@@ -5,10 +5,15 @@
   "type": "module",
   "scripts": {
     "hello": "tsx ./src/hello.ts",
+    "github-setup": "tsx ./src/github-setup.ts",
+    "github-push": "tsx ./src/github-push.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
     "@types/node": "catalog:",
     "tsx": "catalog:"
+  },
+  "dependencies": {
+    "@replit/connectors-sdk": "^0.3.0"
   }
 }
