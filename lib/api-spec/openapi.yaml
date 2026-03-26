@@ -1,22 +1,46 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: SiteSort API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication operations
+  - name: projects
+    description: Project management
+  - name: documents
+    description: Document management
+  - name: distributions
+    description: Document distributions
+  - name: team
+    description: Team management
+  - name: subcontractors
+    description: Subcontractor management
+  - name: insurance
+    description: Insurance records
+  - name: permits
+    description: Permit management
+  - name: photos
+    description: Photo compliance log
+  - name: compliance
+    description: Compliance overview
+  - name: notifications
+    description: Notification management
+  - name: users
+    description: User management
+  - name: qr
+    description: QR code generation
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +48,764 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register a new company and admin user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout current user
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current authenticated user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /projects:
+    get:
+      operationId: listProjects
+      tags: [projects]
+      summary: List all projects for the company
+      responses:
+        "200":
+          description: List of projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Project"
+    post:
+      operationId: createProject
+      tags: [projects]
+      summary: Create a new project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProjectRequest"
+      responses:
+        "201":
+          description: Project created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+
+  /projects/{projectId}:
+    get:
+      operationId: getProject
+      tags: [projects]
+      summary: Get a project by ID
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Project details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateProject
+      tags: [projects]
+      summary: Update a project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProjectRequest"
+      responses:
+        "200":
+          description: Updated project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+
+  /projects/{projectId}/documents:
+    get:
+      operationId: listDocuments
+      tags: [documents]
+      summary: List documents for a project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Document"
+    post:
+      operationId: uploadDocument
+      tags: [documents]
+      summary: Upload a new document to a project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadDocumentRequest"
+      responses:
+        "201":
+          description: Document uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+
+  /documents/{documentId}:
+    get:
+      operationId: getDocument
+      tags: [documents]
+      summary: Get a document by ID
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Document details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /documents/{documentId}/acknowledge:
+    post:
+      operationId: acknowledgeDocument
+      tags: [documents]
+      summary: Acknowledge a document (sign-off)
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcknowledgeRequest"
+      responses:
+        "200":
+          description: Acknowledgment recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /documents/{documentId}/distribute:
+    post:
+      operationId: distributeDocument
+      tags: [distributions]
+      summary: Distribute a document to team members
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DistributeRequest"
+      responses:
+        "200":
+          description: Distribution created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /documents/{documentId}/distributions:
+    get:
+      operationId: getDocumentDistributions
+      tags: [distributions]
+      summary: Get distribution status for a document
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Distribution records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Distribution"
+
+  /projects/{projectId}/members:
+    get:
+      operationId: listProjectMembers
+      tags: [team]
+      summary: List members of a project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of members
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProjectMember"
+    post:
+      operationId: addProjectMember
+      tags: [team]
+      summary: Add a member to a project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddMemberRequest"
+      responses:
+        "201":
+          description: Member added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectMember"
+
+  /projects/{projectId}/members/{memberId}:
+    delete:
+      operationId: removeProjectMember
+      tags: [team]
+      summary: Remove a member from a project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Member removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /subcontractors:
+    get:
+      operationId: listSubcontractors
+      tags: [subcontractors]
+      summary: List all subcontractors for the company
+      responses:
+        "200":
+          description: List of subcontractors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Subcontractor"
+    post:
+      operationId: createSubcontractor
+      tags: [subcontractors]
+      summary: Add a new subcontractor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSubcontractorRequest"
+      responses:
+        "201":
+          description: Subcontractor created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subcontractor"
+
+  /subcontractors/{subcontractorId}:
+    get:
+      operationId: getSubcontractor
+      tags: [subcontractors]
+      summary: Get a subcontractor by ID
+      parameters:
+        - name: subcontractorId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Subcontractor details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubcontractorDetail"
+    patch:
+      operationId: updateSubcontractor
+      tags: [subcontractors]
+      summary: Update a subcontractor
+      parameters:
+        - name: subcontractorId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSubcontractorRequest"
+      responses:
+        "200":
+          description: Updated subcontractor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subcontractor"
+
+  /subcontractors/{subcontractorId}/insurance:
+    post:
+      operationId: addInsuranceRecord
+      tags: [insurance]
+      summary: Add an insurance record for a subcontractor
+      parameters:
+        - name: subcontractorId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddInsuranceRequest"
+      responses:
+        "201":
+          description: Insurance record added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InsuranceRecord"
+
+  /projects/{projectId}/permits:
+    get:
+      operationId: listPermits
+      tags: [permits]
+      summary: List permits for a project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of permits
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Permit"
+    post:
+      operationId: createPermit
+      tags: [permits]
+      summary: Create a new permit
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePermitRequest"
+      responses:
+        "201":
+          description: Permit created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Permit"
+
+  /permits/{permitId}:
+    patch:
+      operationId: updatePermit
+      tags: [permits]
+      summary: Update a permit
+      parameters:
+        - name: permitId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePermitRequest"
+      responses:
+        "200":
+          description: Updated permit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Permit"
+
+  /projects/{projectId}/photos:
+    get:
+      operationId: listPhotos
+      tags: [photos]
+      summary: List photos for a project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of photos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Photo"
+    post:
+      operationId: logPhoto
+      tags: [photos]
+      summary: Log a compliance photo
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogPhotoRequest"
+      responses:
+        "201":
+          description: Photo logged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Photo"
+
+  /compliance:
+    get:
+      operationId: getComplianceOverview
+      tags: [compliance]
+      summary: Get compliance overview (expiring insurance, permits, pending acknowledgments)
+      responses:
+        "200":
+          description: Compliance overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComplianceOverview"
+
+  /notifications:
+    get:
+      operationId: listNotifications
+      tags: [notifications]
+      summary: List notifications for the current user
+      responses:
+        "200":
+          description: List of notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
+
+  /notifications/{notificationId}/read:
+    patch:
+      operationId: markNotificationRead
+      tags: [notifications]
+      summary: Mark a notification as read
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Notification marked read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /notifications/read-all:
+    patch:
+      operationId: markAllNotificationsRead
+      tags: [notifications]
+      summary: Mark all notifications as read
+      responses:
+        "200":
+          description: All notifications marked read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List all users in the company
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+    post:
+      operationId: inviteUser
+      tags: [users]
+      summary: Invite a new user to the company
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InviteUserRequest"
+      responses:
+        "201":
+          description: User invited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/{userId}:
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Update a user
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /projects/{projectId}/qr-codes:
+    post:
+      operationId: generateQrCodes
+      tags: [qr]
+      summary: Generate QR codes for a project's site board
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateQrRequest"
+      responses:
+        "200":
+          description: QR codes generated
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/QrCode"
+
+  /qr/{token}:
+    get:
+      operationId: getQrContent
+      tags: [qr]
+      summary: Get documents accessible via a QR code (public or authenticated)
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: QR code content
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QrContent"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +813,768 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+      required: [success]
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required: [error, message]
+
+    RegisterRequest:
+      type: object
+      properties:
+        companyName:
+          type: string
+        adminName:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        companySize:
+          type: string
+          enum: [1-10, 11-50, 51-200, 201+]
+      required: [companyName, adminName, email, password, companySize]
+
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required: [email, password]
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        token:
+          type: string
+      required: [user, token]
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        companyId:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+          enum: [admin, project_manager, site_worker, subcontractor]
+        phone:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        lastActiveAt:
+          type: string
+          format: date-time
+          nullable: true
+      required: [id, companyId, email, name, role, createdAt]
+
+    InviteUserRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        role:
+          type: string
+          enum: [admin, project_manager, site_worker, subcontractor]
+        phone:
+          type: string
+      required: [email, name, role]
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        role:
+          type: string
+          enum: [admin, project_manager, site_worker, subcontractor]
+        phone:
+          type: string
+
+    Project:
+      type: object
+      properties:
+        id:
+          type: string
+        companyId:
+          type: string
+        name:
+          type: string
+        address:
+          type: string
+        status:
+          type: string
+          enum: [active, on_hold, complete]
+        startDate:
+          type: string
+          format: date
+        targetEndDate:
+          type: string
+          format: date
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        memberCount:
+          type: integer
+        alertCount:
+          type: integer
+        progressPercent:
+          type: integer
+      required: [id, companyId, name, address, status, startDate, createdAt, memberCount, alertCount, progressPercent]
+
+    ProjectDetail:
+      allOf:
+        - $ref: "#/components/schemas/Project"
+        - type: object
+          properties:
+            recentActivity:
+              type: array
+              items:
+                $ref: "#/components/schemas/ActivityItem"
+          required: [recentActivity]
+
+    CreateProjectRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        address:
+          type: string
+        startDate:
+          type: string
+          format: date
+        targetEndDate:
+          type: string
+          format: date
+      required: [name, address, startDate]
+
+    UpdateProjectRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        address:
+          type: string
+        status:
+          type: string
+          enum: [active, on_hold, complete]
+        targetEndDate:
+          type: string
+          format: date
+
+    ActivityItem:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        description:
+          type: string
+        userId:
+          type: string
+          nullable: true
+        userName:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, type, description, createdAt]
+
+    Document:
+      type: object
+      properties:
+        id:
+          type: string
+        projectId:
+          type: string
+        uploadedBy:
+          type: string
+        uploaderName:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [drawing, method_statement, permit, safety, general]
+        version:
+          type: integer
+        fileUrl:
+          type: string
+        fileSize:
+          type: integer
+        previousVersionId:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [current, superseded]
+        requiresAcknowledgment:
+          type: boolean
+        publicAccess:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        distributionSummary:
+          $ref: "#/components/schemas/DistributionSummary"
+      required: [id, projectId, uploadedBy, uploaderName, name, type, version, fileUrl, fileSize, status, requiresAcknowledgment, publicAccess, createdAt, distributionSummary]
+
+    DocumentDetail:
+      allOf:
+        - $ref: "#/components/schemas/Document"
+        - type: object
+          properties:
+            distributions:
+              type: array
+              items:
+                $ref: "#/components/schemas/Distribution"
+          required: [distributions]
+
+    DistributionSummary:
+      type: object
+      properties:
+        total:
+          type: integer
+        pending:
+          type: integer
+        viewed:
+          type: integer
+        acknowledged:
+          type: integer
+      required: [total, pending, viewed, acknowledged]
+
+    UploadDocumentRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [drawing, method_statement, permit, safety, general]
+        fileUrl:
+          type: string
+        fileSize:
+          type: integer
+        requiresAcknowledgment:
+          type: boolean
+        publicAccess:
+          type: boolean
+        distributeToUserIds:
+          type: array
+          items:
+            type: string
+      required: [name, type, fileUrl, fileSize]
+
+    AcknowledgeRequest:
+      type: object
+      properties:
+        pin:
+          type: string
+          nullable: true
+        latitude:
+          type: number
+          nullable: true
+        longitude:
+          type: number
+          nullable: true
+      required: []
+
+    DistributeRequest:
+      type: object
+      properties:
+        userIds:
+          type: array
+          items:
+            type: string
+      required: [userIds]
+
+    Distribution:
+      type: object
+      properties:
+        id:
+          type: string
+        documentId:
+          type: string
+        userId:
+          type: string
+        userName:
+          type: string
+        userRole:
+          type: string
+        status:
+          type: string
+          enum: [pending, viewed, acknowledged]
+        distributedAt:
+          type: string
+          format: date-time
+        viewedAt:
+          type: string
+          format: date-time
+          nullable: true
+        acknowledgedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required: [id, documentId, userId, userName, userRole, status, distributedAt]
+
+    ProjectMember:
+      type: object
+      properties:
+        id:
+          type: string
+        projectId:
+          type: string
+        userId:
+          type: string
+          nullable: true
+        subcontractorId:
+          type: string
+          nullable: true
+        name:
+          type: string
+        role:
+          type: string
+          enum: [manager, worker, subcontractor]
+        complianceStatus:
+          type: string
+          enum: [ok, warning, hold]
+        addedAt:
+          type: string
+          format: date-time
+      required: [id, projectId, name, role, complianceStatus, addedAt]
+
+    AddMemberRequest:
+      type: object
+      properties:
+        userId:
+          type: string
+          nullable: true
+        subcontractorId:
+          type: string
+          nullable: true
+        role:
+          type: string
+          enum: [manager, worker, subcontractor]
+      required: [role]
+
+    Subcontractor:
+      type: object
+      properties:
+        id:
+          type: string
+        companyId:
+          type: string
+        companyName:
+          type: string
+        contactName:
+          type: string
+        contactEmail:
+          type: string
+        contactPhone:
+          type: string
+          nullable: true
+        trades:
+          type: array
+          items:
+            type: string
+        reliabilityRating:
+          type: number
+          nullable: true
+        paymentHold:
+          type: boolean
+        insuranceStatus:
+          type: string
+          enum: [valid, expiring_soon, expired, none]
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, companyId, companyName, contactName, contactEmail, trades, paymentHold, insuranceStatus, createdAt]
+
+    SubcontractorDetail:
+      allOf:
+        - $ref: "#/components/schemas/Subcontractor"
+        - type: object
+          properties:
+            insuranceRecords:
+              type: array
+              items:
+                $ref: "#/components/schemas/InsuranceRecord"
+            assignedProjects:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                required: [id, name]
+          required: [insuranceRecords, assignedProjects]
+
+    CreateSubcontractorRequest:
+      type: object
+      properties:
+        companyName:
+          type: string
+        contactName:
+          type: string
+        contactEmail:
+          type: string
+          format: email
+        contactPhone:
+          type: string
+        trades:
+          type: array
+          items:
+            type: string
+      required: [companyName, contactName, contactEmail, trades]
+
+    UpdateSubcontractorRequest:
+      type: object
+      properties:
+        companyName:
+          type: string
+        contactName:
+          type: string
+        contactEmail:
+          type: string
+        contactPhone:
+          type: string
+        trades:
+          type: array
+          items:
+            type: string
+        reliabilityRating:
+          type: number
+        paymentHold:
+          type: boolean
+
+    InsuranceRecord:
+      type: object
+      properties:
+        id:
+          type: string
+        subcontractorId:
+          type: string
+        type:
+          type: string
+          enum: [public_liability, employers, professional]
+        certificateUrl:
+          type: string
+        expiryDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [valid, expiring_soon, expired]
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, subcontractorId, type, certificateUrl, expiryDate, status, createdAt]
+
+    AddInsuranceRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [public_liability, employers, professional]
+        certificateUrl:
+          type: string
+        expiryDate:
+          type: string
+          format: date
+      required: [type, certificateUrl, expiryDate]
+
+    Permit:
+      type: object
+      properties:
+        id:
+          type: string
+        projectId:
+          type: string
+        type:
+          type: string
+          enum: [hot_works, confined_space, excavation, electrical, general]
+        description:
+          type: string
+        responsibleUserId:
+          type: string
+        responsibleUserName:
+          type: string
+        startDate:
+          type: string
+          format: date
+        expiryDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [active, expiring_today, expired]
+        documentUrl:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, projectId, type, description, responsibleUserId, responsibleUserName, startDate, expiryDate, status, createdAt]
+
+    CreatePermitRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [hot_works, confined_space, excavation, electrical, general]
+        description:
+          type: string
+        responsibleUserId:
+          type: string
+        startDate:
+          type: string
+          format: date
+        expiryDate:
+          type: string
+          format: date
+        documentUrl:
+          type: string
+      required: [type, description, responsibleUserId, startDate, expiryDate]
+
+    UpdatePermitRequest:
+      type: object
+      properties:
+        description:
+          type: string
+        responsibleUserId:
+          type: string
+        expiryDate:
+          type: string
+          format: date
+        documentUrl:
+          type: string
+
+    Photo:
+      type: object
+      properties:
+        id:
+          type: string
+        projectId:
+          type: string
+        uploadedBy:
+          type: string
+        uploaderName:
+          type: string
+        photoUrl:
+          type: string
+        category:
+          type: string
+          enum: [progress, compliance, snag, safety_concern]
+        description:
+          type: string
+          nullable: true
+        zone:
+          type: string
+          nullable: true
+        referenceNumber:
+          type: string
+        latitude:
+          type: number
+          nullable: true
+        longitude:
+          type: number
+          nullable: true
+        takenAt:
+          type: string
+          format: date-time
+      required: [id, projectId, uploadedBy, uploaderName, photoUrl, category, referenceNumber, takenAt]
+
+    LogPhotoRequest:
+      type: object
+      properties:
+        photoUrl:
+          type: string
+        category:
+          type: string
+          enum: [progress, compliance, snag, safety_concern]
+        description:
+          type: string
+        zone:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+      required: [photoUrl, category]
+
+    ComplianceOverview:
+      type: object
+      properties:
+        expiringInsurance:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExpiringInsuranceItem"
+        expiringPermits:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExpiringPermitItem"
+        pendingAcknowledgments:
+          type: array
+          items:
+            $ref: "#/components/schemas/PendingAcknowledgmentItem"
+      required: [expiringInsurance, expiringPermits, pendingAcknowledgments]
+
+    ExpiringInsuranceItem:
+      type: object
+      properties:
+        subcontractorId:
+          type: string
+        subcontractorName:
+          type: string
+        insuranceType:
+          type: string
+        expiryDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [valid, expiring_soon, expired]
+      required: [subcontractorId, subcontractorName, insuranceType, expiryDate, status]
+
+    ExpiringPermitItem:
+      type: object
+      properties:
+        permitId:
+          type: string
+        projectId:
+          type: string
+        projectName:
+          type: string
+        permitType:
+          type: string
+        expiryDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [active, expiring_today, expired]
+      required: [permitId, projectId, projectName, permitType, expiryDate, status]
+
+    PendingAcknowledgmentItem:
+      type: object
+      properties:
+        documentId:
+          type: string
+        documentName:
+          type: string
+        projectId:
+          type: string
+        projectName:
+          type: string
+        pendingCount:
+          type: integer
+      required: [documentId, documentName, projectId, projectName, pendingCount]
+
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        type:
+          type: string
+          enum: [document_uploaded, document_superseded, acknowledgment_required, insurance_expiring, permit_expiring, safety_concern, task_ready]
+        title:
+          type: string
+        message:
+          type: string
+        relatedEntityId:
+          type: string
+          nullable: true
+        relatedEntityType:
+          type: string
+          nullable: true
+        read:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, userId, type, title, message, read, createdAt]
+
+    QrCode:
+      type: object
+      properties:
+        id:
+          type: string
+        projectId:
+          type: string
+        category:
+          type: string
+        token:
+          type: string
+        qrImageUrl:
+          type: string
+        label:
+          type: string
+        requiresLogin:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, projectId, category, token, qrImageUrl, label, requiresLogin, createdAt]
+
+    GenerateQrRequest:
+      type: object
+      properties:
+        categories:
+          type: array
+          items:
+            type: string
+            enum: [safety, emergency, drawings, general]
+      required: [categories]
+
+    QrContent:
+      type: object
+      properties:
+        projectName:
+          type: string
+        category:
+          type: string
+        requiresLogin:
+          type: boolean
+        documents:
+          type: array
+          items:
+            $ref: "#/components/schemas/Document"
+      required: [projectName, category, requiresLogin, documents]

@@ -1,0 +1,26 @@
+packages:
+  "framer-motion": "Smooth page transitions and micro-interactions"
+  "lucide-react": "Standardized iconography for actions and navigation"
+  "date-fns": "Human-readable date formatting for construction logs"
+  "clsx": "Conditional class merging for UI components"
+  "tailwind-merge": "Tailwind class conflict resolution"
+  "react-hook-form": "Form state management for complex data entry"
+  "@hookform/resolvers": "Zod schema validation integration for forms"
+  "zod": "Strict type validation for all inputs"
+  "recharts": "Data visualization for compliance and project dashboards"
+
+images:
+  - path: "artifacts/sitesort/public/images/construction-hero.png"
+    description: "Modern architectural construction site at golden hour with sleek steel beams, high-end photography, cinematic lighting, professional corporate style, no people, wide angle"
+    aspect_ratio: "16:9"
+  - path: "artifacts/sitesort/public/images/logo.png"
+    description: "Minimalist geometric logo for a construction software company called SiteSort, incorporating a layered building block motif in deep navy blue and bright safety orange, transparent background, flat vector style"
+    aspect_ratio: "1:1"
+  - path: "artifacts/sitesort/public/images/auth-bg.png"
+    description: "Abstract architectural blueprint lines superimposed on a dark navy blue background, subtle lighting, professional corporate texture"
+    aspect_ratio: "16:9"
+
+notes:
+  - Token-based authentication using localStorage ('sitesort_token')
+  - API requests automatically intercepted to inject Authorization header
+  - Using generated React Query hooks from @workspace/api-client-react

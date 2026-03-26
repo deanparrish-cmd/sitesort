@@ -1,0 +1,222 @@
+# SiteSort - Product Requirements Document
+
+## What It Is
+SiteSort is a construction site information management platform that guarantees every worker has the correct, up-to-date documents, drawings, and compliance records at their fingertips. Built for SME construction companies, it replaces paper files, scattered emails, and WhatsApp chaos with a single source of truth that automatically distributes the right information to the right people. When a drawing changes, every relevant person knows instantly—and you have proof they acknowledged it.
+
+## Target User
+**Paul, 47, Site Manager at a 35-person construction firm running 3-4 active projects.**
+
+Paul's day starts at 6am checking emails for overnight changes from architects or engineers. By 7am he's printing updated drawings, but by the time he's distributed them, two subbies have already started work using yesterday's version—now he's looking at a £3,000 rework. His filing cabinet has 6 versions of the same floorplan. He spends 2 hours daily answering "where's the latest...?" questions. His WhatsApp has 47 unread messages across 8 project groups. When the HSE inspector arrives, he scrambles to prove his scaffolders' CSCS cards aren't expired.
+
+**Current workarounds:** Dropbox folder nobody can find things in, WhatsApp groups that bury critical info in banter, email chains he has to search for 20 minutes, paper sign-off sheets that get rained on, Excel spreadsheet tracking subcontractor insurance that's always out of date.
+
+**What Paul wants:** To hand his phone to an inspector and show instant proof of compliance. To know that when structural engineers issue Rev C, everyone on site sees Rev C and nobody touches Rev B again. To stop being a human message relay.
+
+## Core Problem
+Construction teams waste money on reworks and risk compliance failures because there's no reliable way to ensure every worker is using the current version of every document, drawing, and safety record.
+
+## Unique Value Proposition
+SiteSort guarantees document version integrity with automatic cascade control—when you upload Rev C, Rev B becomes inaccessible site-wide instantly, but is stored in a legacy folder for the project manager only, and you get timestamped proof of who viewed the new version and when. Unlike generic file-sharing tools, SiteSort speaks construction: QR codes on physical site boards link to live documents, subcontractor insurance expiries trigger automatic payment holds, and voice notes become compliance records without typing on a muddy screen.
+
+---
+
+## MVP Features (Build These First)
+
+### 1. Version-Controlled Document Hub
+**What the user does:** Navigates to a project, clicks "Upload Document", selects file type (Drawing/Permit/Method Statement/etc), enters document name, optional revision number, and selects which teams need access. Clicks "Upload & Distribute".
+**What the system does:** Stores the file with automatic version number (v1, v2, etc). If a document with the same name exists, marks previous version as superseded (greyed out, labelled "SUPERSEDED - DO NOT USE"), moves new version to top. Generates unique document ID. Creates distribution records for all selected team members. Triggers push notification to all recipients.
+**It works when:** User uploads "Floor Plan Rev C", previous "Floor Plan Rev B" shows strikethrough with red "SUPERSEDED" badge, and attempting to open Rev B shows interstitial warning: "This document has been replaced. View current version?" with only option to proceed to Rev C.
+
+### 2. Targeted Team Distribution
+**What the user does:** When uploading or from document detail page, clicks "Distribute To", sees list of teams/individuals organized by trade (Electricians, Plumbers, Scaffolders, etc), checks boxes for recipients, clicks "Send".
+**What the system does:** Creates distribution record for each recipient with status "Pending". Sends push notification with document name and urgency level. Updates document's "Distributed To" list showing each recipient's status (Pending/Viewed/Acknowledged).
+**It works when:** Document shows "Distributed to: 8 people (3 viewed, 2 acknowledged, 3 pending)" with ability to click and see exactly who's in each status with timestamps.
+
+### 3. Digital Sign-Off Tracking
+**What the user does:** Receives notification of new document, opens it, views content, taps "I've read and understood this" button at bottom. For critical documents, enters their 4-digit PIN to confirm. The worker or user interface is simple.
+**What the system does:** Records acknowledgment with timestamp, user ID, device info, and GPS coordinates if available. Updates distribution status to "Acknowledged". For documents requiring all-team sign-off, updates completion percentage. Stores acknowledgment as immutable audit record.
+**It works when:** Project manager can export PDF showing "Method Statement v3 - Acknowledged by: [Name, timestamp, signature] x 12 workers" suitable for presenting to HSE inspector.
+
+### 4. Real-Time Sync Notifications
+**What the user does:** Nothing—this is automatic. User has app installed and notifications enabled.
+**What the system does:** When any document they have access to is updated, superseded, or requires acknowledgment, sends push notification within 5 seconds. Notification shows: document name, action required, project name. Tapping notification opens relevant document directly.
+**It works when:** Electrician on break receives "⚠️ NEW: Wiring Diagram Rev D uploaded - Tap to view" within 5 seconds of project manager uploading.
+
+### 5. Timestamped Photo Compliance Log
+**What the user does:** Taps camera icon, takes photo, selects category (Progress/Compliance/Snag/Safety Concern), adds optional voice note or text description, selects relevant area/zone from project map, taps "Log".
+**What the system does:** Stores photo with immutable metadata: timestamp, GPS coordinates, user ID, device info. Prevents any editing of original image. Categorizes in project's photo log. For "Snag" or "Safety Concern" categories, creates notification to project manager. Generates unique reference number (e.g., PROJ-PHOTO-0234).
+**It works when:** Photo taken at 2:34pm shows up in compliance log with exact timestamp, cannot be deleted by the user who took it, and project manager receives immediate alert for safety concerns.
+
+### 6. Subcontractor Insurance Auto-Monitor
+**What the user does:** Adds a subcontractor, uploads their insurance certificate, enters expiry date. Or: receives notification that insurance is expiring, forwards to subbie, subbie uploads new cert.
+**What the system does:** Stores certificate with expiry date. At 30 days before expiry: sends email/notification to subcontractor and project manager. At 7 days: sends urgent notification. At expiry: changes subcontractor status to "COMPLIANCE HOLD", displays red warning banner on all their assigned tasks, triggers No-Pay Compliance Lock if enabled.
+**It works when:** Subcontractor's insurance expires on March 15th, they receive automated email on Feb 13th, PM sees yellow warning on their profile from Feb 13th, and on March 15th their profile shows red "INSURANCE EXPIRED" banner and they cannot be assigned new tasks without override from project manager.
+
+### 7. QR Code Site Board Integration
+**What the project manager or distributor does:** In project settings, clicks "Generate Site Board QR Codes". Selects which document categories to include (Safety Info/Emergency Procedures/Current Drawings/etc). Clicks "Generate". Prints QR codes and posts on physical site boards.
+**What the system does:** Generates unique QR code for each category that links to a mobile-optimized page showing current versions only of documents in that category. QR codes remain static—scanning always shows latest versions. Page requires no login for "Public" documents (emergency info) or prompts login for restricted docs.
+**It works when:** Worker scans "Current Drawings" QR on site board with personal phone, sees list of all current drawings for that project, taps to view, no login required for drawings marked "Site Access", login required for sensitive documents.
+
+### 8. Offline Mobile Access
+**What the user does:** While online, opens documents they need. Or: taps "Download for Offline" on any document/folder. Goes to area with no signal.
+**What the system does:** Caches all viewed documents locally. When offline, shows cached documents with "Offline Mode" banner. Queues any acknowledgments or photo uploads. When connectivity returns, syncs all queued actions with server, shows "Synced" confirmation.
+**It works when:** Worker in basement with no signal can view drawings they looked at earlier, takes a compliance photo, and the photo uploads automatically when they walk outside and regain signal.
+
+### 9. Permit & Expiry Management
+**What the project manager or distributor does:** Creates permit entry: type (Hot Works/Confined Space/Excavation/etc), start date, expiry date, responsible person, uploads permit document. Views dashboard showing all active permits.
+**What the system does:** Displays permits on calendar view. Shows countdown for each permit. Sends notification to responsible person at start-of-day on expiry date and 1 day before. Expired permits show red "EXPIRED" status. Prevents work assignment to areas covered by expired permits.
+**It works when:** Hot works permit expiring today shows "EXPIRES TODAY" in orange on dashboard, responsible person got notification at 6am, and tomorrow it shows "EXPIRED" in red with no option to mark related tasks complete.
+
+### 10. Smart Document Cascade Control
+**What the project manager or distributor does:** Uploads new version of document. System automatically handles the rest.
+**What the system does:** Identifies all documents that reference the superseded version (linked specifications, related method statements). Sends notification to owners of referencing documents: "Drawing XYZ has been updated to Rev C. Please review [Document Name] for potential updates needed." Creates audit trail of cascade notifications.
+**It works when:** Uploading "Structural Drawing Rev C" automatically notifies the owner of "Method Statement - Steel Erection" which references "Structural Drawing Rev B" that a dependency has changed.
+
+### 11. Task Completion Cascade Notification
+**What the user does:** Plasterer marks "First Floor Skim - Complete" by tapping checkbox and taking completion photo.
+**What the system does:** Records completion with timestamp and photo. Checks project workflow rules for "what follows plastering on First Floor". Sends notification to next trade: "🔔 First Floor ready for Second Fix Electrical - Plastering complete as of [timestamp]". Notifies project manager of stage completion. Updates project progress visualization.
+**It works when:** Plasterer completes first floor at 3pm, electrician receives "First Floor ready for you" notification at 3:01pm, project manager sees both notifications and updated progress bar showing "First Floor: Plastering ✓ → Electrical: Scheduled".
+
+---
+
+## Pages & Navigation
+
+### Public Pages
+- **Landing Page** - Product overview, features, pricing tiers, "Start Free Trial" CTA. Single-page scroll with sections.
+- **Login** - Email/password fields, "Forgot Password" link, "Create Account" link.
+- **Register** - Company name, admin name, email, password, company size dropdown. Creates company + admin user.
+
+### Main App (Authenticated)
+- **Dashboard** - Shows: active projects as cards (name, progress %, alerts count), pending acknowledgments requiring action, expiring permits/insurance (next 7 days), recent activity feed. Actions: click project to open, click alert to resolve, "New Project" button.
+
+- **Project List** - All projects in table view: name, status (Active/On Hold/Complete), start date, team count, alerts. Filter by status. Click to open project.
+
+- **Project Detail** - Tabs: Overview | Documents | Team | Photos | Permits | Workflow
+  - *Overview*: Progress summary, upcoming deadlines, recent activity for this project
+  - *Documents*: Folder tree (Drawings/Method Statements/Permits/Safety/General), document list with version badges, upload button, filter by type/status
+  - *Team*: List of assigned workers/subbies with role and compliance status, add/remove members
+  - *Photos*: Grid of timestamped photos, filter by category/date/zone, click to expand with metadata
+  - *Permits*: Active permits calendar, add permit, view expired
+  - *Workflow*: Task sequence editor, define "what follows what", mark completions
+
+- **Document Viewer** - Full-screen document view with zoom/pan for drawings. Shows: version number, upload date, uploader, supersedes badge if applicable. Bottom bar: "Acknowledge" button, "Download Offline" button, "Share" button.
+
+- **Subcontractors** - List all subcontractors across projects: company name, contact, trades, insurance status (green/yellow/red), rating. Click to see detail with all documents, assigned projects, payment status.
+
+- **Compliance Center** - Aggregate view: expiring insurance (next 30 days), expiring permits (next 7 days), pending acknowledgments by project, unsigned toolbox talks. Each item clickable to resolve.
+
+- **QR Code Generator** - Select project, select document categories, generate printable QR sheet with labels.
+
+- **Team Management** - Invite users (email invite), assign roles (Admin/Project Manager/Site Worker/Subcontractor), manage permissions. View all users, their projects, last active.
+
+- **Settings** - Company profile, notification preferences, billing, integrations (future WhatsApp), data export.
+
+- **Notifications** - Chronological list of all notifications with read/unread status, click to go to relevant item.
+
+### Mobile-Specific
+- **Quick Actions (Bottom Nav)** - Camera (quick photo log), Documents (recent/offline), Notifications, Profile
+- **Offline Indicator** - Persistent banner when offline: "Offline Mode - Changes will sync when connected"
+
+---
+
+## Data Model
+
+### Users & Organizations
+```
+companies
+- id (uuid, primary key)
+- name (string)
+- created_at (timestamp)
+- subscription_tier (string: free/pro/enterprise)
+- subscription_status (string: active/past_due/cancelled)
+
+users
+- id (uuid, primary key)
+- company_id (uuid, foreign key)
+- email (string, unique)
+- password_hash (string)
+- name (string)
+- role (string: admin/project_manager/site_worker/subcontractor)
+- phone (string, nullable)
+- pin_hash (string, for document sign-off)
+- created_at (timestamp)
+- last_active_at (timestamp)
+
+subcontractors
+- id (uuid, primary key)
+- company_id (uuid, foreign key)
+- company_name (string)
+- contact_name (string)
+- contact_email (string)
+- contact_phone (string)
+- trades (string array)
+- reliability_rating (decimal, nullable)
+- payment_hold (boolean, default false)
+- created_at (timestamp)
+```
+
+### Projects & Documents
+```
+projects
+- id (uuid, primary key)
+- company_id (uuid, foreign key)
+- name (string)
+- address (string)
+- status (string: active/on_hold/complete)
+- start_date (date)
+- target_end_date (date, nullable)
+- created_at (timestamp)
+
+project_members
+- id (uuid, primary key)
+- project_id (uuid, foreign key)
+- user_id (uuid, foreign key, nullable)
+- subcontractor_id (uuid, foreign key, nullable)
+- role (string: manager/worker/subcontractor)
+- added_at (timestamp)
+
+documents
+- id (uuid, primary key)
+- project_id (uuid, foreign key)
+- uploaded_by (uuid, foreign key to users)
+- name (string)
+- type (string: drawing/method_statement/permit/safety/general)
+- version (integer)
+- file_url (string)
+- file_size (integer)
+- previous_version_id (uuid, foreign key to documents, nullable)
+- status (string: current/superseded)
+- requires_acknowledgment (boolean)
+- public_access (boolean, for QR scanning without login)
+- created_at (timestamp)
+
+document_distributions
+- id (uuid, primary key)
+- document_id (uuid, foreign key)
+- user_id (uuid, foreign key)
+- status (string: pending/viewed/acknowledged)
+- distributed_at (timestamp)
+- viewed_at (timestamp, nullable)
+- acknowledged_at (timestamp, nullable)
+- acknowledgment_location (point, nullable)
+- device_info (string, nullable)
+```
+
+### Compliance & Tracking
+```
+insurance_records
+- id (uuid, primary key)
+- subcontractor_id (uuid, foreign key)
+- type (string: public_liability/employers/professional)
+- certificate_url (string)
+- expiry_date (date)
+- status (string: valid/expiring_soon/expired)
+- created_at (timestamp)
+
+permits
+- id (uuid, primary key)
+- project_id (uuid, foreign key)
+- type (string: hot_works/confined_space/excavation/electrical/general)
+- description (string)
+- responsible_user_id (uuid, foreign key)
+-
