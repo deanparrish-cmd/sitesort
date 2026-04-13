@@ -75,6 +75,17 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 
 ## Session Log
 
+### 2026-04-07
+- Landing page visual polish session (no functional changes)
+- All three feature cards (Version Control, Compliance Hub, QR Site Boards) changed to dark grey (`bg-gray-800`, `border-gray-700`) with white headings and `text-gray-300` body text
+- All three feature card icons changed to `text-orange-500` / `bg-orange-500/20`
+- "site information" hero gradient updated to `from-orange-800 to-orange-400` (dark-to-light orange)
+- Accent button variant updated to match: `bg-gradient-to-r from-orange-800 to-orange-400`
+- Removed the "Built for Construction SMEs" animated badge from the hero
+- Added "Built for Construction SMEs." as bold text inline below the hero paragraph
+- `logo-concepts.html` added to `public/` (5 SVG logo concepts) — untracked, included in this commit
+- Note: `index.css` ring colour was nudged to `24 100% 50%` (pure safety orange) in the committed base
+
 ### 2026-03-26
 - Built and completed all 10 core features of the SiteSort platform
 - Added `scripts/src/github-setup.ts` to create the GitHub repo via Replit Connectors SDK

@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SiteSort – Logo Concepts</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f4f5f7;
+      padding: 40px 24px;
+      color: #1a1a2e;
+    }
+    h1 {
+      text-align: center;
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #1a1a2e;
+    }
+    p.sub {
+      text-align: center;
+      color: #666;
+      font-size: 14px;
+      margin-bottom: 40px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 32px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 40px 32px 28px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+    .card h2 {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #999;
+    }
+    .card p {
+      font-size: 13px;
+      color: #666;
+      text-align: center;
+      line-height: 1.6;
+    }
+    .logo-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100px;
+    }
+    /* Dark background variant */
+    .dark-bg .logo-wrap {
+      background: #1a1a2e;
+      border-radius: 12px;
+      padding: 24px 32px;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <h1>SiteSort – Logo Concepts</h1>
+  <p class="sub">5 design directions. Pick your favourite — or mix elements from several.</p>
+
+  <div class="grid">
+
+    <!-- OPTION 1: Hard Hat + Wordmark -->
+    <div class="card">
+      <h2>Option 1 — Site First</h2>
+      <div class="logo-wrap">
+        <svg width="220" height="72" viewBox="0 0 220 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- Hard hat shape -->
+          <g transform="translate(0,4)">
+            <!-- brim -->
+            <rect x="4" y="42" width="56" height="7" rx="3.5" fill="#F59E0B"/>
+            <!-- dome -->
+            <path d="M10 42 C10 18 52 18 52 42 Z" fill="#FBBF24"/>
+            <!-- highlight stripe -->
+            <rect x="29" y="18" width="4" height="24" rx="2" fill="#F59E0B" opacity="0.5"/>
+            <!-- brim shadow -->
+            <rect x="4" y="46" width="56" height="3" rx="1.5" fill="#D97706" opacity="0.4"/>
+          </g>
+          <!-- Wordmark -->
+          <text x="76" y="34" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="26" font-weight="800" fill="#1a1a2e">Site</text>
+          <text x="76" y="60" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="26" font-weight="800" fill="#F59E0B">Sort</text>
+        </svg>
+      </div>
+      <p>Bold two-line wordmark paired with an amber hard hat. Instantly communicates construction. Strong at all sizes.</p>
+    </div>
+
+    <!-- OPTION 2: Stacked Layers / Sort Lines -->
+    <div class="card">
+      <h2>Option 2 — Sort Lines</h2>
+      <div class="logo-wrap">
+        <svg width="240" height="60" viewBox="0 0 240 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- Sort bar icon -->
+          <rect x="0" y="8"  width="44" height="9" rx="4.5" fill="#2563EB"/>
+          <rect x="0" y="25" width="33" height="9" rx="4.5" fill="#3B82F6"/>
+          <rect x="0" y="42" width="20" height="9" rx="4.5" fill="#93C5FD"/>
+          <!-- Wordmark -->
+          <text x="56" y="43" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="32" font-weight="800" letter-spacing="-1" fill="#1e293b">SiteSort</text>
+        </svg>
+      </div>
+      <p>Descending sort bars on the left double as a "signal strength" icon. Clean, tech-forward, memorable. Works well in blue.</p>
+    </div>
+
+    <!-- OPTION 3: Location Pin with building inside -->
+    <div class="card">
+      <h2>Option 3 — On-Site</h2>
+      <div class="logo-wrap">
+        <svg width="220" height="72" viewBox="0 0 220 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- Pin drop shape -->
+          <path d="M32 4 C18 4 8 14 8 28 C8 46 32 68 32 68 C32 68 56 46 56 28 C56 14 46 4 32 4Z" fill="#16A34A"/>
+          <!-- Building inside pin -->
+          <rect x="22" y="20" width="5" height="16" rx="1" fill="white" opacity="0.9"/>
+          <rect x="30" y="16" width="5" height="20" rx="1" fill="white"/>
+          <rect x="38" y="23" width="5" height="13" rx="1" fill="white" opacity="0.9"/>
+          <!-- ground line -->
+          <rect x="18" y="36" width="28" height="2" rx="1" fill="white" opacity="0.6"/>
+          <!-- Wordmark -->
+          <text x="70" y="36" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="22" font-weight="800" fill="#1e293b">SiteSort</text>
+          <text x="70" y="56" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="12" font-weight="500" fill="#16A34A" letter-spacing="0.12em">CONSTRUCTION PLATFORM</text>
+        </svg>
+      </div>
+      <p>Location pin icon with a city-skyline inside. Green signals "go / on track". Works well for a compliance-focused brand.</p>
+    </div>
+
+    <!-- OPTION 4: Monogram SS with hard-hat brim -->
+    <div class="card dark-bg">
+      <h2>Option 4 — Monogram</h2>
+      <div class="logo-wrap">
+        <svg width="220" height="70" viewBox="0 0 220 70" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- SS badge -->
+          <rect x="0" y="0" width="60" height="60" rx="12" fill="#F59E0B"/>
+          <!-- S letterform left -->
+          <text x="5" y="46" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="42" font-weight="900" fill="#1a1a2e">SS</text>
+          <!-- brim underline -->
+          <rect x="0" y="54" width="60" height="6" rx="3" fill="#D97706"/>
+          <!-- Wordmark -->
+          <text x="74" y="32" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="28" font-weight="800" fill="white">SiteSort</text>
+          <text x="75" y="52" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="12" font-weight="500" fill="#F59E0B" letter-spacing="0.14em">SITE MANAGEMENT</text>
+        </svg>
+      </div>
+      <p>Amber "SS" badge on dark background. Premium and authoritative — works well on dark nav bars, hard hats, or hi-vis vests.</p>
+    </div>
+
+    <!-- OPTION 5: Blueprint grid + text -->
+    <div class="card">
+      <h2>Option 5 — Blueprint</h2>
+      <div class="logo-wrap">
+        <svg width="240" height="68" viewBox="0 0 240 68" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- Blueprint square -->
+          <rect x="0" y="4" width="60" height="60" rx="10" fill="#1D4ED8"/>
+          <!-- Grid lines -->
+          <line x1="0"  y1="24" x2="60" y2="24" stroke="white" stroke-width="0.8" opacity="0.3"/>
+          <line x1="0"  y1="44" x2="60" y2="44" stroke="white" stroke-width="0.8" opacity="0.3"/>
+          <line x1="20" y1="4"  x2="20" y2="64" stroke="white" stroke-width="0.8" opacity="0.3"/>
+          <line x1="40" y1="4"  x2="40" y2="64" stroke="white" stroke-width="0.8" opacity="0.3"/>
+          <!-- Building outline on grid -->
+          <rect x="12" y="22" width="14" height="24" rx="1" fill="none" stroke="#FCD34D" stroke-width="2"/>
+          <rect x="34" y="14" width="14" height="32" rx="1" fill="none" stroke="#FCD34D" stroke-width="2"/>
+          <line x1="8" y1="46" x2="52" y2="46" stroke="#FCD34D" stroke-width="2"/>
+          <!-- Wordmark -->
+          <text x="74" y="38" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="30" font-weight="800" letter-spacing="-0.5" fill="#1D4ED8">SiteSort</text>
+          <rect x="74" y="46" width="140" height="3" rx="1.5" fill="#FCD34D"/>
+        </svg>
+      </div>
+      <p>Blueprint grid with yellow building outlines on a deep blue square. Suggests precision, planning, and professionalism.</p>
+    </div>
+
+  </div>
+</body>
+</html>

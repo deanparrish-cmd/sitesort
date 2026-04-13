@@ -27,19 +27,13 @@ export default function LandingPage() {
       <main className="pt-32 pb-16 lg:pt-48 lg:pb-32 overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="text-center max-w-3xl mx-auto slide-up">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent/10 text-accent font-semibold text-sm mb-6 border border-accent/20">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-accent"></span>
-              </span>
-              Built for Construction SMEs
-            </div>
             <h1 className="text-5xl md:text-6xl lg:text-7xl font-extrabold text-primary tracking-tight mb-8 leading-tight">
               Control the chaos of <br/>
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-accent to-amber-500">site information.</span>
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-800 to-orange-400">site information.</span>
             </h1>
             <p className="text-lg md:text-xl text-muted-foreground mb-10 leading-relaxed max-w-2xl mx-auto">
-              The single source of truth for your site teams. Distribute documents, track compliance, and manage subcontractors without the paperwork headache.
+              The single source of truth for your site teams. Distribute documents, track compliance, and manage subcontractors without the paperwork headache.<br />
+              <span className="font-bold text-foreground">Built for Construction SMEs.</span>
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link href="/register">
@@ -77,32 +71,38 @@ export default function LandingPage() {
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
-            <div className="bg-card p-8 rounded-2xl shadow-sm border hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mb-6 text-primary">
+            <div className="bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-700 hover:shadow-md transition-shadow">
+              <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center mb-6 text-orange-500 shadow-lg shadow-white/10">
                 <FileText className="w-6 h-6" />
               </div>
-              <h3 className="text-xl font-bold mb-3">Version Control</h3>
-              <p className="text-muted-foreground leading-relaxed">
-                Never build from the wrong drawing again. Automatic superseded warnings and digital sign-off tracking.
-              </p>
+              <h3 className="text-xl font-bold mb-3 text-white">Version Control</h3>
+              <ul className="text-gray-300 leading-relaxed space-y-1 list-disc list-inside font-bold">
+                <li>Never build from the wrong drawing again</li>
+                <li>Automatic superseded warnings</li>
+                <li>Digital sign-off tracking</li>
+              </ul>
             </div>
-            <div className="bg-card p-8 rounded-2xl shadow-sm border hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 bg-accent/10 rounded-xl flex items-center justify-center mb-6 text-accent">
+            <div className="bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-700 hover:shadow-md transition-shadow">
+              <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center mb-6 text-orange-500 shadow-lg shadow-white/10">
                 <ShieldCheck className="w-6 h-6" />
               </div>
-              <h3 className="text-xl font-bold mb-3">Compliance Hub</h3>
-              <p className="text-muted-foreground leading-relaxed">
-                Monitor subcontractor insurance and active permits in real-time. Automated alerts before they expire.
-              </p>
+              <h3 className="text-xl font-bold mb-3 text-white">Compliance Hub</h3>
+              <ul className="text-gray-300 leading-relaxed space-y-1 list-disc list-inside font-bold">
+                <li>Monitor subcontractor insurance in real-time</li>
+                <li>Track active permits across all sites</li>
+                <li>Automated alerts before they expire</li>
+              </ul>
             </div>
-            <div className="bg-card p-8 rounded-2xl shadow-sm border hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 bg-success/10 rounded-xl flex items-center justify-center mb-6 text-success">
+            <div className="bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-700 hover:shadow-md transition-shadow">
+              <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center mb-6 text-orange-500 shadow-lg shadow-white/10">
                 <Building2 className="w-6 h-6" />
               </div>
-              <h3 className="text-xl font-bold mb-3">QR Site Boards</h3>
-              <p className="text-muted-foreground leading-relaxed">
-                Generate dynamic QR codes for your site boards. Anyone can scan to access public safety docs instantly.
-              </p>
+              <h3 className="text-xl font-bold mb-3 text-white">QR Site Boards</h3>
+              <ul className="text-gray-300 leading-relaxed space-y-1 list-disc list-inside font-bold">
+                <li>Generate dynamic QR codes for site boards</li>
+                <li>Instant access to public safety documents</li>
+                <li>No app download required to scan</li>
+              </ul>
             </div>
           </div>
         </div>
