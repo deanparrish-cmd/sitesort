@@ -7,10 +7,9 @@ export default function LandingPage() {
     <div className="min-h-screen bg-background">
       {/* Navbar */}
       <nav className="border-b bg-card/80 backdrop-blur-md fixed w-full top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-36 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-accent/20">S</div>
-            <span className="font-display font-extrabold text-2xl tracking-tight text-primary">SiteSort</span>
+            <img src={`${import.meta.env.BASE_URL}images/logo.png`} alt="SiteSort" className="h-28 w-auto" style={{ filter: 'hue-rotate(-50deg) saturate(2.5)' }} />
           </div>
           <div className="flex gap-4">
             <Link href="/login">
@@ -24,7 +23,7 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero */}
-      <main className="pt-32 pb-16 lg:pt-48 lg:pb-32 overflow-hidden">
+      <main className="pt-44 pb-16 lg:pt-56 lg:pb-32 overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="text-center max-w-3xl mx-auto slide-up">
             <h1 className="text-5xl md:text-6xl lg:text-7xl font-extrabold text-primary tracking-tight mb-8 leading-tight">

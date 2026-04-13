@@ -62,8 +62,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       {/* Mobile Header */}
       <div className="md:hidden flex items-center justify-between p-4 border-b bg-card">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center text-white font-bold text-lg">S</div>
-          <span className="font-display font-bold text-xl">SiteSort</span>
+          <img src={`${import.meta.env.BASE_URL}images/logo.png`} alt="SiteSort" className="h-20 w-auto" style={{ filter: 'hue-rotate(-50deg) saturate(2.5)' }} />
         </div>
         <div className="flex items-center gap-4">
           <Link href="/notifications" className="relative p-2 text-muted-foreground hover:text-foreground">
@@ -82,8 +81,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
         isMobileOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="p-6 hidden md:flex items-center gap-3">
-          <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-accent/20">S</div>
-          <span className="font-display font-extrabold text-2xl tracking-tight text-primary">SiteSort</span>
+          <img src={`${import.meta.env.BASE_URL}images/logo.png`} alt="SiteSort" className="h-20 w-auto" style={{ filter: 'hue-rotate(-50deg) saturate(2.5)' }} />
         </div>
 
         <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
