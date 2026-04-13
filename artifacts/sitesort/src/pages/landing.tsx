@@ -9,7 +9,7 @@ export default function LandingPage() {
       <nav className="border-b bg-card/80 backdrop-blur-md fixed w-full top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-36 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <img src={`${import.meta.env.BASE_URL}images/logo.png`} alt="SiteSort" className="h-28 w-auto" style={{ filter: 'hue-rotate(-50deg) saturate(2.5)' }} />
+            <img src={`${import.meta.env.BASE_URL}images/logo.png`} alt="SiteSort" className="h-28 w-auto" style={{ filter: 'hue-rotate(-50deg) saturate(2.5) brightness(0.75)' }} />
           </div>
           <div className="flex gap-4">
             <Link href="/login">
