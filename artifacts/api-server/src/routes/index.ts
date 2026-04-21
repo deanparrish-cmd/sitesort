@@ -11,6 +11,7 @@ import complianceRouter from "./compliance";
 import notificationsRouter from "./notifications";
 import usersRouter from "./users";
 import qrRouter from "./qr";
+import aiRouter from "./ai";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use(complianceRouter);
 router.use(notificationsRouter);
 router.use(usersRouter);
 router.use(qrRouter);
+router.use(aiRouter);
 
 export default router;

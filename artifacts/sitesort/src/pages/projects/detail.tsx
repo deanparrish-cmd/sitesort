@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff } from "lucide-react";
+import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users } from "lucide-react";
+import { VoiceRecall } from "@/components/voice-recall";
 import { 
   useGetProject, 
   useListDocuments, 
@@ -138,6 +139,9 @@ export default function ProjectDetail() {
         </TabsContent>
 
         <TabsContent value="documents">
+          <div className="mb-6">
+            <VoiceRecall projectId={projectId} />
+          </div>
           <div className="flex justify-between items-center mb-6">
             <div className="flex gap-2 overflow-x-auto pb-2">
               <Button 
