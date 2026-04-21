@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users } from "lucide-react";
+import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X } from "lucide-react";
 import { VoiceRecall } from "@/components/voice-recall";
 import { 
   useGetProject, 
@@ -33,6 +33,8 @@ export default function ProjectDetail() {
   const { register, handleSubmit, reset, watch } = useForm();
   
   const [selectedDocType, setSelectedDocType] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState<string>("all");
 
   const onUpload = async (data: any) => {
     try {
@@ -142,27 +144,53 @@ export default function ProjectDetail() {
           <div className="mb-6">
             <VoiceRecall projectId={projectId} />
           </div>
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex gap-2 overflow-x-auto pb-2">
-              <Button 
-                variant={selectedDocType === 'all' ? 'default' : 'secondary'} 
+          <div className="flex flex-col gap-3 mb-6">
+            <div className="flex gap-3 items-center">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Search documents..."
+                  className="pl-9 pr-8"
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              <Button variant="accent" onClick={() => setIsUploadOpen(true)}>
+                <Upload className="w-4 h-4 mr-2" /> Upload Document
+              </Button>
+            </div>
+            <div className="flex gap-2 flex-wrap items-center">
+              <Button
+                variant={selectedDocType === 'all' ? 'default' : 'secondary'}
                 size="sm" onClick={() => setSelectedDocType('all')}
-              >All Docs</Button>
+              >All Types</Button>
               {Object.values(DocumentType).map(type => (
-                <Button 
+                <Button
                   key={type}
-                  variant={selectedDocType === type ? 'default' : 'secondary'} 
-                  size="sm" 
+                  variant={selectedDocType === type ? 'default' : 'secondary'}
+                  size="sm"
                   onClick={() => setSelectedDocType(type)}
                   className="capitalize"
                 >
                   {type.replace('_', ' ')}s
                 </Button>
               ))}
+              <div className="w-px h-6 bg-border mx-1" />
+              {(['all', 'current', 'superseded'] as const).map(s => (
+                <Button
+                  key={s}
+                  variant={selectedStatus === s ? 'default' : 'secondary'}
+                  size="sm"
+                  onClick={() => setSelectedStatus(s)}
+                  className="capitalize"
+                >{s === 'all' ? 'All Statuses' : s}</Button>
+              ))}
             </div>
-            <Button variant="accent" onClick={() => setIsUploadOpen(true)}>
-              <Upload className="w-4 h-4 mr-2" /> Upload Document
-            </Button>
           </div>
 
           <div className="bg-card border rounded-xl shadow-sm overflow-hidden">
@@ -177,7 +205,11 @@ export default function ProjectDetail() {
                 </tr>
               </thead>
               <tbody>
-                {documents?.filter(d => selectedDocType === 'all' || d.type === selectedDocType).map(doc => {
+                {documents?.filter(d =>
+                  (selectedDocType === 'all' || d.type === selectedDocType) &&
+                  (selectedStatus === 'all' || d.status === selectedStatus) &&
+                  (searchQuery === '' || d.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                ).map(doc => {
                   const isSuperseded = doc.status === 'superseded';
                   return (
                     <tr key={doc.id} className={cn("border-b transition-colors", isSuperseded ? "bg-muted/30 opacity-70" : "hover:bg-muted/10")}>
@@ -216,8 +248,14 @@ export default function ProjectDetail() {
                     </tr>
                   )
                 })}
-                {documents?.length === 0 && (
-                  <tr><td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">No documents uploaded yet.</td></tr>
+                {documents !== undefined && documents.filter(d =>
+                  (selectedDocType === 'all' || d.type === selectedDocType) &&
+                  (selectedStatus === 'all' || d.status === selectedStatus) &&
+                  (searchQuery === '' || d.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                ).length === 0 && (
+                  <tr><td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">
+                    {documents.length === 0 ? 'No documents uploaded yet.' : 'No documents match your filters.'}
+                  </td></tr>
                 )}
               </tbody>
             </table>
