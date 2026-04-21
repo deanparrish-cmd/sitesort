@@ -3,7 +3,7 @@ import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Building2, AlertTriangle, CheckCircle2, ArrowRight, ShieldAlert, FileSignature } from "lucide-react";
+import { Building2, AlertTriangle, CheckCircle2, ArrowRight, ShieldAlert, FileSignature, Users } from "lucide-react";
 import { useListProjects, useGetComplianceOverview } from "@workspace/api-client-react";
 
 export default function Dashboard() {

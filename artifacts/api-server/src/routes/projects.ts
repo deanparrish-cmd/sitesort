@@ -54,7 +54,7 @@ router.post("/projects", authenticate, async (req, res) => {
       name,
       address,
       startDate,
-      targetEndDate: targetEndDate ?? null,
+      targetEndDate: targetEndDate || null,
       status: "active",
     });
 

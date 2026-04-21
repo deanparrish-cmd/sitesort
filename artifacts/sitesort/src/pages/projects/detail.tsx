@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X } from "lucide-react";
+import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { VoiceRecall } from "@/components/voice-recall";
 import { 
   useGetProject, 
@@ -30,7 +31,7 @@ export default function ProjectDetail() {
   
   const uploadMutation = useUploadDocument();
   const [isUploadOpen, setIsUploadOpen] = useState(false);
-  const { register, handleSubmit, reset, watch } = useForm();
+  const { register, handleSubmit, reset, watch, setValue } = useForm();
   
   const [selectedDocType, setSelectedDocType] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -38,13 +39,13 @@ export default function ProjectDetail() {
 
   const onUpload = async (data: any) => {
     try {
-      await uploadMutation.mutateAsync({ 
-        projectId, 
+      await uploadMutation.mutateAsync({
+        projectId,
         data: {
           name: data.name,
           type: data.type as UploadDocumentRequestType,
-          fileUrl: data.fileUrl || "https://example.com/dummy.pdf", // MVP placeholder
-          fileSize: 1024 * 1024 * 2.5, // 2.5MB dummy
+          fileUrl: data.fileUrl,
+          fileSize: data.fileSize,
           requiresAcknowledgment: data.requiresAcknowledgment,
         }
       });
@@ -142,7 +143,7 @@ export default function ProjectDetail() {
 
         <TabsContent value="documents">
           <div className="mb-6">
-            <VoiceRecall projectId={projectId} />
+            <VoiceRecall projectId={projectId} documents={documents?.map(d => ({ id: d.id, name: d.name, type: d.type, version: d.version, status: d.status, fileUrl: d.fileUrl, createdAt: String(d.createdAt) }))} />
           </div>
           <div className="flex flex-col gap-3 mb-6">
             <div className="flex gap-3 items-center">
@@ -292,8 +293,11 @@ export default function ProjectDetail() {
             </select>
           </div>
           <div>
-            <label className="text-sm font-semibold mb-1 block">File URL (MVP)</label>
-            <Input {...register("fileUrl")} placeholder="https://..." />
+            <label className="text-sm font-semibold mb-2 block">File</label>
+            <FileDropZone
+              onUploaded={f => { setValue("fileUrl", f.url); setValue("fileSize", f.size); }}
+              onCleared={() => { setValue("fileUrl", ""); setValue("fileSize", 0); }}
+            />
           </div>
           <div className="flex items-center gap-2 p-4 bg-muted/30 border rounded-lg mt-4">
             <input type="checkbox" id="reqAck" {...register("requiresAcknowledgment")} className="w-4 h-4 text-accent rounded border-input focus:ring-accent" />

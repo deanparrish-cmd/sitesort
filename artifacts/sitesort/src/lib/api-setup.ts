@@ -5,26 +5,27 @@
  */
 export function setupApiInterceptor() {
   const originalFetch = window.fetch;
-  
+
   window.fetch = async (...args) => {
     const [resource, config] = args;
     const token = localStorage.getItem('sitesort_token');
-    
+
     if (token) {
+      const existing = config?.headers;
+      const normalized: Record<string, string> =
+        existing instanceof Headers
+          ? Object.fromEntries(existing.entries())
+          : (existing as Record<string, string>) ?? {};
+
+      const newHeaders = { ...normalized, Authorization: `Bearer ${token}` };
+
       if (config) {
-        config.headers = {
-          ...config.headers,
-          Authorization: `Bearer ${token}`
-        };
+        config.headers = newHeaders;
       } else {
-        args[1] = { 
-          headers: { 
-            Authorization: `Bearer ${token}` 
-          } 
-        };
+        args[1] = { headers: newHeaders };
       }
     }
-    
+
     return originalFetch(...args);
   };
 }

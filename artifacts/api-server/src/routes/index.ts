@@ -12,6 +12,7 @@ import notificationsRouter from "./notifications";
 import usersRouter from "./users";
 import qrRouter from "./qr";
 import aiRouter from "./ai";
+import uploadRouter from "./upload";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use(notificationsRouter);
 router.use(usersRouter);
 router.use(qrRouter);
 router.use(aiRouter);
+router.use(uploadRouter);
 
 export default router;

@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback } from "react";
-import { Mic, MicOff, Loader2, FileText, AlertTriangle, CheckCircle2, Sparkles, X } from "lucide-react";
+import { Mic, MicOff, Loader2, FileText, AlertTriangle, CheckCircle2, Sparkles, X, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { cn, formatDate } from "@/lib/utils";
 
 interface RecallResult {
@@ -23,15 +24,20 @@ interface VoiceRecallResponse {
 
 interface VoiceRecallProps {
   projectId: string;
+  documents?: RecallResult[];
 }
 
 type RecordingState = "idle" | "recording" | "processing";
+type InputMode = "voice" | "text";
 
-export function VoiceRecall({ projectId }: VoiceRecallProps) {
+export function VoiceRecall({ projectId, documents = [] }: VoiceRecallProps) {
+  const [inputMode, setInputMode] = useState<InputMode>("voice");
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
   const [response, setResponse] = useState<VoiceRecallResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [seconds, setSeconds] = useState(0);
+  const [textQuery, setTextQuery] = useState("");
+  const [textResults, setTextResults] = useState<RecallResult[] | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -112,6 +118,16 @@ export function VoiceRecall({ projectId }: VoiceRecallProps) {
     setResponse(null);
     setError(null);
     setSeconds(0);
+    setTextQuery("");
+    setTextResults(null);
+  };
+
+  const handleTextSearch = (query: string) => {
+    setTextQuery(query);
+    if (!query.trim()) { setTextResults(null); return; }
+    const q = query.toLowerCase();
+    const matches = documents.filter(d => d.name.toLowerCase().includes(q));
+    setTextResults(matches);
   };
 
   return (
@@ -123,20 +139,92 @@ export function VoiceRecall({ projectId }: VoiceRecallProps) {
             <Sparkles className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h3 className="font-bold text-base">AI Voice Recall</h3>
-            <p className="text-xs text-muted-foreground">Ask for any drawing or document by voice</p>
+            <h3 className="font-bold text-base">AI Document Recall</h3>
+            <p className="text-xs text-muted-foreground">Find any document by name or voice</p>
           </div>
         </div>
-        {response && (
-          <Button variant="ghost" size="sm" onClick={reset} className="text-muted-foreground">
-            <X className="w-4 h-4 mr-1" /> Clear
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-lg border overflow-hidden text-xs font-semibold">
+            <button
+              onClick={() => { setInputMode("text"); reset(); }}
+              className={cn("px-3 py-1.5 flex items-center gap-1 transition-colors", inputMode === "text" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted")}
+            >
+              <Search className="w-3 h-3" /> Text
+            </button>
+            <button
+              onClick={() => { setInputMode("voice"); reset(); }}
+              className={cn("px-3 py-1.5 flex items-center gap-1 transition-colors", inputMode === "voice" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted")}
+            >
+              <Mic className="w-3 h-3" /> Voice
+            </button>
+          </div>
+          {(response || textResults !== null) && (
+            <Button variant="ghost" size="sm" onClick={reset} className="text-muted-foreground">
+              <X className="w-4 h-4" />
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="p-6">
+        {/* Text search mode */}
+        {inputMode === "text" && (
+          <div className="space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              <Input
+                value={textQuery}
+                onChange={e => handleTextSearch(e.target.value)}
+                placeholder="Type a document name…"
+                className="pl-9"
+                autoFocus
+              />
+            </div>
+            {textResults !== null && (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  {textResults.length} document{textResults.length !== 1 ? "s" : ""} found
+                </p>
+                {textResults.length > 0 ? textResults.map(doc => {
+                  const isSuperseded = doc.status === "superseded";
+                  return (
+                    <a
+                      key={doc.id}
+                      href={doc.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={cn(
+                        "flex items-center gap-4 p-4 rounded-xl border transition-colors group",
+                        isSuperseded ? "bg-muted/30 opacity-70 hover:bg-muted/50" : "bg-background hover:bg-primary/5 hover:border-primary/30"
+                      )}
+                    >
+                      <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center shrink-0", isSuperseded ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary")}>
+                        <FileText className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={cn("font-bold text-sm truncate", isSuperseded && "line-through text-muted-foreground")}>{doc.name}</p>
+                        <p className="text-xs text-muted-foreground capitalize">{doc.type.replace("_", " ")} · {formatDate(doc.createdAt)}</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="font-mono bg-muted px-2 py-0.5 rounded text-xs font-bold">v{doc.version}</span>
+                        {isSuperseded ? (
+                          <Badge variant="destructive" className="text-[10px]">SUPERSEDED</Badge>
+                        ) : (
+                          <Badge variant="success" className="text-[10px]"><CheckCircle2 className="w-3 h-3 mr-1" /> CURRENT</Badge>
+                        )}
+                      </div>
+                    </a>
+                  );
+                }) : (
+                  <div className="text-center py-4 text-muted-foreground text-sm">No documents match "{textQuery}".</div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Mic Button + Recording State */}
-        {!response && (
+        {inputMode === "voice" && !response && (
           <div className="flex flex-col items-center gap-4">
             <div className="relative">
               <button

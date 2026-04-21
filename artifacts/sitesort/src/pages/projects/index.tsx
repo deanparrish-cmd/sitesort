@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,10 +12,13 @@ import { useForm } from "react-hook-form";
 import { formatDate } from "@/lib/utils";
 
 export default function ProjectsList() {
-  const { data: projects, isLoading, refetch } = useListProjects();
+  const { data: projects, isLoading } = useListProjects();
   const createMutation = useCreateProject();
-  
+  const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
+
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const { register, handleSubmit, reset } = useForm();
 
@@ -24,13 +28,15 @@ export default function ProjectsList() {
   );
 
   const onSubmit = async (data: any) => {
+    setCreateError(null);
     try {
       await createMutation.mutateAsync({ data });
+      await queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
       setIsModalOpen(false);
       reset();
-      refetch();
-    } catch (e) {
-      console.error(e);
+      setLocation("/dashboard");
+    } catch (e: any) {
+      setCreateError(e?.message ?? "Failed to create project. Please try again.");
     }
   };
 
@@ -112,10 +118,15 @@ export default function ProjectsList() {
         </div>
       </div>
 
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+      <Dialog open={isModalOpen} onOpenChange={v => { setIsModalOpen(v); if (!v) setCreateError(null); }}>
         <DialogHeader>
           <DialogTitle>Create New Project</DialogTitle>
         </DialogHeader>
+        {createError && (
+          <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm">
+            {createError}
+          </div>
+        )}
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
             <label className="text-sm font-semibold mb-1 block">Project Name</label>

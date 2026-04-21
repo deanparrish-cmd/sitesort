@@ -28,9 +28,6 @@ router.post(
 
       // 1. Transcribe audio with Whisper
       const audioBuffer = req.file.buffer;
-      const audioStream = Readable.from(audioBuffer) as any;
-      audioStream.name = "audio.webm";
-
       const transcription = await openai.audio.transcriptions.create({
         model: "whisper-1",
         file: new File([audioBuffer], "audio.webm", { type: req.file.mimetype || "audio/webm" }),
