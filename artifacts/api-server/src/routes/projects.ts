@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { projectsTable, projectMembersTable, usersTable, documentsTable, documentDistributionsTable, permitsTable, notificationsTable } from "@workspace/db/schema";
+import { projectsTable, projectMembersTable, usersTable, documentsTable, documentDistributionsTable, permitsTable, notificationsTable, subcontractorsTable } from "@workspace/db/schema";
 import { eq, and, count, sql } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
@@ -101,6 +101,7 @@ router.get("/projects/:projectId", authenticate, async (req, res) => {
       memberCount: Number(memberCount.count),
       alertCount: Number(docAlerts.count),
       progressPercent: p.status === "complete" ? 100 : p.status === "on_hold" ? 50 : 30,
+      trades: p.trades ?? [],
       recentActivity: [],
     });
   } catch (err) {
@@ -130,6 +131,62 @@ router.patch("/projects/:projectId", authenticate, async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Update project error");
     res.status(500).json({ error: "server_error", message: "Failed to update project" });
+  }
+});
+
+router.post("/projects/:projectId/trades", authenticate, async (req, res) => {
+  try {
+    const { trade } = req.body;
+    if (!trade?.trim()) { res.status(400).json({ error: "validation_error", message: "trade is required" }); return; }
+    const rows = await db.select({ trades: projectsTable.trades }).from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId))).limit(1);
+    if (!rows.length) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+    const existing = rows[0].trades ?? [];
+    const normalised = trade.trim().toLowerCase();
+    if (!existing.map((t: string) => t.toLowerCase()).includes(normalised)) {
+      await db.update(projectsTable).set({ trades: [...existing, trade.trim()] })
+        .where(eq(projectsTable.id, req.params.projectId));
+    }
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Add trade error");
+    res.status(500).json({ error: "server_error", message: "Failed to add trade" });
+  }
+});
+
+router.post("/projects/:projectId/tradespeople", authenticate, async (req, res) => {
+  try {
+    const { trade, companyName, contactName, contactEmail, contactPhone } = req.body;
+    if (!trade || !companyName || !contactName) {
+      res.status(400).json({ error: "validation_error", message: "trade, companyName and contactName are required" }); return;
+    }
+    const subId = generateId();
+    await db.insert(subcontractorsTable).values({
+      id: subId,
+      companyId: req.user!.companyId,
+      companyName,
+      contactName,
+      contactEmail: contactEmail || "",
+      contactPhone: contactPhone || null,
+      trades: [trade],
+    });
+    const memberId = generateId();
+    await db.insert(projectMembersTable).values({
+      id: memberId,
+      projectId: req.params.projectId,
+      subcontractorId: subId,
+      role: "subcontractor",
+    });
+    // Also ensure the trade exists on the project
+    const rows = await db.select({ trades: projectsTable.trades }).from(projectsTable).where(eq(projectsTable.id, req.params.projectId)).limit(1);
+    const existing = rows[0]?.trades ?? [];
+    if (!existing.map((t: string) => t.toLowerCase()).includes(trade.toLowerCase())) {
+      await db.update(projectsTable).set({ trades: [...existing, trade] }).where(eq(projectsTable.id, req.params.projectId));
+    }
+    res.status(201).json({ success: true, memberId });
+  } catch (err) {
+    req.log.error({ err }, "Add tradesperson error");
+    res.status(500).json({ error: "server_error", message: "Failed to add tradesperson" });
   }
 });
 

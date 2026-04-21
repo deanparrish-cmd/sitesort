@@ -10,6 +10,7 @@ export const subcontractorsTable = pgTable("subcontractors", {
   contactName: text("contact_name").notNull(),
   contactEmail: text("contact_email").notNull(),
   contactPhone: text("contact_phone"),
+  avatarUrl: text("avatar_url"),
   trades: text("trades").array().notNull().default([]),
   reliabilityRating: numeric("reliability_rating"),
   paymentHold: boolean("payment_hold").notNull().default(false),

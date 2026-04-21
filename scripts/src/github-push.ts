@@ -118,7 +118,7 @@ async function main() {
   // Create commit
   console.log("Creating commit...");
   const commitBody: any = {
-    message: "Initial commit: SiteSort construction management platform",
+    message: "chore: sync latest changes - AI voice recall, bug fixes, dashboard icons",
     tree: tree.sha,
   };
   if (baseSha) commitBody.parents = [baseSha];

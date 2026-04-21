@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, time } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { projectsTable } from "./projects";
@@ -11,6 +11,9 @@ export const projectMembersTable = pgTable("project_members", {
   userId: text("user_id").references(() => usersTable.id),
   subcontractorId: text("subcontractor_id").references(() => subcontractorsTable.id),
   role: text("role").notNull().default("worker"),
+  scheduledDays: text("scheduled_days").array().default([]),
+  siteStartTime: time("site_start_time"),
+  siteEndTime: time("site_end_time"),
   addedAt: timestamp("added_at").notNull().defaultNow(),
 });
 

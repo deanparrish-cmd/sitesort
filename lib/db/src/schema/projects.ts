@@ -11,6 +11,7 @@ export const projectsTable = pgTable("projects", {
   status: text("status").notNull().default("active"),
   startDate: date("start_date").notNull(),
   targetEndDate: date("target_end_date"),
+  trades: text("trades").array().default([]),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

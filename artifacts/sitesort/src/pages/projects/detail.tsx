@@ -7,16 +7,20 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X } from "lucide-react";
+import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronRight } from "lucide-react";
 import { FileDropZone } from "@/components/ui/file-drop-zone";
+import { InsuranceCertZone } from "@/components/ui/insurance-cert-zone";
 import { VoiceRecall } from "@/components/voice-recall";
-import { 
-  useGetProject, 
-  useListDocuments, 
-  useListProjectMembers, 
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useGetProject,
+  useListDocuments,
+  useListProjectMembers,
   useUploadDocument,
+  useUpdateProject,
   DocumentType,
-  UploadDocumentRequestType
+  UploadDocumentRequestType,
+  UpdateProjectRequestStatus,
 } from "@workspace/api-client-react";
 import { formatDate, formatBytes, cn } from "@/lib/utils";
 import { useForm } from "react-hook-form";
@@ -30,12 +34,109 @@ export default function ProjectDetail() {
   const { data: members } = useListProjectMembers(projectId, { query: { enabled: !!projectId } });
   
   const uploadMutation = useUploadDocument();
+  const updateMutation = useUpdateProject();
+  const queryClient = useQueryClient();
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const { register, handleSubmit, reset, watch, setValue } = useForm();
+  const { register: editRegister, handleSubmit: editHandleSubmit, reset: editReset } = useForm();
   
+  const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({});
+  const toggleFolder = (trade: string) => setOpenFolders(prev => ({ ...prev, [trade]: !prev[trade] }));
+  const isFolderOpen = (trade: string, defaultOpen = true) => trade in openFolders ? openFolders[trade] : defaultOpen;
+
+  const [addingTrade, setAddingTrade] = useState(false);
+  const [newTradeName, setNewTradeName] = useState("");
+  const [addPersonTrade, setAddPersonTrade] = useState<string | null>(null);
+  const [addPersonError, setAddPersonError] = useState<string | null>(null);
+  const { register: personRegister, handleSubmit: personHandleSubmit, reset: personReset } = useForm();
+
+  const submitAddTrade = async () => {
+    if (!newTradeName.trim()) return;
+    const token = localStorage.getItem("sitesort_token");
+    await fetch(`/api/projects/${projectId}/trades`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ trade: newTradeName.trim() }),
+    });
+    await queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}`] });
+    setNewTradeName("");
+    setAddingTrade(false);
+  };
+
+  const submitAddPerson = async (data: any) => {
+    setAddPersonError(null);
+    try {
+      const token = localStorage.getItem("sitesort_token");
+      const res = await fetch(`/api/projects/${projectId}/tradespeople`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ trade: addPersonTrade, companyName: data.companyName, contactName: data.contactName, contactEmail: data.contactEmail, contactPhone: data.contactPhone }),
+      });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.message); }
+      await queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/members`] });
+      await queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}`] });
+      setAddPersonTrade(null);
+      personReset();
+    } catch (e: any) {
+      setAddPersonError(e?.message ?? "Failed to add person");
+    }
+  };
+
+  const [editingPhoneId, setEditingPhoneId] = useState<string | null>(null);
+  const [phoneInput, setPhoneInput] = useState("");
+
+  const savePhone = async (memberId: string) => {
+    const token = localStorage.getItem("sitesort_token");
+    await fetch(`/api/projects/${projectId}/members/${memberId}/contact`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ phone: phoneInput }),
+    });
+    await queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/members`] });
+    setEditingPhoneId(null);
+  };
+
   const [selectedDocType, setSelectedDocType] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
+  const [scheduleTarget, setScheduleTarget] = useState<any | null>(null);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+  const { register: schedRegister, handleSubmit: schedHandleSubmit, reset: schedReset, setValue: schedSetValue, watch: schedWatch } = useForm();
+
+  const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+  const openSchedule = (member: any) => {
+    setScheduleTarget(member);
+    setScheduleError(null);
+    schedReset({
+      scheduledDays: member.scheduledDays ?? [],
+      siteStartTime: member.siteStartTime ?? "",
+      siteEndTime: member.siteEndTime ?? "",
+    });
+  };
+
+  const onScheduleSubmit = async (data: any) => {
+    setScheduleError(null);
+    try {
+      const token = localStorage.getItem("sitesort_token");
+      const res = await fetch(`/api/projects/${projectId}/members/${scheduleTarget.id}/schedule`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({
+          scheduledDays: data.scheduledDays ?? [],
+          siteStartTime: data.siteStartTime || null,
+          siteEndTime: data.siteEndTime || null,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to save schedule");
+      await queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/members`] });
+      setScheduleTarget(null);
+    } catch (e: any) {
+      setScheduleError(e?.message ?? "Failed to save schedule");
+    }
+  };
 
   const onUpload = async (data: any) => {
     try {
@@ -54,6 +155,37 @@ export default function ProjectDetail() {
       refetchDocs();
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const openEdit = () => {
+    editReset({
+      name: project?.name ?? "",
+      address: project?.address ?? "",
+      status: project?.status ?? "active",
+      targetEndDate: project?.targetEndDate ?? "",
+    });
+    setEditError(null);
+    setIsEditOpen(true);
+  };
+
+  const onEditSubmit = async (data: any) => {
+    setEditError(null);
+    try {
+      await updateMutation.mutateAsync({
+        projectId,
+        data: {
+          name: data.name,
+          address: data.address,
+          status: data.status as UpdateProjectRequestStatus,
+          targetEndDate: data.targetEndDate || undefined,
+        },
+      });
+      await queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}`] });
+      await queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
+      setIsEditOpen(false);
+    } catch (e: any) {
+      setEditError(e?.message ?? "Failed to save changes.");
     }
   };
 
@@ -79,7 +211,7 @@ export default function ProjectDetail() {
                 <span className="flex items-center gap-1"><Calendar className="w-4 h-4"/> Started {formatDate(project.startDate)}</span>
               </div>
             </div>
-            <Button variant="outline">Edit Details</Button>
+            <Button variant="outline" onClick={openEdit}>Edit Details</Button>
           </div>
           
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8 pt-6 border-t border-border/50">
@@ -263,13 +395,217 @@ export default function ProjectDetail() {
           </div>
         </TabsContent>
         
-        {/* MVP Placeholder for other tabs */}
         <TabsContent value="team">
-          <div className="bg-card p-8 rounded-xl border text-center">
-            <Users className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-lg font-bold">Team Roster</h3>
-            <p className="text-muted-foreground">Manage project members and subcontractors here.</p>
-          </div>
+          {(!members || members.length === 0) ? (
+            <div className="bg-card p-12 rounded-xl border text-center border-dashed border-2">
+              <Users className="w-12 h-12 mx-auto text-muted-foreground mb-4 opacity-50" />
+              <h3 className="text-lg font-bold">No team members yet</h3>
+              <p className="text-muted-foreground">Add tradespeople and subcontractors to this project.</p>
+            </div>
+          ) : (() => {
+            const allMembers = members as any[];
+            const projectTrades: string[] = (project as any)?.trades ?? [];
+            const memberTrades = allMembers.flatMap((m: any) => m.trades?.length ? m.trades : []);
+            const hasStaff = allMembers.some((m: any) => !m.trades?.length);
+            const allTrades = Array.from(new Set([...projectTrades, ...memberTrades, ...(hasStaff ? ["Site Staff"] : [])])).sort((a, b) => a === "Site Staff" ? 1 : b === "Site Staff" ? -1 : a.localeCompare(b)) as string[];
+            const membersByTrade = (trade: string) => allMembers.filter((m: any) => trade === "Site Staff" ? !m.trades?.length : m.trades?.includes(trade));
+
+            return (
+              <div className="space-y-3">
+                {allTrades.map(trade => {
+                  const tradeMembers = membersByTrade(trade);
+                  const open = isFolderOpen(trade);
+                  return (
+                    <div key={trade} className="bg-card border rounded-xl overflow-hidden shadow-sm">
+                      <button
+                        onClick={() => toggleFolder(trade)}
+                        className="w-full flex items-center gap-3 px-5 py-4 hover:bg-muted/30 transition-colors text-left"
+                      >
+                        {open ? <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
+                        <FolderOpen className="w-5 h-5 text-orange-500 shrink-0" />
+                        <span className="font-bold capitalize flex-1">{trade}</span>
+                        <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{tradeMembers.length} {tradeMembers.length === 1 ? "person" : "people"}</span>
+                        {trade !== "Site Staff" && (
+                          <button
+                            onClick={e => { e.stopPropagation(); setAddPersonTrade(trade); setAddPersonError(null); personReset(); }}
+                            className="ml-2 flex items-center gap-1 text-xs font-semibold text-primary hover:underline shrink-0"
+                          >+ Add Person</button>
+                        )}
+                      </button>
+                      {open && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 pt-0 border-t">
+                          {tradeMembers.map((member: any) => {
+                const isSubcontractor = !!member.subcontractorId;
+                const complianceBadge = member.complianceStatus === "ok"
+                  ? <Badge variant="success" className="text-[10px]"><UserCheck className="w-3 h-3 mr-1"/>Compliant</Badge>
+                  : member.complianceStatus === "warning"
+                  ? <Badge variant="warning" className="text-[10px]"><AlertTriangle className="w-3 h-3 mr-1"/>Insurance Expiring</Badge>
+                  : member.complianceStatus === "hold"
+                  ? <Badge variant="destructive" className="text-[10px]"><AlertTriangle className="w-3 h-3 mr-1"/>On Hold</Badge>
+                  : null;
+
+                return (
+                  <div key={member.id} className="bg-card border rounded-xl p-5 flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <label className="relative cursor-pointer group shrink-0" title="Click to upload photo">
+                          <input type="file" accept="image/*" className="hidden" onChange={async e => {
+                            const file = e.target.files?.[0]; if (!file) return;
+                            const token = localStorage.getItem("sitesort_token");
+                            const fd = new FormData(); fd.append("file", file);
+                            const up = await fetch("/api/upload", { method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : {}, body: fd });
+                            if (!up.ok) return;
+                            const { url } = await up.json();
+                            await fetch(`/api/projects/${projectId}/members/${member.id}/avatar`, { method: "PATCH", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ avatarUrl: url }) });
+                            await queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/members`] });
+                          }} />
+                          <div className={cn("w-14 h-14 rounded-xl flex items-center justify-center shrink-0 overflow-hidden", isSubcontractor ? "bg-orange-500/10" : "bg-primary/10")}>
+                            {member.avatarUrl ? (
+                              <img src={member.avatarUrl} alt={member.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <span className={cn("text-lg font-extrabold", isSubcontractor ? "text-orange-500" : "text-primary")}>
+                                {member.name.split(" ").map((w: string) => w[0]).slice(0, 2).join("")}
+                              </span>
+                            )}
+                          </div>
+                          <div className="absolute inset-0 rounded-xl bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <Camera className="w-4 h-4 text-white" />
+                          </div>
+                        </label>
+                        <div>
+                          <p className="font-bold text-base leading-tight">{member.name}</p>
+                          {isSubcontractor && member.contactName && (
+                            <p className="text-xs text-muted-foreground">Contact: {member.contactName}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        <Badge variant="secondary" className="text-[10px] capitalize">{member.role.replace('_', ' ')}</Badge>
+                        {complianceBadge}
+                      </div>
+                    </div>
+
+                    {member.trades?.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {member.trades.map((trade: string) => (
+                          <span key={trade} className="inline-flex items-center gap-1 px-2.5 py-1 bg-orange-500/10 text-orange-600 text-xs font-semibold rounded-full capitalize">
+                            <HardHat className="w-3 h-3" />{trade}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex flex-col gap-1.5 pt-1 border-t border-border/50">
+                      {member.email && (
+                        <a href={`mailto:${member.email}`} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors">
+                          <Mail className="w-4 h-4 shrink-0" />
+                          <span className="truncate">{member.email}</span>
+                        </a>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <Phone className="w-4 h-4 shrink-0 text-muted-foreground" />
+                        {editingPhoneId === member.id ? (
+                          <div className="flex items-center gap-1 flex-1">
+                            <input
+                              autoFocus
+                              value={phoneInput}
+                              onChange={e => setPhoneInput(e.target.value)}
+                              onKeyDown={e => { if (e.key === "Enter") savePhone(member.id); if (e.key === "Escape") setEditingPhoneId(null); }}
+                              placeholder="+44 7700 000000"
+                              className="flex-1 text-sm bg-muted rounded px-2 py-0.5 outline-none focus:ring-2 focus:ring-primary/30 min-w-0"
+                            />
+                            <button onClick={() => savePhone(member.id)} className="text-success hover:text-success/80 shrink-0"><CheckCircle2 className="w-4 h-4" /></button>
+                            <button onClick={() => setEditingPhoneId(null)} className="text-muted-foreground hover:text-destructive shrink-0"><X className="w-4 h-4" /></button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1 flex-1 min-w-0 group/phone">
+                            {member.phone ? (
+                              <a href={`tel:${member.phone}`} className="text-sm text-muted-foreground hover:text-primary transition-colors truncate">{member.phone}</a>
+                            ) : (
+                              <span className="text-sm text-muted-foreground italic">Add phone number</span>
+                            )}
+                            <button
+                              onClick={() => { setEditingPhoneId(member.id); setPhoneInput(member.phone ?? ""); }}
+                              className="ml-1 opacity-0 group-hover/phone:opacity-100 transition-opacity text-muted-foreground hover:text-primary shrink-0"
+                            ><Pencil className="w-3 h-3" /></button>
+                          </div>
+                        )}
+                      </div>
+                      {!member.email && !member.phone && editingPhoneId !== member.id && (
+                        <p className="text-xs text-muted-foreground italic">No email on file</p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1 border-t border-border/50">
+                      <div className="flex-1">
+                        {(member.scheduledDays?.length > 0 || member.siteStartTime) ? (
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                            {member.scheduledDays?.length > 0 && (
+                              <div className="flex gap-1 flex-wrap">
+                                {[...member.scheduledDays].sort((a: string, b: string) => DAYS.indexOf(a) - DAYS.indexOf(b)).map((d: string) => (
+                                  <span key={d} className="px-1.5 py-0.5 bg-primary/10 text-primary text-[10px] font-bold rounded">{d}</span>
+                                ))}
+                              </div>
+                            )}
+                            {member.siteStartTime && member.siteEndTime && (
+                              <span className="text-xs text-muted-foreground">{member.siteStartTime.slice(0,5)}–{member.siteEndTime.slice(0,5)}</span>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground italic">No site schedule set</p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => openSchedule(member)}
+                        className="ml-2 p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-primary transition-colors shrink-0"
+                        title="Edit schedule"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    {isSubcontractor && (
+                      <InsuranceCertZone
+                        memberId={member.id}
+                        projectId={projectId}
+                        existingCertUrl={member.pliCertUrl ?? null}
+                        existingExpiryDate={member.pliExpiryDate ?? null}
+                        onSaved={() => queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/members`] })}
+                      />
+                    )}
+                      </div>
+                    );
+                  })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {addingTrade ? (
+                  <div className="flex items-center gap-2 px-2">
+                    <input
+                      autoFocus
+                      value={newTradeName}
+                      onChange={e => setNewTradeName(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") submitAddTrade(); if (e.key === "Escape") { setAddingTrade(false); setNewTradeName(""); } }}
+                      placeholder="e.g. Electrical, Roofing…"
+                      className="flex-1 text-sm bg-muted rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-primary/30 border border-input"
+                    />
+                    <Button size="sm" variant="accent" onClick={submitAddTrade}>Add</Button>
+                    <Button size="sm" variant="ghost" onClick={() => { setAddingTrade(false); setNewTradeName(""); }}>Cancel</Button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setAddingTrade(true)}
+                    className="flex items-center gap-2 px-4 py-3 w-full text-sm font-semibold text-muted-foreground hover:text-primary border-2 border-dashed border-muted hover:border-primary/40 rounded-xl transition-colors"
+                  >
+                    <FolderOpen className="w-4 h-4" />+ Add Trade Folder
+                  </button>
+                )}
+              </div>
+            );
+          })()}
         </TabsContent>
       </Tabs>
 
@@ -306,6 +642,121 @@ export default function ProjectDetail() {
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => setIsUploadOpen(false)}>Cancel</Button>
             <Button type="submit" variant="accent" isLoading={uploadMutation.isPending}>Upload</Button>
+          </DialogFooter>
+        </form>
+      </Dialog>
+
+      <Dialog open={isEditOpen} onOpenChange={v => { setIsEditOpen(v); if (!v) setEditError(null); }}>
+        <DialogHeader>
+          <DialogTitle>Edit Project Details</DialogTitle>
+        </DialogHeader>
+        {editError && (
+          <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm">
+            {editError}
+          </div>
+        )}
+        <form onSubmit={editHandleSubmit(onEditSubmit)} className="space-y-4">
+          <div>
+            <label className="text-sm font-semibold mb-1 block">Project Name</label>
+            <Input {...editRegister("name", { required: true })} placeholder="e.g. Riverside Apartments" />
+          </div>
+          <div>
+            <label className="text-sm font-semibold mb-1 block">Site Address</label>
+            <Input {...editRegister("address", { required: true })} placeholder="123 River Road, London" icon={<MapPin className="w-4 h-4" />} />
+          </div>
+          <div>
+            <label className="text-sm font-semibold mb-1 block">Status</label>
+            <select {...editRegister("status")} className="flex h-11 w-full rounded-lg border-2 border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:border-primary">
+              <option value="active">Active</option>
+              <option value="on_hold">On Hold</option>
+              <option value="complete">Complete</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-sm font-semibold mb-1 block">Target End Date</label>
+            <Input type="date" {...editRegister("targetEndDate")} icon={<Calendar className="w-4 h-4" />} />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setIsEditOpen(false)}>Cancel</Button>
+            <Button type="submit" variant="accent" isLoading={updateMutation.isPending}>Save Changes</Button>
+          </DialogFooter>
+        </form>
+      </Dialog>
+
+      <Dialog open={!!addPersonTrade} onOpenChange={v => { if (!v) { setAddPersonTrade(null); setAddPersonError(null); } }}>
+        <DialogHeader>
+          <DialogTitle>Add Person — <span className="capitalize">{addPersonTrade}</span></DialogTitle>
+        </DialogHeader>
+        {addPersonError && (
+          <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm">{addPersonError}</div>
+        )}
+        <form onSubmit={personHandleSubmit(submitAddPerson)} className="space-y-4">
+          <div>
+            <label className="text-sm font-semibold mb-1 block">Company / Business Name</label>
+            <Input {...personRegister("companyName", { required: true })} placeholder="e.g. Smith Electrical Ltd" />
+          </div>
+          <div>
+            <label className="text-sm font-semibold mb-1 block">Contact Name</label>
+            <Input {...personRegister("contactName", { required: true })} placeholder="e.g. John Smith" icon={<Users className="w-4 h-4" />} />
+          </div>
+          <div>
+            <label className="text-sm font-semibold mb-1 block">Email</label>
+            <Input {...personRegister("contactEmail")} type="email" placeholder="john@smithelectrical.co.uk" icon={<Mail className="w-4 h-4" />} />
+          </div>
+          <div>
+            <label className="text-sm font-semibold mb-1 block">Phone</label>
+            <Input {...personRegister("contactPhone")} type="tel" placeholder="+44 7700 000000" icon={<Phone className="w-4 h-4" />} />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setAddPersonTrade(null)}>Cancel</Button>
+            <Button type="submit" variant="accent">Add to Project</Button>
+          </DialogFooter>
+        </form>
+      </Dialog>
+
+      <Dialog open={!!scheduleTarget} onOpenChange={v => { if (!v) { setScheduleTarget(null); setScheduleError(null); } }}>
+        <DialogHeader>
+          <DialogTitle>Site Schedule — {scheduleTarget?.name}</DialogTitle>
+        </DialogHeader>
+        {scheduleError && (
+          <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm">{scheduleError}</div>
+        )}
+        <form onSubmit={schedHandleSubmit(onScheduleSubmit)} className="space-y-5">
+          <div>
+            <label className="text-sm font-semibold mb-2 block">Days on Site</label>
+            <div className="flex flex-wrap gap-2">
+              {DAYS.map(day => {
+                const checked = (schedWatch("scheduledDays") ?? []).includes(day);
+                return (
+                  <button
+                    key={day}
+                    type="button"
+                    onClick={() => {
+                      const current: string[] = schedWatch("scheduledDays") ?? [];
+                      schedSetValue("scheduledDays", checked ? current.filter((d: string) => d !== day) : [...current, day]);
+                    }}
+                    className={cn(
+                      "px-3 py-1.5 rounded-lg text-sm font-semibold border-2 transition-colors",
+                      checked ? "bg-primary text-primary-foreground border-primary" : "bg-background text-muted-foreground border-input hover:border-primary/50"
+                    )}
+                  >{day}</button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-semibold mb-1 block">Start Time</label>
+              <Input type="time" {...schedRegister("siteStartTime")} icon={<Clock className="w-4 h-4" />} />
+            </div>
+            <div>
+              <label className="text-sm font-semibold mb-1 block">End Time</label>
+              <Input type="time" {...schedRegister("siteEndTime")} icon={<Clock className="w-4 h-4" />} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setScheduleTarget(null)}>Cancel</Button>
+            <Button type="submit" variant="accent">Save Schedule</Button>
           </DialogFooter>
         </form>
       </Dialog>
