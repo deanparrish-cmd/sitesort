@@ -12,6 +12,8 @@ import Register from "@/pages/auth/register";
 import Dashboard from "@/pages/dashboard";
 import ProjectsList from "@/pages/projects";
 import ProjectDetail from "@/pages/projects/detail";
+import QrPage from "@/pages/qr";
+import SiteBoard from "@/pages/site-board";
 
 // Set up the fetch interceptor for auth
 setupApiInterceptor();
@@ -55,9 +57,8 @@ function Router() {
       <Route path="/compliance">
         <PlaceholderPage title="Compliance Center" />
       </Route>
-      <Route path="/qr">
-        <PlaceholderPage title="QR Code Generator" />
-      </Route>
+      <Route path="/qr" component={QrPage} />
+      <Route path="/site/:token" component={SiteBoard} />
       <Route path="/team">
         <PlaceholderPage title="Team Management" />
       </Route>

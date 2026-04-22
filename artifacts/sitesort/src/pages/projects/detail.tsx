@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRoute } from "wouter";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronRight } from "lucide-react";
+import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronRight, QrCode, Download, Printer, RefreshCw } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { InsuranceCertZone } from "@/components/ui/insurance-cert-zone";
 import { VoiceRecall } from "@/components/voice-recall";
@@ -101,6 +102,73 @@ export default function ProjectDetail() {
   const [selectedDocType, setSelectedDocType] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
+
+  const [qrCode, setQrCode] = useState<{ token: string; siteUrl: string } | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrFetched, setQrFetched] = useState(false);
+  const qrSvgRef = useRef<HTMLDivElement>(null);
+
+  const loadQr = async () => {
+    setQrLoading(true);
+    try {
+      const token = localStorage.getItem("sitesort_token");
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+      const buildUrl = (t: string) => `${window.location.origin}${BASE}/site/${t}`;
+
+      const existing = await fetch(`/api/projects/${projectId}/qr-codes`, { headers }).then(r => r.json());
+      if (Array.isArray(existing) && existing.length > 0) {
+        const qr = existing.find((q: any) => q.category === "site_board") ?? existing[0];
+        setQrCode({ token: qr.token, siteUrl: buildUrl(qr.token) });
+        setQrFetched(true);
+        return;
+      }
+
+      const res = await fetch(`/api/projects/${projectId}/qr-codes`, {
+        method: "POST", headers,
+        body: JSON.stringify({ categories: ["site_board"] }),
+      });
+      const created = await res.json();
+      if (Array.isArray(created) && created.length > 0) {
+        const qr = created[0];
+        setQrCode({ token: qr.token, siteUrl: buildUrl(qr.token) });
+      }
+    } catch (e) { console.error(e); }
+    finally { setQrLoading(false); setQrFetched(true); }
+  };
+
+  const downloadQr = () => {
+    if (!qrSvgRef.current || !project) return;
+    const svg = qrSvgRef.current.querySelector("svg");
+    if (!svg) return;
+    const blob = new Blob([svg.outerHTML], { type: "image/svg+xml" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${project.name.replace(/\s+/g, "-")}-site-board-qr.svg`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const printQr = () => {
+    if (!qrCode || !qrSvgRef.current || !project) return;
+    const svg = qrSvgRef.current.querySelector("svg");
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.write(`<html><head><title>${project.name} — Site Board QR</title>
+      <style>body{font-family:system-ui,sans-serif;margin:0;padding:40px;text-align:center;background:white}
+      h2{font-size:24px;font-weight:800;margin-bottom:4px;color:#1f2937}
+      p{color:#6b7280;font-size:14px;margin:4px 0}
+      .url{font-size:11px;color:#9ca3af;word-break:break-all;margin-top:12px}
+      .badge{display:inline-block;background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;border-radius:9999px;padding:4px 12px;font-size:12px;font-weight:600;margin-bottom:20px}
+      svg{margin:20px auto;display:block}</style></head><body>
+      <span class="badge">SiteSort — Site Board</span>
+      <h2>${project.name}</h2><p>${project.address}</p>
+      ${svg?.outerHTML ?? ""}
+      <p class="url">Scan to view site information: ${qrCode.siteUrl}</p>
+      </body></html>`);
+    win.document.close(); win.print();
+  };
   const [scheduleTarget, setScheduleTarget] = useState<any | null>(null);
   const [scheduleError, setScheduleError] = useState<string | null>(null);
   const { register: schedRegister, handleSubmit: schedHandleSubmit, reset: schedReset, setValue: schedSetValue, watch: schedWatch } = useForm();
@@ -238,13 +306,20 @@ export default function ProjectDetail() {
 
       <Tabs defaultValue="documents">
         <TabsList className="mb-6 w-full justify-start overflow-x-auto bg-transparent border-b rounded-none p-0 h-auto">
-          {["overview", "documents", "team", "photos", "permits"].map(tab => (
+          {[
+            { value: "overview", label: "Overview" },
+            { value: "documents", label: "Documents" },
+            { value: "team", label: "Team" },
+            { value: "photos", label: "Photos" },
+            { value: "permits", label: "Permits" },
+            { value: "qr", label: "Site Board QR" },
+          ].map(tab => (
             <TabsTrigger 
-              key={tab} 
-              value={tab} 
-              className="capitalize px-6 py-3 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-primary"
+              key={tab.value}
+              value={tab.value}
+              className="px-6 py-3 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-primary"
             >
-              {tab}
+              {tab.label}
             </TabsTrigger>
           ))}
         </TabsList>
@@ -606,6 +681,64 @@ export default function ProjectDetail() {
               </div>
             );
           })()}
+        </TabsContent>
+
+        <TabsContent value="qr">
+          <div className="max-w-xl mx-auto py-4">
+            <div className="text-center mb-8">
+              <QrCode className="w-10 h-10 text-primary mx-auto mb-3" />
+              <h2 className="text-xl font-bold">Site Board QR Code</h2>
+              <p className="text-muted-foreground text-sm mt-1">
+                Print this QR code and post it on site. Workers can scan it to view live project information, permits, and documents — no login required.
+              </p>
+            </div>
+
+            {!qrFetched ? (
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-40 h-40 rounded-2xl bg-muted flex items-center justify-center opacity-40">
+                  <QrCode className="w-16 h-16 text-muted-foreground" />
+                </div>
+                <Button onClick={loadQr} disabled={qrLoading} size="lg">
+                  {qrLoading
+                    ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Generating…</>
+                    : <><QrCode className="w-4 h-4 mr-2" /> Generate Site Board QR Code</>}
+                </Button>
+              </div>
+            ) : qrCode ? (
+              <div className="flex flex-col items-center gap-5">
+                <div ref={qrSvgRef} className="p-4 bg-white border-2 border-muted rounded-2xl shadow-sm">
+                  <QRCodeSVG value={qrCode.siteUrl} size={200} level="H" includeMargin />
+                </div>
+
+                <div className="w-full bg-muted/50 rounded-xl px-4 py-3 text-center">
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Scan target URL</p>
+                  <p className="text-sm font-mono text-foreground break-all">{qrCode.siteUrl}</p>
+                </div>
+
+                <div className="flex gap-3 w-full">
+                  <Button variant="outline" className="flex-1" onClick={downloadQr}>
+                    <Download className="w-4 h-4 mr-2" /> Download SVG
+                  </Button>
+                  <Button variant="outline" className="flex-1" onClick={printQr}>
+                    <Printer className="w-4 h-4 mr-2" /> Print
+                  </Button>
+                </div>
+
+                <div className="w-full bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
+                  <p className="font-semibold mb-1">What workers will see when they scan:</p>
+                  <ul className="list-disc list-inside space-y-1 text-blue-700 text-xs">
+                    <li>Project name, address and status</li>
+                    <li>Site manager contact details</li>
+                    <li>Active permits and expiry dates</li>
+                    <li>Public documents on display</li>
+                    <li>Trades currently working on site</li>
+                  </ul>
+                </div>
+              </div>
+            ) : (
+              <p className="text-destructive text-center text-sm">Failed to generate QR code. Please try again.</p>
+            )}
+          </div>
         </TabsContent>
       </Tabs>
 
