@@ -13,6 +13,7 @@ import usersRouter from "./users";
 import qrRouter from "./qr";
 import aiRouter from "./ai";
 import uploadRouter from "./upload";
+import testEmailRouter from "./test-email";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use(usersRouter);
 router.use(qrRouter);
 router.use(aiRouter);
 router.use(uploadRouter);
+router.use(testEmailRouter);
 
 export default router;

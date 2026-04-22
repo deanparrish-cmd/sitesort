@@ -1,14 +1,28 @@
+import { useState } from "react";
 import { Link } from "wouter";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Building2, AlertTriangle, CheckCircle2, ArrowRight, ShieldAlert, FileSignature, Users } from "lucide-react";
+import { Building2, AlertTriangle, CheckCircle2, ArrowRight, ShieldAlert, FileSignature, Users, Mail } from "lucide-react";
 import { useListProjects, useGetComplianceOverview } from "@workspace/api-client-react";
 
 export default function Dashboard() {
   const { data: projects, isLoading: projectsLoading } = useListProjects();
   const { data: compliance, isLoading: compLoading } = useGetComplianceOverview();
+
+  const [emailStatus, setEmailStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+
+  async function sendTestEmail() {
+    setEmailStatus("sending");
+    try {
+      const res = await fetch("/api/test-email", { method: "POST" });
+      const data = await res.json();
+      setEmailStatus(data.success ? "sent" : "error");
+    } catch {
+      setEmailStatus("error");
+    }
+  }
 
   return (
     <SidebarLayout>
@@ -17,9 +31,24 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold">Dashboard</h1>
           <p className="text-muted-foreground mt-1">Overview of your sites and compliance.</p>
         </div>
-        <Link href="/projects">
-          <Button variant="accent">New Project</Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={sendTestEmail}
+            disabled={emailStatus === "sending"}
+            className="text-xs"
+          >
+            <Mail className="w-3.5 h-3.5 mr-1.5" />
+            {emailStatus === "idle" && "Send Test Email"}
+            {emailStatus === "sending" && "Sending…"}
+            {emailStatus === "sent" && "✓ Email sent!"}
+            {emailStatus === "error" && "✗ Failed — check console"}
+          </Button>
+          <Link href="/projects">
+            <Button variant="accent">New Project</Button>
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
