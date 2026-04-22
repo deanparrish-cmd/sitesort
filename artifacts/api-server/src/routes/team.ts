@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { projectMembersTable, usersTable, subcontractorsTable, insuranceRecordsTable } from "@workspace/db/schema";
+import { projectMembersTable, usersTable, subcontractorsTable, insuranceRecordsTable, projectsTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
@@ -16,6 +16,14 @@ function getInsuranceStatus(records: Array<{ status: string }>): string {
 
 router.get("/projects/:projectId/members", authenticate, async (req, res) => {
   try {
+    const project = await db.select().from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!project[0]) {
+      res.status(404).json({ error: "not_found", message: "Project not found" });
+      return;
+    }
+
     const members = await db.select().from(projectMembersTable).where(eq(projectMembersTable.projectId, req.params.projectId));
 
     const result = await Promise.all(members.map(async (m) => {
@@ -100,6 +108,32 @@ router.post("/projects/:projectId/members", authenticate, async (req, res) => {
     if (!role) {
       res.status(400).json({ error: "validation_error", message: "role is required" });
       return;
+    }
+
+    const project = await db.select().from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!project[0]) {
+      res.status(404).json({ error: "not_found", message: "Project not found" });
+      return;
+    }
+
+    if (userId) {
+      const existing = await db.select().from(projectMembersTable)
+        .where(and(eq(projectMembersTable.projectId, req.params.projectId), eq(projectMembersTable.userId, userId)))
+        .limit(1);
+      if (existing.length > 0) {
+        res.status(409).json({ error: "conflict", message: "User is already a member of this project" });
+        return;
+      }
+    } else if (subcontractorId) {
+      const existing = await db.select().from(projectMembersTable)
+        .where(and(eq(projectMembersTable.projectId, req.params.projectId), eq(projectMembersTable.subcontractorId, subcontractorId)))
+        .limit(1);
+      if (existing.length > 0) {
+        res.status(409).json({ error: "conflict", message: "Subcontractor is already a member of this project" });
+        return;
+      }
     }
 
     const id = generateId();

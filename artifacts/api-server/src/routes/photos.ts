@@ -1,16 +1,22 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { photosTable, usersTable, notificationsTable, projectMembersTable } from "@workspace/db/schema";
-import { eq, and } from "drizzle-orm";
+import { photosTable, usersTable, notificationsTable, projectMembersTable, projectsTable } from "@workspace/db/schema";
+import { eq, and, count } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 
 const router: IRouter = Router();
 
-let photoCounter = 1000;
-
 router.get("/projects/:projectId/photos", authenticate, async (req, res) => {
   try {
+    const project = await db.select().from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!project[0]) {
+      res.status(404).json({ error: "not_found", message: "Project not found" });
+      return;
+    }
+
     const { category } = req.query as { category?: string };
     const conditions = [eq(photosTable.projectId, req.params.projectId)];
     if (category) conditions.push(eq(photosTable.category, category));
@@ -48,7 +54,8 @@ router.post("/projects/:projectId/photos", authenticate, async (req, res) => {
       return;
     }
 
-    const refNum = `PROJ-PHOTO-${String(++photoCounter).padStart(4, "0")}`;
+    const [{ total }] = await db.select({ total: count() }).from(photosTable);
+    const refNum = `PHOTO-${String(total + 1).padStart(4, "0")}`;
     const id = generateId();
     await db.insert(photosTable).values({
       id,

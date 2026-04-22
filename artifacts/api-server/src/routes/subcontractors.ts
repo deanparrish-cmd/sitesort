@@ -128,9 +128,16 @@ router.patch("/subcontractors/:subcontractorId", authenticate, async (req, res) 
     if (reliabilityRating !== undefined) updates.reliabilityRating = reliabilityRating;
     if (paymentHold !== undefined) updates.paymentHold = paymentHold;
 
-    await db.update(subcontractorsTable).set(updates).where(eq(subcontractorsTable.id, req.params.subcontractorId));
+    await db.update(subcontractorsTable).set(updates)
+      .where(and(eq(subcontractorsTable.id, req.params.subcontractorId), eq(subcontractorsTable.companyId, req.user!.companyId)));
 
-    const subs = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.id, req.params.subcontractorId)).limit(1);
+    const subs = await db.select().from(subcontractorsTable)
+      .where(and(eq(subcontractorsTable.id, req.params.subcontractorId), eq(subcontractorsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!subs[0]) {
+      res.status(404).json({ error: "not_found", message: "Subcontractor not found" });
+      return;
+    }
     const s = subs[0];
     const insurance = await db.select().from(insuranceRecordsTable).where(eq(insuranceRecordsTable.subcontractorId, s.id));
 
@@ -146,6 +153,14 @@ router.post("/subcontractors/:subcontractorId/insurance", authenticate, async (r
     const { type, certificateUrl, expiryDate } = req.body;
     if (!type || !certificateUrl || !expiryDate) {
       res.status(400).json({ error: "validation_error", message: "type, certificateUrl, expiryDate required" });
+      return;
+    }
+
+    const sub = await db.select().from(subcontractorsTable)
+      .where(and(eq(subcontractorsTable.id, req.params.subcontractorId), eq(subcontractorsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!sub[0]) {
+      res.status(404).json({ error: "not_found", message: "Subcontractor not found" });
       return;
     }
 

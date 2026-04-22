@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { documentsTable, documentDistributionsTable, usersTable, notificationsTable } from "@workspace/db/schema";
+import { documentsTable, documentDistributionsTable, usersTable, notificationsTable, projectsTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
@@ -149,6 +149,14 @@ router.get("/documents/:documentId", authenticate, async (req, res) => {
 
     const d = docs[0];
 
+    const project = await db.select().from(projectsTable)
+      .where(and(eq(projectsTable.id, d.projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!project[0]) {
+      res.status(404).json({ error: "not_found", message: "Document not found" });
+      return;
+    }
+
     const distRecord = await db.select().from(documentDistributionsTable)
       .where(and(eq(documentDistributionsTable.documentId, d.id), eq(documentDistributionsTable.userId, req.user!.id)))
       .limit(1);
@@ -240,6 +248,14 @@ router.post("/documents/:documentId/distribute", authenticate, async (req, res) 
       return;
     }
 
+    const project = await db.select().from(projectsTable)
+      .where(and(eq(projectsTable.id, docs[0].projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!project[0]) {
+      res.status(404).json({ error: "not_found", message: "Document not found" });
+      return;
+    }
+
     for (const userId of userIds) {
       const existing = await db.select().from(documentDistributionsTable)
         .where(and(eq(documentDistributionsTable.documentId, req.params.documentId), eq(documentDistributionsTable.userId, userId)))
@@ -275,6 +291,20 @@ router.post("/documents/:documentId/distribute", authenticate, async (req, res) 
 
 router.get("/documents/:documentId/distributions", authenticate, async (req, res) => {
   try {
+    const docs = await db.select({ projectId: documentsTable.projectId }).from(documentsTable)
+      .where(eq(documentsTable.id, req.params.documentId)).limit(1);
+    if (!docs[0]) {
+      res.status(404).json({ error: "not_found", message: "Document not found" });
+      return;
+    }
+    const project = await db.select().from(projectsTable)
+      .where(and(eq(projectsTable.id, docs[0].projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!project[0]) {
+      res.status(404).json({ error: "not_found", message: "Document not found" });
+      return;
+    }
+
     const dists = await db.select().from(documentDistributionsTable).where(eq(documentDistributionsTable.documentId, req.params.documentId));
     const result = await Promise.all(dists.map(async (dist) => {
       const userRows = await db.select({ name: usersTable.name, role: usersTable.role }).from(usersTable).where(eq(usersTable.id, dist.userId)).limit(1);

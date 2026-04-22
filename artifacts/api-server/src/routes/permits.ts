@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { permitsTable, usersTable } from "@workspace/db/schema";
+import { permitsTable, usersTable, projectsTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
@@ -75,6 +75,20 @@ router.post("/projects/:projectId/permits", authenticate, async (req, res) => {
 
 router.patch("/permits/:permitId", authenticate, async (req, res) => {
   try {
+    const existing = await db.select().from(permitsTable).where(eq(permitsTable.id, req.params.permitId)).limit(1);
+    if (!existing[0]) {
+      res.status(404).json({ error: "not_found", message: "Permit not found" });
+      return;
+    }
+
+    const project = await db.select().from(projectsTable)
+      .where(and(eq(projectsTable.id, existing[0].projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!project[0]) {
+      res.status(404).json({ error: "not_found", message: "Permit not found" });
+      return;
+    }
+
     const { description, responsibleUserId, expiryDate, documentUrl } = req.body;
     const updates: Record<string, unknown> = {};
     if (description !== undefined) updates.description = description;
@@ -83,12 +97,8 @@ router.patch("/permits/:permitId", authenticate, async (req, res) => {
     if (documentUrl !== undefined) updates.documentUrl = documentUrl;
 
     await db.update(permitsTable).set(updates).where(eq(permitsTable.id, req.params.permitId));
-    const permits = await db.select().from(permitsTable).where(eq(permitsTable.id, req.params.permitId)).limit(1);
-    if (permits.length === 0) {
-      res.status(404).json({ error: "not_found", message: "Permit not found" });
-      return;
-    }
-    res.json(await formatPermit(permits[0]));
+    const updated = await db.select().from(permitsTable).where(eq(permitsTable.id, req.params.permitId)).limit(1);
+    res.json(await formatPermit(updated[0]));
   } catch (err) {
     req.log.error({ err }, "Update permit error");
     res.status(500).json({ error: "server_error", message: "Failed to update permit" });

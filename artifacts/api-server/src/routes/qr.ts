@@ -92,7 +92,16 @@ router.post("/projects/:projectId/qr-codes", authenticate, async (req, res) => {
 // Delete a QR code
 router.delete("/projects/:projectId/qr-codes/:id", authenticate, async (req, res) => {
   try {
-    await db.delete(qrCodesTable).where(eq(qrCodesTable.id, req.params.id));
+    const project = await db.select().from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .then(r => r[0]);
+
+    if (!project) {
+      res.status(404).json({ error: "not_found", message: "Project not found" });
+      return;
+    }
+
+    await db.delete(qrCodesTable).where(and(eq(qrCodesTable.id, req.params.id), eq(qrCodesTable.projectId, req.params.projectId)));
     res.status(204).end();
   } catch (err) {
     req.log.error({ err }, "Delete QR code error");
@@ -140,10 +149,10 @@ router.get("/site/:token", async (req, res) => {
       name: documentsTable.name,
       type: documentsTable.type,
       version: documentsTable.version,
-      uploadedAt: documentsTable.uploadedAt,
+      createdAt: documentsTable.createdAt,
       publicAccess: documentsTable.publicAccess,
     }).from(documentsTable)
-      .where(and(eq(documentsTable.projectId, qr.projectId), eq(documentsTable.status, "active")));
+      .where(and(eq(documentsTable.projectId, qr.projectId), eq(documentsTable.status, "current")));
 
     const siteManager = members.find(m => m.role === "manager") ?? members[0] ?? null;
 
@@ -172,7 +181,7 @@ router.get("/site/:token", async (req, res) => {
           name: d.name,
           type: d.type,
           version: d.version,
-          uploadedAt: d.uploadedAt,
+          uploadedAt: d.createdAt,
         })),
       generatedAt: new Date().toISOString(),
     });

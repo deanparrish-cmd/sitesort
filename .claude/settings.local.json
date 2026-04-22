@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(PORT=8080 node --enable-source-maps ./dist/index.mjs)",
-      "Bash(curl -s http://localhost:8080/api/projects -H \"Authorization: Bearer bad\")"
+      "Bash(curl -s http://localhost:8080/api/projects -H \"Authorization: Bearer bad\")",
+      "Bash(pnpm run *)",
+      "Bash(pnpm *)",
+      "Bash(printenv JWT_SECRET)"
     ]
   }
 }

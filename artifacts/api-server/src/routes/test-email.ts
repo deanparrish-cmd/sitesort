@@ -1,9 +1,10 @@
 import { Router } from "express";
 import { Resend } from "resend";
+import { authenticate } from "../middlewares/auth";
 
 const router = Router();
 
-router.post("/test-email", async (_req, res) => {
+router.post("/test-email", authenticate, async (_req, res) => {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     res.status(500).json({ error: "RESEND_API_KEY is not set" });

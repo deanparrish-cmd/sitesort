@@ -126,12 +126,6 @@ function ProjectQrCard({ project }: { project: any }) {
                 size={160}
                 level="H"
                 includeMargin
-                imageSettings={{
-                  src: "",
-                  height: 0,
-                  width: 0,
-                  excavate: false,
-                }}
               />
             </div>
             <p className="text-xs text-muted-foreground text-center break-all px-2 leading-relaxed">
