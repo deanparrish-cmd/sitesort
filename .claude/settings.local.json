@@ -5,7 +5,10 @@
       "Bash(curl -s http://localhost:8080/api/projects -H \"Authorization: Bearer bad\")",
       "Bash(pnpm run *)",
       "Bash(pnpm *)",
-      "Bash(printenv JWT_SECRET)"
+      "Bash(printenv JWT_SECRET)",
+      "Bash(node ./build.mjs)",
+      "Read(//run/**)",
+      "Read(//run/secrets/**)"
     ]
   }
 }
