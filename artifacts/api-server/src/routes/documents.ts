@@ -4,6 +4,7 @@ import { documentsTable, documentDistributionsTable, usersTable, notificationsTa
 import { eq, and } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
+import { sendDocumentNotificationEmail } from "../lib/email";
 
 const router: IRouter = Router();
 
@@ -91,6 +92,10 @@ router.post("/projects/:projectId/documents", authenticate, async (req, res) => 
       publicAccess: publicAccess ?? false,
     });
 
+    // Look up project name once for all notifications
+    const projectRows = await db.select({ name: projectsTable.name }).from(projectsTable).where(eq(projectsTable.id, req.params.projectId)).limit(1);
+    const projectName = projectRows[0]?.name ?? "your project";
+
     if (distributeToUserIds && Array.isArray(distributeToUserIds)) {
       for (const userId of distributeToUserIds) {
         await db.insert(documentDistributionsTable).values({
@@ -110,6 +115,15 @@ router.post("/projects/:projectId/documents", authenticate, async (req, res) => 
           relatedEntityType: "document",
           read: false,
         });
+
+        // Send email notification (fire-and-forget)
+        const recipientRows = await db.select({ email: usersTable.email, name: usersTable.name }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+        if (recipientRows[0]) {
+          const { email: recipientEmail, name: recipientName } = recipientRows[0];
+          sendDocumentNotificationEmail(recipientEmail, recipientName, name, newVersion, projectName, requiresAcknowledgment ?? false).catch(err =>
+            req.log.error({ err }, "Failed to send document notification email"),
+          );
+        }
       }
     }
 

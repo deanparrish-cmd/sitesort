@@ -4,6 +4,7 @@ import { photosTable, usersTable, notificationsTable, projectMembersTable, proje
 import { eq, and, count } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
+import { sendSafetyAlertEmail } from "../lib/email";
 
 const router: IRouter = Router();
 
@@ -71,6 +72,9 @@ router.post("/projects/:projectId/photos", authenticate, async (req, res) => {
     });
 
     if (category === "safety_concern" || category === "snag") {
+      const projectRows = await db.select({ name: projectsTable.name }).from(projectsTable).where(eq(projectsTable.id, req.params.projectId)).limit(1);
+      const projectName = projectRows[0]?.name ?? "your project";
+
       const managers = await db.select({ userId: projectMembersTable.userId }).from(projectMembersTable)
         .where(and(eq(projectMembersTable.projectId, req.params.projectId), eq(projectMembersTable.role, "manager")));
 
@@ -86,6 +90,15 @@ router.post("/projects/:projectId/photos", authenticate, async (req, res) => {
             relatedEntityType: "photo",
             read: false,
           });
+
+          // Send email alert (fire-and-forget)
+          const managerRows = await db.select({ email: usersTable.email, name: usersTable.name }).from(usersTable).where(eq(usersTable.id, m.userId)).limit(1);
+          if (managerRows[0]) {
+            const { email: managerEmail, name: managerName } = managerRows[0];
+            sendSafetyAlertEmail(managerEmail, managerName, category, refNum, projectName).catch(err =>
+              req.log.error({ err }, "Failed to send safety alert email"),
+            );
+          }
         }
       }
     }

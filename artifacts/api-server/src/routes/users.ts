@@ -1,10 +1,11 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { usersTable } from "@workspace/db/schema";
+import { companiesTable, usersTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
+import { sendInvitationEmail } from "../lib/email";
 
 const router: IRouter = Router();
 
@@ -54,6 +55,19 @@ router.post("/users", authenticate, async (req, res) => {
       role,
       phone: phone ?? null,
     });
+
+    // Look up inviter name and company name for the invitation email
+    const [inviterRow, companyRow] = await Promise.all([
+      db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1),
+      db.select({ name: companiesTable.name }).from(companiesTable).where(eq(companiesTable.id, req.user!.companyId)).limit(1),
+    ]);
+
+    const inviterName = inviterRow[0]?.name ?? "Your administrator";
+    const companyName = companyRow[0]?.name ?? "your company";
+
+    sendInvitationEmail(email, name, companyName, defaultPassword, inviterName).catch(err =>
+      req.log.error({ err }, "Failed to send invitation email"),
+    );
 
     res.status(201).json({ id, companyId: req.user!.companyId, email, name, role, phone: phone ?? null, createdAt: new Date().toISOString(), lastActiveAt: null });
   } catch (err) {

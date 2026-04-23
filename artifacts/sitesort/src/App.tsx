@@ -9,6 +9,9 @@ import NotFound from "@/pages/not-found";
 import LandingPage from "@/pages/landing";
 import Login from "@/pages/auth/login";
 import Register from "@/pages/auth/register";
+import VerifyEmail from "@/pages/auth/verify-email";
+import ForgotPassword from "@/pages/auth/forgot-password";
+import ResetPassword from "@/pages/auth/reset-password";
 import Dashboard from "@/pages/dashboard";
 import ProjectsList from "@/pages/projects";
 import ProjectDetail from "@/pages/projects/detail";
@@ -45,6 +48,9 @@ function Router() {
       <Route path="/" component={LandingPage} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
+      <Route path="/verify-email" component={VerifyEmail} />
+      <Route path="/forgot-password" component={ForgotPassword} />
+      <Route path="/reset-password" component={ResetPassword} />
       
       {/* Authenticated Routes */}
       <Route path="/dashboard" component={Dashboard} />

@@ -1,10 +1,15 @@
 import { Router, type IRouter } from "express";
+import { randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
 import { db } from "@workspace/db";
 import { companiesTable, usersTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { generateToken, authenticate } from "../middlewares/auth";
+import {
+  sendVerificationEmail,
+  sendPasswordResetEmail,
+} from "../lib/email";
 
 const router: IRouter = Router();
 
@@ -25,6 +30,8 @@ router.post("/auth/register", async (req, res) => {
     const companyId = generateId();
     const userId = generateId();
     const passwordHash = await bcrypt.hash(password, 10);
+    const verificationToken = randomBytes(32).toString("hex");
+    const verificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     await db.insert(companiesTable).values({
       id: companyId,
@@ -39,7 +46,14 @@ router.post("/auth/register", async (req, res) => {
       passwordHash,
       name: adminName,
       role: "admin",
+      emailVerified: false,
+      emailVerificationToken: verificationToken,
+      emailVerificationExpiry: verificationExpiry,
     });
+
+    sendVerificationEmail(email, adminName, verificationToken).catch(err =>
+      req.log.error({ err }, "Failed to send verification email"),
+    );
 
     const token = generateToken({ id: userId, companyId, role: "admin", email });
     res.status(201).json({
@@ -102,6 +116,118 @@ router.get("/auth/me", authenticate, async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Get me error");
     res.status(500).json({ error: "server_error", message: "Failed to get user" });
+  }
+});
+
+router.post("/auth/verify-email", async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) {
+      res.status(400).json({ error: "validation_error", message: "Token required" });
+      return;
+    }
+
+    const users = await db.select().from(usersTable)
+      .where(eq(usersTable.emailVerificationToken, token))
+      .limit(1);
+
+    if (users.length === 0) {
+      res.status(400).json({ error: "invalid_token", message: "Invalid or expired verification link" });
+      return;
+    }
+
+    const user = users[0];
+    if (user.emailVerificationExpiry && user.emailVerificationExpiry < new Date()) {
+      res.status(400).json({ error: "token_expired", message: "Verification link has expired" });
+      return;
+    }
+
+    await db.update(usersTable).set({
+      emailVerified: true,
+      emailVerificationToken: null,
+      emailVerificationExpiry: null,
+    }).where(eq(usersTable.id, user.id));
+
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Verify email error");
+    res.status(500).json({ error: "server_error", message: "Verification failed" });
+  }
+});
+
+router.post("/auth/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      res.status(400).json({ error: "validation_error", message: "Email required" });
+      return;
+    }
+
+    const users = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
+    // Always return success to prevent email enumeration
+    if (users.length === 0) {
+      res.json({ success: true });
+      return;
+    }
+
+    const user = users[0];
+    const resetToken = randomBytes(32).toString("hex");
+    const resetExpiry = new Date(Date.now() + 60 * 60 * 1000);
+
+    await db.update(usersTable).set({
+      passwordResetToken: resetToken,
+      passwordResetExpiry: resetExpiry,
+    }).where(eq(usersTable.id, user.id));
+
+    sendPasswordResetEmail(user.email, user.name, resetToken).catch(err =>
+      req.log.error({ err }, "Failed to send password reset email"),
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Forgot password error");
+    res.status(500).json({ error: "server_error", message: "Failed to process request" });
+  }
+});
+
+router.post("/auth/reset-password", async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password) {
+      res.status(400).json({ error: "validation_error", message: "Token and password required" });
+      return;
+    }
+    if (password.length < 8) {
+      res.status(400).json({ error: "validation_error", message: "Password must be at least 8 characters" });
+      return;
+    }
+
+    const users = await db.select().from(usersTable)
+      .where(eq(usersTable.passwordResetToken, token))
+      .limit(1);
+
+    if (users.length === 0) {
+      res.status(400).json({ error: "invalid_token", message: "Invalid or expired reset link" });
+      return;
+    }
+
+    const user = users[0];
+    if (user.passwordResetExpiry && user.passwordResetExpiry < new Date()) {
+      res.status(400).json({ error: "token_expired", message: "Reset link has expired" });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    await db.update(usersTable).set({
+      passwordHash,
+      passwordResetToken: null,
+      passwordResetExpiry: null,
+    }).where(eq(usersTable.id, user.id));
+
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Reset password error");
+    res.status(500).json({ error: "server_error", message: "Failed to reset password" });
   }
 });
 
