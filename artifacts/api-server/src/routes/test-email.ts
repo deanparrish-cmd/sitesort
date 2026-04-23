@@ -13,7 +13,7 @@ router.post("/test-email", authenticate, async (req, res) => {
 
   const resend = new Resend(apiKey);
 
-  const { error } = await resend.emails.send({
+  const { data, error } = await resend.emails.send({
     from: "onboarding@resend.dev",
     to: "amy-parrish@hotmail.co.uk",
     subject: "🎉 Your email is working!",
@@ -21,9 +21,11 @@ router.post("/test-email", authenticate, async (req, res) => {
   });
 
   if (error) {
-    res.status(500).json({ error: error.message });
+    console.error("Resend error:", JSON.stringify(error, null, 2));
+    res.status(500).json({ error: error.message, details: error });
     return;
   }
+  console.log("Resend success:", data);
 
   res.json({ success: true });
 });
