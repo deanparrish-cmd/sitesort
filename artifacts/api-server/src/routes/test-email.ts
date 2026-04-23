@@ -14,7 +14,7 @@ router.post("/test-email", authenticate, async (req, res) => {
   const resend = new Resend(apiKey);
 
   const { error } = await resend.emails.send({
-    from: "SiteSort <noreply@sitesort.co.uk>",
+    from: "onboarding@resend.dev",
     to: "amy-parrish@hotmail.co.uk",
     subject: "🎉 Your email is working!",
     text: "If you're reading this, your Resend API is set up correctly. You can now send emails from your app!",
