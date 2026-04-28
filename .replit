@@ -29,3 +29,8 @@ timeoutMs = 20000
 [nix]
 channel = "stable-25_05"
 packages = ["haskellPackages.hinit"]
+
+[userenv]
+
+[userenv.shared]
+APP_URL = "https://90ee6957-4e85-4996-8aec-3f8d82d8a668-00-3j1mush3t01sx.kirk.replit.dev"
