@@ -1,6 +1,6 @@
 import { Resend } from "resend";
 
-const FROM = "SiteSort <noreply@sitesort.co.uk>";
+const FROM = "SiteSort <noreply@mail.sitesort.co.uk>";
 const APP_URL = process.env.APP_URL ?? "https://sitesort.co.uk";
 
 function resend() {

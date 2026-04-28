@@ -18,6 +18,14 @@ function getDistSummary(dists: Array<{ status: string }>) {
 
 router.get("/projects/:projectId/documents", authenticate, async (req, res) => {
   try {
+    const project = await db.select({ id: projectsTable.id }).from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!project[0]) {
+      res.status(404).json({ error: "not_found", message: "Project not found" });
+      return;
+    }
+
     const { type, status } = req.query as { type?: string; status?: string };
     let conditions = [eq(documentsTable.projectId, req.params.projectId)];
     if (type) conditions.push(eq(documentsTable.type, type));
@@ -56,6 +64,14 @@ router.get("/projects/:projectId/documents", authenticate, async (req, res) => {
 
 router.post("/projects/:projectId/documents", authenticate, async (req, res) => {
   try {
+    const project = await db.select({ id: projectsTable.id }).from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!project[0]) {
+      res.status(404).json({ error: "not_found", message: "Project not found" });
+      return;
+    }
+
     const { name, type, fileUrl, fileSize, requiresAcknowledgment, publicAccess, distributeToUserIds } = req.body;
     if (!name || !type || !fileUrl) {
       res.status(400).json({ error: "validation_error", message: "name, type, fileUrl required" });

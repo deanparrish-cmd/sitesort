@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import { isTokenBlocked } from "../lib/token-blocklist";
 
 if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET environment variable is required");
 const JWT_SECRET: string = process.env.JWT_SECRET;
@@ -19,7 +20,7 @@ declare global {
   }
 }
 
-export function authenticate(req: Request, res: Response, next: NextFunction): void {
+export async function authenticate(req: Request, res: Response, next: NextFunction): Promise<void> {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     res.status(401).json({ error: "unauthorized", message: "Authentication required" });
@@ -29,6 +30,10 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
   const token = authHeader.slice(7);
   try {
     const payload = jwt.verify(token, JWT_SECRET) as AuthUser;
+    if (await isTokenBlocked(token)) {
+      res.status(401).json({ error: "unauthorized", message: "Token has been revoked" });
+      return;
+    }
     req.user = payload;
     next();
   } catch {

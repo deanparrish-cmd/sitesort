@@ -18,6 +18,8 @@ type LoginForm = z.infer<typeof loginSchema>;
 export default function Login() {
   const [, setLocation] = useLocation();
   const [error, setError] = useState<string | null>(null);
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
+  const [resendState, setResendState] = useState<"idle" | "sending" | "sent">("idle");
   const loginMutation = useLogin();
 
   const { register, handleSubmit, formState: { errors } } = useForm<LoginForm>({
@@ -26,25 +28,45 @@ export default function Login() {
 
   const onSubmit = async (data: LoginForm) => {
     setError(null);
+    setUnverifiedEmail(null);
+    setResendState("idle");
     try {
       const response = await loginMutation.mutateAsync({ data });
       localStorage.setItem("sitesort_token", response.token);
       setLocation("/dashboard");
     } catch (err: any) {
-      setError(err.message || "Invalid credentials. Please try again.");
+      if (err?.data?.error === "email_not_verified") {
+        setUnverifiedEmail(data.email);
+      } else {
+        setError(err?.data?.message || err.message || "Invalid credentials. Please try again.");
+      }
+    }
+  };
+
+  const handleResend = async () => {
+    if (!unverifiedEmail || resendState !== "idle") return;
+    setResendState("sending");
+    try {
+      await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: unverifiedEmail }),
+      });
+    } finally {
+      setResendState("sent");
     }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted/30 relative">
       <div className="absolute inset-0 z-0 opacity-20">
-        <img 
-          src={`${import.meta.env.BASE_URL}images/auth-bg.png`} 
-          alt="Background" 
+        <img
+          src={`${import.meta.env.BASE_URL}images/auth-bg.png`}
+          alt="Background"
           className="w-full h-full object-cover"
         />
       </div>
-      
+
       <div className="w-full max-w-md p-8 bg-card rounded-2xl shadow-2xl border border-border/50 relative z-10 slide-up">
         <div className="flex flex-col items-center mb-8">
           <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center mb-4 shadow-lg">
@@ -60,22 +82,44 @@ export default function Login() {
           </div>
         )}
 
+        {unverifiedEmail && (
+          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg dark:bg-amber-950/30 dark:border-amber-800">
+            <p className="text-amber-800 dark:text-amber-300 text-sm font-medium mb-2">
+              Please verify your email address
+            </p>
+            <p className="text-amber-700 dark:text-amber-400 text-sm mb-3">
+              Check your inbox at <span className="font-semibold">{unverifiedEmail}</span> for a verification link.
+            </p>
+            {resendState === "sent" ? (
+              <p className="text-green-700 dark:text-green-400 text-sm font-medium">Verification email sent — check your inbox.</p>
+            ) : (
+              <button
+                onClick={handleResend}
+                disabled={resendState === "sending"}
+                className="text-sm text-amber-800 dark:text-amber-300 underline underline-offset-2 hover:no-underline disabled:opacity-50"
+              >
+                {resendState === "sending" ? "Sending…" : "Resend verification email"}
+              </button>
+            )}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
           <div>
-            <Input 
-              {...register("email")} 
-              type="email" 
-              placeholder="Email address" 
+            <Input
+              {...register("email")}
+              type="email"
+              placeholder="Email address"
               icon={<Mail className="w-5 h-5" />}
             />
             {errors.email && <p className="text-destructive text-sm mt-1 ml-1">{errors.email.message}</p>}
           </div>
-          
+
           <div>
-            <Input 
-              {...register("password")} 
-              type="password" 
-              placeholder="Password" 
+            <Input
+              {...register("password")}
+              type="password"
+              placeholder="Password"
               icon={<Lock className="w-5 h-5" />}
             />
             {errors.password && <p className="text-destructive text-sm mt-1 ml-1">{errors.password.message}</p>}

@@ -36,6 +36,14 @@ async function formatPermit(p: { id: string; projectId: string; type: string; de
 
 router.get("/projects/:projectId/permits", authenticate, async (req, res) => {
   try {
+    const project = await db.select({ id: projectsTable.id }).from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!project[0]) {
+      res.status(404).json({ error: "not_found", message: "Project not found" });
+      return;
+    }
+
     const permits = await db.select().from(permitsTable).where(eq(permitsTable.projectId, req.params.projectId));
     const result = await Promise.all(permits.map(formatPermit));
     res.json(result);
@@ -47,6 +55,14 @@ router.get("/projects/:projectId/permits", authenticate, async (req, res) => {
 
 router.post("/projects/:projectId/permits", authenticate, async (req, res) => {
   try {
+    const project = await db.select({ id: projectsTable.id }).from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!project[0]) {
+      res.status(404).json({ error: "not_found", message: "Project not found" });
+      return;
+    }
+
     const { type, description, responsibleUserId, startDate, expiryDate, documentUrl } = req.body;
     if (!type || !description || !responsibleUserId || !startDate || !expiryDate) {
       res.status(400).json({ error: "validation_error", message: "type, description, responsibleUserId, startDate, expiryDate required" });

@@ -2,8 +2,8 @@ import { Router, type IRouter } from "express";
 import multer from "multer";
 import OpenAI from "openai";
 import { db } from "@workspace/db";
-import { documentsTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { documentsTable, projectsTable } from "@workspace/db/schema";
+import { eq, and } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
 
 const router: IRouter = Router();
@@ -40,7 +40,15 @@ router.post(
         return;
       }
 
-      // 2. Load all documents for this project
+      // 2. Load all documents for this project (verify project ownership first)
+      const project = await db.select({ id: projectsTable.id }).from(projectsTable)
+        .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
+        .limit(1);
+      if (!project[0]) {
+        res.status(404).json({ error: "not_found", message: "Project not found" });
+        return;
+      }
+
       const allDocs = await db
         .select()
         .from(documentsTable)

@@ -121,7 +121,9 @@ router.patch("/projects/:projectId", authenticate, async (req, res) => {
 
     await db.update(projectsTable).set(updates).where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)));
 
-    const projects = await db.select().from(projectsTable).where(eq(projectsTable.id, req.params.projectId)).limit(1);
+    const projects = await db.select().from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
     if (projects.length === 0) {
       res.status(404).json({ error: "not_found", message: "Project not found" });
       return;

@@ -86,7 +86,9 @@ router.patch("/users/:userId", authenticate, async (req, res) => {
 
     await db.update(usersTable).set(updates).where(and(eq(usersTable.id, req.params.userId), eq(usersTable.companyId, req.user!.companyId)));
 
-    const users = await db.select().from(usersTable).where(eq(usersTable.id, req.params.userId)).limit(1);
+    const users = await db.select().from(usersTable)
+      .where(and(eq(usersTable.id, req.params.userId), eq(usersTable.companyId, req.user!.companyId)))
+      .limit(1);
     if (users.length === 0) {
       res.status(404).json({ error: "not_found", message: "User not found" });
       return;

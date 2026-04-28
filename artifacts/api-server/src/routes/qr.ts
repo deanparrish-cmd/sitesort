@@ -19,6 +19,14 @@ const CATEGORY_LABELS: Record<string, string> = {
 // List QR codes for a project
 router.get("/projects/:projectId/qr-codes", authenticate, async (req, res) => {
   try {
+    const project = await db.select({ id: projectsTable.id }).from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!project[0]) {
+      res.status(404).json({ error: "not_found", message: "Project not found" });
+      return;
+    }
+
     const codes = await db.select()
       .from(qrCodesTable)
       .where(eq(qrCodesTable.projectId, req.params.projectId));

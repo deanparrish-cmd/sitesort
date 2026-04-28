@@ -1,11 +1,14 @@
 import { Router, type IRouter } from "express";
 import { randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 import { db } from "@workspace/db";
 import { companiesTable, usersTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { generateToken, authenticate } from "../middlewares/auth";
+import { blockToken } from "../lib/token-blocklist";
+import { isLockedOut, recordFailedAttempt, clearAttempts } from "../lib/login-attempts";
 import {
   sendVerificationEmail,
   sendPasswordResetEmail,
@@ -74,8 +77,14 @@ router.post("/auth/login", async (req, res) => {
       return;
     }
 
+    if (await isLockedOut(email)) {
+      res.status(429).json({ error: "too_many_attempts", message: "Account locked due to too many failed attempts. Try again in 15 minutes." });
+      return;
+    }
+
     const users = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
     if (users.length === 0) {
+      await recordFailedAttempt(email);
       res.status(401).json({ error: "invalid_credentials", message: "Invalid email or password" });
       return;
     }
@@ -83,10 +92,21 @@ router.post("/auth/login", async (req, res) => {
     const user = users[0];
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) {
-      res.status(401).json({ error: "invalid_credentials", message: "Invalid email or password" });
+      const { locked, remaining } = await recordFailedAttempt(email);
+      if (locked) {
+        res.status(429).json({ error: "too_many_attempts", message: "Account locked due to too many failed attempts. Try again in 15 minutes." });
+      } else {
+        res.status(401).json({ error: "invalid_credentials", message: "Invalid email or password", attemptsRemaining: remaining });
+      }
       return;
     }
 
+    if (!user.emailVerified) {
+      res.status(403).json({ error: "email_not_verified", message: "Please verify your email address before logging in." });
+      return;
+    }
+
+    await clearAttempts(email);
     await db.update(usersTable).set({ lastActiveAt: new Date() }).where(eq(usersTable.id, user.id));
 
     const token = generateToken({ id: user.id, companyId: user.companyId, role: user.role, email: user.email });
@@ -100,8 +120,16 @@ router.post("/auth/login", async (req, res) => {
   }
 });
 
-router.post("/auth/logout", (_req, res) => {
-  res.json({ success: true });
+router.post("/auth/logout", authenticate, async (req, res) => {
+  try {
+    const token = req.headers.authorization!.slice(7);
+    const decoded = jwt.decode(token) as { exp: number };
+    await blockToken(token, decoded.exp);
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Logout error");
+    res.status(500).json({ error: "server_error", message: "Logout failed" });
+  }
 });
 
 router.get("/auth/me", authenticate, async (req, res) => {
@@ -152,6 +180,41 @@ router.post("/auth/verify-email", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Verify email error");
     res.status(500).json({ error: "server_error", message: "Verification failed" });
+  }
+});
+
+router.post("/auth/resend-verification", async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      res.status(400).json({ error: "validation_error", message: "Email required" });
+      return;
+    }
+
+    const users = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
+    // Always return success to prevent email enumeration
+    if (users.length === 0 || users[0].emailVerified) {
+      res.json({ success: true });
+      return;
+    }
+
+    const user = users[0];
+    const verificationToken = randomBytes(32).toString("hex");
+    const verificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    await db.update(usersTable).set({
+      emailVerificationToken: verificationToken,
+      emailVerificationExpiry: verificationExpiry,
+    }).where(eq(usersTable.id, user.id));
+
+    sendVerificationEmail(user.email, user.name, verificationToken).catch(err =>
+      req.log.error({ err }, "Failed to resend verification email"),
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Resend verification error");
+    res.status(500).json({ error: "server_error", message: "Failed to resend verification email" });
   }
 });
 

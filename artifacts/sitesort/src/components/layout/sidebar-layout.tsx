@@ -1,21 +1,28 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { 
-  Building2, 
-  LayoutDashboard, 
-  Files, 
-  Users, 
-  ShieldCheck, 
-  Camera, 
+import {
+  Building2,
+  LayoutDashboard,
+  Users,
+  ShieldCheck,
   Settings,
   Menu,
   X,
   LogOut,
   Bell,
-  QrCode
+  QrCode,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetMe, useLogout } from "@workspace/api-client-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export function SidebarLayout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
@@ -64,11 +71,14 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
         <div className="flex items-center gap-2">
           <img src={`${import.meta.env.BASE_URL}images/logo.png?v=5`} alt="SiteSort" className="h-[6.25rem] w-auto" />
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <Link href="/notifications" className="relative p-2 text-muted-foreground hover:text-foreground">
             <Bell className="w-6 h-6" />
             <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-destructive rounded-full border-2 border-card"></span>
           </Link>
+          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
+            {user?.name?.charAt(0) || 'U'}
+          </div>
           <button onClick={() => setIsMobileOpen(!isMobileOpen)} className="p-2 text-primary">
             {isMobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
@@ -128,11 +138,40 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 max-h-screen overflow-y-auto">
-        <header className="hidden md:flex h-16 items-center justify-end px-8 border-b bg-card/50 backdrop-blur-md sticky top-0 z-30">
+        <header className="hidden md:flex h-16 items-center justify-end gap-2 px-8 border-b bg-card/50 backdrop-blur-md sticky top-0 z-30">
           <Link href="/notifications" className="relative p-2 text-muted-foreground hover:text-primary transition-colors">
             <Bell className="w-5 h-5" />
             <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-destructive rounded-full"></span>
           </Link>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-xl hover:bg-muted transition-colors focus:outline-none">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
+                  {user?.name?.charAt(0) || 'U'}
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-semibold text-foreground leading-tight">{user?.name}</p>
+                  <p className="text-xs text-muted-foreground capitalize leading-tight">{user?.role?.replace('_', ' ')}</p>
+                </div>
+                <ChevronDown className="w-4 h-4 text-muted-foreground ml-1" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuLabel className="font-normal">
+                <p className="font-semibold text-foreground">{user?.name}</p>
+                <p className="text-xs text-muted-foreground capitalize">{user?.role?.replace('_', ' ')}</p>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={handleLogout}
+                className="text-destructive focus:text-destructive cursor-pointer"
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Log out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </header>
         <main className="flex-1 p-4 md:p-8">
           <div className="max-w-7xl mx-auto slide-up">
