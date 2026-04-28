@@ -14,9 +14,11 @@ import qrRouter from "./qr";
 import aiRouter from "./ai";
 import uploadRouter from "./upload";
 import testEmailRouter from "./test-email";
+import adminRouter from "./admin";
 
 const router: IRouter = Router();
 
+router.use(adminRouter);
 router.use(healthRouter);
 router.use(authRouter);
 router.use(projectsRouter);

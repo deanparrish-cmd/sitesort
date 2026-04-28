@@ -17,6 +17,7 @@ import ProjectsList from "@/pages/projects";
 import ProjectDetail from "@/pages/projects/detail";
 import QrPage from "@/pages/qr";
 import SiteBoard from "@/pages/site-board";
+import AdminDashboard from "@/pages/admin";
 
 // Set up the fetch interceptor for auth
 setupApiInterceptor();
@@ -74,6 +75,9 @@ function Router() {
       <Route path="/settings">
         <PlaceholderPage title="Company Settings" />
       </Route>
+
+      {/* Admin */}
+      <Route path="/admin" component={AdminDashboard} />
 
       {/* Fallback */}
       <Route component={NotFound} />

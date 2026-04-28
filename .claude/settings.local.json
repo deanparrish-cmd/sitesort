@@ -8,7 +8,12 @@
       "Bash(printenv JWT_SECRET)",
       "Bash(node ./build.mjs)",
       "Read(//run/**)",
-      "Read(//run/secrets/**)"
+      "Read(//run/secrets/**)",
+      "Bash(curl -s -X POST http://localhost:8080/api/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"dean.parrish@me.com\",\"password\":\"AdminPass123!\"}')",
+      "Bash(python3 -m json.tool)",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>console.log\\(JSON.stringify\\(JSON.parse\\(d\\),null,2\\)\\)\\)\")",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>{const a=JSON.parse\\(d\\);console.log\\('Total items:',a.length\\);console.log\\(JSON.stringify\\(a[0],null,2\\)\\)}\\)\")",
+      "Bash(curl -s -X POST http://localhost:8080/api/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"paul@acme.com\",\"password\":\"password123\"}')"
     ]
   }
 }
