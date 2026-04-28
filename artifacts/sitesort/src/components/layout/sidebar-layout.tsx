@@ -12,6 +12,7 @@ import {
   Bell,
   QrCode,
   ChevronDown,
+  ShieldAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetMe, useLogout } from "@workspace/api-client-react";
@@ -57,6 +58,9 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     { name: "Compliance Center", href: "/compliance", icon: ShieldCheck },
     { name: "QR Codes", href: "/qr", icon: QrCode },
     { name: "Team", href: "/team", icon: Users },
+    ...(user?.role === "admin"
+      ? [{ name: "Admin", href: "/admin", icon: ShieldAlert }]
+      : []),
     { name: "Settings", href: "/settings", icon: Settings },
   ];
 
