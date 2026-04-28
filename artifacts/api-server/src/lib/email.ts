@@ -28,7 +28,9 @@ function layout(body: string): string {
 }
 
 const btn = (href: string, label: string) =>
-  `<a href="${href}" style="display:inline-block;background:linear-gradient(135deg,#9a3412,#f97316);color:#ffffff;text-decoration:none;padding:13px 28px;border-radius:8px;font-weight:600;font-size:14px;margin:20px 0;">${label}</a>`;
+  `<table cellpadding="0" cellspacing="0" border="0" style="margin:24px 0;"><tr><td align="center" bgcolor="#ea580c" style="background-color:#ea580c;border-radius:8px;">
+    <a href="${href}" target="_blank" style="display:inline-block;background-color:#ea580c;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:600;font-size:15px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;border:1px solid #ea580c;mso-padding-alt:0;">${label}</a>
+  </td></tr></table>`;
 
 const h = (t: string) =>
   `<h2 style="color:#111827;font-size:20px;font-weight:700;margin:0 0 12px;">${t}</h2>`;
