@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -8,7 +8,7 @@ import {
   Users, FileText, PenLine, ClipboardCheck, ShieldCheck, QrCode, Camera,
   Building2, Bell, TrendingUp, TrendingDown, Minus, AlertTriangle,
   CheckCircle2, AlertCircle, Download, RefreshCw, HardHat, Clock,
-  Activity, Layers, Zap, UserCheck, UserX, Trophy, BarChart2,
+  Activity, Layers, Zap, UserCheck, UserX, Trophy, BarChart2, Search, Mic, MicOff,
 } from "lucide-react";
 
 const ADMIN_EMAILS = ["dean.parrish@me.com", "amy-parrish@hotmail.co.uk"];
@@ -263,6 +263,27 @@ export default function AdminDashboard() {
   const { data: featureAdoption, isLoading: adoptionLoading, refetch: refetchAdoption } = useFeatureAdoption();
 
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [activitySearch, setActivitySearch] = useState("");
+  const [activityListening, setActivityListening] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const activityRecognitionRef = useRef<any>(null);
+  const voiceSupported = typeof window !== "undefined" && !!(
+    (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+  );
+  function toggleActivityVoice() {
+    if (activityListening) { activityRecognitionRef.current?.stop(); return; }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SpeechRec = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
+    if (!SpeechRec) return;
+    const rec = new SpeechRec();
+    rec.continuous = false; rec.interimResults = true; rec.lang = "en-GB";
+    rec.onstart = () => setActivityListening(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rec.onresult = (e: any) => setActivitySearch(Array.from(e.results as any[]).map((r: any) => r[0].transcript).join(""));
+    rec.onend = () => { setActivityListening(false); activityRecognitionRef.current = null; };
+    rec.onerror = () => { setActivityListening(false); activityRecognitionRef.current = null; };
+    rec.start(); activityRecognitionRef.current = rec;
+  }
 
   const refetchAll = useCallback(async () => {
     setIsRefreshing(true);
@@ -409,6 +430,22 @@ export default function AdminDashboard() {
         {/* ── Activity Feed ── */}
         <section>
           <SectionTitle icon={Layers} title="Recent Activity" sub="Last 50 actions across all features" />
+          <div className="relative max-w-sm mb-3">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+            <input
+              type="text"
+              placeholder={activityListening ? "Listening…" : "Filter by type, user or detail…"}
+              value={activitySearch}
+              onChange={e => setActivitySearch(e.target.value)}
+              className={`w-full bg-gray-800 border rounded-lg pl-9 ${voiceSupported ? "pr-10" : "pr-3"} py-2 text-sm text-gray-200 placeholder-gray-500 outline-none focus:ring-1 transition-colors ${activityListening ? "border-orange-500 ring-orange-500/40" : "border-gray-700 focus:border-gray-500"}`}
+            />
+            {voiceSupported && (
+              <button type="button" onClick={toggleActivityVoice} title={activityListening ? "Stop" : "Search by voice"}
+                className={`absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded transition-colors ${activityListening ? "text-orange-500 animate-pulse" : "text-gray-500 hover:text-gray-300"}`}>
+                {activityListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              </button>
+            )}
+          </div>
           <Card className="p-0 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -432,7 +469,10 @@ export default function AdminDashboard() {
                           <td className="px-4 py-3"><Skeleton className="h-4 w-16" /></td>
                         </tr>
                       ))
-                    : (activity ?? []).map((a: any) => (
+                    : (activity ?? []).filter((a: any) => {
+                        const q = activitySearch.toLowerCase();
+                        return !q || a.type?.toLowerCase().includes(q) || a.userName?.toLowerCase().includes(q) || a.detail?.toLowerCase().includes(q);
+                      }).map((a: any) => (
                         <tr key={a.id + a.ts} className="hover:bg-gray-800/30 transition-colors">
                           <td className="px-4 py-3"><ActivityBadge type={a.type} /></td>
                           <td className="px-4 py-3 text-gray-300 font-medium">{a.userName}</td>
