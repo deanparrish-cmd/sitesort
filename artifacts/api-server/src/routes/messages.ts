@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { messagesTable, usersTable } from "@workspace/db/schema";
+import { messagesTable, usersTable, notificationsTable } from "@workspace/db/schema";
 import { eq, and, or, desc, sql } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
@@ -188,6 +188,22 @@ router.post("/messages", authenticate, async (req, res) => {
       senderId: req.user!.id,
       recipientId,
       content: content.trim(),
+    });
+
+    // Fetch sender name for the notification
+    const senderRows = await db.select({ name: usersTable.name })
+      .from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
+    const senderName = senderRows[0]?.name ?? "Someone";
+    const preview = content.trim().length > 80 ? content.trim().slice(0, 77) + "…" : content.trim();
+
+    await db.insert(notificationsTable).values({
+      id: generateId(),
+      userId: recipientId,
+      type: "new_message",
+      title: `New message from ${senderName}`,
+      message: preview,
+      relatedEntityId: req.user!.id,
+      relatedEntityType: "user",
     });
 
     res.status(201).json({ id, recipientId, content: content.trim(), createdAt: new Date().toISOString(), mine: true });

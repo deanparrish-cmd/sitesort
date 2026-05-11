@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Building2,
@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetMe, useLogout } from "@workspace/api-client-react";
+import { useToast } from "@/hooks/use-toast";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,11 +28,71 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+function authHeaders() {
+  const t = localStorage.getItem("sitesort_token");
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
+
 export function SidebarLayout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const { data: user, isLoading, error } = useGetMe();
   const logoutMutation = useLogout();
+  const { toast } = useToast();
+  const [unreadMsgCount, setUnreadMsgCount] = useState(0);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+  const prevUnreadRef = useRef(0);
+
+  const fetchUnread = useCallback(async () => {
+    try {
+      const [msgRes, notifRes] = await Promise.all([
+        fetch("/api/messages/unread-count", { headers: authHeaders() }),
+        fetch("/api/notifications", { headers: authHeaders() }),
+      ]);
+      if (msgRes.ok) {
+        const { count } = await msgRes.json();
+        if (count > prevUnreadRef.current && prevUnreadRef.current !== -1) {
+          const diff = count - prevUnreadRef.current;
+          toast({
+            title: `${diff} new message${diff > 1 ? "s" : ""}`,
+            description: "You have unread messages from your team.",
+          });
+          if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+            new Notification(`${diff} new message${diff > 1 ? "s" : ""}`, {
+              body: "You have unread messages from your team.",
+              icon: "/images/logo.png",
+            });
+          }
+        }
+        prevUnreadRef.current = count;
+        setUnreadMsgCount(count);
+      }
+      if (notifRes.ok) {
+        const notifs = await notifRes.json();
+        setUnreadNotifCount(notifs.filter((n: { read: boolean }) => !n.read).length);
+      }
+    } catch { /* silent */ }
+  }, [toast]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+    prevUnreadRef.current = -1;
+    fetchUnread().then(() => {
+      setUnreadMsgCount(c => { prevUnreadRef.current = c; return c; });
+    });
+    const interval = setInterval(fetchUnread, 10000);
+    return () => clearInterval(interval);
+  }, [fetchUnread]);
+
+  // Clear message badge when on messages page
+  useEffect(() => {
+    if (location.startsWith("/messages")) {
+      setUnreadMsgCount(0);
+      prevUnreadRef.current = 0;
+    }
+  }, [location]);
 
   useEffect(() => {
     // Redirect to login if unauthenticated
@@ -54,18 +115,18 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
   };
 
   const navItems = [
-    { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { name: "Projects", href: "/projects", icon: Building2 },
-    { name: "Subcontractors", href: "/subcontractors", icon: Users },
-    { name: "Compliance Center", href: "/compliance", icon: ShieldCheck },
-    { name: "Invoices", href: "/invoices", icon: Receipt },
-    { name: "QR Codes", href: "/qr", icon: QrCode },
-    { name: "Team", href: "/team", icon: Users },
-    { name: "Messages", href: "/messages", icon: MessageSquare },
+    { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, badge: 0 },
+    { name: "Projects", href: "/projects", icon: Building2, badge: 0 },
+    { name: "Subcontractors", href: "/subcontractors", icon: Users, badge: 0 },
+    { name: "Compliance Center", href: "/compliance", icon: ShieldCheck, badge: 0 },
+    { name: "Invoices", href: "/invoices", icon: Receipt, badge: 0 },
+    { name: "QR Codes", href: "/qr", icon: QrCode, badge: 0 },
+    { name: "Team", href: "/team", icon: Users, badge: 0 },
+    { name: "Messages", href: "/messages", icon: MessageSquare, badge: unreadMsgCount },
     ...(user?.role === "admin"
-      ? [{ name: "Admin", href: "/admin", icon: ShieldAlert }]
+      ? [{ name: "Admin", href: "/admin", icon: ShieldAlert, badge: 0 }]
       : []),
-    { name: "Settings", href: "/settings", icon: Settings },
+    { name: "Settings", href: "/settings", icon: Settings, badge: 0 },
   ];
 
   if (isLoading) {
@@ -84,7 +145,11 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
         <div className="flex items-center gap-3">
           <Link href="/notifications" className="relative p-2 text-muted-foreground hover:text-foreground">
             <Bell className="w-6 h-6" />
-            <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-destructive rounded-full border-2 border-card"></span>
+            {unreadNotifCount > 0 && (
+              <span className="absolute top-1 right-1 min-w-[1rem] h-4 px-0.5 bg-destructive text-white rounded-full text-[9px] font-bold flex items-center justify-center border border-card">
+                {unreadNotifCount > 9 ? "9+" : unreadNotifCount}
+              </span>
+            )}
           </Link>
           <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
             {user?.name?.charAt(0) || 'U'}
@@ -110,19 +175,25 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
           {navItems.map((item) => {
             const isActive = location.startsWith(item.href);
             return (
-              <Link 
-                key={item.name} 
+              <Link
+                key={item.name}
                 href={item.href}
                 className={cn(
                   "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200",
-                  isActive 
-                    ? "bg-primary text-primary-foreground shadow-md shadow-primary/10" 
+                  isActive
+                    ? "bg-primary text-primary-foreground shadow-md shadow-primary/10"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
                 onClick={() => setIsMobileOpen(false)}
               >
                 <item.icon className={cn("w-5 h-5", isActive ? "text-primary-foreground" : "text-muted-foreground")} />
-                {item.name}
+                <span className="flex-1">{item.name}</span>
+                {item.badge > 0 && (
+                  <span className={cn(
+                    "text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center",
+                    isActive ? "bg-primary-foreground text-primary" : "bg-primary text-primary-foreground"
+                  )}>{item.badge}</span>
+                )}
               </Link>
             )
           })}
@@ -153,7 +224,11 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
         <header className="hidden md:flex h-16 items-center justify-end gap-2 px-8 border-b bg-card/50 backdrop-blur-md sticky top-0 z-30">
           <Link href="/notifications" className="relative p-2 text-muted-foreground hover:text-primary transition-colors">
             <Bell className="w-5 h-5" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-destructive rounded-full"></span>
+            {unreadNotifCount > 0 && (
+              <span className="absolute top-1 right-1 min-w-[1rem] h-4 px-0.5 bg-destructive text-white rounded-full text-[9px] font-bold flex items-center justify-center">
+                {unreadNotifCount > 9 ? "9+" : unreadNotifCount}
+              </span>
+            )}
           </Link>
 
           <DropdownMenu>
