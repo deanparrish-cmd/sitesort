@@ -387,6 +387,18 @@ export default function SubcontractorsPage() {
                             )}
                           </div>
                           <p className="text-xs text-muted-foreground truncate">{sub.contactName}</p>
+                          <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                            {sub.contactPhone && (
+                              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Phone className="w-3 h-3 shrink-0" />{sub.contactPhone}
+                              </span>
+                            )}
+                            {sub.contactEmail && (
+                              <span className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+                                <Mail className="w-3 h-3 shrink-0" />{sub.contactEmail}
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         {/* Contact actions */}
