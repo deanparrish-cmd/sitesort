@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, Building, MapPin, Calendar } from "lucide-react";
+import { Search, Plus, Building, MapPin, Calendar, Mic, MicOff } from "lucide-react";
 import { useListProjects, useCreateProject } from "@workspace/api-client-react";
 import { useForm } from "react-hook-form";
-import { formatDate } from "@/lib/utils";
+import { formatDate, cn } from "@/lib/utils";
 
 export default function ProjectsList() {
   const { data: projects, isLoading } = useListProjects();
@@ -21,6 +21,34 @@ export default function ProjectsList() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const { register, handleSubmit, reset } = useForm();
+
+  const [listening, setListening] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null);
+  const voiceSupported = typeof window !== "undefined" && !!(
+    (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+  );
+
+  function toggleVoiceSearch() {
+    if (listening) { recognitionRef.current?.stop(); return; }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SpeechRec = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
+    if (!SpeechRec) return;
+    const rec = new SpeechRec();
+    rec.continuous = false;
+    rec.interimResults = true;
+    rec.lang = "en-GB";
+    rec.onstart = () => setListening(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rec.onresult = (e: any) => {
+      const transcript = Array.from(e.results as any[]).map((r: any) => r[0].transcript).join("");
+      setSearch(transcript);
+    };
+    rec.onend = () => { setListening(false); recognitionRef.current = null; };
+    rec.onerror = () => { setListening(false); recognitionRef.current = null; };
+    rec.start();
+    recognitionRef.current = rec;
+  }
 
   const filteredProjects = projects?.filter(p => 
     p.name.toLowerCase().includes(search.toLowerCase()) || 
@@ -54,13 +82,27 @@ export default function ProjectsList() {
 
       <div className="bg-card border rounded-2xl shadow-sm overflow-hidden">
         <div className="p-4 border-b bg-muted/20">
-          <div className="max-w-md">
-            <Input 
-              placeholder="Search projects..." 
-              icon={<Search className="w-5 h-5" />}
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            <Input
+              placeholder={listening ? "Listening…" : "Search projects by name or address…"}
+              className={cn("pl-9", voiceSupported ? "pr-10" : "", listening && "border-orange-400 ring-1 ring-orange-400/60")}
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={e => setSearch(e.target.value)}
             />
+            {voiceSupported && (
+              <button
+                type="button"
+                onClick={toggleVoiceSearch}
+                title={listening ? "Stop listening" : "Search by voice"}
+                className={cn(
+                  "absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md transition-colors",
+                  listening ? "text-orange-500 animate-pulse" : "text-muted-foreground hover:text-primary"
+                )}
+              >
+                {listening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              </button>
+            )}
           </div>
         </div>
 
