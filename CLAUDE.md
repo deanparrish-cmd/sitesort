@@ -65,15 +65,50 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 1. Version-controlled document hub (auto versioning, SUPERSEDED badges)
 2. Targeted team distribution (track pending/viewed/acknowledged)
 3. Digital sign-off tracking (PIN confirmation, timestamped)
-4. Real-time in-app notifications
+4. Real-time in-app notifications (bell with live unread count)
 5. Compliance photo log (timestamped, GPS metadata, reference numbers)
 6. Subcontractor insurance monitor (valid/expiring_soon/expired)
 7. QR code site board integration
 8. Permit management (active/expiring/expired, responsible persons)
-9. Compliance center (aggregate view across projects)
+9. Compliance center (aggregate view across projects, drag-and-drop certificate upload)
 10. Team management (admin/project_manager/site_worker/subcontractor roles)
+11. Subcontractor cards — call/email/SMS/WhatsApp action buttons, visible contact details, trade badges, notes field
+12. Add subcontractors from company directory into individual projects
+13. Voice search on: Projects, Dashboard, Compliance, Team, Invoices, Admin pages
+14. Full compliance page (was placeholder) — expiring insurance/permits, pending sign-offs, drag-and-drop file upload
+15. Full team page (was placeholder) — members grouped by role, voice search, last-active
+16. Team messaging — direct messages between team members, two-panel chat UI, 5s polling, unread badges
+17. Message notifications — toast + browser OS notification on new message, live badge on sidebar Messages item and bell icon, manager "View All" read-only oversight mode
 
 ## Session Log
+
+### 2026-05-11
+
+#### Tasks completed
+- Drag-and-drop file upload on compliance page — global drag overlay, `dragCounter` ref for accurate enter/leave tracking, per-row insurance targets that pre-fill subcontractor, paste support, post-drop modal (subcontractor select, insurance type, expiry date), saves via `POST /api/subcontractors/:id/insurance`
+- Team messaging (`/messages`) — new `messages` DB table, full CRUD API (`/api/messages/*`), two-panel chat UI with conversation list + threaded view, 5-second polling, unread badge on Messages nav item
+- Message notifications — server creates a `notifications` row on every sent message; sidebar polls unread count every 10s, fires toast and browser OS notification when count increases; bell icon shows live unread count
+
+#### New DB tables
+- `messages` (id, companyId, senderId, recipientId, content, readAt, createdAt)
+
+#### Key files added/modified
+- `lib/db/src/schema/messages.ts` — new messages table
+- `artifacts/api-server/src/routes/messages.ts` — conversations, thread, send, users, unread-count endpoints
+- `artifacts/sitesort/src/pages/messages/index.tsx` — chat UI
+- `artifacts/sitesort/src/pages/compliance/index.tsx` — drag-and-drop upload (full rewrite)
+- `artifacts/sitesort/src/components/layout/sidebar-layout.tsx` — live unread badge, bell count, message poller
+
+#### Known pre-existing issues (not introduced this session)
+- `lib/api-zod/src/index.ts` has two duplicate-export TS errors (`ListDocumentsParams`, `ListPhotosParams`) — pre-existing, does not affect runtime
+- Several `buttonVariants` and `queryKey` TS errors in `projects/detail.tsx` and UI components — pre-existing
+
+#### Notes for next session
+- Notifications page (`/notifications`) is still a placeholder — could build it out to list all notification types (messages, compliance alerts, document distributions) with mark-read actions
+- Messages currently poll every 5s (thread) / 10s (sidebar) — could upgrade to WebSockets or SSE for true real-time if needed
+- No message deletion or editing yet
+- Consider adding file/image attachment support to messages (upload API already exists at `POST /api/upload`)
+- Subcontractor `notes` column was added to DB this session — confirm it is visible in all subcontractor list/detail API responses
 
 ### 2026-04-07
 - Landing page visual polish session (no functional changes)
