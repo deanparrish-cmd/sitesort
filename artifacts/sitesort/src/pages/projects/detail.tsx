@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck } from "lucide-react";
+import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { InsuranceCertZone } from "@/components/ui/insurance-cert-zone";
@@ -187,6 +187,37 @@ export default function ProjectDetail() {
   };
   const [scheduleTarget, setScheduleTarget] = useState<any | null>(null);
   const [scheduleError, setScheduleError] = useState<string | null>(null);
+
+  const [fromDirOpen, setFromDirOpen] = useState(false);
+  const [dirSubs, setDirSubs] = useState<any[]>([]);
+  const [dirSubsLoading, setDirSubsLoading] = useState(false);
+  const [dirSearch, setDirSearch] = useState("");
+  const [linkingSubId, setLinkingSubId] = useState<string | null>(null);
+
+  const openFromDirectory = async () => {
+    setFromDirOpen(true);
+    setDirSearch("");
+    setDirSubsLoading(true);
+    const token = localStorage.getItem("sitesort_token");
+    const res = await fetch("/api/subcontractors", { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (res.ok) setDirSubs(await res.json());
+    setDirSubsLoading(false);
+  };
+
+  const linkSubcontractor = async (subId: string) => {
+    setLinkingSubId(subId);
+    const token = localStorage.getItem("sitesort_token");
+    const res = await fetch(`/api/projects/${projectId}/members/link`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ subcontractorId: subId }),
+    });
+    if (res.ok) {
+      await queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/members`] });
+      await queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}`] });
+    }
+    setLinkingSubId(null);
+  };
   const { register: schedRegister, handleSubmit: schedHandleSubmit, reset: schedReset, setValue: schedSetValue, watch: schedWatch } = useForm();
 
   const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -488,6 +519,11 @@ export default function ProjectDetail() {
         </TabsContent>
         
         <TabsContent value="team">
+          <div className="flex justify-end mb-4">
+            <Button variant="outline" size="sm" onClick={openFromDirectory}>
+              <UserPlus className="w-4 h-4 mr-2" /> Add from Subcontractor Directory
+            </Button>
+          </div>
           {(!members || members.length === 0) ? (
             <div className="bg-card p-12 rounded-xl border text-center border-dashed border-2">
               <Users className="w-12 h-12 mx-auto text-muted-foreground mb-4 opacity-50" />
@@ -1017,6 +1053,72 @@ export default function ProjectDetail() {
             <Button type="submit" variant="accent">Add to Project</Button>
           </DialogFooter>
         </form>
+      </Dialog>
+
+      <Dialog open={fromDirOpen} onOpenChange={v => { if (!v) setFromDirOpen(false); }}>
+        <DialogHeader>
+          <DialogTitle>Add from Subcontractor Directory</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            <Input
+              placeholder="Search by company or contact name…"
+              className="pl-9"
+              value={dirSearch}
+              onChange={e => setDirSearch(e.target.value)}
+            />
+          </div>
+          {dirSubsLoading ? (
+            <div className="space-y-2">
+              {[...Array(4)].map((_, i) => <div key={i} className="h-14 bg-muted rounded-lg animate-pulse" />)}
+            </div>
+          ) : (() => {
+            const q = dirSearch.toLowerCase();
+            const filtered = dirSubs.filter(s =>
+              !q || s.companyName.toLowerCase().includes(q) || s.contactName.toLowerCase().includes(q)
+            );
+            return filtered.length === 0 ? (
+              <p className="text-center text-muted-foreground text-sm py-8">
+                {dirSubs.length === 0 ? "No subcontractors in your directory yet." : "No results match your search."}
+              </p>
+            ) : (
+              <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                {filtered.map((sub: any) => {
+                  const alreadyAdded = (members as any[])?.some((m: any) => m.subcontractorId === sub.id);
+                  return (
+                    <div key={sub.id} className={cn(
+                      "flex items-center justify-between gap-3 px-4 py-3 rounded-lg border transition-colors",
+                      alreadyAdded ? "opacity-50 bg-muted/50" : "hover:bg-muted/30"
+                    )}>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm truncate">{sub.companyName}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {sub.contactName}{sub.trades?.length ? ` · ${sub.trades.join(", ")}` : ""}
+                        </p>
+                      </div>
+                      {alreadyAdded ? (
+                        <span className="text-xs text-muted-foreground shrink-0 font-medium">Already on project</span>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="accent"
+                          disabled={linkingSubId === sub.id}
+                          onClick={() => linkSubcontractor(sub.id)}
+                        >
+                          {linkingSubId === sub.id ? "Adding…" : "Add"}
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setFromDirOpen(false)}>Done</Button>
+        </DialogFooter>
       </Dialog>
 
       <Dialog open={!!scheduleTarget} onOpenChange={v => { if (!v) { setScheduleTarget(null); setScheduleError(null); } }}>

@@ -156,6 +156,53 @@ router.post("/projects/:projectId/trades", authenticate, async (req, res) => {
   }
 });
 
+router.post("/projects/:projectId/members/link", authenticate, async (req, res) => {
+  try {
+    const { subcontractorId } = req.body;
+    if (!subcontractorId) {
+      res.status(400).json({ error: "validation_error", message: "subcontractorId required" });
+      return;
+    }
+
+    const sub = await db.select().from(subcontractorsTable)
+      .where(and(eq(subcontractorsTable.id, subcontractorId), eq(subcontractorsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!sub[0]) {
+      res.status(404).json({ error: "not_found", message: "Subcontractor not found" });
+      return;
+    }
+
+    const proj = await db.select().from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!proj[0]) {
+      res.status(404).json({ error: "not_found", message: "Project not found" });
+      return;
+    }
+
+    const existing = await db.select().from(projectMembersTable)
+      .where(and(eq(projectMembersTable.projectId, req.params.projectId), eq(projectMembersTable.subcontractorId, subcontractorId)))
+      .limit(1);
+    if (existing[0]) {
+      res.status(409).json({ error: "conflict", message: "Subcontractor is already on this project" });
+      return;
+    }
+
+    const memberId = generateId();
+    await db.insert(projectMembersTable).values({
+      id: memberId,
+      projectId: req.params.projectId,
+      subcontractorId,
+      role: "subcontractor",
+    });
+
+    res.status(201).json({ success: true, memberId });
+  } catch (err) {
+    req.log.error({ err }, "Link subcontractor error");
+    res.status(500).json({ error: "server_error", message: "Failed to link subcontractor" });
+  }
+});
+
 router.post("/projects/:projectId/tradespeople", authenticate, async (req, res) => {
   try {
     const { trade, companyName, contactName, contactEmail, contactPhone } = req.body;
