@@ -24,6 +24,7 @@ type Sub = {
   trades: string[];
   reliabilityRating: number | null;
   paymentHold: boolean;
+  notes: string | null;
   insuranceStatus: InsuranceStatus;
   createdAt: string;
 };
@@ -134,6 +135,7 @@ type AddFormData = {
   contactEmail: string;
   contactPhone: string;
   trades: string[];
+  notes: string;
 };
 
 type EditFormData = AddFormData & { reliabilityRating: string; paymentHold: boolean };
@@ -249,6 +251,7 @@ export default function SubcontractorsPage() {
       contactPhone: sub.contactPhone ?? "",
       reliabilityRating: sub.reliabilityRating != null ? String(sub.reliabilityRating) : "",
       paymentHold: sub.paymentHold,
+      notes: sub.notes ?? "",
     });
   }
 
@@ -408,6 +411,9 @@ export default function SubcontractorsPage() {
                               ))}
                             </div>
                           )}
+                          {sub.notes && (
+                            <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2 italic">{sub.notes}</p>
+                          )}
                         </div>
 
                         {/* Contact actions */}
@@ -484,6 +490,16 @@ export default function SubcontractorsPage() {
             </div>
           </div>
 
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">Notes</label>
+            <textarea
+              placeholder="Any additional notes about this subcontractor…"
+              rows={3}
+              {...register("notes")}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+            />
+          </div>
+
           {addError && <p className="text-sm text-destructive">{addError}</p>}
 
           <DialogFooter>
@@ -551,6 +567,16 @@ export default function SubcontractorsPage() {
                 <span className="text-sm font-medium">Payment Hold</span>
               </label>
             </div>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">Notes</label>
+            <textarea
+              placeholder="Any additional notes about this subcontractor…"
+              rows={3}
+              {...editReg("notes")}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+            />
           </div>
 
           {editError && <p className="text-sm text-destructive">{editError}</p>}

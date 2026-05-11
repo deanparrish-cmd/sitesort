@@ -14,6 +14,7 @@ export const subcontractorsTable = pgTable("subcontractors", {
   trades: text("trades").array().notNull().default([]),
   reliabilityRating: numeric("reliability_rating"),
   paymentHold: boolean("payment_hold").notNull().default(false),
+  notes: text("notes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
