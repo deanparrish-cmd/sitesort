@@ -1,12 +1,14 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Building2, AlertTriangle, ChevronLeft, ChevronRight, ArrowRight, ShieldAlert, FileSignature, Users, Mail, Bell } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Building2, AlertTriangle, ChevronLeft, ChevronRight, ArrowRight, ShieldAlert, FileSignature, Users, Mail, Bell, Search, Mic, MicOff } from "lucide-react";
 import { useListProjects, useGetComplianceOverview } from "@workspace/api-client-react";
 import type { ExpiringInsuranceItem, ExpiringPermitItem } from "@workspace/api-client-react";
+import { cn } from "@/lib/utils";
 
 type CalEvent = { date: string; label: string; type: "project-start" | "project-end" | "permit" | "insurance" | "invoice-out" | "invoice-in" };
 type ExpiryAlert = { label: string; expiryDate: string; kind: "permit" | "insurance"; daysLeft: number };
@@ -168,6 +170,35 @@ export default function Dashboard() {
 
   const [emailStatus, setEmailStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
 
+  const [search, setSearch] = useState("");
+  const [listening, setListening] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null);
+  const voiceSupported = typeof window !== "undefined" && !!(
+    (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+  );
+
+  function toggleVoiceSearch() {
+    if (listening) { recognitionRef.current?.stop(); return; }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SpeechRec = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
+    if (!SpeechRec) return;
+    const rec = new SpeechRec();
+    rec.continuous = false;
+    rec.interimResults = true;
+    rec.lang = "en-GB";
+    rec.onstart = () => setListening(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rec.onresult = (e: any) => {
+      const transcript = Array.from(e.results as any[]).map((r: any) => r[0].transcript).join("");
+      setSearch(transcript);
+    };
+    rec.onend = () => { setListening(false); recognitionRef.current = null; };
+    rec.onerror = () => { setListening(false); recognitionRef.current = null; };
+    rec.start();
+    recognitionRef.current = rec;
+  }
+
   async function sendTestEmail() {
     setEmailStatus("sending");
     try {
@@ -281,7 +312,31 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      <h2 className="text-2xl font-bold mb-4">Active Projects</h2>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <h2 className="text-2xl font-bold">Active Projects</h2>
+        <div className="relative w-full sm:max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          <Input
+            placeholder={listening ? "Listening…" : "Search projects…"}
+            className={cn("pl-9", voiceSupported ? "pr-10" : "", listening && "border-orange-400 ring-1 ring-orange-400/60")}
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+          {voiceSupported && (
+            <button
+              type="button"
+              onClick={toggleVoiceSearch}
+              title={listening ? "Stop listening" : "Search by voice"}
+              className={cn(
+                "absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md transition-colors",
+                listening ? "text-orange-500 animate-pulse" : "text-muted-foreground hover:text-primary"
+              )}
+            >
+              {listening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            </button>
+          )}
+        </div>
+      </div>
       {projectsLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-pulse">
           {[1,2,3].map(i => <div key={i} className="h-48 bg-muted rounded-xl"></div>)}
@@ -295,7 +350,7 @@ export default function Dashboard() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {projects?.filter(p => p.status === 'active').map(project => (
+          {projects?.filter(p => p.status === 'active' && (!search || p.name.toLowerCase().includes(search.toLowerCase()) || p.address.toLowerCase().includes(search.toLowerCase()))).map(project => (
             <Link key={project.id} href={`/projects/${project.id}`}>
               <Card className="hover:shadow-lg hover:border-primary/30 transition-all cursor-pointer group h-full flex flex-col">
                 <CardHeader>
