@@ -1,13 +1,14 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Plus, Search, ArrowDownCircle, ArrowUpCircle, CheckCircle2, Clock, AlertTriangle, Receipt } from "lucide-react";
+import { Plus, Search, ArrowDownCircle, ArrowUpCircle, CheckCircle2, Clock, AlertTriangle, Receipt, Mic, MicOff } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { useListProjects } from "@workspace/api-client-react";
+import { cn } from "@/lib/utils";
 
 type Invoice = {
   id: string;
@@ -76,6 +77,27 @@ export default function InvoicesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [listening, setListening] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null);
+  const voiceSupported = typeof window !== "undefined" && !!(
+    (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+  );
+  function toggleVoiceSearch() {
+    if (listening) { recognitionRef.current?.stop(); return; }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SpeechRec = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
+    if (!SpeechRec) return;
+    const rec = new SpeechRec();
+    rec.continuous = false; rec.interimResults = true; rec.lang = "en-GB";
+    rec.onstart = () => setListening(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rec.onresult = (e: any) => setSearch(Array.from(e.results as any[]).map((r: any) => r[0].transcript).join(""));
+    rec.onend = () => { setListening(false); recognitionRef.current = null; };
+    rec.onerror = () => { setListening(false); recognitionRef.current = null; };
+    rec.start(); recognitionRef.current = rec;
+  }
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
     defaultValues: { direction: "inbound", currency: "GBP" },
@@ -188,7 +210,19 @@ export default function InvoicesPage() {
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-          <Input placeholder="Search invoices…" className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
+          <Input
+            placeholder={listening ? "Listening…" : "Search invoices…"}
+            className={cn("pl-9", voiceSupported ? "pr-10" : "", listening && "border-orange-400 ring-1 ring-orange-400/60")}
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+          {voiceSupported && (
+            <button type="button" onClick={toggleVoiceSearch} title={listening ? "Stop" : "Search by voice"}
+              className={cn("absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md transition-colors",
+                listening ? "text-orange-500 animate-pulse" : "text-muted-foreground hover:text-primary")}>
+              {listening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            </button>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           {(["all", "inbound", "outbound", "pending", "paid"] as const).map(f => (
