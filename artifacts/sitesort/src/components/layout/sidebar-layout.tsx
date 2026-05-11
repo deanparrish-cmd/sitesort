@@ -6,6 +6,7 @@ import {
   Users,
   ShieldCheck,
   Settings,
+  Receipt,
   Menu,
   X,
   LogOut,
@@ -56,6 +57,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     { name: "Projects", href: "/projects", icon: Building2 },
     { name: "Subcontractors", href: "/subcontractors", icon: Users },
     { name: "Compliance Center", href: "/compliance", icon: ShieldCheck },
+    { name: "Invoices", href: "/invoices", icon: Receipt },
     { name: "QR Codes", href: "/qr", icon: QrCode },
     { name: "Team", href: "/team", icon: Users },
     ...(user?.role === "admin"
@@ -73,7 +75,9 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       {/* Mobile Header */}
       <div className="md:hidden flex items-center justify-between p-4 border-b bg-card">
         <div className="flex items-center gap-2">
-          <img src={`${import.meta.env.BASE_URL}images/logo.png?v=5`} alt="SiteSort" className="h-[6.25rem] w-auto" />
+          <Link href="/dashboard">
+            <img src={`${import.meta.env.BASE_URL}images/logo.png?v=5`} alt="SiteSort" className="h-[6.25rem] w-auto" />
+          </Link>
         </div>
         <div className="flex items-center gap-3">
           <Link href="/notifications" className="relative p-2 text-muted-foreground hover:text-foreground">
@@ -95,7 +99,9 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
         isMobileOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="p-6 hidden md:flex items-center gap-3">
-          <img src={`${import.meta.env.BASE_URL}images/logo.png?v=5`} alt="SiteSort" className="h-[6.25rem] w-auto" />
+          <Link href="/dashboard">
+            <img src={`${import.meta.env.BASE_URL}images/logo.png?v=5`} alt="SiteSort" className="h-[6.25rem] w-auto" />
+          </Link>
         </div>
 
         <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">

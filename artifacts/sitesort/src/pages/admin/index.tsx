@@ -1,8 +1,8 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell,
 } from "recharts";
 import {
   Users, FileText, PenLine, ClipboardCheck, ShieldCheck, QrCode, Camera,
@@ -11,7 +11,7 @@ import {
   Activity, Layers, Zap, UserCheck, UserX, Trophy, BarChart2,
 } from "lucide-react";
 
-const ADMIN_EMAIL = "dean.parrish@me.com";
+const ADMIN_EMAILS = ["dean.parrish@me.com", "amy-parrish@hotmail.co.uk"];
 const ORANGE = "#ea580c";
 
 // ─── Data fetching ───────────────────────────────────────────────────────────
@@ -49,6 +49,30 @@ function useActivity() {
     queryFn: () => apiFetch("/api/admin/activity"),
     refetchInterval: 60_000,
     staleTime: 30_000,
+  });
+}
+
+function useDormantUsers() {
+  return useQuery({
+    queryKey: ["admin-dormant-users"],
+    queryFn: () => apiFetch("/api/admin/dormant-users"),
+    staleTime: 60_000,
+  });
+}
+
+function useLapsedUsers() {
+  return useQuery({
+    queryKey: ["admin-lapsed-users"],
+    queryFn: () => apiFetch("/api/admin/lapsed-users"),
+    staleTime: 60_000,
+  });
+}
+
+function useFeatureAdoption() {
+  return useQuery({
+    queryKey: ["admin-feature-adoption"],
+    queryFn: () => apiFetch("/api/admin/feature-adoption"),
+    staleTime: 60_000,
   });
 }
 
@@ -232,12 +256,26 @@ export default function AdminDashboard() {
   const [, setLocation] = useLocation();
   const { data: me, isLoading: authLoading } = useMe();
   const { data: stats, isLoading: statsLoading, dataUpdatedAt, refetch: refetchStats } = useAdminStats();
-  const { data: charts, isLoading: chartsLoading } = useChartData();
-  const { data: activity, isLoading: activityLoading } = useActivity();
+  const { data: charts, isLoading: chartsLoading, refetch: refetchCharts } = useChartData();
+  const { data: activity, isLoading: activityLoading, refetch: refetchActivity } = useActivity();
+  const { data: dormantUsers, isLoading: dormantLoading, refetch: refetchDormant } = useDormantUsers();
+  const { data: lapsedUsers, isLoading: lapsedLoading, refetch: refetchLapsed } = useLapsedUsers();
+  const { data: featureAdoption, isLoading: adoptionLoading, refetch: refetchAdoption } = useFeatureAdoption();
 
-  const refetchAll = useCallback(() => {
-    refetchStats();
-  }, [refetchStats]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const refetchAll = useCallback(async () => {
+    setIsRefreshing(true);
+    await Promise.all([
+      refetchStats(),
+      refetchCharts(),
+      refetchActivity(),
+      refetchDormant(),
+      refetchLapsed(),
+      refetchAdoption(),
+    ]);
+    setIsRefreshing(false);
+  }, [refetchStats, refetchCharts, refetchActivity, refetchDormant, refetchLapsed, refetchAdoption]);
 
   useEffect(() => {
     if (!authLoading && !me) setLocation("/login");
@@ -251,7 +289,7 @@ export default function AdminDashboard() {
     );
   }
 
-  if (!me || me.email !== ADMIN_EMAIL) {
+  if (!me || !ADMIN_EMAILS.includes(me.email)) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center text-center px-4">
         <div>
@@ -278,10 +316,12 @@ export default function AdminDashboard() {
       <header className="border-b border-gray-800 bg-gray-900/80 backdrop-blur sticky top-0 z-40">
         <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-7 h-7 bg-gradient-to-br from-orange-700 to-orange-500 rounded-lg flex items-center justify-center">
-              <Building2 className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-white font-bold text-sm hidden sm:block">SiteSort</span>
+            <button onClick={() => setLocation("/dashboard")} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+              <div className="w-7 h-7 bg-gradient-to-br from-orange-700 to-orange-500 rounded-lg flex items-center justify-center">
+                <Building2 className="w-4 h-4 text-white" />
+              </div>
+              <span className="text-white font-bold text-sm hidden sm:block">SiteSort</span>
+            </button>
             <span className="text-gray-600 text-sm hidden sm:block">/</span>
             <span className="text-orange-400 font-semibold text-sm">Admin</span>
           </div>
@@ -291,10 +331,11 @@ export default function AdminDashboard() {
             </span>
             <button
               onClick={refetchAll}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-xs font-medium transition-colors"
+              disabled={isRefreshing}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-gray-300 rounded-lg text-xs font-medium transition-colors"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
-              Refresh
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+              {isRefreshing ? "Refreshing…" : "Refresh"}
             </button>
             <button onClick={() => setLocation("/dashboard")} className="text-gray-500 hover:text-white text-xs transition-colors hidden sm:block">
               ← App
@@ -602,6 +643,41 @@ export default function AdminDashboard() {
           </Card>
         </section>
 
+        {/* ── Feature Adoption Speed ── */}
+        <section>
+          <SectionTitle icon={Zap} title="Feature Adoption Speed" sub="Average days from signup to first use of each feature" />
+          {adoptionLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {[...Array(8)].map((_, i) => <Skeleton key={i} className="h-28 w-full" />)}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {(featureAdoption ?? []).map((f: { feature: string; description: string; usersWhoUsed: number; avgDays: number | null }) => (
+                <Card key={f.feature}>
+                  <p className="text-gray-400 text-xs font-medium uppercase tracking-wide mb-1 truncate">{f.feature}</p>
+                  <p className="text-gray-600 text-xs mb-3 truncate">{f.description}</p>
+                  <div className="flex items-end justify-between gap-2">
+                    <div>
+                      <p className="text-3xl font-extrabold text-white leading-none">
+                        {f.avgDays != null
+                          ? f.avgDays < 1
+                            ? `${Math.round(f.avgDays * 24)}h`
+                            : `${f.avgDays}d`
+                          : "—"}
+                      </p>
+                      <p className="text-gray-500 text-xs mt-1">avg to first use</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-orange-400 font-bold text-lg leading-none">{f.usersWhoUsed}</p>
+                      <p className="text-gray-600 text-xs mt-1">{f.avgDays != null ? "users" : "total"}</p>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </section>
+
         {/* ── Power Users ── */}
         <section>
           <SectionTitle icon={Trophy} title="Power Users" sub="Top 10 most active users by document & photo uploads" />
@@ -721,6 +797,143 @@ export default function AdminDashboard() {
               }
             </Card>
           </div>
+        </section>
+
+        {/* ── Best Time to Post ── */}
+        <section>
+          <SectionTitle icon={Clock} title="Best Time to Post" sub="Peak platform activity by hour — post on social when your users are most active" />
+          <Card>
+            {chartsLoading ? (
+              <Skeleton className="h-64 w-full" />
+            ) : (() => {
+              const hours: { hour: number; label: string; count: number }[] = charts?.byHour ?? [];
+              const maxCount = Math.max(...hours.map(h => h.count), 1);
+              const sorted = [...hours].sort((a, b) => b.count - a.count);
+              const top3 = new Set(sorted.slice(0, 3).map(h => h.hour));
+              return (
+                <>
+                  <div className="flex flex-wrap gap-3 mb-6">
+                    {sorted.slice(0, 3).map((h, i) => (
+                      <div key={h.hour} className={`flex items-center gap-2 px-4 py-2 rounded-xl border ${i === 0 ? "bg-orange-600/20 border-orange-500/40 text-orange-300" : "bg-gray-800 border-gray-700 text-gray-300"}`}>
+                        <span className="text-lg font-bold">{h.label}</span>
+                        <span className="text-xs opacity-70">#{i + 1} peak</span>
+                      </div>
+                    ))}
+                    {sorted[0] && (
+                      <p className="w-full text-gray-500 text-xs mt-1">
+                        Post around <span className="text-orange-400 font-semibold">{sorted[0].label}</span> for maximum reach — that's when your users are most active.
+                      </p>
+                    )}
+                  </div>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart data={hours} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                      <XAxis dataKey="label" tick={{ fill: "#6b7280", fontSize: 10 }} interval={3} />
+                      <YAxis tick={{ fill: "#6b7280", fontSize: 11 }} allowDecimals={false} />
+                      <Tooltip
+                        contentStyle={{ background: "#111827", border: "1px solid #374151", borderRadius: 8, color: "#f3f4f6" }}
+                        formatter={(v: number) => [v, "actions"]}
+                        labelFormatter={l => `${l} — ${Math.round((Number(hours.find(h => h.label === l)?.count ?? 0) / maxCount) * 100)}% of peak`}
+                      />
+                      <Bar dataKey="count" radius={[3, 3, 0, 0]} name="Actions">
+                        {hours.map(h => (
+                          <Cell key={h.hour} fill={top3.has(h.hour) ? ORANGE : "#374151"} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </>
+              );
+            })()}
+          </Card>
+        </section>
+
+        {/* ── Lapsed This Week ── */}
+        <section>
+          <SectionTitle icon={UserX} title="Active Last Week — Gone This Week" sub="Users who were active 7–14 days ago but haven't logged in since" />
+          {lapsedLoading ? (
+            <div className="space-y-2">
+              {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}
+            </div>
+          ) : !lapsedUsers?.length ? (
+            <Card><p className="text-gray-400 text-sm">No lapsed users this week — everyone who was active last week has returned.</p></Card>
+          ) : (
+            <Card className="p-0 overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800">
+                <p className="text-gray-300 text-sm font-semibold">
+                  {lapsedUsers.length} {lapsedUsers.length === 1 ? "user" : "users"} went quiet this week
+                </p>
+                <button
+                  onClick={() => {
+                    const emails = lapsedUsers.map((u: { email: string }) => u.email).join(",");
+                    window.open(`mailto:${emails}?subject=We%20miss%20you%20on%20SiteSort&body=Hi%20there%2C%0A%0AWe%20noticed%20you%20haven%27t%20been%20on%20SiteSort%20this%20week%20%E2%80%94%20is%20everything%20okay%3F%20Let%20us%20know%20if%20there%27s%20anything%20we%20can%20help%20with.%0A%0AKind%20regards%2C%0AThe%20SiteSort%20Team`, "_blank");
+                  }}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-xs font-semibold transition-colors"
+                >
+                  Email All ({lapsedUsers.length})
+                </button>
+              </div>
+              <div className="divide-y divide-gray-800">
+                {lapsedUsers.map((u: { id: string; name: string; email: string; role: string; lastActiveAt: string; signedUpAt: string }) => (
+                  <div key={u.id} className="flex items-center justify-between px-5 py-3 hover:bg-gray-800/40 transition-colors">
+                    <div className="min-w-0">
+                      <p className="text-gray-200 text-sm font-medium truncate">{u.name}</p>
+                      <p className="text-gray-500 text-xs truncate">{u.email} · last active {timeAgo(u.lastActiveAt)}</p>
+                    </div>
+                    <a
+                      href={`mailto:${u.email}?subject=We%20miss%20you%20on%20SiteSort`}
+                      className="ml-4 flex-shrink-0 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg text-xs font-medium transition-colors"
+                    >
+                      Email
+                    </a>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+        </section>
+
+        {/* ── Dormant Users ── */}
+        <section>
+          <SectionTitle icon={UserX} title="Signed Up — Never Active" sub="Users who registered but have never uploaded a document, photo, permit, or sign-off" />
+          {dormantLoading ? (
+            <div className="space-y-2">
+              {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}
+            </div>
+          ) : !dormantUsers?.length ? (
+            <Card><p className="text-gray-400 text-sm">No dormant users — everyone has taken at least one action.</p></Card>
+          ) : (
+            <Card className="p-0 overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800">
+                <p className="text-gray-300 text-sm font-semibold">{dormantUsers.length} dormant {dormantUsers.length === 1 ? "user" : "users"}</p>
+                <button
+                  onClick={() => {
+                    const emails = dormantUsers.map((u: { email: string }) => u.email).join(",");
+                    window.open(`mailto:${emails}?subject=Getting%20started%20with%20SiteSort&body=Hi%20there%2C%0A%0AWe%20noticed%20you%20signed%20up%20to%20SiteSort%20but%20haven%27t%20had%20a%20chance%20to%20explore%20it%20yet.%20We%27d%20love%20to%20help%20you%20get%20started!%0A%0AKind%20regards%2C%0AThe%20SiteSort%20Team`, "_blank");
+                  }}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-xs font-semibold transition-colors"
+                >
+                  Email All ({dormantUsers.length})
+                </button>
+              </div>
+              <div className="divide-y divide-gray-800">
+                {dormantUsers.map((u: { id: string; name: string; email: string; role: string; signedUpAt: string }) => (
+                  <div key={u.id} className="flex items-center justify-between px-5 py-3 hover:bg-gray-800/40 transition-colors">
+                    <div className="min-w-0">
+                      <p className="text-gray-200 text-sm font-medium truncate">{u.name}</p>
+                      <p className="text-gray-500 text-xs truncate">{u.email} · {u.role} · signed up {fmtDate(u.signedUpAt)}</p>
+                    </div>
+                    <a
+                      href={`mailto:${u.email}?subject=Getting%20started%20with%20SiteSort`}
+                      className="ml-4 flex-shrink-0 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg text-xs font-medium transition-colors"
+                    >
+                      Email
+                    </a>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
         </section>
 
         {/* ── Not-tracked sections ── */}

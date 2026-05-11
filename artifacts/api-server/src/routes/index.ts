@@ -15,6 +15,7 @@ import aiRouter from "./ai";
 import uploadRouter from "./upload";
 import testEmailRouter from "./test-email";
 import adminRouter from "./admin";
+import invoicesRouter from "./invoices";
 
 const router: IRouter = Router();
 
@@ -34,5 +35,6 @@ router.use(qrRouter);
 router.use(aiRouter);
 router.use(uploadRouter);
 router.use(testEmailRouter);
+router.use(invoicesRouter);
 
 export default router;

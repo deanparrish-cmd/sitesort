@@ -16,13 +16,13 @@ import {
 import { eq, gte, lt, and, desc, sql, count, isNotNull, inArray } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
 
-const ADMIN_EMAIL = "dean.parrish@me.com";
+const ADMIN_EMAILS = ["dean.parrish@me.com", "amy-parrish@hotmail.co.uk"];
 
 const router: IRouter = Router();
 
 function requireAdmin(_req: Request, res: Response, next: NextFunction): void {
   const req = _req as Request & { user?: { email: string } };
-  if (req.user?.email !== ADMIN_EMAIL) {
+  if (!req.user?.email || !ADMIN_EMAILS.includes(req.user.email)) {
     res.status(403).json({ error: "forbidden", message: "Admin access required" });
     return;
   }
@@ -507,6 +507,173 @@ router.get("/admin/activity", authenticate, requireAdmin, async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Admin activity error");
     res.status(500).json({ error: "server_error", message: "Failed to load activity" });
+  }
+});
+
+router.get("/admin/feature-adoption", authenticate, requireAdmin, async (req, res) => {
+  try {
+    async function avgDaysToFirst(
+      firstActionRows: { userId: string; firstAt: Date }[]
+    ): Promise<{ usersWhoUsed: number; avgDays: number | null }> {
+      if (firstActionRows.length === 0) return { usersWhoUsed: 0, avgDays: null };
+      const userIds = firstActionRows.map(r => r.userId);
+      const users = await db.select({ id: usersTable.id, createdAt: usersTable.createdAt })
+        .from(usersTable).where(inArray(usersTable.id, userIds));
+      const signupMap = new Map(users.map(u => [u.id, u.createdAt]));
+      let total = 0, count = 0;
+      for (const r of firstActionRows) {
+        const signup = signupMap.get(r.userId);
+        if (!signup) continue;
+        const days = (r.firstAt.getTime() - signup.getTime()) / 86400000;
+        if (days >= 0 && days < 365) { total += days; count++; }
+      }
+      return { usersWhoUsed: firstActionRows.length, avgDays: count > 0 ? Math.round((total / count) * 10) / 10 : null };
+    }
+
+    const [docRows, supersededRows, signOffRows, permitRows, publicDocRows, photoRows] = await Promise.all([
+      // Any document upload
+      db.select({
+        userId: documentsTable.uploadedBy,
+        firstAt: sql<Date>`MIN(${documentsTable.createdAt})`.mapWith(v => new Date(v)),
+      }).from(documentsTable).groupBy(documentsTable.uploadedBy),
+
+      // Superseded drawings (version > 1)
+      db.select({
+        userId: documentsTable.uploadedBy,
+        firstAt: sql<Date>`MIN(${documentsTable.createdAt})`.mapWith(v => new Date(v)),
+      }).from(documentsTable)
+        .where(sql`${documentsTable.previousVersionId} IS NOT NULL`)
+        .groupBy(documentsTable.uploadedBy),
+
+      // Digital sign-off
+      db.select({
+        userId: documentDistributionsTable.userId,
+        firstAt: sql<Date>`MIN(${documentDistributionsTable.acknowledgedAt})`.mapWith(v => new Date(v)),
+      }).from(documentDistributionsTable)
+        .where(isNotNull(documentDistributionsTable.acknowledgedAt))
+        .groupBy(documentDistributionsTable.userId),
+
+      // Permit tracking
+      db.select({
+        userId: permitsTable.responsibleUserId,
+        firstAt: sql<Date>`MIN(${permitsTable.createdAt})`.mapWith(v => new Date(v)),
+      }).from(permitsTable).groupBy(permitsTable.responsibleUserId),
+
+      // Public safety documents
+      db.select({
+        userId: documentsTable.uploadedBy,
+        firstAt: sql<Date>`MIN(${documentsTable.createdAt})`.mapWith(v => new Date(v)),
+      }).from(documentsTable)
+        .where(eq(documentsTable.publicAccess, true))
+        .groupBy(documentsTable.uploadedBy),
+
+      // Photo log
+      db.select({
+        userId: photosTable.uploadedBy,
+        firstAt: sql<Date>`MIN(${photosTable.takenAt})`.mapWith(v => new Date(v)),
+      }).from(photosTable).groupBy(photosTable.uploadedBy),
+    ]);
+
+    const [qrTotal, insuranceTotal] = await Promise.all([
+      n(db.select({ count: count() }).from(qrCodesTable)),
+      n(db.select({ count: count() }).from(insuranceRecordsTable)),
+    ]);
+
+    const [docs, superseded, signOffs, permits, publicDocs, photos] = await Promise.all([
+      avgDaysToFirst(docRows),
+      avgDaysToFirst(supersededRows),
+      avgDaysToFirst(signOffRows),
+      avgDaysToFirst(permitRows),
+      avgDaysToFirst(publicDocRows),
+      avgDaysToFirst(photoRows),
+    ]);
+
+    res.json([
+      { feature: "Document Upload", description: "Automatic superseded drawings", icon: "FileText", ...docs },
+      { feature: "Digital Sign-offs", description: "Digital sign-off tracking", icon: "PenLine", ...signOffs },
+      { feature: "Permit Tracking", description: "Track active permits", icon: "ClipboardCheck", ...permits },
+      { feature: "Public Safety Docs", description: "Instant access to public safety documents", icon: "ShieldCheck", ...publicDocs },
+      { feature: "Photo Log", description: "Compliance photo log", icon: "Camera", ...photos },
+      { feature: "Superseded Drawings", description: "Version-controlled document hub", icon: "Layers", ...superseded },
+      { feature: "QR Site Boards", description: "Generate dynamic QR codes for site boards", icon: "QrCode", usersWhoUsed: qrTotal, avgDays: null },
+      { feature: "Insurance Monitor", description: "Subcontractor insurance documents", icon: "HardHat", usersWhoUsed: insuranceTotal, avgDays: null },
+    ]);
+  } catch (err) {
+    req.log.error({ err }, "Admin feature adoption error");
+    res.status(500).json({ error: "server_error", message: "Failed to load feature adoption" });
+  }
+});
+
+router.get("/admin/lapsed-users", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const sevenDaysAgo = daysAgo(7);
+    const fourteenDaysAgo = daysAgo(14);
+
+    const users = await db.select({
+      id: usersTable.id,
+      name: usersTable.name,
+      email: usersTable.email,
+      role: usersTable.role,
+      lastActiveAt: usersTable.lastActiveAt,
+      createdAt: usersTable.createdAt,
+    }).from(usersTable).where(
+      and(
+        isNotNull(usersTable.lastActiveAt),
+        gte(usersTable.lastActiveAt, fourteenDaysAgo),
+        lt(usersTable.lastActiveAt, sevenDaysAgo),
+      )
+    ).orderBy(desc(usersTable.lastActiveAt));
+
+    res.json(users.map(u => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      lastActiveAt: u.lastActiveAt!.toISOString(),
+      signedUpAt: u.createdAt.toISOString(),
+    })));
+  } catch (err) {
+    req.log.error({ err }, "Admin lapsed users error");
+    res.status(500).json({ error: "server_error", message: "Failed to load lapsed users" });
+  }
+});
+
+router.get("/admin/dormant-users", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const [docsUsers, photosUsers, permitsUsers, signOffUsers] = await Promise.all([
+      db.select({ id: documentsTable.uploadedBy }).from(documentsTable).groupBy(documentsTable.uploadedBy),
+      db.select({ id: photosTable.uploadedBy }).from(photosTable).groupBy(photosTable.uploadedBy),
+      db.select({ id: permitsTable.responsibleUserId }).from(permitsTable).groupBy(permitsTable.responsibleUserId),
+      db.select({ id: documentDistributionsTable.userId }).from(documentDistributionsTable).groupBy(documentDistributionsTable.userId),
+    ]);
+
+    const activeUserIds = new Set([
+      ...docsUsers.map(r => r.id),
+      ...photosUsers.map(r => r.id),
+      ...permitsUsers.map(r => r.id).filter(Boolean),
+      ...signOffUsers.map(r => r.id),
+    ]);
+
+    const allUsers = await db.select({
+      id: usersTable.id,
+      name: usersTable.name,
+      email: usersTable.email,
+      role: usersTable.role,
+      createdAt: usersTable.createdAt,
+    }).from(usersTable).orderBy(desc(usersTable.createdAt));
+
+    const dormant = allUsers.filter(u => !activeUserIds.has(u.id));
+
+    res.json(dormant.map(u => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      signedUpAt: u.createdAt.toISOString(),
+    })));
+  } catch (err) {
+    req.log.error({ err }, "Admin dormant users error");
+    res.status(500).json({ error: "server_error", message: "Failed to load dormant users" });
   }
 });
 

@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRoute } from "wouter";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronRight, QrCode, Download, Printer, RefreshCw } from "lucide-react";
+import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { InsuranceCertZone } from "@/components/ui/insurance-cert-zone";
@@ -34,6 +34,22 @@ export default function ProjectDetail() {
   const { data: documents, refetch: refetchDocs } = useListDocuments(projectId, undefined, { query: { enabled: !!projectId } });
   const { data: members } = useListProjectMembers(projectId, { query: { enabled: !!projectId } });
   
+  type PermitItem = { id: string; type: string; description: string; startDate: string; expiryDate: string; status: string; responsibleName?: string };
+  type InvoiceItem = { id: string; direction: string; counterpartyName: string; description: string; amount: string; currency: string; dueDate: string; status: string; reference?: string | null };
+
+  const [permits, setPermits] = useState<PermitItem[]>([]);
+  const [projectInvoices, setProjectInvoices] = useState<InvoiceItem[]>([]);
+
+  useEffect(() => {
+    if (!projectId) return;
+    const token = localStorage.getItem("sitesort_token");
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+    Promise.all([
+      fetch(`/api/projects/${projectId}/permits`, { headers }).then(r => r.ok ? r.json() : []),
+      fetch(`/api/projects/${projectId}/invoices`, { headers }).then(r => r.ok ? r.json() : []),
+    ]).then(([p, inv]) => { setPermits(p); setProjectInvoices(inv); });
+  }, [projectId]);
+
   const uploadMutation = useUploadDocument();
   const updateMutation = useUpdateProject();
   const queryClient = useQueryClient();
@@ -312,6 +328,7 @@ export default function ProjectDetail() {
             { value: "team", label: "Team" },
             { value: "photos", label: "Photos" },
             { value: "permits", label: "Permits" },
+            { value: "finances", label: "Finances & Expiry" },
             { value: "qr", label: "Site Board QR" },
           ].map(tab => (
             <TabsTrigger 
@@ -678,6 +695,161 @@ export default function ProjectDetail() {
                     <FolderOpen className="w-4 h-4" />+ Add Trade Folder
                   </button>
                 )}
+              </div>
+            );
+          })()}
+        </TabsContent>
+
+        <TabsContent value="finances">
+          {(() => {
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+            const daysLeft = (dateStr: string) => Math.ceil((new Date(dateStr + "T00:00:00").getTime() - today.getTime()) / 86400000);
+            const fmtDate = (s: string) => new Date(s + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+            const fmtAmt = (currency: string, amount: string) => `${currency} ${Number(amount).toLocaleString("en-GB", { minimumFractionDigits: 2 })}`;
+
+            const statusStyle = (days: number, paid = false) => {
+              if (paid) return "bg-emerald-50 border-emerald-200 text-emerald-700";
+              if (days < 0) return "bg-red-50 border-red-200 text-red-700";
+              if (days <= 7) return "bg-orange-50 border-orange-200 text-orange-700";
+              if (days <= 30) return "bg-yellow-50 border-yellow-200 text-yellow-700";
+              return "bg-muted/30 border-border text-muted-foreground";
+            };
+            const statusLabel = (days: number, paid = false) => {
+              if (paid) return "Paid";
+              if (days < 0) return "Overdue";
+              if (days <= 7) return `${days}d — urgent`;
+              if (days <= 30) return `${days}d`;
+              return `${days}d`;
+            };
+
+            const unpaidInbound = projectInvoices.filter(i => i.direction === "inbound" && i.status !== "paid").reduce((s, i) => s + Number(i.amount), 0);
+            const unpaidOutbound = projectInvoices.filter(i => i.direction === "outbound" && i.status !== "paid").reduce((s, i) => s + Number(i.amount), 0);
+
+            return (
+              <div className="space-y-8">
+
+                {/* Permit Expiry */}
+                <section>
+                  <div className="flex items-center gap-2 mb-4">
+                    <ClipboardCheck className="w-5 h-5 text-primary" />
+                    <h3 className="font-bold text-lg">Permit Expiry</h3>
+                    <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{permits.length}</span>
+                  </div>
+                  {permits.length === 0 ? (
+                    <Card><CardContent className="py-8 text-center text-muted-foreground text-sm">No permits on this project.</CardContent></Card>
+                  ) : (
+                    <div className="space-y-2">
+                      {[...permits].sort((a, b) => a.expiryDate.localeCompare(b.expiryDate)).map(p => {
+                        const days = daysLeft(p.expiryDate);
+                        return (
+                          <div key={p.id} className={`flex items-center justify-between gap-4 px-4 py-3 rounded-xl border ${statusStyle(days)}`}>
+                            <div className="min-w-0">
+                              <p className="font-semibold text-sm truncate">{p.type}</p>
+                              <p className="text-xs opacity-70 truncate">{p.description}{p.responsibleName ? ` · ${p.responsibleName}` : ""}</p>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="text-xs font-semibold">{statusLabel(days)}</p>
+                              <p className="text-xs opacity-70">{fmtDate(p.expiryDate)}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </section>
+
+                {/* Document Status */}
+                <section>
+                  <div className="flex items-center gap-2 mb-4">
+                    <FileText className="w-5 h-5 text-primary" />
+                    <h3 className="font-bold text-lg">Document Status</h3>
+                    <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{documents?.length ?? 0}</span>
+                  </div>
+                  {(!documents || documents.length === 0) ? (
+                    <Card><CardContent className="py-8 text-center text-muted-foreground text-sm">No documents uploaded yet.</CardContent></Card>
+                  ) : (
+                    <div className="space-y-2">
+                      {[...documents].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).map(doc => {
+                        const isSuperseded = doc.status === "superseded";
+                        const pending = doc.distributionSummary?.pending ?? 0;
+                        return (
+                          <div key={doc.id} className={`flex items-center justify-between gap-4 px-4 py-3 rounded-xl border ${isSuperseded ? "bg-muted/30 border-border opacity-60" : pending > 0 ? "bg-yellow-50 border-yellow-200" : "bg-emerald-50 border-emerald-200"}`}>
+                            <div className="flex items-center gap-3 min-w-0">
+                              <FileText className="w-4 h-4 shrink-0 text-muted-foreground" />
+                              <div className="min-w-0">
+                                <p className={`font-semibold text-sm truncate ${isSuperseded ? "line-through text-muted-foreground" : ""}`}>{doc.name}</p>
+                                <p className="text-xs text-muted-foreground capitalize">{doc.type.replace("_", " ")} · v{doc.version}</p>
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              {isSuperseded
+                                ? <Badge variant="secondary" className="text-[10px]">Superseded</Badge>
+                                : pending > 0
+                                ? <Badge className="text-[10px] bg-yellow-100 text-yellow-700 border-yellow-200">{pending} pending sign-off</Badge>
+                                : <Badge variant="success" className="text-[10px]">All signed off</Badge>
+                              }
+                              <p className="text-xs text-muted-foreground mt-0.5">{formatDate(doc.createdAt)}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </section>
+
+                {/* Invoices */}
+                <section>
+                  <div className="flex items-center gap-2 mb-4">
+                    <Receipt className="w-5 h-5 text-primary" />
+                    <h3 className="font-bold text-lg">Invoices</h3>
+                    <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{projectInvoices.length}</span>
+                  </div>
+
+                  {projectInvoices.length > 0 && (
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      <div className="px-4 py-3 rounded-xl border bg-emerald-50 border-emerald-200">
+                        <div className="flex items-center gap-1.5 mb-0.5"><ArrowDownCircle className="w-4 h-4 text-emerald-600" /><p className="text-xs font-medium text-emerald-700">Due to You</p></div>
+                        <p className="text-xl font-extrabold text-emerald-700">GBP {unpaidInbound.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</p>
+                      </div>
+                      <div className="px-4 py-3 rounded-xl border bg-rose-50 border-rose-200">
+                        <div className="flex items-center gap-1.5 mb-0.5"><ArrowUpCircle className="w-4 h-4 text-rose-600" /><p className="text-xs font-medium text-rose-700">You Owe</p></div>
+                        <p className="text-xl font-extrabold text-rose-700">GBP {unpaidOutbound.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {projectInvoices.length === 0 ? (
+                    <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">
+                      No invoices linked to this project yet. Add invoices from the <a href="/invoices" className="text-primary hover:underline font-medium">Invoices page</a> and assign them here.
+                    </CardContent></Card>
+                  ) : (
+                    <div className="space-y-2">
+                      {[...projectInvoices].sort((a, b) => a.dueDate.localeCompare(b.dueDate)).map(inv => {
+                        const days = daysLeft(inv.dueDate);
+                        const paid = inv.status === "paid";
+                        return (
+                          <div key={inv.id} className={`flex items-center justify-between gap-4 px-4 py-3 rounded-xl border ${statusStyle(days, paid)}`}>
+                            <div className="flex items-center gap-3 min-w-0">
+                              {inv.direction === "inbound"
+                                ? <ArrowDownCircle className="w-4 h-4 shrink-0 text-emerald-600" />
+                                : <ArrowUpCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                              }
+                              <div className="min-w-0">
+                                <p className="font-semibold text-sm truncate">{inv.counterpartyName}</p>
+                                <p className="text-xs opacity-70 truncate">{inv.description}{inv.reference ? ` · ${inv.reference}` : ""}</p>
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="font-bold text-sm">{fmtAmt(inv.currency, inv.amount)}</p>
+                              <p className="text-xs opacity-70">{paid ? "Paid" : statusLabel(days)} · {fmtDate(inv.dueDate)}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </section>
+
               </div>
             );
           })()}

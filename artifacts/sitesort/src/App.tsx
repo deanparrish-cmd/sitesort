@@ -18,6 +18,8 @@ import ProjectDetail from "@/pages/projects/detail";
 import QrPage from "@/pages/qr";
 import SiteBoard from "@/pages/site-board";
 import AdminDashboard from "@/pages/admin";
+import InvoicesPage from "@/pages/invoices";
+import SubcontractorsPage from "@/pages/subcontractors";
 
 // Set up the fetch interceptor for auth
 setupApiInterceptor();
@@ -58,9 +60,7 @@ function Router() {
       <Route path="/projects" component={ProjectsList} />
       <Route path="/projects/:id" component={ProjectDetail} />
       
-      <Route path="/subcontractors">
-        <PlaceholderPage title="Subcontractors Directory" />
-      </Route>
+      <Route path="/subcontractors" component={SubcontractorsPage} />
       <Route path="/compliance">
         <PlaceholderPage title="Compliance Center" />
       </Route>
@@ -75,6 +75,8 @@ function Router() {
       <Route path="/settings">
         <PlaceholderPage title="Company Settings" />
       </Route>
+
+      <Route path="/invoices" component={InvoicesPage} />
 
       {/* Admin */}
       <Route path="/admin" component={AdminDashboard} />

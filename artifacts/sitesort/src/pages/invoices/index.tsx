@@ -1,0 +1,363 @@
+import { useState, useEffect, useCallback } from "react";
+import { SidebarLayout } from "@/components/layout/sidebar-layout";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Plus, Search, ArrowDownCircle, ArrowUpCircle, CheckCircle2, Clock, AlertTriangle, Receipt } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { useListProjects } from "@workspace/api-client-react";
+
+type Invoice = {
+  id: string;
+  direction: "inbound" | "outbound";
+  counterpartyName: string;
+  description: string;
+  amount: string;
+  currency: string;
+  dueDate: string;
+  status: "pending" | "paid" | "overdue";
+  reference?: string | null;
+  createdAt: string;
+};
+
+function apiFetch(path: string, options?: RequestInit) {
+  const token = localStorage.getItem("sitesort_token");
+  return fetch(path, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options?.headers,
+    },
+  });
+}
+
+function fmtAmount(currency: string, amount: string) {
+  return `${currency} ${Number(amount).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function fmtDate(iso: string) {
+  return new Date(iso + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function daysUntil(dateStr: string) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const due = new Date(dateStr + "T00:00:00");
+  return Math.ceil((due.getTime() - today.getTime()) / 86400000);
+}
+
+function StatusBadge({ invoice }: { invoice: Invoice }) {
+  if (invoice.status === "paid") return <Badge variant="success" className="gap-1"><CheckCircle2 className="w-3 h-3" />Paid</Badge>;
+  const days = daysUntil(invoice.dueDate);
+  if (days < 0) return <Badge variant="destructive" className="gap-1"><AlertTriangle className="w-3 h-3" />Overdue</Badge>;
+  if (days <= 7) return <Badge className="gap-1 bg-orange-100 text-orange-700 border-orange-200"><Clock className="w-3 h-3" />Due in {days}d</Badge>;
+  return <Badge variant="secondary" className="gap-1"><Clock className="w-3 h-3" />Due in {days}d</Badge>;
+}
+
+type FormData = {
+  direction: "inbound" | "outbound";
+  counterpartyName: string;
+  description: string;
+  amount: string;
+  currency: string;
+  dueDate: string;
+  reference: string;
+  projectId: string;
+};
+
+export default function InvoicesPage() {
+  const { data: projects } = useListProjects();
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<"all" | "inbound" | "outbound" | "pending" | "paid">("all");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
+    defaultValues: { direction: "inbound", currency: "GBP" },
+  });
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const res = await apiFetch("/api/invoices");
+    if (res.ok) setInvoices(await res.json());
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function markPaid(id: string) {
+    await apiFetch(`/api/invoices/${id}`, { method: "PATCH", body: JSON.stringify({ status: "paid" }) });
+    setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, status: "paid" } : inv));
+  }
+
+  async function deleteInvoice(id: string) {
+    await apiFetch(`/api/invoices/${id}`, { method: "DELETE" });
+    setInvoices(prev => prev.filter(inv => inv.id !== id));
+  }
+
+  async function onSubmit(data: FormData) {
+    setSubmitting(true);
+    setError(null);
+    const res = await apiFetch("/api/invoices", {
+      method: "POST",
+      body: JSON.stringify({ ...data, amount: data.amount, projectId: data.projectId || null }),
+    });
+    if (res.ok) {
+      const created = await res.json();
+      setInvoices(prev => [created, ...prev]);
+      setModalOpen(false);
+      reset();
+    } else {
+      setError("Failed to create invoice. Please check your inputs.");
+    }
+    setSubmitting(false);
+  }
+
+  const filtered = invoices.filter(inv => {
+    const matchSearch = inv.counterpartyName.toLowerCase().includes(search.toLowerCase()) ||
+      inv.description.toLowerCase().includes(search.toLowerCase()) ||
+      (inv.reference ?? "").toLowerCase().includes(search.toLowerCase());
+    const matchFilter =
+      filter === "all" ? true :
+      filter === "inbound" ? inv.direction === "inbound" :
+      filter === "outbound" ? inv.direction === "outbound" :
+      filter === "pending" ? inv.status !== "paid" :
+      inv.status === "paid";
+    return matchSearch && matchFilter;
+  }).sort((a, b) => {
+    if (a.status === "paid" && b.status !== "paid") return 1;
+    if (a.status !== "paid" && b.status === "paid") return -1;
+    return a.dueDate.localeCompare(b.dueDate);
+  });
+
+  const totalInbound = invoices.filter(i => i.direction === "inbound" && i.status !== "paid").reduce((s, i) => s + Number(i.amount), 0);
+  const totalOutbound = invoices.filter(i => i.direction === "outbound" && i.status !== "paid").reduce((s, i) => s + Number(i.amount), 0);
+  const overdue = invoices.filter(i => i.status !== "paid" && daysUntil(i.dueDate) < 0).length;
+
+  return (
+    <SidebarLayout>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+        <div>
+          <h1 className="text-3xl font-bold">Invoices</h1>
+          <p className="text-muted-foreground">Track payments in and out.</p>
+        </div>
+        <Button variant="accent" onClick={() => setModalOpen(true)}>
+          <Plus className="w-4 h-4 mr-2" /> New Invoice
+        </Button>
+      </div>
+
+      {/* Summary cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <Card className="p-5 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-900">
+          <div className="flex items-center gap-3 mb-1">
+            <ArrowDownCircle className="w-5 h-5 text-emerald-600" />
+            <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Due To You</p>
+          </div>
+          <p className="text-2xl font-extrabold text-emerald-700 dark:text-emerald-300">
+            GBP {totalInbound.toLocaleString("en-GB", { minimumFractionDigits: 2 })}
+          </p>
+          <p className="text-xs text-emerald-600/70 mt-0.5">unpaid inbound</p>
+        </Card>
+        <Card className="p-5 border-rose-200 bg-rose-50 dark:bg-rose-950/20 dark:border-rose-900">
+          <div className="flex items-center gap-3 mb-1">
+            <ArrowUpCircle className="w-5 h-5 text-rose-600" />
+            <p className="text-sm font-medium text-rose-700 dark:text-rose-400">You Owe</p>
+          </div>
+          <p className="text-2xl font-extrabold text-rose-700 dark:text-rose-300">
+            GBP {totalOutbound.toLocaleString("en-GB", { minimumFractionDigits: 2 })}
+          </p>
+          <p className="text-xs text-rose-600/70 mt-0.5">unpaid outbound</p>
+        </Card>
+        <Card className="p-5">
+          <div className="flex items-center gap-3 mb-1">
+            <AlertTriangle className="w-5 h-5 text-destructive" />
+            <p className="text-sm font-medium text-muted-foreground">Overdue</p>
+          </div>
+          <p className="text-2xl font-extrabold text-destructive">{overdue}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">invoice{overdue !== 1 ? "s" : ""} past due</p>
+        </Card>
+      </div>
+
+      {/* Filters & search */}
+      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+        <div className="relative flex-1 max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          <Input placeholder="Search invoices…" className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {(["all", "inbound", "outbound", "pending", "paid"] as const).map(f => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors capitalize
+                ${filter === f ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border hover:border-primary/40"}`}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Table */}
+      <Card className="overflow-hidden">
+        {loading ? (
+          <div className="divide-y">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="flex items-center gap-4 p-4 animate-pulse">
+                <div className="w-8 h-8 rounded-full bg-muted" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 bg-muted rounded w-1/3" />
+                  <div className="h-3 bg-muted rounded w-1/2" />
+                </div>
+                <div className="h-4 bg-muted rounded w-20" />
+              </div>
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center px-4">
+            <Receipt className="w-10 h-10 text-muted-foreground/30 mb-3" />
+            <p className="font-semibold text-muted-foreground">No invoices found</p>
+            <p className="text-sm text-muted-foreground/70 mt-1">Add your first invoice to track payments.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/30">
+                  <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Type</th>
+                  <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Counterparty</th>
+                  <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden md:table-cell">Description</th>
+                  <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Amount</th>
+                  <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Due</th>
+                  <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
+                  <th className="px-5 py-3" />
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {filtered.map(inv => (
+                  <tr key={inv.id} className="hover:bg-muted/20 transition-colors">
+                    <td className="px-5 py-3.5">
+                      {inv.direction === "inbound"
+                        ? <span className="flex items-center gap-1.5 text-emerald-600 font-medium"><ArrowDownCircle className="w-4 h-4" />In</span>
+                        : <span className="flex items-center gap-1.5 text-rose-600 font-medium"><ArrowUpCircle className="w-4 h-4" />Out</span>
+                      }
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <p className="font-medium text-foreground">{inv.counterpartyName}</p>
+                      {inv.reference && <p className="text-xs text-muted-foreground">{inv.reference}</p>}
+                    </td>
+                    <td className="px-5 py-3.5 text-muted-foreground hidden md:table-cell max-w-xs truncate">{inv.description}</td>
+                    <td className="px-5 py-3.5 font-semibold tabular-nums">{fmtAmount(inv.currency, inv.amount)}</td>
+                    <td className="px-5 py-3.5 text-muted-foreground whitespace-nowrap">{fmtDate(inv.dueDate)}</td>
+                    <td className="px-5 py-3.5"><StatusBadge invoice={inv} /></td>
+                    <td className="px-5 py-3.5">
+                      <div className="flex items-center gap-2 justify-end">
+                        {inv.status !== "paid" && (
+                          <button onClick={() => markPaid(inv.id)} className="text-xs text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap">
+                            Mark paid
+                          </button>
+                        )}
+                        <button onClick={() => deleteInvoice(inv.id)} className="text-xs text-muted-foreground hover:text-destructive transition-colors">
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {/* Create modal */}
+      <Dialog open={modalOpen} onOpenChange={open => { setModalOpen(open); if (!open) { reset(); setError(null); } }}>
+          <DialogHeader>
+            <DialogTitle>New Invoice</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-2">
+            {/* Direction */}
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Type</label>
+              <div className="grid grid-cols-2 gap-2">
+                {(["inbound", "outbound"] as const).map(d => (
+                  <label key={d} className="relative flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+                    <input type="radio" value={d} {...register("direction", { required: true })} className="sr-only" />
+                    {d === "inbound"
+                      ? <><ArrowDownCircle className="w-4 h-4 text-emerald-600" /><span className="text-sm font-medium">Inbound <span className="text-muted-foreground font-normal">(owed to you)</span></span></>
+                      : <><ArrowUpCircle className="w-4 h-4 text-rose-600" /><span className="text-sm font-medium">Outbound <span className="text-muted-foreground font-normal">(you pay)</span></span></>
+                    }
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Counterparty Name</label>
+              <Input placeholder="e.g. Acme Supplies Ltd" {...register("counterpartyName", { required: true })} />
+              {errors.counterpartyName && <p className="text-xs text-destructive mt-1">Required</p>}
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Description</label>
+              <Input placeholder="e.g. Materials — Site A" {...register("description", { required: true })} />
+              {errors.description && <p className="text-xs text-destructive mt-1">Required</p>}
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-1">
+                <label className="text-sm font-medium mb-1.5 block">Currency</label>
+                <select {...register("currency")} className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                  <option>GBP</option>
+                  <option>EUR</option>
+                  <option>USD</option>
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className="text-sm font-medium mb-1.5 block">Amount</label>
+                <Input type="number" step="0.01" min="0" placeholder="0.00" {...register("amount", { required: true, min: 0.01 })} />
+                {errors.amount && <p className="text-xs text-destructive mt-1">Enter a valid amount</p>}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Due Date</label>
+                <Input type="date" {...register("dueDate", { required: true })} />
+                {errors.dueDate && <p className="text-xs text-destructive mt-1">Required</p>}
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Reference <span className="text-muted-foreground font-normal">(optional)</span></label>
+                <Input placeholder="INV-001" {...register("reference")} />
+              </div>
+            </div>
+
+            {(projects?.filter(p => p.status === "active") ?? []).length > 0 && (
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Link to Project <span className="text-muted-foreground font-normal">(optional)</span></label>
+                <select {...register("projectId")} className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                  <option value="">— No project —</option>
+                  {projects?.filter(p => p.status === "active").map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {error && <p className="text-sm text-destructive">{error}</p>}
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => { setModalOpen(false); reset(); setError(null); }}>Cancel</Button>
+              <Button type="submit" variant="accent" disabled={submitting}>{submitting ? "Saving…" : "Save Invoice"}</Button>
+            </DialogFooter>
+          </form>
+      </Dialog>
+    </SidebarLayout>
+  );
+}

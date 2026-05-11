@@ -72,7 +72,7 @@ router.get("/compliance", authenticate, async (req, res) => {
         else if (expiryDay <= new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)) status = "expiring_today";
         else status = "active";
 
-        if (expiry <= in7Days) {
+        if (expiry <= in30Days) {
           expiringPermits.push({
             permitId: permit.id,
             projectId: permit.projectId,
