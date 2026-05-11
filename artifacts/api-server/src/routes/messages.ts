@@ -1,0 +1,233 @@
+import { Router, type IRouter } from "express";
+import { db } from "@workspace/db";
+import { messagesTable, usersTable } from "@workspace/db/schema";
+import { eq, and, or, desc, sql } from "drizzle-orm";
+import { generateId } from "../lib/id";
+import { authenticate } from "../middlewares/auth";
+
+const router: IRouter = Router();
+
+// GET /api/messages/conversations — list conversations for current user (or all if admin/pm)
+router.get("/messages/conversations", authenticate, async (req, res) => {
+  try {
+    const userId = req.user!.id;
+    const companyId = req.user!.companyId;
+    const role = req.user!.role;
+    const viewAll = req.query.all === "true" && (role === "admin" || role === "project_manager");
+
+    // Get all messages in company, grouped into conversations
+    let rows;
+    if (viewAll) {
+      rows = await db
+        .select()
+        .from(messagesTable)
+        .where(eq(messagesTable.companyId, companyId))
+        .orderBy(desc(messagesTable.createdAt));
+    } else {
+      rows = await db
+        .select()
+        .from(messagesTable)
+        .where(
+          and(
+            eq(messagesTable.companyId, companyId),
+            or(eq(messagesTable.senderId, userId), eq(messagesTable.recipientId, userId))
+          )
+        )
+        .orderBy(desc(messagesTable.createdAt));
+    }
+
+    // Get all unique user ids involved
+    const userIds = Array.from(new Set(rows.flatMap(r => [r.senderId, r.recipientId])));
+    const userRows = userIds.length
+      ? await db.select({ id: usersTable.id, name: usersTable.name, role: usersTable.role })
+          .from(usersTable)
+          .where(sql`${usersTable.id} = ANY(${userIds})`)
+      : [];
+    const userMap = Object.fromEntries(userRows.map(u => [u.id, u]));
+
+    // Group into conversations
+    const convMap = new Map<string, {
+      otherId: string; otherName: string; otherRole: string;
+      lastMessage: string; lastAt: string; unread: number;
+    }>();
+
+    for (const msg of rows) {
+      const otherId = viewAll
+        ? `${msg.senderId}:${msg.recipientId}`  // unique pair key for all-view
+        : msg.senderId === userId ? msg.recipientId : msg.senderId;
+
+      const convKey = viewAll
+        ? [msg.senderId, msg.recipientId].sort().join(":")
+        : otherId as string;
+
+      if (!convMap.has(convKey)) {
+        const otherUserId = viewAll ? msg.senderId : otherId as string;
+        const sender = userMap[msg.senderId];
+        const recipient = userMap[msg.recipientId];
+        convMap.set(convKey, {
+          otherId: convKey,
+          otherName: viewAll
+            ? `${sender?.name ?? "Unknown"} → ${recipient?.name ?? "Unknown"}`
+            : userMap[otherId as string]?.name ?? "Unknown",
+          otherRole: viewAll ? "" : userMap[otherId as string]?.role ?? "",
+          lastMessage: msg.content,
+          lastAt: msg.createdAt.toISOString(),
+          unread: (!viewAll && msg.recipientId === userId && !msg.readAt) ? 1 : 0,
+        });
+      } else if (!viewAll && msg.recipientId === userId && !msg.readAt) {
+        const conv = convMap.get(convKey)!;
+        conv.unread += 1;
+      }
+    }
+
+    res.json(Array.from(convMap.values()));
+  } catch (err) {
+    req.log.error({ err }, "List conversations error");
+    res.status(500).json({ error: "server_error", message: "Failed to list conversations" });
+  }
+});
+
+// GET /api/messages/thread/:userId — messages between current user and given user
+router.get("/messages/thread/:userId", authenticate, async (req, res) => {
+  try {
+    const me = req.user!.id;
+    const other = req.params.userId;
+    const companyId = req.user!.companyId;
+    const role = req.user!.role;
+    const canViewAll = role === "admin" || role === "project_manager";
+
+    let rows;
+    if (canViewAll && req.query.all === "true") {
+      // Manager viewing a conversation between two other users
+      const [a, b] = other.split(":");
+      rows = await db
+        .select()
+        .from(messagesTable)
+        .where(
+          and(
+            eq(messagesTable.companyId, companyId),
+            or(
+              and(eq(messagesTable.senderId, a), eq(messagesTable.recipientId, b)),
+              and(eq(messagesTable.senderId, b), eq(messagesTable.recipientId, a))
+            )
+          )
+        )
+        .orderBy(messagesTable.createdAt);
+    } else {
+      rows = await db
+        .select()
+        .from(messagesTable)
+        .where(
+          and(
+            eq(messagesTable.companyId, companyId),
+            or(
+              and(eq(messagesTable.senderId, me), eq(messagesTable.recipientId, other)),
+              and(eq(messagesTable.senderId, other), eq(messagesTable.recipientId, me))
+            )
+          )
+        )
+        .orderBy(messagesTable.createdAt);
+
+      // Mark unread messages as read
+      const unreadIds = rows.filter(r => r.recipientId === me && !r.readAt).map(r => r.id);
+      if (unreadIds.length) {
+        for (const id of unreadIds) {
+          await db.update(messagesTable).set({ readAt: new Date() }).where(eq(messagesTable.id, id));
+        }
+      }
+    }
+
+    // Fetch sender names
+    const userIds = Array.from(new Set(rows.flatMap(r => [r.senderId, r.recipientId])));
+    const userRows = userIds.length
+      ? await db.select({ id: usersTable.id, name: usersTable.name })
+          .from(usersTable)
+          .where(sql`${usersTable.id} = ANY(${userIds})`)
+      : [];
+    const userMap = Object.fromEntries(userRows.map(u => [u.id, u.name]));
+
+    res.json(rows.map(m => ({
+      id: m.id,
+      senderId: m.senderId,
+      senderName: userMap[m.senderId] ?? "Unknown",
+      recipientId: m.recipientId,
+      content: m.content,
+      readAt: m.readAt?.toISOString() ?? null,
+      createdAt: m.createdAt.toISOString(),
+      mine: m.senderId === me,
+    })));
+  } catch (err) {
+    req.log.error({ err }, "Get thread error");
+    res.status(500).json({ error: "server_error", message: "Failed to get thread" });
+  }
+});
+
+// POST /api/messages — send a message
+router.post("/messages", authenticate, async (req, res) => {
+  try {
+    const { recipientId, content } = req.body;
+    if (!recipientId || !content?.trim()) {
+      res.status(400).json({ error: "validation_error", message: "recipientId and content are required" });
+      return;
+    }
+
+    // Verify recipient is in same company
+    const recipient = await db.select({ id: usersTable.id, name: usersTable.name })
+      .from(usersTable)
+      .where(and(eq(usersTable.id, recipientId), eq(usersTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!recipient[0]) {
+      res.status(404).json({ error: "not_found", message: "Recipient not found" });
+      return;
+    }
+
+    const id = generateId();
+    await db.insert(messagesTable).values({
+      id,
+      companyId: req.user!.companyId,
+      senderId: req.user!.id,
+      recipientId,
+      content: content.trim(),
+    });
+
+    res.status(201).json({ id, recipientId, content: content.trim(), createdAt: new Date().toISOString(), mine: true });
+  } catch (err) {
+    req.log.error({ err }, "Send message error");
+    res.status(500).json({ error: "server_error", message: "Failed to send message" });
+  }
+});
+
+// GET /api/messages/users — list company users to start new conversations with
+router.get("/messages/users", authenticate, async (req, res) => {
+  try {
+    const users = await db
+      .select({ id: usersTable.id, name: usersTable.name, role: usersTable.role, email: usersTable.email })
+      .from(usersTable)
+      .where(eq(usersTable.companyId, req.user!.companyId));
+
+    res.json(users.filter(u => u.id !== req.user!.id));
+  } catch (err) {
+    req.log.error({ err }, "List users error");
+    res.status(500).json({ error: "server_error", message: "Failed to list users" });
+  }
+});
+
+// GET /api/messages/unread-count — total unread for current user
+router.get("/messages/unread-count", authenticate, async (req, res) => {
+  try {
+    const rows = await db
+      .select({ id: messagesTable.id })
+      .from(messagesTable)
+      .where(
+        and(
+          eq(messagesTable.recipientId, req.user!.id),
+          sql`${messagesTable.readAt} IS NULL`
+        )
+      );
+    res.json({ count: rows.length });
+  } catch (err) {
+    res.status(500).json({ error: "server_error", message: "Failed to get unread count" });
+  }
+});
+
+export default router;

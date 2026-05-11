@@ -16,6 +16,7 @@ import uploadRouter from "./upload";
 import testEmailRouter from "./test-email";
 import adminRouter from "./admin";
 import invoicesRouter from "./invoices";
+import messagesRouter from "./messages";
 
 const router: IRouter = Router();
 
@@ -36,5 +37,6 @@ router.use(aiRouter);
 router.use(uploadRouter);
 router.use(testEmailRouter);
 router.use(invoicesRouter);
+router.use(messagesRouter);
 
 export default router;

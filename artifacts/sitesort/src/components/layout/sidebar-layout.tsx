@@ -14,6 +14,7 @@ import {
   QrCode,
   ChevronDown,
   ShieldAlert,
+  MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetMe, useLogout } from "@workspace/api-client-react";
@@ -60,6 +61,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     { name: "Invoices", href: "/invoices", icon: Receipt },
     { name: "QR Codes", href: "/qr", icon: QrCode },
     { name: "Team", href: "/team", icon: Users },
+    { name: "Messages", href: "/messages", icon: MessageSquare },
     ...(user?.role === "admin"
       ? [{ name: "Admin", href: "/admin", icon: ShieldAlert }]
       : []),
