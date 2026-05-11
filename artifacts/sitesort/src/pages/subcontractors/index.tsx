@@ -399,6 +399,15 @@ export default function SubcontractorsPage() {
                               </span>
                             )}
                           </div>
+                          {sub.trades.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1.5">
+                              {sub.trades.map(t => (
+                                <span key={t} className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-orange-50 text-orange-700 border border-orange-200 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800">
+                                  {t}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
 
                         {/* Contact actions */}
