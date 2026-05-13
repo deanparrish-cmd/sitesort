@@ -6,8 +6,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus } from "lucide-react";
+import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { InsuranceCertZone } from "@/components/ui/insurance-cert-zone";
@@ -458,6 +461,7 @@ export default function ProjectDetail() {
                   <th className="px-6 py-4 font-semibold">Status / Ver</th>
                   <th className="px-6 py-4 font-semibold">Distribution</th>
                   <th className="px-6 py-4 font-semibold">Date</th>
+                  <th className="px-6 py-4" />
                 </tr>
               </thead>
               <tbody>
@@ -501,6 +505,50 @@ export default function ProjectDetail() {
                       <td className="px-6 py-4 text-muted-foreground">
                         {formatDate(doc.createdAt)}
                       </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-1">
+                          <a
+                            href={doc.fileUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-1 text-xs text-primary hover:underline font-medium"
+                            title="Open document"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                            Open
+                          </a>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="p-1 rounded text-muted-foreground hover:text-primary transition-colors" title="Share">
+                                <Share2 className="w-3.5 h-3.5" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44">
+                              <DropdownMenuItem
+                                className="gap-2 cursor-pointer"
+                                onClick={() => {
+                                  const url = doc.fileUrl.startsWith("http") ? doc.fileUrl : `${window.location.origin}${doc.fileUrl}`;
+                                  const subject = encodeURIComponent(`Document – ${doc.name}`);
+                                  const body = encodeURIComponent(`Hi,\n\nPlease find the document "${doc.name}" (v${doc.version}) here:\n\n${url}`);
+                                  window.open(`mailto:?subject=${subject}&body=${body}`);
+                                }}
+                              >
+                                <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="gap-2 cursor-pointer"
+                                onClick={() => {
+                                  const url = doc.fileUrl.startsWith("http") ? doc.fileUrl : `${window.location.origin}${doc.fileUrl}`;
+                                  const text = encodeURIComponent(`Document: ${doc.name} (v${doc.version})\n${url}`);
+                                  window.open(`https://wa.me/?text=${text}`, "_blank");
+                                }}
+                              >
+                                <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </td>
                     </tr>
                   )
                 })}
@@ -509,7 +557,7 @@ export default function ProjectDetail() {
                   (selectedStatus === 'all' || d.status === selectedStatus) &&
                   (searchQuery === '' || d.name.toLowerCase().includes(searchQuery.toLowerCase()))
                 ).length === 0 && (
-                  <tr><td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">
+                  <tr><td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
                     {documents.length === 0 ? 'No documents uploaded yet.' : 'No documents match your filters.'}
                   </td></tr>
                 )}

@@ -21,6 +21,7 @@ router.get("/compliance", authenticate, async (req, res) => {
       insuranceType: string;
       expiryDate: string;
       status: string;
+      certificateUrl: string | null;
     }> = [];
 
     if (subIds.length > 0) {
@@ -35,6 +36,7 @@ router.get("/compliance", authenticate, async (req, res) => {
             insuranceType: ins.type,
             expiryDate: ins.expiryDate,
             status: ins.status,
+            certificateUrl: ins.certificateUrl ?? null,
           });
         }
       }

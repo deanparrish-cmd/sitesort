@@ -7,12 +7,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   ShieldAlert, ShieldX, FileSignature, Search, Mic, MicOff,
   CheckCircle2, ArrowRight, Upload, FileText, AlertTriangle, Loader2, Calendar,
+  ExternalLink, Share2, Mail, MessageCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type InsuranceItem = { subcontractorId: string; subcontractorName: string; insuranceType: string; expiryDate: string; status: string };
+type InsuranceItem = { subcontractorId: string; subcontractorName: string; insuranceType: string; expiryDate: string; status: string; certificateUrl?: string | null };
 type PermitItem = { permitId: string; projectId: string; projectName: string; permitType: string; expiryDate: string; status: string };
 type AckItem = { documentId: string; documentName: string; projectId: string; projectName: string; pendingCount: number };
 type Sub = { id: string; companyName: string; contactName: string };
@@ -328,6 +332,49 @@ export default function CompliancePage() {
                           <>
                             <p className="text-xs text-muted-foreground">{fmtDate(ins.expiryDate)}</p>
                             <ExpiryBadge days={days} />
+                            {ins.certificateUrl && (
+                              <>
+                                <a
+                                  href={ins.certificateUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-xs text-primary hover:underline flex items-center gap-0.5"
+                                  title="Open certificate"
+                                >
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <button className="text-muted-foreground hover:text-primary transition-colors" title="Share certificate">
+                                      <Share2 className="w-3 h-3" />
+                                    </button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-44">
+                                    <DropdownMenuItem
+                                      className="gap-2 cursor-pointer"
+                                      onClick={() => {
+                                        const url = ins.certificateUrl!.startsWith("http") ? ins.certificateUrl! : `${window.location.origin}${ins.certificateUrl}`;
+                                        const subject = encodeURIComponent(`Insurance Certificate – ${ins.subcontractorName}`);
+                                        const body = encodeURIComponent(`Hi,\n\nPlease find the ${ins.insuranceType.replace(/_/g, " ")} insurance certificate for ${ins.subcontractorName} here:\n\n${url}\n\nExpiry: ${fmtDate(ins.expiryDate)}`);
+                                        window.open(`mailto:?subject=${subject}&body=${body}`);
+                                      }}
+                                    >
+                                      <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      className="gap-2 cursor-pointer"
+                                      onClick={() => {
+                                        const url = ins.certificateUrl!.startsWith("http") ? ins.certificateUrl! : `${window.location.origin}${ins.certificateUrl}`;
+                                        const text = encodeURIComponent(`Insurance certificate – ${ins.subcontractorName}\nType: ${ins.insuranceType.replace(/_/g, " ")}\nExpiry: ${fmtDate(ins.expiryDate)}\n${url}`);
+                                        window.open(`https://wa.me/?text=${text}`, "_blank");
+                                      }}
+                                    >
+                                      <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </>
+                            )}
                             <button
                               onClick={() => uploadFile(new File([], ""), ins.subcontractorId)}
                               className="text-xs text-primary hover:underline flex items-center gap-0.5"
