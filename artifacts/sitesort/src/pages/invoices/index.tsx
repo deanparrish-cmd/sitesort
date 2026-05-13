@@ -5,7 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Plus, Search, ArrowDownCircle, ArrowUpCircle, CheckCircle2, Clock, AlertTriangle, Receipt, Mic, MicOff } from "lucide-react";
+import {
+  Plus, Search, ArrowDownCircle, ArrowUpCircle, CheckCircle2, Clock,
+  AlertTriangle, Receipt, Mic, MicOff, Paperclip, Upload, ExternalLink, Loader2, X,
+} from "lucide-react";
 import { useForm } from "react-hook-form";
 import { useListProjects } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
@@ -20,6 +23,7 @@ type Invoice = {
   dueDate: string;
   status: "pending" | "paid" | "overdue";
   reference?: string | null;
+  attachmentUrl?: string | null;
   createdAt: string;
 };
 
@@ -33,6 +37,11 @@ function apiFetch(path: string, options?: RequestInit) {
       ...options?.headers,
     },
   });
+}
+
+function authHeaders(): Record<string, string> {
+  const token = localStorage.getItem("sitesort_token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 function fmtAmount(currency: string, amount: string) {
@@ -77,6 +86,15 @@ export default function InvoicesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // drag-and-drop state
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [dragRowId, setDragRowId] = useState<string | null>(null);
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const dragCounter = useRef(0);
+  const lastDragRowRef = useRef<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const clickUploadIdRef = useRef<string | null>(null);
 
   const [listening, setListening] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -140,6 +158,82 @@ export default function InvoicesPage() {
     setSubmitting(false);
   }
 
+  // ── upload + attach ──
+  const attachFile = useCallback(async (file: File, invoiceId: string) => {
+    setUploadingId(invoiceId);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const uploadRes = await fetch("/api/upload", {
+        method: "POST",
+        headers: authHeaders(),
+        body: fd,
+      });
+      if (!uploadRes.ok) throw new Error("Upload failed");
+      const { url } = await uploadRes.json();
+      const patchRes = await apiFetch(`/api/invoices/${invoiceId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ attachmentUrl: url }),
+      });
+      if (!patchRes.ok) throw new Error("Attach failed");
+      setInvoices(prev => prev.map(inv => inv.id === invoiceId ? { ...inv, attachmentUrl: url } : inv));
+    } catch { /* silent */ }
+    finally { setUploadingId(null); }
+  }, []);
+
+  // ── global drag listeners ──
+  useEffect(() => {
+    const onDragEnter = (e: DragEvent) => {
+      if (!e.dataTransfer?.types.includes("Files")) return;
+      dragCounter.current++;
+      setIsDragOver(true);
+    };
+    const onDragLeave = () => {
+      dragCounter.current--;
+      if (dragCounter.current <= 0) {
+        dragCounter.current = 0;
+        setIsDragOver(false);
+        setDragRowId(null);
+        lastDragRowRef.current = null;
+      }
+    };
+    const onDragOver = (e: DragEvent) => { e.preventDefault(); };
+    const onDrop = async (e: DragEvent) => {
+      e.preventDefault();
+      dragCounter.current = 0;
+      setIsDragOver(false);
+      const targetId = lastDragRowRef.current;
+      setDragRowId(null);
+      lastDragRowRef.current = null;
+      const file = e.dataTransfer?.files[0];
+      if (file && targetId) attachFile(file, targetId);
+    };
+    document.addEventListener("dragenter", onDragEnter);
+    document.addEventListener("dragleave", onDragLeave);
+    document.addEventListener("dragover", onDragOver);
+    document.addEventListener("drop", onDrop);
+    return () => {
+      document.removeEventListener("dragenter", onDragEnter);
+      document.removeEventListener("dragleave", onDragLeave);
+      document.removeEventListener("dragover", onDragOver);
+      document.removeEventListener("drop", onDrop);
+    };
+  }, [attachFile]);
+
+  // ── click-to-upload ──
+  function triggerUpload(invoiceId: string) {
+    clickUploadIdRef.current = invoiceId;
+    fileInputRef.current?.click();
+  }
+
+  function onFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    const invoiceId = clickUploadIdRef.current;
+    if (file && invoiceId) attachFile(file, invoiceId);
+    e.target.value = "";
+    clickUploadIdRef.current = null;
+  }
+
   const filtered = invoices.filter(inv => {
     const matchSearch = inv.counterpartyName.toLowerCase().includes(search.toLowerCase()) ||
       inv.description.toLowerCase().includes(search.toLowerCase()) ||
@@ -163,6 +257,25 @@ export default function InvoicesPage() {
 
   return (
     <SidebarLayout>
+      {/* Hidden file input for click-to-upload */}
+      <input ref={fileInputRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" className="hidden" onChange={onFileInputChange} />
+
+      {/* Global drag overlay */}
+      {isDragOver && (
+        <div className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center">
+          <div className="absolute inset-0 bg-primary/10 border-2 border-dashed border-primary rounded-none transition-all" />
+          <div className="relative bg-card border-2 border-primary rounded-2xl px-8 py-6 shadow-2xl text-center">
+            <Upload className="w-8 h-8 text-primary mx-auto mb-2" />
+            <p className="font-semibold text-foreground">
+              {dragRowId
+                ? `Drop to attach to ${invoices.find(i => i.id === dragRowId)?.counterpartyName ?? "invoice"}`
+                : "Hover over an invoice row to attach"}
+            </p>
+            <p className="text-sm text-muted-foreground mt-1">PDF, PNG or JPG</p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
@@ -238,6 +351,12 @@ export default function InvoicesPage() {
         </div>
       </div>
 
+      {/* Drag hint */}
+      <p className="text-xs text-muted-foreground mb-3 flex items-center gap-1.5">
+        <Paperclip className="w-3.5 h-3.5" />
+        Drag a PDF or image onto any row to attach the invoice document, or click the paperclip icon.
+      </p>
+
       {/* Table */}
       <Card className="overflow-hidden">
         {loading ? (
@@ -270,40 +389,101 @@ export default function InvoicesPage() {
                   <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Amount</th>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Due</th>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
+                  <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">File</th>
                   <th className="px-5 py-3" />
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {filtered.map(inv => (
-                  <tr key={inv.id} className="hover:bg-muted/20 transition-colors">
-                    <td className="px-5 py-3.5">
-                      {inv.direction === "inbound"
-                        ? <span className="flex items-center gap-1.5 text-emerald-600 font-medium"><ArrowDownCircle className="w-4 h-4" />In</span>
-                        : <span className="flex items-center gap-1.5 text-rose-600 font-medium"><ArrowUpCircle className="w-4 h-4" />Out</span>
-                      }
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <p className="font-medium text-foreground">{inv.counterpartyName}</p>
-                      {inv.reference && <p className="text-xs text-muted-foreground">{inv.reference}</p>}
-                    </td>
-                    <td className="px-5 py-3.5 text-muted-foreground hidden md:table-cell max-w-xs truncate">{inv.description}</td>
-                    <td className="px-5 py-3.5 font-semibold tabular-nums">{fmtAmount(inv.currency, inv.amount)}</td>
-                    <td className="px-5 py-3.5 text-muted-foreground whitespace-nowrap">{fmtDate(inv.dueDate)}</td>
-                    <td className="px-5 py-3.5"><StatusBadge invoice={inv} /></td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-2 justify-end">
-                        {inv.status !== "paid" && (
-                          <button onClick={() => markPaid(inv.id)} className="text-xs text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap">
-                            Mark paid
+                {filtered.map(inv => {
+                  const isRowDragTarget = dragRowId === inv.id;
+                  const isUploading = uploadingId === inv.id;
+                  return (
+                    <tr
+                      key={inv.id}
+                      onDragOver={() => {
+                        setDragRowId(inv.id);
+                        lastDragRowRef.current = inv.id;
+                      }}
+                      className={cn(
+                        "transition-colors",
+                        isRowDragTarget
+                          ? "bg-primary/10 outline outline-2 outline-primary/40"
+                          : "hover:bg-muted/20"
+                      )}
+                    >
+                      <td className="px-5 py-3.5">
+                        {inv.direction === "inbound"
+                          ? <span className="flex items-center gap-1.5 text-emerald-600 font-medium"><ArrowDownCircle className="w-4 h-4" />In</span>
+                          : <span className="flex items-center gap-1.5 text-rose-600 font-medium"><ArrowUpCircle className="w-4 h-4" />Out</span>
+                        }
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <p className="font-medium text-foreground">{inv.counterpartyName}</p>
+                        {inv.reference && <p className="text-xs text-muted-foreground">{inv.reference}</p>}
+                      </td>
+                      <td className="px-5 py-3.5 text-muted-foreground hidden md:table-cell max-w-xs truncate">{inv.description}</td>
+                      <td className="px-5 py-3.5 font-semibold tabular-nums">{fmtAmount(inv.currency, inv.amount)}</td>
+                      <td className="px-5 py-3.5 text-muted-foreground whitespace-nowrap">{fmtDate(inv.dueDate)}</td>
+                      <td className="px-5 py-3.5"><StatusBadge invoice={inv} /></td>
+
+                      {/* Attachment cell */}
+                      <td className="px-5 py-3.5">
+                        {isUploading ? (
+                          <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                        ) : inv.attachmentUrl ? (
+                          <div className="flex items-center gap-1.5">
+                            <a
+                              href={inv.attachmentUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center gap-1 text-xs text-primary hover:underline font-medium"
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <Paperclip className="w-3.5 h-3.5" />
+                              View
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                            <button
+                              title="Remove attachment"
+                              onClick={() => {
+                                apiFetch(`/api/invoices/${inv.id}`, { method: "PATCH", body: JSON.stringify({ attachmentUrl: null }) })
+                                  .then(r => r.ok && setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, attachmentUrl: null } : i)));
+                              }}
+                              className="text-muted-foreground/50 hover:text-destructive transition-colors"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            title="Attach invoice document"
+                            onClick={() => triggerUpload(inv.id)}
+                            className={cn(
+                              "flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors",
+                              isRowDragTarget && "text-primary"
+                            )}
+                          >
+                            <Paperclip className="w-3.5 h-3.5" />
+                            Attach
                           </button>
                         )}
-                        <button onClick={() => deleteInvoice(inv.id)} className="text-xs text-muted-foreground hover:text-destructive transition-colors">
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-2 justify-end">
+                          {inv.status !== "paid" && (
+                            <button onClick={() => markPaid(inv.id)} className="text-xs text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap">
+                              Mark paid
+                            </button>
+                          )}
+                          <button onClick={() => deleteInvoice(inv.id)} className="text-xs text-muted-foreground hover:text-destructive transition-colors">
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

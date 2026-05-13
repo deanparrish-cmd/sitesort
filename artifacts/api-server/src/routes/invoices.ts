@@ -66,10 +66,14 @@ router.post("/invoices", authenticate, async (req, res) => {
 
 router.patch("/invoices/:id", authenticate, async (req, res) => {
   try {
-    const { status } = req.body;
+    const { status, attachmentUrl } = req.body;
+    const updates: Record<string, unknown> = {};
+    if (status !== undefined) updates.status = status;
+    if (attachmentUrl !== undefined) updates.attachmentUrl = attachmentUrl;
+    if (Object.keys(updates).length === 0) { res.status(400).json({ error: "validation_error", message: "Nothing to update" }); return; }
     const [updated] = await db
       .update(invoicesTable)
-      .set({ status })
+      .set(updates)
       .where(and(eq(invoicesTable.id, req.params.id), eq(invoicesTable.companyId, req.user!.companyId)))
       .returning();
     if (!updated) { res.status(404).json({ error: "not_found" }); return; }

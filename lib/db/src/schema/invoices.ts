@@ -18,6 +18,7 @@ export const invoicesTable = pgTable("invoices", {
   dueDate: date("due_date").notNull(),
   status: text("status").notNull().default("pending"), // "pending" | "paid" | "overdue"
   reference: text("reference"),
+  attachmentUrl: text("attachment_url"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
