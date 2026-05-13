@@ -17,8 +17,11 @@ import { useForm } from "react-hook-form";
 import { useListProjects } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
 
+// Normalise stored URLs: old records may have /uploads/… which is only served
+// by Express. Rewrite to /api/uploads/… so Replit always routes to the API server.
 function fullUrl(attachmentUrl: string) {
-  return attachmentUrl.startsWith("http") ? attachmentUrl : `${window.location.origin}${attachmentUrl}`;
+  const normalised = attachmentUrl.replace(/^\/uploads\//, "/api/uploads/");
+  return normalised.startsWith("http") ? normalised : `${window.location.origin}${normalised}`;
 }
 
 function shareEmail(inv: Invoice) {

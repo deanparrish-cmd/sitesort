@@ -508,7 +508,7 @@ export default function ProjectDetail() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-1">
                           <a
-                            href={doc.fileUrl}
+                            href={doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/")}
                             target="_blank"
                             rel="noreferrer"
                             className="flex items-center gap-1 text-xs text-primary hover:underline font-medium"
@@ -527,7 +527,7 @@ export default function ProjectDetail() {
                               <DropdownMenuItem
                                 className="gap-2 cursor-pointer"
                                 onClick={() => {
-                                  const url = doc.fileUrl.startsWith("http") ? doc.fileUrl : `${window.location.origin}${doc.fileUrl}`;
+                                  const norm = doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/"); const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
                                   const subject = encodeURIComponent(`Document – ${doc.name}`);
                                   const body = encodeURIComponent(`Hi,\n\nPlease find the document "${doc.name}" (v${doc.version}) here:\n\n${url}`);
                                   window.open(`mailto:?subject=${subject}&body=${body}`);
@@ -538,7 +538,7 @@ export default function ProjectDetail() {
                               <DropdownMenuItem
                                 className="gap-2 cursor-pointer"
                                 onClick={() => {
-                                  const url = doc.fileUrl.startsWith("http") ? doc.fileUrl : `${window.location.origin}${doc.fileUrl}`;
+                                  const norm = doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/"); const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
                                   const text = encodeURIComponent(`Document: ${doc.name} (v${doc.version})\n${url}`);
                                   window.open(`https://wa.me/?text=${text}`, "_blank");
                                 }}

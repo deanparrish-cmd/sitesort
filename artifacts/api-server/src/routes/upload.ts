@@ -41,7 +41,7 @@ router.post("/upload", authenticate, upload.single("file"), (req, res) => {
     return;
   }
   res.json({
-    url: `/uploads/${req.file.filename}`,
+    url: `/api/uploads/${req.file.filename}`,
     originalName: req.file.originalname,
     size: req.file.size,
     mimetype: req.file.mimetype,

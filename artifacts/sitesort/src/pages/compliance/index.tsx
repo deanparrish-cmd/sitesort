@@ -335,7 +335,7 @@ export default function CompliancePage() {
                             {ins.certificateUrl && (
                               <>
                                 <a
-                                  href={ins.certificateUrl}
+                                  href={ins.certificateUrl!.replace(/^\/uploads\//, "/api/uploads/")}
                                   target="_blank"
                                   rel="noreferrer"
                                   className="text-xs text-primary hover:underline flex items-center gap-0.5"
@@ -353,7 +353,7 @@ export default function CompliancePage() {
                                     <DropdownMenuItem
                                       className="gap-2 cursor-pointer"
                                       onClick={() => {
-                                        const url = ins.certificateUrl!.startsWith("http") ? ins.certificateUrl! : `${window.location.origin}${ins.certificateUrl}`;
+                                        const norm = ins.certificateUrl!.replace(/^\/uploads\//, "/api/uploads/"); const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
                                         const subject = encodeURIComponent(`Insurance Certificate – ${ins.subcontractorName}`);
                                         const body = encodeURIComponent(`Hi,\n\nPlease find the ${ins.insuranceType.replace(/_/g, " ")} insurance certificate for ${ins.subcontractorName} here:\n\n${url}\n\nExpiry: ${fmtDate(ins.expiryDate)}`);
                                         window.open(`mailto:?subject=${subject}&body=${body}`);
@@ -364,7 +364,7 @@ export default function CompliancePage() {
                                     <DropdownMenuItem
                                       className="gap-2 cursor-pointer"
                                       onClick={() => {
-                                        const url = ins.certificateUrl!.startsWith("http") ? ins.certificateUrl! : `${window.location.origin}${ins.certificateUrl}`;
+                                        const norm = ins.certificateUrl!.replace(/^\/uploads\//, "/api/uploads/"); const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
                                         const text = encodeURIComponent(`Insurance certificate – ${ins.subcontractorName}\nType: ${ins.insuranceType.replace(/_/g, " ")}\nExpiry: ${fmtDate(ins.expiryDate)}\n${url}`);
                                         window.open(`https://wa.me/?text=${text}`, "_blank");
                                       }}
