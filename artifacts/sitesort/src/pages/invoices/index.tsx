@@ -6,12 +6,37 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Plus, Search, ArrowDownCircle, ArrowUpCircle, CheckCircle2, Clock,
-  AlertTriangle, Receipt, Mic, MicOff, Paperclip, Upload, ExternalLink, Loader2, X,
+  AlertTriangle, Receipt, Mic, MicOff, Paperclip, Upload, Loader2, X,
+  Share2, Mail, MessageCircle,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { useListProjects } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
+
+function fullUrl(attachmentUrl: string) {
+  return attachmentUrl.startsWith("http") ? attachmentUrl : `${window.location.origin}${attachmentUrl}`;
+}
+
+function shareEmail(inv: Invoice) {
+  const url = fullUrl(inv.attachmentUrl!);
+  const subject = encodeURIComponent(`Invoice – ${inv.counterpartyName}`);
+  const body = encodeURIComponent(
+    `Hi,\n\nPlease find the invoice document attached below:\n\n${url}\n\nRef: ${inv.reference ?? "N/A"} | Amount: ${inv.currency} ${Number(inv.amount).toFixed(2)}\n\nRegards`
+  );
+  window.open(`mailto:?subject=${subject}&body=${body}`);
+}
+
+function shareWhatsApp(inv: Invoice) {
+  const url = fullUrl(inv.attachmentUrl!);
+  const text = encodeURIComponent(
+    `Invoice document – ${inv.counterpartyName}\nRef: ${inv.reference ?? "N/A"} | ${inv.currency} ${Number(inv.amount).toFixed(2)}\n${url}`
+  );
+  window.open(`https://wa.me/?text=${text}`, "_blank");
+}
 
 type Invoice = {
   id: string;
@@ -431,25 +456,46 @@ export default function InvoicesPage() {
                         {isUploading ? (
                           <Loader2 className="w-4 h-4 animate-spin text-primary" />
                         ) : inv.attachmentUrl ? (
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1">
                             <a
-                              href={inv.attachmentUrl}
+                              href={fullUrl(inv.attachmentUrl)}
                               target="_blank"
                               rel="noreferrer"
                               className="flex items-center gap-1 text-xs text-primary hover:underline font-medium"
                               onClick={e => e.stopPropagation()}
                             >
                               <Paperclip className="w-3.5 h-3.5" />
-                              View
-                              <ExternalLink className="w-3 h-3" />
+                              Open
                             </a>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  title="Share"
+                                  className="p-1 rounded text-muted-foreground hover:text-primary transition-colors"
+                                  onClick={e => e.stopPropagation()}
+                                >
+                                  <Share2 className="w-3.5 h-3.5" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-40">
+                                <DropdownMenuItem onClick={() => shareEmail(inv)} className="gap-2 cursor-pointer">
+                                  <Mail className="w-4 h-4 text-muted-foreground" />
+                                  Send via Email
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => shareWhatsApp(inv)} className="gap-2 cursor-pointer">
+                                  <MessageCircle className="w-4 h-4 text-green-600" />
+                                  Send via WhatsApp
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                             <button
                               title="Remove attachment"
-                              onClick={() => {
+                              onClick={e => {
+                                e.stopPropagation();
                                 apiFetch(`/api/invoices/${inv.id}`, { method: "PATCH", body: JSON.stringify({ attachmentUrl: null }) })
                                   .then(r => r.ok && setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, attachmentUrl: null } : i)));
                               }}
-                              className="text-muted-foreground/50 hover:text-destructive transition-colors"
+                              className="p-1 text-muted-foreground/50 hover:text-destructive transition-colors"
                             >
                               <X className="w-3 h-3" />
                             </button>
