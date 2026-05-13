@@ -94,6 +94,13 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     }
   }, [location]);
 
+  // Clear notification badge when on notifications page
+  useEffect(() => {
+    if (location.startsWith("/notifications")) {
+      setUnreadNotifCount(0);
+    }
+  }, [location]);
+
   useEffect(() => {
     // Redirect to login if unauthenticated
     if (error) {
