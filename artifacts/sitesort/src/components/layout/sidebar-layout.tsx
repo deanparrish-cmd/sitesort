@@ -28,6 +28,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+function Avatar({ src, name, size }: { src?: string | null; name?: string | null; size: "sm" | "md" }) {
+  const cls = size === "sm" ? "w-8 h-8 text-sm" : "w-10 h-10 text-base";
+  if (src) return <img src={src} alt={name ?? ""} className={`${cls} rounded-full object-cover border border-border`} />;
+  return (
+    <div className={`${cls} rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold`}>
+      {name?.charAt(0) || "U"}
+    </div>
+  );
+}
+
 function authHeaders() {
   const t = localStorage.getItem("sitesort_token");
   return t ? { Authorization: `Bearer ${t}` } : {};
@@ -160,9 +170,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
               </span>
             )}
           </Link>
-          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
-            {user?.name?.charAt(0) || 'U'}
-          </div>
+          <Avatar src={(user as any)?.avatarUrl} name={user?.name} size="sm" />
           <button onClick={() => setIsMobileOpen(!isMobileOpen)} className="p-2 text-primary">
             {isMobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
@@ -210,9 +218,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
 
         <div className="p-4 border-t">
           <div className="flex items-center gap-3 mb-4 px-2">
-            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
-              {user?.name?.charAt(0) || 'U'}
-            </div>
+            <Avatar src={(user as any)?.avatarUrl} name={user?.name} size="md" />
             <div>
               <p className="text-sm font-bold text-foreground">{user?.name}</p>
               <p className="text-xs text-muted-foreground capitalize">{user?.role?.replace('_', ' ')}</p>
@@ -243,9 +249,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-xl hover:bg-muted transition-colors focus:outline-none">
-                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
-                  {user?.name?.charAt(0) || 'U'}
-                </div>
+                <Avatar src={(user as any)?.avatarUrl} name={user?.name} size="sm" />
                 <div className="text-left">
                   <p className="text-sm font-semibold text-foreground leading-tight">{user?.name}</p>
                   <p className="text-xs text-muted-foreground capitalize leading-tight">{user?.role?.replace('_', ' ')}</p>

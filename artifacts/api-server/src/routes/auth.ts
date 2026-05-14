@@ -140,7 +140,7 @@ router.get("/auth/me", authenticate, async (req, res) => {
       return;
     }
     const user = users[0];
-    res.json({ id: user.id, companyId: user.companyId, email: user.email, name: user.name, role: user.role, phone: user.phone ?? null, createdAt: user.createdAt.toISOString(), lastActiveAt: user.lastActiveAt?.toISOString() ?? null });
+    res.json({ id: user.id, companyId: user.companyId, email: user.email, name: user.name, role: user.role, phone: user.phone ?? null, avatarUrl: user.avatarUrl ?? null, createdAt: user.createdAt.toISOString(), lastActiveAt: user.lastActiveAt?.toISOString() ?? null });
   } catch (err) {
     req.log.error({ err }, "Get me error");
     res.status(500).json({ error: "server_error", message: "Failed to get user" });
@@ -296,7 +296,7 @@ router.post("/auth/reset-password", async (req, res) => {
 
 router.patch("/auth/me", authenticate, async (req, res) => {
   try {
-    const { name, phone } = req.body;
+    const { name, phone, avatarUrl } = req.body;
     const updates: Record<string, unknown> = {};
     if (name !== undefined) {
       if (typeof name !== "string" || name.trim().length === 0) {
@@ -306,6 +306,7 @@ router.patch("/auth/me", authenticate, async (req, res) => {
       updates.name = name.trim();
     }
     if (phone !== undefined) updates.phone = phone || null;
+    if (avatarUrl !== undefined) updates.avatarUrl = avatarUrl || null;
 
     if (Object.keys(updates).length === 0) {
       res.status(400).json({ error: "validation_error", message: "No fields to update" });
@@ -315,7 +316,7 @@ router.patch("/auth/me", authenticate, async (req, res) => {
     await db.update(usersTable).set(updates).where(eq(usersTable.id, req.user!.id));
     const users = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
     const u = users[0];
-    res.json({ id: u.id, companyId: u.companyId, email: u.email, name: u.name, role: u.role, phone: u.phone ?? null, createdAt: u.createdAt.toISOString(), lastActiveAt: u.lastActiveAt?.toISOString() ?? null });
+    res.json({ id: u.id, companyId: u.companyId, email: u.email, name: u.name, role: u.role, phone: u.phone ?? null, avatarUrl: u.avatarUrl ?? null, createdAt: u.createdAt.toISOString(), lastActiveAt: u.lastActiveAt?.toISOString() ?? null });
   } catch (err) {
     req.log.error({ err }, "Update profile error");
     res.status(500).json({ error: "server_error", message: "Failed to update profile" });

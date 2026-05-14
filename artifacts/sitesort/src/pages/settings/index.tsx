@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import {
   Save,
   CheckCircle2,
   AlertCircle,
+  Camera,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetMe } from "@workspace/api-client-react";
@@ -51,16 +52,53 @@ function StatusBanner({ status }: { status: StatusMsg | null }) {
   );
 }
 
-function ProfileTab({ user, onSaved }: { user: { id: string; name: string; email: string; phone?: string | null; role: string }; onSaved: () => void }) {
+function ProfileTab({ user, onSaved }: { user: { id: string; name: string; email: string; phone?: string | null; role: string; avatarUrl?: string | null }; onSaved: () => void }) {
   const [name, setName] = useState(user.name);
   const [phone, setPhone] = useState(user.phone ?? "");
+  const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl ?? "");
+  const [avatarUploading, setAvatarUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<StatusMsg | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setName(user.name);
     setPhone(user.phone ?? "");
-  }, [user.name, user.phone]);
+    setAvatarUrl(user.avatarUrl ?? "");
+  }, [user.name, user.phone, user.avatarUrl]);
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarUploading(true);
+    setStatus(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const token = localStorage.getItem("sitesort_token");
+      const upRes = await fetch("/api/upload", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+      });
+      if (!upRes.ok) { setStatus({ type: "error", text: "Image upload failed." }); return; }
+      const { url } = await upRes.json();
+      const patchRes = await fetch("/api/auth/me", {
+        method: "PATCH",
+        headers: authHeaders(),
+        body: JSON.stringify({ avatarUrl: url }),
+      });
+      if (!patchRes.ok) { setStatus({ type: "error", text: "Failed to save avatar." }); return; }
+      setAvatarUrl(url);
+      setStatus({ type: "success", text: "Avatar updated." });
+      onSaved();
+    } catch {
+      setStatus({ type: "error", text: "Network error. Please try again." });
+    } finally {
+      setAvatarUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
 
   const save = async () => {
     if (!name.trim()) { setStatus({ type: "error", text: "Name cannot be empty." }); return; }
@@ -87,18 +125,49 @@ function ProfileTab({ user, onSaved }: { user: { id: string; name: string; email
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold mb-1">Profile</h2>
-        <p className="text-sm text-muted-foreground">Update your name and contact details.</p>
+        <p className="text-sm text-muted-foreground">Update your name, photo and contact details.</p>
       </div>
       <StatusBanner status={status} />
       <div className="flex items-center gap-4 mb-6">
-        <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-2xl">
-          {name.charAt(0).toUpperCase()}
+        <div className="relative group shrink-0">
+          {avatarUrl ? (
+            <img src={avatarUrl} alt={name} className="w-16 h-16 rounded-full object-cover border-2 border-border" />
+          ) : (
+            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-2xl">
+              {name.charAt(0).toUpperCase() || "?"}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={avatarUploading}
+            className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-wait"
+            title="Change photo"
+          >
+            <Camera className="w-5 h-5 text-white" />
+          </button>
+          <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handleAvatarChange} />
+          {avatarUploading && (
+            <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center">
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
         </div>
         <div>
           <p className="font-semibold text-foreground">{name || "—"}</p>
-          <Badge className="text-[10px] capitalize mt-1 bg-muted text-muted-foreground border border-border">
-            {user.role.replace(/_/g, " ")}
-          </Badge>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="text-xs text-primary hover:underline mt-0.5"
+            disabled={avatarUploading}
+          >
+            {avatarUploading ? "Uploading…" : "Change photo"}
+          </button>
+          <div className="mt-1">
+            <Badge className="text-[10px] capitalize bg-muted text-muted-foreground border border-border">
+              {user.role.replace(/_/g, " ")}
+            </Badge>
+          </div>
         </div>
       </div>
       <div className="grid gap-4 max-w-md">
@@ -401,7 +470,7 @@ export default function SettingsPage() {
         {/* Tab content */}
         <Card className="flex-1 p-6">
           {user && activeTab === "profile" && (
-            <ProfileTab user={user} onSaved={() => refetch()} />
+            <ProfileTab user={user as typeof user & { avatarUrl?: string | null }} onSaved={() => refetch()} />
           )}
           {activeTab === "security" && <SecurityTab />}
           {activeTab === "notifications" && <NotificationsTab />}
