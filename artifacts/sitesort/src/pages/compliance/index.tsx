@@ -345,8 +345,9 @@ export default function CompliancePage() {
                                 </a>
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
-                                    <button className="text-muted-foreground hover:text-primary transition-colors" title="Share certificate">
+                                    <button className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs" title="Share certificate">
                                       <Share2 className="w-3 h-3" />
+                                      Share
                                     </button>
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align="end" className="w-44">

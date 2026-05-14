@@ -474,10 +474,11 @@ export default function InvoicesPage() {
                               <DropdownMenuTrigger asChild>
                                 <button
                                   title="Share"
-                                  className="p-1 rounded text-muted-foreground hover:text-primary transition-colors"
+                                  className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs"
                                   onClick={e => e.stopPropagation()}
                                 >
                                   <Share2 className="w-3.5 h-3.5" />
+                                  Share
                                 </button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-40">
