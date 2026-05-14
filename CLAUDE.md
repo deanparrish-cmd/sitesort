@@ -82,8 +82,9 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 18. Notifications page (`/notifications`) — filter tabs (All/Unread/Messages/Documents/Safety), per-type icons, click-to-read, mark-all-read, badge clears on visit, navigates to related entity on click
 19. Invoice file attachments — drag-and-drop or click-to-upload per invoice row, `attachmentUrl` column on invoices table, Open/Email/WhatsApp share dropdown, remove button
 20. Document & certificate sharing — Open + Email/WhatsApp share on project documents tab and compliance insurance certificate rows; compliance API extended to include `certificateUrl`
-21. Settings page (`/settings`) — Profile (name/phone), Security (change password), Notifications (toast + OS toggles persisted to localStorage), Company (admin: name/size); new API endpoints `PATCH /auth/me`, `POST /auth/change-password`, `GET/PATCH /companies/mine`
-22. Document supersedes selector — upload form shows optional dropdown of current docs of the same type; selecting one marks it superseded on save; API accepts explicit `supersededDocumentId` alongside existing same-name auto-supersede fallback
+21. Settings page (`/settings`) — Profile (name/phone/avatar upload), Security (change password), Notifications (toast + OS toggles in localStorage), Company (admin: name/size); API: `PATCH /auth/me`, `POST /auth/change-password`, `GET/PATCH /companies/mine`
+22. Document supersedes selector — upload form shows optional dropdown of current docs of the same type; selecting one marks it superseded on save; API accepts explicit `supersededDocumentId` with same-name auto-supersede fallback
+23. Document status/version editing — Edit button on document rows opens dialog to change status (current/superseded) and version number; `PATCH /api/documents/:documentId`
 
 ## Uploads / File Serving
 
@@ -100,34 +101,37 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 
 #### Tasks completed
 - **Settings page** (`/settings`) — fully built out; replaces the placeholder; four tabs:
-  - **Profile** — edit name and phone; email shown read-only; avatar initial auto-updates on save
+  - **Profile** — edit name, phone, and avatar photo; email shown read-only
   - **Security** — change password (requires current password; client-side validation before submit)
   - **Notifications** — toggle in-app toast and browser OS notifications (stored in localStorage); handles denied/unsupported OS permission states gracefully
   - **Company** (admin only) — edit company name and size; shows subscription tier/status badges
+- **Notification toggles wired** — sidebar poller checks `sitesort_notif_toast` and `sitesort_notif_os` localStorage keys before firing; both default to enabled
+- **Document supersedes selector** — upload form shows optional "Supersedes" dropdown of current docs of the same type; API accepts `supersededDocumentId`, falls back to same-name auto-supersede if omitted
+- **Avatar upload** — Profile tab has a hover camera overlay on the avatar circle and a "Change photo" link; uploads via `POST /api/upload` then patches `avatarUrl` on the user; sidebar shows uploaded photo in all three avatar spots
+- **"Share" label** — added text label next to the Share icon on document rows (projects), compliance certificates, and invoice attachments
+- **Document status/version editing** — Edit button on every document row opens a dialog to change status (current/superseded) and version number; backed by new `PATCH /api/documents/:documentId`
 
-#### New API endpoints (`artifacts/api-server/src/routes/auth.ts`)
-- `PATCH /api/auth/me` — update own name/phone
+#### New/updated API endpoints
+- `PATCH /api/auth/me` — update name, phone, avatarUrl
 - `POST /api/auth/change-password` — change password with current-password verification
 - `GET /api/companies/mine` — get own company info
-- `PATCH /api/companies/mine` — update company name/size (admin role required)
+- `PATCH /api/companies/mine` — update company name/size (admin only)
+- `PATCH /api/documents/:documentId` — update document status and/or version
 
 #### Key files added/modified
-- `artifacts/sitesort/src/pages/settings/index.tsx` — new settings page (Profile / Security / Notifications / Company tabs)
-- `artifacts/api-server/src/routes/auth.ts` — four new endpoints appended
-- `artifacts/sitesort/src/App.tsx` — `/settings` route now uses `SettingsPage` component
-
-- **Notification toggles wired** — sidebar poller in `sidebar-layout.tsx` now checks `sitesort_notif_toast` and `sitesort_notif_os` localStorage keys before firing toasts/OS notifications; both default to enabled (key absent or `"true"`)
-- **Document supersedes selector** — upload form in `projects/detail.tsx` shows an optional "Supersedes" dropdown listing current documents of the same type; selecting one marks it as superseded on save; API (`POST /projects/:projectId/documents`) accepts optional `supersededDocumentId` and supersedes that specific doc, falling back to same-name auto-supersede if not provided
-
-#### Key files modified (additional, same session)
-- `artifacts/sitesort/src/components/layout/sidebar-layout.tsx` — gate toast + OS notifications on localStorage prefs
-- `artifacts/sitesort/src/pages/projects/detail.tsx` — supersedes dropdown in upload form
-- `artifacts/api-server/src/routes/documents.ts` — accept `supersededDocumentId` in POST body
+- `artifacts/sitesort/src/pages/settings/index.tsx` — settings page (all four tabs + avatar upload)
+- `artifacts/sitesort/src/App.tsx` — `/settings` route wired to `SettingsPage`
+- `artifacts/api-server/src/routes/auth.ts` — profile/password/company endpoints; `avatarUrl` in GET+PATCH responses
+- `artifacts/sitesort/src/components/layout/sidebar-layout.tsx` — notification pref gates; `Avatar` component; avatar shown in all three spots
+- `artifacts/sitesort/src/pages/projects/detail.tsx` — supersedes dropdown, Edit doc dialog, Share label
+- `artifacts/sitesort/src/pages/compliance/index.tsx` — Share label on certificate rows
+- `artifacts/sitesort/src/pages/invoices/index.tsx` — Share label on attachment rows
+- `artifacts/api-server/src/routes/documents.ts` — `supersededDocumentId` in POST; new PATCH endpoint
 
 #### Notes for next session
 - Messages page: no deletion or editing yet
-- Consider adding an avatar upload to the Profile tab in Settings (upload API already exists at `POST /api/upload`)
-- Notifications page only shows `new_message`, `document_uploaded`, and `safety_concern` types — any new notification types added to the API should have a matching icon/filter added to `notifications/index.tsx`
+- Notifications page only shows `new_message`, `document_uploaded`, and `safety_concern` types — any new notification types need a matching icon/filter in `notifications/index.tsx`
+- Uploaded files (avatars, attachments) are stored on the Replit filesystem — ephemeral on full restart; consider migrating to object storage (R2/S3)
 
 ### 2026-05-13
 
