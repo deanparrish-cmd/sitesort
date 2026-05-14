@@ -371,4 +371,61 @@ router.get("/documents/:documentId/distributions", authenticate, async (req, res
   }
 });
 
+router.patch("/documents/:documentId", authenticate, async (req, res) => {
+  try {
+    const docs = await db.select().from(documentsTable).where(eq(documentsTable.id, req.params.documentId)).limit(1);
+    if (!docs[0]) {
+      res.status(404).json({ error: "not_found", message: "Document not found" });
+      return;
+    }
+    const project = await db.select().from(projectsTable)
+      .where(and(eq(projectsTable.id, docs[0].projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!project[0]) {
+      res.status(404).json({ error: "not_found", message: "Document not found" });
+      return;
+    }
+
+    const { status, version } = req.body;
+    const updates: Record<string, unknown> = {};
+    if (status !== undefined) {
+      if (!["current", "superseded"].includes(status)) {
+        res.status(400).json({ error: "validation_error", message: "status must be current or superseded" });
+        return;
+      }
+      updates.status = status;
+    }
+    if (version !== undefined) {
+      const v = parseInt(version, 10);
+      if (isNaN(v) || v < 1) {
+        res.status(400).json({ error: "validation_error", message: "version must be a positive integer" });
+        return;
+      }
+      updates.version = v;
+    }
+    if (Object.keys(updates).length === 0) {
+      res.status(400).json({ error: "validation_error", message: "No fields to update" });
+      return;
+    }
+
+    await db.update(documentsTable).set(updates).where(eq(documentsTable.id, req.params.documentId));
+    const updated = await db.select().from(documentsTable).where(eq(documentsTable.id, req.params.documentId)).limit(1);
+    const d = updated[0];
+    const dists = await db.select({ status: documentDistributionsTable.status }).from(documentDistributionsTable).where(eq(documentDistributionsTable.documentId, d.id));
+    const uploaderRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, d.uploadedBy)).limit(1);
+    res.json({
+      id: d.id, projectId: d.projectId, uploadedBy: d.uploadedBy,
+      uploaderName: uploaderRows[0]?.name ?? "Unknown",
+      name: d.name, type: d.type, version: d.version, fileUrl: d.fileUrl,
+      fileSize: d.fileSize, previousVersionId: d.previousVersionId ?? null,
+      status: d.status, requiresAcknowledgment: d.requiresAcknowledgment,
+      publicAccess: d.publicAccess, createdAt: d.createdAt.toISOString(),
+      distributionSummary: getDistSummary(dists),
+    });
+  } catch (err) {
+    req.log.error({ err }, "Update document error");
+    res.status(500).json({ error: "server_error", message: "Failed to update document" });
+  }
+});
+
 export default router;

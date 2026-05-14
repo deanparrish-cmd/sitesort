@@ -58,6 +58,11 @@ export default function ProjectDetail() {
   const queryClient = useQueryClient();
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  type EditDocModal = { id: string; name: string; status: string; version: number };
+  const [editDocModal, setEditDocModal] = useState<EditDocModal | null>(null);
+  const [editDocSaving, setEditDocSaving] = useState(false);
+  const [editDocStatus, setEditDocStatus] = useState("current");
+  const [editDocVersion, setEditDocVersion] = useState(1);
   const [editError, setEditError] = useState<string | null>(null);
   const { register, handleSubmit, reset, watch, setValue } = useForm<Record<string, any>>({ defaultValues: { type: "drawing" } });
   const { register: editRegister, handleSubmit: editHandleSubmit, reset: editReset } = useForm();
@@ -277,6 +282,31 @@ export default function ProjectDetail() {
       refetchDocs();
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const openDocEdit = (doc: { id: string; name: string; status: string; version: number }) => {
+    setEditDocStatus(doc.status);
+    setEditDocVersion(doc.version);
+    setEditDocModal(doc);
+  };
+
+  const saveDocEdit = async () => {
+    if (!editDocModal) return;
+    setEditDocSaving(true);
+    try {
+      const token = localStorage.getItem("sitesort_token");
+      await fetch(`/api/documents/${editDocModal.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ status: editDocStatus, version: editDocVersion }),
+      });
+      setEditDocModal(null);
+      refetchDocs();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setEditDocSaving(false);
     }
   };
 
@@ -521,6 +551,14 @@ export default function ProjectDetail() {
                             <ExternalLink className="w-3.5 h-3.5" />
                             Open
                           </a>
+                          <button
+                            onClick={() => openDocEdit(doc)}
+                            className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs"
+                            title="Edit status / version"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                            Edit
+                          </button>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <button className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs" title="Share">
@@ -1002,6 +1040,42 @@ export default function ProjectDetail() {
           </div>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={!!editDocModal} onOpenChange={v => { if (!v) setEditDocModal(null); }}>
+        <DialogHeader>
+          <DialogTitle>Edit Document</DialogTitle>
+        </DialogHeader>
+        {editDocModal && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground truncate">{editDocModal.name}</p>
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold block">Status</label>
+              <select
+                value={editDocStatus}
+                onChange={e => setEditDocStatus(e.target.value)}
+                className="flex h-11 w-full rounded-lg border-2 border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="current">Current</option>
+                <option value="superseded">Superseded</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold block">Version</label>
+              <input
+                type="number"
+                min={1}
+                value={editDocVersion}
+                onChange={e => setEditDocVersion(parseInt(e.target.value) || 1)}
+                className="flex h-11 w-full rounded-lg border-2 border-input bg-background px-3 py-2 text-sm"
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setEditDocModal(null)}>Cancel</Button>
+              <Button variant="accent" onClick={saveDocEdit} isLoading={editDocSaving}>Save</Button>
+            </DialogFooter>
+          </div>
+        )}
+      </Dialog>
 
       <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
         <DialogHeader>
