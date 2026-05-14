@@ -82,6 +82,8 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 18. Notifications page (`/notifications`) — filter tabs (All/Unread/Messages/Documents/Safety), per-type icons, click-to-read, mark-all-read, badge clears on visit, navigates to related entity on click
 19. Invoice file attachments — drag-and-drop or click-to-upload per invoice row, `attachmentUrl` column on invoices table, Open/Email/WhatsApp share dropdown, remove button
 20. Document & certificate sharing — Open + Email/WhatsApp share on project documents tab and compliance insurance certificate rows; compliance API extended to include `certificateUrl`
+21. Settings page (`/settings`) — Profile (name/phone), Security (change password), Notifications (toast + OS toggles persisted to localStorage), Company (admin: name/size); new API endpoints `PATCH /auth/me`, `POST /auth/change-password`, `GET/PATCH /companies/mine`
+22. Document supersedes selector — upload form shows optional dropdown of current docs of the same type; selecting one marks it superseded on save; API accepts explicit `supersededDocumentId` alongside existing same-name auto-supersede fallback
 
 ## Uploads / File Serving
 
@@ -114,10 +116,18 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 - `artifacts/api-server/src/routes/auth.ts` — four new endpoints appended
 - `artifacts/sitesort/src/App.tsx` — `/settings` route now uses `SettingsPage` component
 
+- **Notification toggles wired** — sidebar poller in `sidebar-layout.tsx` now checks `sitesort_notif_toast` and `sitesort_notif_os` localStorage keys before firing toasts/OS notifications; both default to enabled (key absent or `"true"`)
+- **Document supersedes selector** — upload form in `projects/detail.tsx` shows an optional "Supersedes" dropdown listing current documents of the same type; selecting one marks it as superseded on save; API (`POST /projects/:projectId/documents`) accepts optional `supersededDocumentId` and supersedes that specific doc, falling back to same-name auto-supersede if not provided
+
+#### Key files modified (additional, same session)
+- `artifacts/sitesort/src/components/layout/sidebar-layout.tsx` — gate toast + OS notifications on localStorage prefs
+- `artifacts/sitesort/src/pages/projects/detail.tsx` — supersedes dropdown in upload form
+- `artifacts/api-server/src/routes/documents.ts` — accept `supersededDocumentId` in POST body
+
 #### Notes for next session
-- Settings notification toggles are stored in localStorage; the sidebar poller does not yet read these flags — it always fires toasts/OS notifications regardless. Wire `NOTIF_TOAST_KEY` / `NOTIF_OS_KEY` checks into `sidebar-layout.tsx` to honour the preferences
 - Messages page: no deletion or editing yet
-- Settings page is complete — the only remaining major placeholder is none; consider adding an avatar upload to the Profile tab (upload API already exists)
+- Consider adding an avatar upload to the Profile tab in Settings (upload API already exists at `POST /api/upload`)
+- Notifications page only shows `new_message`, `document_uploaded`, and `safety_concern` types — any new notification types added to the API should have a matching icon/filter added to `notifications/index.tsx`
 
 ### 2026-05-13
 
