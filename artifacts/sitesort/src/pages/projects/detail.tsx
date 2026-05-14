@@ -59,7 +59,7 @@ export default function ProjectDetail() {
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
-  const { register, handleSubmit, reset, watch, setValue } = useForm();
+  const { register, handleSubmit, reset, watch, setValue } = useForm<Record<string, any>>({ defaultValues: { type: "drawing" } });
   const { register: editRegister, handleSubmit: editHandleSubmit, reset: editReset } = useForm();
   
   const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({});
@@ -256,6 +256,9 @@ export default function ProjectDetail() {
     }
   };
 
+  const watchedType = watch("type") ?? "drawing";
+  const supersedableDocs = (documents ?? []).filter(d => d.status === "current" && d.type === watchedType);
+
   const onUpload = async (data: any) => {
     try {
       await uploadMutation.mutateAsync({
@@ -266,7 +269,8 @@ export default function ProjectDetail() {
           fileUrl: data.fileUrl,
           fileSize: data.fileSize,
           requiresAcknowledgment: data.requiresAcknowledgment,
-        }
+          ...(data.supersededDocumentId ? { supersededDocumentId: data.supersededDocumentId } : {}),
+        } as any
       });
       setIsUploadOpen(false);
       reset();
@@ -1017,6 +1021,18 @@ export default function ProjectDetail() {
               <option value="general">General</option>
             </select>
           </div>
+          {supersedableDocs.length > 0 && (
+            <div>
+              <label className="text-sm font-semibold mb-1 block">Supersedes <span className="text-muted-foreground font-normal">(optional)</span></label>
+              <select {...register("supersededDocumentId")} className="flex h-11 w-full rounded-lg border-2 border-input bg-background px-3 py-2 text-sm">
+                <option value="">— None —</option>
+                {supersedableDocs.map(d => (
+                  <option key={d.id} value={d.id}>{d.name} (v{d.version})</option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground mt-1">The selected document will be moved to the Superseded tab.</p>
+            </div>
+          )}
           <div>
             <label className="text-sm font-semibold mb-2 block">File</label>
             <FileDropZone

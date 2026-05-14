@@ -72,24 +72,38 @@ router.post("/projects/:projectId/documents", authenticate, async (req, res) => 
       return;
     }
 
-    const { name, type, fileUrl, fileSize, requiresAcknowledgment, publicAccess, distributeToUserIds } = req.body;
+    const { name, type, fileUrl, fileSize, requiresAcknowledgment, publicAccess, distributeToUserIds, supersededDocumentId } = req.body;
     if (!name || !type || !fileUrl) {
       res.status(400).json({ error: "validation_error", message: "name, type, fileUrl required" });
       return;
     }
 
-    const existing = await db.select().from(documentsTable)
-      .where(and(eq(documentsTable.projectId, req.params.projectId), eq(documentsTable.name, name), eq(documentsTable.status, "current")))
-      .limit(1);
-
     let previousVersionId: string | null = null;
     let newVersion = 1;
 
-    if (existing.length > 0) {
-      const prev = existing[0];
-      previousVersionId = prev.id;
-      newVersion = prev.version + 1;
-      await db.update(documentsTable).set({ status: "superseded" }).where(eq(documentsTable.id, prev.id));
+    if (supersededDocumentId) {
+      const toSupersede = await db.select().from(documentsTable)
+        .where(and(
+          eq(documentsTable.id, supersededDocumentId),
+          eq(documentsTable.projectId, req.params.projectId),
+          eq(documentsTable.status, "current")
+        ))
+        .limit(1);
+      if (toSupersede.length > 0) {
+        previousVersionId = toSupersede[0].id;
+        newVersion = toSupersede[0].version + 1;
+        await db.update(documentsTable).set({ status: "superseded" }).where(eq(documentsTable.id, toSupersede[0].id));
+      }
+    } else {
+      const existing = await db.select().from(documentsTable)
+        .where(and(eq(documentsTable.projectId, req.params.projectId), eq(documentsTable.name, name), eq(documentsTable.status, "current")))
+        .limit(1);
+      if (existing.length > 0) {
+        const prev = existing[0];
+        previousVersionId = prev.id;
+        newVersion = prev.version + 1;
+        await db.update(documentsTable).set({ status: "superseded" }).where(eq(documentsTable.id, prev.id));
+      }
     }
 
     const docId = generateId();
