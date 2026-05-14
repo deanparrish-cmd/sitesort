@@ -53,11 +53,13 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
         const { count } = await msgRes.json();
         if (count > prevUnreadRef.current && prevUnreadRef.current !== -1) {
           const diff = count - prevUnreadRef.current;
-          toast({
-            title: `${diff} new message${diff > 1 ? "s" : ""}`,
-            description: "You have unread messages from your team.",
-          });
-          if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+          if (localStorage.getItem("sitesort_notif_toast") !== "false") {
+            toast({
+              title: `${diff} new message${diff > 1 ? "s" : ""}`,
+              description: "You have unread messages from your team.",
+            });
+          }
+          if (localStorage.getItem("sitesort_notif_os") !== "false" && typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
             new Notification(`${diff} new message${diff > 1 ? "s" : ""}`, {
               body: "You have unread messages from your team.",
               icon: "/images/logo.png",

@@ -294,4 +294,112 @@ router.post("/auth/reset-password", async (req, res) => {
   }
 });
 
+router.patch("/auth/me", authenticate, async (req, res) => {
+  try {
+    const { name, phone } = req.body;
+    const updates: Record<string, unknown> = {};
+    if (name !== undefined) {
+      if (typeof name !== "string" || name.trim().length === 0) {
+        res.status(400).json({ error: "validation_error", message: "Name cannot be empty" });
+        return;
+      }
+      updates.name = name.trim();
+    }
+    if (phone !== undefined) updates.phone = phone || null;
+
+    if (Object.keys(updates).length === 0) {
+      res.status(400).json({ error: "validation_error", message: "No fields to update" });
+      return;
+    }
+
+    await db.update(usersTable).set(updates).where(eq(usersTable.id, req.user!.id));
+    const users = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
+    const u = users[0];
+    res.json({ id: u.id, companyId: u.companyId, email: u.email, name: u.name, role: u.role, phone: u.phone ?? null, createdAt: u.createdAt.toISOString(), lastActiveAt: u.lastActiveAt?.toISOString() ?? null });
+  } catch (err) {
+    req.log.error({ err }, "Update profile error");
+    res.status(500).json({ error: "server_error", message: "Failed to update profile" });
+  }
+});
+
+router.post("/auth/change-password", authenticate, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      res.status(400).json({ error: "validation_error", message: "currentPassword and newPassword are required" });
+      return;
+    }
+    if (newPassword.length < 8) {
+      res.status(400).json({ error: "validation_error", message: "New password must be at least 8 characters" });
+      return;
+    }
+
+    const users = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
+    if (users.length === 0) {
+      res.status(404).json({ error: "not_found", message: "User not found" });
+      return;
+    }
+    const user = users[0];
+    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!valid) {
+      res.status(401).json({ error: "invalid_credentials", message: "Current password is incorrect" });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await db.update(usersTable).set({ passwordHash }).where(eq(usersTable.id, user.id));
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Change password error");
+    res.status(500).json({ error: "server_error", message: "Failed to change password" });
+  }
+});
+
+router.get("/companies/mine", authenticate, async (req, res) => {
+  try {
+    const rows = await db.select().from(companiesTable).where(eq(companiesTable.id, req.user!.companyId)).limit(1);
+    if (rows.length === 0) {
+      res.status(404).json({ error: "not_found", message: "Company not found" });
+      return;
+    }
+    const c = rows[0];
+    res.json({ id: c.id, name: c.name, size: c.size, subscriptionTier: c.subscriptionTier, subscriptionStatus: c.subscriptionStatus, createdAt: c.createdAt.toISOString() });
+  } catch (err) {
+    req.log.error({ err }, "Get company error");
+    res.status(500).json({ error: "server_error", message: "Failed to get company" });
+  }
+});
+
+router.patch("/companies/mine", authenticate, async (req, res) => {
+  try {
+    if (req.user!.role !== "admin") {
+      res.status(403).json({ error: "forbidden", message: "Only admins can update company settings" });
+      return;
+    }
+    const { name, size } = req.body;
+    const updates: Record<string, unknown> = {};
+    if (name !== undefined) {
+      if (typeof name !== "string" || name.trim().length === 0) {
+        res.status(400).json({ error: "validation_error", message: "Company name cannot be empty" });
+        return;
+      }
+      updates.name = name.trim();
+    }
+    if (size !== undefined) updates.size = size;
+
+    if (Object.keys(updates).length === 0) {
+      res.status(400).json({ error: "validation_error", message: "No fields to update" });
+      return;
+    }
+
+    await db.update(companiesTable).set(updates).where(eq(companiesTable.id, req.user!.companyId));
+    const rows = await db.select().from(companiesTable).where(eq(companiesTable.id, req.user!.companyId)).limit(1);
+    const c = rows[0];
+    res.json({ id: c.id, name: c.name, size: c.size, subscriptionTier: c.subscriptionTier, subscriptionStatus: c.subscriptionStatus, createdAt: c.createdAt.toISOString() });
+  } catch (err) {
+    req.log.error({ err }, "Update company error");
+    res.status(500).json({ error: "server_error", message: "Failed to update company" });
+  }
+});
+
 export default router;

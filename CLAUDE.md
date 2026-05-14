@@ -79,6 +79,77 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 15. Full team page (was placeholder) — members grouped by role, voice search, last-active
 16. Team messaging — direct messages between team members, two-panel chat UI, 5s polling, unread badges
 17. Message notifications — toast + browser OS notification on new message, live badge on sidebar Messages item and bell icon, manager "View All" read-only oversight mode
+18. Notifications page (`/notifications`) — filter tabs (All/Unread/Messages/Documents/Safety), per-type icons, click-to-read, mark-all-read, badge clears on visit, navigates to related entity on click
+19. Invoice file attachments — drag-and-drop or click-to-upload per invoice row, `attachmentUrl` column on invoices table, Open/Email/WhatsApp share dropdown, remove button
+20. Document & certificate sharing — Open + Email/WhatsApp share on project documents tab and compliance insurance certificate rows; compliance API extended to include `certificateUrl`
+
+## Uploads / File Serving
+
+**Critical:** Replit's router only forwards `/api/*` to the Express server. Files must be served under `/api/uploads/` not `/uploads/` or they 404 in the frontend.
+
+- Express serves uploads at **both** `/uploads` (legacy) and `/api/uploads` (`artifacts/api-server/src/app.ts`)
+- Upload endpoint (`POST /api/upload`) returns `/api/uploads/<filename>` URLs
+- All frontend file links rewrite legacy `/uploads/…` to `/api/uploads/…` before use
+- Vite proxy for `/uploads` was also added (`artifacts/sitesort/vite.config.ts`) as a belt-and-braces measure, but the `/api/uploads` path is the reliable one
+
+## Session Log
+
+### 2026-05-14
+
+#### Tasks completed
+- **Settings page** (`/settings`) — fully built out; replaces the placeholder; four tabs:
+  - **Profile** — edit name and phone; email shown read-only; avatar initial auto-updates on save
+  - **Security** — change password (requires current password; client-side validation before submit)
+  - **Notifications** — toggle in-app toast and browser OS notifications (stored in localStorage); handles denied/unsupported OS permission states gracefully
+  - **Company** (admin only) — edit company name and size; shows subscription tier/status badges
+
+#### New API endpoints (`artifacts/api-server/src/routes/auth.ts`)
+- `PATCH /api/auth/me` — update own name/phone
+- `POST /api/auth/change-password` — change password with current-password verification
+- `GET /api/companies/mine` — get own company info
+- `PATCH /api/companies/mine` — update company name/size (admin role required)
+
+#### Key files added/modified
+- `artifacts/sitesort/src/pages/settings/index.tsx` — new settings page (Profile / Security / Notifications / Company tabs)
+- `artifacts/api-server/src/routes/auth.ts` — four new endpoints appended
+- `artifacts/sitesort/src/App.tsx` — `/settings` route now uses `SettingsPage` component
+
+#### Notes for next session
+- Settings notification toggles are stored in localStorage; the sidebar poller does not yet read these flags — it always fires toasts/OS notifications regardless. Wire `NOTIF_TOAST_KEY` / `NOTIF_OS_KEY` checks into `sidebar-layout.tsx` to honour the preferences
+- Messages page: no deletion or editing yet
+- Settings page is complete — the only remaining major placeholder is none; consider adding an avatar upload to the Profile tab (upload API already exists)
+
+### 2026-05-13
+
+#### Tasks completed
+- **Notifications page** (`/notifications`) — built out from placeholder; filter tabs (All, Unread, Messages, Documents, Safety) each with count badge; per-type icons (blue message, indigo document, amber safety); unread items highlighted; click marks as read and navigates to related entity; "Mark all as read" button; bell badge in sidebar clears on visit
+- **Invoice file attachments** — added `attachment_url` column to `invoices` DB table (schema pushed); `PATCH /api/invoices/:id` now accepts `attachmentUrl`; per-row drag-and-drop with global overlay naming the target invoice; click-to-upload fallback (paperclip button); spinner while uploading; Open link, Share dropdown (Email/WhatsApp pre-filled), and remove button on rows with attachments
+- **Open/Share on project documents** — Documents tab in project detail now has Open link and Email/WhatsApp share dropdown on every document row; share message pre-filled with doc name and version
+- **Open/Share on compliance insurance certificates** — compliance API extended to return `certificateUrl` per insurance record; certificate rows now show Open icon + Share dropdown when a certificate is present
+- **Fixed file serving** — uploads were 404-ing because Replit routes `/uploads/*` to the Vite server, not Express; fixed by serving uploads at `/api/uploads/` (guaranteed to reach Express), updating the upload endpoint, and rewriting legacy URLs in all frontend share/open helpers
+
+#### DB schema changes
+- `invoices` table: added `attachment_url` column
+
+#### Key files added/modified
+- `artifacts/sitesort/src/pages/notifications/index.tsx` — new notifications page
+- `artifacts/sitesort/src/pages/invoices/index.tsx` — drag-and-drop attachment, open/share
+- `artifacts/sitesort/src/pages/compliance/index.tsx` — open/share on insurance certificate rows
+- `artifacts/sitesort/src/pages/projects/detail.tsx` — open/share on document rows
+- `artifacts/api-server/src/routes/compliance.ts` — added `certificateUrl` to expiring insurance response
+- `artifacts/api-server/src/routes/invoices.ts` — PATCH accepts `attachmentUrl`
+- `artifacts/api-server/src/routes/upload.ts` — returns `/api/uploads/…` URLs
+- `artifacts/api-server/src/app.ts` — serves `/api/uploads` static path
+- `artifacts/sitesort/vite.config.ts` — proxy `/uploads` to API server (belt-and-braces)
+- `artifacts/sitesort/src/App.tsx` — notifications route wired up
+- `lib/db/src/schema/invoices.ts` — `attachmentUrl` column added
+
+#### Notes for next session
+- Uploaded files are stored on the Replit filesystem (`artifacts/api-server/uploads/`) — they are **ephemeral** and will be lost on a full Repl restart. Consider migrating to object storage (e.g. Cloudflare R2, AWS S3) for persistence
+- Messages page: no deletion or editing yet
+- Settings page (`/settings`) is still a placeholder
+- Notifications page only shows `new_message`, `document_uploaded`, and `safety_concern` types — any new notification types added to the API should have a matching icon/filter added to `notifications/index.tsx`
+- Consider adding file/image attachment support to messages (upload API already exists at `POST /api/upload`)
 
 ## Session Log
 
