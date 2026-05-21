@@ -29,7 +29,7 @@ router.post("/billing/checkout", authenticate, async (req, res) => {
               name: "SiteSort",
               description: "Monthly subscription to SiteSort",
             },
-            unit_amount: 2900,
+            unit_amount: 14900,
             recurring: { interval: "month" },
           },
           quantity: 1,

@@ -484,7 +484,7 @@ function BillingTab() {
         </div>
 
         <div className="flex items-baseline gap-1 mb-5">
-          <span className="text-4xl font-bold text-foreground">£29</span>
+          <span className="text-4xl font-bold text-foreground">£149</span>
           <span className="text-sm text-muted-foreground">/ month</span>
         </div>
 
@@ -498,7 +498,7 @@ function BillingTab() {
 
         <Button onClick={subscribe} disabled={loading} className="w-full gap-2">
           <CreditCard className="w-4 h-4" />
-          {loading ? "Redirecting to checkout…" : "Subscribe for £29/month"}
+          {loading ? "Redirecting to checkout…" : "Subscribe for £149/month"}
         </Button>
 
         <p className="text-[11px] text-muted-foreground text-center mt-3">
