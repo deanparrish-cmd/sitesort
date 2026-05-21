@@ -64,6 +64,18 @@ router.post("/billing/checkout", authenticate, async (req, res) => {
       ],
       success_url: `${APP_URL}/settings?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${APP_URL}/settings?checkout=cancelled`,
+      payment_method_collection: "always",
+      subscription_data: {
+        trial_period_days: 14,
+        trial_settings: {
+          end_behavior: { missing_payment_method: "cancel" },
+        },
+        metadata: {
+          userId: user.id,
+          companyId: user.companyId,
+          plan: planId,
+        },
+      },
       metadata: {
         userId: user.id,
         companyId: user.companyId,

@@ -525,6 +525,11 @@ function BillingTab() {
       </div>
       <StatusBanner status={status} />
 
+      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium">
+        <Sparkles className="w-3.5 h-3.5" />
+        Start with a 14-day free trial on any plan
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 max-w-5xl">
         {PLANS.map(plan => (
           <Card
@@ -577,14 +582,18 @@ function BillingTab() {
               className="w-full gap-2"
             >
               <CreditCard className="w-4 h-4" />
-              {loadingPlan === plan.id ? "Redirecting…" : `Subscribe for ${plan.price}/month`}
+              {loadingPlan === plan.id ? "Redirecting…" : `Start 14-day free trial`}
             </Button>
+
+            <p className="text-[11px] text-muted-foreground text-center mt-2">
+              Then {plan.price}/month. Cancel any time during the trial.
+            </p>
           </Card>
         ))}
       </div>
 
       <p className="text-[11px] text-muted-foreground">
-        Secure checkout powered by Stripe. Cancel any time.
+        Card details required at sign-up. Your subscription auto-renews after the 14-day trial unless cancelled. Secure checkout powered by Stripe.
       </p>
     </div>
   );
