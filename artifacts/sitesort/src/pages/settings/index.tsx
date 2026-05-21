@@ -22,11 +22,13 @@ import {
   CheckCircle2,
   AlertCircle,
   Camera,
+  CreditCard,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetMe } from "@workspace/api-client-react";
 
-type Tab = "profile" | "security" | "notifications" | "company";
+type Tab = "profile" | "security" | "notifications" | "company" | "billing";
 
 function authHeaders(): Record<string, string> {
   const t = localStorage.getItem("sitesort_token");
@@ -425,11 +427,94 @@ function CompanyTab() {
   );
 }
 
+function BillingTab() {
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<StatusMsg | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get("checkout");
+    if (result === "success") {
+      setStatus({ type: "success", text: "Payment successful! Your subscription is now active." });
+      window.history.replaceState({}, "", window.location.pathname);
+    } else if (result === "cancelled") {
+      setStatus({ type: "error", text: "Checkout was cancelled. You can try again any time." });
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
+
+  const subscribe = async () => {
+    setLoading(true);
+    setStatus(null);
+    try {
+      const res = await fetch("/api/billing/checkout", {
+        method: "POST",
+        headers: authHeaders(),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.url) {
+        setStatus({ type: "error", text: data.error ?? "Failed to start checkout." });
+        return;
+      }
+      window.location.href = data.url;
+    } catch {
+      setStatus({ type: "error", text: "Network error. Please try again." });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold mb-1">Billing & Subscription</h2>
+        <p className="text-sm text-muted-foreground">Manage your SiteSort subscription.</p>
+      </div>
+      <StatusBanner status={status} />
+
+      <Card className="p-6 max-w-md border-2 border-primary/20 bg-gradient-to-br from-orange-50/50 to-amber-50/30">
+        <div className="flex items-start gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shrink-0">
+            <Sparkles className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-foreground">SiteSort Subscription</h3>
+            <p className="text-xs text-muted-foreground">Full access to every feature</p>
+          </div>
+        </div>
+
+        <div className="flex items-baseline gap-1 mb-5">
+          <span className="text-4xl font-bold text-foreground">£29</span>
+          <span className="text-sm text-muted-foreground">/ month</span>
+        </div>
+
+        <ul className="space-y-2 text-sm text-foreground mb-6">
+          <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> Unlimited projects</li>
+          <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> Unlimited team members</li>
+          <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> Document version control</li>
+          <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> QR site boards</li>
+          <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> Compliance tracking</li>
+        </ul>
+
+        <Button onClick={subscribe} disabled={loading} className="w-full gap-2">
+          <CreditCard className="w-4 h-4" />
+          {loading ? "Redirecting to checkout…" : "Subscribe for £29/month"}
+        </Button>
+
+        <p className="text-[11px] text-muted-foreground text-center mt-3">
+          Secure checkout powered by Stripe. Cancel any time.
+        </p>
+      </Card>
+    </div>
+  );
+}
+
 const TABS: { id: Tab; label: string; icon: React.ElementType; adminOnly?: boolean }[] = [
   { id: "profile", label: "Profile", icon: User },
   { id: "security", label: "Security", icon: Lock },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "company", label: "Company", icon: Building2, adminOnly: true },
+  { id: "billing", label: "Billing", icon: CreditCard, adminOnly: true },
 ];
 
 export default function SettingsPage() {
@@ -475,6 +560,7 @@ export default function SettingsPage() {
           {activeTab === "security" && <SecurityTab />}
           {activeTab === "notifications" && <NotificationsTab />}
           {activeTab === "company" && user?.role === "admin" && <CompanyTab />}
+          {activeTab === "billing" && user?.role === "admin" && <BillingTab />}
         </Card>
       </div>
     </SidebarLayout>
