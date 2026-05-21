@@ -13,6 +13,11 @@ const PLANS = {
     description: "1 project — monthly subscription",
     amount: 2900,
   },
+  team: {
+    name: "SiteSort Team",
+    description: "Up to 5 projects — monthly subscription",
+    amount: 7900,
+  },
   pro: {
     name: "SiteSort Pro",
     description: "Unlimited projects — monthly subscription",

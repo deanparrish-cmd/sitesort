@@ -427,7 +427,7 @@ function CompanyTab() {
   );
 }
 
-type PlanId = "solo" | "pro";
+type PlanId = "solo" | "team" | "pro";
 
 const PLANS: {
   id: PlanId;
@@ -451,6 +451,20 @@ const PLANS: {
     ],
   },
   {
+    id: "team",
+    name: "Team",
+    tagline: "For growing contractors",
+    price: "£79",
+    features: [
+      "Up to 5 active projects",
+      "Unlimited team members",
+      "Document version control",
+      "QR site boards",
+      "Compliance tracking",
+    ],
+    highlight: true,
+  },
+  {
     id: "pro",
     name: "Pro",
     tagline: "Full access to every feature",
@@ -462,7 +476,6 @@ const PLANS: {
       "QR site boards",
       "Compliance tracking",
     ],
-    highlight: true,
   },
 ];
 
@@ -512,7 +525,7 @@ function BillingTab() {
       </div>
       <StatusBanner status={status} />
 
-      <div className="grid gap-4 sm:grid-cols-2 max-w-3xl">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 max-w-5xl">
         {PLANS.map(plan => (
           <Card
             key={plan.id}
