@@ -427,8 +427,47 @@ function CompanyTab() {
   );
 }
 
+type PlanId = "solo" | "pro";
+
+const PLANS: {
+  id: PlanId;
+  name: string;
+  tagline: string;
+  price: string;
+  features: string[];
+  highlight?: boolean;
+}[] = [
+  {
+    id: "solo",
+    name: "Solo",
+    tagline: "Perfect for a single site",
+    price: "£29",
+    features: [
+      "1 active project",
+      "Unlimited team members",
+      "Document version control",
+      "QR site boards",
+      "Compliance tracking",
+    ],
+  },
+  {
+    id: "pro",
+    name: "Pro",
+    tagline: "Full access to every feature",
+    price: "£149",
+    features: [
+      "Unlimited projects",
+      "Unlimited team members",
+      "Document version control",
+      "QR site boards",
+      "Compliance tracking",
+    ],
+    highlight: true,
+  },
+];
+
 function BillingTab() {
-  const [loading, setLoading] = useState(false);
+  const [loadingPlan, setLoadingPlan] = useState<PlanId | null>(null);
   const [status, setStatus] = useState<StatusMsg | null>(null);
 
   useEffect(() => {
@@ -443,13 +482,14 @@ function BillingTab() {
     }
   }, []);
 
-  const subscribe = async () => {
-    setLoading(true);
+  const subscribe = async (plan: PlanId) => {
+    setLoadingPlan(plan);
     setStatus(null);
     try {
       const res = await fetch("/api/billing/checkout", {
         method: "POST",
         headers: authHeaders(),
+        body: JSON.stringify({ plan }),
       });
       const data = await res.json();
       if (!res.ok || !data.url) {
@@ -460,7 +500,7 @@ function BillingTab() {
     } catch {
       setStatus({ type: "error", text: "Network error. Please try again." });
     } finally {
-      setLoading(false);
+      setLoadingPlan(null);
     }
   };
 
@@ -468,43 +508,71 @@ function BillingTab() {
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold mb-1">Billing & Subscription</h2>
-        <p className="text-sm text-muted-foreground">Manage your SiteSort subscription.</p>
+        <p className="text-sm text-muted-foreground">Choose the plan that fits your business.</p>
       </div>
       <StatusBanner status={status} />
 
-      <Card className="p-6 max-w-md border-2 border-primary/20 bg-gradient-to-br from-orange-50/50 to-amber-50/30">
-        <div className="flex items-start gap-3 mb-4">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shrink-0">
-            <Sparkles className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-foreground">SiteSort Subscription</h3>
-            <p className="text-xs text-muted-foreground">Full access to every feature</p>
-          </div>
-        </div>
+      <div className="grid gap-4 sm:grid-cols-2 max-w-3xl">
+        {PLANS.map(plan => (
+          <Card
+            key={plan.id}
+            className={cn(
+              "p-6 relative flex flex-col",
+              plan.highlight
+                ? "border-2 border-primary/30 bg-gradient-to-br from-orange-50/50 to-amber-50/30"
+                : "border"
+            )}
+          >
+            {plan.highlight && (
+              <div className="absolute -top-2.5 right-4 text-[10px] font-semibold uppercase tracking-wide bg-orange-500 text-white px-2 py-0.5 rounded-full">
+                Most popular
+              </div>
+            )}
 
-        <div className="flex items-baseline gap-1 mb-5">
-          <span className="text-4xl font-bold text-foreground">£149</span>
-          <span className="text-sm text-muted-foreground">/ month</span>
-        </div>
+            <div className="flex items-start gap-3 mb-4">
+              <div className={cn(
+                "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+                plan.highlight
+                  ? "bg-gradient-to-br from-orange-500 to-orange-600"
+                  : "bg-muted"
+              )}>
+                <Sparkles className={cn("w-5 h-5", plan.highlight ? "text-white" : "text-muted-foreground")} />
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground">SiteSort {plan.name}</h3>
+                <p className="text-xs text-muted-foreground">{plan.tagline}</p>
+              </div>
+            </div>
 
-        <ul className="space-y-2 text-sm text-foreground mb-6">
-          <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> Unlimited projects</li>
-          <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> Unlimited team members</li>
-          <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> Document version control</li>
-          <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> QR site boards</li>
-          <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> Compliance tracking</li>
-        </ul>
+            <div className="flex items-baseline gap-1 mb-5">
+              <span className="text-4xl font-bold text-foreground">{plan.price}</span>
+              <span className="text-sm text-muted-foreground">/ month</span>
+            </div>
 
-        <Button onClick={subscribe} disabled={loading} className="w-full gap-2">
-          <CreditCard className="w-4 h-4" />
-          {loading ? "Redirecting to checkout…" : "Subscribe for £149/month"}
-        </Button>
+            <ul className="space-y-2 text-sm text-foreground mb-6 flex-1">
+              {plan.features.map(f => (
+                <li key={f} className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> {f}
+                </li>
+              ))}
+            </ul>
 
-        <p className="text-[11px] text-muted-foreground text-center mt-3">
-          Secure checkout powered by Stripe. Cancel any time.
-        </p>
-      </Card>
+            <Button
+              onClick={() => subscribe(plan.id)}
+              disabled={loadingPlan !== null}
+              variant={plan.highlight ? "default" : "outline"}
+              className="w-full gap-2"
+            >
+              <CreditCard className="w-4 h-4" />
+              {loadingPlan === plan.id ? "Redirecting…" : `Subscribe for ${plan.price}/month`}
+            </Button>
+          </Card>
+        ))}
+      </div>
+
+      <p className="text-[11px] text-muted-foreground">
+        Secure checkout powered by Stripe. Cancel any time.
+      </p>
     </div>
   );
 }

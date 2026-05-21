@@ -7,10 +7,32 @@ const router = Router();
 const APP_URL =
   process.env.APP_URL ?? `https://${process.env.REPLIT_DEV_DOMAIN ?? "sitesort.co.uk"}`;
 
+const PLANS = {
+  solo: {
+    name: "SiteSort Solo",
+    description: "1 project — monthly subscription",
+    amount: 2900,
+  },
+  pro: {
+    name: "SiteSort Pro",
+    description: "Unlimited projects — monthly subscription",
+    amount: 14900,
+  },
+} as const;
+
+type PlanId = keyof typeof PLANS;
+
 router.post("/billing/checkout", authenticate, async (req, res) => {
   const apiKey = process.env.STRIPE_SECRET_KEY;
   if (!apiKey) {
     res.status(500).json({ error: "STRIPE_SECRET_KEY is not set" });
+    return;
+  }
+
+  const planId = (req.body?.plan ?? "pro") as PlanId;
+  const plan = PLANS[planId];
+  if (!plan) {
+    res.status(400).json({ error: `Unknown plan: ${planId}` });
     return;
   }
 
@@ -26,10 +48,10 @@ router.post("/billing/checkout", authenticate, async (req, res) => {
           price_data: {
             currency: "gbp",
             product_data: {
-              name: "SiteSort",
-              description: "Monthly subscription to SiteSort",
+              name: plan.name,
+              description: plan.description,
             },
-            unit_amount: 14900,
+            unit_amount: plan.amount,
             recurring: { interval: "month" },
           },
           quantity: 1,
@@ -40,6 +62,7 @@ router.post("/billing/checkout", authenticate, async (req, res) => {
       metadata: {
         userId: user.id,
         companyId: user.companyId,
+        plan: planId,
       },
     });
 
