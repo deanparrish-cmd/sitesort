@@ -479,11 +479,18 @@ const PLANS: {
   },
 ];
 
+type CompanyBilling = { subscriptionTier: string; subscriptionStatus: string };
+
 function BillingTab() {
   const [loadingPlan, setLoadingPlan] = useState<PlanId | null>(null);
   const [status, setStatus] = useState<StatusMsg | null>(null);
+  const [company, setCompany] = useState<CompanyBilling | null>(null);
 
   useEffect(() => {
+    fetch("/api/companies/mine", { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setCompany(data); });
+
     const params = new URLSearchParams(window.location.search);
     const result = params.get("checkout");
     if (result === "success") {
@@ -494,6 +501,8 @@ function BillingTab() {
       window.history.replaceState({}, "", window.location.pathname);
     }
   }, []);
+
+  const hasActiveSub = company && ["active", "trialing"].includes(company.subscriptionStatus);
 
   const subscribe = async (plan: PlanId) => {
     setLoadingPlan(plan);
@@ -525,71 +534,118 @@ function BillingTab() {
       </div>
       <StatusBanner status={status} />
 
-      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium">
-        <Sparkles className="w-3.5 h-3.5" />
-        Start with a 14-day free trial on any plan
-      </div>
+      {company && company.subscriptionTier !== "free" && (
+        <div className="flex flex-wrap items-center gap-3 p-4 rounded-xl border bg-muted/30">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">Current subscription:</span>
+            <Badge className="capitalize bg-primary/10 text-primary border-primary/20">
+              SiteSort {company.subscriptionTier}
+            </Badge>
+            <Badge className={cn(
+              "capitalize border",
+              company.subscriptionStatus === "active" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+              company.subscriptionStatus === "trialing" ? "bg-blue-50 text-blue-700 border-blue-200" :
+              company.subscriptionStatus === "past_due" ? "bg-red-50 text-red-700 border-red-200" :
+              "bg-muted text-muted-foreground border-border"
+            )}>
+              {company.subscriptionStatus === "trialing" ? "Trial active" : company.subscriptionStatus.replace(/_/g, " ")}
+            </Badge>
+          </div>
+          {company.subscriptionStatus === "trialing" && (
+            <span className="text-xs text-muted-foreground">No charge until your 14-day trial ends.</span>
+          )}
+          {company.subscriptionStatus === "past_due" && (
+            <span className="text-xs text-red-600 font-medium">Payment failed — please update your payment method via Stripe.</span>
+          )}
+        </div>
+      )}
+
+      {(!company || company.subscriptionTier === "free") && (
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium">
+          <Sparkles className="w-3.5 h-3.5" />
+          Start with a 14-day free trial on any plan
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 max-w-5xl">
-        {PLANS.map(plan => (
-          <Card
-            key={plan.id}
-            className={cn(
-              "p-6 relative flex flex-col",
-              plan.highlight
-                ? "border-2 border-primary/30 bg-gradient-to-br from-orange-50/50 to-amber-50/30"
-                : "border"
-            )}
-          >
-            {plan.highlight && (
-              <div className="absolute -top-2.5 right-4 text-[10px] font-semibold uppercase tracking-wide bg-orange-500 text-white px-2 py-0.5 rounded-full">
-                Most popular
-              </div>
-            )}
-
-            <div className="flex items-start gap-3 mb-4">
-              <div className={cn(
-                "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
-                plan.highlight
-                  ? "bg-gradient-to-br from-orange-500 to-orange-600"
-                  : "bg-muted"
-              )}>
-                <Sparkles className={cn("w-5 h-5", plan.highlight ? "text-white" : "text-muted-foreground")} />
-              </div>
-              <div>
-                <h3 className="font-semibold text-foreground">SiteSort {plan.name}</h3>
-                <p className="text-xs text-muted-foreground">{plan.tagline}</p>
-              </div>
-            </div>
-
-            <div className="flex items-baseline gap-1 mb-5">
-              <span className="text-4xl font-bold text-foreground">{plan.price}</span>
-              <span className="text-sm text-muted-foreground">/ month</span>
-            </div>
-
-            <ul className="space-y-2 text-sm text-foreground mb-6 flex-1">
-              {plan.features.map(f => (
-                <li key={f} className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> {f}
-                </li>
-              ))}
-            </ul>
-
-            <Button
-              onClick={() => subscribe(plan.id)}
-              disabled={loadingPlan !== null}
-              variant={plan.highlight ? "default" : "outline"}
-              className="w-full gap-2"
+        {PLANS.map(plan => {
+          const isCurrentPlan = hasActiveSub && company?.subscriptionTier === plan.id;
+          return (
+            <Card
+              key={plan.id}
+              className={cn(
+                "p-6 relative flex flex-col",
+                isCurrentPlan
+                  ? "border-2 border-emerald-400 bg-gradient-to-br from-emerald-50/50 to-green-50/30"
+                  : plan.highlight
+                  ? "border-2 border-primary/30 bg-gradient-to-br from-orange-50/50 to-amber-50/30"
+                  : "border"
+              )}
             >
-              <CreditCard className="w-4 h-4" />
-              {loadingPlan === plan.id ? "Redirecting…" : `Start 14-day free trial`}
-            </Button>
+              {isCurrentPlan && (
+                <div className="absolute -top-2.5 left-4 text-[10px] font-semibold uppercase tracking-wide bg-emerald-500 text-white px-2 py-0.5 rounded-full">
+                  Current plan
+                </div>
+              )}
+              {!isCurrentPlan && plan.highlight && (
+                <div className="absolute -top-2.5 right-4 text-[10px] font-semibold uppercase tracking-wide bg-orange-500 text-white px-2 py-0.5 rounded-full">
+                  Most popular
+                </div>
+              )}
 
-            <p className="text-[11px] text-muted-foreground text-center mt-2">
-              Then {plan.price}/month. Cancel any time during the trial.
-            </p>
-          </Card>
-        ))}
+              <div className="flex items-start gap-3 mb-4">
+                <div className={cn(
+                  "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+                  isCurrentPlan
+                    ? "bg-gradient-to-br from-emerald-500 to-green-600"
+                    : plan.highlight
+                    ? "bg-gradient-to-br from-orange-500 to-orange-600"
+                    : "bg-muted"
+                )}>
+                  <Sparkles className={cn("w-5 h-5", isCurrentPlan || plan.highlight ? "text-white" : "text-muted-foreground")} />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-foreground">SiteSort {plan.name}</h3>
+                  <p className="text-xs text-muted-foreground">{plan.tagline}</p>
+                </div>
+              </div>
+
+              <div className="flex items-baseline gap-1 mb-5">
+                <span className="text-4xl font-bold text-foreground">{plan.price}</span>
+                <span className="text-sm text-muted-foreground">/ month</span>
+              </div>
+
+              <ul className="space-y-2 text-sm text-foreground mb-6 flex-1">
+                {plan.features.map(f => (
+                  <li key={f} className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> {f}
+                  </li>
+                ))}
+              </ul>
+
+              {isCurrentPlan ? (
+                <Button disabled variant="outline" className="w-full gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Current plan
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    onClick={() => subscribe(plan.id)}
+                    disabled={loadingPlan !== null}
+                    variant={plan.highlight ? "default" : "outline"}
+                    className="w-full gap-2"
+                  >
+                    <CreditCard className="w-4 h-4" />
+                    {loadingPlan === plan.id ? "Redirecting…" : "Start 14-day free trial"}
+                  </Button>
+                  <p className="text-[11px] text-muted-foreground text-center mt-2">
+                    Then {plan.price}/month. Cancel any time during the trial.
+                  </p>
+                </>
+              )}
+            </Card>
+          );
+        })}
       </div>
 
       <p className="text-[11px] text-muted-foreground">
@@ -609,7 +665,11 @@ const TABS: { id: Tab; label: string; icon: React.ElementType; adminOnly?: boole
 
 export default function SettingsPage() {
   const { data: user, refetch } = useGetMe();
-  const [activeTab, setActiveTab] = useState<Tab>("profile");
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get("tab") as Tab | null;
+    return tab && ["profile", "security", "notifications", "company", "billing"].includes(tab) ? tab : "profile";
+  });
 
   const visibleTabs = TABS.filter(t => !t.adminOnly || user?.role === "admin");
 

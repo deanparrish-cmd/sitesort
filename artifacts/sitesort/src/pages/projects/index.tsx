@@ -4,9 +4,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, Building, MapPin, Calendar, Mic, MicOff } from "lucide-react";
+import { Search, Plus, Building, MapPin, Calendar, Mic, MicOff, Sparkles } from "lucide-react";
 import { useListProjects, useCreateProject } from "@workspace/api-client-react";
 import { useForm } from "react-hook-form";
 import { formatDate, cn } from "@/lib/utils";
@@ -19,6 +19,7 @@ export default function ProjectsList() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
   const [search, setSearch] = useState("");
   const { register, handleSubmit, reset } = useForm();
 
@@ -64,6 +65,12 @@ export default function ProjectsList() {
       reset();
       setLocation("/dashboard");
     } catch (e: any) {
+      if (e?.status === 403 && (e?.data as any)?.error === "plan_limit") {
+        setIsModalOpen(false);
+        reset();
+        setShowUpgradeDialog(true);
+        return;
+      }
       setCreateError(e?.message ?? "Failed to create project. Please try again.");
     }
   };
@@ -159,6 +166,21 @@ export default function ProjectsList() {
           </table>
         </div>
       </div>
+
+      <Dialog open={showUpgradeDialog} onOpenChange={setShowUpgradeDialog}>
+        <DialogHeader>
+          <DialogTitle>Project limit reached</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground my-2">
+          You've reached the maximum number of projects on your current plan. Upgrade to create more sites.
+        </p>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setShowUpgradeDialog(false)}>Maybe later</Button>
+          <Button variant="accent" onClick={() => setLocation("/settings?tab=billing")} className="gap-2">
+            <Sparkles className="w-4 h-4" /> Upgrade plan
+          </Button>
+        </DialogFooter>
+      </Dialog>
 
       <Dialog open={isModalOpen} onOpenChange={v => { setIsModalOpen(v); if (!v) setCreateError(null); }}>
         <DialogHeader>

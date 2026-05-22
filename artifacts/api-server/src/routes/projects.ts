@@ -1,11 +1,23 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { projectsTable, projectMembersTable, usersTable, documentsTable, documentDistributionsTable, permitsTable, notificationsTable, subcontractorsTable } from "@workspace/db/schema";
+import { projectsTable, projectMembersTable, usersTable, documentsTable, documentDistributionsTable, permitsTable, notificationsTable, subcontractorsTable, companiesTable } from "@workspace/db/schema";
 import { eq, and, count, sql } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 
 const router: IRouter = Router();
+
+const PLAN_PROJECT_LIMITS: Record<string, number> = {
+  free: 1,
+  solo: 1,
+  team: 5,
+  pro: Infinity,
+};
+
+function planProjectLimit(tier: string, status: string): number {
+  if (status === "cancelled") return 1;
+  return PLAN_PROJECT_LIMITS[tier] ?? 1;
+}
 
 router.get("/projects", authenticate, async (req, res) => {
   try {
@@ -45,6 +57,28 @@ router.post("/projects", authenticate, async (req, res) => {
     if (!name || !address || !startDate) {
       res.status(400).json({ error: "validation_error", message: "name, address, startDate required" });
       return;
+    }
+
+    const companyRows = await db
+      .select({ subscriptionTier: companiesTable.subscriptionTier, subscriptionStatus: companiesTable.subscriptionStatus })
+      .from(companiesTable)
+      .where(eq(companiesTable.id, req.user!.companyId))
+      .limit(1);
+    const { subscriptionTier, subscriptionStatus } = companyRows[0] ?? { subscriptionTier: "free", subscriptionStatus: "active" };
+    const limit = planProjectLimit(subscriptionTier, subscriptionStatus);
+
+    if (limit !== Infinity) {
+      const [{ total }] = await db.select({ total: count() }).from(projectsTable)
+        .where(eq(projectsTable.companyId, req.user!.companyId));
+      if (Number(total) >= limit) {
+        res.status(403).json({
+          error: "plan_limit",
+          message: `Your ${subscriptionTier} plan allows up to ${limit} project${limit === 1 ? "" : "s"}. Upgrade to add more.`,
+          limit,
+          currentTier: subscriptionTier,
+        });
+        return;
+      }
     }
 
     const id = generateId();
