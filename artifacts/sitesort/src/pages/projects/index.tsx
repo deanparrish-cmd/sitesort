@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
@@ -28,6 +28,16 @@ export default function ProjectsList() {
   const [listening, setListening] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
+
+  // Auto-open create modal when navigated here via voice command (?new=1)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("new") === "1") {
+      window.history.replaceState({}, "", "/projects");
+      if (isCancelled) setLocation("/settings?tab=billing");
+      else setIsModalOpen(true);
+    }
+  }, [isCancelled, setLocation]);
   const voiceSupported = typeof window !== "undefined" && !!(
     (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
   );

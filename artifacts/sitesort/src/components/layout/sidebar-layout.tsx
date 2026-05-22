@@ -64,6 +64,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
 
   const VOICE_COMMANDS: Record<string, string> = {
     "dashboard": "/dashboard", "home": "/dashboard",
+    "new project": "/projects?new=1", "create project": "/projects?new=1", "add project": "/projects?new=1",
     "projects": "/projects", "project": "/projects",
     "subcontractors": "/subcontractors", "subcontractor": "/subcontractors",
     "compliance": "/compliance", "compliance center": "/compliance", "insurance": "/compliance",
@@ -451,7 +452,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
             </button>
           </div>
           <p className="text-xs text-gray-400 leading-relaxed">
-            Try: <span className="text-gray-200">"go to projects"</span>, <span className="text-gray-200">"open compliance"</span>, <span className="text-gray-200">"navigate to invoices"</span>, <span className="text-gray-200">"show messages"</span>
+            Try: <span className="text-gray-200">"new project"</span>, <span className="text-gray-200">"go to projects"</span>, <span className="text-gray-200">"open compliance"</span>, <span className="text-gray-200">"show messages"</span>
           </p>
         </div>
       )}
