@@ -153,10 +153,30 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 - `artifacts/sitesort/src/pages/projects/index.tsx` — `plan_limit` error detection, upgrade dialog, removed stale `DialogContent` import
 - `artifacts/sitesort/src/pages/settings/index.tsx` — company fetch in `BillingTab`, current-plan highlighting, `?tab=` init
 
-#### Notes for next session
+#### Notes for next session (after gating)
 - Only project count is gated so far — team member count, document uploads, and other per-plan limits are not enforced yet
-- No Stripe Customer Portal wired up; users cannot self-serve cancel or swap plans from within the app
 - Upgrade dialog is intentionally simple — could be enhanced to show current usage (e.g. "2 of 5 projects used")
+
+### 2026-05-22 (continued)
+
+#### Tasks completed
+- **Stripe Customer Portal** — users can now self-serve cancel, swap plans, update payment method, and download invoices
+- **`stripeCustomerId` column** — added to `companies` table (`stripe_customer_id`, nullable); schema pushed to DB; `handleSubscriptionUpsert` in webhook now saves `subscription.customer` to this column on every subscription event
+- **`POST /api/billing/portal`** — creates a Stripe Billing Portal session using the stored `stripeCustomerId`; falls back to `stripe.customers.list({ email })` lookup if not yet set; returns to `/settings?tab=billing` after the user exits the portal
+- **"Manage subscription" button** — appears in the billing tab status banner when on an active/trialing plan; calls the portal endpoint and redirects
+
+#### DB schema changes
+- `companies` table: added `stripe_customer_id` column
+
+#### Key files modified
+- `lib/db/src/schema/companies.ts` — `stripeCustomerId` column added
+- `artifacts/api-server/src/routes/billing.ts` — `POST /api/billing/portal` endpoint; `stripeCustomerId` saved in `handleSubscriptionUpsert`
+- `artifacts/sitesort/src/pages/settings/index.tsx` — `ManageSubscriptionButton` component + rendered in billing status banner
+
+#### Notes for next session
+- Stripe Customer Portal must be activated in Stripe Dashboard → Settings → Billing → Customer portal before the portal URL will work
+- Only project count is gated — team member limits, read-only mode on cancellation, and other per-plan gates are not yet enforced
+- No in-app notification or email when a trial is ending or payment fails
 
 ### 2026-05-14
 
