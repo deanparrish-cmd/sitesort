@@ -87,7 +87,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 23. Document status/version editing — Edit button on document rows opens dialog to change status (current/superseded) and version number; `PATCH /api/documents/:documentId`
 24. Subscription billing — Stripe Checkout (Solo £29/Team £79/Pro £149, 14-day trial), webhook sync, Customer Portal, plan-based project limits, trial-ending and payment-failed notifications
 25. Read-only mode on cancellation — persistent red banner on all authenticated pages; "New Project" button redirects to billing when cancelled; `SubscriptionContext` exposes `isCancelled` app-wide
-26. Global voice command navigation — mic button in sidebar and desktop header bar; Web Speech API listens for commands like "go to projects" / "open compliance" / "new project"; floating hint overlay with examples; toast feedback on match or no-match; hidden on unsupported browsers; "new project" / "create project" / "add project" navigates to `/projects?new=1` which auto-opens the create modal (or redirects to billing if cancelled)
+26. Global voice command navigation — mic button in sidebar and desktop header bar; Web Speech API listens for commands like "go to projects" / "open compliance" / "new project" / "find invoice"; floating hint overlay with examples; toast feedback on match or no-match; hidden on unsupported browsers; action commands: "new project" → `/projects?new=1` (opens create modal, or billing if cancelled); "new invoice" → `/invoices?new=1` (opens create modal); "find invoice" / "recall invoice" → `/invoices?recall=1` (activates voice search filter)
 
 ## Uploads / File Serving
 
@@ -112,10 +112,12 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 
 #### Tasks completed (continued)
 - **"New project" voice command** — saying "new project", "create project", or "add project" navigates to `/projects?new=1`; projects page detects param on mount and opens the create modal, or redirects to `/settings?tab=billing` if subscription is cancelled; hint overlay updated to show "new project" as the first example
+- **Invoice voice commands** — "new invoice" / "create invoice" / "add invoice" → `/invoices?new=1` opens the create modal; "find invoice" / "recall invoice" / "search invoices" → `/invoices?recall=1` navigates to invoices and auto-activates the mic voice search filter
 
 #### Key files modified (continued)
-- `artifacts/sitesort/src/components/layout/sidebar-layout.tsx` — added `new project`/`create project`/`add project` entries to `VOICE_COMMANDS`; updated hint overlay example text
+- `artifacts/sitesort/src/components/layout/sidebar-layout.tsx` — added `new project`/`create project`/`add project`, `new invoice`/`create invoice`, and `find invoice`/`recall invoice`/`search invoices` entries to `VOICE_COMMANDS`; updated hint overlay example text
 - `artifacts/sitesort/src/pages/projects/index.tsx` — `useEffect` reads `?new=1` param on mount, strips it from history, then opens modal or redirects to billing
+- `artifacts/sitesort/src/pages/invoices/index.tsx` — `toggleVoiceSearch` converted to `useCallback`; `useEffect` reads `?new=1` (open modal) or `?recall=1` (activate voice search) on mount
 
 #### Notes for next session
 - Only project creation is blocked client-side on cancellation — other write actions (edit project, upload docs, etc.) are not yet restricted
