@@ -87,6 +87,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 23. Document status/version editing — Edit button on document rows opens dialog to change status (current/superseded) and version number; `PATCH /api/documents/:documentId`
 24. Subscription billing — Stripe Checkout (Solo £29/Team £79/Pro £149, 14-day trial), webhook sync, Customer Portal, plan-based project limits, trial-ending and payment-failed notifications
 25. Read-only mode on cancellation — persistent red banner on all authenticated pages; "New Project" button redirects to billing when cancelled; `SubscriptionContext` exposes `isCancelled` app-wide
+26. Global voice command navigation — mic button in sidebar and desktop header bar; Web Speech API listens for commands like "go to projects" / "open compliance"; floating hint overlay with examples; toast feedback on match or no-match; hidden on unsupported browsers
 
 ## Uploads / File Serving
 
@@ -98,6 +99,21 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 - Vite proxy for `/uploads` was also added (`artifacts/sitesort/vite.config.ts`) as a belt-and-braces measure, but the `/api/uploads` path is the reliable one
 
 ## Session Log
+
+### 2026-05-22 (continued)
+
+#### Tasks completed
+- **Global voice command navigation** — mic button added to sidebar (below nav items) and desktop header bar (between bell and user avatar); uses Web Speech API (`SpeechRecognition`); listens for navigation commands and routes accordingly
+- **Command matching** — strips natural-language prefixes ("go to", "navigate to", "open", "show me", etc.) then matches against a command map covering all 11 nav destinations; also handles aliases (e.g. "home" → dashboard, "insurance" → compliance, "chat" → messages, "billing" → settings?tab=billing)
+- **UX feedback** — floating dark hint overlay appears at screen bottom when listening with example phrases; toast confirms successful navigation or shows "not recognised" error; button pulses orange with bouncing audio bars while active; hidden on unsupported browsers (Firefox)
+
+#### Key files modified
+- `artifacts/sitesort/src/components/layout/sidebar-layout.tsx` — `Mic`/`MicOff` icons, `voiceSupported` check, `VOICE_COMMANDS` map, `startVoiceCommand`/`stopVoiceCommand`/`toggleVoiceCommand` callbacks, Voice Command button in sidebar, mic icon in desktop header, floating hint overlay
+
+#### Notes for next session
+- Only project creation is blocked client-side on cancellation — other write actions (edit project, upload docs, etc.) are not yet restricted
+- File storage is still ephemeral (Replit filesystem) — R2/S3 migration needed for production
+- No message search or pagination yet
 
 ### 2026-05-21
 
