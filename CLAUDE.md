@@ -173,10 +173,31 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 - `artifacts/api-server/src/routes/billing.ts` — `POST /api/billing/portal` endpoint; `stripeCustomerId` saved in `handleSubscriptionUpsert`
 - `artifacts/sitesort/src/pages/settings/index.tsx` — `ManageSubscriptionButton` component + rendered in billing status banner
 
-#### Notes for next session
+#### Notes for next session (after portal)
 - Stripe Customer Portal must be activated in Stripe Dashboard → Settings → Billing → Customer portal before the portal URL will work
 - Only project count is gated — team member limits, read-only mode on cancellation, and other per-plan gates are not yet enforced
-- No in-app notification or email when a trial is ending or payment fails
+
+### 2026-05-22 (continued)
+
+#### Tasks completed
+- **Trial-ending notification** — `customer.subscription.trial_will_end` webhook event handled; fires 3 days before trial ends; creates a `trial_ending` notification for every admin in the company with the exact end date and a link to billing settings
+- **Notifications page — billing support** — `trial_ending` type added: orange `CreditCard` icon, orange background, clicks through to `/settings?tab=billing`; new **Billing** filter tab on the notifications page isolates billing notifications
+
+#### Key files modified
+- `artifacts/api-server/src/routes/billing.ts` — `handleTrialWillEnd()` helper + `customer.subscription.trial_will_end` case in webhook switch; imports `usersTable`, `notificationsTable`, `generateId`
+- `artifacts/sitesort/src/pages/notifications/index.tsx` — `trial_ending` icon/bg/link, `billing` filter tab
+
+#### Stripe webhook events now handled
+- `checkout.session.completed`
+- `customer.subscription.updated`
+- `customer.subscription.deleted`
+- `customer.subscription.trial_will_end`
+
+#### Notes for next session
+- Add `customer.subscription.trial_will_end` to the Stripe Dashboard webhook event list
+- No payment-failure notification yet (`invoice.payment_failed` would be the event)
+- Only project count is gated — read-only mode on cancellation and other per-plan limits not yet enforced
+- Messages page still has no editing or deletion
 
 ### 2026-05-14
 
