@@ -68,6 +68,8 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     "projects": "/projects", "project": "/projects",
     "subcontractors": "/subcontractors", "subcontractor": "/subcontractors",
     "compliance": "/compliance", "compliance center": "/compliance", "insurance": "/compliance",
+    "new invoice": "/invoices?new=1", "create invoice": "/invoices?new=1", "add invoice": "/invoices?new=1",
+    "find invoice": "/invoices?recall=1", "recall invoice": "/invoices?recall=1", "search invoices": "/invoices?recall=1",
     "invoices": "/invoices", "invoice": "/invoices",
     "qr": "/qr", "qr codes": "/qr",
     "team": "/team",

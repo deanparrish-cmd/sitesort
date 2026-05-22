@@ -130,7 +130,7 @@ export default function InvoicesPage() {
   const voiceSupported = typeof window !== "undefined" && !!(
     (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
   );
-  function toggleVoiceSearch() {
+  const toggleVoiceSearch = useCallback(() => {
     if (listening) { recognitionRef.current?.stop(); return; }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const SpeechRec = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
@@ -143,7 +143,7 @@ export default function InvoicesPage() {
     rec.onend = () => { setListening(false); recognitionRef.current = null; };
     rec.onerror = () => { setListening(false); recognitionRef.current = null; };
     rec.start(); recognitionRef.current = rec;
-  }
+  }, [listening]);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
     defaultValues: { direction: "inbound", currency: "GBP" },
@@ -157,6 +157,18 @@ export default function InvoicesPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Auto-open modal or activate voice search when navigated here via voice command
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("new") === "1") {
+      window.history.replaceState({}, "", "/invoices");
+      setModalOpen(true);
+    } else if (params.get("recall") === "1") {
+      window.history.replaceState({}, "", "/invoices");
+      toggleVoiceSearch();
+    }
+  }, [toggleVoiceSearch]);
 
   async function markPaid(id: string) {
     await apiFetch(`/api/invoices/${id}`, { method: "PATCH", body: JSON.stringify({ status: "paid" }) });
