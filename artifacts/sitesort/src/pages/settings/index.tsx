@@ -24,6 +24,7 @@ import {
   Camera,
   CreditCard,
   Sparkles,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetMe } from "@workspace/api-client-react";
@@ -479,6 +480,36 @@ const PLANS: {
   },
 ];
 
+function ManageSubscriptionButton() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const open = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/billing/portal", { method: "POST", headers: authHeaders() });
+      const data = await res.json();
+      if (!res.ok || !data.url) { setError(data.message ?? "Could not open billing portal."); return; }
+      window.location.href = data.url;
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <Button variant="outline" size="sm" onClick={open} disabled={loading} className="gap-2">
+        <ExternalLink className="w-3.5 h-3.5" />
+        {loading ? "Opening…" : "Manage subscription"}
+      </Button>
+      {error && <span className="text-xs text-red-600">{error}</span>}
+    </div>
+  );
+}
+
 type CompanyBilling = { subscriptionTier: string; subscriptionStatus: string };
 
 function BillingTab() {
@@ -557,6 +588,7 @@ function BillingTab() {
           {company.subscriptionStatus === "past_due" && (
             <span className="text-xs text-red-600 font-medium">Payment failed — please update your payment method via Stripe.</span>
           )}
+          <ManageSubscriptionButton />
         </div>
       )}
 

@@ -8,6 +8,7 @@ export const companiesTable = pgTable("companies", {
   size: text("size").notNull().default("1-10"),
   subscriptionTier: text("subscription_tier").notNull().default("free"),
   subscriptionStatus: text("subscription_status").notNull().default("active"),
+  stripeCustomerId: text("stripe_customer_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

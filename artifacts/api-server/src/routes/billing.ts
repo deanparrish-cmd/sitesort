@@ -120,6 +120,7 @@ async function handleSubscriptionUpsert(
     .set({
       subscriptionTier: plan,
       subscriptionStatus: mapSubscriptionStatus(subscription.status),
+      stripeCustomerId: subscription.customer as string,
     })
     .where(eq(companiesTable.id, companyId));
 }
@@ -192,6 +193,47 @@ router.post("/billing/webhook", async (req, res) => {
   }
 
   res.json({ received: true });
+});
+
+router.post("/billing/portal", authenticate, async (req, res) => {
+  const apiKey = process.env.STRIPE_SECRET_KEY;
+  if (!apiKey) {
+    res.status(500).json({ error: "STRIPE_SECRET_KEY is not set" });
+    return;
+  }
+
+  const stripe = new Stripe(apiKey);
+  const user = req.user!;
+
+  const companyRows = await db
+    .select({ stripeCustomerId: companiesTable.stripeCustomerId })
+    .from(companiesTable)
+    .where(eq(companiesTable.id, user.companyId))
+    .limit(1);
+
+  let customerId = companyRows[0]?.stripeCustomerId ?? null;
+
+  if (!customerId) {
+    const customers = await stripe.customers.list({ email: user.email, limit: 1 });
+    customerId = customers.data[0]?.id ?? null;
+  }
+
+  if (!customerId) {
+    res.status(404).json({ error: "no_subscription", message: "No Stripe customer found for this account." });
+    return;
+  }
+
+  try {
+    const session = await stripe.billingPortal.sessions.create({
+      customer: customerId,
+      return_url: `${APP_URL}/settings?tab=billing`,
+    });
+    res.json({ url: session.url });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("Stripe portal error:", message);
+    res.status(500).json({ error: message });
+  }
 });
 
 export default router;
