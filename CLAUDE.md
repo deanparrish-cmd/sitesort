@@ -193,11 +193,33 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 - `customer.subscription.deleted`
 - `customer.subscription.trial_will_end`
 
-#### Notes for next session
+#### Notes for next session (after trial notification)
 - Add `customer.subscription.trial_will_end` to the Stripe Dashboard webhook event list
-- No payment-failure notification yet (`invoice.payment_failed` would be the event)
 - Only project count is gated — read-only mode on cancellation and other per-plan limits not yet enforced
 - Messages page still has no editing or deletion
+
+### 2026-05-22 (continued)
+
+#### Tasks completed
+- **Payment-failure notification** — `invoice.payment_failed` webhook event handled; looks up company by `stripeCustomerId` (invoice objects don't carry `companyId` in metadata); creates a `payment_failed` notification for every admin prompting them to update their payment method
+- **Notifications page — payment_failed type** — red `CreditCard` icon, red background, clicks through to `/settings?tab=billing`; Billing filter tab now catches both `trial_ending` and `payment_failed`
+
+#### Key files modified
+- `artifacts/api-server/src/routes/billing.ts` — `handlePaymentFailed()` helper + `invoice.payment_failed` case in webhook switch
+- `artifacts/sitesort/src/pages/notifications/index.tsx` — `payment_failed` icon/bg/link, Billing filter updated
+
+#### Stripe webhook events now handled (full list)
+- `checkout.session.completed`
+- `customer.subscription.updated`
+- `customer.subscription.deleted`
+- `customer.subscription.trial_will_end`
+- `invoice.payment_failed`
+
+#### Notes for next session
+- Add all five webhook events to Stripe Dashboard → Webhooks → event list
+- Only project count is gated — read-only mode on cancellation not yet enforced
+- Messages page still has no editing or deletion
+- File storage is still ephemeral (Replit filesystem) — R2/S3 migration needed for production
 
 ### 2026-05-14
 
