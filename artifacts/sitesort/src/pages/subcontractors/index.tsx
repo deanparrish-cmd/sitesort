@@ -161,7 +161,7 @@ export default function SubcontractorsPage() {
     (window as unknown as Record<string, unknown>).webkitSpeechRecognition
   );
 
-  function toggleVoiceSearch() {
+  const toggleVoiceSearch = useCallback(() => {
     if (listening) {
       recognitionRef.current?.stop();
       return;
@@ -183,7 +183,7 @@ export default function SubcontractorsPage() {
     rec.onerror = () => { setListening(false); recognitionRef.current = null; };
     rec.start();
     recognitionRef.current = rec;
-  }
+  }, [listening]);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<AddFormData>();
   const { register: editReg, handleSubmit: editSubmit, reset: editReset } = useForm<EditFormData>();
@@ -196,6 +196,25 @@ export default function SubcontractorsPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Handle voice-command params: ?new=1 opens modal, ?find=1 activates mic, ?q=term pre-fills search
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("new") === "1") {
+      window.history.replaceState({}, "", "/subcontractors");
+      setAddOpen(true);
+      setAddError(null);
+      reset();
+      setSelectedTradesAdd([]);
+    } else if (params.get("q")) {
+      const term = params.get("q")!;
+      window.history.replaceState({}, "", "/subcontractors");
+      setSearch(term);
+    } else if (params.get("find") === "1") {
+      window.history.replaceState({}, "", "/subcontractors");
+      toggleVoiceSearch();
+    }
+  }, [toggleVoiceSearch, reset]);
 
   // Group subs by trade — a sub can appear in multiple trade groups
   const grouped = useMemo(() => {

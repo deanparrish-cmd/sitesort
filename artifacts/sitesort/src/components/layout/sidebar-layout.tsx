@@ -66,6 +66,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     "dashboard": "/dashboard", "home": "/dashboard",
     "new project": "/projects?new=1", "create project": "/projects?new=1", "add project": "/projects?new=1",
     "projects": "/projects", "project": "/projects",
+    "new subcontractor": "/subcontractors?new=1", "add subcontractor": "/subcontractors?new=1",
     "subcontractors": "/subcontractors", "subcontractor": "/subcontractors",
     "compliance": "/compliance", "compliance center": "/compliance", "insurance": "/compliance",
     "new invoice": "/invoices?new=1", "create invoice": "/invoices?new=1", "add invoice": "/invoices?new=1",
@@ -84,6 +85,14 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     const text = raw.toLowerCase()
       .replace(/^(go to|navigate to|open|show|show me|take me to|visit|switch to)\s+/i, "")
       .trim();
+
+    // "find/search [for] subcontractor[s] [optional term]" — encode inline term if present
+    const subFind = text.match(/^(?:find|search(?:\s+for)?)\s+(?:subcontractors?|subs?|contractors?)\s*(.*)/i);
+    if (subFind) {
+      const term = subFind[1].trim();
+      return term ? `/subcontractors?q=${encodeURIComponent(term)}` : `/subcontractors?find=1`;
+    }
+
     if (VOICE_COMMANDS[text]) return VOICE_COMMANDS[text];
     for (const [key, path] of Object.entries(VOICE_COMMANDS)) {
       if (text.includes(key)) return path;
