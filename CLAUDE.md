@@ -118,10 +118,28 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 - `artifacts/sitesort/src/pages/settings/index.tsx` — Billing tab with pricing grid and checkout flow
 - `package.json` / `pnpm-lock.yaml` — `stripe` and `@stripe/stripe-js` dependencies added
 
-#### Notes for next session
-- No Stripe webhook handler yet — subscription activation/cancellation events are not reflected in the DB; a `subscriptionStatus` column on companies (or a separate subscriptions table) would be needed to gate features
+#### Notes for next session (after billing tab)
 - `STRIPE_SECRET_KEY` env var must be set for checkout to work; currently returns 500 if missing
 - No upgrade/downgrade flow between plans; users can only initiate a new checkout
+
+### 2026-05-22
+
+#### Tasks completed
+- **Stripe webhook handler** — `POST /api/billing/webhook` added; verifies Stripe signature when `STRIPE_WEBHOOK_SECRET` is set (skips verification in dev if unset); handles three events:
+  - `checkout.session.completed` — fetches the resulting subscription and writes tier + status to the companies table
+  - `customer.subscription.updated` — syncs status changes (trialing → active, active → past_due, etc.) and plan tier
+  - `customer.subscription.deleted` — resets company to `subscriptionTier: free`, `subscriptionStatus: cancelled`
+- **Raw body middleware** — `express.raw({ type: 'application/json' })` registered for `/api/billing/webhook` before `express.json()` so Stripe signature verification receives the unmodified body
+
+#### Key files modified
+- `artifacts/api-server/src/routes/billing.ts` — webhook handler + `mapSubscriptionStatus` / `handleSubscriptionUpsert` / `handleSubscriptionDeleted` helpers
+- `artifacts/api-server/src/app.ts` — raw body middleware for webhook route
+
+#### Notes for next session
+- Set `STRIPE_WEBHOOK_SECRET` env var (from Stripe Dashboard → Webhooks → signing secret) to enable signature verification in production
+- Events to subscribe to in Stripe Dashboard: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`
+- No upgrade/downgrade flow yet — users can only initiate a new checkout; switching plans would need a Stripe portal or custom flow
+- `subscriptionTier` and `subscriptionStatus` on the companies table are now kept in sync, but no feature-gating UI has been wired up yet
 
 ### 2026-05-14
 
