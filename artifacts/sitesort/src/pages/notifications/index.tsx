@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   CheckCheck,
   Check,
+  CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -25,7 +26,7 @@ type Notification = {
   createdAt: string;
 };
 
-type Filter = "all" | "unread" | "messages" | "documents" | "safety";
+type Filter = "all" | "unread" | "messages" | "documents" | "safety" | "billing";
 
 function authHeaders(): Record<string, string> {
   const t = localStorage.getItem("sitesort_token");
@@ -54,6 +55,8 @@ function notifIcon(type: string) {
       return <FileText className="w-5 h-5 text-indigo-500" />;
     case "safety_concern":
       return <AlertTriangle className="w-5 h-5 text-amber-500" />;
+    case "trial_ending":
+      return <CreditCard className="w-5 h-5 text-orange-500" />;
     default:
       return <Bell className="w-5 h-5 text-muted-foreground" />;
   }
@@ -67,6 +70,8 @@ function notifBg(type: string) {
       return "bg-indigo-100";
     case "safety_concern":
       return "bg-amber-100";
+    case "trial_ending":
+      return "bg-orange-100";
     default:
       return "bg-muted";
   }
@@ -76,6 +81,7 @@ function notifLink(n: Notification): string | null {
   if (n.type === "new_message") return "/messages";
   if (n.type === "document_uploaded" && n.relatedEntityId) return `/projects/${n.relatedEntityId}`;
   if (n.type === "safety_concern" && n.relatedEntityId) return `/projects/${n.relatedEntityId}`;
+  if (n.type === "trial_ending") return "/settings?tab=billing";
   return null;
 }
 
@@ -85,6 +91,7 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: "messages", label: "Messages" },
   { key: "documents", label: "Documents" },
   { key: "safety", label: "Safety" },
+  { key: "billing", label: "Billing" },
 ];
 
 function filterMatch(n: Notification, f: Filter) {
@@ -93,6 +100,7 @@ function filterMatch(n: Notification, f: Filter) {
   if (f === "messages") return n.type === "new_message";
   if (f === "documents") return n.type === "document_uploaded";
   if (f === "safety") return n.type === "safety_concern";
+  if (f === "billing") return n.type === "trial_ending";
   return true;
 }
 

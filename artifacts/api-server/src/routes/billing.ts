@@ -1,9 +1,10 @@
 import { Router } from "express";
 import Stripe from "stripe";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
 import { db } from "@workspace/db";
-import { companiesTable } from "@workspace/db/schema";
+import { companiesTable, usersTable, notificationsTable } from "@workspace/db/schema";
+import { generateId } from "../lib/id";
 
 const router = Router();
 
@@ -137,6 +138,33 @@ async function handleSubscriptionDeleted(
     .where(eq(companiesTable.id, companyId));
 }
 
+async function handleTrialWillEnd(subscription: Stripe.Subscription): Promise<void> {
+  const companyId = subscription.metadata?.companyId;
+  if (!companyId) return;
+
+  const admins = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(and(eq(usersTable.companyId, companyId), eq(usersTable.role, "admin")));
+
+  if (admins.length === 0) return;
+
+  const trialEnd = subscription.trial_end
+    ? new Date(subscription.trial_end * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long" })
+    : "soon";
+
+  await db.insert(notificationsTable).values(
+    admins.map(admin => ({
+      id: generateId(),
+      userId: admin.id,
+      type: "trial_ending",
+      title: "Your free trial ends soon",
+      message: `Your SiteSort trial ends on ${trialEnd}. Add a payment method in billing settings to keep full access.`,
+      relatedEntityType: "billing",
+    })),
+  );
+}
+
 router.post("/billing/webhook", async (req, res) => {
   const apiKey = process.env.STRIPE_SECRET_KEY;
   if (!apiKey) {
@@ -182,6 +210,11 @@ router.post("/billing/webhook", async (req, res) => {
       case "customer.subscription.deleted": {
         const subscription = event.data.object as Stripe.Subscription;
         await handleSubscriptionDeleted(subscription);
+        break;
+      }
+      case "customer.subscription.trial_will_end": {
+        const subscription = event.data.object as Stripe.Subscription;
+        await handleTrialWillEnd(subscription);
         break;
       }
     }
