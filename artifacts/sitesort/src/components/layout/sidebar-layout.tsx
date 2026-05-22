@@ -16,6 +16,8 @@ import {
   ShieldAlert,
   MessageSquare,
   AlertCircle,
+  Mic,
+  MicOff,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetMe, useLogout } from "@workspace/api-client-react";
@@ -53,6 +55,93 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
   const { toast } = useToast();
   const { isCancelled } = useSubscription();
   const [unreadMsgCount, setUnreadMsgCount] = useState(0);
+
+  // Voice commands
+  const voiceSupported = typeof window !== "undefined" && !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
+  const [voiceListening, setVoiceListening] = useState(false);
+  const [voiceHint, setVoiceHint] = useState(false);
+  const recognitionRef = useRef<any>(null);
+
+  const VOICE_COMMANDS: Record<string, string> = {
+    "dashboard": "/dashboard", "home": "/dashboard",
+    "projects": "/projects", "project": "/projects",
+    "subcontractors": "/subcontractors", "subcontractor": "/subcontractors",
+    "compliance": "/compliance", "compliance center": "/compliance", "insurance": "/compliance",
+    "invoices": "/invoices", "invoice": "/invoices",
+    "qr": "/qr", "qr codes": "/qr",
+    "team": "/team",
+    "messages": "/messages", "message": "/messages", "chat": "/messages",
+    "notifications": "/notifications", "alerts": "/notifications",
+    "settings": "/settings", "profile": "/settings",
+    "billing": "/settings?tab=billing", "subscription": "/settings?tab=billing",
+    "admin": "/admin",
+  };
+
+  const matchVoiceCommand = (raw: string): string | null => {
+    const text = raw.toLowerCase()
+      .replace(/^(go to|navigate to|open|show|show me|take me to|visit|switch to)\s+/i, "")
+      .trim();
+    if (VOICE_COMMANDS[text]) return VOICE_COMMANDS[text];
+    for (const [key, path] of Object.entries(VOICE_COMMANDS)) {
+      if (text.includes(key)) return path;
+    }
+    return null;
+  };
+
+  const stopVoiceCommand = useCallback(() => {
+    recognitionRef.current?.stop();
+    setVoiceListening(false);
+    setVoiceHint(false);
+  }, []);
+
+  const startVoiceCommand = useCallback(() => {
+    if (!voiceSupported) return;
+    const SpeechRec = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
+    const recognition = new SpeechRec();
+    recognition.lang = "en-GB";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognitionRef.current = recognition;
+
+    recognition.onresult = (event: any) => {
+      const transcript: string = event.results[0][0].transcript;
+      const path = matchVoiceCommand(transcript);
+      if (path) {
+        setLocation(path);
+        setIsMobileOpen(false);
+        const label = Object.entries(VOICE_COMMANDS).find(([, p]) => p === path)?.[0] ?? path;
+        toast({ title: `Navigating to ${label}`, description: `Heard: "${transcript}"` });
+      } else {
+        toast({ title: "Command not recognised", description: `"${transcript}" — try "go to projects" or "open compliance"`, variant: "destructive" });
+      }
+      setVoiceListening(false);
+      setVoiceHint(false);
+    };
+
+    recognition.onerror = (e: any) => {
+      if (e.error !== "no-speech" && e.error !== "aborted") {
+        toast({ title: "Voice error", description: "Could not hear a command. Please try again.", variant: "destructive" });
+      }
+      setVoiceListening(false);
+      setVoiceHint(false);
+    };
+
+    recognition.onend = () => {
+      setVoiceListening(false);
+      setVoiceHint(false);
+    };
+
+    recognition.start();
+    setVoiceListening(true);
+    setVoiceHint(true);
+  }, [voiceSupported, setLocation, toast]);
+
+  const toggleVoiceCommand = useCallback(() => {
+    if (voiceListening) stopVoiceCommand();
+    else startVoiceCommand();
+  }, [voiceListening, startVoiceCommand, stopVoiceCommand]);
+
+  useEffect(() => () => { recognitionRef.current?.stop(); }, []);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const prevUnreadRef = useRef(0);
 
@@ -219,6 +308,34 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
+        {voiceSupported && (
+          <div className="px-4 pb-3">
+            <button
+              onClick={toggleVoiceCommand}
+              className={cn(
+                "flex w-full items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200",
+                voiceListening
+                  ? "bg-orange-500 text-white"
+                  : "bg-primary/10 text-primary hover:bg-primary/20"
+              )}
+            >
+              {voiceListening
+                ? <MicOff className="w-5 h-5 shrink-0" />
+                : <Mic className="w-5 h-5 shrink-0" />}
+              <span className="flex-1 text-left">
+                {voiceListening ? "Listening…" : "Voice Command"}
+              </span>
+              {voiceListening && (
+                <span className="flex gap-0.5 items-end h-4">
+                  {[0, 150, 300].map(d => (
+                    <span key={d} className="w-1 bg-white rounded-full animate-bounce" style={{ height: "60%", animationDelay: `${d}ms` }} />
+                  ))}
+                </span>
+              )}
+            </button>
+          </div>
+        )}
+
         <div className="p-4 border-t">
           <div className="flex items-center gap-3 mb-4 px-2">
             <Avatar src={(user as any)?.avatarUrl} name={user?.name} size="md" />
@@ -240,6 +357,20 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 max-h-screen overflow-y-auto">
         <header className="hidden md:flex h-16 items-center justify-end gap-2 px-8 border-b bg-card/50 backdrop-blur-md sticky top-0 z-30">
+          {voiceSupported && (
+            <button
+              onClick={toggleVoiceCommand}
+              title={voiceListening ? "Stop listening" : "Voice command"}
+              className={cn(
+                "p-2 rounded-lg transition-colors",
+                voiceListening
+                  ? "bg-orange-500 text-white animate-pulse"
+                  : "text-muted-foreground hover:text-primary hover:bg-muted"
+              )}
+            >
+              {voiceListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            </button>
+          )}
           <Link href="/notifications" className="relative p-2 text-muted-foreground hover:text-primary transition-colors">
             <Bell className="w-5 h-5" />
             {unreadNotifCount > 0 && (
@@ -301,10 +432,28 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
 
       {/* Mobile backdrop */}
       {isMobileOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-primary/20 backdrop-blur-sm z-30 md:hidden"
           onClick={() => setIsMobileOpen(false)}
         />
+      )}
+
+      {/* Voice command hint overlay */}
+      {voiceHint && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white rounded-2xl shadow-2xl px-6 py-4 max-w-sm w-[calc(100vw-3rem)] animate-in fade-in slide-in-from-bottom-4 duration-200">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center shrink-0 animate-pulse">
+              <Mic className="w-4 h-4 text-white" />
+            </div>
+            <p className="font-semibold text-sm">Listening for a command…</p>
+            <button onClick={stopVoiceCommand} className="ml-auto text-gray-400 hover:text-white">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 leading-relaxed">
+            Try: <span className="text-gray-200">"go to projects"</span>, <span className="text-gray-200">"open compliance"</span>, <span className="text-gray-200">"navigate to invoices"</span>, <span className="text-gray-200">"show messages"</span>
+          </p>
+        </div>
       )}
     </div>
   );
