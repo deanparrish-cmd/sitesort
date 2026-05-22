@@ -215,11 +215,34 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 - `customer.subscription.trial_will_end`
 - `invoice.payment_failed`
 
-#### Notes for next session
+#### Notes for next session (after payment failure)
 - Add all five webhook events to Stripe Dashboard → Webhooks → event list
 - Only project count is gated — read-only mode on cancellation not yet enforced
-- Messages page still has no editing or deletion
 - File storage is still ephemeral (Replit filesystem) — R2/S3 migration needed for production
+
+### 2026-05-22 (continued)
+
+#### Tasks completed
+- **Message editing** — own message bubbles show a pencil icon on hover; clicking opens an inline input pre-filled with current content; Enter saves, Escape cancels; edited messages show a faint `(edited)` label; backed by `PATCH /api/messages/:id`
+- **Message deletion** — trash icon on hover shows an inline "Delete this message? Yes / No" confirm; confirmed deletes remove the message from the thread and refresh the conversation list; backed by `DELETE /api/messages/:id`
+- **`editedAt` column** — added to `messages` table and pushed to DB; returned in thread API response
+
+#### DB schema changes
+- `messages` table: added `edited_at` column
+
+#### New API endpoints
+- `PATCH /api/messages/:id` — edit own message content; sets `editedAt`; 404 if not found or not sender
+- `DELETE /api/messages/:id` — delete own message; 404 if not found or not sender
+
+#### Key files modified
+- `lib/db/src/schema/messages.ts` — `editedAt` column added
+- `artifacts/api-server/src/routes/messages.ts` — PATCH + DELETE endpoints; `editedAt` in thread response
+- `artifacts/sitesort/src/pages/messages/index.tsx` — hover actions, inline edit input, inline delete confirm, `(edited)` label
+
+#### Notes for next session
+- Only project count is gated — read-only mode on cancellation not yet enforced
+- File storage is still ephemeral (Replit filesystem) — R2/S3 migration needed for production
+- No message search or pagination yet
 
 ### 2026-05-14
 
