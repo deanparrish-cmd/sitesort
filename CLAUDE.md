@@ -97,6 +97,32 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 
 ## Session Log
 
+### 2026-05-21
+
+#### Tasks completed
+- **Billing tab in Settings** — new "Billing" tab added to `/settings`; displays three pricing cards (Solo/Team/Pro) and initiates a Stripe Checkout session on click
+- **Stripe integration** — `@stripe/stripe-js` and `stripe` SDK installed; `POST /api/billing/checkout` endpoint creates a Stripe Checkout session in subscription mode; redirects to Stripe-hosted checkout; success/cancel redirect back to `/settings?checkout=success|cancelled`
+- **Three subscription plans**:
+  - **Solo** — £29/month, 1 project
+  - **Team** — £79/month, up to 5 projects
+  - **Pro** — £149/month, unlimited projects
+- **14-day free trial** — all plans configured with `trial_period_days: 14`; payment method collected upfront; trial auto-cancels if no payment method on file at trial end
+- **Checkout success/cancel feedback** — settings page reads `?checkout=` query param on load and shows appropriate UI state
+
+#### New/updated API endpoints
+- `POST /api/billing/checkout` — creates a Stripe Checkout session for the selected plan (`solo`|`team`|`pro`); requires auth; returns `{ url }` for redirect
+
+#### Key files added/modified
+- `artifacts/api-server/src/routes/billing.ts` — new billing route with PLANS config and Stripe session creation
+- `artifacts/api-server/src/routes/index.ts` — billing router registered
+- `artifacts/sitesort/src/pages/settings/index.tsx` — Billing tab with pricing grid and checkout flow
+- `package.json` / `pnpm-lock.yaml` — `stripe` and `@stripe/stripe-js` dependencies added
+
+#### Notes for next session
+- No Stripe webhook handler yet — subscription activation/cancellation events are not reflected in the DB; a `subscriptionStatus` column on companies (or a separate subscriptions table) would be needed to gate features
+- `STRIPE_SECRET_KEY` env var must be set for checkout to work; currently returns 500 if missing
+- No upgrade/downgrade flow between plans; users can only initiate a new checkout
+
 ### 2026-05-14
 
 #### Tasks completed
