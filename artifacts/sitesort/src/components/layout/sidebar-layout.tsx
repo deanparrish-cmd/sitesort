@@ -65,6 +65,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
   const VOICE_COMMANDS: Record<string, string> = {
     "dashboard": "/dashboard", "home": "/dashboard",
     "new project": "/projects?new=1", "create project": "/projects?new=1", "add project": "/projects?new=1",
+    "log safety issue": "/projects?safety=1", "report safety issue": "/projects?safety=1", "log hazard": "/projects?safety=1", "report hazard": "/projects?safety=1", "safety issue": "/projects?safety=1",
     "projects": "/projects", "project": "/projects",
     "new message": "/messages?new=1", "send message": "/messages?new=1", "compose message": "/messages?new=1",
     "dictate message": "/messages?dictate=1", "dictate a message": "/messages?dictate=1",

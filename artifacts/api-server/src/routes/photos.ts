@@ -50,8 +50,8 @@ router.get("/projects/:projectId/photos", authenticate, async (req, res) => {
 router.post("/projects/:projectId/photos", authenticate, async (req, res) => {
   try {
     const { photoUrl, category, description, zone, latitude, longitude } = req.body;
-    if (!photoUrl || !category) {
-      res.status(400).json({ error: "validation_error", message: "photoUrl and category required" });
+    if (!category) {
+      res.status(400).json({ error: "validation_error", message: "category required" });
       return;
     }
 
@@ -62,7 +62,7 @@ router.post("/projects/:projectId/photos", authenticate, async (req, res) => {
       id,
       projectId: req.params.projectId,
       uploadedBy: req.user!.id,
-      photoUrl,
+      photoUrl: photoUrl ?? null,
       category,
       description: description ?? null,
       zone: zone ?? null,

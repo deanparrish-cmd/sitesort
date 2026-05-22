@@ -8,7 +8,7 @@ export const photosTable = pgTable("photos", {
   id: text("id").primaryKey(),
   projectId: text("project_id").notNull().references(() => projectsTable.id),
   uploadedBy: text("uploaded_by").notNull().references(() => usersTable.id),
-  photoUrl: text("photo_url").notNull(),
+  photoUrl: text("photo_url"),
   category: text("category").notNull(),
   description: text("description"),
   zone: text("zone"),

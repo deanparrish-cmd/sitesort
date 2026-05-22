@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, Building, MapPin, Calendar, Mic, MicOff, Sparkles } from "lucide-react";
+import { Search, Plus, Building, MapPin, Calendar, Mic, MicOff, Sparkles, AlertTriangle, CheckCircle2, Camera, Loader2 } from "lucide-react";
 import { useListProjects, useCreateProject } from "@workspace/api-client-react";
 import { useSubscription } from "@/contexts/subscription";
 import { useForm } from "react-hook-form";
@@ -29,6 +29,77 @@ export default function ProjectsList() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
 
+  // Safety issue state
+  const [safetyOpen, setSafetyOpen] = useState(false);
+  const [safetyProjectId, setSafetyProjectId] = useState("");
+  const [safetyDesc, setSafetyDesc] = useState("");
+  const [safetyZone, setSafetyZone] = useState("");
+  const [safetyPhotoUrl, setSafetyPhotoUrl] = useState<string | null>(null);
+  const [safetySubmitting, setSafetySubmitting] = useState(false);
+  const [safetyUploading, setSafetyUploading] = useState(false);
+  const [safetyError, setSafetyError] = useState<string | null>(null);
+  const [safetyRefNum, setSafetyRefNum] = useState<string | null>(null);
+  const [safetyDictating, setSafetyDictating] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const safetyDictateRef = useRef<any>(null);
+  const safetyFileRef = useRef<HTMLInputElement>(null);
+
+  const toggleSafetyDictate = useCallback(() => {
+    if (safetyDictating) { safetyDictateRef.current?.stop(); return; }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SpeechRec = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
+    if (!SpeechRec) return;
+    const rec = new SpeechRec();
+    rec.continuous = true; rec.interimResults = false; rec.lang = "en-GB";
+    rec.onstart = () => setSafetyDictating(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rec.onresult = (e: any) => {
+      const t = Array.from(e.results as any[]).map((r: any) => r[0].transcript).join(" ");
+      setSafetyDesc(prev => prev + (prev ? " " : "") + t);
+    };
+    rec.onend = () => { setSafetyDictating(false); safetyDictateRef.current = null; };
+    rec.onerror = () => { setSafetyDictating(false); safetyDictateRef.current = null; };
+    rec.start(); safetyDictateRef.current = rec;
+  }, [safetyDictating]);
+
+  const closeSafetyModal = useCallback(() => {
+    safetyDictateRef.current?.stop();
+    setSafetyOpen(false); setSafetyProjectId(""); setSafetyDesc(""); setSafetyZone("");
+    setSafetyPhotoUrl(null); setSafetyError(null); setSafetyRefNum(null); setSafetyDictating(false);
+  }, []);
+
+  const uploadSafetyPhoto = useCallback(async (file: File) => {
+    setSafetyUploading(true);
+    const token = localStorage.getItem("sitesort_token");
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch("/api/upload", { method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : {}, body: fd });
+    if (res.ok) { const { url } = await res.json(); setSafetyPhotoUrl(url); }
+    setSafetyUploading(false);
+  }, []);
+
+  const submitSafetyIssue = useCallback(async () => {
+    if (!safetyProjectId || !safetyDesc.trim()) { setSafetyError("Please select a project and describe the issue."); return; }
+    setSafetySubmitting(true); setSafetyError(null);
+    const token = localStorage.getItem("sitesort_token");
+    const res = await fetch(`/api/projects/${safetyProjectId}/photos`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ category: "safety_concern", description: safetyDesc.trim(), zone: safetyZone.trim() || null, photoUrl: safetyPhotoUrl }),
+    });
+    if (res.ok) { const d = await res.json(); setSafetyRefNum(d.referenceNumber); }
+    else setSafetyError("Failed to log safety issue. Please try again.");
+    setSafetySubmitting(false);
+  }, [safetyProjectId, safetyDesc, safetyZone, safetyPhotoUrl]);
+
+  // Auto-select project if only one active project
+  useEffect(() => {
+    if (safetyOpen && projects && !safetyProjectId) {
+      const active = projects.filter((p: any) => p.status === "active");
+      if (active.length === 1) setSafetyProjectId(active[0].id);
+    }
+  }, [safetyOpen, projects, safetyProjectId]);
+
   // Auto-open create modal when navigated here via voice command (?new=1)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -38,6 +109,15 @@ export default function ProjectsList() {
       else setIsModalOpen(true);
     }
   }, [isCancelled, setLocation]);
+
+  // Auto-open safety modal via voice command (?safety=1)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("safety") === "1") {
+      window.history.replaceState({}, "", "/projects");
+      setSafetyOpen(true);
+    }
+  }, []);
   const voiceSupported = typeof window !== "undefined" && !!(
     (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
   );
@@ -231,6 +311,104 @@ export default function ProjectsList() {
             <Button type="submit" variant="accent" isLoading={createMutation.isPending}>Create Project</Button>
           </DialogFooter>
         </form>
+      </Dialog>
+      {/* Hidden file input for safety photo */}
+      <input ref={safetyFileRef} type="file" accept="image/*,.pdf" className="hidden"
+        onChange={e => { const f = e.target.files?.[0]; if (f) uploadSafetyPhoto(f); e.target.value = ""; }} />
+
+      {/* Log Safety Issue modal */}
+      <Dialog open={safetyOpen} onOpenChange={open => { if (!open) closeSafetyModal(); }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-orange-500" />
+            Log Safety Issue
+          </DialogTitle>
+        </DialogHeader>
+
+        {safetyRefNum ? (
+          <div className="flex flex-col items-center py-8 gap-3">
+            <CheckCircle2 className="w-12 h-12 text-emerald-500" />
+            <p className="font-semibold text-emerald-600">Safety issue logged</p>
+            <p className="text-sm text-muted-foreground">Reference: <span className="font-mono font-bold">{safetyRefNum}</span></p>
+            <p className="text-xs text-muted-foreground text-center">Project managers have been notified.</p>
+          </div>
+        ) : (
+          <div className="space-y-4 pt-2">
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Project</label>
+              <select value={safetyProjectId} onChange={e => setSafetyProjectId(e.target.value)}
+                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                <option value="">Select a project…</option>
+                {projects?.filter((p: any) => p.status === "active").map((p: any) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Description</label>
+              <div className="relative">
+                <textarea
+                  value={safetyDesc}
+                  onChange={e => setSafetyDesc(e.target.value)}
+                  placeholder={safetyDictating ? "Listening… describe the safety issue" : "Describe the hazard or safety concern…"}
+                  rows={3}
+                  className={cn("w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring pr-10",
+                    safetyDictating && "border-orange-400 ring-1 ring-orange-400/60")}
+                />
+                {voiceSupported && (
+                  <button type="button" onClick={toggleSafetyDictate}
+                    title={safetyDictating ? "Stop dictating" : "Dictate description"}
+                    className={cn("absolute right-2 top-2 p-1 rounded transition-colors",
+                      safetyDictating ? "text-orange-500 animate-pulse" : "text-muted-foreground hover:text-primary")}>
+                    {safetyDictating ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">
+                Zone / Location <span className="text-muted-foreground font-normal">(optional)</span>
+              </label>
+              <Input value={safetyZone} onChange={e => setSafetyZone(e.target.value)} placeholder="e.g. Level 2, East stairwell" />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">
+                Photo <span className="text-muted-foreground font-normal">(optional)</span>
+              </label>
+              {safetyPhotoUrl ? (
+                <div className="flex items-center gap-2 text-sm text-emerald-600">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Photo attached</span>
+                  <button onClick={() => setSafetyPhotoUrl(null)} className="ml-2 text-xs text-muted-foreground hover:text-destructive">Remove</button>
+                </div>
+              ) : (
+                <button type="button" disabled={safetyUploading} onClick={() => safetyFileRef.current?.click()}
+                  className="flex items-center gap-2 text-sm text-primary border border-dashed border-primary/40 rounded-lg px-4 py-2.5 hover:bg-primary/5 transition-colors w-full justify-center">
+                  {safetyUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
+                  {safetyUploading ? "Uploading…" : "Attach photo"}
+                </button>
+              )}
+            </div>
+
+            {safetyError && <p className="text-sm text-destructive">{safetyError}</p>}
+          </div>
+        )}
+
+        <DialogFooter>
+          {safetyRefNum ? (
+            <Button variant="accent" onClick={closeSafetyModal}>Done</Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={closeSafetyModal}>Cancel</Button>
+              <Button variant="accent" onClick={submitSafetyIssue} disabled={safetySubmitting}>
+                {safetySubmitting ? "Logging…" : "Log Safety Issue"}
+              </Button>
+            </>
+          )}
+        </DialogFooter>
       </Dialog>
     </SidebarLayout>
   );
