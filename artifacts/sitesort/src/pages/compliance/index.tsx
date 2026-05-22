@@ -90,8 +90,10 @@ export default function CompliancePage() {
       .then(setSubs);
   }, [loadCompliance]);
 
+  const [highlightUpload, setHighlightUpload] = useState(false);
+
   // ── voice search ──
-  function toggleVoice() {
+  const toggleVoice = useCallback(() => {
     if (listening) { recognitionRef.current?.stop(); return; }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const SpeechRec = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
@@ -104,7 +106,24 @@ export default function CompliancePage() {
     rec.onend = () => { setListening(false); recognitionRef.current = null; };
     rec.onerror = () => { setListening(false); recognitionRef.current = null; };
     rec.start(); recognitionRef.current = rec;
-  }
+  }, [listening]);
+
+  // ── voice command param handling ──
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("upload") === "1") {
+      window.history.replaceState({}, "", "/compliance");
+      setHighlightUpload(true);
+      setTimeout(() => setHighlightUpload(false), 4000);
+    } else if (params.get("q")) {
+      const term = params.get("q")!;
+      window.history.replaceState({}, "", "/compliance");
+      setSearch(term);
+    } else if (params.get("find") === "1") {
+      window.history.replaceState({}, "", "/compliance");
+      toggleVoice();
+    }
+  }, [toggleVoice]);
 
   // ── file upload ──
   const uploadFile = useCallback(async (file: File, prefilledSubId?: string) => {
@@ -248,13 +267,20 @@ export default function CompliancePage() {
 
       {/* ── Upload tip banner ── */}
       <div
-        className="flex items-center gap-3 p-4 mb-6 bg-primary/5 border border-primary/20 rounded-xl text-sm cursor-pointer hover:bg-primary/10 transition-colors"
+        className={cn(
+          "flex items-center gap-3 p-4 mb-6 border rounded-xl text-sm cursor-pointer transition-all",
+          highlightUpload
+            ? "bg-primary/15 border-primary shadow-lg shadow-primary/20 animate-pulse ring-2 ring-primary/40"
+            : "bg-primary/5 border-primary/20 hover:bg-primary/10"
+        )}
         onClick={() => fileInputRef.current?.click()}
       >
-        <Upload className="w-5 h-5 text-primary shrink-0" />
+        <Upload className={cn("w-5 h-5 shrink-0", highlightUpload ? "text-primary" : "text-primary")} />
         <p className="text-muted-foreground flex-1">
-          <span className="font-semibold text-foreground">Drag &amp; drop</span> insurance certs or documents from your desktop, email or WhatsApp — or{" "}
-          <span className="text-primary underline font-medium">browse files</span>. Paste (⌘V) also works.
+          {highlightUpload
+            ? <span className="font-semibold text-primary">Tap here to select your compliance document</span>
+            : <><span className="font-semibold text-foreground">Drag &amp; drop</span> insurance certs or documents from your desktop, email or WhatsApp — or{" "}<span className="text-primary underline font-medium">browse files</span>. Paste (⌘V) also works.</>
+          }
         </p>
         <input
           ref={fileInputRef}

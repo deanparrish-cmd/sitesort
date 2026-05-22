@@ -93,6 +93,17 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       return term ? `/subcontractors?q=${encodeURIComponent(term)}` : `/subcontractors?find=1`;
     }
 
+    // "upload/add compliance/certificate/insurance cert" → prompt upload on compliance page
+    const compUpload = text.match(/^(?:upload|add)\s+(?:compliance|certificate|cert|insurance cert(?:ificate)?)\b/i);
+    if (compUpload) return "/compliance?upload=1";
+
+    // "find/recall/search compliance/certificate [optional term]"
+    const compFind = text.match(/^(?:find|recall|search(?:\s+for)?)\s+(?:compliance|certificate|cert|insurance)\s*(.*)/i);
+    if (compFind) {
+      const term = compFind[1].trim();
+      return term ? `/compliance?q=${encodeURIComponent(term)}` : `/compliance?find=1`;
+    }
+
     if (VOICE_COMMANDS[text]) return VOICE_COMMANDS[text];
     for (const [key, path] of Object.entries(VOICE_COMMANDS)) {
       if (text.includes(key)) return path;
