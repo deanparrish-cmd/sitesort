@@ -66,6 +66,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     "dashboard": "/dashboard", "home": "/dashboard",
     "new project": "/projects?new=1", "create project": "/projects?new=1", "add project": "/projects?new=1",
     "log safety issue": "/projects?safety=1", "report safety issue": "/projects?safety=1", "log hazard": "/projects?safety=1", "report hazard": "/projects?safety=1", "safety issue": "/projects?safety=1",
+    "add permit": "/projects?permit=1", "new permit": "/projects?permit=1", "create permit": "/projects?permit=1",
     "projects": "/projects", "project": "/projects",
     "new message": "/messages?new=1", "send message": "/messages?new=1", "compose message": "/messages?new=1",
     "dictate message": "/messages?dictate=1", "dictate a message": "/messages?dictate=1",
@@ -105,6 +106,13 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     if (compFind) {
       const term = compFind[1].trim();
       return term ? `/compliance?q=${encodeURIComponent(term)}` : `/compliance?find=1`;
+    }
+
+    // "find/recall/search permit[s] [optional term]" → compliance page filtered
+    const permitFind = text.match(/^(?:find|recall|search(?:\s+for)?)\s+(?:permits?)\s*(.*)/i);
+    if (permitFind) {
+      const term = permitFind[1].trim();
+      return term ? `/compliance?q=${encodeURIComponent(term)}` : `/compliance?q=permit`;
     }
 
     // "send/write/compose [a] message to [name]"

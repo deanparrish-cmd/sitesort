@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, Building, MapPin, Calendar, Mic, MicOff, Sparkles, AlertTriangle, CheckCircle2, Camera, Loader2 } from "lucide-react";
+import { Search, Plus, Building, MapPin, Calendar, Mic, MicOff, Sparkles, AlertTriangle, CheckCircle2, Camera, Loader2, ClipboardCheck } from "lucide-react";
 import { useListProjects, useCreateProject } from "@workspace/api-client-react";
 import { useSubscription } from "@/contexts/subscription";
 import { useForm } from "react-hook-form";
@@ -92,13 +92,86 @@ export default function ProjectsList() {
     setSafetySubmitting(false);
   }, [safetyProjectId, safetyDesc, safetyZone, safetyPhotoUrl]);
 
-  // Auto-select project if only one active project
+  // Auto-select project if only one active project (safety)
   useEffect(() => {
     if (safetyOpen && projects && !safetyProjectId) {
       const active = projects.filter((p: any) => p.status === "active");
       if (active.length === 1) setSafetyProjectId(active[0].id);
     }
   }, [safetyOpen, projects, safetyProjectId]);
+
+  // ── Permit modal state ──
+  const PERMIT_TYPES = ["Hot Work", "Scaffolding", "Working at Height", "Confined Space Entry", "Excavation", "Electrical Work", "Demolition", "Asbestos Removal", "Other"];
+
+  const [permitOpen, setPermitOpen] = useState(false);
+  const [permitProjectId, setPermitProjectId] = useState("");
+  const [permitType, setPermitType] = useState("Hot Work");
+  const [permitDesc, setPermitDesc] = useState("");
+  const [permitResponsibleId, setPermitResponsibleId] = useState("");
+  const [permitStart, setPermitStart] = useState("");
+  const [permitExpiry, setPermitExpiry] = useState("");
+  const [permitSubmitting, setPermitSubmitting] = useState(false);
+  const [permitError, setPermitError] = useState<string | null>(null);
+  const [permitSuccess, setPermitSuccess] = useState(false);
+  const [permitDictating, setPermitDictating] = useState(false);
+  const [teamUsers, setTeamUsers] = useState<{ id: string; name: string; role: string }[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const permitDictateRef = useRef<any>(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem("sitesort_token");
+    fetch("/api/messages/users", { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then(r => r.ok ? r.json() : []).then(setTeamUsers);
+  }, []);
+
+  const togglePermitDictate = useCallback(() => {
+    if (permitDictating) { permitDictateRef.current?.stop(); return; }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SpeechRec = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
+    if (!SpeechRec) return;
+    const rec = new SpeechRec();
+    rec.continuous = true; rec.interimResults = false; rec.lang = "en-GB";
+    rec.onstart = () => setPermitDictating(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rec.onresult = (e: any) => {
+      const t = Array.from(e.results as any[]).map((r: any) => r[0].transcript).join(" ");
+      setPermitDesc(prev => prev + (prev ? " " : "") + t);
+    };
+    rec.onend = () => { setPermitDictating(false); permitDictateRef.current = null; };
+    rec.onerror = () => { setPermitDictating(false); permitDictateRef.current = null; };
+    rec.start(); permitDictateRef.current = rec;
+  }, [permitDictating]);
+
+  const closePermitModal = useCallback(() => {
+    permitDictateRef.current?.stop();
+    setPermitOpen(false); setPermitProjectId(""); setPermitType("Hot Work");
+    setPermitDesc(""); setPermitResponsibleId(""); setPermitStart(""); setPermitExpiry("");
+    setPermitError(null); setPermitSuccess(false); setPermitDictating(false);
+  }, []);
+
+  const submitPermit = useCallback(async () => {
+    if (!permitProjectId || !permitDesc.trim() || !permitResponsibleId || !permitStart || !permitExpiry) {
+      setPermitError("Please fill in all required fields."); return;
+    }
+    setPermitSubmitting(true); setPermitError(null);
+    const token = localStorage.getItem("sitesort_token");
+    const res = await fetch(`/api/projects/${permitProjectId}/permits`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ type: permitType, description: permitDesc.trim(), responsibleUserId: permitResponsibleId, startDate: permitStart, expiryDate: permitExpiry }),
+    });
+    if (res.ok) setPermitSuccess(true);
+    else setPermitError("Failed to add permit. Please try again.");
+    setPermitSubmitting(false);
+  }, [permitProjectId, permitType, permitDesc, permitResponsibleId, permitStart, permitExpiry]);
+
+  // Auto-select project if only one active project (permit)
+  useEffect(() => {
+    if (permitOpen && projects && !permitProjectId) {
+      const active = projects.filter((p: any) => p.status === "active");
+      if (active.length === 1) setPermitProjectId(active[0].id);
+    }
+  }, [permitOpen, projects, permitProjectId]);
 
   // Auto-open create modal when navigated here via voice command (?new=1)
   useEffect(() => {
@@ -116,6 +189,15 @@ export default function ProjectsList() {
     if (params.get("safety") === "1") {
       window.history.replaceState({}, "", "/projects");
       setSafetyOpen(true);
+    }
+  }, []);
+
+  // Auto-open permit modal via voice command (?permit=1)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("permit") === "1") {
+      window.history.replaceState({}, "", "/projects");
+      setPermitOpen(true);
     }
   }, []);
   const voiceSupported = typeof window !== "undefined" && !!(
@@ -315,6 +397,103 @@ export default function ProjectsList() {
       {/* Hidden file input for safety photo */}
       <input ref={safetyFileRef} type="file" accept="image/*,.pdf" className="hidden"
         onChange={e => { const f = e.target.files?.[0]; if (f) uploadSafetyPhoto(f); e.target.value = ""; }} />
+
+      {/* Add Permit modal */}
+      <Dialog open={permitOpen} onOpenChange={open => { if (!open) closePermitModal(); }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ClipboardCheck className="w-5 h-5 text-primary" />
+            Add Permit
+          </DialogTitle>
+        </DialogHeader>
+
+        {permitSuccess ? (
+          <div className="flex flex-col items-center py-8 gap-3">
+            <CheckCircle2 className="w-12 h-12 text-emerald-500" />
+            <p className="font-semibold text-emerald-600">Permit added successfully</p>
+          </div>
+        ) : (
+          <div className="space-y-4 pt-2">
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Project</label>
+              <select value={permitProjectId} onChange={e => setPermitProjectId(e.target.value)}
+                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                <option value="">Select a project…</option>
+                {projects?.filter((p: any) => p.status === "active").map((p: any) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Permit Type</label>
+              <select value={permitType} onChange={e => setPermitType(e.target.value)}
+                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                {PERMIT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Description</label>
+              <div className="relative">
+                <textarea
+                  value={permitDesc}
+                  onChange={e => setPermitDesc(e.target.value)}
+                  placeholder={permitDictating ? "Listening… describe the permit scope" : "Describe the work covered by this permit…"}
+                  rows={3}
+                  className={cn("w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring pr-10",
+                    permitDictating && "border-orange-400 ring-1 ring-orange-400/60")}
+                />
+                {voiceSupported && (
+                  <button type="button" onClick={togglePermitDictate}
+                    title={permitDictating ? "Stop dictating" : "Dictate description"}
+                    className={cn("absolute right-2 top-2 p-1 rounded transition-colors",
+                      permitDictating ? "text-orange-500 animate-pulse" : "text-muted-foreground hover:text-primary")}>
+                    {permitDictating ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Responsible Person</label>
+              <select value={permitResponsibleId} onChange={e => setPermitResponsibleId(e.target.value)}
+                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                <option value="">Select person…</option>
+                {teamUsers.map(u => (
+                  <option key={u.id} value={u.id}>{u.name} ({u.role.replace(/_/g, " ")})</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Start Date</label>
+                <Input type="date" value={permitStart} onChange={e => setPermitStart(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Expiry Date</label>
+                <Input type="date" value={permitExpiry} onChange={e => setPermitExpiry(e.target.value)} />
+              </div>
+            </div>
+
+            {permitError && <p className="text-sm text-destructive">{permitError}</p>}
+          </div>
+        )}
+
+        <DialogFooter>
+          {permitSuccess ? (
+            <Button variant="accent" onClick={closePermitModal}>Done</Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={closePermitModal}>Cancel</Button>
+              <Button variant="accent" onClick={submitPermit} disabled={permitSubmitting}>
+                {permitSubmitting ? "Saving…" : "Add Permit"}
+              </Button>
+            </>
+          )}
+        </DialogFooter>
+      </Dialog>
 
       {/* Log Safety Issue modal */}
       <Dialog open={safetyOpen} onOpenChange={open => { if (!open) closeSafetyModal(); }}>
