@@ -87,7 +87,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 23. Document status/version editing — Edit button on document rows opens dialog to change status (current/superseded) and version number; `PATCH /api/documents/:documentId`
 24. Subscription billing — Stripe Checkout (Solo £29/Team £79/Pro £149, 14-day trial), webhook sync, Customer Portal, plan-based project limits, trial-ending and payment-failed notifications
 25. Read-only mode on cancellation — persistent red banner on all authenticated pages; "New Project" button redirects to billing when cancelled; `SubscriptionContext` exposes `isCancelled` app-wide
-26. Global voice command navigation — mic button in sidebar and desktop header bar; Web Speech API listens for commands like "go to projects" / "open compliance"; floating hint overlay with examples; toast feedback on match or no-match; hidden on unsupported browsers
+26. Global voice command navigation — mic button in sidebar and desktop header bar; Web Speech API listens for commands like "go to projects" / "open compliance" / "new project"; floating hint overlay with examples; toast feedback on match or no-match; hidden on unsupported browsers; "new project" / "create project" / "add project" navigates to `/projects?new=1` which auto-opens the create modal (or redirects to billing if cancelled)
 
 ## Uploads / File Serving
 
@@ -109,6 +109,13 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 
 #### Key files modified
 - `artifacts/sitesort/src/components/layout/sidebar-layout.tsx` — `Mic`/`MicOff` icons, `voiceSupported` check, `VOICE_COMMANDS` map, `startVoiceCommand`/`stopVoiceCommand`/`toggleVoiceCommand` callbacks, Voice Command button in sidebar, mic icon in desktop header, floating hint overlay
+
+#### Tasks completed (continued)
+- **"New project" voice command** — saying "new project", "create project", or "add project" navigates to `/projects?new=1`; projects page detects param on mount and opens the create modal, or redirects to `/settings?tab=billing` if subscription is cancelled; hint overlay updated to show "new project" as the first example
+
+#### Key files modified (continued)
+- `artifacts/sitesort/src/components/layout/sidebar-layout.tsx` — added `new project`/`create project`/`add project` entries to `VOICE_COMMANDS`; updated hint overlay example text
+- `artifacts/sitesort/src/pages/projects/index.tsx` — `useEffect` reads `?new=1` param on mount, strips it from history, then opens modal or redirects to billing
 
 #### Notes for next session
 - Only project creation is blocked client-side on cancellation — other write actions (edit project, upload docs, etc.) are not yet restricted
