@@ -85,6 +85,8 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 21. Settings page (`/settings`) — Profile (name/phone/avatar upload), Security (change password), Notifications (toast + OS toggles in localStorage), Company (admin: name/size); API: `PATCH /auth/me`, `POST /auth/change-password`, `GET/PATCH /companies/mine`
 22. Document supersedes selector — upload form shows optional dropdown of current docs of the same type; selecting one marks it superseded on save; API accepts explicit `supersededDocumentId` with same-name auto-supersede fallback
 23. Document status/version editing — Edit button on document rows opens dialog to change status (current/superseded) and version number; `PATCH /api/documents/:documentId`
+24. Subscription billing — Stripe Checkout (Solo £29/Team £79/Pro £149, 14-day trial), webhook sync, Customer Portal, plan-based project limits, trial-ending and payment-failed notifications
+25. Read-only mode on cancellation — persistent red banner on all authenticated pages; "New Project" button redirects to billing when cancelled; `SubscriptionContext` exposes `isCancelled` app-wide
 
 ## Uploads / File Serving
 
@@ -241,6 +243,25 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 
 #### Notes for next session
 - Only project count is gated — read-only mode on cancellation not yet enforced
+- File storage is still ephemeral (Replit filesystem) — R2/S3 migration needed for production
+- No message search or pagination yet
+
+### 2026-05-22 (continued)
+
+#### Tasks completed
+- **Read-only mode on cancellation** — when `subscriptionStatus === "cancelled"`, a persistent red banner appears at the top of every authenticated page: "Your subscription has ended — new projects and edits are restricted." with an "Upgrade now" button → `/settings?tab=billing`
+- **`SubscriptionContext`** — new React context (`artifacts/sitesort/src/contexts/subscription.tsx`) fetches `/api/companies/mine` on mount (only when a JWT token exists) and exposes `{ tier, status, isCancelled, isLoading }` to the whole app
+- **Project creation blocked on cancel** — "New Project" button in `/projects` redirects to `/settings?tab=billing` instead of opening the create modal when `isCancelled` is true
+- **`SubscriptionProvider` wraps app** — added to `App.tsx` around the router so all pages have access to subscription state without prop-drilling
+
+#### Key files added/modified
+- `artifacts/sitesort/src/contexts/subscription.tsx` — new file; `SubscriptionProvider` + `useSubscription()` hook
+- `artifacts/sitesort/src/App.tsx` — `SubscriptionProvider` wrapping the router
+- `artifacts/sitesort/src/components/layout/sidebar-layout.tsx` — imports `useSubscription`, `AlertCircle`; renders red cancellation banner; `authHeaders()` typed as `Record<string, string>`
+- `artifacts/sitesort/src/pages/projects/index.tsx` — `isCancelled` gate on "New Project" button
+
+#### Notes for next session
+- Only project creation is blocked client-side on cancellation — other write actions (edit project, upload docs, etc.) are not yet restricted
 - File storage is still ephemeral (Replit filesystem) — R2/S3 migration needed for production
 - No message search or pagination yet
 
