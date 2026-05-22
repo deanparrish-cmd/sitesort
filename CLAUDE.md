@@ -87,7 +87,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 23. Document status/version editing — Edit button on document rows opens dialog to change status (current/superseded) and version number; `PATCH /api/documents/:documentId`
 24. Subscription billing — Stripe Checkout (Solo £29/Team £79/Pro £149, 14-day trial), webhook sync, Customer Portal, plan-based project limits, trial-ending and payment-failed notifications
 25. Read-only mode on cancellation — persistent red banner on all authenticated pages; "New Project" button redirects to billing when cancelled; `SubscriptionContext` exposes `isCancelled` app-wide
-26. Global voice command navigation — mic button in sidebar and desktop header bar; Web Speech API listens for commands like "go to projects" / "open compliance" / "new project" / "find invoice"; floating hint overlay with examples; toast feedback on match or no-match; hidden on unsupported browsers; action commands: "new project" → `/projects?new=1` (opens create modal, or billing if cancelled); "new invoice" → `/invoices?new=1` (opens create modal); "find invoice" / "recall invoice" → `/invoices?recall=1` (activates voice search filter)
+26. Global voice command navigation — mic button in sidebar and desktop header bar; Web Speech API listens for commands like "go to projects" / "open compliance" / "new project" / "find invoice" / "find subcontractor electricians"; floating hint overlay with examples; toast feedback on match or no-match; hidden on unsupported browsers; action commands: "new project" → `/projects?new=1` (opens create modal, or billing if cancelled); "new invoice" → `/invoices?new=1` (opens create modal); "find invoice" / "recall invoice" → `/invoices?recall=1` (activates voice search); "add subcontractor" → `/subcontractors?new=1` (opens add modal); "find subcontractor [term]" → `/subcontractors?q=<term>` (pre-fills search by name/company/trade) or `/subcontractors?find=1` (activates mic search)
 
 ## Uploads / File Serving
 
@@ -115,9 +115,10 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 - **Invoice voice commands** — "new invoice" / "create invoice" / "add invoice" → `/invoices?new=1` opens the create modal; "find invoice" / "recall invoice" / "search invoices" → `/invoices?recall=1` navigates to invoices and auto-activates the mic voice search filter
 
 #### Key files modified (continued)
-- `artifacts/sitesort/src/components/layout/sidebar-layout.tsx` — added `new project`/`create project`/`add project`, `new invoice`/`create invoice`, and `find invoice`/`recall invoice`/`search invoices` entries to `VOICE_COMMANDS`; updated hint overlay example text
+- `artifacts/sitesort/src/components/layout/sidebar-layout.tsx` — added `new project`/`create project`/`add project`, `new invoice`/`create invoice`, `find invoice`/`recall invoice`/`search invoices`, `new subcontractor`/`add subcontractor` entries to `VOICE_COMMANDS`; added regex match in `matchVoiceCommand` for "find subcontractor [term]" → encodes term as `?q=` param; updated hint overlay example text
 - `artifacts/sitesort/src/pages/projects/index.tsx` — `useEffect` reads `?new=1` param on mount, strips it from history, then opens modal or redirects to billing
 - `artifacts/sitesort/src/pages/invoices/index.tsx` — `toggleVoiceSearch` converted to `useCallback`; `useEffect` reads `?new=1` (open modal) or `?recall=1` (activate voice search) on mount
+- `artifacts/sitesort/src/pages/subcontractors/index.tsx` — `toggleVoiceSearch` converted to `useCallback`; `useEffect` reads `?new=1` (open add modal), `?q=<term>` (pre-fills search), or `?find=1` (activates mic search) on mount
 
 #### Notes for next session
 - Only project creation is blocked client-side on cancellation — other write actions (edit project, upload docs, etc.) are not yet restricted
