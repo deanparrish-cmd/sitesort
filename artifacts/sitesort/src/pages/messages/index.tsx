@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Send, Users, Eye, ArrowLeft, Circle, Pencil, Trash2 } from "lucide-react";
+import { MessageSquare, Send, Users, Eye, ArrowLeft, Circle, Pencil, Trash2, Mic, MicOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Conversation = {
@@ -84,8 +84,14 @@ export default function MessagesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [pendingTo, setPendingTo] = useState<string | null>(null);
+  const [autoDictate, setAutoDictate] = useState(false);
+  const [dictating, setDictating] = useState(false);
   const threadEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const dictateRef = useRef<any>(null);
+  const voiceSupported = typeof window !== "undefined" && !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
 
   const fetchConversations = useCallback(async () => {
     const r = await fetch(`/api/messages/conversations${viewAll ? "?all=true" : ""}`, { headers: authHeaders() });
@@ -121,6 +127,72 @@ export default function MessagesPage() {
       .then(r => r.ok ? r.json() : [])
       .then(setTeamUsers);
   }, []);
+
+  // Voice dictation
+  const startDictation = useCallback(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SpeechRec = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
+    if (!SpeechRec) return;
+    const rec = new SpeechRec();
+    rec.continuous = true; rec.interimResults = false; rec.lang = "en-GB";
+    rec.onstart = () => setDictating(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rec.onresult = (e: any) => {
+      const transcript = Array.from(e.results as any[]).map((r: any) => r[0].transcript).join(" ");
+      setDraft(prev => prev + (prev ? " " : "") + transcript);
+    };
+    rec.onend = () => { setDictating(false); dictateRef.current = null; };
+    rec.onerror = () => { setDictating(false); dictateRef.current = null; };
+    rec.start(); dictateRef.current = rec;
+  }, []);
+
+  const stopDictation = useCallback(() => {
+    dictateRef.current?.stop();
+    setDictating(false);
+  }, []);
+
+  const toggleDictation = useCallback(() => {
+    if (dictating) stopDictation(); else startDictation();
+  }, [dictating, startDictation, stopDictation]);
+
+  useEffect(() => () => { dictateRef.current?.stop(); }, []);
+
+  // Handle voice-command params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("new") === "1") {
+      window.history.replaceState({}, "", "/messages");
+      setNewChatOpen(true);
+    } else if (params.get("to")) {
+      window.history.replaceState({}, "", "/messages");
+      setPendingTo(params.get("to")!.toLowerCase());
+    } else if (params.get("dictate") === "1") {
+      window.history.replaceState({}, "", "/messages");
+      setAutoDictate(true);
+    }
+  }, []);
+
+  // Match pendingTo name once teamUsers loads
+  useEffect(() => {
+    if (!pendingTo || teamUsers.length === 0) return;
+    const match = teamUsers.find(u => u.name.toLowerCase().includes(pendingTo));
+    setPendingTo(null);
+    if (match) {
+      setNewChatOpen(false);
+      setActiveConv({ otherId: match.id, otherName: match.name, otherRole: match.role, lastMessage: "", lastAt: new Date().toISOString(), unread: 0 });
+      setThread([]);
+    } else {
+      setNewChatOpen(true);
+    }
+  }, [pendingTo, teamUsers]);
+
+  // Auto-start dictation when conversation opens via voice command
+  useEffect(() => {
+    if (autoDictate && activeConv && !viewAll) {
+      setAutoDictate(false);
+      startDictation();
+    }
+  }, [autoDictate, activeConv, viewAll, startDictation]);
 
   async function sendMessage() {
     if (!draft.trim() || !activeConv || sending || viewAll) return;
@@ -401,10 +473,19 @@ export default function MessagesPage() {
                     <Input
                       value={draft}
                       onChange={e => setDraft(e.target.value)}
-                      placeholder="Type a message…"
-                      className="flex-1"
+                      placeholder={dictating ? "Listening… speak your message" : "Type a message…"}
+                      className={cn("flex-1", dictating && "border-orange-400 ring-1 ring-orange-400/60")}
                       onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
                     />
+                    {voiceSupported && (
+                      <Button type="button" size="sm" variant="ghost"
+                        title={dictating ? "Stop dictating" : "Dictate message"}
+                        className={cn("px-2 shrink-0", dictating && "text-orange-500 animate-pulse")}
+                        onClick={toggleDictation}
+                      >
+                        {dictating ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                      </Button>
+                    )}
                     <Button type="submit" size="sm" disabled={!draft.trim() || sending} className="px-3">
                       <Send className="w-4 h-4" />
                     </Button>

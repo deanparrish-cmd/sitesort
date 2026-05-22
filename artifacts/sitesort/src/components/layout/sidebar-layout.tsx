@@ -66,6 +66,8 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     "dashboard": "/dashboard", "home": "/dashboard",
     "new project": "/projects?new=1", "create project": "/projects?new=1", "add project": "/projects?new=1",
     "projects": "/projects", "project": "/projects",
+    "new message": "/messages?new=1", "send message": "/messages?new=1", "compose message": "/messages?new=1",
+    "dictate message": "/messages?dictate=1", "dictate a message": "/messages?dictate=1",
     "new subcontractor": "/subcontractors?new=1", "add subcontractor": "/subcontractors?new=1",
     "subcontractors": "/subcontractors", "subcontractor": "/subcontractors",
     "compliance": "/compliance", "compliance center": "/compliance", "insurance": "/compliance",
@@ -103,6 +105,10 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       const term = compFind[1].trim();
       return term ? `/compliance?q=${encodeURIComponent(term)}` : `/compliance?find=1`;
     }
+
+    // "send/write/compose [a] message to [name]"
+    const msgTo = text.match(/^(?:send|write|compose)\s+(?:a\s+)?message\s+to\s+(.+)/i);
+    if (msgTo) return `/messages?to=${encodeURIComponent(msgTo[1].trim())}`;
 
     if (VOICE_COMMANDS[text]) return VOICE_COMMANDS[text];
     for (const [key, path] of Object.entries(VOICE_COMMANDS)) {
