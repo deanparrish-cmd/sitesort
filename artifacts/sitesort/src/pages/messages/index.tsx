@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Send, Users, Eye, ArrowLeft, Circle } from "lucide-react";
+import { MessageSquare, Send, Users, Eye, ArrowLeft, Circle, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Conversation = {
@@ -23,6 +23,7 @@ type Message = {
   recipientId: string;
   content: string;
   readAt: string | null;
+  editedAt: string | null;
   createdAt: string;
   mine: boolean;
 };
@@ -80,6 +81,9 @@ export default function MessagesPage() {
   const [teamUsers, setTeamUsers] = useState<TeamUser[]>([]);
   const [newChatOpen, setNewChatOpen] = useState(false);
   const [loadingThread, setLoadingThread] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -133,6 +137,35 @@ export default function MessagesPage() {
       fetchConversations();
     }
     setSending(false);
+  }
+
+  function startEdit(msg: Message) {
+    setEditingId(msg.id);
+    setEditDraft(msg.content);
+    setConfirmDeleteId(null);
+  }
+
+  async function saveEdit(id: string) {
+    if (!editDraft.trim()) return;
+    const r = await fetch(`/api/messages/${id}`, {
+      method: "PATCH",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ content: editDraft.trim() }),
+    });
+    if (r.ok) {
+      const data = await r.json();
+      setThread(prev => prev.map(m => m.id === id ? { ...m, content: data.content, editedAt: data.editedAt } : m));
+      setEditingId(null);
+    }
+  }
+
+  async function deleteMessage(id: string) {
+    const r = await fetch(`/api/messages/${id}`, { method: "DELETE", headers: authHeaders() });
+    if (r.ok) {
+      setThread(prev => prev.filter(m => m.id !== id));
+      setConfirmDeleteId(null);
+      fetchConversations();
+    }
   }
 
   async function startNewChat(user: TeamUser) {
@@ -288,7 +321,7 @@ export default function MessagesPage() {
                   </div>
                 ) : (
                   thread.map(msg => (
-                    <div key={msg.id} className={cn("flex gap-2", msg.mine && !viewAll ? "flex-row-reverse" : "flex-row")}>
+                    <div key={msg.id} className={cn("flex gap-2 group", msg.mine && !viewAll ? "flex-row-reverse" : "flex-row")}>
                       <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-[9px] font-bold text-primary shrink-0 mt-1">
                         {msg.senderName.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
                       </div>
@@ -296,18 +329,62 @@ export default function MessagesPage() {
                         {viewAll && (
                           <span className="text-[10px] text-muted-foreground px-1">{msg.senderName}</span>
                         )}
-                        <div className={cn(
-                          "px-3 py-2 rounded-2xl text-sm leading-relaxed break-words",
-                          msg.mine && !viewAll
-                            ? "bg-primary text-primary-foreground rounded-tr-sm"
-                            : "bg-muted rounded-tl-sm"
-                        )}>
-                          {msg.content}
-                        </div>
+                        {editingId === msg.id ? (
+                          <div className="flex flex-col gap-1 min-w-[180px]">
+                            <input
+                              value={editDraft}
+                              onChange={e => setEditDraft(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveEdit(msg.id); }
+                                if (e.key === "Escape") setEditingId(null);
+                              }}
+                              className="px-3 py-2 rounded-2xl text-sm bg-primary text-primary-foreground outline outline-2 outline-white/40 w-full"
+                              autoFocus
+                            />
+                            <div className="flex gap-2 justify-end px-1">
+                              <button onClick={() => setEditingId(null)} className="text-[10px] text-muted-foreground hover:text-foreground">Cancel</button>
+                              <button onClick={() => saveEdit(msg.id)} className="text-[10px] text-primary font-semibold hover:underline">Save</button>
+                            </div>
+                          </div>
+                        ) : confirmDeleteId === msg.id ? (
+                          <div className="px-3 py-2 rounded-2xl text-sm bg-red-100 text-red-700 flex items-center gap-2">
+                            <span>Delete this message?</span>
+                            <button onClick={() => deleteMessage(msg.id)} className="font-semibold hover:underline">Yes</button>
+                            <button onClick={() => setConfirmDeleteId(null)} className="text-muted-foreground hover:underline">No</button>
+                          </div>
+                        ) : (
+                          <div className={cn(
+                            "px-3 py-2 rounded-2xl text-sm leading-relaxed break-words",
+                            msg.mine && !viewAll
+                              ? "bg-primary text-primary-foreground rounded-tr-sm"
+                              : "bg-muted rounded-tl-sm"
+                          )}>
+                            {msg.content}
+                            {msg.editedAt && <span className="text-[9px] opacity-50 ml-1.5">(edited)</span>}
+                          </div>
+                        )}
                         <div className={cn("flex items-center gap-1 px-1", msg.mine && !viewAll ? "flex-row-reverse" : "flex-row")}>
                           <span className="text-[10px] text-muted-foreground">{timeLabel(msg.createdAt)}</span>
                           {msg.mine && !viewAll && (
                             <Circle className={cn("w-2 h-2", msg.readAt ? "fill-primary text-primary" : "fill-muted-foreground/40 text-muted-foreground/40")} />
+                          )}
+                          {msg.mine && !viewAll && editingId !== msg.id && confirmDeleteId !== msg.id && (
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">
+                              <button
+                                onClick={() => startEdit(msg)}
+                                className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                                title="Edit"
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => setConfirmDeleteId(msg.id)}
+                                className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-red-500"
+                                title="Delete"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
                           )}
                         </div>
                       </div>

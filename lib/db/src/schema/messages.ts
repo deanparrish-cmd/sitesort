@@ -9,6 +9,7 @@ export const messagesTable = pgTable("messages", {
   recipientId: text("recipient_id").notNull().references(() => usersTable.id),
   content: text("content").notNull(),
   readAt: timestamp("read_at"),
+  editedAt: timestamp("edited_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

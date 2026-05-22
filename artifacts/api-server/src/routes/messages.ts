@@ -153,6 +153,7 @@ router.get("/messages/thread/:userId", authenticate, async (req, res) => {
       recipientId: m.recipientId,
       content: m.content,
       readAt: m.readAt?.toISOString() ?? null,
+      editedAt: m.editedAt?.toISOString() ?? null,
       createdAt: m.createdAt.toISOString(),
       mine: m.senderId === me,
     })));
@@ -210,6 +211,50 @@ router.post("/messages", authenticate, async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Send message error");
     res.status(500).json({ error: "server_error", message: "Failed to send message" });
+  }
+});
+
+// PATCH /api/messages/:id — edit own message
+router.patch("/messages/:id", authenticate, async (req, res) => {
+  try {
+    const { content } = req.body;
+    if (!content?.trim()) {
+      res.status(400).json({ error: "validation_error", message: "content is required" });
+      return;
+    }
+    const rows = await db.select().from(messagesTable)
+      .where(and(eq(messagesTable.id, req.params.id), eq(messagesTable.senderId, req.user!.id)))
+      .limit(1);
+    if (!rows[0]) {
+      res.status(404).json({ error: "not_found", message: "Message not found or not yours" });
+      return;
+    }
+    const now = new Date();
+    await db.update(messagesTable)
+      .set({ content: content.trim(), editedAt: now })
+      .where(eq(messagesTable.id, req.params.id));
+    res.json({ id: req.params.id, content: content.trim(), editedAt: now.toISOString() });
+  } catch (err) {
+    req.log.error({ err }, "Edit message error");
+    res.status(500).json({ error: "server_error", message: "Failed to edit message" });
+  }
+});
+
+// DELETE /api/messages/:id — delete own message
+router.delete("/messages/:id", authenticate, async (req, res) => {
+  try {
+    const rows = await db.select().from(messagesTable)
+      .where(and(eq(messagesTable.id, req.params.id), eq(messagesTable.senderId, req.user!.id)))
+      .limit(1);
+    if (!rows[0]) {
+      res.status(404).json({ error: "not_found", message: "Message not found or not yours" });
+      return;
+    }
+    await db.delete(messagesTable).where(eq(messagesTable.id, req.params.id));
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Delete message error");
+    res.status(500).json({ error: "server_error", message: "Failed to delete message" });
   }
 });
 
