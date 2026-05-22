@@ -1,6 +1,9 @@
 import { Router } from "express";
 import Stripe from "stripe";
+import { eq } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
+import { db } from "@workspace/db";
+import { companiesTable } from "@workspace/db/schema";
 
 const router = Router();
 
@@ -89,6 +92,106 @@ router.post("/billing/checkout", authenticate, async (req, res) => {
     console.error("Stripe checkout error:", message);
     res.status(500).json({ error: message });
   }
+});
+
+function mapSubscriptionStatus(status: Stripe.Subscription.Status): string {
+  switch (status) {
+    case "active": return "active";
+    case "trialing": return "trialing";
+    case "past_due": return "past_due";
+    case "canceled":
+    case "unpaid":
+    case "incomplete_expired":
+      return "cancelled";
+    default:
+      return status;
+  }
+}
+
+async function handleSubscriptionUpsert(
+  subscription: Stripe.Subscription,
+): Promise<void> {
+  const companyId = subscription.metadata?.companyId;
+  const plan = (subscription.metadata?.plan ?? "pro") as PlanId;
+  if (!companyId) return;
+
+  await db
+    .update(companiesTable)
+    .set({
+      subscriptionTier: plan,
+      subscriptionStatus: mapSubscriptionStatus(subscription.status),
+    })
+    .where(eq(companiesTable.id, companyId));
+}
+
+async function handleSubscriptionDeleted(
+  subscription: Stripe.Subscription,
+): Promise<void> {
+  const companyId = subscription.metadata?.companyId;
+  if (!companyId) return;
+
+  await db
+    .update(companiesTable)
+    .set({ subscriptionTier: "free", subscriptionStatus: "cancelled" })
+    .where(eq(companiesTable.id, companyId));
+}
+
+router.post("/billing/webhook", async (req, res) => {
+  const apiKey = process.env.STRIPE_SECRET_KEY;
+  if (!apiKey) {
+    res.status(500).json({ error: "STRIPE_SECRET_KEY is not set" });
+    return;
+  }
+
+  const stripe = new Stripe(apiKey);
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  let event: Stripe.Event;
+  try {
+    if (webhookSecret) {
+      const sig = req.headers["stripe-signature"] as string;
+      event = stripe.webhooks.constructEvent(req.body as Buffer, sig, webhookSecret);
+    } else {
+      event = JSON.parse((req.body as Buffer).toString()) as Stripe.Event;
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("Stripe webhook error:", message);
+    res.status(400).json({ error: `Webhook error: ${message}` });
+    return;
+  }
+
+  try {
+    switch (event.type) {
+      case "checkout.session.completed": {
+        const session = event.data.object as Stripe.Checkout.Session;
+        if (session.mode === "subscription" && session.subscription) {
+          const subscription = await stripe.subscriptions.retrieve(
+            session.subscription as string,
+          );
+          await handleSubscriptionUpsert(subscription);
+        }
+        break;
+      }
+      case "customer.subscription.updated": {
+        const subscription = event.data.object as Stripe.Subscription;
+        await handleSubscriptionUpsert(subscription);
+        break;
+      }
+      case "customer.subscription.deleted": {
+        const subscription = event.data.object as Stripe.Subscription;
+        await handleSubscriptionDeleted(subscription);
+        break;
+      }
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("Stripe webhook handler error:", message);
+    res.status(500).json({ error: message });
+    return;
+  }
+
+  res.json({ received: true });
 });
 
 export default router;
