@@ -8,6 +8,7 @@ import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui
 import { Badge } from "@/components/ui/badge";
 import { Search, Plus, Building, MapPin, Calendar, Mic, MicOff, Sparkles } from "lucide-react";
 import { useListProjects, useCreateProject } from "@workspace/api-client-react";
+import { useSubscription } from "@/contexts/subscription";
 import { useForm } from "react-hook-form";
 import { formatDate, cn } from "@/lib/utils";
 
@@ -15,6 +16,7 @@ export default function ProjectsList() {
   const { data: projects, isLoading } = useListProjects();
   const createMutation = useCreateProject();
   const [, setLocation] = useLocation();
+  const { isCancelled } = useSubscription();
   const queryClient = useQueryClient();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -82,7 +84,11 @@ export default function ProjectsList() {
           <h1 className="text-3xl font-bold">Projects</h1>
           <p className="text-muted-foreground">Manage all your construction sites.</p>
         </div>
-        <Button variant="accent" onClick={() => setIsModalOpen(true)}>
+        <Button
+          variant="accent"
+          onClick={() => isCancelled ? setLocation("/settings?tab=billing") : setIsModalOpen(true)}
+          title={isCancelled ? "Subscription ended — upgrade to create projects" : undefined}
+        >
           <Plus className="w-5 h-5 mr-2" /> New Project
         </Button>
       </div>

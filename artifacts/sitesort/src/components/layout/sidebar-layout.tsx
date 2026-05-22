@@ -15,9 +15,11 @@ import {
   ChevronDown,
   ShieldAlert,
   MessageSquare,
+  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetMe, useLogout } from "@workspace/api-client-react";
+import { useSubscription } from "@/contexts/subscription";
 import { useToast } from "@/hooks/use-toast";
 import {
   DropdownMenu,
@@ -38,7 +40,7 @@ function Avatar({ src, name, size }: { src?: string | null; name?: string | null
   );
 }
 
-function authHeaders() {
+function authHeaders(): Record<string, string> {
   const t = localStorage.getItem("sitesort_token");
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
@@ -49,6 +51,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
   const { data: user, isLoading, error } = useGetMe();
   const logoutMutation = useLogout();
   const { toast } = useToast();
+  const { isCancelled } = useSubscription();
   const [unreadMsgCount, setUnreadMsgCount] = useState(0);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const prevUnreadRef = useRef(0);
@@ -273,6 +276,22 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
             </DropdownMenuContent>
           </DropdownMenu>
         </header>
+        {isCancelled && (
+          <div className="bg-red-600 text-white px-4 py-3 flex items-center justify-between gap-4 shrink-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span className="text-sm font-medium truncate">
+                Your subscription has ended — new projects and edits are restricted.
+              </span>
+            </div>
+            <button
+              onClick={() => setLocation("/settings?tab=billing")}
+              className="shrink-0 text-sm font-semibold underline underline-offset-2 hover:no-underline whitespace-nowrap"
+            >
+              Upgrade now
+            </button>
+          </div>
+        )}
         <main className="flex-1 p-4 md:p-8">
           <div className="max-w-7xl mx-auto slide-up">
             {children}
