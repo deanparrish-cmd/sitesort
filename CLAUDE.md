@@ -135,11 +135,28 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 - `artifacts/api-server/src/routes/billing.ts` — webhook handler + `mapSubscriptionStatus` / `handleSubscriptionUpsert` / `handleSubscriptionDeleted` helpers
 - `artifacts/api-server/src/app.ts` — raw body middleware for webhook route
 
-#### Notes for next session
+#### Notes for next session (after webhook)
 - Set `STRIPE_WEBHOOK_SECRET` env var (from Stripe Dashboard → Webhooks → signing secret) to enable signature verification in production
 - Events to subscribe to in Stripe Dashboard: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`
 - No upgrade/downgrade flow yet — users can only initiate a new checkout; switching plans would need a Stripe portal or custom flow
-- `subscriptionTier` and `subscriptionStatus` on the companies table are now kept in sync, but no feature-gating UI has been wired up yet
+
+### 2026-05-22 (continued)
+
+#### Tasks completed
+- **Project creation gating** — `POST /projects` checks the company's plan before inserting; limits: `free`/`solo` = 1 project, `team` = 5, `pro` = unlimited, `cancelled` = 1 regardless of tier; returns `403 { error: "plan_limit" }` with a human-readable message if over limit
+- **Upgrade dialog on projects page** — when `POST /projects` returns a `plan_limit` 403, the create modal closes and a dedicated "Project limit reached" dialog appears with an "Upgrade plan" button that navigates to `/settings?tab=billing`
+- **Billing tab current-plan display** — billing tab in settings now fetches `/api/companies/mine` on mount; active plan card is highlighted green with a "Current plan" badge and disabled button; status banner at the top shows subscription status (trial active / past due warning)
+- **`?tab=` URL param in Settings** — `SettingsPage` initialises `activeTab` from `?tab=` query param, so the upgrade dialog link (`/settings?tab=billing`) opens directly to the Billing tab
+
+#### Key files modified
+- `artifacts/api-server/src/routes/projects.ts` — `planProjectLimit()` helper + limit check in `POST /projects`
+- `artifacts/sitesort/src/pages/projects/index.tsx` — `plan_limit` error detection, upgrade dialog, removed stale `DialogContent` import
+- `artifacts/sitesort/src/pages/settings/index.tsx` — company fetch in `BillingTab`, current-plan highlighting, `?tab=` init
+
+#### Notes for next session
+- Only project count is gated so far — team member count, document uploads, and other per-plan limits are not enforced yet
+- No Stripe Customer Portal wired up; users cannot self-serve cancel or swap plans from within the app
+- Upgrade dialog is intentionally simple — could be enhanced to show current usage (e.g. "2 of 5 projects used")
 
 ### 2026-05-14
 
