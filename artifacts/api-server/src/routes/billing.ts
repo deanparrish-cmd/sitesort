@@ -165,6 +165,38 @@ async function handleTrialWillEnd(subscription: Stripe.Subscription): Promise<vo
   );
 }
 
+async function handlePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
+  const customerId = invoice.customer as string | null;
+  if (!customerId) return;
+
+  const companyRows = await db
+    .select({ id: companiesTable.id })
+    .from(companiesTable)
+    .where(eq(companiesTable.stripeCustomerId, customerId))
+    .limit(1);
+
+  const companyId = companyRows[0]?.id;
+  if (!companyId) return;
+
+  const admins = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(and(eq(usersTable.companyId, companyId), eq(usersTable.role, "admin")));
+
+  if (admins.length === 0) return;
+
+  await db.insert(notificationsTable).values(
+    admins.map(admin => ({
+      id: generateId(),
+      userId: admin.id,
+      type: "payment_failed",
+      title: "Payment failed",
+      message: "We couldn't process your subscription payment. Update your payment method to avoid losing access.",
+      relatedEntityType: "billing",
+    })),
+  );
+}
+
 router.post("/billing/webhook", async (req, res) => {
   const apiKey = process.env.STRIPE_SECRET_KEY;
   if (!apiKey) {
@@ -215,6 +247,11 @@ router.post("/billing/webhook", async (req, res) => {
       case "customer.subscription.trial_will_end": {
         const subscription = event.data.object as Stripe.Subscription;
         await handleTrialWillEnd(subscription);
+        break;
+      }
+      case "invoice.payment_failed": {
+        const invoice = event.data.object as Stripe.Invoice;
+        await handlePaymentFailed(invoice);
         break;
       }
     }

@@ -57,6 +57,8 @@ function notifIcon(type: string) {
       return <AlertTriangle className="w-5 h-5 text-amber-500" />;
     case "trial_ending":
       return <CreditCard className="w-5 h-5 text-orange-500" />;
+    case "payment_failed":
+      return <CreditCard className="w-5 h-5 text-red-500" />;
     default:
       return <Bell className="w-5 h-5 text-muted-foreground" />;
   }
@@ -72,6 +74,8 @@ function notifBg(type: string) {
       return "bg-amber-100";
     case "trial_ending":
       return "bg-orange-100";
+    case "payment_failed":
+      return "bg-red-100";
     default:
       return "bg-muted";
   }
@@ -82,6 +86,7 @@ function notifLink(n: Notification): string | null {
   if (n.type === "document_uploaded" && n.relatedEntityId) return `/projects/${n.relatedEntityId}`;
   if (n.type === "safety_concern" && n.relatedEntityId) return `/projects/${n.relatedEntityId}`;
   if (n.type === "trial_ending") return "/settings?tab=billing";
+  if (n.type === "payment_failed") return "/settings?tab=billing";
   return null;
 }
 
@@ -100,7 +105,7 @@ function filterMatch(n: Notification, f: Filter) {
   if (f === "messages") return n.type === "new_message";
   if (f === "documents") return n.type === "document_uploaded";
   if (f === "safety") return n.type === "safety_concern";
-  if (f === "billing") return n.type === "trial_ending";
+  if (f === "billing") return n.type === "trial_ending" || n.type === "payment_failed";
   return true;
 }
 
