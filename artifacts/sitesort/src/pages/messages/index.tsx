@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Send, Users, Eye, ArrowLeft, Circle, Pencil, Trash2, Mic, MicOff, User, Building2 } from "lucide-react";
+import { MessageSquare, Send, Users, Eye, ArrowLeft, Circle, Pencil, Trash2, Mic, MicOff, User, Building2, Receipt, X, ExternalLink, FileText, Image, FileCheck, Paperclip } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSubscription } from "@/contexts/subscription";
 import { useToast } from "@/hooks/use-toast";
@@ -18,12 +18,33 @@ type Conversation = {
   unread: number;
 };
 
+type InvoiceAttachment = {
+  id: string;
+  counterpartyName: string;
+  amount: string;
+  currency: string;
+  dueDate: string;
+  status: string;
+  reference?: string | null;
+  attachmentUrl?: string | null;
+  direction: string;
+};
+
+type DocAttachment = { id: string; name: string; type: string; fileUrl: string; status: string; version: number };
+type PhotoAttachment = { id: string; photoUrl?: string | null; category: string; description?: string | null; referenceNumber: string; zone?: string | null };
+type PermitAttachment = { id: string; type: string; description: string; expiryDate: string; documentUrl?: string | null };
+
 type Message = {
   id: string;
   senderId: string;
   senderName: string;
   recipientId: string;
   content: string;
+  invoiceId?: string | null;
+  invoice?: InvoiceAttachment | null;
+  attachmentType?: "document" | "photo" | "permit" | null;
+  attachmentId?: string | null;
+  attachment?: DocAttachment | PhotoAttachment | PermitAttachment | null;
   readAt: string | null;
   editedAt: string | null;
   createdAt: string;
@@ -100,6 +121,22 @@ export default function MessagesPage() {
   const [broadcastRole, setBroadcastRole] = useState("all");
   const [broadcastContent, setBroadcastContent] = useState("");
   const [broadcastSending, setBroadcastSending] = useState(false);
+
+  // Invoice attachment state
+  const [invoicePickerOpen, setInvoicePickerOpen] = useState(false);
+  const [pickerInvoices, setPickerInvoices] = useState<InvoiceAttachment[]>([]);
+  const [pickerLoading, setPickerLoading] = useState(false);
+  const [attachedInvoice, setAttachedInvoice] = useState<InvoiceAttachment | null>(null);
+
+  // Doc/photo/permit attachment state
+  type AttachTab = "document" | "photo" | "permit";
+  const [attachPickerOpen, setAttachPickerOpen] = useState(false);
+  const [attachTab, setAttachTab] = useState<AttachTab>("document");
+  const [attachPickerProjects, setAttachPickerProjects] = useState<{ id: string; name: string }[]>([]);
+  const [attachPickerProjectId, setAttachPickerProjectId] = useState("");
+  const [attachPickerItems, setAttachPickerItems] = useState<(DocAttachment | PhotoAttachment | PermitAttachment)[]>([]);
+  const [attachPickerLoading, setAttachPickerLoading] = useState(false);
+  const [attachedItem, setAttachedItem] = useState<{ type: AttachTab; data: DocAttachment | PhotoAttachment | PermitAttachment } | null>(null);
   const [dictating, setDictating] = useState(false);
   const threadEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -210,17 +247,24 @@ export default function MessagesPage() {
 
   async function sendMessage() {
     if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
-    if (!draft.trim() || !activeConv || sending || viewAll) return;
+    if ((!draft.trim() && !attachedInvoice && !attachedItem) || !activeConv || sending || viewAll) return;
     setSending(true);
     const r = await fetch("/api/messages", {
       method: "POST",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ recipientId: activeConv.otherId, content: draft.trim() }),
+      body: JSON.stringify({
+        recipientId: activeConv.otherId,
+        content: draft.trim(),
+        ...(attachedInvoice ? { invoiceId: attachedInvoice.id } : {}),
+        ...(attachedItem ? { attachmentType: attachedItem.type, attachmentId: attachedItem.data.id } : {}),
+      }),
     });
     if (r.ok) {
       const msg = await r.json();
-      setThread(prev => [...prev, { ...msg, senderName: me?.name ?? "Me" }]);
+      setThread(prev => [...prev, { ...msg, senderName: me?.name ?? "Me", invoice: attachedInvoice, attachment: attachedItem?.data ?? null }]);
       setDraft("");
+      setAttachedInvoice(null);
+      setAttachedItem(null);
       fetchConversations();
     }
     setSending(false);
@@ -292,6 +336,39 @@ export default function MessagesPage() {
     setBroadcastRole("all");
     setBroadcastContent("");
   }
+
+  async function openInvoicePicker() {
+    setInvoicePickerOpen(true);
+    if (pickerInvoices.length > 0) return;
+    setPickerLoading(true);
+    const r = await fetch("/api/invoices", { headers: authHeaders() });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (r.ok) setPickerInvoices(await r.json() as any[]);
+    setPickerLoading(false);
+  }
+
+  function openAttachPicker() {
+    setAttachPickerOpen(true);
+    setInvoicePickerOpen(false);
+    if (attachPickerProjects.length === 0) {
+      fetch("/api/projects", { headers: authHeaders() })
+        .then(r => r.ok ? r.json() : [])
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .then((all: any[]) => setAttachPickerProjects(all.filter((p: any) => p.status === "active")));
+    }
+  }
+
+  // Fetch items when project or tab changes in attach picker
+  useEffect(() => {
+    if (!attachPickerOpen || !attachPickerProjectId) { setAttachPickerItems([]); return; }
+    setAttachPickerLoading(true);
+    const endpoint = attachTab === "document" ? "documents" : attachTab === "photo" ? "photos" : "permits";
+    fetch(`/api/projects/${attachPickerProjectId}/${endpoint}`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : [])
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .then((items: any[]) => setAttachPickerItems(items))
+      .finally(() => setAttachPickerLoading(false));
+  }, [attachPickerOpen, attachPickerProjectId, attachTab]);
 
   async function sendBroadcast() {
     if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
@@ -600,14 +677,142 @@ export default function MessagesPage() {
                             <button onClick={() => setConfirmDeleteId(null)} className="text-muted-foreground hover:underline">No</button>
                           </div>
                         ) : (
-                          <div className={cn(
-                            "px-3 py-2 rounded-2xl text-sm leading-relaxed break-words",
-                            msg.mine && !viewAll
-                              ? "bg-primary text-primary-foreground rounded-tr-sm"
-                              : "bg-muted rounded-tl-sm"
-                          )}>
-                            {msg.content}
-                            {msg.editedAt && <span className="text-[9px] opacity-50 ml-1.5">(edited)</span>}
+                          <div className="flex flex-col gap-1.5">
+                            {/* Invoice card */}
+                            {msg.invoice && (
+                              <div className={cn(
+                                "rounded-2xl border text-xs overflow-hidden min-w-[220px]",
+                                msg.mine && !viewAll ? "rounded-tr-sm border-primary/20 bg-primary/5" : "rounded-tl-sm border-border bg-card"
+                              )}>
+                                <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/40">
+                                  <Receipt className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                  <span className="font-semibold text-foreground">Invoice</span>
+                                  <span className={cn("ml-auto px-1.5 py-0.5 rounded text-[10px] font-semibold capitalize",
+                                    msg.invoice.status === "paid" ? "bg-emerald-100 text-emerald-700" :
+                                    msg.invoice.status === "overdue" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                                  )}>{msg.invoice.status}</span>
+                                </div>
+                                <div className="px-3 py-2 space-y-0.5">
+                                  <p className="font-semibold text-foreground">{msg.invoice.counterpartyName}</p>
+                                  <p className="text-muted-foreground">{msg.invoice.currency} {Number(msg.invoice.amount).toLocaleString("en-GB", { minimumFractionDigits: 2 })}</p>
+                                  {msg.invoice.reference && <p className="text-muted-foreground">Ref: {msg.invoice.reference}</p>}
+                                  <p className="text-muted-foreground">Due: {new Date(msg.invoice.dueDate + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
+                                </div>
+                                {msg.invoice.attachmentUrl && (
+                                  <div className="px-3 pb-2">
+                                    <a
+                                      href={msg.invoice.attachmentUrl.replace(/^\/uploads\//, "/api/uploads/")}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex items-center gap-1 text-primary hover:underline text-[11px] font-medium"
+                                    >
+                                      <ExternalLink className="w-3 h-3" /> View document
+                                    </a>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            {/* Document attachment card */}
+                            {msg.attachmentType === "document" && msg.attachment && (() => {
+                              const doc = msg.attachment as DocAttachment;
+                              return (
+                                <div className={cn(
+                                  "rounded-2xl border text-xs overflow-hidden min-w-[220px]",
+                                  msg.mine && !viewAll ? "rounded-tr-sm border-primary/20 bg-primary/5" : "rounded-tl-sm border-border bg-card"
+                                )}>
+                                  <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/40">
+                                    <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                    <span className="font-semibold text-foreground">Document</span>
+                                    <span className={cn("ml-auto px-1.5 py-0.5 rounded text-[10px] font-semibold capitalize",
+                                      doc.status === "current" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                                    )}>{doc.status}</span>
+                                  </div>
+                                  <div className="px-3 py-2 space-y-0.5">
+                                    <p className="font-semibold text-foreground">{doc.name}</p>
+                                    <p className="text-muted-foreground capitalize">{doc.type} · v{doc.version}</p>
+                                    <a href={doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/")} target="_blank" rel="noreferrer"
+                                      className="inline-flex items-center gap-1 text-primary hover:underline text-[11px] font-medium mt-1">
+                                      <ExternalLink className="w-3 h-3" /> View document
+                                    </a>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+
+                            {/* Photo attachment card */}
+                            {msg.attachmentType === "photo" && msg.attachment && (() => {
+                              const photo = msg.attachment as PhotoAttachment;
+                              return (
+                                <div className={cn(
+                                  "rounded-2xl border text-xs overflow-hidden min-w-[220px] max-w-[260px]",
+                                  msg.mine && !viewAll ? "rounded-tr-sm border-primary/20 bg-primary/5" : "rounded-tl-sm border-border bg-card"
+                                )}>
+                                  {photo.photoUrl && (
+                                    <img
+                                      src={photo.photoUrl.replace(/^\/uploads\//, "/api/uploads/")}
+                                      alt={photo.description ?? photo.category}
+                                      className="w-full aspect-video object-cover"
+                                    />
+                                  )}
+                                  <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-muted/40">
+                                    <Image className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                    <span className="font-semibold text-foreground capitalize">{photo.category}</span>
+                                    <span className="ml-auto text-muted-foreground">{photo.referenceNumber}</span>
+                                  </div>
+                                  {(photo.description || photo.zone) && (
+                                    <div className="px-3 py-2 space-y-0.5">
+                                      {photo.description && <p className="text-foreground">{photo.description}</p>}
+                                      {photo.zone && <p className="text-muted-foreground">Zone: {photo.zone}</p>}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
+
+                            {/* Permit attachment card */}
+                            {msg.attachmentType === "permit" && msg.attachment && (() => {
+                              const permit = msg.attachment as PermitAttachment;
+                              const expiry = new Date(permit.expiryDate + "T12:00:00");
+                              const daysLeft = Math.ceil((expiry.getTime() - Date.now()) / 86400000);
+                              return (
+                                <div className={cn(
+                                  "rounded-2xl border text-xs overflow-hidden min-w-[220px]",
+                                  msg.mine && !viewAll ? "rounded-tr-sm border-primary/20 bg-primary/5" : "rounded-tl-sm border-border bg-card"
+                                )}>
+                                  <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/40">
+                                    <FileCheck className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                    <span className="font-semibold text-foreground">Permit</span>
+                                    <span className={cn("ml-auto px-1.5 py-0.5 rounded text-[10px] font-semibold",
+                                      daysLeft < 0 ? "bg-red-100 text-red-700" : daysLeft <= 14 ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
+                                    )}>{daysLeft < 0 ? "Expired" : daysLeft <= 14 ? "Expiring soon" : "Active"}</span>
+                                  </div>
+                                  <div className="px-3 py-2 space-y-0.5">
+                                    <p className="font-semibold text-foreground capitalize">{permit.type}</p>
+                                    <p className="text-muted-foreground">{permit.description}</p>
+                                    <p className="text-muted-foreground">Expires: {expiry.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
+                                    {permit.documentUrl && (
+                                      <a href={permit.documentUrl.replace(/^\/uploads\//, "/api/uploads/")} target="_blank" rel="noreferrer"
+                                        className="inline-flex items-center gap-1 text-primary hover:underline text-[11px] font-medium mt-1">
+                                        <ExternalLink className="w-3 h-3" /> View permit
+                                      </a>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })()}
+
+                            {/* Text bubble (optional note alongside invoice, or standalone message) */}
+                            {(msg.content || (!msg.invoice && !msg.attachmentType)) && (
+                              <div className={cn(
+                                "px-3 py-2 rounded-2xl text-sm leading-relaxed break-words",
+                                msg.mine && !viewAll
+                                  ? "bg-primary text-primary-foreground rounded-tr-sm"
+                                  : "bg-muted rounded-tl-sm"
+                              )}>
+                                {msg.content}
+                                {msg.editedAt && <span className="text-[9px] opacity-50 ml-1.5">(edited)</span>}
+                              </div>
+                            )}
                           </div>
                         )}
                         <div className={cn("flex items-center gap-1 px-1", msg.mine && !viewAll ? "flex-row-reverse" : "flex-row")}>
@@ -643,12 +848,188 @@ export default function MessagesPage() {
 
               {/* Input */}
               {!viewAll ? (
-                <div className="p-3 border-t bg-muted/20">
+                <div className="p-3 border-t bg-muted/20 space-y-2">
+                  {/* Attached invoice preview */}
+                  {attachedInvoice && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-50 border border-blue-200 text-xs">
+                      <Receipt className="w-4 h-4 text-blue-600 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <span className="font-semibold text-blue-800">{attachedInvoice.counterpartyName}</span>
+                        <span className="text-blue-600 ml-2">{attachedInvoice.currency} {Number(attachedInvoice.amount).toLocaleString("en-GB", { minimumFractionDigits: 2 })}</span>
+                        {attachedInvoice.reference && <span className="text-blue-500 ml-1">· {attachedInvoice.reference}</span>}
+                      </div>
+                      <button onClick={() => setAttachedInvoice(null)} className="text-blue-400 hover:text-blue-600 shrink-0">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Attached doc/photo/permit preview */}
+                  {attachedItem && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-violet-50 border border-violet-200 text-xs">
+                      {attachedItem.type === "document" && <FileText className="w-4 h-4 text-violet-600 shrink-0" />}
+                      {attachedItem.type === "photo" && <Image className="w-4 h-4 text-violet-600 shrink-0" />}
+                      {attachedItem.type === "permit" && <FileCheck className="w-4 h-4 text-violet-600 shrink-0" />}
+                      <span className="flex-1 font-semibold text-violet-800 truncate">
+                        {attachedItem.type === "document" && (attachedItem.data as DocAttachment).name}
+                        {attachedItem.type === "photo" && `Photo · ${(attachedItem.data as PhotoAttachment).referenceNumber}`}
+                        {attachedItem.type === "permit" && `Permit · ${(attachedItem.data as PermitAttachment).type}`}
+                      </span>
+                      <button onClick={() => setAttachedItem(null)} className="text-violet-400 hover:text-violet-600 shrink-0">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Invoice picker dropdown */}
+                  {invoicePickerOpen && (
+                    <div className="rounded-xl border bg-card shadow-lg max-h-48 overflow-y-auto">
+                      {pickerLoading ? (
+                        <div className="p-3 text-xs text-muted-foreground text-center">Loading invoices…</div>
+                      ) : pickerInvoices.length === 0 ? (
+                        <div className="p-3 text-xs text-muted-foreground text-center">No invoices found.</div>
+                      ) : (
+                        pickerInvoices.map(inv => (
+                          <button
+                            key={inv.id}
+                            onClick={() => { setAttachedInvoice(inv); setInvoicePickerOpen(false); }}
+                            className="w-full text-left px-3 py-2 hover:bg-muted transition-colors text-xs flex items-center gap-2 border-b last:border-0"
+                          >
+                            <Receipt className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold truncate">{inv.counterpartyName}</p>
+                              <p className="text-muted-foreground">{inv.currency} {Number(inv.amount).toLocaleString("en-GB", { minimumFractionDigits: 2 })}{inv.reference ? ` · ${inv.reference}` : ""}</p>
+                            </div>
+                            <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-semibold capitalize shrink-0",
+                              inv.status === "paid" ? "bg-emerald-100 text-emerald-700" :
+                              inv.status === "overdue" ? "bg-red-100 text-red-700" : "bg-muted text-muted-foreground"
+                            )}>{inv.status}</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+
+                  {/* Doc/Photo/Permit picker */}
+                  {attachPickerOpen && (
+                    <div className="rounded-xl border bg-card shadow-lg overflow-hidden">
+                      {/* Tabs */}
+                      <div className="flex border-b">
+                        {([
+                          { id: "document" as const, label: "Document", Icon: FileText },
+                          { id: "photo" as const, label: "Photo", Icon: Image },
+                          { id: "permit" as const, label: "Permit", Icon: FileCheck },
+                        ]).map(({ id, label, Icon }) => (
+                          <button
+                            key={id}
+                            onClick={() => { setAttachTab(id); setAttachPickerItems([]); }}
+                            className={cn(
+                              "flex-1 flex items-center justify-center gap-1 px-2 py-2 text-[11px] font-semibold border-b-2 transition-colors",
+                              attachTab === id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+                            )}
+                          >
+                            <Icon className="w-3 h-3" />{label}
+                          </button>
+                        ))}
+                      </div>
+                      {/* Project picker */}
+                      <div className="px-3 pt-2 pb-1">
+                        <select
+                          value={attachPickerProjectId}
+                          onChange={e => setAttachPickerProjectId(e.target.value)}
+                          className="w-full text-xs rounded-lg border px-2 py-1.5 bg-background"
+                        >
+                          <option value="">Select project…</option>
+                          {attachPickerProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                      </div>
+                      {/* Items list */}
+                      <div className="max-h-40 overflow-y-auto">
+                        {!attachPickerProjectId ? (
+                          <div className="p-3 text-xs text-muted-foreground text-center">Select a project above.</div>
+                        ) : attachPickerLoading ? (
+                          <div className="p-3 text-xs text-muted-foreground text-center">Loading…</div>
+                        ) : attachPickerItems.length === 0 ? (
+                          <div className="p-3 text-xs text-muted-foreground text-center">No {attachTab}s found in this project.</div>
+                        ) : attachTab === "document" ? (
+                          (attachPickerItems as DocAttachment[]).map(doc => (
+                            <button key={doc.id} onClick={() => { setAttachedItem({ type: "document", data: doc }); setAttachPickerOpen(false); setAttachPickerProjectId(""); }}
+                              className="w-full text-left px-3 py-2 hover:bg-muted transition-colors text-xs flex items-center gap-2 border-b last:border-0">
+                              <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold truncate">{doc.name}</p>
+                                <p className="text-muted-foreground capitalize">{doc.type} · v{doc.version}</p>
+                              </div>
+                              <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-semibold capitalize shrink-0",
+                                doc.status === "current" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                              )}>{doc.status}</span>
+                            </button>
+                          ))
+                        ) : attachTab === "photo" ? (
+                          (attachPickerItems as PhotoAttachment[]).map(photo => (
+                            <button key={photo.id} onClick={() => { setAttachedItem({ type: "photo", data: photo }); setAttachPickerOpen(false); setAttachPickerProjectId(""); }}
+                              className="w-full text-left px-3 py-2 hover:bg-muted transition-colors text-xs flex items-center gap-2 border-b last:border-0">
+                              {photo.photoUrl ? (
+                                <img src={photo.photoUrl.replace(/^\/uploads\//, "/api/uploads/")} alt="" className="w-8 h-8 rounded object-cover shrink-0" />
+                              ) : (
+                                <div className="w-8 h-8 rounded bg-muted flex items-center justify-center shrink-0"><Image className="w-3 h-3 text-muted-foreground" /></div>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold truncate capitalize">{photo.category}</p>
+                                <p className="text-muted-foreground truncate">{photo.description ?? photo.referenceNumber}</p>
+                              </div>
+                            </button>
+                          ))
+                        ) : (
+                          (attachPickerItems as PermitAttachment[]).map(permit => {
+                            const daysLeft = Math.ceil((new Date(permit.expiryDate + "T12:00:00").getTime() - Date.now()) / 86400000);
+                            return (
+                              <button key={permit.id} onClick={() => { setAttachedItem({ type: "permit", data: permit }); setAttachPickerOpen(false); setAttachPickerProjectId(""); }}
+                                className="w-full text-left px-3 py-2 hover:bg-muted transition-colors text-xs flex items-center gap-2 border-b last:border-0">
+                                <FileCheck className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-semibold truncate capitalize">{permit.type}</p>
+                                  <p className="text-muted-foreground truncate">{permit.description}</p>
+                                </div>
+                                <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0",
+                                  daysLeft < 0 ? "bg-red-100 text-red-700" : daysLeft <= 14 ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
+                                )}>{daysLeft < 0 ? "Expired" : "Active"}</span>
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                      <div className="px-3 pb-2 pt-1 border-t">
+                        <button onClick={() => { setAttachPickerOpen(false); setAttachPickerProjectId(""); }} className="text-[10px] text-muted-foreground hover:text-foreground">Cancel</button>
+                      </div>
+                    </div>
+                  )}
+
                   <form onSubmit={e => { e.preventDefault(); sendMessage(); }} className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      title="Attach invoice"
+                      className={cn("px-2 shrink-0", invoicePickerOpen && "text-blue-600 bg-blue-50")}
+                      onClick={() => invoicePickerOpen ? setInvoicePickerOpen(false) : openInvoicePicker()}
+                    >
+                      <Receipt className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      title="Attach document, photo or permit"
+                      className={cn("px-2 shrink-0", attachPickerOpen && "text-violet-600 bg-violet-50")}
+                      onClick={() => attachPickerOpen ? setAttachPickerOpen(false) : openAttachPicker()}
+                    >
+                      <Paperclip className="w-4 h-4" />
+                    </Button>
                     <Input
                       value={draft}
                       onChange={e => setDraft(e.target.value)}
-                      placeholder={dictating ? "Listening… speak your message" : "Type a message…"}
+                      placeholder={dictating ? "Listening… speak your message" : (attachedInvoice || attachedItem) ? "Add a note (optional)…" : "Type a message…"}
                       className={cn("flex-1", dictating && "border-orange-400 ring-1 ring-orange-400/60")}
                       onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
                     />
@@ -661,7 +1042,7 @@ export default function MessagesPage() {
                         {dictating ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
                       </Button>
                     )}
-                    <Button type="submit" size="sm" disabled={!draft.trim() || sending} className="px-3">
+                    <Button type="submit" size="sm" disabled={(!draft.trim() && !attachedInvoice && !attachedItem) || sending} className="px-3">
                       <Send className="w-4 h-4" />
                     </Button>
                   </form>

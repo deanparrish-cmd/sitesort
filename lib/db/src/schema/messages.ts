@@ -7,7 +7,10 @@ export const messagesTable = pgTable("messages", {
   companyId: text("company_id").notNull().references(() => companiesTable.id),
   senderId: text("sender_id").notNull().references(() => usersTable.id),
   recipientId: text("recipient_id").notNull().references(() => usersTable.id),
-  content: text("content").notNull(),
+  content: text("content").notNull().default(""),
+  invoiceId: text("invoice_id"),
+  attachmentType: text("attachment_type"), // "document" | "photo" | "permit"
+  attachmentId: text("attachment_id"),
   readAt: timestamp("read_at"),
   editedAt: timestamp("edited_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { messagesTable, usersTable, notificationsTable } from "@workspace/db/schema";
+import { messagesTable, usersTable, notificationsTable, invoicesTable, documentsTable, photosTable, permitsTable } from "@workspace/db/schema";
 import { eq, and, or, desc, sql } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
@@ -146,12 +146,59 @@ router.get("/messages/thread/:userId", authenticate, async (req, res) => {
       : [];
     const userMap = Object.fromEntries(userRows.map(u => [u.id, u.name]));
 
+    // Fetch invoice data for messages that have one
+    const invoiceIds = Array.from(new Set(rows.map(r => r.invoiceId).filter(Boolean))) as string[];
+    const invoiceRows = invoiceIds.length
+      ? await db.select({
+          id: invoicesTable.id,
+          counterpartyName: invoicesTable.counterpartyName,
+          amount: invoicesTable.amount,
+          currency: invoicesTable.currency,
+          dueDate: invoicesTable.dueDate,
+          status: invoicesTable.status,
+          reference: invoicesTable.reference,
+          attachmentUrl: invoicesTable.attachmentUrl,
+          direction: invoicesTable.direction,
+        }).from(invoicesTable).where(sql`${invoicesTable.id} = ANY(${invoiceIds})`)
+      : [];
+    const invoiceMap = Object.fromEntries(invoiceRows.map(inv => [inv.id, inv]));
+
+    // Fetch document/photo/permit attachments
+    const docIds = rows.filter(r => r.attachmentType === "document" && r.attachmentId).map(r => r.attachmentId as string);
+    const photoIds = rows.filter(r => r.attachmentType === "photo" && r.attachmentId).map(r => r.attachmentId as string);
+    const permitIds = rows.filter(r => r.attachmentType === "permit" && r.attachmentId).map(r => r.attachmentId as string);
+
+    const docRows = docIds.length
+      ? await db.select({ id: documentsTable.id, name: documentsTable.name, type: documentsTable.type, fileUrl: documentsTable.fileUrl, status: documentsTable.status, version: documentsTable.version })
+          .from(documentsTable).where(sql`${documentsTable.id} = ANY(${docIds})`)
+      : [];
+    const photoRows = photoIds.length
+      ? await db.select({ id: photosTable.id, photoUrl: photosTable.photoUrl, category: photosTable.category, description: photosTable.description, referenceNumber: photosTable.referenceNumber, zone: photosTable.zone })
+          .from(photosTable).where(sql`${photosTable.id} = ANY(${photoIds})`)
+      : [];
+    const permitRows = permitIds.length
+      ? await db.select({ id: permitsTable.id, type: permitsTable.type, description: permitsTable.description, expiryDate: permitsTable.expiryDate, documentUrl: permitsTable.documentUrl })
+          .from(permitsTable).where(sql`${permitsTable.id} = ANY(${permitIds})`)
+      : [];
+
+    const docMap = Object.fromEntries(docRows.map(d => [d.id, d]));
+    const photoMap = Object.fromEntries(photoRows.map(p => [p.id, p]));
+    const permitMap = Object.fromEntries(permitRows.map(p => [p.id, p]));
+
     res.json(rows.map(m => ({
       id: m.id,
       senderId: m.senderId,
       senderName: userMap[m.senderId] ?? "Unknown",
       recipientId: m.recipientId,
       content: m.content,
+      invoiceId: m.invoiceId ?? null,
+      invoice: m.invoiceId ? (invoiceMap[m.invoiceId] ?? null) : null,
+      attachmentType: m.attachmentType ?? null,
+      attachmentId: m.attachmentId ?? null,
+      attachment: m.attachmentType === "document" && m.attachmentId ? (docMap[m.attachmentId] ?? null)
+        : m.attachmentType === "photo" && m.attachmentId ? (photoMap[m.attachmentId] ?? null)
+        : m.attachmentType === "permit" && m.attachmentId ? (permitMap[m.attachmentId] ?? null)
+        : null,
       readAt: m.readAt?.toISOString() ?? null,
       editedAt: m.editedAt?.toISOString() ?? null,
       createdAt: m.createdAt.toISOString(),
@@ -166,9 +213,9 @@ router.get("/messages/thread/:userId", authenticate, async (req, res) => {
 // POST /api/messages — send a message
 router.post("/messages", authenticate, async (req, res) => {
   try {
-    const { recipientId, content } = req.body;
-    if (!recipientId || !content?.trim()) {
-      res.status(400).json({ error: "validation_error", message: "recipientId and content are required" });
+    const { recipientId, content, invoiceId, attachmentType, attachmentId } = req.body;
+    if (!recipientId || (!content?.trim() && !invoiceId && !attachmentId)) {
+      res.status(400).json({ error: "validation_error", message: "recipientId and content, invoiceId, or attachment are required" });
       return;
     }
 
@@ -188,7 +235,9 @@ router.post("/messages", authenticate, async (req, res) => {
       companyId: req.user!.companyId,
       senderId: req.user!.id,
       recipientId,
-      content: content.trim(),
+      content: content?.trim() || "",
+      ...(invoiceId ? { invoiceId } : {}),
+      ...(attachmentType && attachmentId ? { attachmentType, attachmentId } : {}),
     });
 
     // Fetch sender name for the notification
@@ -207,7 +256,7 @@ router.post("/messages", authenticate, async (req, res) => {
       relatedEntityType: "user",
     });
 
-    res.status(201).json({ id, recipientId, content: content.trim(), createdAt: new Date().toISOString(), mine: true });
+    res.status(201).json({ id, recipientId, content: content?.trim() || "", invoiceId: invoiceId ?? null, invoice: null, attachmentType: attachmentType ?? null, attachmentId: attachmentId ?? null, attachment: null, createdAt: new Date().toISOString(), mine: true });
   } catch (err) {
     req.log.error({ err }, "Send message error");
     res.status(500).json({ error: "server_error", message: "Failed to send message" });
