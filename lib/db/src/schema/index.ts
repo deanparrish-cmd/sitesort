@@ -12,3 +12,5 @@ export * from "./notifications";
 export * from "./qr_codes";
 export * from "./invoices";
 export * from "./messages";
+export * from "./channel_messages";
+export * from "./channel_reads";

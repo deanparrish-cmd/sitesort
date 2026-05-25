@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Send, Users, Eye, ArrowLeft, Circle, Pencil, Trash2, Mic, MicOff, User, Building2, Receipt, X, ExternalLink, FileText, Image, FileCheck, Paperclip } from "lucide-react";
+import { MessageSquare, Send, Users, Eye, ArrowLeft, Circle, Pencil, Trash2, Mic, MicOff, User, Building2, Receipt, X, ExternalLink, FileText, Image, FileCheck, Paperclip, Hash } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSubscription } from "@/contexts/subscription";
 import { useToast } from "@/hooks/use-toast";
@@ -56,6 +56,29 @@ type TeamUser = {
   name: string;
   role: string;
   email: string;
+};
+
+type Channel = {
+  projectId: string;
+  projectName: string;
+  lastMessage: string;
+  lastAt: string | null;
+  unread: number;
+};
+
+type ChannelMessage = {
+  id: string;
+  projectId: string;
+  senderId: string;
+  senderName: string;
+  senderRole: string;
+  content: string;
+  attachmentType?: "document" | "photo" | "permit" | null;
+  attachmentId?: string | null;
+  attachment?: DocAttachment | PhotoAttachment | PermitAttachment | null;
+  editedAt: string | null;
+  createdAt: string;
+  mine: boolean;
 };
 
 const ROLE_COLOURS: Record<string, string> = {
@@ -112,6 +135,13 @@ export default function MessagesPage() {
   const [pendingTo, setPendingTo] = useState<string | null>(null);
   const [autoDictate, setAutoDictate] = useState(false);
 
+  // Project channel state
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [activeChannel, setActiveChannel] = useState<Channel | null>(null);
+  const [channelThread, setChannelThread] = useState<ChannelMessage[]>([]);
+  const [loadingChannelThread, setLoadingChannelThread] = useState(false);
+  const channelPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   type BroadcastMode = "individual" | "role" | "project";
   type BroadcastMember = { userId: string; name: string; role: string };
   const [broadcastMode, setBroadcastMode] = useState<BroadcastMode>("individual");
@@ -157,9 +187,26 @@ export default function MessagesPage() {
     setLoadingThread(false);
   }, [viewAll]);
 
+  const fetchChannels = useCallback(async () => {
+    const r = await fetch("/api/channels", { headers: authHeaders() });
+    if (r.ok) setChannels(await r.json());
+  }, []);
+
+  const fetchChannelThread = useCallback(async (ch: Channel) => {
+    setLoadingChannelThread(true);
+    const r = await fetch(`/api/channels/${ch.projectId}/messages`, { headers: authHeaders() });
+    if (r.ok) {
+      setChannelThread(await r.json());
+      // Mark as read locally
+      setChannels(prev => prev.map(c => c.projectId === ch.projectId ? { ...c, unread: 0 } : c));
+    }
+    setLoadingChannelThread(false);
+  }, []);
+
   useEffect(() => {
     fetchConversations();
-  }, [fetchConversations]);
+    fetchChannels();
+  }, [fetchConversations, fetchChannels]);
 
   useEffect(() => {
     if (activeConv) {
@@ -170,8 +217,16 @@ export default function MessagesPage() {
   }, [activeConv, fetchThread]);
 
   useEffect(() => {
+    if (activeChannel) {
+      fetchChannelThread(activeChannel);
+      channelPollRef.current = setInterval(() => fetchChannelThread(activeChannel), 5000);
+    }
+    return () => { if (channelPollRef.current) clearInterval(channelPollRef.current); };
+  }, [activeChannel, fetchChannelThread]);
+
+  useEffect(() => {
     threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [thread]);
+  }, [thread, channelThread]);
 
   useEffect(() => {
     fetch("/api/messages/users", { headers: authHeaders() })
@@ -268,6 +323,52 @@ export default function MessagesPage() {
       fetchConversations();
     }
     setSending(false);
+  }
+
+  async function sendChannelMessage() {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
+    if ((!draft.trim() && !attachedItem) || !activeChannel || sending) return;
+    setSending(true);
+    const r = await fetch(`/api/channels/${activeChannel.projectId}/messages`, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        content: draft.trim(),
+        ...(attachedItem ? { attachmentType: attachedItem.type, attachmentId: attachedItem.data.id } : {}),
+      }),
+    });
+    if (r.ok) {
+      const msg = await r.json();
+      setChannelThread(prev => [...prev, { ...msg, attachment: attachedItem?.data ?? null }]);
+      setDraft("");
+      setAttachedItem(null);
+      fetchChannels();
+    }
+    setSending(false);
+  }
+
+  async function saveChannelEdit(id: string) {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
+    if (!editDraft.trim()) return;
+    const r = await fetch(`/api/channel-messages/${id}`, {
+      method: "PATCH",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ content: editDraft.trim() }),
+    });
+    if (r.ok) {
+      const data = await r.json();
+      setChannelThread(prev => prev.map(m => m.id === id ? { ...m, content: data.content, editedAt: data.editedAt } : m));
+      setEditingId(null);
+    }
+  }
+
+  async function deleteChannelMessage(id: string) {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
+    const r = await fetch(`/api/channel-messages/${id}`, { method: "DELETE", headers: authHeaders() });
+    if (r.ok) {
+      setChannelThread(prev => prev.filter(m => m.id !== id));
+      setConfirmDeleteId(null);
+    }
   }
 
   function startEdit(msg: Message) {
@@ -430,7 +531,7 @@ export default function MessagesPage() {
           {/* Conversation list */}
           <div className={cn(
             "flex flex-col border rounded-2xl overflow-hidden bg-card",
-            activeConv ? "hidden sm:flex w-72 shrink-0" : "flex-1 sm:w-72 sm:flex-none sm:shrink-0"
+            (activeConv || activeChannel) ? "hidden sm:flex w-72 shrink-0" : "flex-1 sm:w-72 sm:flex-none sm:shrink-0"
           )}>
             <div className="p-3 border-b flex items-center justify-between bg-muted/30">
               <span className="font-semibold text-sm">
@@ -570,11 +671,50 @@ export default function MessagesPage() {
             )}
 
             <div className="flex-1 overflow-y-auto divide-y">
-              {conversations.length === 0 ? (
+              {/* Project channels */}
+              {!viewAll && channels.length > 0 && (
+                <>
+                  <div className="px-4 py-2 bg-muted/20 flex items-center gap-1.5">
+                    <Hash className="w-3 h-3 text-muted-foreground" />
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Project Channels</span>
+                  </div>
+                  {channels.map(ch => (
+                    <button key={ch.projectId} onClick={() => { setActiveChannel(ch); setActiveConv(null); setThread([]); }}
+                      className={cn(
+                        "w-full text-left px-4 py-3 hover:bg-muted/50 transition-colors",
+                        activeChannel?.projectId === ch.projectId && "bg-muted"
+                      )}>
+                      <div className="flex items-start gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center shrink-0">
+                          <Hash className="w-4 h-4 text-blue-500" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1">
+                            <p className="font-semibold text-sm truncate">{ch.projectName}</p>
+                            {ch.lastAt && <span className="text-[10px] text-muted-foreground shrink-0">{timeLabel(ch.lastAt)}</span>}
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate mt-0.5">{ch.lastMessage || "No messages yet"}</p>
+                        </div>
+                        {ch.unread > 0 && (
+                          <Badge className="bg-blue-500 text-white text-[10px] h-4 min-w-4 px-1 shrink-0">{ch.unread}</Badge>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                  <div className="px-4 py-2 bg-muted/20 flex items-center gap-1.5">
+                    <MessageSquare className="w-3 h-3 text-muted-foreground" />
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Direct Messages</span>
+                  </div>
+                </>
+              )}
+
+              {conversations.length === 0 && channels.length === 0 ? (
                 <div className="p-6 text-center text-muted-foreground">
                   <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-30" />
                   <p className="text-xs">{viewAll ? "No messages yet." : "No conversations yet."}</p>
                 </div>
+              ) : conversations.length === 0 && !viewAll ? (
+                <div className="px-4 py-3 text-xs text-muted-foreground">No direct messages yet.</div>
               ) : (
                 conversations.map(conv => (
                   <button key={conv.otherId} onClick={() => setActiveConv(conv)}
@@ -1052,6 +1192,227 @@ export default function MessagesPage() {
                   <p className="text-xs text-muted-foreground">Read-only — manager view</p>
                 </div>
               )}
+            </div>
+          ) : activeChannel ? (
+            /* Channel thread panel */
+            <div className="flex flex-col flex-1 border rounded-2xl overflow-hidden bg-card min-w-0">
+              {/* Channel header */}
+              <div className="px-4 py-3 border-b bg-muted/30 flex items-center gap-3">
+                <button className="sm:hidden mr-1 text-muted-foreground" onClick={() => setActiveChannel(null)}>
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+                <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center shrink-0">
+                  <Hash className="w-4 h-4 text-blue-500" />
+                </div>
+                <div>
+                  <p className="font-bold text-sm">{activeChannel.projectName}</p>
+                  <p className="text-[10px] text-muted-foreground">Project channel · all members</p>
+                </div>
+              </div>
+
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {loadingChannelThread ? (
+                  <div className="flex justify-center pt-8">
+                    <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                  </div>
+                ) : channelThread.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
+                    <Hash className="w-10 h-10 opacity-20" />
+                    <p className="text-sm">No messages yet. Start the conversation!</p>
+                  </div>
+                ) : (
+                  channelThread.map(msg => (
+                    <div key={msg.id} className={cn("flex gap-2 group", msg.mine ? "flex-row-reverse" : "flex-row")}>
+                      <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-[9px] font-bold text-primary shrink-0 mt-1">
+                        {msg.senderName.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
+                      </div>
+                      <div className={cn("max-w-[70%] flex flex-col gap-0.5", msg.mine ? "items-end" : "items-start")}>
+                        <span className="text-[10px] text-muted-foreground px-1">{msg.senderName}
+                          {msg.senderRole && <span className={cn("ml-1.5 px-1 py-0.5 rounded text-[9px] font-semibold capitalize", ROLE_COLOURS[msg.senderRole] ?? "")}>{msg.senderRole.replace(/_/g, " ")}</span>}
+                        </span>
+                        {editingId === msg.id ? (
+                          <div className="flex flex-col gap-1 min-w-[180px]">
+                            <input value={editDraft} onChange={e => setEditDraft(e.target.value)}
+                              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveChannelEdit(msg.id); } if (e.key === "Escape") setEditingId(null); }}
+                              className="px-3 py-2 rounded-2xl text-sm bg-primary text-primary-foreground outline outline-2 outline-white/40 w-full" autoFocus />
+                            <div className="flex gap-2 justify-end px-1">
+                              <button onClick={() => setEditingId(null)} className="text-[10px] text-muted-foreground hover:text-foreground">Cancel</button>
+                              <button onClick={() => saveChannelEdit(msg.id)} className="text-[10px] text-primary font-semibold hover:underline">Save</button>
+                            </div>
+                          </div>
+                        ) : confirmDeleteId === msg.id ? (
+                          <div className="px-3 py-2 rounded-2xl text-sm bg-red-100 text-red-700 flex items-center gap-2">
+                            <span>Delete?</span>
+                            <button onClick={() => deleteChannelMessage(msg.id)} className="font-semibold hover:underline">Yes</button>
+                            <button onClick={() => setConfirmDeleteId(null)} className="text-muted-foreground hover:underline">No</button>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col gap-1.5">
+                            {/* Document card */}
+                            {msg.attachmentType === "document" && msg.attachment && (() => {
+                              const doc = msg.attachment as DocAttachment;
+                              return (
+                                <div className={cn("rounded-2xl border text-xs overflow-hidden min-w-[220px]", msg.mine ? "rounded-tr-sm border-primary/20 bg-primary/5" : "rounded-tl-sm border-border bg-card")}>
+                                  <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/40">
+                                    <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" /><span className="font-semibold">Document</span>
+                                    <span className={cn("ml-auto px-1.5 py-0.5 rounded text-[10px] font-semibold capitalize", doc.status === "current" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")}>{doc.status}</span>
+                                  </div>
+                                  <div className="px-3 py-2 space-y-0.5">
+                                    <p className="font-semibold">{doc.name}</p>
+                                    <p className="text-muted-foreground capitalize">{doc.type} · v{doc.version}</p>
+                                    <a href={doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/")} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline text-[11px] font-medium mt-1"><ExternalLink className="w-3 h-3" /> View</a>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                            {/* Photo card */}
+                            {msg.attachmentType === "photo" && msg.attachment && (() => {
+                              const photo = msg.attachment as PhotoAttachment;
+                              return (
+                                <div className={cn("rounded-2xl border text-xs overflow-hidden min-w-[220px] max-w-[260px]", msg.mine ? "rounded-tr-sm border-primary/20 bg-primary/5" : "rounded-tl-sm border-border bg-card")}>
+                                  {photo.photoUrl && <img src={photo.photoUrl.replace(/^\/uploads\//, "/api/uploads/")} alt={photo.category} className="w-full aspect-video object-cover" />}
+                                  <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-muted/40">
+                                    <Image className="w-3.5 h-3.5 text-muted-foreground shrink-0" /><span className="font-semibold capitalize">{photo.category}</span>
+                                    <span className="ml-auto text-muted-foreground">{photo.referenceNumber}</span>
+                                  </div>
+                                  {(photo.description || photo.zone) && (
+                                    <div className="px-3 py-2 space-y-0.5">
+                                      {photo.description && <p>{photo.description}</p>}
+                                      {photo.zone && <p className="text-muted-foreground">Zone: {photo.zone}</p>}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                            {/* Permit card */}
+                            {msg.attachmentType === "permit" && msg.attachment && (() => {
+                              const permit = msg.attachment as PermitAttachment;
+                              const daysLeft = Math.ceil((new Date(permit.expiryDate + "T12:00:00").getTime() - Date.now()) / 86400000);
+                              return (
+                                <div className={cn("rounded-2xl border text-xs overflow-hidden min-w-[220px]", msg.mine ? "rounded-tr-sm border-primary/20 bg-primary/5" : "rounded-tl-sm border-border bg-card")}>
+                                  <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/40">
+                                    <FileCheck className="w-3.5 h-3.5 text-muted-foreground shrink-0" /><span className="font-semibold">Permit</span>
+                                    <span className={cn("ml-auto px-1.5 py-0.5 rounded text-[10px] font-semibold", daysLeft < 0 ? "bg-red-100 text-red-700" : daysLeft <= 14 ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700")}>{daysLeft < 0 ? "Expired" : daysLeft <= 14 ? "Expiring soon" : "Active"}</span>
+                                  </div>
+                                  <div className="px-3 py-2 space-y-0.5">
+                                    <p className="font-semibold capitalize">{permit.type}</p>
+                                    <p className="text-muted-foreground">{permit.description}</p>
+                                    <p className="text-muted-foreground">Expires: {new Date(permit.expiryDate + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
+                                    {permit.documentUrl && <a href={permit.documentUrl.replace(/^\/uploads\//, "/api/uploads/")} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline text-[11px] font-medium mt-1"><ExternalLink className="w-3 h-3" /> View permit</a>}
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                            {(msg.content || !msg.attachmentType) && (
+                              <div className={cn("px-3 py-2 rounded-2xl text-sm leading-relaxed break-words", msg.mine ? "bg-primary text-primary-foreground rounded-tr-sm" : "bg-muted rounded-tl-sm")}>
+                                {msg.content}{msg.editedAt && <span className="text-[9px] opacity-50 ml-1.5">(edited)</span>}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        <div className={cn("flex items-center gap-1 px-1", msg.mine ? "flex-row-reverse" : "flex-row")}>
+                          <span className="text-[10px] text-muted-foreground">{timeLabel(msg.createdAt)}</span>
+                          {msg.mine && editingId !== msg.id && confirmDeleteId !== msg.id && (
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">
+                              <button onClick={() => { setEditingId(msg.id); setEditDraft(msg.content); setConfirmDeleteId(null); }} className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground" title="Edit"><Pencil className="w-3 h-3" /></button>
+                              <button onClick={() => setConfirmDeleteId(msg.id)} className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-red-500" title="Delete"><Trash2 className="w-3 h-3" /></button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+                <div ref={threadEndRef} />
+              </div>
+
+              {/* Channel compose area */}
+              <div className="p-3 border-t bg-muted/20 space-y-2">
+                {attachedItem && (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-violet-50 border border-violet-200 text-xs">
+                    {attachedItem.type === "document" && <FileText className="w-4 h-4 text-violet-600 shrink-0" />}
+                    {attachedItem.type === "photo" && <Image className="w-4 h-4 text-violet-600 shrink-0" />}
+                    {attachedItem.type === "permit" && <FileCheck className="w-4 h-4 text-violet-600 shrink-0" />}
+                    <span className="flex-1 font-semibold text-violet-800 truncate">
+                      {attachedItem.type === "document" && (attachedItem.data as DocAttachment).name}
+                      {attachedItem.type === "photo" && `Photo · ${(attachedItem.data as PhotoAttachment).referenceNumber}`}
+                      {attachedItem.type === "permit" && `Permit · ${(attachedItem.data as PermitAttachment).type}`}
+                    </span>
+                    <button onClick={() => setAttachedItem(null)} className="text-violet-400 hover:text-violet-600 shrink-0"><X className="w-3.5 h-3.5" /></button>
+                  </div>
+                )}
+                {attachPickerOpen && (
+                  <div className="rounded-xl border bg-card shadow-lg overflow-hidden">
+                    <div className="flex border-b">
+                      {([{ id: "document" as const, label: "Document", Icon: FileText }, { id: "photo" as const, label: "Photo", Icon: Image }, { id: "permit" as const, label: "Permit", Icon: FileCheck }]).map(({ id, label, Icon }) => (
+                        <button key={id} onClick={() => { setAttachTab(id); setAttachPickerItems([]); }}
+                          className={cn("flex-1 flex items-center justify-center gap-1 px-2 py-2 text-[11px] font-semibold border-b-2 transition-colors", attachTab === id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}>
+                          <Icon className="w-3 h-3" />{label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="px-3 pt-2 pb-1">
+                      <select value={attachPickerProjectId} onChange={e => setAttachPickerProjectId(e.target.value)} className="w-full text-xs rounded-lg border px-2 py-1.5 bg-background">
+                        <option value="">Select project…</option>
+                        {attachPickerProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="max-h-40 overflow-y-auto">
+                      {!attachPickerProjectId ? <div className="p-3 text-xs text-muted-foreground text-center">Select a project above.</div>
+                        : attachPickerLoading ? <div className="p-3 text-xs text-muted-foreground text-center">Loading…</div>
+                        : attachPickerItems.length === 0 ? <div className="p-3 text-xs text-muted-foreground text-center">No {attachTab}s found.</div>
+                        : attachTab === "document" ? (attachPickerItems as DocAttachment[]).map(doc => (
+                          <button key={doc.id} onClick={() => { setAttachedItem({ type: "document", data: doc }); setAttachPickerOpen(false); setAttachPickerProjectId(""); }}
+                            className="w-full text-left px-3 py-2 hover:bg-muted transition-colors text-xs flex items-center gap-2 border-b last:border-0">
+                            <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                            <div className="flex-1 min-w-0"><p className="font-semibold truncate">{doc.name}</p><p className="text-muted-foreground capitalize">{doc.type} · v{doc.version}</p></div>
+                            <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-semibold capitalize shrink-0", doc.status === "current" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")}>{doc.status}</span>
+                          </button>
+                        )) : attachTab === "photo" ? (attachPickerItems as PhotoAttachment[]).map(photo => (
+                          <button key={photo.id} onClick={() => { setAttachedItem({ type: "photo", data: photo }); setAttachPickerOpen(false); setAttachPickerProjectId(""); }}
+                            className="w-full text-left px-3 py-2 hover:bg-muted transition-colors text-xs flex items-center gap-2 border-b last:border-0">
+                            {photo.photoUrl ? <img src={photo.photoUrl.replace(/^\/uploads\//, "/api/uploads/")} alt="" className="w-8 h-8 rounded object-cover shrink-0" /> : <div className="w-8 h-8 rounded bg-muted flex items-center justify-center shrink-0"><Image className="w-3 h-3 text-muted-foreground" /></div>}
+                            <div className="flex-1 min-w-0"><p className="font-semibold truncate capitalize">{photo.category}</p><p className="text-muted-foreground truncate">{photo.description ?? photo.referenceNumber}</p></div>
+                          </button>
+                        )) : (attachPickerItems as PermitAttachment[]).map(permit => {
+                          const daysLeft = Math.ceil((new Date(permit.expiryDate + "T12:00:00").getTime() - Date.now()) / 86400000);
+                          return (
+                            <button key={permit.id} onClick={() => { setAttachedItem({ type: "permit", data: permit }); setAttachPickerOpen(false); setAttachPickerProjectId(""); }}
+                              className="w-full text-left px-3 py-2 hover:bg-muted transition-colors text-xs flex items-center gap-2 border-b last:border-0">
+                              <FileCheck className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                              <div className="flex-1 min-w-0"><p className="font-semibold truncate capitalize">{permit.type}</p><p className="text-muted-foreground truncate">{permit.description}</p></div>
+                              <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0", daysLeft < 0 ? "bg-red-100 text-red-700" : daysLeft <= 14 ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700")}>{daysLeft < 0 ? "Expired" : "Active"}</span>
+                            </button>
+                          );
+                        })}
+                    </div>
+                    <div className="px-3 pb-2 pt-1 border-t">
+                      <button onClick={() => { setAttachPickerOpen(false); setAttachPickerProjectId(""); }} className="text-[10px] text-muted-foreground hover:text-foreground">Cancel</button>
+                    </div>
+                  </div>
+                )}
+                <form onSubmit={e => { e.preventDefault(); sendChannelMessage(); }} className="flex gap-2">
+                  <Button type="button" size="sm" variant="ghost" title="Attach document, photo or permit"
+                    className={cn("px-2 shrink-0", attachPickerOpen && "text-violet-600 bg-violet-50")}
+                    onClick={() => attachPickerOpen ? setAttachPickerOpen(false) : openAttachPicker()}>
+                    <Paperclip className="w-4 h-4" />
+                  </Button>
+                  <Input value={draft} onChange={e => setDraft(e.target.value)}
+                    placeholder={dictating ? "Listening…" : attachedItem ? "Add a note (optional)…" : `Message #${activeChannel.projectName}…`}
+                    className={cn("flex-1", dictating && "border-orange-400 ring-1 ring-orange-400/60")}
+                    onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChannelMessage(); } }} />
+                  {voiceSupported && (
+                    <Button type="button" size="sm" variant="ghost" title={dictating ? "Stop" : "Dictate"}
+                      className={cn("px-2 shrink-0", dictating && "text-orange-500 animate-pulse")} onClick={toggleDictation}>
+                      {dictating ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                    </Button>
+                  )}
+                  <Button type="submit" size="sm" disabled={(!draft.trim() && !attachedItem) || sending} className="px-3">
+                    <Send className="w-4 h-4" />
+                  </Button>
+                </form>
+              </div>
             </div>
           ) : (
             <div className="hidden sm:flex flex-1 items-center justify-center border rounded-2xl bg-card/50 border-dashed">
