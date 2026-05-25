@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Send, Users, Eye, ArrowLeft, Circle, Pencil, Trash2, Mic, MicOff } from "lucide-react";
+import { MessageSquare, Send, Users, Eye, ArrowLeft, Circle, Pencil, Trash2, Mic, MicOff, User, Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSubscription } from "@/contexts/subscription";
 import { useToast } from "@/hooks/use-toast";
@@ -44,7 +44,7 @@ const ROLE_COLOURS: Record<string, string> = {
   subcontractor: "bg-orange-100 text-orange-700",
 };
 
-function authHeaders() {
+function authHeaders(): Record<string, string> {
   const t = localStorage.getItem("sitesort_token");
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
@@ -90,6 +90,16 @@ export default function MessagesPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [pendingTo, setPendingTo] = useState<string | null>(null);
   const [autoDictate, setAutoDictate] = useState(false);
+
+  type BroadcastMode = "individual" | "role" | "project";
+  type BroadcastMember = { userId: string; name: string; role: string };
+  const [broadcastMode, setBroadcastMode] = useState<BroadcastMode>("individual");
+  const [broadcastProjects, setBroadcastProjects] = useState<{ id: string; name: string }[]>([]);
+  const [broadcastProjectId, setBroadcastProjectId] = useState("");
+  const [broadcastMembers, setBroadcastMembers] = useState<BroadcastMember[]>([]);
+  const [broadcastRole, setBroadcastRole] = useState("all");
+  const [broadcastContent, setBroadcastContent] = useState("");
+  const [broadcastSending, setBroadcastSending] = useState(false);
   const [dictating, setDictating] = useState(false);
   const threadEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -247,6 +257,62 @@ export default function MessagesPage() {
     }
   }
 
+  // Fetch active projects when switching to role/project broadcast mode
+  useEffect(() => {
+    if ((broadcastMode === "role" || broadcastMode === "project") && broadcastProjects.length === 0) {
+      fetch("/api/projects", { headers: authHeaders() })
+        .then(r => r.ok ? r.json() : [])
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .then((all: any[]) => setBroadcastProjects(all.filter((p: any) => p.status === "active")));
+    }
+  }, [broadcastMode, broadcastProjects.length]);
+
+  // Fetch project members when a project is selected
+  useEffect(() => {
+    if (!broadcastProjectId) { setBroadcastMembers([]); return; }
+    fetch(`/api/projects/${broadcastProjectId}/members`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : [])
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .then((members: any[]) => setBroadcastMembers(
+        members
+          .filter((m: any) => m.userId && m.userId !== me?.id)
+          .map((m: any) => ({ userId: m.userId, name: m.name, role: m.role }))
+      ));
+  }, [broadcastProjectId, me?.id]);
+
+  const broadcastRecipients: BroadcastMember[] =
+    broadcastMode === "project"
+      ? broadcastMembers
+      : broadcastMembers.filter(m => broadcastRole === "all" || m.role === broadcastRole);
+
+  function resetBroadcast() {
+    setBroadcastMode("individual");
+    setBroadcastProjectId("");
+    setBroadcastMembers([]);
+    setBroadcastRole("all");
+    setBroadcastContent("");
+  }
+
+  async function sendBroadcast() {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
+    if (!broadcastContent.trim() || broadcastRecipients.length === 0 || broadcastSending) return;
+    setBroadcastSending(true);
+    const r = await fetch("/api/messages/broadcast", {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ recipientIds: broadcastRecipients.map(m => m.userId), content: broadcastContent.trim() }),
+    });
+    if (r.ok) {
+      const { sent } = await r.json();
+      toast({ title: `Message sent to ${sent} team member${sent !== 1 ? "s" : ""}` });
+      setBroadcastContent("");
+      setNewChatOpen(false);
+      resetBroadcast();
+      fetchConversations();
+    }
+    setBroadcastSending(false);
+  }
+
   async function startNewChat(user: TeamUser) {
     setNewChatOpen(false);
     const conv: Conversation = {
@@ -300,25 +366,127 @@ export default function MessagesPage() {
               )}
             </div>
 
-            {/* New chat user picker */}
+            {/* New chat picker */}
             {newChatOpen && !viewAll && (
-              <div className="border-b p-3 bg-muted/20">
-                <p className="text-xs font-semibold text-muted-foreground mb-2">Start a conversation:</p>
-                <div className="space-y-1 max-h-48 overflow-y-auto">
-                  {teamUsers.map(u => (
-                    <button key={u.id} onClick={() => startNewChat(u)}
-                      className="w-full text-left px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary shrink-0">
-                        {u.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="font-semibold leading-none">{u.name}</p>
-                        <p className="text-[10px] text-muted-foreground capitalize mt-0.5">{u.role.replace(/_/g, " ")}</p>
-                      </div>
+              <div className="border-b p-3 bg-muted/20 space-y-2">
+                {/* Mode selector */}
+                <div className="flex gap-1">
+                  {([
+                    { id: "individual", label: "Individual", Icon: User },
+                    { id: "role", label: "By Role", Icon: Users },
+                    { id: "project", label: "All in Project", Icon: Building2 },
+                  ] as { id: BroadcastMode; label: string; Icon: React.ElementType }[]).map(({ id, label, Icon }) => (
+                    <button
+                      key={id}
+                      onClick={() => { setBroadcastMode(id); setBroadcastProjectId(""); setBroadcastRole("all"); setBroadcastContent(""); }}
+                      className={cn(
+                        "flex-1 flex flex-col items-center gap-0.5 py-1.5 rounded-lg text-[10px] font-semibold transition-colors",
+                        broadcastMode === id ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/70"
+                      )}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      {label}
                     </button>
                   ))}
                 </div>
-                <Button size="sm" variant="ghost" className="w-full mt-2 h-7 text-xs" onClick={() => setNewChatOpen(false)}>
+
+                {/* Individual: existing user list */}
+                {broadcastMode === "individual" && (
+                  <div className="space-y-1 max-h-48 overflow-y-auto">
+                    {teamUsers.map(u => (
+                      <button key={u.id} onClick={() => { startNewChat(u); resetBroadcast(); }}
+                        className="w-full text-left px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary shrink-0">
+                          {u.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="font-semibold leading-none">{u.name}</p>
+                          <p className="text-[10px] text-muted-foreground capitalize mt-0.5">{u.role.replace(/_/g, " ")}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Role / All in Project: project picker + compose */}
+                {(broadcastMode === "role" || broadcastMode === "project") && (
+                  <div className="space-y-2">
+                    <select
+                      value={broadcastProjectId}
+                      onChange={e => { setBroadcastProjectId(e.target.value); setBroadcastRole("all"); }}
+                      className="w-full text-xs rounded-lg border px-2 py-1.5 bg-background"
+                    >
+                      <option value="">Select project…</option>
+                      {broadcastProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+
+                    {/* Role filter chips (role mode only) */}
+                    {broadcastMode === "role" && broadcastProjectId && (
+                      <div className="flex flex-wrap gap-1">
+                        {(["all", "admin", "project_manager", "site_worker", "subcontractor"] as const).map(r => {
+                          const count = r === "all" ? broadcastMembers.length : broadcastMembers.filter(m => m.role === r).length;
+                          if (r !== "all" && count === 0) return null;
+                          return (
+                            <button
+                              key={r}
+                              onClick={() => setBroadcastRole(r)}
+                              className={cn(
+                                "px-2 py-0.5 rounded-full text-[10px] font-semibold transition-colors capitalize",
+                                broadcastRole === r ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/70"
+                              )}
+                            >
+                              {r === "all" ? "All" : r.replace(/_/g, " ")} ({count})
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Member preview */}
+                    {broadcastProjectId && broadcastRecipients.length > 0 && (
+                      <div className="max-h-20 overflow-y-auto space-y-0.5 bg-muted/30 rounded-lg px-2 py-1">
+                        {broadcastRecipients.slice(0, 6).map(m => (
+                          <div key={m.userId} className="flex items-center gap-1.5 text-xs text-muted-foreground py-0.5">
+                            <div className="w-5 h-5 rounded bg-primary/10 flex items-center justify-center text-[9px] font-bold text-primary shrink-0">
+                              {m.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
+                            </div>
+                            {m.name}
+                          </div>
+                        ))}
+                        {broadcastRecipients.length > 6 && (
+                          <p className="text-[10px] text-muted-foreground">+{broadcastRecipients.length - 6} more</p>
+                        )}
+                      </div>
+                    )}
+                    {broadcastProjectId && broadcastRecipients.length === 0 && (
+                      <p className="text-[10px] text-muted-foreground">No team members with accounts in this project.</p>
+                    )}
+
+                    {/* Compose + send */}
+                    {broadcastProjectId && broadcastRecipients.length > 0 && (
+                      <>
+                        <textarea
+                          value={broadcastContent}
+                          onChange={e => setBroadcastContent(e.target.value)}
+                          placeholder="Type your message…"
+                          rows={2}
+                          className="w-full text-xs rounded-lg border px-2 py-1.5 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                        />
+                        <Button
+                          size="sm"
+                          className="w-full h-7 text-xs gap-1"
+                          disabled={!broadcastContent.trim() || broadcastSending}
+                          onClick={sendBroadcast}
+                        >
+                          <Send className="w-3 h-3" />
+                          {broadcastSending ? "Sending…" : `Send to ${broadcastRecipients.length} member${broadcastRecipients.length !== 1 ? "s" : ""}`}
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                <Button size="sm" variant="ghost" className="w-full h-7 text-xs" onClick={() => { setNewChatOpen(false); resetBroadcast(); }}>
                   Cancel
                 </Button>
               </div>

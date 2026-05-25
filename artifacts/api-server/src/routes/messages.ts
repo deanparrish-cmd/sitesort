@@ -214,6 +214,53 @@ router.post("/messages", authenticate, async (req, res) => {
   }
 });
 
+// POST /api/messages/broadcast — send same message to multiple recipients
+router.post("/messages/broadcast", authenticate, async (req, res) => {
+  try {
+    const { recipientIds, content } = req.body;
+    if (!Array.isArray(recipientIds) || recipientIds.length === 0 || !content?.trim()) {
+      res.status(400).json({ error: "validation_error", message: "recipientIds and content are required" });
+      return;
+    }
+
+    const recipients = await db
+      .select({ id: usersTable.id, name: usersTable.name })
+      .from(usersTable)
+      .where(and(sql`${usersTable.id} = ANY(${recipientIds})`, eq(usersTable.companyId, req.user!.companyId)));
+
+    const senderRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
+    const senderName = senderRows[0]?.name ?? "Someone";
+    const preview = content.trim().length > 80 ? content.trim().slice(0, 77) + "…" : content.trim();
+
+    let sent = 0;
+    for (const recipient of recipients) {
+      if (recipient.id === req.user!.id) continue;
+      await db.insert(messagesTable).values({
+        id: generateId(),
+        companyId: req.user!.companyId,
+        senderId: req.user!.id,
+        recipientId: recipient.id,
+        content: content.trim(),
+      });
+      await db.insert(notificationsTable).values({
+        id: generateId(),
+        userId: recipient.id,
+        type: "new_message",
+        title: `New message from ${senderName}`,
+        message: preview,
+        relatedEntityId: req.user!.id,
+        relatedEntityType: "user",
+      });
+      sent++;
+    }
+
+    res.json({ sent });
+  } catch (err) {
+    req.log.error({ err }, "Broadcast message error");
+    res.status(500).json({ error: "server_error", message: "Failed to send broadcast" });
+  }
+});
+
 // PATCH /api/messages/:id — edit own message
 router.patch("/messages/:id", authenticate, async (req, res) => {
   try {
