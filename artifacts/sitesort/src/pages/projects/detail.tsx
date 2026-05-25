@@ -77,9 +77,6 @@ export default function ProjectDetail() {
 
   const [addingTrade, setAddingTrade] = useState(false);
   const [newTradeName, setNewTradeName] = useState("");
-  const [addPersonTrade, setAddPersonTrade] = useState<string | null>(null);
-  const [addPersonError, setAddPersonError] = useState<string | null>(null);
-  const { register: personRegister, handleSubmit: personHandleSubmit, reset: personReset } = useForm();
 
   const submitAddTrade = async () => {
     if (!newTradeName.trim()) return;
@@ -92,25 +89,6 @@ export default function ProjectDetail() {
     await queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}`] });
     setNewTradeName("");
     setAddingTrade(false);
-  };
-
-  const submitAddPerson = async (data: any) => {
-    setAddPersonError(null);
-    try {
-      const token = localStorage.getItem("sitesort_token");
-      const res = await fetch(`/api/projects/${projectId}/tradespeople`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ trade: addPersonTrade, companyName: data.companyName, contactName: data.contactName, contactEmail: data.contactEmail, contactPhone: data.contactPhone }),
-      });
-      if (!res.ok) { const e = await res.json(); throw new Error(e.message); }
-      await queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/members`] });
-      await queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}`] });
-      setAddPersonTrade(null);
-      personReset();
-    } catch (e: any) {
-      setAddPersonError(e?.message ?? "Failed to add person");
-    }
   };
 
   const [editingPhoneId, setEditingPhoneId] = useState<string | null>(null);
@@ -760,7 +738,7 @@ tr:last-child td{border-bottom:none}
             <div className="bg-card p-12 rounded-xl border text-center border-dashed border-2">
               <Users className="w-12 h-12 mx-auto text-muted-foreground mb-4 opacity-50" />
               <h3 className="text-lg font-bold">No team members yet</h3>
-              <p className="text-muted-foreground">Add tradespeople and subcontractors to this project.</p>
+              <p className="text-muted-foreground">Add subcontractors from your directory using the button above.</p>
             </div>
           ) : (() => {
             const allMembers = members as any[];
@@ -785,12 +763,6 @@ tr:last-child td{border-bottom:none}
                         <FolderOpen className="w-5 h-5 text-orange-500 shrink-0" />
                         <span className="font-bold capitalize flex-1">{trade}</span>
                         <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{tradeMembers.length} {tradeMembers.length === 1 ? "person" : "people"}</span>
-                        {trade !== "Site Staff" && (
-                          <button
-                            onClick={e => { e.stopPropagation(); setAddPersonTrade(trade); setAddPersonError(null); personReset(); }}
-                            className="ml-2 flex items-center gap-1 text-xs font-semibold text-primary hover:underline shrink-0"
-                          >+ Add Person</button>
-                        )}
                       </button>
                       {open && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 pt-0 border-t">
@@ -1355,37 +1327,6 @@ tr:last-child td{border-bottom:none}
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => setIsEditOpen(false)}>Cancel</Button>
             <Button type="submit" variant="accent" isLoading={updateMutation.isPending}>Save Changes</Button>
-          </DialogFooter>
-        </form>
-      </Dialog>
-
-      <Dialog open={!!addPersonTrade} onOpenChange={v => { if (!v) { setAddPersonTrade(null); setAddPersonError(null); } }}>
-        <DialogHeader>
-          <DialogTitle>Add Person — <span className="capitalize">{addPersonTrade}</span></DialogTitle>
-        </DialogHeader>
-        {addPersonError && (
-          <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm">{addPersonError}</div>
-        )}
-        <form onSubmit={personHandleSubmit(submitAddPerson)} className="space-y-4">
-          <div>
-            <label className="text-sm font-semibold mb-1 block">Company / Business Name</label>
-            <Input {...personRegister("companyName", { required: true })} placeholder="e.g. Smith Electrical Ltd" />
-          </div>
-          <div>
-            <label className="text-sm font-semibold mb-1 block">Contact Name</label>
-            <Input {...personRegister("contactName", { required: true })} placeholder="e.g. John Smith" icon={<Users className="w-4 h-4" />} />
-          </div>
-          <div>
-            <label className="text-sm font-semibold mb-1 block">Email</label>
-            <Input {...personRegister("contactEmail")} type="email" placeholder="john@smithelectrical.co.uk" icon={<Mail className="w-4 h-4" />} />
-          </div>
-          <div>
-            <label className="text-sm font-semibold mb-1 block">Phone</label>
-            <Input {...personRegister("contactPhone")} type="tel" placeholder="+44 7700 000000" icon={<Phone className="w-4 h-4" />} />
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => setAddPersonTrade(null)}>Cancel</Button>
-            <Button type="submit" variant="accent">Add to Project</Button>
           </DialogFooter>
         </form>
       </Dialog>
