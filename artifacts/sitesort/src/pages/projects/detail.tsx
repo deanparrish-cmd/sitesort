@@ -10,7 +10,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle } from "lucide-react";
+import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { InsuranceCertZone } from "@/components/ui/insurance-cert-zone";
@@ -345,6 +345,138 @@ export default function ProjectDetail() {
     }
   };
 
+  const generateReport = () => {
+    if (!project) return;
+    const now = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" } as Intl.DateTimeFormatOptions);
+    const fmtD = (s?: string | null) => s ? new Date(s.slice(0, 10) + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—";
+    const fmtAmt = (currency: string, amount: string) => `${currency} ${Number(amount).toLocaleString("en-GB", { minimumFractionDigits: 2 })}`;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const daysLeft = (s: string) => Math.ceil((new Date(s + "T00:00:00").getTime() - today.getTime()) / 86400000);
+
+    const allMembersArr: any[] = (members as any[]) ?? [];
+    const projectTrades: string[] = (project as any)?.trades ?? [];
+    const memberTrades = allMembersArr.flatMap((m: any) => m.trades?.length ? m.trades : []);
+    const hasStaff = allMembersArr.some((m: any) => !m.trades?.length);
+    const allTrades = Array.from(new Set([...projectTrades, ...memberTrades, ...(hasStaff ? ["Site Staff"] : [])])).sort((a, b) => a === "Site Staff" ? 1 : b === "Site Staff" ? -1 : a.localeCompare(b));
+
+    const teamRows = allTrades.map(trade => {
+      const tradeMembers = allMembersArr.filter((m: any) => trade === "Site Staff" ? !m.trades?.length : m.trades?.includes(trade));
+      if (!tradeMembers.length) return "";
+      return `<tr class="trade-header"><td colspan="4">${trade}</td></tr>${tradeMembers.map((m: any) => `<tr><td>${m.name}</td><td class="capitalize">${m.role.replace("_", " ")}</td><td>${m.email ?? "—"}</td><td>${m.phone ?? "—"}</td></tr>`).join("")}`;
+    }).join("");
+
+    const permitsRows = [...permits].sort((a, b) => a.expiryDate.localeCompare(b.expiryDate)).map(p => {
+      const d = daysLeft(p.expiryDate);
+      const statusLabel = d < 0 ? "Expired" : d <= 7 ? `Expires in ${d}d` : `Active (${d}d)`;
+      const cls = d < 0 ? "red" : d <= 7 ? "orange" : "";
+      return `<tr><td>${p.type}</td><td>${p.description}</td><td>${fmtD(p.expiryDate)}</td><td class="${cls}">${statusLabel}</td><td>${p.responsibleName ?? "—"}</td></tr>`;
+    }).join("");
+
+    const docsRows = [...(documents ?? [])].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).map(doc => {
+      const pending = doc.distributionSummary?.pending ?? 0;
+      const signOff = doc.status === "superseded" ? "Superseded" : pending > 0 ? `${pending} pending` : "All signed off";
+      return `<tr${doc.status === "superseded" ? ' class="superseded"' : ""}><td>${doc.name}</td><td class="capitalize">${doc.type.replace("_", " ")}</td><td>v${doc.version}</td><td>${doc.status === "superseded" ? "Superseded" : "Current"}</td><td>${signOff}</td><td>${fmtD(String(doc.createdAt))}</td></tr>`;
+    }).join("");
+
+    const unpaidIn = projectInvoices.filter(i => i.direction === "inbound" && i.status !== "paid").reduce((s, i) => s + Number(i.amount), 0);
+    const unpaidOut = projectInvoices.filter(i => i.direction === "outbound" && i.status !== "paid").reduce((s, i) => s + Number(i.amount), 0);
+    const invRows = [...projectInvoices].sort((a, b) => a.dueDate.localeCompare(b.dueDate)).map(inv => {
+      const d = daysLeft(inv.dueDate); const paid = inv.status === "paid";
+      const statusLabel = paid ? "Paid" : d < 0 ? "Overdue" : `Due in ${d}d`;
+      const cls = paid ? "green" : d < 0 ? "red" : d <= 7 ? "orange" : "";
+      return `<tr><td>${inv.direction === "inbound" ? "↓ Inbound" : "↑ Outbound"}</td><td>${inv.counterpartyName}</td><td>${inv.description}</td><td>${inv.reference ?? "—"}</td><td>${fmtAmt(inv.currency, inv.amount)}</td><td>${fmtD(inv.dueDate)}</td><td class="${cls}">${statusLabel}</td></tr>`;
+    }).join("");
+
+    const photoCounts = photos.reduce((acc, p) => { acc[p.category] = (acc[p.category] ?? 0) + 1; return acc; }, {} as Record<string, number>);
+    const photoSummary = Object.entries(photoCounts).map(([cat, n]) => `${n} ${cat.replace("_", " ")}`).join(", ");
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/>
+<title>${project.name} — Project Report</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:11px;color:#1a1a1a;background:white;padding:0}
+.page{max-width:900px;margin:0 auto;padding:32px}
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;padding-bottom:14px;border-bottom:2px solid #e5e7eb}
+.logo{font-size:20px;font-weight:800;color:#ea6c0a;letter-spacing:-0.5px}
+.report-label{font-size:10px;color:#6b7280}
+.hero{margin-bottom:24px;padding:18px;background:#fff7ed;border-left:4px solid #ea6c0a;border-radius:4px}
+.hero h1{font-size:22px;font-weight:800;color:#1f2937;margin-bottom:2px}
+.hero .address{color:#6b7280;font-size:12px;margin-bottom:14px}
+.meta{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.meta-item label{display:block;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#9ca3af;margin-bottom:2px}
+.meta-item span{font-size:14px;font-weight:700;color:#1f2937}
+.prog{height:5px;background:#e5e7eb;border-radius:99px;overflow:hidden;margin-top:4px}
+.prog-fill{height:100%;background:#ea6c0a;border-radius:99px}
+section{margin-bottom:24px}
+section h2{font-size:12px;font-weight:700;color:#ea6c0a;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid #f3f4f6}
+.count{background:#f3f4f6;color:#6b7280;font-size:9px;font-weight:700;padding:1px 6px;border-radius:99px;margin-left:6px}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#9ca3af;padding:5px 8px;border-bottom:1px solid #e5e7eb;background:#f9fafb}
+td{padding:5px 8px;border-bottom:1px solid #f3f4f6;vertical-align:top}
+tr:last-child td{border-bottom:none}
+.trade-header td{background:#f3f4f6;font-size:9px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:0.5px;padding:3px 8px}
+.superseded td{opacity:0.5}
+.red{color:#dc2626;font-weight:700}
+.orange{color:#ea580c;font-weight:700}
+.green{color:#16a34a;font-weight:700}
+.badge{display:inline-block;font-size:9px;font-weight:700;padding:2px 7px;border-radius:99px}
+.badge-active{background:#dcfce7;color:#15803d}
+.badge-hold{background:#fef9c3;color:#a16207}
+.summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.summary-box{padding:10px 14px;border-radius:6px;border:1px solid}
+.summary-box.green-box{background:#f0fdf4;border-color:#bbf7d0}
+.summary-box.red-box{background:#fff1f2;border-color:#fecdd3}
+.summary-box label{display:block;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#9ca3af;margin-bottom:3px}
+.summary-box.green-box span{font-size:16px;font-weight:800;color:#15803d}
+.summary-box.red-box span{font-size:16px;font-weight:800;color:#be123c}
+.photo-box{background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:10px 14px;font-size:12px;color:#374151}
+.empty{color:#9ca3af;font-style:italic;padding:8px}
+.footer{margin-top:28px;padding-top:10px;border-top:1px solid #e5e7eb;display:flex;justify-content:space-between;color:#9ca3af;font-size:9px}
+.capitalize{text-transform:capitalize}
+@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}.page{max-width:100%;padding:16px}section{page-break-inside:avoid}}
+</style></head><body><div class="page">
+<div class="header"><span class="logo">SiteSort</span><span class="report-label">Project Report · Generated ${now}</span></div>
+<div class="hero">
+  <h1>${project.name}</h1>
+  <p class="address">${project.address}</p>
+  <div class="meta">
+    <div class="meta-item"><label>Status</label><span><span class="badge ${project.status === "active" ? "badge-active" : "badge-hold"}">${project.status.toUpperCase()}</span></span></div>
+    <div class="meta-item"><label>Started</label><span>${fmtD(project.startDate)}</span></div>
+    <div class="meta-item"><label>Target End</label><span>${project.targetEndDate ? fmtD(project.targetEndDate) : "—"}</span></div>
+    <div class="meta-item"><label>Progress</label><span>${project.progressPercent}%</span><div class="prog"><div class="prog-fill" style="width:${project.progressPercent}%"></div></div></div>
+  </div>
+</div>
+<section>
+  <h2>Team<span class="count">${allMembersArr.length}</span></h2>
+  ${allMembersArr.length ? `<table><thead><tr><th>Name</th><th>Role</th><th>Email</th><th>Phone</th></tr></thead><tbody>${teamRows}</tbody></table>` : `<p class="empty">No team members added yet.</p>`}
+</section>
+<section>
+  <h2>Permits<span class="count">${permits.length}</span></h2>
+  ${permits.length ? `<table><thead><tr><th>Type</th><th>Description</th><th>Expiry</th><th>Status</th><th>Responsible</th></tr></thead><tbody>${permitsRows}</tbody></table>` : `<p class="empty">No permits on this project.</p>`}
+</section>
+<section>
+  <h2>Documents<span class="count">${(documents ?? []).length}</span></h2>
+  ${(documents ?? []).length ? `<table><thead><tr><th>Name</th><th>Category</th><th>Version</th><th>Status</th><th>Sign-offs</th><th>Uploaded</th></tr></thead><tbody>${docsRows}</tbody></table>` : `<p class="empty">No documents uploaded yet.</p>`}
+</section>
+<section>
+  <h2>Finances<span class="count">${projectInvoices.length}</span></h2>
+  ${projectInvoices.length ? `<div class="summary-grid"><div class="summary-box green-box"><label>Due to You (unpaid)</label><span>GBP ${unpaidIn.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</span></div><div class="summary-box red-box"><label>You Owe (unpaid)</label><span>GBP ${unpaidOut.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</span></div></div><table><thead><tr><th>Type</th><th>Counterparty</th><th>Description</th><th>Ref</th><th>Amount</th><th>Due</th><th>Status</th></tr></thead><tbody>${invRows}</tbody></table>` : `<p class="empty">No invoices linked to this project.</p>`}
+</section>
+<section>
+  <h2>Photo Log<span class="count">${photos.length}</span></h2>
+  ${photos.length ? `<div class="photo-box"><strong>${photos.length}</strong> photo${photos.length !== 1 ? "s" : ""} logged${photoSummary ? ` — ${photoSummary}` : ""}</div>` : `<p class="empty">No photos logged yet.</p>`}
+</section>
+<div class="footer"><span>${project.name} · SiteSort</span><span>Generated ${now}</span></div>
+</div></body></html>`;
+
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 400);
+  };
+
   if (projectLoading) return <SidebarLayout><div className="animate-pulse h-32 bg-muted rounded-xl"></div></SidebarLayout>;
   if (!project) return <SidebarLayout>Project not found</SidebarLayout>;
 
@@ -367,7 +499,12 @@ export default function ProjectDetail() {
                 <span className="flex items-center gap-1"><Calendar className="w-4 h-4"/> Started {formatDate(project.startDate)}</span>
               </div>
             </div>
-            <Button variant="outline" onClick={openEdit}>Edit Details</Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={generateReport}>
+                <FileDown className="w-4 h-4 mr-2" /> Export Report
+              </Button>
+              <Button variant="outline" onClick={openEdit}>Edit Details</Button>
+            </div>
           </div>
           
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8 pt-6 border-t border-border/50">
