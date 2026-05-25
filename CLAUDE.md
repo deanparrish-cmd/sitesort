@@ -92,6 +92,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 28. Real user dashboard — personalised greeting, quick-action buttons, 4-stat cards (active projects/expiring items/pending sign-offs/unread messages), "Needs Attention" panel, recent activity feed, portfolio snapshot, site calendar
 29. Invoice document viewer — full-screen inline viewer panel; PDF via iframe, image via img tag, fallback open-in-tab; sidebar with invoice details; header actions: open in new tab, share, mark paid
 30. Project detail report / PDF export — "Export Report" button generates a print-ready HTML report (team, permits, documents, finances, photos) and auto-triggers browser Save-as-PDF
+31. Subcontractor "Add to Project" — FolderPlus button on each sub card opens a dialog listing active projects; one-click add with inline per-project feedback (added/already linked/error)
 
 ## Uploads / File Serving
 
@@ -143,6 +144,11 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 
 #### Key files modified
 - `artifacts/sitesort/src/pages/projects/detail.tsx` — `generateReport()` function + `FileDown` icon + "Export Report" button in project header
+
+- **Subcontractor "Add to Project"** — `FolderPlus` icon button on each subcontractor card opens a dialog to link the sub into any active project. Dialog shows sub summary + active project list; each project row is a one-click "Add" button with inline per-project feedback: spinner → "Added ✓" (200), "Already on project" (409 conflict), "Failed — retry?" (other errors). Error rows stay clickable for retry without closing.
+
+#### Key files modified
+- `artifacts/sitesort/src/pages/subcontractors/index.tsx` — `shareTarget`/`shareProjects`/`linkStatus` state; `useEffect` fetches active projects on open; `linkToProject()` calls `POST /api/projects/:id/members/link`; share dialog JSX; `FolderPlus`, `CheckCircle2`, `Loader2`, `Building2` icons added
 
 #### Pending / open tasks
 - Only project creation is blocked client-side on cancellation — other write actions not yet restricted
