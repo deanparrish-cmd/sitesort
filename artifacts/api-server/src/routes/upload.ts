@@ -44,7 +44,7 @@ router.post("/upload", authenticate, upload.single("file"), async (req: Request,
       contentType: req.file.mimetype,
       resumable: false,
       metadata: {
-        cacheControl: "public, max-age=31536000, immutable",
+        cacheControl: "private, max-age=300",
         metadata: {
           originalName: req.file.originalname,
           uploadedBy: req.user?.id ?? "",
@@ -65,6 +65,13 @@ router.post("/upload", authenticate, upload.single("file"), async (req: Request,
   }
 });
 
+// File access is gated by the unguessable random UUID in the filename
+// (capability-URL model, same as Dropbox/Drive share links). Browser <img> and
+// <a> tags can't send Authorization headers, so requiring a Bearer token here
+// would break avatars, project photos, and document downloads across the app.
+// TODO post-launch: switch to short-lived signed GCS URLs minted by an
+// authenticated /api/uploads/:filename/url endpoint, then update the frontend
+// to resolve URLs through it.
 router.get("/uploads/:filename", async (req: Request, res: Response) => {
   const { filename } = req.params;
   if (!filename || filename.includes("/") || filename.includes("..")) {
@@ -81,9 +88,10 @@ router.get("/uploads/:filename", async (req: Request, res: Response) => {
     }
 
     const [metadata] = await file.getMetadata();
+
     if (metadata.contentType) res.setHeader("Content-Type", metadata.contentType);
     if (metadata.size) res.setHeader("Content-Length", String(metadata.size));
-    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    res.setHeader("Cache-Control", "private, max-age=300");
 
     const original = metadata.metadata?.originalName as string | undefined;
     if (original) {
