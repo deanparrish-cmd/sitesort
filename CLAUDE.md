@@ -90,6 +90,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 26. Global voice command navigation — mic button in sidebar and desktop header bar; Web Speech API listens for navigation and action commands; floating hint overlay with examples; toast feedback on match or no-match; hidden on unsupported browsers. Action commands: "new project" → `/projects?new=1`; "new invoice" → `/invoices?new=1`; "find invoice" / "recall invoice" → `/invoices?recall=1`; "add subcontractor" → `/subcontractors?new=1`; "find subcontractor [term]" → `/subcontractors?q=<term>` or `?find=1`; "upload compliance/certificate" → `/compliance?upload=1`; "find/recall compliance [term]" → `/compliance?q=<term>` or `?find=1`; "new/send message" → `/messages?new=1`; "send message to [name]" → `/messages?to=<name>`; "dictate message" → `/messages?dictate=1`; "log safety issue" / "report hazard" → `/projects?safety=1`; "add/new permit" → `/projects?permit=1` (opens add permit modal); "find/recall permit [term]" → `/compliance?q=<term>` (filters expiring permits by type/project); "upload/log/new photo" → `/projects?photo=1` (opens photo log modal); "recall/find/view photos" → `/projects?viewphoto=1` (navigates to project photos tab)
 27. Photo voice commands — "upload photo" / "log photo" / "new photo" opens a global photo log modal (project picker, category, voice-dictated description, zone, file upload with preview); "recall photos" / "find photos" navigates to the active project's Photos tab; Photos tab in project detail built out as a full colour-coded grid (thumbnail, category badge, reference number, zone, date, uploader); `?tab=photos` URL param selects the Photos tab on load
 28. Real user dashboard — personalised greeting, quick-action buttons, 4-stat cards (active projects/expiring items/pending sign-offs/unread messages), "Needs Attention" panel, recent activity feed, portfolio snapshot, site calendar
+29. Invoice document viewer — full-screen inline viewer panel; PDF via iframe, image via img tag, fallback open-in-tab; sidebar with invoice details; header actions: open in new tab, share, mark paid
 
 ## Uploads / File Serving
 
@@ -127,6 +128,15 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 
 #### Key files modified
 - `artifacts/sitesort/src/pages/dashboard/index.tsx` — full rewrite; fetches `/api/auth/me`, `/api/notifications`, `/api/messages/unread-count`, `/api/invoices` alongside existing hooks
+
+- **Inline invoice document viewer** — clicking any invoice row (or eye icon) opens a full-screen viewer panel:
+  - Left sidebar: counterparty, direction, amount, status badge, due date, description, created date; "Attach document" shortcut if no file attached
+  - Right pane: PDF rendered via `<iframe>`, images via `<img>`, fallback "Open file" link for other formats, empty state prompting upload if no attachment
+  - Header actions: Open in new tab, Share (Email/WhatsApp dropdown), Mark Paid, Close
+  - File type detected from URL extension (`.pdf` → iframe, `.png/.jpg/.jpeg/.webp/.gif` → img)
+
+#### Key files modified
+- `artifacts/sitesort/src/pages/invoices/index.tsx` — invoice viewer overlay added (custom wide panel, not Dialog which is max-w-lg); `ExternalLink`, `FileText`, `Image` icons added
 
 #### Pending / open tasks
 - Only project creation is blocked client-side on cancellation — other write actions not yet restricted
