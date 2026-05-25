@@ -86,7 +86,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 22. Document supersedes selector — upload form shows optional dropdown of current docs of the same type; selecting one marks it superseded on save; API accepts explicit `supersededDocumentId` with same-name auto-supersede fallback
 23. Document status/version editing — Edit button on document rows opens dialog to change status (current/superseded) and version number; `PATCH /api/documents/:documentId`
 24. Subscription billing — Stripe Checkout (Solo £29/Team £79/Pro £149, 14-day trial), webhook sync, Customer Portal, plan-based project limits, trial-ending and payment-failed notifications
-25. Read-only mode on cancellation — persistent red banner on all authenticated pages; "New Project" button redirects to billing when cancelled; `SubscriptionContext` exposes `isCancelled` app-wide
+25. Read-only mode on cancellation — persistent red banner on all authenticated pages; all write actions across every page show a destructive toast and return early when cancelled; voice modal openers redirect to billing; settings profile/password/company show inline error banner; `SubscriptionContext` exposes `isCancelled` app-wide
 26. Global voice command navigation — mic button in sidebar and desktop header bar; Web Speech API listens for navigation and action commands; floating hint overlay with examples; toast feedback on match or no-match; hidden on unsupported browsers. Action commands: "new project" → `/projects?new=1`; "new invoice" → `/invoices?new=1`; "find invoice" / "recall invoice" → `/invoices?recall=1`; "add subcontractor" → `/subcontractors?new=1`; "find subcontractor [term]" → `/subcontractors?q=<term>` or `?find=1`; "upload compliance/certificate" → `/compliance?upload=1`; "find/recall compliance [term]" → `/compliance?q=<term>` or `?find=1`; "new/send message" → `/messages?new=1`; "send message to [name]" → `/messages?to=<name>`; "dictate message" → `/messages?dictate=1`; "log safety issue" / "report hazard" → `/projects?safety=1`; "add/new permit" → `/projects?permit=1` (opens add permit modal); "find/recall permit [term]" → `/compliance?q=<term>` (filters expiring permits by type/project); "upload/log/new photo" → `/projects?photo=1` (opens photo log modal); "recall/find/view photos" → `/projects?viewphoto=1` (navigates to project photos tab)
 27. Photo voice commands — "upload photo" / "log photo" / "new photo" opens a global photo log modal (project picker, category, voice-dictated description, zone, file upload with preview); "recall photos" / "find photos" navigates to the active project's Photos tab; Photos tab in project detail built out as a full colour-coded grid (thumbnail, category badge, reference number, zone, date, uploader); `?tab=photos` URL param selects the Photos tab on load
 28. Real user dashboard — personalised greeting, quick-action buttons, 4-stat cards (active projects/expiring items/pending sign-offs/unread messages), "Needs Attention" panel, recent activity feed, portfolio snapshot, site calendar
@@ -94,6 +94,8 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 30. Project detail report / PDF export — "Export Report" button generates a print-ready HTML report (team, permits, documents, finances, photos) and auto-triggers browser Save-as-PDF
 31. Subcontractor "Add to Project" — FolderPlus button on each sub card opens a dialog listing active projects; one-click add with inline per-project feedback (added/already linked/error)
 32. Enforced subcontractor directory-first workflow — removed "Add Person" form and dialog from the project Team tab; contacts must be added to the subcontractor directory first, then linked into a project via "Add from Subcontractor Directory"
+33. Broadcast messaging — "New" button in Messages opens a three-mode picker: Individual (1-to-1), By Role (filter project members by Admin/PM/Site Worker/Subcontractor), All in Project; backend `POST /api/messages/broadcast` sends message + notification per recipient
+34. Landing page pricing section — "Start Free Trial" smooth-scrolls to Solo £29/Team £79/Pro £149 plan cards; Book Demo button removed
 
 ## Uploads / File Serving
 
@@ -159,8 +161,39 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 #### Key files modified
 - `artifacts/sitesort/src/pages/projects/detail.tsx` — removed `addPersonTrade` state, `submitAddPerson` function, "+ Add Person" trade folder button, and Add Person dialog
 
+### 2026-05-25 (session 3)
+
+#### Tasks completed
+
+- **Cancellation enforcement on all write actions** — every create/edit/delete operation now checks `isCancelled` before executing; shows a destructive toast and returns early. Voice command modal openers (safety, permit, photo, new subcontractor) also redirect to billing when cancelled.
+  - Pages gated: projects list (photo, permit, safety modals), project detail (upload doc, edit doc, edit project, add trade, save phone), subcontractors (add sub, link to project), messages (send, edit, delete), invoices (create, delete, attach file, mark paid)
+
+- **Cancellation enforcement on settings page** — Profile save + avatar upload, Change Password, Company save all show an inline red `StatusBanner` and return early when cancelled. Billing and Notifications tabs intentionally ungated.
+
+- **Removed "Book Demo" button** from landing page hero — "Start Free Trial" is now the only CTA.
+
+- **Pricing section on landing page** — "Start Free Trial" smooth-scrolls to a new `#pricing` section showing Solo £29 / Team £79 / Pro £149 plan cards, each with their own "Start free trial" → `/register` button. Trial badge and Stripe disclaimer included.
+
+- **Feature card bullet alignment fix** — changed `list-inside` to `list-outside pl-5` on the three dark feature cards so bullets sit flush left.
+
+- **Broadcast messaging** — "New" button in messages now opens a three-mode picker:
+  - **Individual**: existing 1-to-1 flow (unchanged)
+  - **By Role**: pick a project → filter by role chip (Admin/PM/Site Worker/Subcontractor) → compose → "Send to X members"
+  - **All in Project**: pick a project → send to all members with accounts
+  - Backend: `POST /api/messages/broadcast` inserts a message + notification per recipient
+  - Also fixed pre-existing `authHeaders()` TypeScript return-type issue in messages page
+
+#### Key files modified
+- `artifacts/sitesort/src/pages/projects/index.tsx` — cancellation guards on submitPhoto, submitPermit, submitSafetyIssue; modal-opener useEffects redirect to billing
+- `artifacts/sitesort/src/pages/projects/detail.tsx` — cancellation guards on onUpload, saveDocEdit, onEditSubmit, submitAddTrade, savePhone
+- `artifacts/sitesort/src/pages/subcontractors/index.tsx` — cancellation guards on onAdd, linkToProject; ?new=1 voice command blocked
+- `artifacts/sitesort/src/pages/messages/index.tsx` — cancellation guards on sendMessage, saveEdit, deleteMessage; broadcast mode picker; authHeaders() fix
+- `artifacts/sitesort/src/pages/invoices/index.tsx` — cancellation guards on onSubmit, deleteInvoice, attachFile, markPaid
+- `artifacts/sitesort/src/pages/settings/index.tsx` — isCancelled prop threaded to ProfileTab, SecurityTab, CompanyTab
+- `artifacts/sitesort/src/pages/landing.tsx` — removed Book Demo button; added #pricing section; fixed bullet alignment
+- `artifacts/api-server/src/routes/messages.ts` — added POST /api/messages/broadcast endpoint
+
 #### Pending / open tasks
-- Only project creation is blocked client-side on cancellation — other write actions not yet restricted
-- File storage is ephemeral (Replit filesystem) — R2/S3 migration needed for production
+- File storage migrated to object storage (done in prior session)
 - No message search or pagination yet
 - Stripe Dashboard setup needed: activate Customer Portal; add all 5 webhook events (`checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `customer.subscription.trial_will_end`, `invoice.payment_failed`)
