@@ -91,6 +91,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 27. Photo voice commands — "upload photo" / "log photo" / "new photo" opens a global photo log modal (project picker, category, voice-dictated description, zone, file upload with preview); "recall photos" / "find photos" navigates to the active project's Photos tab; Photos tab in project detail built out as a full colour-coded grid (thumbnail, category badge, reference number, zone, date, uploader); `?tab=photos` URL param selects the Photos tab on load
 28. Real user dashboard — personalised greeting, quick-action buttons, 4-stat cards (active projects/expiring items/pending sign-offs/unread messages), "Needs Attention" panel, recent activity feed, portfolio snapshot, site calendar
 29. Invoice document viewer — full-screen inline viewer panel; PDF via iframe, image via img tag, fallback open-in-tab; sidebar with invoice details; header actions: open in new tab, share, mark paid
+30. Project detail report / PDF export — "Export Report" button generates a print-ready HTML report (team, permits, documents, finances, photos) and auto-triggers browser Save-as-PDF
 
 ## Uploads / File Serving
 
@@ -137,6 +138,11 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 
 #### Key files modified
 - `artifacts/sitesort/src/pages/invoices/index.tsx` — invoice viewer overlay added (custom wide panel, not Dialog which is max-w-lg); `ExternalLink`, `FileText`, `Image` icons added
+
+- **Project detail report / PDF export** — "Export Report" button in project header (next to "Edit Details") opens a print-ready HTML page in a new tab and auto-triggers the browser print/Save-as-PDF dialog. Report sections: project summary (name, address, status badge, start/end dates, progress bar), team grouped by trade, permits sorted by expiry with colour-coded status, documents with sign-off counts, finances (due-to-you/you-owe summary + invoice list), photo log count by category. Zero new dependencies — uses `window.open` + `window.print()` with `print-color-adjust: exact`.
+
+#### Key files modified
+- `artifacts/sitesort/src/pages/projects/detail.tsx` — `generateReport()` function + `FileDown` icon + "Export Report" button in project header
 
 #### Pending / open tasks
 - Only project creation is blocked client-side on cancellation — other write actions not yet restricted
