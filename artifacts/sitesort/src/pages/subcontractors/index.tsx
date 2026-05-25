@@ -9,6 +9,7 @@ import {
   Plus, Search, ChevronDown, ChevronRight, HardHat, Mail, Phone,
   ShieldCheck, ShieldAlert, ShieldX, Shield, Star, AlertTriangle,
   Users, Pencil, X, FolderOpen, Mic, MicOff, MessageSquare,
+  FolderPlus, CheckCircle2, Loader2, Building2,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { cn } from "@/lib/utils";
@@ -152,6 +153,45 @@ export default function SubcontractorsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [selectedTradesAdd, setSelectedTradesAdd] = useState<string[]>([]);
   const [selectedTradesEdit, setSelectedTradesEdit] = useState<string[]>([]);
+
+  // Share-to-project state
+  type ProjectLinkStatus = "idle" | "loading" | "added" | "already" | "error";
+  type ActiveProject = { id: string; name: string; address: string };
+  const [shareTarget, setShareTarget] = useState<Sub | null>(null);
+  const [shareProjects, setShareProjects] = useState<ActiveProject[]>([]);
+  const [shareProjectsLoading, setShareProjectsLoading] = useState(false);
+  const [linkStatus, setLinkStatus] = useState<Record<string, ProjectLinkStatus>>({});
+
+  useEffect(() => {
+    if (!shareTarget) return;
+    setShareProjectsLoading(true);
+    setLinkStatus({});
+    apiFetch("/api/projects")
+      .then(r => r.ok ? r.json() : [])
+      .then((all: any[]) => setShareProjects(all.filter((p: any) => p.status === "active")))
+      .catch(() => setShareProjects([]))
+      .finally(() => setShareProjectsLoading(false));
+  }, [shareTarget]);
+
+  async function linkToProject(projectId: string) {
+    if (!shareTarget) return;
+    setLinkStatus(prev => ({ ...prev, [projectId]: "loading" }));
+    try {
+      const res = await apiFetch(`/api/projects/${projectId}/members/link`, {
+        method: "POST",
+        body: JSON.stringify({ subcontractorId: shareTarget.id }),
+      });
+      if (res.status === 409) {
+        setLinkStatus(prev => ({ ...prev, [projectId]: "already" }));
+      } else if (res.ok) {
+        setLinkStatus(prev => ({ ...prev, [projectId]: "added" }));
+      } else {
+        setLinkStatus(prev => ({ ...prev, [projectId]: "error" }));
+      }
+    } catch {
+      setLinkStatus(prev => ({ ...prev, [projectId]: "error" }));
+    }
+  }
 
   const [listening, setListening] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -444,6 +484,15 @@ export default function SubcontractorsPage() {
                           <RatingStars rating={sub.reliabilityRating} />
                         </div>
 
+                        {/* Add to project */}
+                        <button
+                          onClick={() => setShareTarget(sub)}
+                          className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors shrink-0"
+                          title="Add to a project"
+                        >
+                          <FolderPlus className="w-3.5 h-3.5" />
+                        </button>
+
                         {/* Edit */}
                         <button
                           onClick={() => openEdit(sub)}
@@ -526,6 +575,87 @@ export default function SubcontractorsPage() {
             <Button type="submit" variant="accent" disabled={submitting}>{submitting ? "Saving…" : "Add Subcontractor"}</Button>
           </DialogFooter>
         </form>
+      </Dialog>
+
+      {/* Add to project dialog */}
+      <Dialog open={!!shareTarget} onOpenChange={open => { if (!open) setShareTarget(null); }}>
+        <DialogHeader>
+          <DialogTitle>Add to a Project</DialogTitle>
+        </DialogHeader>
+        {shareTarget && (
+          <div className="space-y-4">
+            {/* Sub summary */}
+            <div className="flex items-center gap-3 px-4 py-3 bg-muted/40 rounded-xl">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                <span className="font-extrabold text-primary text-sm">
+                  {shareTarget.companyName.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
+                </span>
+              </div>
+              <div className="min-w-0">
+                <p className="font-semibold text-sm">{shareTarget.companyName}</p>
+                <p className="text-xs text-muted-foreground">{shareTarget.contactName}{shareTarget.trades.length ? ` · ${shareTarget.trades.join(", ")}` : ""}</p>
+              </div>
+            </div>
+
+            <p className="text-sm text-muted-foreground">Select an active project to add this subcontractor to.</p>
+
+            {shareProjectsLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : shareProjects.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <Building2 className="w-8 h-8 text-muted-foreground/30 mb-2" />
+                <p className="text-sm text-muted-foreground">No active projects found.</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                {shareProjects.map(project => {
+                  const status = linkStatus[project.id] ?? "idle";
+                  return (
+                    <div key={project.id} className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border bg-card hover:bg-muted/20 transition-colors">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm truncate">{project.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{project.address}</p>
+                      </div>
+                      <div className="shrink-0">
+                        {status === "idle" && (
+                          <Button size="sm" variant="accent" onClick={() => linkToProject(project.id)}>
+                            <FolderPlus className="w-3.5 h-3.5 mr-1.5" /> Add
+                          </Button>
+                        )}
+                        {status === "loading" && (
+                          <span className="flex items-center gap-1.5 text-xs text-muted-foreground px-3 py-1.5">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Adding…
+                          </span>
+                        )}
+                        {status === "added" && (
+                          <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-semibold px-3 py-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Added
+                          </span>
+                        )}
+                        {status === "already" && (
+                          <span className="flex items-center gap-1.5 text-xs text-muted-foreground px-3 py-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Already on project
+                          </span>
+                        )}
+                        {status === "error" && (
+                          <span className="flex items-center gap-1.5 text-xs text-destructive px-3 py-1.5">
+                            <X className="w-3.5 h-3.5" /> Failed — retry?
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShareTarget(null)}>Done</Button>
+            </DialogFooter>
+          </div>
+        )}
       </Dialog>
 
       {/* Edit modal */}
