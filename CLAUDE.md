@@ -89,6 +89,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 25. Read-only mode on cancellation — persistent red banner on all authenticated pages; "New Project" button redirects to billing when cancelled; `SubscriptionContext` exposes `isCancelled` app-wide
 26. Global voice command navigation — mic button in sidebar and desktop header bar; Web Speech API listens for navigation and action commands; floating hint overlay with examples; toast feedback on match or no-match; hidden on unsupported browsers. Action commands: "new project" → `/projects?new=1`; "new invoice" → `/invoices?new=1`; "find invoice" / "recall invoice" → `/invoices?recall=1`; "add subcontractor" → `/subcontractors?new=1`; "find subcontractor [term]" → `/subcontractors?q=<term>` or `?find=1`; "upload compliance/certificate" → `/compliance?upload=1`; "find/recall compliance [term]" → `/compliance?q=<term>` or `?find=1`; "new/send message" → `/messages?new=1`; "send message to [name]" → `/messages?to=<name>`; "dictate message" → `/messages?dictate=1`; "log safety issue" / "report hazard" → `/projects?safety=1`; "add/new permit" → `/projects?permit=1` (opens add permit modal); "find/recall permit [term]" → `/compliance?q=<term>` (filters expiring permits by type/project); "upload/log/new photo" → `/projects?photo=1` (opens photo log modal); "recall/find/view photos" → `/projects?viewphoto=1` (navigates to project photos tab)
 27. Photo voice commands — "upload photo" / "log photo" / "new photo" opens a global photo log modal (project picker, category, voice-dictated description, zone, file upload with preview); "recall photos" / "find photos" navigates to the active project's Photos tab; Photos tab in project detail built out as a full colour-coded grid (thumbnail, category badge, reference number, zone, date, uploader); `?tab=photos` URL param selects the Photos tab on load
+28. Real user dashboard — personalised greeting, quick-action buttons, 4-stat cards (active projects/expiring items/pending sign-offs/unread messages), "Needs Attention" panel, recent activity feed, portfolio snapshot, site calendar
 
 ## Uploads / File Serving
 
@@ -110,6 +111,22 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 - Read-only mode on cancellation (`SubscriptionContext`, persistent red banner app-wide)
 - Message editing + deletion (inline pencil/trash, `PATCH`/`DELETE /api/messages/:id`, `editedAt` column)
 - Stripe: webhook handler, project gating, Customer Portal, trial-ending + payment-failed notifications
+
+### 2026-05-25
+
+#### Tasks completed
+- **Real user dashboard** — full rebuild of `artifacts/sitesort/src/pages/dashboard/index.tsx`:
+  - Personalised greeting with user's first name (fetched from `GET /api/auth/me`) and today's full date
+  - Quick-action buttons in header: New Project → `/projects?new=1`, Log Photo → `/projects?photo=1`, Message → `/messages?new=1`, Upload Doc → `/compliance?upload=1`
+  - 4-stat cards: Active Projects, Expiring Soon (insurance + permits in 30d), Pending Sign-offs, Unread Messages — each links to its page and colour-codes when non-zero
+  - "Needs Attention" panel — only renders when items exist; surfaces expired/near-expiry compliance, overdue invoices, pending sign-offs, unread messages as clickable rows
+  - 2-column main area: active project cards (left 2/3, horizontal with progress %, team count, due date) + Recent Activity feed (right 1/3, last 8 notifications with per-type icons and time-ago labels)
+  - Portfolio Snapshot card: avg. progress bar, total team size, on-track project ratio
+  - Removed dev-only "Send Test Email" button
+  - Site Calendar and expiry-alert list retained at bottom
+
+#### Key files modified
+- `artifacts/sitesort/src/pages/dashboard/index.tsx` — full rewrite; fetches `/api/auth/me`, `/api/notifications`, `/api/messages/unread-count`, `/api/invoices` alongside existing hooks
 
 #### Pending / open tasks
 - Only project creation is blocked client-side on cancellation — other write actions not yet restricted
