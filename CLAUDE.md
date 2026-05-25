@@ -96,6 +96,8 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 32. Enforced subcontractor directory-first workflow — removed "Add Person" form and dialog from the project Team tab; contacts must be added to the subcontractor directory first, then linked into a project via "Add from Subcontractor Directory"
 33. Broadcast messaging — "New" button in Messages opens a three-mode picker: Individual (1-to-1), By Role (filter project members by Admin/PM/Site Worker/Subcontractor), All in Project; backend `POST /api/messages/broadcast` sends message + notification per recipient
 34. Landing page pricing section — "Start Free Trial" smooth-scrolls to Solo £29/Team £79/Pro £149 plan cards; Book Demo button removed
+35. Invoice sharing in messages — Receipt button in compose bar opens an invoice picker; selected invoice renders as a card in the thread (counterparty, amount, status badge, due date, PDF link); `invoiceId` nullable column on messages table; `content` defaults to `""` to allow invoice-only messages
+36. Document, photo, and permit sharing in messages — Paperclip button in compose bar opens a tabbed picker (Document / Photo / Permit) with a project selector; selected item shown as a violet chip; thread renders typed cards: document (name, type, version, view link), photo (thumbnail, category, reference), permit (type, description, expiry status badge); `attachmentType` + `attachmentId` columns on messages table; API thread endpoint batch-fetches attachment data
 
 ## Uploads / File Serving
 
@@ -197,3 +199,25 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 - File storage migrated to object storage (done in prior session)
 - No message search or pagination yet
 - Stripe Dashboard setup needed: activate Customer Portal; add all 5 webhook events (`checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `customer.subscription.trial_will_end`, `invoice.payment_failed`)
+
+### 2026-05-25 (session 4)
+
+#### Tasks completed
+
+- **Invoice sharing in messages** — Receipt button in compose bar opens a picker dropdown of all company invoices; selected invoice shows as a blue chip above the input; sends `invoiceId` with the message; thread renders an invoice card (counterparty, amount/currency, status badge, due date, optional PDF link). Schema: `invoiceId` nullable column + `content` changed to `.default("")` to allow invoice-only messages. DB migrated.
+
+- **Document, photo, and permit sharing in messages** — Paperclip button in compose bar opens a tabbed picker (Document / Photo / Permit) with a project dropdown. Selecting an item shows a violet chip preview above the input. Thread renders typed cards for each:
+  - Document: name, type, version badge, status badge, view-document link
+  - Photo: thumbnail (if available), category badge, reference number, zone, description
+  - Permit: type, description, colour-coded expiry badge (Active / Expiring soon / Expired), view-permit link
+  - Schema: `attachmentType` + `attachmentId` nullable columns on messages table. DB migrated.
+  - API: thread endpoint batch-fetches docs/photos/permits by IDs and returns as `attachment` field; POST endpoint accepts `attachmentType` + `attachmentId`
+
+#### Key files modified
+- `lib/db/src/schema/messages.ts` — added `invoiceId`, `attachmentType`, `attachmentId` columns; `content` → `.default("")`
+- `artifacts/api-server/src/routes/messages.ts` — thread endpoint fetches and returns `invoice` + `attachment`; POST accepts all new fields; imports `documentsTable`, `photosTable`, `permitsTable`
+- `artifacts/sitesort/src/pages/messages/index.tsx` — `DocAttachment`, `PhotoAttachment`, `PermitAttachment` types; attach picker state + effects; `openAttachPicker()`; `Paperclip` button; tabbed picker UI with project selector; typed attachment cards in thread; updated send button guard
+
+#### Pending / open tasks
+- No message search or pagination yet
+- Stripe Dashboard setup needed: activate Customer Portal; add all 5 webhook events
