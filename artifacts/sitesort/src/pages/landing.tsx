@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Building2, ShieldCheck, FileText, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Building2, ShieldCheck, FileText, ArrowRight, CheckCircle2, Sparkles, CreditCard } from "lucide-react";
 
 export default function LandingPage() {
   return (
@@ -35,12 +35,15 @@ export default function LandingPage() {
               <span className="font-bold text-foreground">Built for Construction SMEs.</span>
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/register">
-                <Button size="lg" variant="accent" className="w-full sm:w-auto group">
-                  Start Free Trial
-                  <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </Button>
-              </Link>
+              <Button
+                size="lg"
+                variant="accent"
+                className="w-full sm:w-auto group"
+                onClick={() => document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth" })}
+              >
+                Start Free Trial
+                <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </Button>
             </div>
           </div>
 
@@ -99,6 +102,82 @@ export default function LandingPage() {
               </ul>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Pricing */}
+      <section id="pricing" className="py-24 border-t">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-4">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium mb-6">
+              <Sparkles className="w-3.5 h-3.5" />
+              14-day free trial on every plan — no charge until it ends
+            </div>
+            <h2 className="text-3xl md:text-4xl font-bold text-primary mb-4">Simple, transparent pricing</h2>
+            <p className="text-muted-foreground max-w-xl mx-auto text-lg">Pick the plan that fits your workload. Upgrade or cancel any time.</p>
+          </div>
+
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 max-w-5xl mx-auto mt-12">
+            {[
+              {
+                name: "Solo",
+                tagline: "Perfect for a single site",
+                price: "£29",
+                features: ["1 active project", "Unlimited team members", "Document version control", "QR site boards", "Compliance tracking"],
+              },
+              {
+                name: "Team",
+                tagline: "For growing contractors",
+                price: "£79",
+                features: ["Up to 5 active projects", "Unlimited team members", "Document version control", "QR site boards", "Compliance tracking"],
+                highlight: true,
+              },
+              {
+                name: "Pro",
+                tagline: "Full access to every feature",
+                price: "£149",
+                features: ["Unlimited projects", "Unlimited team members", "Document version control", "QR site boards", "Compliance tracking"],
+              },
+            ].map(plan => (
+              <div
+                key={plan.name}
+                className={`relative flex flex-col rounded-2xl border p-8 ${plan.highlight ? "border-2 border-primary/40 bg-gradient-to-br from-orange-50/50 to-amber-50/30 shadow-lg" : "bg-card shadow-sm"}`}
+              >
+                {plan.highlight && (
+                  <div className="absolute -top-3 right-6 text-[10px] font-semibold uppercase tracking-wide bg-orange-500 text-white px-3 py-1 rounded-full">
+                    Most popular
+                  </div>
+                )}
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-4 ${plan.highlight ? "bg-gradient-to-br from-orange-500 to-orange-600" : "bg-muted"}`}>
+                  <Sparkles className={`w-5 h-5 ${plan.highlight ? "text-white" : "text-muted-foreground"}`} />
+                </div>
+                <h3 className="text-lg font-bold text-foreground">SiteSort {plan.name}</h3>
+                <p className="text-sm text-muted-foreground mb-4">{plan.tagline}</p>
+                <div className="flex items-baseline gap-1 mb-6">
+                  <span className="text-4xl font-bold text-foreground">{plan.price}</span>
+                  <span className="text-sm text-muted-foreground">/ month</span>
+                </div>
+                <ul className="space-y-2 text-sm text-foreground mb-8 flex-1">
+                  {plan.features.map(f => (
+                    <li key={f} className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> {f}
+                    </li>
+                  ))}
+                </ul>
+                <Link href="/register">
+                  <Button variant={plan.highlight ? "default" : "outline"} className="w-full gap-2">
+                    <CreditCard className="w-4 h-4" />
+                    Start free trial
+                  </Button>
+                </Link>
+                <p className="text-[11px] text-muted-foreground text-center mt-2">Then {plan.price}/month. Cancel any time.</p>
+              </div>
+            ))}
+          </div>
+
+          <p className="text-center text-xs text-muted-foreground mt-10">
+            Card details required at sign-up. Secure checkout powered by Stripe.
+          </p>
         </div>
       </section>
     </div>
