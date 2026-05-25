@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Search, Plus, Building, MapPin, Calendar, Mic, MicOff, Sparkles, AlertTriangle, CheckCircle2, Camera, Loader2, ClipboardCheck } from "lucide-react";
 import { useListProjects, useCreateProject } from "@workspace/api-client-react";
 import { useSubscription } from "@/contexts/subscription";
+import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { formatDate, cn } from "@/lib/utils";
 
@@ -17,6 +18,7 @@ export default function ProjectsList() {
   const createMutation = useCreateProject();
   const [, setLocation] = useLocation();
   const { isCancelled } = useSubscription();
+  const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -79,6 +81,7 @@ export default function ProjectsList() {
   }, []);
 
   const submitSafetyIssue = useCallback(async () => {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
     if (!safetyProjectId || !safetyDesc.trim()) { setSafetyError("Please select a project and describe the issue."); return; }
     setSafetySubmitting(true); setSafetyError(null);
     const token = localStorage.getItem("sitesort_token");
@@ -90,7 +93,7 @@ export default function ProjectsList() {
     if (res.ok) { const d = await res.json(); setSafetyRefNum(d.referenceNumber); }
     else setSafetyError("Failed to log safety issue. Please try again.");
     setSafetySubmitting(false);
-  }, [safetyProjectId, safetyDesc, safetyZone, safetyPhotoUrl]);
+  }, [isCancelled, toast, safetyProjectId, safetyDesc, safetyZone, safetyPhotoUrl]);
 
   // Auto-select project if only one active project (safety)
   useEffect(() => {
@@ -150,6 +153,7 @@ export default function ProjectsList() {
   }, []);
 
   const submitPermit = useCallback(async () => {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
     if (!permitProjectId || !permitDesc.trim() || !permitResponsibleId || !permitStart || !permitExpiry) {
       setPermitError("Please fill in all required fields."); return;
     }
@@ -163,7 +167,7 @@ export default function ProjectsList() {
     if (res.ok) setPermitSuccess(true);
     else setPermitError("Failed to add permit. Please try again.");
     setPermitSubmitting(false);
-  }, [permitProjectId, permitType, permitDesc, permitResponsibleId, permitStart, permitExpiry]);
+  }, [isCancelled, toast, permitProjectId, permitType, permitDesc, permitResponsibleId, permitStart, permitExpiry]);
 
   // Auto-select project if only one active project (permit)
   useEffect(() => {
@@ -232,6 +236,7 @@ export default function ProjectsList() {
   }, []);
 
   const submitPhoto = useCallback(async () => {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
     if (!photoProjectId) { setPhotoError("Please select a project."); return; }
     setPhotoSubmitting(true); setPhotoError(null);
     const token = localStorage.getItem("sitesort_token");
@@ -243,7 +248,7 @@ export default function ProjectsList() {
     if (res.ok) { const d = await res.json(); setPhotoRefNum(d.referenceNumber); }
     else setPhotoError("Failed to log photo. Please try again.");
     setPhotoSubmitting(false);
-  }, [photoProjectId, photoCategory, photoDesc, photoZone, photoUrl]);
+  }, [isCancelled, toast, photoProjectId, photoCategory, photoDesc, photoZone, photoUrl]);
 
   // Auto-select project if only one active project (photo)
   useEffect(() => {
@@ -268,27 +273,30 @@ export default function ProjectsList() {
     const params = new URLSearchParams(window.location.search);
     if (params.get("safety") === "1") {
       window.history.replaceState({}, "", "/projects");
-      setSafetyOpen(true);
+      if (isCancelled) setLocation("/settings?tab=billing");
+      else setSafetyOpen(true);
     }
-  }, []);
+  }, [isCancelled, setLocation]);
 
   // Auto-open permit modal via voice command (?permit=1)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("permit") === "1") {
       window.history.replaceState({}, "", "/projects");
-      setPermitOpen(true);
+      if (isCancelled) setLocation("/settings?tab=billing");
+      else setPermitOpen(true);
     }
-  }, []);
+  }, [isCancelled, setLocation]);
 
   // Auto-open photo upload modal via voice command (?photo=1)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("photo") === "1") {
       window.history.replaceState({}, "", "/projects");
-      setPhotoOpen(true);
+      if (isCancelled) setLocation("/settings?tab=billing");
+      else setPhotoOpen(true);
     }
-  }, []);
+  }, [isCancelled, setLocation]);
 
   // View photo log via voice command (?viewphoto=1) — go to first active project's photos tab
   useEffect(() => {

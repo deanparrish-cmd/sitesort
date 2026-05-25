@@ -16,6 +16,8 @@ import {
 import { useForm } from "react-hook-form";
 import { useListProjects } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
+import { useSubscription } from "@/contexts/subscription";
+import { useToast } from "@/hooks/use-toast";
 
 // Normalise stored URLs: old records may have /uploads/… which is only served
 // by Express. Rewrite to /api/uploads/… so Replit always routes to the API server.
@@ -106,6 +108,8 @@ type FormData = {
 };
 
 export default function InvoicesPage() {
+  const { isCancelled } = useSubscription();
+  const { toast } = useToast();
   const { data: projects } = useListProjects();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -172,16 +176,19 @@ export default function InvoicesPage() {
   }, [toggleVoiceSearch]);
 
   async function markPaid(id: string) {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
     await apiFetch(`/api/invoices/${id}`, { method: "PATCH", body: JSON.stringify({ status: "paid" }) });
     setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, status: "paid" } : inv));
   }
 
   async function deleteInvoice(id: string) {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
     await apiFetch(`/api/invoices/${id}`, { method: "DELETE" });
     setInvoices(prev => prev.filter(inv => inv.id !== id));
   }
 
   async function onSubmit(data: FormData) {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
     setSubmitting(true);
     setError(null);
     const res = await apiFetch("/api/invoices", {
@@ -201,6 +208,7 @@ export default function InvoicesPage() {
 
   // ── upload + attach ──
   const attachFile = useCallback(async (file: File, invoiceId: string) => {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
     setUploadingId(invoiceId);
     try {
       const fd = new FormData();
@@ -220,7 +228,7 @@ export default function InvoicesPage() {
       setInvoices(prev => prev.map(inv => inv.id === invoiceId ? { ...inv, attachmentUrl: url } : inv));
     } catch { /* silent */ }
     finally { setUploadingId(null); }
-  }, []);
+  }, [isCancelled, toast]);
 
   // ── global drag listeners ──
   useEffect(() => {

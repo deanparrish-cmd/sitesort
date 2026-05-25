@@ -27,6 +27,8 @@ import {
   UpdateProjectRequestStatus,
 } from "@workspace/api-client-react";
 import { formatDate, formatBytes, cn } from "@/lib/utils";
+import { useSubscription } from "@/contexts/subscription";
+import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 
 export default function ProjectDetail() {
@@ -57,6 +59,8 @@ export default function ProjectDetail() {
     ]).then(([p, inv, ph]) => { setPermits(p); setProjectInvoices(inv); setPhotos(ph); });
   }, [projectId]);
 
+  const { isCancelled } = useSubscription();
+  const { toast } = useToast();
   const uploadMutation = useUploadDocument();
   const updateMutation = useUpdateProject();
   const queryClient = useQueryClient();
@@ -79,6 +83,7 @@ export default function ProjectDetail() {
   const [newTradeName, setNewTradeName] = useState("");
 
   const submitAddTrade = async () => {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
     if (!newTradeName.trim()) return;
     const token = localStorage.getItem("sitesort_token");
     await fetch(`/api/projects/${projectId}/trades`, {
@@ -95,6 +100,7 @@ export default function ProjectDetail() {
   const [phoneInput, setPhoneInput] = useState("");
 
   const savePhone = async (memberId: string) => {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
     const token = localStorage.getItem("sitesort_token");
     await fetch(`/api/projects/${projectId}/members/${memberId}/contact`, {
       method: "PATCH",
@@ -250,6 +256,7 @@ export default function ProjectDetail() {
   const supersedableDocs = (documents ?? []).filter(d => d.status === "current" && d.type === watchedType);
 
   const onUpload = async (data: any) => {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
     try {
       await uploadMutation.mutateAsync({
         projectId,
@@ -277,6 +284,7 @@ export default function ProjectDetail() {
   };
 
   const saveDocEdit = async () => {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
     if (!editDocModal) return;
     setEditDocSaving(true);
     try {
@@ -307,6 +315,7 @@ export default function ProjectDetail() {
   };
 
   const onEditSubmit = async (data: any) => {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
     setEditError(null);
     try {
       await updateMutation.mutateAsync({

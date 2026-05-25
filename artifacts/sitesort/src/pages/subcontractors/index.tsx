@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { cn } from "@/lib/utils";
+import { useSubscription } from "@/contexts/subscription";
+import { useToast } from "@/hooks/use-toast";
 
 type InsuranceStatus = "valid" | "expiring_soon" | "expired" | "none";
 
@@ -142,6 +144,8 @@ type AddFormData = {
 type EditFormData = AddFormData & { reliabilityRating: string; paymentHold: boolean };
 
 export default function SubcontractorsPage() {
+  const { isCancelled } = useSubscription();
+  const { toast } = useToast();
   const [subs, setSubs] = useState<Sub[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -174,6 +178,7 @@ export default function SubcontractorsPage() {
   }, [shareTarget]);
 
   async function linkToProject(projectId: string) {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
     if (!shareTarget) return;
     setLinkStatus(prev => ({ ...prev, [projectId]: "loading" }));
     try {
@@ -242,10 +247,12 @@ export default function SubcontractorsPage() {
     const params = new URLSearchParams(window.location.search);
     if (params.get("new") === "1") {
       window.history.replaceState({}, "", "/subcontractors");
-      setAddOpen(true);
-      setAddError(null);
-      reset();
-      setSelectedTradesAdd([]);
+      if (!isCancelled) {
+        setAddOpen(true);
+        setAddError(null);
+        reset();
+        setSelectedTradesAdd([]);
+      }
     } else if (params.get("q")) {
       const term = params.get("q")!;
       window.history.replaceState({}, "", "/subcontractors");
@@ -254,7 +261,7 @@ export default function SubcontractorsPage() {
       window.history.replaceState({}, "", "/subcontractors");
       toggleVoiceSearch();
     }
-  }, [toggleVoiceSearch, reset]);
+  }, [isCancelled, toggleVoiceSearch, reset]);
 
   // Group subs by trade — a sub can appear in multiple trade groups
   const grouped = useMemo(() => {
@@ -283,6 +290,7 @@ export default function SubcontractorsPage() {
     setOpenTrades(prev => ({ ...prev, [trade]: !(prev[trade] ?? true) }));
 
   async function onAdd(data: AddFormData) {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
     setSubmitting(true); setAddError(null);
     const res = await apiFetch("/api/subcontractors", {
       method: "POST",

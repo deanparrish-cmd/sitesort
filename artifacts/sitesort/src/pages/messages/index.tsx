@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MessageSquare, Send, Users, Eye, ArrowLeft, Circle, Pencil, Trash2, Mic, MicOff } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useSubscription } from "@/contexts/subscription";
+import { useToast } from "@/hooks/use-toast";
 
 type Conversation = {
   otherId: string;
@@ -69,6 +71,8 @@ function getCurrentUser(): { id: string; role: string; name: string } | null {
 }
 
 export default function MessagesPage() {
+  const { isCancelled } = useSubscription();
+  const { toast } = useToast();
   const me = getCurrentUser();
   const isManager = me?.role === "admin" || me?.role === "project_manager";
 
@@ -195,6 +199,7 @@ export default function MessagesPage() {
   }, [autoDictate, activeConv, viewAll, startDictation]);
 
   async function sendMessage() {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
     if (!draft.trim() || !activeConv || sending || viewAll) return;
     setSending(true);
     const r = await fetch("/api/messages", {
@@ -218,6 +223,7 @@ export default function MessagesPage() {
   }
 
   async function saveEdit(id: string) {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
     if (!editDraft.trim()) return;
     const r = await fetch(`/api/messages/${id}`, {
       method: "PATCH",
@@ -232,6 +238,7 @@ export default function MessagesPage() {
   }
 
   async function deleteMessage(id: string) {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
     const r = await fetch(`/api/messages/${id}`, { method: "DELETE", headers: authHeaders() });
     if (r.ok) {
       setThread(prev => prev.filter(m => m.id !== id));
