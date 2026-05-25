@@ -98,6 +98,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 34. Landing page pricing section — "Start Free Trial" smooth-scrolls to Solo £29/Team £79/Pro £149 plan cards; Book Demo button removed
 35. Invoice sharing in messages — Receipt button in compose bar opens an invoice picker; selected invoice renders as a card in the thread (counterparty, amount, status badge, due date, PDF link); `invoiceId` nullable column on messages table; `content` defaults to `""` to allow invoice-only messages
 36. Document, photo, and permit sharing in messages — Paperclip button in compose bar opens a tabbed picker (Document / Photo / Permit) with a project selector; selected item shown as a violet chip; thread renders typed cards: document (name, type, version, view link), photo (thumbnail, category, reference), permit (type, description, expiry status badge); `attachmentType` + `attachmentId` columns on messages table; API thread endpoint batch-fetches attachment data
+37. Project channel group messaging — each active project gets a shared `#channel` thread visible to all project members; appears above DMs in sidebar with blue `#` icon and unread badge; full attachment support (doc/photo/permit cards); sender name + role chip on every message; edit/delete own messages; 5s polling; notifications to all project members on send; `channel_messages` + `channel_reads` tables; `GET/POST /api/channels/:projectId/messages`, `PATCH/DELETE /api/channel-messages/:id`
 
 ## Uploads / File Serving
 
@@ -217,6 +218,34 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 - `lib/db/src/schema/messages.ts` — added `invoiceId`, `attachmentType`, `attachmentId` columns; `content` → `.default("")`
 - `artifacts/api-server/src/routes/messages.ts` — thread endpoint fetches and returns `invoice` + `attachment`; POST accepts all new fields; imports `documentsTable`, `photosTable`, `permitsTable`
 - `artifacts/sitesort/src/pages/messages/index.tsx` — `DocAttachment`, `PhotoAttachment`, `PermitAttachment` types; attach picker state + effects; `openAttachPicker()`; `Paperclip` button; tabbed picker UI with project selector; typed attachment cards in thread; updated send button guard
+
+#### Pending / open tasks
+- No message search or pagination yet
+- Stripe Dashboard setup needed: activate Customer Portal; add all 5 webhook events
+
+### 2026-05-25 (session 5)
+
+#### Tasks completed
+
+- **Project channel group messaging** — each active project gets a shared group thread available to all project members:
+  - Sidebar: "Project Channels" section above Direct Messages; each channel shown as `#ProjectName` with blue `#` icon and unread badge (count resets on open)
+  - Thread: all members' messages with sender name + role chip; edit/delete on own messages; 5s polling
+  - Attachments: full doc/photo/permit card rendering (same as DMs); Paperclip picker + voice dictation in compose bar
+  - Notifications: sending a channel message notifies all other project members via `notificationsTable`
+  - Read tracking: `channel_reads` table stores `lastReadAt` per user per project; unread count = messages after `lastReadAt` by other users
+  - Admins/PMs see all active company projects as channels; other roles see only projects they're a member of
+
+#### Key files added/modified
+- `lib/db/src/schema/channel_messages.ts` — new table: id, projectId, companyId, senderId, content, attachmentType, attachmentId, editedAt, createdAt
+- `lib/db/src/schema/channel_reads.ts` — new table: projectId, userId, lastReadAt
+- `lib/db/src/schema/index.ts` — exports new tables
+- `artifacts/api-server/src/routes/channels.ts` — new route file: GET /api/channels, GET/POST /api/channels/:projectId/messages, PATCH/DELETE /api/channel-messages/:id
+- `artifacts/api-server/src/routes/index.ts` — registered channelsRouter
+- `artifacts/sitesort/src/pages/messages/index.tsx` — Channel + ChannelMessage types; channel state + fetch/poll effects; sendChannelMessage, saveChannelEdit, deleteChannelMessage; channels section in sidebar; full channel thread panel with compose area
+
+#### Technical notes
+- `lib/db` is a composite TypeScript project (`composite: true`, `emitDeclarationOnly: true`); adding new schema files requires running `npx tsc -p tsconfig.json` in `lib/db/` to regenerate `dist/` `.d.ts` files before the api-server typecheck will pick up the new exports
+- DB migrated with `pnpm --filter @workspace/db run push`
 
 #### Pending / open tasks
 - No message search or pagination yet
