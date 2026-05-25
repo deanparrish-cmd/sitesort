@@ -73,7 +73,7 @@ export default function LandingPage() {
                 <FileText className="w-6 h-6" />
               </div>
               <h3 className="text-xl font-bold mb-3 text-white">Version Control</h3>
-              <ul className="text-gray-300 leading-relaxed space-y-1 list-disc list-inside font-bold">
+              <ul className="text-gray-300 leading-relaxed space-y-1 list-disc list-outside pl-5 font-bold">
                 <li>Never build from the wrong drawing again</li>
                 <li>Automatic superseded warnings</li>
                 <li>Digital sign-off tracking</li>
@@ -84,7 +84,7 @@ export default function LandingPage() {
                 <ShieldCheck className="w-6 h-6" />
               </div>
               <h3 className="text-xl font-bold mb-3 text-white">Compliance Hub</h3>
-              <ul className="text-gray-300 leading-relaxed space-y-1 list-disc list-inside font-bold">
+              <ul className="text-gray-300 leading-relaxed space-y-1 list-disc list-outside pl-5 font-bold">
                 <li>Monitor subcontractor insurance in real-time</li>
                 <li>Track active permits across all sites</li>
                 <li>Automated alerts before they expire</li>
@@ -95,7 +95,7 @@ export default function LandingPage() {
                 <Building2 className="w-6 h-6" />
               </div>
               <h3 className="text-xl font-bold mb-3 text-white">QR Site Boards</h3>
-              <ul className="text-gray-300 leading-relaxed space-y-1 list-disc list-inside font-bold">
+              <ul className="text-gray-300 leading-relaxed space-y-1 list-disc list-outside pl-5 font-bold">
                 <li>Generate dynamic QR codes for site boards</li>
                 <li>Instant access to public safety documents</li>
                 <li>No app download required to scan</li>
