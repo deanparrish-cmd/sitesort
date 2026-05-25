@@ -11,7 +11,7 @@ import {
 import {
   Plus, Search, ArrowDownCircle, ArrowUpCircle, CheckCircle2, Clock,
   AlertTriangle, Receipt, Mic, MicOff, Paperclip, Upload, Loader2, X,
-  Share2, Mail, MessageCircle, Eye,
+  Share2, Mail, MessageCircle, Eye, ExternalLink, FileText, Image,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { useListProjects } from "@workspace/api-client-react";
@@ -576,6 +576,176 @@ export default function InvoicesPage() {
           </div>
         )}
       </Card>
+
+      {/* Invoice viewer overlay */}
+      {viewingInvoice && (
+        <div className="fixed inset-0 z-50 flex items-stretch justify-center">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setViewingInvoice(null)} />
+          <div className="relative z-10 flex flex-col w-full max-w-5xl m-4 bg-background rounded-2xl shadow-2xl overflow-hidden">
+            {/* Viewer header */}
+            <div className="flex items-center gap-3 px-5 py-4 border-b bg-muted/30 flex-shrink-0">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <div className={cn(
+                  "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0",
+                  viewingInvoice.direction === "inbound" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                )}>
+                  {viewingInvoice.counterpartyName.charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <p className="font-semibold truncate leading-tight">{viewingInvoice.counterpartyName}</p>
+                  {viewingInvoice.reference && <p className="text-xs text-muted-foreground">{viewingInvoice.reference}</p>}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {viewingInvoice.attachmentUrl && (
+                  <a
+                    href={fullUrl(viewingInvoice.attachmentUrl)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border bg-background hover:bg-muted transition-colors"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" /> Open in new tab
+                  </a>
+                )}
+                {viewingInvoice.attachmentUrl && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border bg-background hover:bg-muted transition-colors">
+                        <Share2 className="w-3.5 h-3.5" /> Share
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-44">
+                      <DropdownMenuItem onClick={() => shareEmail(viewingInvoice)} className="gap-2 cursor-pointer">
+                        <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => shareWhatsApp(viewingInvoice)} className="gap-2 cursor-pointer">
+                        <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+                {viewingInvoice.status !== "paid" && (
+                  <button
+                    onClick={() => { markPaid(viewingInvoice.id); setViewingInvoice(prev => prev ? { ...prev, status: "paid" } : null); }}
+                    className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Mark paid
+                  </button>
+                )}
+                <button
+                  onClick={() => setViewingInvoice(null)}
+                  className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Viewer body */}
+            <div className="flex flex-col sm:flex-row flex-1 min-h-0 overflow-hidden">
+              {/* Details sidebar */}
+              <div className="sm:w-64 flex-shrink-0 border-b sm:border-b-0 sm:border-r p-5 overflow-y-auto space-y-4">
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Type</p>
+                  {viewingInvoice.direction === "inbound"
+                    ? <span className="flex items-center gap-1.5 text-emerald-600 font-medium text-sm"><ArrowDownCircle className="w-4 h-4" />Inbound (owed to you)</span>
+                    : <span className="flex items-center gap-1.5 text-rose-600 font-medium text-sm"><ArrowUpCircle className="w-4 h-4" />Outbound (you pay)</span>
+                  }
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Amount</p>
+                  <p className="text-2xl font-extrabold tabular-nums">{fmtAmount(viewingInvoice.currency, viewingInvoice.amount)}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Status</p>
+                  <StatusBadge invoice={viewingInvoice} />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Due Date</p>
+                  <p className="text-sm font-medium">{fmtDate(viewingInvoice.dueDate)}</p>
+                </div>
+                {viewingInvoice.description && (
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Description</p>
+                    <p className="text-sm text-muted-foreground">{viewingInvoice.description}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Created</p>
+                  <p className="text-sm text-muted-foreground">{fmtDate(viewingInvoice.createdAt.slice(0, 10))}</p>
+                </div>
+                {!viewingInvoice.attachmentUrl && (
+                  <button
+                    onClick={() => { setViewingInvoice(null); triggerUpload(viewingInvoice.id); }}
+                    className="w-full flex items-center justify-center gap-2 text-sm text-muted-foreground border border-dashed rounded-lg py-3 hover:text-primary hover:border-primary transition-colors"
+                  >
+                    <Paperclip className="w-4 h-4" /> Attach document
+                  </button>
+                )}
+              </div>
+
+              {/* File viewer */}
+              <div className="flex-1 min-h-0 overflow-auto bg-muted/20 flex flex-col">
+                {viewingInvoice.attachmentUrl ? (() => {
+                  const url = fullUrl(viewingInvoice.attachmentUrl);
+                  const isImg = /\.(png|jpe?g|webp|gif)$/i.test(url);
+                  const isPdf = /\.pdf$/i.test(url);
+                  if (isImg) {
+                    return (
+                      <div className="flex-1 flex items-center justify-center p-6 min-h-64">
+                        <img
+                          src={url}
+                          alt="Invoice attachment"
+                          className="max-w-full max-h-full object-contain rounded-lg shadow-md"
+                        />
+                      </div>
+                    );
+                  }
+                  if (isPdf) {
+                    return (
+                      <iframe
+                        src={url}
+                        title="Invoice PDF"
+                        className="flex-1 w-full min-h-[500px] border-0"
+                      />
+                    );
+                  }
+                  return (
+                    <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8 text-center">
+                      <FileText className="w-12 h-12 text-muted-foreground/40" />
+                      <p className="text-sm text-muted-foreground">Preview not available for this file type.</p>
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+                      >
+                        <ExternalLink className="w-4 h-4" /> Open file
+                      </a>
+                    </div>
+                  );
+                })() : (
+                  <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8 text-center">
+                    <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+                      <Image className="w-7 h-7 text-muted-foreground/40" />
+                    </div>
+                    <div>
+                      <p className="font-medium mb-1">No document attached</p>
+                      <p className="text-sm text-muted-foreground">Drag a PDF or image onto the invoice row to attach it.</p>
+                    </div>
+                    <button
+                      onClick={() => { setViewingInvoice(null); triggerUpload(viewingInvoice.id); }}
+                      className="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg border hover:bg-muted transition-colors"
+                    >
+                      <Upload className="w-4 h-4" /> Choose file
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create modal */}
       <Dialog open={modalOpen} onOpenChange={open => { setModalOpen(open); if (!open) { reset(); setError(null); } }}>
