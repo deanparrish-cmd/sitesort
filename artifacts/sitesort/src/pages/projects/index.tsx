@@ -173,6 +173,86 @@ export default function ProjectsList() {
     }
   }, [permitOpen, projects, permitProjectId]);
 
+  // ── Photo upload modal state ──
+  const PHOTO_CATEGORIES = [
+    { value: "general", label: "General" },
+    { value: "progress", label: "Progress" },
+    { value: "snag", label: "Snag" },
+    { value: "safety_concern", label: "Safety Concern" },
+  ];
+
+  const [photoOpen, setPhotoOpen] = useState(false);
+  const [photoProjectId, setPhotoProjectId] = useState("");
+  const [photoCategory, setPhotoCategory] = useState("progress");
+  const [photoDesc, setPhotoDesc] = useState("");
+  const [photoZone, setPhotoZone] = useState("");
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoSubmitting, setPhotoSubmitting] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [photoRefNum, setPhotoRefNum] = useState<string | null>(null);
+  const [photoDictating, setPhotoDictating] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const photoDictateRef = useRef<any>(null);
+  const photoFileRef = useRef<HTMLInputElement>(null);
+
+  const togglePhotoDictate = useCallback(() => {
+    if (photoDictating) { photoDictateRef.current?.stop(); return; }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SpeechRec = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
+    if (!SpeechRec) return;
+    const rec = new SpeechRec();
+    rec.continuous = true; rec.interimResults = false; rec.lang = "en-GB";
+    rec.onstart = () => setPhotoDictating(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rec.onresult = (e: any) => {
+      const t = Array.from(e.results as any[]).map((r: any) => r[0].transcript).join(" ");
+      setPhotoDesc(prev => prev + (prev ? " " : "") + t);
+    };
+    rec.onend = () => { setPhotoDictating(false); photoDictateRef.current = null; };
+    rec.onerror = () => { setPhotoDictating(false); photoDictateRef.current = null; };
+    rec.start(); photoDictateRef.current = rec;
+  }, [photoDictating]);
+
+  const closePhotoModal = useCallback(() => {
+    photoDictateRef.current?.stop();
+    setPhotoOpen(false); setPhotoProjectId(""); setPhotoCategory("progress");
+    setPhotoDesc(""); setPhotoZone(""); setPhotoUrl(null);
+    setPhotoError(null); setPhotoRefNum(null); setPhotoDictating(false);
+  }, []);
+
+  const uploadPhotoFile = useCallback(async (file: File) => {
+    setPhotoUploading(true);
+    const token = localStorage.getItem("sitesort_token");
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch("/api/upload", { method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : {}, body: fd });
+    if (res.ok) { const { url } = await res.json(); setPhotoUrl(url); }
+    setPhotoUploading(false);
+  }, []);
+
+  const submitPhoto = useCallback(async () => {
+    if (!photoProjectId) { setPhotoError("Please select a project."); return; }
+    setPhotoSubmitting(true); setPhotoError(null);
+    const token = localStorage.getItem("sitesort_token");
+    const res = await fetch(`/api/projects/${photoProjectId}/photos`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ category: photoCategory, description: photoDesc.trim() || null, zone: photoZone.trim() || null, photoUrl }),
+    });
+    if (res.ok) { const d = await res.json(); setPhotoRefNum(d.referenceNumber); }
+    else setPhotoError("Failed to log photo. Please try again.");
+    setPhotoSubmitting(false);
+  }, [photoProjectId, photoCategory, photoDesc, photoZone, photoUrl]);
+
+  // Auto-select project if only one active project (photo)
+  useEffect(() => {
+    if (photoOpen && projects && !photoProjectId) {
+      const active = projects.filter((p: any) => p.status === "active");
+      if (active.length === 1) setPhotoProjectId(active[0].id);
+    }
+  }, [photoOpen, projects, photoProjectId]);
+
   // Auto-open create modal when navigated here via voice command (?new=1)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -200,6 +280,38 @@ export default function ProjectsList() {
       setPermitOpen(true);
     }
   }, []);
+
+  // Auto-open photo upload modal via voice command (?photo=1)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("photo") === "1") {
+      window.history.replaceState({}, "", "/projects");
+      setPhotoOpen(true);
+    }
+  }, []);
+
+  // View photo log via voice command (?viewphoto=1) — go to first active project's photos tab
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("viewphoto") === "1" && projects) {
+      window.history.replaceState({}, "", "/projects");
+      const active = projects.filter((p: any) => p.status === "active");
+      if (active.length === 1) setLocation(`/projects/${active[0].id}?tab=photos`);
+    }
+  }, [projects, setLocation]);
+
+  // Open specific project by name via voice command (?openproject=<name>)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const nameQuery = params.get("openproject");
+    if (!nameQuery || !projects) return;
+    window.history.replaceState({}, "", "/projects");
+    const q = nameQuery.toLowerCase();
+    const match = projects.find((p: any) =>
+      p.name.toLowerCase().includes(q) || q.includes(p.name.toLowerCase())
+    );
+    if (match) setLocation(`/projects/${match.id}`);
+  }, [projects, setLocation]);
   const voiceSupported = typeof window !== "undefined" && !!(
     (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
   );
@@ -397,6 +509,114 @@ export default function ProjectsList() {
       {/* Hidden file input for safety photo */}
       <input ref={safetyFileRef} type="file" accept="image/*,.pdf" className="hidden"
         onChange={e => { const f = e.target.files?.[0]; if (f) uploadSafetyPhoto(f); e.target.value = ""; }} />
+
+      {/* Hidden file input for photo upload */}
+      <input ref={photoFileRef} type="file" accept="image/*" className="hidden"
+        onChange={e => { const f = e.target.files?.[0]; if (f) uploadPhotoFile(f); e.target.value = ""; }} />
+
+      {/* Upload Photo modal */}
+      <Dialog open={photoOpen} onOpenChange={open => { if (!open) closePhotoModal(); }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Camera className="w-5 h-5 text-primary" />
+            Log Photo
+          </DialogTitle>
+        </DialogHeader>
+
+        {photoRefNum ? (
+          <div className="flex flex-col items-center py-8 gap-3">
+            <CheckCircle2 className="w-12 h-12 text-emerald-500" />
+            <p className="font-semibold text-emerald-600">Photo logged</p>
+            <p className="text-sm text-muted-foreground">Reference: <span className="font-mono font-bold">{photoRefNum}</span></p>
+          </div>
+        ) : (
+          <div className="space-y-4 pt-2">
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Project</label>
+              <select value={photoProjectId} onChange={e => setPhotoProjectId(e.target.value)}
+                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                <option value="">Select a project…</option>
+                {projects?.filter((p: any) => p.status === "active").map((p: any) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Category</label>
+              <select value={photoCategory} onChange={e => setPhotoCategory(e.target.value)}
+                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                {PHOTO_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">
+                Description <span className="text-muted-foreground font-normal">(optional)</span>
+              </label>
+              <div className="relative">
+                <textarea
+                  value={photoDesc}
+                  onChange={e => setPhotoDesc(e.target.value)}
+                  placeholder={photoDictating ? "Listening…" : "Describe what the photo shows…"}
+                  rows={2}
+                  className={cn("w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring pr-10",
+                    photoDictating && "border-orange-400 ring-1 ring-orange-400/60")}
+                />
+                {voiceSupported && (
+                  <button type="button" onClick={togglePhotoDictate}
+                    title={photoDictating ? "Stop dictating" : "Dictate description"}
+                    className={cn("absolute right-2 top-2 p-1 rounded transition-colors",
+                      photoDictating ? "text-orange-500 animate-pulse" : "text-muted-foreground hover:text-primary")}>
+                    {photoDictating ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">
+                Zone / Location <span className="text-muted-foreground font-normal">(optional)</span>
+              </label>
+              <Input value={photoZone} onChange={e => setPhotoZone(e.target.value)} placeholder="e.g. Level 3, North wall" />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Photo</label>
+              {photoUrl ? (
+                <div className="flex items-center gap-2">
+                  <img src={photoUrl} alt="preview" className="w-16 h-16 object-cover rounded-lg border" />
+                  <div className="flex flex-col gap-1">
+                    <span className="text-sm text-emerald-600 flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4" /> Photo attached</span>
+                    <button onClick={() => setPhotoUrl(null)} className="text-xs text-muted-foreground hover:text-destructive text-left">Remove</button>
+                  </div>
+                </div>
+              ) : (
+                <button type="button" disabled={photoUploading} onClick={() => photoFileRef.current?.click()}
+                  className="flex items-center gap-2 text-sm text-primary border border-dashed border-primary/40 rounded-lg px-4 py-2.5 hover:bg-primary/5 transition-colors w-full justify-center">
+                  {photoUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
+                  {photoUploading ? "Uploading…" : "Choose photo"}
+                </button>
+              )}
+            </div>
+
+            {photoError && <p className="text-sm text-destructive">{photoError}</p>}
+          </div>
+        )}
+
+        <DialogFooter>
+          {photoRefNum ? (
+            <Button variant="accent" onClick={closePhotoModal}>Done</Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={closePhotoModal}>Cancel</Button>
+              <Button variant="accent" onClick={submitPhoto} disabled={photoSubmitting}>
+                {photoSubmitting ? "Saving…" : "Log Photo"}
+              </Button>
+            </>
+          )}
+        </DialogFooter>
+      </Dialog>
 
       {/* Add Permit modal */}
       <Dialog open={permitOpen} onOpenChange={open => { if (!open) closePermitModal(); }}>

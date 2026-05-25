@@ -15,7 +15,10 @@
       "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>{const a=JSON.parse\\(d\\);console.log\\('Total items:',a.length\\);console.log\\(JSON.stringify\\(a[0],null,2\\)\\)}\\)\")",
       "Bash(curl -s -X POST http://localhost:8080/api/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"paul@acme.com\",\"password\":\"password123\"}')",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(npx tsx *)",
+      "Bash(git stash *)",
+      "Bash(git pull *)"
     ]
   }
 }

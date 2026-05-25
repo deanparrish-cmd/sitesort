@@ -67,6 +67,8 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     "new project": "/projects?new=1", "create project": "/projects?new=1", "add project": "/projects?new=1",
     "log safety issue": "/projects?safety=1", "report safety issue": "/projects?safety=1", "log hazard": "/projects?safety=1", "report hazard": "/projects?safety=1", "safety issue": "/projects?safety=1",
     "add permit": "/projects?permit=1", "new permit": "/projects?permit=1", "create permit": "/projects?permit=1",
+    "upload photo": "/projects?photo=1", "log photo": "/projects?photo=1", "new photo": "/projects?photo=1", "take photo": "/projects?photo=1", "add photo": "/projects?photo=1",
+    "recall photos": "/projects?viewphoto=1", "find photos": "/projects?viewphoto=1", "view photos": "/projects?viewphoto=1", "photo log": "/projects?viewphoto=1", "photos": "/projects?viewphoto=1",
     "projects": "/projects", "project": "/projects",
     "new message": "/messages?new=1", "send message": "/messages?new=1", "compose message": "/messages?new=1",
     "dictate message": "/messages?dictate=1", "dictate a message": "/messages?dictate=1",
@@ -87,8 +89,12 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
 
   const matchVoiceCommand = (raw: string): string | null => {
     const text = raw.toLowerCase()
-      .replace(/^(go to|navigate to|open|show|show me|take me to|visit|switch to)\s+/i, "")
+      .replace(/^(go to|navigate to|open|show|show me|take me to|visit|switch to|view|see|list|my)\s+/i, "")
       .trim();
+
+    // "project [name]" — after prefix strip, navigate to a specific project by name
+    const projectByName = text.match(/^project\s+(.+)/i);
+    if (projectByName) return `/projects?openproject=${encodeURIComponent(projectByName[1].trim())}`;
 
     // "find/search [for] subcontractor[s] [optional term]" — encode inline term if present
     const subFind = text.match(/^(?:find|search(?:\s+for)?)\s+(?:subcontractors?|subs?|contractors?)\s*(.*)/i);
@@ -114,6 +120,10 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       const term = permitFind[1].trim();
       return term ? `/compliance?q=${encodeURIComponent(term)}` : `/compliance?q=permit`;
     }
+
+    // "find/recall/search photo[s] [optional term]"
+    const photoFind = text.match(/^(?:find|recall|search(?:\s+for)?|view)\s+(?:photos?)\s*(.*)/i);
+    if (photoFind) return "/projects?viewphoto=1";
 
     // "send/write/compose [a] message to [name]"
     const msgTo = text.match(/^(?:send|write|compose)\s+(?:a\s+)?message\s+to\s+(.+)/i);
@@ -489,7 +499,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
             </button>
           </div>
           <p className="text-xs text-gray-400 leading-relaxed">
-            Try: <span className="text-gray-200">"new project"</span>, <span className="text-gray-200">"go to projects"</span>, <span className="text-gray-200">"open compliance"</span>, <span className="text-gray-200">"show messages"</span>
+            Try: <span className="text-gray-200">"new project"</span>, <span className="text-gray-200">"upload photo"</span>, <span className="text-gray-200">"log safety issue"</span>, <span className="text-gray-200">"recall photos"</span>, <span className="text-gray-200">"open compliance"</span>
           </p>
         </div>
       )}

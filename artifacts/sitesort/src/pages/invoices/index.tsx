@@ -11,7 +11,7 @@ import {
 import {
   Plus, Search, ArrowDownCircle, ArrowUpCircle, CheckCircle2, Clock,
   AlertTriangle, Receipt, Mic, MicOff, Paperclip, Upload, Loader2, X,
-  Share2, Mail, MessageCircle,
+  Share2, Mail, MessageCircle, Eye,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { useListProjects } from "@workspace/api-client-react";
@@ -114,6 +114,7 @@ export default function InvoicesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
 
   // drag-and-drop state
   const [isDragOver, setIsDragOver] = useState(false);
@@ -423,6 +424,7 @@ export default function InvoicesPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/30">
+                  <th className="px-5 py-3 w-12" />
                   <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Type</th>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Counterparty</th>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden md:table-cell">Description</th>
@@ -444,13 +446,29 @@ export default function InvoicesPage() {
                         setDragRowId(inv.id);
                         lastDragRowRef.current = inv.id;
                       }}
+                      onClick={() => setViewingInvoice(inv)}
                       className={cn(
-                        "transition-colors",
+                        "transition-colors cursor-pointer",
                         isRowDragTarget
                           ? "bg-primary/10 outline outline-2 outline-primary/40"
                           : "hover:bg-muted/20"
                       )}
                     >
+                      {/* Avatar */}
+                      <td className="pl-5 pr-2 py-3.5">
+                        <button
+                          onClick={e => { e.stopPropagation(); setViewingInvoice(inv); }}
+                          title="View invoice"
+                          className={cn(
+                            "w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-opacity hover:opacity-80",
+                            inv.direction === "inbound"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : "bg-rose-100 text-rose-700"
+                          )}
+                        >
+                          {inv.counterpartyName.charAt(0).toUpperCase()}
+                        </button>
+                      </td>
                       <td className="px-5 py-3.5">
                         {inv.direction === "inbound"
                           ? <span className="flex items-center gap-1.5 text-emerald-600 font-medium"><ArrowDownCircle className="w-4 h-4" />In</span>
@@ -531,14 +549,21 @@ export default function InvoicesPage() {
                         )}
                       </td>
 
-                      <td className="px-5 py-3.5">
+                      <td className="px-5 py-3.5" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center gap-2 justify-end">
+                          <button
+                            onClick={e => { e.stopPropagation(); setViewingInvoice(inv); }}
+                            title="View invoice"
+                            className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
                           {inv.status !== "paid" && (
-                            <button onClick={() => markPaid(inv.id)} className="text-xs text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap">
+                            <button onClick={e => { e.stopPropagation(); markPaid(inv.id); }} className="text-xs text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap">
                               Mark paid
                             </button>
                           )}
-                          <button onClick={() => deleteInvoice(inv.id)} className="text-xs text-muted-foreground hover:text-destructive transition-colors">
+                          <button onClick={e => { e.stopPropagation(); deleteInvoice(inv.id); }} className="text-xs text-muted-foreground hover:text-destructive transition-colors">
                             Delete
                           </button>
                         </div>

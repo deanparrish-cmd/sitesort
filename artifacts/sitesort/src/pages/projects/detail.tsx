@@ -32,16 +32,19 @@ import { useForm } from "react-hook-form";
 export default function ProjectDetail() {
   const [, params] = useRoute("/projects/:id");
   const projectId = params?.id || "";
-  
+  const defaultTab = new URLSearchParams(window.location.search).get("tab") || "documents";
+
   const { data: project, isLoading: projectLoading } = useGetProject(projectId, { query: { enabled: !!projectId } });
   const { data: documents, refetch: refetchDocs } = useListDocuments(projectId, undefined, { query: { enabled: !!projectId } });
   const { data: members } = useListProjectMembers(projectId, { query: { enabled: !!projectId } });
-  
+
   type PermitItem = { id: string; type: string; description: string; startDate: string; expiryDate: string; status: string; responsibleName?: string };
   type InvoiceItem = { id: string; direction: string; counterpartyName: string; description: string; amount: string; currency: string; dueDate: string; status: string; reference?: string | null };
+  type PhotoItem = { id: string; uploadedBy: string; uploaderName: string; photoUrl: string | null; category: string; description: string | null; zone: string | null; referenceNumber: string; takenAt: string };
 
   const [permits, setPermits] = useState<PermitItem[]>([]);
   const [projectInvoices, setProjectInvoices] = useState<InvoiceItem[]>([]);
+  const [photos, setPhotos] = useState<PhotoItem[]>([]);
 
   useEffect(() => {
     if (!projectId) return;
@@ -50,7 +53,8 @@ export default function ProjectDetail() {
     Promise.all([
       fetch(`/api/projects/${projectId}/permits`, { headers }).then(r => r.ok ? r.json() : []),
       fetch(`/api/projects/${projectId}/invoices`, { headers }).then(r => r.ok ? r.json() : []),
-    ]).then(([p, inv]) => { setPermits(p); setProjectInvoices(inv); });
+      fetch(`/api/projects/${projectId}/photos`, { headers }).then(r => r.ok ? r.json() : []),
+    ]).then(([p, inv, ph]) => { setPermits(p); setProjectInvoices(inv); setPhotos(ph); });
   }, [projectId]);
 
   const uploadMutation = useUploadDocument();
@@ -388,7 +392,7 @@ export default function ProjectDetail() {
         </div>
       </div>
 
-      <Tabs defaultValue="documents">
+      <Tabs defaultValue={defaultTab}>
         <TabsList className="mb-6 w-full justify-start overflow-x-auto bg-transparent border-b rounded-none p-0 h-auto">
           {[
             { value: "overview", label: "Overview" },
@@ -821,6 +825,61 @@ export default function ProjectDetail() {
                   >
                     <FolderOpen className="w-4 h-4" />+ Add Trade Folder
                   </button>
+                )}
+              </div>
+            );
+          })()}
+        </TabsContent>
+
+        <TabsContent value="photos">
+          {(() => {
+            const CATEGORY_LABELS: Record<string, string> = {
+              general: "General", progress: "Progress", snag: "Snag", safety_concern: "Safety Concern",
+            };
+            const CATEGORY_COLOURS: Record<string, string> = {
+              general: "bg-blue-50 border-blue-200 text-blue-700",
+              progress: "bg-emerald-50 border-emerald-200 text-emerald-700",
+              snag: "bg-orange-50 border-orange-200 text-orange-700",
+              safety_concern: "bg-red-50 border-red-200 text-red-700",
+            };
+            return (
+              <div>
+                <div className="flex items-center gap-2 mb-6">
+                  <Camera className="w-5 h-5 text-primary" />
+                  <h3 className="font-bold text-lg">Photo Log</h3>
+                  <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{photos.length}</span>
+                </div>
+                {photos.length === 0 ? (
+                  <Card><CardContent className="py-12 text-center text-muted-foreground text-sm">
+                    No photos logged yet. Use voice commands or the sidebar to log a photo.
+                  </CardContent></Card>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                    {[...photos].sort((a, b) => b.takenAt.localeCompare(a.takenAt)).map(photo => (
+                      <div key={photo.id} className="rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                        {photo.photoUrl ? (
+                          <a href={photo.photoUrl} target="_blank" rel="noopener noreferrer">
+                            <img src={photo.photoUrl} alt={photo.description ?? photo.category} className="w-full h-36 object-cover" />
+                          </a>
+                        ) : (
+                          <div className="w-full h-36 bg-muted flex items-center justify-center">
+                            <Camera className="w-8 h-8 text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className="p-3 space-y-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${CATEGORY_COLOURS[photo.category] ?? "bg-muted border-border text-muted-foreground"}`}>
+                              {CATEGORY_LABELS[photo.category] ?? photo.category}
+                            </span>
+                            <span className="text-[10px] font-mono text-muted-foreground">{photo.referenceNumber}</span>
+                          </div>
+                          {photo.description && <p className="text-xs text-foreground line-clamp-2">{photo.description}</p>}
+                          {photo.zone && <p className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="w-3 h-3" />{photo.zone}</p>}
+                          <p className="text-[10px] text-muted-foreground">{formatDate(photo.takenAt)} · {photo.uploaderName}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             );
