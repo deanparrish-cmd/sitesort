@@ -41,11 +41,6 @@ export default function LandingPage() {
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Button>
               </Link>
-              <Link href="/login">
-                <Button size="lg" variant="outline" className="w-full sm:w-auto">
-                  Book Demo
-                </Button>
-              </Link>
             </div>
           </div>
 
