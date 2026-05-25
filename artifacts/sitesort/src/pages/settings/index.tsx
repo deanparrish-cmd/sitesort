@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetMe } from "@workspace/api-client-react";
+import { useSubscription } from "@/contexts/subscription";
 
 type Tab = "profile" | "security" | "notifications" | "company" | "billing";
 
@@ -55,7 +56,7 @@ function StatusBanner({ status }: { status: StatusMsg | null }) {
   );
 }
 
-function ProfileTab({ user, onSaved }: { user: { id: string; name: string; email: string; phone?: string | null; role: string; avatarUrl?: string | null }; onSaved: () => void }) {
+function ProfileTab({ user, onSaved, isCancelled }: { user: { id: string; name: string; email: string; phone?: string | null; role: string; avatarUrl?: string | null }; onSaved: () => void; isCancelled: boolean }) {
   const [name, setName] = useState(user.name);
   const [phone, setPhone] = useState(user.phone ?? "");
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl ?? "");
@@ -73,6 +74,7 @@ function ProfileTab({ user, onSaved }: { user: { id: string; name: string; email
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (isCancelled) { setStatus({ type: "error", text: "Your subscription is cancelled. Renew your plan to continue." }); return; }
     setAvatarUploading(true);
     setStatus(null);
     try {
@@ -104,6 +106,7 @@ function ProfileTab({ user, onSaved }: { user: { id: string; name: string; email
   };
 
   const save = async () => {
+    if (isCancelled) { setStatus({ type: "error", text: "Your subscription is cancelled. Renew your plan to continue." }); return; }
     if (!name.trim()) { setStatus({ type: "error", text: "Name cannot be empty." }); return; }
     setSaving(true);
     setStatus(null);
@@ -196,7 +199,7 @@ function ProfileTab({ user, onSaved }: { user: { id: string; name: string; email
   );
 }
 
-function SecurityTab() {
+function SecurityTab({ isCancelled }: { isCancelled: boolean }) {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -204,6 +207,7 @@ function SecurityTab() {
   const [status, setStatus] = useState<StatusMsg | null>(null);
 
   const save = async () => {
+    if (isCancelled) { setStatus({ type: "error", text: "Your subscription is cancelled. Renew your plan to continue." }); return; }
     if (!current || !next || !confirm) { setStatus({ type: "error", text: "All fields are required." }); return; }
     if (next.length < 8) { setStatus({ type: "error", text: "New password must be at least 8 characters." }); return; }
     if (next !== confirm) { setStatus({ type: "error", text: "New passwords do not match." }); return; }
@@ -335,7 +339,7 @@ type Company = { id: string; name: string; size: string; subscriptionTier: strin
 
 const COMPANY_SIZES = ["1-10", "11-50", "51-200", "201-500", "500+"];
 
-function CompanyTab() {
+function CompanyTab({ isCancelled }: { isCancelled: boolean }) {
   const [company, setCompany] = useState<Company | null>(null);
   const [name, setName] = useState("");
   const [size, setSize] = useState("");
@@ -353,6 +357,7 @@ function CompanyTab() {
   }, []);
 
   const save = async () => {
+    if (isCancelled) { setStatus({ type: "error", text: "Your subscription is cancelled. Renew your plan to continue." }); return; }
     if (!name.trim()) { setStatus({ type: "error", text: "Company name cannot be empty." }); return; }
     setSaving(true);
     setStatus(null);
@@ -696,6 +701,7 @@ const TABS: { id: Tab; label: string; icon: React.ElementType; adminOnly?: boole
 ];
 
 export default function SettingsPage() {
+  const { isCancelled } = useSubscription();
   const { data: user, refetch } = useGetMe();
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const params = new URLSearchParams(window.location.search);
@@ -737,11 +743,11 @@ export default function SettingsPage() {
         {/* Tab content */}
         <Card className="flex-1 p-6">
           {user && activeTab === "profile" && (
-            <ProfileTab user={user as typeof user & { avatarUrl?: string | null }} onSaved={() => refetch()} />
+            <ProfileTab user={user as typeof user & { avatarUrl?: string | null }} onSaved={() => refetch()} isCancelled={isCancelled} />
           )}
-          {activeTab === "security" && <SecurityTab />}
+          {activeTab === "security" && <SecurityTab isCancelled={isCancelled} />}
           {activeTab === "notifications" && <NotificationsTab />}
-          {activeTab === "company" && user?.role === "admin" && <CompanyTab />}
+          {activeTab === "company" && user?.role === "admin" && <CompanyTab isCancelled={isCancelled} />}
           {activeTab === "billing" && user?.role === "admin" && <BillingTab />}
         </Card>
       </div>
