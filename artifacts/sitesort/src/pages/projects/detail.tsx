@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown } from "lucide-react";
@@ -208,6 +208,9 @@ export default function ProjectDetail() {
     }
     setLinkingSubId(null);
   };
+  type SharingDoc = { id: string; name: string; version: number; fileUrl: string };
+  const [sharingDoc, setSharingDoc] = useState<SharingDoc | null>(null);
+
   const { register: schedRegister, handleSubmit: schedHandleSubmit, reset: schedReset, setValue: schedSetValue, watch: schedWatch } = useForm();
 
   const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -706,6 +709,13 @@ tr:last-child td{border-bottom:none}
                                 }}
                               >
                                 <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="gap-2 cursor-pointer"
+                                onClick={() => setSharingDoc({ id: doc.id, name: doc.name, version: doc.version, fileUrl: doc.fileUrl })}
+                              >
+                                <Users className="w-4 h-4 text-primary" /> Share with project team
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -1395,6 +1405,92 @@ tr:last-child td{border-bottom:none}
         <DialogFooter>
           <Button variant="outline" onClick={() => setFromDirOpen(false)}>Done</Button>
         </DialogFooter>
+      </Dialog>
+
+      <Dialog open={!!sharingDoc} onOpenChange={v => { if (!v) setSharingDoc(null); }}>
+        <DialogHeader>
+          <DialogTitle>Share with project team</DialogTitle>
+        </DialogHeader>
+        {sharingDoc && (() => {
+          const norm = sharingDoc.fileUrl.replace(/^\/uploads\//, "/api/uploads/");
+          const docUrl = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
+          const allMembers = (members as any[]) ?? [];
+          const withEmail = allMembers.filter((m: any) => m.email);
+          const withPhone = allMembers.filter((m: any) => m.phone);
+          const emailSubject = encodeURIComponent(`Document – ${sharingDoc.name}`);
+          const emailBody = encodeURIComponent(`Hi,\n\nPlease find the document "${sharingDoc.name}" (v${sharingDoc.version}) here:\n\n${docUrl}`);
+          const waText = encodeURIComponent(`Document: ${sharingDoc.name} (v${sharingDoc.version})\n${docUrl}`);
+          return (
+            <div className="space-y-5">
+              <div className="px-4 py-3 bg-muted/50 rounded-lg text-sm">
+                <p className="font-semibold truncate">{sharingDoc.name}</p>
+                <p className="text-muted-foreground text-xs">v{sharingDoc.version} · <a href={docUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">Open document</a></p>
+              </div>
+
+              {withEmail.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm font-semibold">Email all members</p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const allEmails = withEmail.map((m: any) => m.email).join(",");
+                        window.open(`mailto:${allEmails}?subject=${emailSubject}&body=${emailBody}`);
+                      }}
+                    >
+                      <Mail className="w-3.5 h-3.5 mr-1.5" /> Email all ({withEmail.length})
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <p className="text-sm font-semibold mb-2">Send to individual members</p>
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                  {allMembers.length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-4">No team members on this project yet.</p>
+                  )}
+                  {allMembers.map((m: any) => (
+                    <div key={m.id} className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg border bg-card">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm truncate">{m.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{m.email ?? m.phone ?? "No contact details"}</p>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {m.email && (
+                          <button
+                            onClick={() => window.open(`mailto:${m.email}?subject=${emailSubject}&body=${emailBody}`)}
+                            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-primary transition-colors"
+                            title={`Email ${m.name}`}
+                          >
+                            <Mail className="w-4 h-4" />
+                          </button>
+                        )}
+                        {m.phone && (
+                          <button
+                            onClick={() => window.open(`https://wa.me/${m.phone.replace(/\D/g, "")}?text=${waText}`, "_blank")}
+                            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-green-600 transition-colors"
+                            title={`WhatsApp ${m.name}`}
+                          >
+                            <MessageCircle className="w-4 h-4" />
+                          </button>
+                        )}
+                        {!m.email && !m.phone && (
+                          <span className="text-xs text-muted-foreground italic">No contact</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setSharingDoc(null)}>Done</Button>
+              </DialogFooter>
+            </div>
+          );
+        })()}
       </Dialog>
 
       <Dialog open={!!scheduleTarget} onOpenChange={v => { if (!v) { setScheduleTarget(null); setScheduleError(null); } }}>
