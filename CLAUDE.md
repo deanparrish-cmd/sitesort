@@ -93,6 +93,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 29. Invoice document viewer — full-screen inline viewer panel; PDF via iframe, image via img tag, fallback open-in-tab; sidebar with invoice details; header actions: open in new tab, share, mark paid
 30. Project detail report / PDF export — "Export Report" button generates a print-ready HTML report (team, permits, documents, finances, photos) and auto-triggers browser Save-as-PDF
 31. Subcontractor "Add to Project" — FolderPlus button on each sub card opens a dialog listing active projects; one-click add with inline per-project feedback (added/already linked/error)
+32. Enforced subcontractor directory-first workflow — removed "Add Person" form and dialog from the project Team tab; contacts must be added to the subcontractor directory first, then linked into a project via "Add from Subcontractor Directory"
 
 ## Uploads / File Serving
 
@@ -149,6 +150,14 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 
 #### Key files modified
 - `artifacts/sitesort/src/pages/subcontractors/index.tsx` — `shareTarget`/`shareProjects`/`linkStatus` state; `useEffect` fetches active projects on open; `linkToProject()` calls `POST /api/projects/:id/members/link`; share dialog JSX; `FolderPlus`, `CheckCircle2`, `Loader2`, `Building2` icons added
+
+### 2026-05-25 (continued)
+
+#### Tasks completed
+- **Enforced directory-first contact workflow** — removed the "+ Add Person" button from each trade folder in the project Team tab, removed the Add Person dialog and `submitAddPerson` handler, and removed associated state/form (`addPersonTrade`, `addPersonError`, `personRegister`). All contacts must now be added to the subcontractor directory first and then linked into a project via the "Add from Subcontractor Directory" button. Updated empty-state copy to reflect this.
+
+#### Key files modified
+- `artifacts/sitesort/src/pages/projects/detail.tsx` — removed `addPersonTrade` state, `submitAddPerson` function, "+ Add Person" trade folder button, and Add Person dialog
 
 #### Pending / open tasks
 - Only project creation is blocked client-side on cancellation — other write actions not yet restricted
