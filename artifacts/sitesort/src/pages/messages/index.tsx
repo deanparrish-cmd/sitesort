@@ -34,6 +34,8 @@ type DocAttachment = { id: string; name: string; type: string; fileUrl: string; 
 type PhotoAttachment = { id: string; photoUrl?: string | null; category: string; description?: string | null; referenceNumber: string; zone?: string | null };
 type PermitAttachment = { id: string; type: string; description: string; expiryDate: string; documentUrl?: string | null };
 
+type Reaction = { emoji: string; count: number; mine: boolean };
+
 type Message = {
   id: string;
   senderId: string;
@@ -45,6 +47,7 @@ type Message = {
   attachmentType?: "document" | "photo" | "permit" | null;
   attachmentId?: string | null;
   attachment?: DocAttachment | PhotoAttachment | PermitAttachment | null;
+  reactions?: Reaction[];
   readAt: string | null;
   editedAt: string | null;
   createdAt: string;
@@ -76,6 +79,7 @@ type ChannelMessage = {
   attachmentType?: "document" | "photo" | "permit" | null;
   attachmentId?: string | null;
   attachment?: DocAttachment | PhotoAttachment | PermitAttachment | null;
+  reactions?: Reaction[];
   editedAt: string | null;
   createdAt: string;
   mine: boolean;
@@ -168,6 +172,7 @@ export default function MessagesPage() {
   const [attachPickerLoading, setAttachPickerLoading] = useState(false);
   const [attachedItem, setAttachedItem] = useState<{ type: AttachTab; data: DocAttachment | PhotoAttachment | PermitAttachment } | null>(null);
   const [dictating, setDictating] = useState(false);
+  const [emojiPickerId, setEmojiPickerId] = useState<string | null>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -489,6 +494,34 @@ export default function MessagesPage() {
       fetchConversations();
     }
     setBroadcastSending(false);
+  }
+
+  const EMOJI_SET = ["👍", "✅", "👀", "❤️", "😂"];
+
+  async function toggleReaction(messageId: string, emoji: string) {
+    const r = await fetch(`/api/messages/${messageId}/react`, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ emoji }),
+    });
+    if (r.ok) {
+      const reactions: Reaction[] = await r.json();
+      setThread(prev => prev.map(m => m.id === messageId ? { ...m, reactions } : m));
+    }
+    setEmojiPickerId(null);
+  }
+
+  async function toggleChannelReaction(messageId: string, emoji: string) {
+    const r = await fetch(`/api/channel-messages/${messageId}/react`, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ emoji }),
+    });
+    if (r.ok) {
+      const reactions: Reaction[] = await r.json();
+      setChannelThread(prev => prev.map(m => m.id === messageId ? { ...m, reactions } : m));
+    }
+    setEmojiPickerId(null);
   }
 
   async function startNewChat(user: TeamUser) {
@@ -955,27 +988,63 @@ export default function MessagesPage() {
                             )}
                           </div>
                         )}
+                        {/* Reactions row */}
+                        {((msg.reactions && msg.reactions.length > 0) || emojiPickerId === msg.id) && (
+                          <div className={cn("flex flex-wrap gap-1 px-1", msg.mine && !viewAll ? "justify-end" : "justify-start")}>
+                            {(msg.reactions ?? []).map(r => (
+                              <button
+                                key={r.emoji}
+                                onClick={() => toggleReaction(msg.id, r.emoji)}
+                                className={cn(
+                                  "flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors",
+                                  r.mine ? "bg-primary/10 border-primary/30 text-primary font-semibold" : "bg-muted border-border text-muted-foreground hover:bg-muted/70"
+                                )}
+                              >
+                                {r.emoji} {r.count}
+                              </button>
+                            ))}
+                            {emojiPickerId === msg.id && (
+                              <div className="flex gap-0.5 bg-card border rounded-full px-1.5 py-0.5 shadow-sm">
+                                {EMOJI_SET.map(e => (
+                                  <button key={e} onClick={() => toggleReaction(msg.id, e)} className="text-sm hover:scale-125 transition-transform px-0.5">
+                                    {e}
+                                  </button>
+                                ))}
+                                <button onClick={() => setEmojiPickerId(null)} className="text-muted-foreground hover:text-foreground text-xs px-1 ml-0.5">✕</button>
+                              </div>
+                            )}
+                          </div>
+                        )}
                         <div className={cn("flex items-center gap-1 px-1", msg.mine && !viewAll ? "flex-row-reverse" : "flex-row")}>
                           <span className="text-[10px] text-muted-foreground">{timeLabel(msg.createdAt)}</span>
                           {msg.mine && !viewAll && (
                             <Circle className={cn("w-2 h-2", msg.readAt ? "fill-primary text-primary" : "fill-muted-foreground/40 text-muted-foreground/40")} />
                           )}
-                          {msg.mine && !viewAll && editingId !== msg.id && confirmDeleteId !== msg.id && (
+                          {!viewAll && editingId !== msg.id && confirmDeleteId !== msg.id && (
                             <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">
                               <button
-                                onClick={() => startEdit(msg)}
-                                className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-                                title="Edit"
-                              >
-                                <Pencil className="w-3 h-3" />
-                              </button>
-                              <button
-                                onClick={() => setConfirmDeleteId(msg.id)}
-                                className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-red-500"
-                                title="Delete"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
+                                onClick={() => setEmojiPickerId(id => id === msg.id ? null : msg.id)}
+                                className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground text-sm"
+                                title="React"
+                              >😊</button>
+                              {msg.mine && (
+                                <>
+                                  <button
+                                    onClick={() => startEdit(msg)}
+                                    className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                                    title="Edit"
+                                  >
+                                    <Pencil className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    onClick={() => setConfirmDeleteId(msg.id)}
+                                    className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-red-500"
+                                    title="Delete"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </>
+                              )}
                             </div>
                           )}
                         </div>
@@ -1311,12 +1380,48 @@ export default function MessagesPage() {
                             )}
                           </div>
                         )}
+                        {/* Reactions row */}
+                        {((msg.reactions && msg.reactions.length > 0) || emojiPickerId === msg.id) && (
+                          <div className={cn("flex flex-wrap gap-1 px-1", msg.mine ? "justify-end" : "justify-start")}>
+                            {(msg.reactions ?? []).map(r => (
+                              <button
+                                key={r.emoji}
+                                onClick={() => toggleChannelReaction(msg.id, r.emoji)}
+                                className={cn(
+                                  "flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors",
+                                  r.mine ? "bg-primary/10 border-primary/30 text-primary font-semibold" : "bg-muted border-border text-muted-foreground hover:bg-muted/70"
+                                )}
+                              >
+                                {r.emoji} {r.count}
+                              </button>
+                            ))}
+                            {emojiPickerId === msg.id && (
+                              <div className="flex gap-0.5 bg-card border rounded-full px-1.5 py-0.5 shadow-sm">
+                                {EMOJI_SET.map(e => (
+                                  <button key={e} onClick={() => toggleChannelReaction(msg.id, e)} className="text-sm hover:scale-125 transition-transform px-0.5">
+                                    {e}
+                                  </button>
+                                ))}
+                                <button onClick={() => setEmojiPickerId(null)} className="text-muted-foreground hover:text-foreground text-xs px-1 ml-0.5">✕</button>
+                              </div>
+                            )}
+                          </div>
+                        )}
                         <div className={cn("flex items-center gap-1 px-1", msg.mine ? "flex-row-reverse" : "flex-row")}>
                           <span className="text-[10px] text-muted-foreground">{timeLabel(msg.createdAt)}</span>
-                          {msg.mine && editingId !== msg.id && confirmDeleteId !== msg.id && (
+                          {editingId !== msg.id && confirmDeleteId !== msg.id && (
                             <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">
-                              <button onClick={() => { setEditingId(msg.id); setEditDraft(msg.content); setConfirmDeleteId(null); }} className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground" title="Edit"><Pencil className="w-3 h-3" /></button>
-                              <button onClick={() => setConfirmDeleteId(msg.id)} className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-red-500" title="Delete"><Trash2 className="w-3 h-3" /></button>
+                              <button
+                                onClick={() => setEmojiPickerId(id => id === msg.id ? null : msg.id)}
+                                className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground text-sm"
+                                title="React"
+                              >😊</button>
+                              {msg.mine && (
+                                <>
+                                  <button onClick={() => { setEditingId(msg.id); setEditDraft(msg.content); setConfirmDeleteId(null); }} className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground" title="Edit"><Pencil className="w-3 h-3" /></button>
+                                  <button onClick={() => setConfirmDeleteId(msg.id)} className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-red-500" title="Delete"><Trash2 className="w-3 h-3" /></button>
+                                </>
+                              )}
                             </div>
                           )}
                         </div>

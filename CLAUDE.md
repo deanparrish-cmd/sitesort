@@ -250,3 +250,30 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 #### Pending / open tasks
 - No message search or pagination yet
 - Stripe Dashboard setup needed: activate Customer Portal; add all 5 webhook events
+
+---
+
+## End-of-session notes — 2026-05-25
+
+### All tasks completed today (across 5 sessions)
+
+1. **Cancellation enforcement** — all write actions across every page (projects, project detail, subcontractors, messages, invoices, settings) check `isCancelled` and return early with a destructive toast or inline `StatusBanner`
+2. **Landing page** — removed Book Demo button; "Start Free Trial" smooth-scrolls to new `#pricing` section (Solo £29 / Team £79 / Pro £149); fixed bullet alignment on dark feature cards
+3. **Broadcast messaging** — three-mode picker (Individual / By Role / All in Project); backend `POST /api/messages/broadcast`
+4. **Invoice sharing in messages** — Receipt button, invoice picker, invoice card in thread; `invoiceId` + `content` default schema changes
+5. **Document / photo / permit sharing in messages** — Paperclip picker with tabbed project selector; typed attachment cards in thread; `attachmentType` + `attachmentId` schema columns
+6. **Project channel group messaging** — `#ProjectName` shared threads for all project members; full attachment support; unread counts; notifications; `channel_messages` + `channel_reads` tables
+
+### Fixes applied
+- Fixed pre-existing `authHeaders()` TypeScript return-type error in messages page (`{ Authorization: string } | {}` → `Record<string, string>`)
+- Fixed `lib/db` composite project stale `.d.ts` cache blocking api-server typecheck of new schema exports — resolved by running `npx tsc -p tsconfig.json` in `lib/db/`
+
+### Known pre-existing issues (not introduced today)
+- TypeScript errors in `alert-dialog.tsx`, `calendar.tsx`, `command.tsx`, `pagination.tsx` (missing `buttonVariants` / `DialogContent` exports), `dashboard/index.tsx`, `projects/detail.tsx`, and Drizzle ORM `eq()` overload errors across api-server routes — none affect runtime
+- `lib/api-zod` duplicate export error (`ListDocumentsParams`, `ListPhotosParams`) blocks root `pnpm typecheck` but does not affect the app
+
+### Notes for next session
+- **Good next messaging features**: message reactions (thumbs up / tick), reply-to-a-specific-message (WhatsApp-style quote), quick-reply templates for site workers, message search
+- **Stripe still needs manual setup**: activate Customer Portal in Stripe Dashboard; register all 5 webhook events (`checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `customer.subscription.trial_will_end`, `invoice.payment_failed`)
+- **When adding new DB schema files**: always run `npx tsc -p tsconfig.json` inside `lib/db/` after editing `src/schema/index.ts` to regenerate `dist/` before typechecking api-server
+- All commits are on `main`; push via `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts`

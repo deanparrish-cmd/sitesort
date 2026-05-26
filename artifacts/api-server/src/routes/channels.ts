@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import {
   channelMessagesTable, channelReadsTable,
+  channelMessageReactionsTable,
   usersTable, projectsTable, projectMembersTable,
   notificationsTable, documentsTable, photosTable, permitsTable,
 } from "@workspace/db/schema";
@@ -148,6 +149,21 @@ router.get("/channels/:projectId/messages", authenticate, async (req, res) => {
     const photoMap = Object.fromEntries(photoRows.map(p => [p.id, p]));
     const permitMap = Object.fromEntries(permitRows.map(p => [p.id, p]));
 
+    // Fetch reactions
+    const msgIds = rows.map(r => r.id);
+    const reactionRows = msgIds.length
+      ? await db.select().from(channelMessageReactionsTable).where(sql`${channelMessageReactionsTable.channelMessageId} = ANY(${msgIds})`)
+      : [];
+    const reactionMap = new Map<string, Map<string, { count: number; mine: boolean }>>();
+    for (const r of reactionRows) {
+      if (!reactionMap.has(r.channelMessageId)) reactionMap.set(r.channelMessageId, new Map());
+      const emojiMap = reactionMap.get(r.channelMessageId)!;
+      const existing = emojiMap.get(r.emoji) ?? { count: 0, mine: false };
+      emojiMap.set(r.emoji, { count: existing.count + 1, mine: existing.mine || r.userId === userId });
+    }
+    const reactionsFor = (id: string) =>
+      Array.from(reactionMap.get(id)?.entries() ?? []).map(([emoji, v]) => ({ emoji, ...v }));
+
     // Mark as read
     const now = new Date();
     const existing = await db.select().from(channelReadsTable)
@@ -173,6 +189,7 @@ router.get("/channels/:projectId/messages", authenticate, async (req, res) => {
         : m.attachmentType === "photo" && m.attachmentId ? (photoMap[m.attachmentId] ?? null)
         : m.attachmentType === "permit" && m.attachmentId ? (permitMap[m.attachmentId] ?? null)
         : null,
+      reactions: reactionsFor(m.id),
       editedAt: m.editedAt?.toISOString() ?? null,
       createdAt: m.createdAt.toISOString(),
       mine: m.senderId === userId,
@@ -266,6 +283,42 @@ router.patch("/channel-messages/:id", authenticate, async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Edit channel message error");
     res.status(500).json({ error: "server_error", message: "Failed to edit message" });
+  }
+});
+
+// POST /api/channel-messages/:id/react — toggle a reaction
+router.post("/channel-messages/:id/react", authenticate, async (req, res) => {
+  try {
+    const { emoji } = req.body;
+    const ALLOWED = ["👍", "✅", "👀", "❤️", "😂"];
+    if (!emoji || !ALLOWED.includes(emoji)) {
+      res.status(400).json({ error: "validation_error", message: "Invalid emoji" });
+      return;
+    }
+    const userId = req.user!.id;
+    const channelMessageId = req.params.id;
+
+    const existing = await db.select().from(channelMessageReactionsTable)
+      .where(and(eq(channelMessageReactionsTable.channelMessageId, channelMessageId), eq(channelMessageReactionsTable.userId, userId), eq(channelMessageReactionsTable.emoji, emoji)))
+      .limit(1);
+
+    if (existing[0]) {
+      await db.delete(channelMessageReactionsTable)
+        .where(and(eq(channelMessageReactionsTable.channelMessageId, channelMessageId), eq(channelMessageReactionsTable.userId, userId), eq(channelMessageReactionsTable.emoji, emoji)));
+    } else {
+      await db.insert(channelMessageReactionsTable).values({ id: generateId(), channelMessageId, userId, emoji });
+    }
+
+    const all = await db.select().from(channelMessageReactionsTable).where(eq(channelMessageReactionsTable.channelMessageId, channelMessageId));
+    const grouped = new Map<string, { count: number; mine: boolean }>();
+    for (const r of all) {
+      const g = grouped.get(r.emoji) ?? { count: 0, mine: false };
+      grouped.set(r.emoji, { count: g.count + 1, mine: g.mine || r.userId === userId });
+    }
+    res.json(Array.from(grouped.entries()).map(([e, v]) => ({ emoji: e, ...v })));
+  } catch (err) {
+    req.log.error({ err }, "React to channel message error");
+    res.status(500).json({ error: "server_error", message: "Failed to react" });
   }
 });
 

@@ -18,7 +18,10 @@
       "Bash(git commit -m ' *)",
       "Bash(npx tsx *)",
       "Bash(git stash *)",
-      "Bash(git pull *)"
+      "Bash(git pull *)",
+      "Bash(node --loader ts-node/esm scripts/src/github-push.ts)",
+      "Bash(node -e \"require\\('child_process'\\).execSync\\('npx --yes tsx scripts/src/github-push.ts', {stdio:'inherit'}\\)\")",
+      "Bash(/home/runner/workspace/scripts/node_modules/.bin/tsx *)"
     ]
   }
 }

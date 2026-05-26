@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { messagesTable, usersTable, notificationsTable, invoicesTable, documentsTable, photosTable, permitsTable } from "@workspace/db/schema";
+import { messagesTable, usersTable, notificationsTable, invoicesTable, documentsTable, photosTable, permitsTable, messageReactionsTable } from "@workspace/db/schema";
 import { eq, and, or, desc, sql } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
@@ -185,6 +185,22 @@ router.get("/messages/thread/:userId", authenticate, async (req, res) => {
     const photoMap = Object.fromEntries(photoRows.map(p => [p.id, p]));
     const permitMap = Object.fromEntries(permitRows.map(p => [p.id, p]));
 
+    // Fetch reactions
+    const msgIds = rows.map(r => r.id);
+    const reactionRows = msgIds.length
+      ? await db.select().from(messageReactionsTable).where(sql`${messageReactionsTable.messageId} = ANY(${msgIds})`)
+      : [];
+    // Group: messageId → emoji → { count, mine }
+    const reactionMap = new Map<string, Map<string, { count: number; mine: boolean }>>();
+    for (const r of reactionRows) {
+      if (!reactionMap.has(r.messageId)) reactionMap.set(r.messageId, new Map());
+      const emojiMap = reactionMap.get(r.messageId)!;
+      const existing = emojiMap.get(r.emoji) ?? { count: 0, mine: false };
+      emojiMap.set(r.emoji, { count: existing.count + 1, mine: existing.mine || r.userId === me });
+    }
+    const reactionsFor = (id: string) =>
+      Array.from(reactionMap.get(id)?.entries() ?? []).map(([emoji, v]) => ({ emoji, ...v }));
+
     res.json(rows.map(m => ({
       id: m.id,
       senderId: m.senderId,
@@ -199,6 +215,7 @@ router.get("/messages/thread/:userId", authenticate, async (req, res) => {
         : m.attachmentType === "photo" && m.attachmentId ? (photoMap[m.attachmentId] ?? null)
         : m.attachmentType === "permit" && m.attachmentId ? (permitMap[m.attachmentId] ?? null)
         : null,
+      reactions: reactionsFor(m.id),
       readAt: m.readAt?.toISOString() ?? null,
       editedAt: m.editedAt?.toISOString() ?? null,
       createdAt: m.createdAt.toISOString(),
@@ -351,6 +368,42 @@ router.delete("/messages/:id", authenticate, async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Delete message error");
     res.status(500).json({ error: "server_error", message: "Failed to delete message" });
+  }
+});
+
+// POST /api/messages/:id/react — toggle a reaction (add if absent, remove if present)
+router.post("/messages/:id/react", authenticate, async (req, res) => {
+  try {
+    const { emoji } = req.body;
+    const ALLOWED = ["👍", "✅", "👀", "❤️", "😂"];
+    if (!emoji || !ALLOWED.includes(emoji)) {
+      res.status(400).json({ error: "validation_error", message: "Invalid emoji" });
+      return;
+    }
+    const userId = req.user!.id;
+    const messageId = req.params.id;
+
+    const existing = await db.select().from(messageReactionsTable)
+      .where(and(eq(messageReactionsTable.messageId, messageId), eq(messageReactionsTable.userId, userId), eq(messageReactionsTable.emoji, emoji)))
+      .limit(1);
+
+    if (existing[0]) {
+      await db.delete(messageReactionsTable)
+        .where(and(eq(messageReactionsTable.messageId, messageId), eq(messageReactionsTable.userId, userId), eq(messageReactionsTable.emoji, emoji)));
+    } else {
+      await db.insert(messageReactionsTable).values({ id: generateId(), messageId, userId, emoji });
+    }
+
+    const all = await db.select().from(messageReactionsTable).where(eq(messageReactionsTable.messageId, messageId));
+    const grouped = new Map<string, { count: number; mine: boolean }>();
+    for (const r of all) {
+      const g = grouped.get(r.emoji) ?? { count: 0, mine: false };
+      grouped.set(r.emoji, { count: g.count + 1, mine: g.mine || r.userId === userId });
+    }
+    res.json(Array.from(grouped.entries()).map(([e, v]) => ({ emoji: e, ...v })));
+  } catch (err) {
+    req.log.error({ err }, "React to message error");
+    res.status(500).json({ error: "server_error", message: "Failed to react" });
   }
 });
 
