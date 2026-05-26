@@ -253,6 +253,26 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 
 ---
 
+### 2026-05-26
+
+#### Tasks completed
+- **Message reactions** — emoji reactions on both DMs and project channel messages:
+  - Hover any message → 😊 button appears in the action row; clicking opens an inline emoji picker (👍 ✅ 👀 ❤️ 😂)
+  - Reactions displayed as pill badges (emoji + count) below the bubble; your own reactions are highlighted in primary colour
+  - Clicking an existing reaction pill toggles it (remove if already reacted, add if not)
+  - Works identically in DM threads and channel threads
+  - Schema: `message_reactions` + `channel_message_reactions` tables, each with unique constraint on (messageId/channelMessageId, userId, emoji) and cascade-on-delete
+  - API: `POST /api/messages/:id/react` and `POST /api/channel-messages/:id/react` — toggle and return updated grouped reactions
+  - Thread endpoints now batch-fetch reactions and embed as `reactions: Array<{emoji, count, mine}>` on each message
+
+#### Key files added/modified
+- `lib/db/src/schema/message_reactions.ts` — new table
+- `lib/db/src/schema/channel_message_reactions.ts` — new table
+- `lib/db/src/schema/index.ts` — exports new tables
+- `artifacts/api-server/src/routes/messages.ts` — imports `messageReactionsTable`; reactions batch-fetched in thread endpoint; `POST /api/messages/:id/react` toggle endpoint
+- `artifacts/api-server/src/routes/channels.ts` — same pattern for channel messages; `POST /api/channel-messages/:id/react`
+- `artifacts/sitesort/src/pages/messages/index.tsx` — `Reaction` type; `emojiPickerId` state; `toggleReaction` / `toggleChannelReaction` functions; reactions row + emoji picker UI in both DM and channel thread renders; reaction button also available to non-own messages (not just own)
+
 ## End-of-session notes — 2026-05-25
 
 ### All tasks completed today (across 5 sessions)
@@ -273,7 +293,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 - `lib/api-zod` duplicate export error (`ListDocumentsParams`, `ListPhotosParams`) blocks root `pnpm typecheck` but does not affect the app
 
 ### Notes for next session
-- **Good next messaging features**: message reactions (thumbs up / tick), reply-to-a-specific-message (WhatsApp-style quote), quick-reply templates for site workers, message search
+- **Good next messaging features**: reply-to-a-specific-message (WhatsApp-style quote), quick-reply templates for site workers, message search
 - **Stripe still needs manual setup**: activate Customer Portal in Stripe Dashboard; register all 5 webhook events (`checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `customer.subscription.trial_will_end`, `invoice.payment_failed`)
 - **When adding new DB schema files**: always run `npx tsc -p tsconfig.json` inside `lib/db/` after editing `src/schema/index.ts` to regenerate `dist/` before typechecking api-server
 - All commits are on `main`; push via `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts`
