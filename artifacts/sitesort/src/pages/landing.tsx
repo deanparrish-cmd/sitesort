@@ -31,7 +31,9 @@ export default function LandingPage() {
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-800 to-orange-400">site information.</span>
             </h1>
             <p className="text-lg md:text-xl text-muted-foreground mb-10 leading-relaxed max-w-2xl mx-auto">
-              The single source of truth for your site teams. Distribute documents, track compliance, and manage subcontractors without the paperwork headache.<br />
+              The single source of truth for your site teams.<br />
+              Distribute documents, track compliance, and manage<br />
+              subcontractors without the paperwork headache.<br />
               <span className="font-bold text-foreground">Built for Construction SMEs.</span>
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -64,7 +66,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-primary mb-4">Everything you need to run a safe site</h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto text-lg">Replace disjointed WhatsApp groups and overflowing email inboxes with purpose-built tools.</p>
+            <p className="text-muted-foreground max-w-2xl mx-auto text-lg">Replace disjointed WhatsApp groups and overflowing<br />emails inboxes with purpose-built tools.</p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
