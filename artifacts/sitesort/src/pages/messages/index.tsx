@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Send, Users, Eye, ArrowLeft, Circle, Pencil, Trash2, Mic, MicOff, User, Building2, Receipt, X, ExternalLink, FileText, Image, FileCheck, Paperclip, Hash, CornerUpLeft } from "lucide-react";
+import { MessageSquare, Send, Users, Eye, ArrowLeft, Circle, Pencil, Trash2, Mic, MicOff, User, Building2, Receipt, X, ExternalLink, FileText, Image, FileCheck, Paperclip, Hash, CornerUpLeft, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSubscription } from "@/contexts/subscription";
 import { useToast } from "@/hooks/use-toast";
@@ -36,6 +36,8 @@ type PermitAttachment = { id: string; type: string; description: string; expiryD
 
 type Reaction = { emoji: string; count: number; mine: boolean };
 type ReplyTo = { id: string; senderName: string; content: string; attachmentType?: string | null };
+type DmSearchResult = { id: string; content: string; senderName: string; otherId: string; otherName: string; createdAt: string; mine: boolean };
+type ChannelSearchResult = { id: string; content: string; senderName: string; projectId: string; projectName: string; createdAt: string; mine: boolean };
 
 type Message = {
   id: string;
@@ -179,6 +181,10 @@ export default function MessagesPage() {
   const [dictating, setDictating] = useState(false);
   const [emojiPickerId, setEmojiPickerId] = useState<string | null>(null);
   const [replyingTo, setReplyingTo] = useState<ReplyTo | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchDms, setSearchDms] = useState<DmSearchResult[]>([]);
+  const [searchChannels, setSearchChannels] = useState<ChannelSearchResult[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
   const threadEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -273,6 +279,23 @@ export default function MessagesPage() {
   }, [dictating, startDictation, stopDictation]);
 
   useEffect(() => () => { dictateRef.current?.stop(); }, []);
+
+  // Debounced search
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 2) { setSearchDms([]); setSearchChannels([]); return; }
+    const t = setTimeout(async () => {
+      setSearchLoading(true);
+      const [dmRes, chRes] = await Promise.all([
+        fetch(`/api/messages/search?q=${encodeURIComponent(q)}`, { headers: authHeaders() }),
+        fetch(`/api/channels/search?q=${encodeURIComponent(q)}`, { headers: authHeaders() }),
+      ]);
+      if (dmRes.ok) setSearchDms(await dmRes.json());
+      if (chRes.ok) setSearchChannels(await chRes.json());
+      setSearchLoading(false);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
 
   // Handle voice-command params
   useEffect(() => {
@@ -576,15 +599,31 @@ export default function MessagesPage() {
             "flex flex-col border rounded-2xl overflow-hidden bg-card",
             (activeConv || activeChannel) ? "hidden sm:flex w-72 shrink-0" : "flex-1 sm:w-72 sm:flex-none sm:shrink-0"
           )}>
-            <div className="p-3 border-b flex items-center justify-between bg-muted/30">
-              <span className="font-semibold text-sm">
-                {viewAll ? "All Company Chats" : "Conversations"}
-              </span>
-              {!viewAll && (
-                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => setNewChatOpen(true)}>
-                  <Users className="w-3.5 h-3.5" /> New
-                </Button>
-              )}
+            <div className="p-3 border-b bg-muted/30 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-sm">
+                  {viewAll ? "All Company Chats" : "Conversations"}
+                </span>
+                {!viewAll && (
+                  <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => setNewChatOpen(true)}>
+                    <Users className="w-3.5 h-3.5" /> New
+                  </Button>
+                )}
+              </div>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <input
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Search messages…"
+                  className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* New chat picker */}
@@ -714,8 +753,106 @@ export default function MessagesPage() {
             )}
 
             <div className="flex-1 overflow-y-auto divide-y">
+              {/* Search results */}
+              {searchQuery.trim().length >= 2 ? (
+                searchLoading ? (
+                  <div className="flex items-center justify-center py-8 text-xs text-muted-foreground">Searching…</div>
+                ) : searchDms.length === 0 && searchChannels.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 gap-2 text-muted-foreground">
+                    <Search className="w-6 h-6 opacity-30" />
+                    <p className="text-xs">No messages found</p>
+                  </div>
+                ) : (
+                  <>
+                    {searchDms.length > 0 && (
+                      <>
+                        <div className="px-4 py-2 bg-muted/20 flex items-center gap-1.5">
+                          <MessageSquare className="w-3 h-3 text-muted-foreground" />
+                          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Direct Messages</span>
+                        </div>
+                        {searchDms.map(r => {
+                          const q = searchQuery.trim();
+                          const idx = r.content.toLowerCase().indexOf(q.toLowerCase());
+                          const snippet = idx === -1 ? r.content : r.content.slice(Math.max(0, idx - 20), idx + q.length + 40);
+                          const pre = snippet.slice(0, Math.max(0, idx - Math.max(0, idx - 20)));
+                          const match = snippet.slice(Math.max(0, idx - Math.max(0, idx - 20)), Math.max(0, idx - Math.max(0, idx - 20)) + q.length);
+                          const post = snippet.slice(Math.max(0, idx - Math.max(0, idx - 20)) + q.length);
+                          return (
+                            <button
+                              key={r.id}
+                              onClick={() => {
+                                setSearchQuery("");
+                                const conv: Conversation = { otherId: r.otherId, otherName: r.otherName, otherRole: "", lastMessage: r.content, lastAt: r.createdAt, unread: 0 };
+                                setActiveConv(conv);
+                                setActiveChannel(null);
+                                setThread([]);
+                              }}
+                              className="w-full text-left px-4 py-2.5 hover:bg-muted/50 transition-colors"
+                            >
+                              <div className="flex items-center gap-2 mb-0.5">
+                                <div className="w-5 h-5 rounded bg-primary/10 flex items-center justify-center text-[8px] font-bold text-primary shrink-0">
+                                  {r.otherName.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
+                                </div>
+                                <span className="text-xs font-semibold truncate">{r.otherName}</span>
+                                <span className="text-[10px] text-muted-foreground ml-auto shrink-0">{timeLabel(r.createdAt)}</span>
+                              </div>
+                              <p className="text-[11px] text-muted-foreground pl-7 truncate">
+                                {r.mine && <span className="text-primary/60 mr-1">You:</span>}
+                                {pre}<span className="bg-yellow-200 text-yellow-900 rounded px-0.5">{match}</span>{post}
+                              </p>
+                            </button>
+                          );
+                        })}
+                      </>
+                    )}
+                    {searchChannels.length > 0 && (
+                      <>
+                        <div className="px-4 py-2 bg-muted/20 flex items-center gap-1.5">
+                          <Hash className="w-3 h-3 text-muted-foreground" />
+                          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Channel Messages</span>
+                        </div>
+                        {searchChannels.map(r => {
+                          const q = searchQuery.trim();
+                          const idx = r.content.toLowerCase().indexOf(q.toLowerCase());
+                          const start = Math.max(0, idx - 20);
+                          const snippet = r.content.slice(start, idx + q.length + 40);
+                          const pre = r.content.slice(start, idx);
+                          const match = r.content.slice(idx, idx + q.length);
+                          const post = r.content.slice(idx + q.length, idx + q.length + 40);
+                          return (
+                            <button
+                              key={r.id}
+                              onClick={() => {
+                                setSearchQuery("");
+                                const ch = channels.find(c => c.projectId === r.projectId) ?? { projectId: r.projectId, projectName: r.projectName, lastMessage: "", lastAt: null, unread: 0 };
+                                setActiveChannel(ch);
+                                setActiveConv(null);
+                                setThread([]);
+                              }}
+                              className="w-full text-left px-4 py-2.5 hover:bg-muted/50 transition-colors"
+                            >
+                              <div className="flex items-center gap-2 mb-0.5">
+                                <div className="w-5 h-5 rounded bg-blue-500/10 flex items-center justify-center shrink-0">
+                                  <Hash className="w-3 h-3 text-blue-500" />
+                                </div>
+                                <span className="text-xs font-semibold truncate">#{r.projectName}</span>
+                                <span className="text-[10px] text-muted-foreground ml-auto shrink-0">{timeLabel(r.createdAt)}</span>
+                              </div>
+                              <p className="text-[11px] text-muted-foreground pl-7 truncate">
+                                <span className="text-foreground/60 mr-1">{r.senderName}:</span>
+                                {pre}<span className="bg-yellow-200 text-yellow-900 rounded px-0.5">{match}</span>{post}
+                              </p>
+                            </button>
+                          );
+                        })}
+                      </>
+                    )}
+                  </>
+                )
+              ) : null}
+
               {/* Project channels */}
-              {!viewAll && channels.length > 0 && (
+              {!searchQuery && !viewAll && channels.length > 0 && (
                 <>
                   <div className="px-4 py-2 bg-muted/20 flex items-center gap-1.5">
                     <Hash className="w-3 h-3 text-muted-foreground" />
@@ -751,14 +888,14 @@ export default function MessagesPage() {
                 </>
               )}
 
-              {conversations.length === 0 && channels.length === 0 ? (
+              {!searchQuery && conversations.length === 0 && channels.length === 0 ? (
                 <div className="p-6 text-center text-muted-foreground">
                   <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-30" />
                   <p className="text-xs">{viewAll ? "No messages yet." : "No conversations yet."}</p>
                 </div>
-              ) : conversations.length === 0 && !viewAll ? (
+              ) : !searchQuery && conversations.length === 0 && !viewAll ? (
                 <div className="px-4 py-3 text-xs text-muted-foreground">No direct messages yet.</div>
-              ) : (
+              ) : !searchQuery ? (
                 conversations.map(conv => (
                   <button key={conv.otherId} onClick={() => setActiveConv(conv)}
                     className={cn(
@@ -787,7 +924,7 @@ export default function MessagesPage() {
                     </div>
                   </button>
                 ))
-              )}
+              ) : null}
             </div>
           </div>
 

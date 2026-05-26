@@ -100,6 +100,71 @@ router.get("/channels", authenticate, async (req, res) => {
   }
 });
 
+// GET /api/channels/search?q= — search channel message content
+router.get("/channels/search", authenticate, async (req, res) => {
+  try {
+    const q = (req.query.q as string | undefined)?.trim();
+    if (!q || q.length < 2) { res.json([]); return; }
+
+    const userId = req.user!.id;
+    const companyId = req.user!.companyId;
+    const role = req.user!.role;
+
+    // Get accessible project IDs
+    let accessibleProjectIds: string[];
+    if (role === "admin" || role === "project_manager") {
+      const projects = await db.select({ id: projectsTable.id }).from(projectsTable)
+        .where(eq(projectsTable.companyId, companyId));
+      accessibleProjectIds = projects.map(p => p.id);
+    } else {
+      const memberships = await db.select({ projectId: projectMembersTable.projectId })
+        .from(projectMembersTable).where(eq(projectMembersTable.userId, userId));
+      accessibleProjectIds = memberships.map(m => m.projectId);
+    }
+
+    if (accessibleProjectIds.length === 0) { res.json([]); return; }
+
+    const rows = await db.select()
+      .from(channelMessagesTable)
+      .where(
+        and(
+          sql`${channelMessagesTable.projectId} = ANY(${accessibleProjectIds})`,
+          sql`${channelMessagesTable.content} ILIKE ${"%" + q + "%"}`
+        )
+      )
+      .orderBy(desc(channelMessagesTable.createdAt))
+      .limit(30);
+
+    const senderIds = Array.from(new Set(rows.map(r => r.senderId)));
+    const userRows = senderIds.length
+      ? await db.select({ id: usersTable.id, name: usersTable.name })
+          .from(usersTable).where(sql`${usersTable.id} = ANY(${senderIds})`)
+      : [];
+    const userMap = Object.fromEntries(userRows.map(u => [u.id, u.name]));
+
+    const projectIds = Array.from(new Set(rows.map(r => r.projectId)));
+    const projectRows = projectIds.length
+      ? await db.select({ id: projectsTable.id, name: projectsTable.name })
+          .from(projectsTable).where(sql`${projectsTable.id} = ANY(${projectIds})`)
+      : [];
+    const projectMap = Object.fromEntries(projectRows.map(p => [p.id, p.name]));
+
+    res.json(rows.map(m => ({
+      id: m.id,
+      content: m.content,
+      senderId: m.senderId,
+      senderName: userMap[m.senderId] ?? "Unknown",
+      projectId: m.projectId,
+      projectName: projectMap[m.projectId] ?? "Unknown",
+      createdAt: m.createdAt.toISOString(),
+      mine: m.senderId === userId,
+    })));
+  } catch (err) {
+    req.log.error({ err }, "Search channel messages error");
+    res.status(500).json({ error: "server_error", message: "Failed to search" });
+  }
+});
+
 // GET /api/channels/:projectId/messages — fetch thread + mark read
 router.get("/channels/:projectId/messages", authenticate, async (req, res) => {
   try {
