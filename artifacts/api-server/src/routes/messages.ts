@@ -190,7 +190,6 @@ router.get("/messages/thread/:userId", authenticate, async (req, res) => {
     const reactionRows = msgIds.length
       ? await db.select().from(messageReactionsTable).where(sql`${messageReactionsTable.messageId} = ANY(${msgIds})`)
       : [];
-    // Group: messageId → emoji → { count, mine }
     const reactionMap = new Map<string, Map<string, { count: number; mine: boolean }>>();
     for (const r of reactionRows) {
       if (!reactionMap.has(r.messageId)) reactionMap.set(r.messageId, new Map());
@@ -200,6 +199,14 @@ router.get("/messages/thread/:userId", authenticate, async (req, res) => {
     }
     const reactionsFor = (id: string) =>
       Array.from(reactionMap.get(id)?.entries() ?? []).map(([emoji, v]) => ({ emoji, ...v }));
+
+    // Fetch quoted messages
+    const replyIds = Array.from(new Set(rows.map(r => r.replyToId).filter(Boolean))) as string[];
+    const replyRows = replyIds.length
+      ? await db.select({ id: messagesTable.id, senderId: messagesTable.senderId, content: messagesTable.content, attachmentType: messagesTable.attachmentType })
+          .from(messagesTable).where(sql`${messagesTable.id} = ANY(${replyIds})`)
+      : [];
+    const replyMap = Object.fromEntries(replyRows.map(r => [r.id, r]));
 
     res.json(rows.map(m => ({
       id: m.id,
@@ -216,6 +223,12 @@ router.get("/messages/thread/:userId", authenticate, async (req, res) => {
         : m.attachmentType === "permit" && m.attachmentId ? (permitMap[m.attachmentId] ?? null)
         : null,
       reactions: reactionsFor(m.id),
+      replyToId: m.replyToId ?? null,
+      replyTo: m.replyToId ? (() => {
+        const q = replyMap[m.replyToId!];
+        if (!q) return null;
+        return { id: q.id, senderName: userMap[q.senderId] ?? "Unknown", content: q.content, attachmentType: q.attachmentType ?? null };
+      })() : null,
       readAt: m.readAt?.toISOString() ?? null,
       editedAt: m.editedAt?.toISOString() ?? null,
       createdAt: m.createdAt.toISOString(),
@@ -230,7 +243,7 @@ router.get("/messages/thread/:userId", authenticate, async (req, res) => {
 // POST /api/messages — send a message
 router.post("/messages", authenticate, async (req, res) => {
   try {
-    const { recipientId, content, invoiceId, attachmentType, attachmentId } = req.body;
+    const { recipientId, content, invoiceId, attachmentType, attachmentId, replyToId } = req.body;
     if (!recipientId || (!content?.trim() && !invoiceId && !attachmentId)) {
       res.status(400).json({ error: "validation_error", message: "recipientId and content, invoiceId, or attachment are required" });
       return;
@@ -255,6 +268,7 @@ router.post("/messages", authenticate, async (req, res) => {
       content: content?.trim() || "",
       ...(invoiceId ? { invoiceId } : {}),
       ...(attachmentType && attachmentId ? { attachmentType, attachmentId } : {}),
+      ...(replyToId ? { replyToId } : {}),
     });
 
     // Fetch sender name for the notification

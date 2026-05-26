@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Send, Users, Eye, ArrowLeft, Circle, Pencil, Trash2, Mic, MicOff, User, Building2, Receipt, X, ExternalLink, FileText, Image, FileCheck, Paperclip, Hash } from "lucide-react";
+import { MessageSquare, Send, Users, Eye, ArrowLeft, Circle, Pencil, Trash2, Mic, MicOff, User, Building2, Receipt, X, ExternalLink, FileText, Image, FileCheck, Paperclip, Hash, CornerUpLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSubscription } from "@/contexts/subscription";
 import { useToast } from "@/hooks/use-toast";
@@ -35,6 +35,7 @@ type PhotoAttachment = { id: string; photoUrl?: string | null; category: string;
 type PermitAttachment = { id: string; type: string; description: string; expiryDate: string; documentUrl?: string | null };
 
 type Reaction = { emoji: string; count: number; mine: boolean };
+type ReplyTo = { id: string; senderName: string; content: string; attachmentType?: string | null };
 
 type Message = {
   id: string;
@@ -48,6 +49,8 @@ type Message = {
   attachmentId?: string | null;
   attachment?: DocAttachment | PhotoAttachment | PermitAttachment | null;
   reactions?: Reaction[];
+  replyToId?: string | null;
+  replyTo?: ReplyTo | null;
   readAt: string | null;
   editedAt: string | null;
   createdAt: string;
@@ -80,6 +83,8 @@ type ChannelMessage = {
   attachmentId?: string | null;
   attachment?: DocAttachment | PhotoAttachment | PermitAttachment | null;
   reactions?: Reaction[];
+  replyToId?: string | null;
+  replyTo?: ReplyTo | null;
   editedAt: string | null;
   createdAt: string;
   mine: boolean;
@@ -173,6 +178,7 @@ export default function MessagesPage() {
   const [attachedItem, setAttachedItem] = useState<{ type: AttachTab; data: DocAttachment | PhotoAttachment | PermitAttachment } | null>(null);
   const [dictating, setDictating] = useState(false);
   const [emojiPickerId, setEmojiPickerId] = useState<string | null>(null);
+  const [replyingTo, setReplyingTo] = useState<ReplyTo | null>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -317,14 +323,16 @@ export default function MessagesPage() {
         content: draft.trim(),
         ...(attachedInvoice ? { invoiceId: attachedInvoice.id } : {}),
         ...(attachedItem ? { attachmentType: attachedItem.type, attachmentId: attachedItem.data.id } : {}),
+        ...(replyingTo ? { replyToId: replyingTo.id } : {}),
       }),
     });
     if (r.ok) {
       const msg = await r.json();
-      setThread(prev => [...prev, { ...msg, senderName: me?.name ?? "Me", invoice: attachedInvoice, attachment: attachedItem?.data ?? null }]);
+      setThread(prev => [...prev, { ...msg, senderName: me?.name ?? "Me", invoice: attachedInvoice, attachment: attachedItem?.data ?? null, replyTo: replyingTo }]);
       setDraft("");
       setAttachedInvoice(null);
       setAttachedItem(null);
+      setReplyingTo(null);
       fetchConversations();
     }
     setSending(false);
@@ -340,13 +348,15 @@ export default function MessagesPage() {
       body: JSON.stringify({
         content: draft.trim(),
         ...(attachedItem ? { attachmentType: attachedItem.type, attachmentId: attachedItem.data.id } : {}),
+        ...(replyingTo ? { replyToId: replyingTo.id } : {}),
       }),
     });
     if (r.ok) {
       const msg = await r.json();
-      setChannelThread(prev => [...prev, { ...msg, attachment: attachedItem?.data ?? null }]);
+      setChannelThread(prev => [...prev, { ...msg, attachment: attachedItem?.data ?? null, replyTo: replyingTo }]);
       setDraft("");
       setAttachedItem(null);
+      setReplyingTo(null);
       fetchChannels();
     }
     setSending(false);
@@ -851,6 +861,21 @@ export default function MessagesPage() {
                           </div>
                         ) : (
                           <div className="flex flex-col gap-1.5">
+                            {/* Reply quote */}
+                            {msg.replyTo && (
+                              <div className={cn(
+                                "flex items-start gap-2 px-2.5 py-1.5 rounded-xl border-l-2 border-primary/50 text-xs bg-muted/60 max-w-full",
+                                msg.mine && !viewAll ? "rounded-tr-sm" : "rounded-tl-sm"
+                              )}>
+                                <CornerUpLeft className="w-3 h-3 text-primary/60 shrink-0 mt-0.5" />
+                                <div className="min-w-0">
+                                  <span className="font-semibold text-primary/80">{msg.replyTo.senderName}</span>
+                                  <p className="text-muted-foreground truncate">
+                                    {msg.replyTo.content || (msg.replyTo.attachmentType ? `[${msg.replyTo.attachmentType}]` : "[attachment]")}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
                             {/* Invoice card */}
                             {msg.invoice && (
                               <div className={cn(
@@ -1023,6 +1048,11 @@ export default function MessagesPage() {
                           {!viewAll && editingId !== msg.id && confirmDeleteId !== msg.id && (
                             <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">
                               <button
+                                onClick={() => { setReplyingTo({ id: msg.id, senderName: msg.senderName, content: msg.content, attachmentType: msg.attachmentType }); setEmojiPickerId(null); }}
+                                className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                                title="Reply"
+                              ><CornerUpLeft className="w-3 h-3" /></button>
+                              <button
                                 onClick={() => setEmojiPickerId(id => id === msg.id ? null : msg.id)}
                                 className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground text-sm"
                                 title="React"
@@ -1058,6 +1088,19 @@ export default function MessagesPage() {
               {/* Input */}
               {!viewAll ? (
                 <div className="p-3 border-t bg-muted/20 space-y-2">
+                  {/* Reply-to preview */}
+                  {replyingTo && (
+                    <div className="flex items-start gap-2 px-3 py-2 rounded-xl bg-muted/60 border-l-2 border-primary/50 text-xs">
+                      <CornerUpLeft className="w-3.5 h-3.5 text-primary/60 shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <span className="font-semibold text-primary/80">{replyingTo.senderName}</span>
+                        <p className="text-muted-foreground truncate">{replyingTo.content || (replyingTo.attachmentType ? `[${replyingTo.attachmentType}]` : "[attachment]")}</p>
+                      </div>
+                      <button onClick={() => setReplyingTo(null)} className="text-muted-foreground hover:text-foreground shrink-0">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
                   {/* Attached invoice preview */}
                   {attachedInvoice && (
                     <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-50 border border-blue-200 text-xs">
@@ -1318,6 +1361,21 @@ export default function MessagesPage() {
                           </div>
                         ) : (
                           <div className="flex flex-col gap-1.5">
+                            {/* Reply quote */}
+                            {msg.replyTo && (
+                              <div className={cn(
+                                "flex items-start gap-2 px-2.5 py-1.5 rounded-xl border-l-2 border-primary/50 text-xs bg-muted/60 max-w-full",
+                                msg.mine ? "rounded-tr-sm" : "rounded-tl-sm"
+                              )}>
+                                <CornerUpLeft className="w-3 h-3 text-primary/60 shrink-0 mt-0.5" />
+                                <div className="min-w-0">
+                                  <span className="font-semibold text-primary/80">{msg.replyTo.senderName}</span>
+                                  <p className="text-muted-foreground truncate">
+                                    {msg.replyTo.content || (msg.replyTo.attachmentType ? `[${msg.replyTo.attachmentType}]` : "[attachment]")}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
                             {/* Document card */}
                             {msg.attachmentType === "document" && msg.attachment && (() => {
                               const doc = msg.attachment as DocAttachment;
@@ -1412,6 +1470,11 @@ export default function MessagesPage() {
                           {editingId !== msg.id && confirmDeleteId !== msg.id && (
                             <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">
                               <button
+                                onClick={() => { setReplyingTo({ id: msg.id, senderName: msg.senderName, content: msg.content, attachmentType: msg.attachmentType }); setEmojiPickerId(null); }}
+                                className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                                title="Reply"
+                              ><CornerUpLeft className="w-3 h-3" /></button>
+                              <button
                                 onClick={() => setEmojiPickerId(id => id === msg.id ? null : msg.id)}
                                 className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground text-sm"
                                 title="React"
@@ -1434,6 +1497,19 @@ export default function MessagesPage() {
 
               {/* Channel compose area */}
               <div className="p-3 border-t bg-muted/20 space-y-2">
+                {/* Reply-to preview */}
+                {replyingTo && (
+                  <div className="flex items-start gap-2 px-3 py-2 rounded-xl bg-muted/60 border-l-2 border-primary/50 text-xs">
+                    <CornerUpLeft className="w-3.5 h-3.5 text-primary/60 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <span className="font-semibold text-primary/80">{replyingTo.senderName}</span>
+                      <p className="text-muted-foreground truncate">{replyingTo.content || (replyingTo.attachmentType ? `[${replyingTo.attachmentType}]` : "[attachment]")}</p>
+                    </div>
+                    <button onClick={() => setReplyingTo(null)} className="text-muted-foreground hover:text-foreground shrink-0">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
                 {attachedItem && (
                   <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-violet-50 border border-violet-200 text-xs">
                     {attachedItem.type === "document" && <FileText className="w-4 h-4 text-violet-600 shrink-0" />}

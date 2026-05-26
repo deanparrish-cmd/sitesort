@@ -164,6 +164,14 @@ router.get("/channels/:projectId/messages", authenticate, async (req, res) => {
     const reactionsFor = (id: string) =>
       Array.from(reactionMap.get(id)?.entries() ?? []).map(([emoji, v]) => ({ emoji, ...v }));
 
+    // Fetch quoted messages
+    const replyIds = Array.from(new Set(rows.map(r => r.replyToId).filter(Boolean))) as string[];
+    const replyRows = replyIds.length
+      ? await db.select({ id: channelMessagesTable.id, senderId: channelMessagesTable.senderId, content: channelMessagesTable.content, attachmentType: channelMessagesTable.attachmentType })
+          .from(channelMessagesTable).where(sql`${channelMessagesTable.id} = ANY(${replyIds})`)
+      : [];
+    const replyMap = Object.fromEntries(replyRows.map(r => [r.id, r]));
+
     // Mark as read
     const now = new Date();
     const existing = await db.select().from(channelReadsTable)
@@ -190,6 +198,12 @@ router.get("/channels/:projectId/messages", authenticate, async (req, res) => {
         : m.attachmentType === "permit" && m.attachmentId ? (permitMap[m.attachmentId] ?? null)
         : null,
       reactions: reactionsFor(m.id),
+      replyToId: m.replyToId ?? null,
+      replyTo: m.replyToId ? (() => {
+        const q = replyMap[m.replyToId!];
+        if (!q) return null;
+        return { id: q.id, senderName: userMap[q.senderId]?.name ?? "Unknown", content: q.content, attachmentType: q.attachmentType ?? null };
+      })() : null,
       editedAt: m.editedAt?.toISOString() ?? null,
       createdAt: m.createdAt.toISOString(),
       mine: m.senderId === userId,
@@ -204,7 +218,7 @@ router.get("/channels/:projectId/messages", authenticate, async (req, res) => {
 router.post("/channels/:projectId/messages", authenticate, async (req, res) => {
   try {
     const { projectId } = req.params;
-    const { content, attachmentType, attachmentId } = req.body;
+    const { content, attachmentType, attachmentId, replyToId } = req.body;
     const userId = req.user!.id;
     const companyId = req.user!.companyId;
 
@@ -227,6 +241,7 @@ router.post("/channels/:projectId/messages", authenticate, async (req, res) => {
       senderId: userId,
       content: content?.trim() || "",
       ...(attachmentType && attachmentId ? { attachmentType, attachmentId } : {}),
+      ...(replyToId ? { replyToId } : {}),
     });
 
     // Notify other project members

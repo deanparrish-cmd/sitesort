@@ -11,6 +11,7 @@ export const messagesTable = pgTable("messages", {
   invoiceId: text("invoice_id"),
   attachmentType: text("attachment_type"), // "document" | "photo" | "permit"
   attachmentId: text("attachment_id"),
+  replyToId: text("reply_to_id"),
   readAt: timestamp("read_at"),
   editedAt: timestamp("edited_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),

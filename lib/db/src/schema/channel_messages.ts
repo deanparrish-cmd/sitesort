@@ -11,6 +11,7 @@ export const channelMessagesTable = pgTable("channel_messages", {
   content: text("content").notNull().default(""),
   attachmentType: text("attachment_type"),
   attachmentId: text("attachment_id"),
+  replyToId: text("reply_to_id"),
   editedAt: timestamp("edited_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
