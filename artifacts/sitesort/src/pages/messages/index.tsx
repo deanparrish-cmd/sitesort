@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Send, Users, Eye, ArrowLeft, Circle, Pencil, Trash2, Mic, MicOff, User, Building2, Receipt, X, ExternalLink, FileText, Image, FileCheck, Paperclip, Hash, CornerUpLeft, Search } from "lucide-react";
+import { MessageSquare, Send, Users, Eye, ArrowLeft, Circle, Pencil, Trash2, Mic, MicOff, User, Building2, Receipt, X, ExternalLink, FileText, Image, FileCheck, Paperclip, Hash, CornerUpLeft, Search, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSubscription } from "@/contexts/subscription";
 import { useToast } from "@/hooks/use-toast";
@@ -91,6 +91,13 @@ type ChannelMessage = {
   createdAt: string;
   mine: boolean;
 };
+
+const QUICK_REPLIES: { category: string; items: string[] }[] = [
+  { category: "Acknowledge", items: ["Got it, thanks ✓", "Received ✓", "Will do", "On it"] },
+  { category: "Status", items: ["On my way", "On site now", "Leaving site now", "Job complete ✓", "Running ~10 mins late"] },
+  { category: "Requests", items: ["Need more supplies", "Call me when you can", "Can you clarify?", "Need assistance here"] },
+  { category: "Safety", items: ["Area is clear ✓", "Hazard identified – please advise", "All PPE in use", "Permit checked ✓"] },
+];
 
 const ROLE_COLOURS: Record<string, string> = {
   admin: "bg-purple-100 text-purple-700",
@@ -185,6 +192,7 @@ export default function MessagesPage() {
   const [searchDms, setSearchDms] = useState<DmSearchResult[]>([]);
   const [searchChannels, setSearchChannels] = useState<ChannelSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [quickReplyOpen, setQuickReplyOpen] = useState(false);
   const threadEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -859,7 +867,7 @@ export default function MessagesPage() {
                     <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Project Channels</span>
                   </div>
                   {channels.map(ch => (
-                    <button key={ch.projectId} onClick={() => { setActiveChannel(ch); setActiveConv(null); setThread([]); }}
+                    <button key={ch.projectId} onClick={() => { setActiveChannel(ch); setActiveConv(null); setThread([]); setQuickReplyOpen(false); }}
                       className={cn(
                         "w-full text-left px-4 py-3 hover:bg-muted/50 transition-colors",
                         activeChannel?.projectId === ch.projectId && "bg-muted"
@@ -897,7 +905,7 @@ export default function MessagesPage() {
                 <div className="px-4 py-3 text-xs text-muted-foreground">No direct messages yet.</div>
               ) : !searchQuery ? (
                 conversations.map(conv => (
-                  <button key={conv.otherId} onClick={() => setActiveConv(conv)}
+                  <button key={conv.otherId} onClick={() => { setActiveConv(conv); setQuickReplyOpen(false); }}
                     className={cn(
                       "w-full text-left px-4 py-3 hover:bg-muted/50 transition-colors",
                       activeConv?.otherId === conv.otherId && "bg-muted"
@@ -1394,6 +1402,31 @@ export default function MessagesPage() {
                     </div>
                   )}
 
+                  {/* Quick reply templates */}
+                  {quickReplyOpen && (
+                    <div className="rounded-xl border bg-card shadow-sm p-3 space-y-2 max-h-52 overflow-y-auto">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-semibold flex items-center gap-1.5 text-amber-600"><Zap className="w-3.5 h-3.5" />Quick Replies</span>
+                        <button onClick={() => setQuickReplyOpen(false)} className="text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5" /></button>
+                      </div>
+                      {QUICK_REPLIES.map(group => (
+                        <div key={group.category}>
+                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">{group.category}</p>
+                          <div className="flex flex-wrap gap-1">
+                            {group.items.map(t => (
+                              <button
+                                key={t}
+                                type="button"
+                                onClick={() => { setDraft(t); setQuickReplyOpen(false); }}
+                                className="px-2.5 py-1 rounded-full border text-xs bg-muted/50 hover:bg-primary/10 hover:border-primary/40 hover:text-primary transition-colors text-left"
+                              >{t}</button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   <form onSubmit={e => { e.preventDefault(); sendMessage(); }} className="flex gap-2">
                     <Button
                       type="button"
@@ -1414,6 +1447,16 @@ export default function MessagesPage() {
                       onClick={() => attachPickerOpen ? setAttachPickerOpen(false) : openAttachPicker()}
                     >
                       <Paperclip className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      title="Quick replies"
+                      className={cn("px-2 shrink-0", quickReplyOpen && "text-amber-500 bg-amber-50")}
+                      onClick={() => { setQuickReplyOpen(v => !v); setInvoicePickerOpen(false); setAttachPickerOpen(false); }}
+                    >
+                      <Zap className="w-4 h-4" />
                     </Button>
                     <Input
                       value={draft}
@@ -1710,11 +1753,41 @@ export default function MessagesPage() {
                     </div>
                   </div>
                 )}
+                {/* Quick reply templates */}
+                {quickReplyOpen && (
+                  <div className="rounded-xl border bg-card shadow-sm p-3 space-y-2 max-h-52 overflow-y-auto">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-semibold flex items-center gap-1.5 text-amber-600"><Zap className="w-3.5 h-3.5" />Quick Replies</span>
+                      <button onClick={() => setQuickReplyOpen(false)} className="text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5" /></button>
+                    </div>
+                    {QUICK_REPLIES.map(group => (
+                      <div key={group.category}>
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">{group.category}</p>
+                        <div className="flex flex-wrap gap-1">
+                          {group.items.map(t => (
+                            <button
+                              key={t}
+                              type="button"
+                              onClick={() => { setDraft(t); setQuickReplyOpen(false); }}
+                              className="px-2.5 py-1 rounded-full border text-xs bg-muted/50 hover:bg-primary/10 hover:border-primary/40 hover:text-primary transition-colors text-left"
+                            >{t}</button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <form onSubmit={e => { e.preventDefault(); sendChannelMessage(); }} className="flex gap-2">
                   <Button type="button" size="sm" variant="ghost" title="Attach document, photo or permit"
                     className={cn("px-2 shrink-0", attachPickerOpen && "text-violet-600 bg-violet-50")}
                     onClick={() => attachPickerOpen ? setAttachPickerOpen(false) : openAttachPicker()}>
                     <Paperclip className="w-4 h-4" />
+                  </Button>
+                  <Button type="button" size="sm" variant="ghost" title="Quick replies"
+                    className={cn("px-2 shrink-0", quickReplyOpen && "text-amber-500 bg-amber-50")}
+                    onClick={() => { setQuickReplyOpen(v => !v); setAttachPickerOpen(false); }}>
+                    <Zap className="w-4 h-4" />
                   </Button>
                   <Input value={draft} onChange={e => setDraft(e.target.value)}
                     placeholder={dictating ? "Listening…" : attachedItem ? "Add a note (optional)…" : `Message #${activeChannel.projectName}…`}
