@@ -45,6 +45,39 @@
 - New API: `POST /api/billing/checkout`
 - Key files: `routes/billing.ts`, `routes/index.ts`, `settings/index.tsx`
 
+## 2026-05-25 (sessions 1–5)
+
+### Session 1 — Dashboard, invoice viewer, PDF export, sub "Add to Project"
+- **Real user dashboard** — personalised greeting, 4-stat cards, Needs Attention panel, active project cards + recent activity feed, portfolio snapshot, site calendar
+- **Inline invoice document viewer** — full-screen panel; PDF iframe / image / fallback; sidebar with details; open/share/mark-paid header actions
+- **Project detail PDF export** — "Export Report" button generates print-ready HTML in new tab, auto-triggers print dialog; sections: summary, team, permits, documents, finances, photos
+- **Subcontractor "Add to Project"** — FolderPlus button on each sub card; dialog with active project list; one-click add with inline per-project feedback (spinner → Added ✓ / Already on project / Failed)
+- Key files: `dashboard/index.tsx`, `invoices/index.tsx`, `projects/detail.tsx`, `subcontractors/index.tsx`
+
+### Session 2 — Enforced directory-first workflow
+- Removed "+ Add Person" button + dialog from project Team tab; contacts must come from subcontractor directory first
+- Key files: `projects/detail.tsx`
+
+### Session 3 — Cancellation enforcement, landing page, broadcast messaging
+- Cancellation guards on all write actions across every page (projects, detail, subcontractors, messages, invoices, settings)
+- Landing page: removed Book Demo button; added `#pricing` section (Solo £29 / Team £79 / Pro £149); fixed bullet alignment on dark feature cards
+- Broadcast messaging: three-mode picker (Individual / By Role / All in Project); `POST /api/messages/broadcast`
+- Key files: all page files + `routes/messages.ts`, `landing.tsx`
+
+### Session 4 — Invoice + doc/photo/permit sharing in messages
+- Invoice sharing: Receipt button, picker, invoice card in thread; `invoiceId` + `content default("")` schema changes
+- Doc/photo/permit sharing: Paperclip picker with tabbed project selector; typed attachment cards; `attachmentType` + `attachmentId` schema columns
+- Key files: `lib/db/src/schema/messages.ts`, `routes/messages.ts`, `messages/index.tsx`
+
+### Session 5 — Project channel group messaging
+- `#ProjectName` shared threads; sidebar above DMs with unread badge; edit/delete own messages; 5s polling; full attachment support; notifications to all members; read tracking
+- New tables: `channel_messages`, `channel_reads`; new routes: `GET/POST /api/channels/:projectId/messages`, `PATCH/DELETE /api/channel-messages/:id`
+- Key files: `lib/db/src/schema/channel_messages.ts`, `channel_reads.ts`, `routes/channels.ts`, `messages/index.tsx`
+
+### End-of-session summary
+- Fixed pre-existing `authHeaders()` TS return-type error; fixed `lib/db` composite stale `.d.ts` cache
+- Known pre-existing TS errors: `alert-dialog.tsx`, `calendar.tsx`, `command.tsx`, `pagination.tsx`, `dashboard/index.tsx`, `projects/detail.tsx`, Drizzle `eq()` overloads; `lib/api-zod` duplicate exports — none affect runtime
+
 ## 2026-05-22 (detailed log)
 
 ### Stripe webhook handler

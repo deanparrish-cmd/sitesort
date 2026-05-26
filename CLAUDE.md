@@ -111,147 +111,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 
 ## Session Log
 
-### 2026-05-22 (latest — see CLAUDE_ARCHIVE.md for full detail)
-
-#### All features completed this session
-- Global voice command navigation (mic in sidebar + header, hint overlay, toast feedback)
-- Voice action commands: new project/invoice/message, find subcontractor/compliance/permit/invoice, safety issue modal, permit modal, photo upload modal, photo recall
-- Photo voice commands + Photos tab in project detail (colour-coded grid, category badges)
-- Read-only mode on cancellation (`SubscriptionContext`, persistent red banner app-wide)
-- Message editing + deletion (inline pencil/trash, `PATCH`/`DELETE /api/messages/:id`, `editedAt` column)
-- Stripe: webhook handler, project gating, Customer Portal, trial-ending + payment-failed notifications
-
-### 2026-05-25
-
-#### Tasks completed
-- **Real user dashboard** — full rebuild of `artifacts/sitesort/src/pages/dashboard/index.tsx`:
-  - Personalised greeting with user's first name (fetched from `GET /api/auth/me`) and today's full date
-  - Quick-action buttons in header: New Project → `/projects?new=1`, Log Photo → `/projects?photo=1`, Message → `/messages?new=1`, Upload Doc → `/compliance?upload=1`
-  - 4-stat cards: Active Projects, Expiring Soon (insurance + permits in 30d), Pending Sign-offs, Unread Messages — each links to its page and colour-codes when non-zero
-  - "Needs Attention" panel — only renders when items exist; surfaces expired/near-expiry compliance, overdue invoices, pending sign-offs, unread messages as clickable rows
-  - 2-column main area: active project cards (left 2/3, horizontal with progress %, team count, due date) + Recent Activity feed (right 1/3, last 8 notifications with per-type icons and time-ago labels)
-  - Portfolio Snapshot card: avg. progress bar, total team size, on-track project ratio
-  - Removed dev-only "Send Test Email" button
-  - Site Calendar and expiry-alert list retained at bottom
-
-#### Key files modified
-- `artifacts/sitesort/src/pages/dashboard/index.tsx` — full rewrite; fetches `/api/auth/me`, `/api/notifications`, `/api/messages/unread-count`, `/api/invoices` alongside existing hooks
-
-- **Inline invoice document viewer** — clicking any invoice row (or eye icon) opens a full-screen viewer panel:
-  - Left sidebar: counterparty, direction, amount, status badge, due date, description, created date; "Attach document" shortcut if no file attached
-  - Right pane: PDF rendered via `<iframe>`, images via `<img>`, fallback "Open file" link for other formats, empty state prompting upload if no attachment
-  - Header actions: Open in new tab, Share (Email/WhatsApp dropdown), Mark Paid, Close
-  - File type detected from URL extension (`.pdf` → iframe, `.png/.jpg/.jpeg/.webp/.gif` → img)
-
-#### Key files modified
-- `artifacts/sitesort/src/pages/invoices/index.tsx` — invoice viewer overlay added (custom wide panel, not Dialog which is max-w-lg); `ExternalLink`, `FileText`, `Image` icons added
-
-- **Project detail report / PDF export** — "Export Report" button in project header (next to "Edit Details") opens a print-ready HTML page in a new tab and auto-triggers the browser print/Save-as-PDF dialog. Report sections: project summary (name, address, status badge, start/end dates, progress bar), team grouped by trade, permits sorted by expiry with colour-coded status, documents with sign-off counts, finances (due-to-you/you-owe summary + invoice list), photo log count by category. Zero new dependencies — uses `window.open` + `window.print()` with `print-color-adjust: exact`.
-
-#### Key files modified
-- `artifacts/sitesort/src/pages/projects/detail.tsx` — `generateReport()` function + `FileDown` icon + "Export Report" button in project header
-
-- **Subcontractor "Add to Project"** — `FolderPlus` icon button on each subcontractor card opens a dialog to link the sub into any active project. Dialog shows sub summary + active project list; each project row is a one-click "Add" button with inline per-project feedback: spinner → "Added ✓" (200), "Already on project" (409 conflict), "Failed — retry?" (other errors). Error rows stay clickable for retry without closing.
-
-#### Key files modified
-- `artifacts/sitesort/src/pages/subcontractors/index.tsx` — `shareTarget`/`shareProjects`/`linkStatus` state; `useEffect` fetches active projects on open; `linkToProject()` calls `POST /api/projects/:id/members/link`; share dialog JSX; `FolderPlus`, `CheckCircle2`, `Loader2`, `Building2` icons added
-
-### 2026-05-25 (continued)
-
-#### Tasks completed
-- **Enforced directory-first contact workflow** — removed the "+ Add Person" button from each trade folder in the project Team tab, removed the Add Person dialog and `submitAddPerson` handler, and removed associated state/form (`addPersonTrade`, `addPersonError`, `personRegister`). All contacts must now be added to the subcontractor directory first and then linked into a project via the "Add from Subcontractor Directory" button. Updated empty-state copy to reflect this.
-
-#### Key files modified
-- `artifacts/sitesort/src/pages/projects/detail.tsx` — removed `addPersonTrade` state, `submitAddPerson` function, "+ Add Person" trade folder button, and Add Person dialog
-
-### 2026-05-25 (session 3)
-
-#### Tasks completed
-
-- **Cancellation enforcement on all write actions** — every create/edit/delete operation now checks `isCancelled` before executing; shows a destructive toast and returns early. Voice command modal openers (safety, permit, photo, new subcontractor) also redirect to billing when cancelled.
-  - Pages gated: projects list (photo, permit, safety modals), project detail (upload doc, edit doc, edit project, add trade, save phone), subcontractors (add sub, link to project), messages (send, edit, delete), invoices (create, delete, attach file, mark paid)
-
-- **Cancellation enforcement on settings page** — Profile save + avatar upload, Change Password, Company save all show an inline red `StatusBanner` and return early when cancelled. Billing and Notifications tabs intentionally ungated.
-
-- **Removed "Book Demo" button** from landing page hero — "Start Free Trial" is now the only CTA.
-
-- **Pricing section on landing page** — "Start Free Trial" smooth-scrolls to a new `#pricing` section showing Solo £29 / Team £79 / Pro £149 plan cards, each with their own "Start free trial" → `/register` button. Trial badge and Stripe disclaimer included.
-
-- **Feature card bullet alignment fix** — changed `list-inside` to `list-outside pl-5` on the three dark feature cards so bullets sit flush left.
-
-- **Broadcast messaging** — "New" button in messages now opens a three-mode picker:
-  - **Individual**: existing 1-to-1 flow (unchanged)
-  - **By Role**: pick a project → filter by role chip (Admin/PM/Site Worker/Subcontractor) → compose → "Send to X members"
-  - **All in Project**: pick a project → send to all members with accounts
-  - Backend: `POST /api/messages/broadcast` inserts a message + notification per recipient
-  - Also fixed pre-existing `authHeaders()` TypeScript return-type issue in messages page
-
-#### Key files modified
-- `artifacts/sitesort/src/pages/projects/index.tsx` — cancellation guards on submitPhoto, submitPermit, submitSafetyIssue; modal-opener useEffects redirect to billing
-- `artifacts/sitesort/src/pages/projects/detail.tsx` — cancellation guards on onUpload, saveDocEdit, onEditSubmit, submitAddTrade, savePhone
-- `artifacts/sitesort/src/pages/subcontractors/index.tsx` — cancellation guards on onAdd, linkToProject; ?new=1 voice command blocked
-- `artifacts/sitesort/src/pages/messages/index.tsx` — cancellation guards on sendMessage, saveEdit, deleteMessage; broadcast mode picker; authHeaders() fix
-- `artifacts/sitesort/src/pages/invoices/index.tsx` — cancellation guards on onSubmit, deleteInvoice, attachFile, markPaid
-- `artifacts/sitesort/src/pages/settings/index.tsx` — isCancelled prop threaded to ProfileTab, SecurityTab, CompanyTab
-- `artifacts/sitesort/src/pages/landing.tsx` — removed Book Demo button; added #pricing section; fixed bullet alignment
-- `artifacts/api-server/src/routes/messages.ts` — added POST /api/messages/broadcast endpoint
-
-#### Pending / open tasks
-- File storage migrated to object storage (done in prior session)
-- No message search or pagination yet
-- Stripe Dashboard setup needed: activate Customer Portal; add all 5 webhook events (`checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `customer.subscription.trial_will_end`, `invoice.payment_failed`)
-
-### 2026-05-25 (session 4)
-
-#### Tasks completed
-
-- **Invoice sharing in messages** — Receipt button in compose bar opens a picker dropdown of all company invoices; selected invoice shows as a blue chip above the input; sends `invoiceId` with the message; thread renders an invoice card (counterparty, amount/currency, status badge, due date, optional PDF link). Schema: `invoiceId` nullable column + `content` changed to `.default("")` to allow invoice-only messages. DB migrated.
-
-- **Document, photo, and permit sharing in messages** — Paperclip button in compose bar opens a tabbed picker (Document / Photo / Permit) with a project dropdown. Selecting an item shows a violet chip preview above the input. Thread renders typed cards for each:
-  - Document: name, type, version badge, status badge, view-document link
-  - Photo: thumbnail (if available), category badge, reference number, zone, description
-  - Permit: type, description, colour-coded expiry badge (Active / Expiring soon / Expired), view-permit link
-  - Schema: `attachmentType` + `attachmentId` nullable columns on messages table. DB migrated.
-  - API: thread endpoint batch-fetches docs/photos/permits by IDs and returns as `attachment` field; POST endpoint accepts `attachmentType` + `attachmentId`
-
-#### Key files modified
-- `lib/db/src/schema/messages.ts` — added `invoiceId`, `attachmentType`, `attachmentId` columns; `content` → `.default("")`
-- `artifacts/api-server/src/routes/messages.ts` — thread endpoint fetches and returns `invoice` + `attachment`; POST accepts all new fields; imports `documentsTable`, `photosTable`, `permitsTable`
-- `artifacts/sitesort/src/pages/messages/index.tsx` — `DocAttachment`, `PhotoAttachment`, `PermitAttachment` types; attach picker state + effects; `openAttachPicker()`; `Paperclip` button; tabbed picker UI with project selector; typed attachment cards in thread; updated send button guard
-
-#### Pending / open tasks
-- No message search or pagination yet
-- Stripe Dashboard setup needed: activate Customer Portal; add all 5 webhook events
-
-### 2026-05-25 (session 5)
-
-#### Tasks completed
-
-- **Project channel group messaging** — each active project gets a shared group thread available to all project members:
-  - Sidebar: "Project Channels" section above Direct Messages; each channel shown as `#ProjectName` with blue `#` icon and unread badge (count resets on open)
-  - Thread: all members' messages with sender name + role chip; edit/delete on own messages; 5s polling
-  - Attachments: full doc/photo/permit card rendering (same as DMs); Paperclip picker + voice dictation in compose bar
-  - Notifications: sending a channel message notifies all other project members via `notificationsTable`
-  - Read tracking: `channel_reads` table stores `lastReadAt` per user per project; unread count = messages after `lastReadAt` by other users
-  - Admins/PMs see all active company projects as channels; other roles see only projects they're a member of
-
-#### Key files added/modified
-- `lib/db/src/schema/channel_messages.ts` — new table: id, projectId, companyId, senderId, content, attachmentType, attachmentId, editedAt, createdAt
-- `lib/db/src/schema/channel_reads.ts` — new table: projectId, userId, lastReadAt
-- `lib/db/src/schema/index.ts` — exports new tables
-- `artifacts/api-server/src/routes/channels.ts` — new route file: GET /api/channels, GET/POST /api/channels/:projectId/messages, PATCH/DELETE /api/channel-messages/:id
-- `artifacts/api-server/src/routes/index.ts` — registered channelsRouter
-- `artifacts/sitesort/src/pages/messages/index.tsx` — Channel + ChannelMessage types; channel state + fetch/poll effects; sendChannelMessage, saveChannelEdit, deleteChannelMessage; channels section in sidebar; full channel thread panel with compose area
-
-#### Technical notes
-- `lib/db` is a composite TypeScript project (`composite: true`, `emitDeclarationOnly: true`); adding new schema files requires running `npx tsc -p tsconfig.json` in `lib/db/` to regenerate `dist/` `.d.ts` files before the api-server typecheck will pick up the new exports
-- DB migrated with `pnpm --filter @workspace/db run push`
-
-#### Pending / open tasks
-- No message search or pagination yet
-- Stripe Dashboard setup needed: activate Customer Portal; add all 5 webhook events
-
----
+### 2026-05-22 & 2026-05-25 — see CLAUDE_ARCHIVE.md for full detail
 
 ### 2026-05-26
 
@@ -272,6 +132,45 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 - `artifacts/api-server/src/routes/messages.ts` — imports `messageReactionsTable`; reactions batch-fetched in thread endpoint; `POST /api/messages/:id/react` toggle endpoint
 - `artifacts/api-server/src/routes/channels.ts` — same pattern for channel messages; `POST /api/channel-messages/:id/react`
 - `artifacts/sitesort/src/pages/messages/index.tsx` — `Reaction` type; `emojiPickerId` state; `toggleReaction` / `toggleChannelReaction` functions; reactions row + emoji picker UI in both DM and channel thread renders; reaction button also available to non-own messages (not just own)
+
+- **Reply-to-message (WhatsApp-style quote)** — hover any message → ↩ button appears; clicking sets a "Replying to" bar above compose with dismiss X; sending attaches `replyToId`; thread renders quoted block (sender name + content preview, left-border accent) above the reply bubble; works in DMs and channels; falls back to `[document/photo/permit]` for attachment-only quoted messages
+  - Schema: `replyToId` nullable column on `messages` and `channel_messages` tables (no new tables)
+  - API: thread endpoints batch-fetch quoted messages and embed `replyTo: {id, senderName, content, attachmentType}`; POST endpoints accept `replyToId`
+
+#### Key files modified (reply-to)
+- `lib/db/src/schema/messages.ts` — added `replyToId` column
+- `lib/db/src/schema/channel_messages.ts` — added `replyToId` column
+- `artifacts/api-server/src/routes/messages.ts` — batch-fetch quoted messages in thread; `replyTo` in response; accept `replyToId` on POST
+- `artifacts/api-server/src/routes/channels.ts` — same for channels
+- `artifacts/sitesort/src/pages/messages/index.tsx` — `ReplyTo` type; `replyingTo` state; reply button in hover actions; quote bubble in thread; reply-to bar above compose; `CornerUpLeft` icon
+
+- **Message search** — debounced (300ms) search input in the sidebar; while active, replaces conversation list with grouped results (Direct Messages / Channel Messages); each result shows sender, channel/conversation name, timestamp, and the matched snippet with the term **highlighted in yellow**; clicking opens that conversation or channel; X clears back to normal view
+  - API: `GET /api/messages/search?q=` (ILIKE, respects viewAll permissions, min 2 chars, max 30 results); `GET /api/channels/search?q=` (filters to accessible projects by role)
+
+#### Key files modified (search)
+- `artifacts/api-server/src/routes/messages.ts` — added `GET /api/messages/search`
+- `artifacts/api-server/src/routes/channels.ts` — added `GET /api/channels/search`
+- `artifacts/sitesort/src/pages/messages/index.tsx` — `DmSearchResult` / `ChannelSearchResult` types; `searchQuery/searchDms/searchChannels/searchLoading` state; debounce effect; search input in sidebar header; grouped results panel
+
+- **Quick reply templates** — ⚡ Zap button in both DM and channel compose bars opens an inline panel with 18 construction site templates across 4 categories: Acknowledge, Status, Requests, Safety; clicking a template inserts it into the draft (doesn't auto-send) so user can edit; panel closes on selection or conversation switch; no DB changes
+
+#### Key files modified (quick replies)
+- `artifacts/sitesort/src/pages/messages/index.tsx` — `QUICK_REPLIES` constant; `quickReplyOpen` state; Zap button + template panel in both compose bars
+
+## End-of-session notes — 2026-05-26
+
+### All tasks completed today
+
+1. **Message reactions** — 👍 ✅ 👀 ❤️ 😂 on DMs and channel messages; toggle via hover picker; pill badges with count; `message_reactions` + `channel_message_reactions` tables
+2. **Reply-to-message** — WhatsApp-style quote bubble; `replyToId` column on both message tables; reply bar above compose; works in DMs and channels
+3. **Message search** — debounced sidebar search across DMs and channels; yellow-highlighted snippets; grouped results; `GET /api/messages/search` + `GET /api/channels/search`
+4. **Quick reply templates** — 18 site-specific templates in 4 categories; ⚡ Zap button in compose bar; inserts into draft for editing before send
+
+### Notes for next session
+- **Good next features**: message pagination (currently loads entire thread), read receipts per-message in DMs, push notifications (PWA), project progress tracking / Gantt view
+- **Stripe still needs manual setup**: activate Customer Portal in Stripe Dashboard; register all 5 webhook events (`checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `customer.subscription.trial_will_end`, `invoice.payment_failed`)
+- **When adding new DB schema files**: always run `npx tsc -p tsconfig.json` inside `lib/db/` after editing `src/schema/index.ts` to regenerate `dist/` before typechecking api-server
+- All commits are on `main`; push via `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts`
 
 ## End-of-session notes — 2026-05-25
 
