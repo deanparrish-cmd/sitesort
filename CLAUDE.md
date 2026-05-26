@@ -99,6 +99,8 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 35. Invoice sharing in messages — Receipt button in compose bar opens an invoice picker; selected invoice renders as a card in the thread (counterparty, amount, status badge, due date, PDF link); `invoiceId` nullable column on messages table; `content` defaults to `""` to allow invoice-only messages
 36. Document, photo, and permit sharing in messages — Paperclip button in compose bar opens a tabbed picker (Document / Photo / Permit) with a project selector; selected item shown as a violet chip; thread renders typed cards: document (name, type, version, view link), photo (thumbnail, category, reference), permit (type, description, expiry status badge); `attachmentType` + `attachmentId` columns on messages table; API thread endpoint batch-fetches attachment data
 37. Project channel group messaging — each active project gets a shared `#channel` thread visible to all project members; appears above DMs in sidebar with blue `#` icon and unread badge; full attachment support (doc/photo/permit cards); sender name + role chip on every message; edit/delete own messages; 5s polling; notifications to all project members on send; `channel_messages` + `channel_reads` tables; `GET/POST /api/channels/:projectId/messages`, `PATCH/DELETE /api/channel-messages/:id`
+38. Message enhancements — emoji reactions (👍 ✅ 👀 ❤️ 😂) on DMs and channels (hover picker, pill badges, toggle); reply-to-message WhatsApp-style quote bubbles; debounced sidebar message search across DMs and channels with yellow-highlighted snippets; 18 quick reply templates in 4 site-specific categories via ⚡ Zap button
+39. Subcontractor invite links — UserPlus button on each sub card generates a unique invite link; share modal with copy, WhatsApp/Email/SMS options; register page detects `?invite=<token>` and shows tailored join form (email locked, name pre-filled, password only); backend creates user with `subcontractor` role and marks invite as used
 
 ## Uploads / File Serving
 
@@ -157,6 +159,25 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 #### Key files modified (quick replies)
 - `artifacts/sitesort/src/pages/messages/index.tsx` — `QUICK_REPLIES` constant; `quickReplyOpen` state; Zap button + template panel in both compose bars
 
+- **Landing page text formatting** — hero subtitle reformatted to 3 controlled lines: "The single source of truth for your site teams." / "Distribute documents, track compliance, and manage" / "subcontractors without the paperwork headache."; features section subtitle reformatted to 2 lines: "Replace disjointed WhatsApp groups and overflowing" / "emails inboxes with purpose-built tools."
+
+#### Key files modified (landing page)
+- `artifacts/sitesort/src/pages/landing.tsx` — `<br />` tags inserted for precise line break control in hero paragraph and features subtitle
+
+- **Subcontractor invite link flow** — admin can generate a shareable invite link for any subcontractor:
+  - UserPlus button on each sub card (green hover, between FolderPlus and Edit) calls `POST /api/subcontractors/:id/invite`
+  - API reuses existing unused token or generates new 48-char hex token; returns `{ token, email, name }`
+  - Share modal: sub summary, descriptive text, read-only URL field + Copy button (2s "Copied!" feedback), WhatsApp / Email / SMS share links
+  - Register page detects `?invite=<token>`, fetches `GET /api/auth/invite/:token` for prefill data; shows tailored form (email locked as read-only display, name pre-filled but editable, password only)
+  - `POST /api/auth/invite/:token/accept` creates user with role `"subcontractor"`, `emailVerified: true`, marks `inviteUsedAt`, returns JWT
+  - Heading changes to "Join [Company Name]" with "You've been invited to SiteSort" subtitle
+  - Schema: `inviteToken` + `inviteUsedAt` columns already existed on `subcontractorsTable`
+
+#### Key files added/modified (invite)
+- `artifacts/api-server/src/routes/auth.ts` — `POST /api/subcontractors/:id/invite`, `GET /api/auth/invite/:token`, `POST /api/auth/invite/:token/accept`; imports `subcontractorsTable`, `and` from drizzle-orm
+- `artifacts/sitesort/src/pages/subcontractors/index.tsx` — `inviteTarget/inviteLink/inviteLoading/inviteCopied` state; `openInvite()` + `copyInviteLink()`; UserPlus button; share modal; `UserPlus`, `Copy`, `Check` icons
+- `artifacts/sitesort/src/pages/auth/register.tsx` — `inviteSchema` (name + password); `InviteData` type; `inviteToken/inviteData/inviteLoading/inviteSubmitting` state; invite form branch; `onInviteSubmit`; heading/subtitle changes
+
 ## End-of-session notes — 2026-05-26
 
 ### All tasks completed today
@@ -165,11 +186,14 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 2. **Reply-to-message** — WhatsApp-style quote bubble; `replyToId` column on both message tables; reply bar above compose; works in DMs and channels
 3. **Message search** — debounced sidebar search across DMs and channels; yellow-highlighted snippets; grouped results; `GET /api/messages/search` + `GET /api/channels/search`
 4. **Quick reply templates** — 18 site-specific templates in 4 categories; ⚡ Zap button in compose bar; inserts into draft for editing before send
+5. **Landing page text formatting** — hero and features subtitle reformatted with `<br />` for precise 3-line / 2-line control
+6. **Subcontractor invite links** — generate + share link from sub card; tailored register page invite flow; 3 new API endpoints; user created with subcontractor role + email pre-verified
 
 ### Notes for next session
 - **Good next features**: message pagination (currently loads entire thread), read receipts per-message in DMs, push notifications (PWA), project progress tracking / Gantt view
 - **Stripe still needs manual setup**: activate Customer Portal in Stripe Dashboard; register all 5 webhook events (`checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `customer.subscription.trial_will_end`, `invoice.payment_failed`)
 - **When adding new DB schema files**: always run `npx tsc -p tsconfig.json` inside `lib/db/` after editing `src/schema/index.ts` to regenerate `dist/` before typechecking api-server
+- `inviteToken` and `inviteUsedAt` columns already existed on `subcontractorsTable` (added in prior session); no DB migration needed for invite feature
 - All commits are on `main`; push via `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts`
 
 ## End-of-session notes — 2026-05-25
