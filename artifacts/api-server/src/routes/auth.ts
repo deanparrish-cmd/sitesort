@@ -3,8 +3,8 @@ import { randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { db } from "@workspace/db";
-import { companiesTable, usersTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { companiesTable, usersTable, subcontractorsTable } from "@workspace/db/schema";
+import { eq, and } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { generateToken, authenticate } from "../middlewares/auth";
 import { blockToken } from "../lib/token-blocklist";
@@ -368,6 +368,105 @@ router.get("/companies/mine", authenticate, async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Get company error");
     res.status(500).json({ error: "server_error", message: "Failed to get company" });
+  }
+});
+
+// POST /api/subcontractors/:id/invite — generate (or regenerate) an invite link
+router.post("/subcontractors/:id/invite", authenticate, async (req, res) => {
+  try {
+    const sub = await db.select().from(subcontractorsTable)
+      .where(and(eq(subcontractorsTable.id, req.params.id), eq(subcontractorsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!sub[0]) { res.status(404).json({ error: "not_found", message: "Subcontractor not found" }); return; }
+
+    // Reuse existing unused token, otherwise generate a new one
+    let token = sub[0].inviteToken && !sub[0].inviteUsedAt ? sub[0].inviteToken : randomBytes(24).toString("hex");
+    if (token !== sub[0].inviteToken) {
+      await db.update(subcontractorsTable).set({ inviteToken: token, inviteUsedAt: null }).where(eq(subcontractorsTable.id, req.params.id));
+    }
+
+    res.json({ token, email: sub[0].contactEmail, name: sub[0].contactName });
+  } catch (err) {
+    req.log.error({ err }, "Generate invite error");
+    res.status(500).json({ error: "server_error", message: "Failed to generate invite" });
+  }
+});
+
+// GET /api/auth/invite/:token — public: get invite prefill data
+router.get("/auth/invite/:token", async (req, res) => {
+  try {
+    const rows = await db.select({
+      id: subcontractorsTable.id,
+      contactName: subcontractorsTable.contactName,
+      contactEmail: subcontractorsTable.contactEmail,
+      inviteUsedAt: subcontractorsTable.inviteUsedAt,
+      companyId: subcontractorsTable.companyId,
+    }).from(subcontractorsTable)
+      .where(eq(subcontractorsTable.inviteToken, req.params.token))
+      .limit(1);
+
+    if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Invalid invite link" }); return; }
+    if (rows[0].inviteUsedAt) { res.status(410).json({ error: "invite_used", message: "This invite has already been used" }); return; }
+
+    const company = await db.select({ name: companiesTable.name })
+      .from(companiesTable).where(eq(companiesTable.id, rows[0].companyId)).limit(1);
+
+    res.json({ name: rows[0].contactName, email: rows[0].contactEmail, companyName: company[0]?.name ?? "your company" });
+  } catch (err) {
+    req.log.error({ err }, "Get invite error");
+    res.status(500).json({ error: "server_error", message: "Failed to load invite" });
+  }
+});
+
+// POST /api/auth/invite/:token/accept — public: register via invite link
+router.post("/auth/invite/:token/accept", async (req, res) => {
+  try {
+    const { name, password } = req.body;
+    if (!name?.trim() || !password) {
+      res.status(400).json({ error: "validation_error", message: "Name and password are required" });
+      return;
+    }
+    if (password.length < 8) {
+      res.status(400).json({ error: "validation_error", message: "Password must be at least 8 characters" });
+      return;
+    }
+
+    const rows = await db.select().from(subcontractorsTable)
+      .where(eq(subcontractorsTable.inviteToken, req.params.token)).limit(1);
+    if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Invalid invite link" }); return; }
+    if (rows[0].inviteUsedAt) { res.status(410).json({ error: "invite_used", message: "This invite has already been used" }); return; }
+
+    const email = rows[0].contactEmail;
+    const companyId = rows[0].companyId;
+
+    const existing = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
+    if (existing[0]) {
+      res.status(400).json({ error: "already_registered", message: "An account with this email already exists. Please log in." });
+      return;
+    }
+
+    const userId = generateId();
+    const passwordHash = await bcrypt.hash(password, 10);
+    await db.insert(usersTable).values({
+      id: userId,
+      companyId,
+      email,
+      passwordHash,
+      name: name.trim(),
+      role: "subcontractor",
+      emailVerified: true,
+    });
+
+    await db.update(subcontractorsTable).set({ inviteUsedAt: new Date() }).where(eq(subcontractorsTable.id, rows[0].id));
+
+    const token = generateToken({ id: userId, companyId, role: "subcontractor", email });
+    res.status(201).json({
+      user: { id: userId, companyId, email, name: name.trim(), role: "subcontractor" },
+      token,
+    });
+  } catch (err) {
+    req.log.error({ err }, "Accept invite error");
+    res.status(500).json({ error: "server_error", message: "Failed to accept invite" });
   }
 });
 

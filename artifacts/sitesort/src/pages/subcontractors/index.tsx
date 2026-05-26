@@ -9,7 +9,7 @@ import {
   Plus, Search, ChevronDown, ChevronRight, HardHat, Mail, Phone,
   ShieldCheck, ShieldAlert, ShieldX, Shield, Star, AlertTriangle,
   Users, Pencil, X, FolderOpen, Mic, MicOff, MessageSquare,
-  FolderPlus, CheckCircle2, Loader2, Building2,
+  FolderPlus, CheckCircle2, Loader2, Building2, UserPlus, Copy, Check,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { cn } from "@/lib/utils";
@@ -166,6 +166,12 @@ export default function SubcontractorsPage() {
   const [shareProjectsLoading, setShareProjectsLoading] = useState(false);
   const [linkStatus, setLinkStatus] = useState<Record<string, ProjectLinkStatus>>({});
 
+  // Invite state
+  const [inviteTarget, setInviteTarget] = useState<Sub | null>(null);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteCopied, setInviteCopied] = useState(false);
+
   useEffect(() => {
     if (!shareTarget) return;
     setShareProjectsLoading(true);
@@ -288,6 +294,30 @@ export default function SubcontractorsPage() {
 
   const toggleTrade = (trade: string) =>
     setOpenTrades(prev => ({ ...prev, [trade]: !(prev[trade] ?? true) }));
+
+  async function openInvite(sub: Sub) {
+    setInviteTarget(sub);
+    setInviteLink(null);
+    setInviteCopied(false);
+    setInviteLoading(true);
+    const token = localStorage.getItem("sitesort_token");
+    const r = await fetch(`/api/subcontractors/${sub.id}/invite`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (r.ok) {
+      const { token: inviteToken } = await r.json();
+      setInviteLink(`${window.location.origin}/register?invite=${inviteToken}`);
+    }
+    setInviteLoading(false);
+  }
+
+  async function copyInviteLink() {
+    if (!inviteLink) return;
+    await navigator.clipboard.writeText(inviteLink);
+    setInviteCopied(true);
+    setTimeout(() => setInviteCopied(false), 2000);
+  }
 
   async function onAdd(data: AddFormData) {
     if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
@@ -499,6 +529,15 @@ export default function SubcontractorsPage() {
                           title="Add to a project"
                         >
                           <FolderPlus className="w-3.5 h-3.5" />
+                        </button>
+
+                        {/* Invite to SiteSort */}
+                        <button
+                          onClick={() => openInvite(sub)}
+                          className="p-1.5 rounded-lg text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50 transition-colors shrink-0"
+                          title="Invite to SiteSort"
+                        >
+                          <UserPlus className="w-3.5 h-3.5" />
                         </button>
 
                         {/* Edit */}
@@ -743,6 +782,79 @@ export default function SubcontractorsPage() {
             <Button type="submit" variant="accent" disabled={submitting}>{submitting ? "Saving…" : "Save Changes"}</Button>
           </DialogFooter>
         </form>
+      </Dialog>
+      {/* Invite to SiteSort dialog */}
+      <Dialog open={!!inviteTarget} onOpenChange={open => { if (!open) { setInviteTarget(null); setInviteLink(null); } }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserPlus className="w-4 h-4 text-emerald-600" /> Invite to SiteSort
+          </DialogTitle>
+        </DialogHeader>
+        {inviteTarget && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/40">
+              <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                {inviteTarget.contactName.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
+              </div>
+              <div>
+                <p className="font-semibold text-sm">{inviteTarget.contactName}</p>
+                <p className="text-xs text-muted-foreground">{inviteTarget.contactEmail}</p>
+              </div>
+            </div>
+
+            <p className="text-sm text-muted-foreground">
+              Share this link with <span className="font-semibold text-foreground">{inviteTarget.contactName}</span> so they can create a SiteSort account and join your team.
+            </p>
+
+            {inviteLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : inviteLink ? (
+              <>
+                <div className="flex gap-2">
+                  <input
+                    readOnly
+                    value={inviteLink}
+                    className="flex-1 text-xs px-3 py-2 rounded-lg border bg-muted/30 text-muted-foreground font-mono truncate focus:outline-none"
+                  />
+                  <Button size="sm" variant="outline" onClick={copyInviteLink} className="shrink-0 gap-1.5">
+                    {inviteCopied ? <><Check className="w-3.5 h-3.5 text-emerald-600" />Copied!</> : <><Copy className="w-3.5 h-3.5" />Copy</>}
+                  </Button>
+                </div>
+
+                <div className="flex gap-2">
+                  <a
+                    href={`https://wa.me/${inviteTarget.contactPhone?.replace(/\D/g, "") ?? ""}?text=${encodeURIComponent(`You've been invited to join SiteSort. Click here to create your account: ${inviteLink}`)}`}
+                    target="_blank" rel="noreferrer"
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-[#25D366] text-white text-xs font-semibold hover:opacity-90 transition-opacity"
+                  >
+                    WhatsApp
+                  </a>
+                  <a
+                    href={`mailto:${inviteTarget.contactEmail}?subject=${encodeURIComponent("You've been invited to SiteSort")}&body=${encodeURIComponent(`Hi ${inviteTarget.contactName},\n\nYou've been invited to join SiteSort. Click the link below to create your account:\n\n${inviteLink}\n\nSee you on site!`)}`}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-muted text-foreground text-xs font-semibold hover:bg-muted/70 transition-colors border"
+                  >
+                    <Mail className="w-3.5 h-3.5" /> Email
+                  </a>
+                  {inviteTarget.contactPhone && (
+                    <a
+                      href={`sms:${inviteTarget.contactPhone}?body=${encodeURIComponent(`You've been invited to SiteSort: ${inviteLink}`)}`}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-muted text-foreground text-xs font-semibold hover:bg-muted/70 transition-colors border"
+                    >
+                      <Phone className="w-3.5 h-3.5" /> SMS
+                    </a>
+                  )}
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-destructive">Failed to generate invite link. Please try again.</p>
+            )}
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => { setInviteTarget(null); setInviteLink(null); }}>Close</Button>
+        </DialogFooter>
       </Dialog>
     </SidebarLayout>
   );
