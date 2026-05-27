@@ -78,6 +78,34 @@
 - Fixed pre-existing `authHeaders()` TS return-type error; fixed `lib/db` composite stale `.d.ts` cache
 - Known pre-existing TS errors: `alert-dialog.tsx`, `calendar.tsx`, `command.tsx`, `pagination.tsx`, `dashboard/index.tsx`, `projects/detail.tsx`, Drizzle `eq()` overloads; `lib/api-zod` duplicate exports — none affect runtime
 
+## 2026-05-26
+
+### Message reactions
+- Emoji reactions (👍 ✅ 👀 ❤️ 😂) on DMs and channel messages; hover → 😊 button → inline picker; pill badges with count; own reactions highlighted; toggle on/off
+- Schema: `message_reactions` + `channel_message_reactions` tables (unique on messageId/userId/emoji, cascade-delete)
+- API: `POST /api/messages/:id/react`, `POST /api/channel-messages/:id/react` (toggle, return grouped reactions); thread endpoints embed `reactions: [{emoji, count, mine}]`
+
+### Reply-to-message (WhatsApp-style quotes)
+- Hover → ↩ button sets "Replying to" bar above compose; sending attaches `replyToId`; quoted block rendered above reply bubble
+- Schema: `replyToId` nullable column on `messages` and `channel_messages` tables
+- API: batch-fetch quoted messages in thread endpoints; POST endpoints accept `replyToId`
+
+### Message search
+- Debounced (300ms) search input in sidebar; grouped results (DMs / Channels); yellow-highlighted matched snippets; click to open conversation
+- API: `GET /api/messages/search?q=`, `GET /api/channels/search?q=` (ILIKE, role-aware, max 30 results)
+
+### Quick reply templates
+- ⚡ Zap button in DM + channel compose bars; 18 templates across 4 categories (Acknowledge, Status, Requests, Safety); inserts into draft, doesn't auto-send; no DB changes
+
+### Landing page text formatting
+- Hero subtitle: 3 controlled lines via `<br />`; features subtitle: 2 lines via `<br />`
+
+### Subcontractor invite links
+- UserPlus button on sub card → `POST /api/subcontractors/:id/invite` → share modal (copy, WhatsApp/Email/SMS)
+- Register page detects `?invite=<token>` → tailored form (email locked, name pre-filled, password only)
+- `POST /api/auth/invite/:token/accept` creates user (role `subcontractor`, `emailVerified: true`), marks `inviteUsedAt`
+- Key files: `routes/auth.ts`, `subcontractors/index.tsx`, `auth/register.tsx`
+
 ## 2026-05-22 (detailed log)
 
 ### Stripe webhook handler
