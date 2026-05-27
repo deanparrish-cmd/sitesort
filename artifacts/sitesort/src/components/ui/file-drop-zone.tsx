@@ -24,6 +24,7 @@ export function FileDropZone({ onUploaded, onCleared, accept = ACCEPTED_EXTS, cl
   const [uploaded, setUploaded] = useState<UploadedFile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dragCounter = useRef(0);
 
   const uploadFile = useCallback(async (file: File) => {
     setError(null);
@@ -58,8 +59,23 @@ export function FileDropZone({ onUploaded, onCleared, accept = ACCEPTED_EXTS, cl
     onCleared();
   };
 
+  const onDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounter.current++;
+    setIsDragging(true);
+  }, []);
+
+  const onDragLeave = useCallback(() => {
+    dragCounter.current--;
+    if (dragCounter.current <= 0) {
+      dragCounter.current = 0;
+      setIsDragging(false);
+    }
+  }, []);
+
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+    dragCounter.current = 0;
     setIsDragging(false);
     const file = e.dataTransfer.files[0];
     if (file) uploadFile(file);
@@ -90,8 +106,9 @@ export function FileDropZone({ onUploaded, onCleared, accept = ACCEPTED_EXTS, cl
   return (
     <div className={cn("space-y-2", className)}>
       <div
-        onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
-        onDragLeave={() => setIsDragging(false)}
+        onDragEnter={onDragEnter}
+        onDragOver={e => e.preventDefault()}
+        onDragLeave={onDragLeave}
         onDrop={onDrop}
         onClick={() => !uploading && inputRef.current?.click()}
         className={cn(

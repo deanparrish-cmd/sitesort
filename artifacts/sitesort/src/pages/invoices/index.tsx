@@ -234,6 +234,7 @@ export default function InvoicesPage() {
   useEffect(() => {
     const onDragEnter = (e: DragEvent) => {
       if (!e.dataTransfer?.types.includes("Files")) return;
+      e.preventDefault();
       dragCounter.current++;
       setIsDragOver(true);
     };
@@ -450,7 +451,8 @@ export default function InvoicesPage() {
                   return (
                     <tr
                       key={inv.id}
-                      onDragOver={() => {
+                      onDragOver={e => {
+                        e.preventDefault();
                         setDragRowId(inv.id);
                         lastDragRowRef.current = inv.id;
                       }}
