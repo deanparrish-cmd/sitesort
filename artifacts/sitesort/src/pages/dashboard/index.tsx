@@ -9,7 +9,7 @@ import {
   Building2, AlertTriangle, ChevronLeft, ChevronRight, ArrowRight,
   ShieldAlert, FileSignature, Users, Bell, Search, Mic, MicOff,
   MessageSquare, Camera, FilePlus, Plus, AlertCircle, CreditCard,
-  FileText, CheckCircle2, Clock, TrendingUp, Zap,
+  FileText, CheckCircle2, Clock, TrendingUp, Zap, X, Circle,
 } from "lucide-react";
 import { useListProjects, useGetComplianceOverview } from "@workspace/api-client-react";
 import type { ExpiringInsuranceItem, ExpiringPermitItem } from "@workspace/api-client-react";
@@ -204,12 +204,17 @@ export default function Dashboard() {
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [userName, setUserName] = useState<string>("");
 
+  type OnboardingStatus = { hasProject: boolean; hasTeamMember: boolean; hasDocument: boolean; hasSubcontractor: boolean; hasMilestone: boolean };
+  const [onboarding, setOnboarding] = useState<OnboardingStatus | null>(null);
+  const [onboardingDismissed, setOnboardingDismissed] = useState(() => localStorage.getItem("sitesort_onboarding_dismissed") === "1");
+
   useEffect(() => {
     const h = authHeaders();
     fetch("/api/invoices", { headers: h }).then(r => r.ok ? r.json() : []).then(setInvoices).catch(() => {});
     fetch("/api/notifications", { headers: h }).then(r => r.ok ? r.json() : []).then(setNotifications).catch(() => {});
     fetch("/api/messages/unread-count", { headers: h }).then(r => r.ok ? r.json() : { count: 0 }).then(d => setUnreadMessages(d.count ?? 0)).catch(() => {});
     fetch("/api/auth/me", { headers: h }).then(r => r.ok ? r.json() : null).then(u => { if (u?.name) setUserName(u.name.split(" ")[0]); }).catch(() => {});
+    fetch("/api/onboarding/status", { headers: h }).then(r => r.ok ? r.json() : null).then(setOnboarding).catch(() => {});
   }, []);
 
   const [search, setSearch] = useState("");
@@ -334,6 +339,60 @@ export default function Dashboard() {
           </Button>
         </div>
       </div>
+
+      {/* Onboarding checklist */}
+      {onboarding && !onboardingDismissed && (() => {
+        const steps = [
+          { key: "hasProject",       done: onboarding.hasProject,       title: "Create your first project",         desc: "Set up a project with a name, address, and start date.",  href: "/projects?new=1",       cta: "Create project" },
+          { key: "hasTeamMember",    done: onboarding.hasTeamMember,    title: "Invite a team member",              desc: "Add a colleague to one of your projects.",                 href: "/subcontractors?new=1", cta: "Add to directory" },
+          { key: "hasDocument",      done: onboarding.hasDocument,      title: "Upload your first document",        desc: "Share a drawing, method statement, or compliance doc.",    href: "/projects",             cta: "Go to projects" },
+          { key: "hasSubcontractor", done: onboarding.hasSubcontractor, title: "Add a subcontractor",              desc: "Build your directory of subs with contact and trade info.", href: "/subcontractors",       cta: "Add subcontractor" },
+          { key: "hasMilestone",     done: onboarding.hasMilestone,     title: "Set milestones on a project",      desc: "Track progress with key dates and completion markers.",     href: "/projects",             cta: "Go to projects" },
+        ];
+        const doneCount = steps.filter(s => s.done).length;
+        const allDone = doneCount === steps.length;
+
+        if (allDone) return null;
+
+        return (
+          <div className="mb-6 rounded-xl border border-primary/20 bg-primary/5 p-5 relative">
+            <button
+              onClick={() => { localStorage.setItem("sitesort_onboarding_dismissed", "1"); setOnboardingDismissed(true); }}
+              className="absolute top-4 right-4 text-muted-foreground hover:text-foreground transition-colors"
+              title="Dismiss"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <div className="flex items-center justify-between mb-1 pr-6">
+              <h2 className="font-bold text-base">Get started with SiteSort</h2>
+              <span className="text-sm font-semibold text-primary">{doneCount}/{steps.length} complete</span>
+            </div>
+            <div className="w-full bg-muted rounded-full h-1.5 mb-4 overflow-hidden">
+              <div className="h-1.5 rounded-full bg-primary transition-all duration-500" style={{ width: `${(doneCount / steps.length) * 100}%` }} />
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {steps.map(step => (
+                <div key={step.key} className={cn("flex gap-3 rounded-lg p-3 border transition-colors", step.done ? "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800" : "bg-card border-border")}>
+                  <div className="shrink-0 mt-0.5">
+                    {step.done
+                      ? <CheckCircle2 className="w-5 h-5 text-green-500" />
+                      : <Circle className="w-5 h-5 text-muted-foreground" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={cn("text-sm font-semibold", step.done && "line-through text-muted-foreground")}>{step.title}</p>
+                    {!step.done && <p className="text-xs text-muted-foreground mt-0.5">{step.desc}</p>}
+                    {!step.done && (
+                      <button onClick={() => navigate(step.href)} className="mt-1.5 text-xs font-medium text-primary hover:underline">
+                        {step.cta} →
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Stats row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

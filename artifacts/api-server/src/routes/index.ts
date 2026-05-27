@@ -19,6 +19,7 @@ import invoicesRouter from "./invoices";
 import messagesRouter from "./messages";
 import channelsRouter from "./channels";
 import billingRouter from "./billing";
+import onboardingRouter from "./onboarding";
 
 const router: IRouter = Router();
 
@@ -42,5 +43,6 @@ router.use(invoicesRouter);
 router.use(messagesRouter);
 router.use(channelsRouter);
 router.use(billingRouter);
+router.use(onboardingRouter);
 
 export default router;
