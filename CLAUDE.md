@@ -103,6 +103,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 39. Subcontractor invite links — UserPlus button on each sub card generates a unique invite link; share modal with copy, WhatsApp/Email/SMS options; register page detects `?invite=<token>` and shows tailored join form (email locked, name pre-filled, password only); backend creates user with `subcontractor` role and marks invite as used
 40. Beta access flag — `betaAccess` boolean on `companies` table; companies with `beta_access=true` bypass all Stripe subscription checks (`isCancelled` always false, effective status always "active"); set via `UPDATE companies SET beta_access=true WHERE name='...'`
 41. Project progress tracking — `milestones` table (title, dueDate, completedAt, order; cascade-delete with project); 4 CRUD endpoints; `progressPercent` on list and detail now computed from completed/total milestones; "Progress" tab in project detail with progress bar, milestone checklist (add/tick/delete), and Gantt timeline (diamond markers, Today line); mini progress bar column added to project list table
+42. Onboarding checklist — dismissible card at top of dashboard showing 5 steps (create project, invite team member, upload document, add subcontractor, set milestones); completion derived from real DB data via `GET /api/onboarding/status`; progress bar; each incomplete step shows description + CTA link; X dismisses to localStorage; auto-hides when all done
 
 ## Uploads / File Serving
 
@@ -130,18 +131,27 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
    - New "Progress" tab in project detail: large progress bar + %, milestone checklist (add/tick/delete with due dates), CSS Gantt timeline (diamond markers positioned at due dates, orange Today line, legend)
    - Project list table: new "Progress" column with mini progress bar + %
 
+3. **Onboarding checklist** — dismissible card at top of dashboard:
+   - 5 steps: create project, invite team member, upload document, add subcontractor, set milestones
+   - All completion states derived from real DB data — no new table; single `GET /api/onboarding/status` call
+   - Progress bar (X/5); incomplete steps show description + CTA link; completed steps show green tick + strikethrough
+   - X button dismisses permanently (`sitesort_onboarding_dismissed` in localStorage); auto-hides when all done
+
 ### Key files added/modified
 - `lib/db/src/schema/milestones.ts` — new table
 - `lib/db/src/schema/index.ts` — exports milestones table
 - `artifacts/api-server/src/routes/projects.ts` — `milestonesTable` import; `computeProgress()` helper; 4 milestone endpoints; real progress in list + detail
-- `artifacts/sitesort/src/pages/projects/detail.tsx` — `MilestoneItem` type; milestone state + fetch; `fetchMilestones()`; Progress tab with checklist + Gantt; `Plus`, `Trash2`, `Flag` icons
-- `artifacts/sitesort/src/pages/projects/index.tsx` — Progress column header + mini progress bar cell
+- `artifacts/api-server/src/routes/onboarding.ts` — new file; `GET /api/onboarding/status`
+- `artifacts/api-server/src/routes/index.ts` — registers onboarding router
+- `artifacts/sitesort/src/pages/projects/detail.tsx` — Progress tab with checklist + Gantt
+- `artifacts/sitesort/src/pages/projects/index.tsx` — Progress column header + mini progress bar
+- `artifacts/sitesort/src/pages/dashboard/index.tsx` — onboarding checklist card; `OnboardingStatus` type; fetch + dismiss state
 - `lib/db/src/schema/companies.ts` — `betaAccess` boolean column
 - `artifacts/api-server/src/routes/auth.ts` — `betaAccess` in `GET/PATCH /api/companies/mine`
 - `artifacts/sitesort/src/contexts/subscription.tsx` — reads `betaAccess`; overrides `isCancelled` and `effectiveStatus`
 
 ### Notes for next session
-- **Good next features**: message pagination (currently loads entire thread), read receipts per-message in DMs, push notifications (PWA), admin UI to toggle beta access without raw SQL
+- **Good next features**: message pagination (currently loads entire thread), read receipts per-message in DMs, admin UI to toggle beta access without raw SQL, demo data seeder
 - **Stripe still needs manual setup**: activate Customer Portal in Stripe Dashboard; register all 5 webhook events (`checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `customer.subscription.trial_will_end`, `invoice.payment_failed`)
 - **When adding new DB schema files**: always run `npx tsc -p tsconfig.json` inside `lib/db/` after editing `src/schema/index.ts` to regenerate `dist/` before typechecking api-server
 - **Beta access SQL**: `UPDATE companies SET beta_access = true WHERE name = 'Company Name';`
