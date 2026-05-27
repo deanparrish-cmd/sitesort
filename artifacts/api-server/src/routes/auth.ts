@@ -364,7 +364,7 @@ router.get("/companies/mine", authenticate, async (req, res) => {
       return;
     }
     const c = rows[0];
-    res.json({ id: c.id, name: c.name, size: c.size, subscriptionTier: c.subscriptionTier, subscriptionStatus: c.subscriptionStatus, createdAt: c.createdAt.toISOString() });
+    res.json({ id: c.id, name: c.name, size: c.size, subscriptionTier: c.subscriptionTier, subscriptionStatus: c.subscriptionStatus, betaAccess: c.betaAccess, createdAt: c.createdAt.toISOString() });
   } catch (err) {
     req.log.error({ err }, "Get company error");
     res.status(500).json({ error: "server_error", message: "Failed to get company" });
@@ -495,7 +495,7 @@ router.patch("/companies/mine", authenticate, async (req, res) => {
     await db.update(companiesTable).set(updates).where(eq(companiesTable.id, req.user!.companyId));
     const rows = await db.select().from(companiesTable).where(eq(companiesTable.id, req.user!.companyId)).limit(1);
     const c = rows[0];
-    res.json({ id: c.id, name: c.name, size: c.size, subscriptionTier: c.subscriptionTier, subscriptionStatus: c.subscriptionStatus, createdAt: c.createdAt.toISOString() });
+    res.json({ id: c.id, name: c.name, size: c.size, subscriptionTier: c.subscriptionTier, subscriptionStatus: c.subscriptionStatus, betaAccess: c.betaAccess, createdAt: c.createdAt.toISOString() });
   } catch (err) {
     req.log.error({ err }, "Update company error");
     res.status(500).json({ error: "server_error", message: "Failed to update company" });
