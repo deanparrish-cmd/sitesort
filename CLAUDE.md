@@ -102,6 +102,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 38. Message enhancements — emoji reactions (👍 ✅ 👀 ❤️ 😂) on DMs and channels (hover picker, pill badges, toggle); reply-to-message WhatsApp-style quote bubbles; debounced sidebar message search across DMs and channels with yellow-highlighted snippets; 18 quick reply templates in 4 site-specific categories via ⚡ Zap button
 39. Subcontractor invite links — UserPlus button on each sub card generates a unique invite link; share modal with copy, WhatsApp/Email/SMS options; register page detects `?invite=<token>` and shows tailored join form (email locked, name pre-filled, password only); backend creates user with `subcontractor` role and marks invite as used
 40. Beta access flag — `betaAccess` boolean on `companies` table; companies with `beta_access=true` bypass all Stripe subscription checks (`isCancelled` always false, effective status always "active"); set via `UPDATE companies SET beta_access=true WHERE name='...'`
+41. Project progress tracking — `milestones` table (title, dueDate, completedAt, order; cascade-delete with project); 4 CRUD endpoints; `progressPercent` on list and detail now computed from completed/total milestones; "Progress" tab in project detail with progress bar, milestone checklist (add/tick/delete), and Gantt timeline (diamond markers, Today line); mini progress bar column added to project list table
 
 ## Uploads / File Serving
 
@@ -114,70 +115,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 
 ## Session Log
 
-### 2026-05-22 & 2026-05-25 — see CLAUDE_ARCHIVE.md for full detail
-
-### 2026-05-26
-
-#### Tasks completed
-- **Message reactions** — emoji reactions on both DMs and project channel messages:
-  - Hover any message → 😊 button appears in the action row; clicking opens an inline emoji picker (👍 ✅ 👀 ❤️ 😂)
-  - Reactions displayed as pill badges (emoji + count) below the bubble; your own reactions are highlighted in primary colour
-  - Clicking an existing reaction pill toggles it (remove if already reacted, add if not)
-  - Works identically in DM threads and channel threads
-  - Schema: `message_reactions` + `channel_message_reactions` tables, each with unique constraint on (messageId/channelMessageId, userId, emoji) and cascade-on-delete
-  - API: `POST /api/messages/:id/react` and `POST /api/channel-messages/:id/react` — toggle and return updated grouped reactions
-  - Thread endpoints now batch-fetch reactions and embed as `reactions: Array<{emoji, count, mine}>` on each message
-
-#### Key files added/modified
-- `lib/db/src/schema/message_reactions.ts` — new table
-- `lib/db/src/schema/channel_message_reactions.ts` — new table
-- `lib/db/src/schema/index.ts` — exports new tables
-- `artifacts/api-server/src/routes/messages.ts` — imports `messageReactionsTable`; reactions batch-fetched in thread endpoint; `POST /api/messages/:id/react` toggle endpoint
-- `artifacts/api-server/src/routes/channels.ts` — same pattern for channel messages; `POST /api/channel-messages/:id/react`
-- `artifacts/sitesort/src/pages/messages/index.tsx` — `Reaction` type; `emojiPickerId` state; `toggleReaction` / `toggleChannelReaction` functions; reactions row + emoji picker UI in both DM and channel thread renders; reaction button also available to non-own messages (not just own)
-
-- **Reply-to-message (WhatsApp-style quote)** — hover any message → ↩ button appears; clicking sets a "Replying to" bar above compose with dismiss X; sending attaches `replyToId`; thread renders quoted block (sender name + content preview, left-border accent) above the reply bubble; works in DMs and channels; falls back to `[document/photo/permit]` for attachment-only quoted messages
-  - Schema: `replyToId` nullable column on `messages` and `channel_messages` tables (no new tables)
-  - API: thread endpoints batch-fetch quoted messages and embed `replyTo: {id, senderName, content, attachmentType}`; POST endpoints accept `replyToId`
-
-#### Key files modified (reply-to)
-- `lib/db/src/schema/messages.ts` — added `replyToId` column
-- `lib/db/src/schema/channel_messages.ts` — added `replyToId` column
-- `artifacts/api-server/src/routes/messages.ts` — batch-fetch quoted messages in thread; `replyTo` in response; accept `replyToId` on POST
-- `artifacts/api-server/src/routes/channels.ts` — same for channels
-- `artifacts/sitesort/src/pages/messages/index.tsx` — `ReplyTo` type; `replyingTo` state; reply button in hover actions; quote bubble in thread; reply-to bar above compose; `CornerUpLeft` icon
-
-- **Message search** — debounced (300ms) search input in the sidebar; while active, replaces conversation list with grouped results (Direct Messages / Channel Messages); each result shows sender, channel/conversation name, timestamp, and the matched snippet with the term **highlighted in yellow**; clicking opens that conversation or channel; X clears back to normal view
-  - API: `GET /api/messages/search?q=` (ILIKE, respects viewAll permissions, min 2 chars, max 30 results); `GET /api/channels/search?q=` (filters to accessible projects by role)
-
-#### Key files modified (search)
-- `artifacts/api-server/src/routes/messages.ts` — added `GET /api/messages/search`
-- `artifacts/api-server/src/routes/channels.ts` — added `GET /api/channels/search`
-- `artifacts/sitesort/src/pages/messages/index.tsx` — `DmSearchResult` / `ChannelSearchResult` types; `searchQuery/searchDms/searchChannels/searchLoading` state; debounce effect; search input in sidebar header; grouped results panel
-
-- **Quick reply templates** — ⚡ Zap button in both DM and channel compose bars opens an inline panel with 18 construction site templates across 4 categories: Acknowledge, Status, Requests, Safety; clicking a template inserts it into the draft (doesn't auto-send) so user can edit; panel closes on selection or conversation switch; no DB changes
-
-#### Key files modified (quick replies)
-- `artifacts/sitesort/src/pages/messages/index.tsx` — `QUICK_REPLIES` constant; `quickReplyOpen` state; Zap button + template panel in both compose bars
-
-- **Landing page text formatting** — hero subtitle reformatted to 3 controlled lines: "The single source of truth for your site teams." / "Distribute documents, track compliance, and manage" / "subcontractors without the paperwork headache."; features section subtitle reformatted to 2 lines: "Replace disjointed WhatsApp groups and overflowing" / "emails inboxes with purpose-built tools."
-
-#### Key files modified (landing page)
-- `artifacts/sitesort/src/pages/landing.tsx` — `<br />` tags inserted for precise line break control in hero paragraph and features subtitle
-
-- **Subcontractor invite link flow** — admin can generate a shareable invite link for any subcontractor:
-  - UserPlus button on each sub card (green hover, between FolderPlus and Edit) calls `POST /api/subcontractors/:id/invite`
-  - API reuses existing unused token or generates new 48-char hex token; returns `{ token, email, name }`
-  - Share modal: sub summary, descriptive text, read-only URL field + Copy button (2s "Copied!" feedback), WhatsApp / Email / SMS share links
-  - Register page detects `?invite=<token>`, fetches `GET /api/auth/invite/:token` for prefill data; shows tailored form (email locked as read-only display, name pre-filled but editable, password only)
-  - `POST /api/auth/invite/:token/accept` creates user with role `"subcontractor"`, `emailVerified: true`, marks `inviteUsedAt`, returns JWT
-  - Heading changes to "Join [Company Name]" with "You've been invited to SiteSort" subtitle
-  - Schema: `inviteToken` + `inviteUsedAt` columns already existed on `subcontractorsTable`
-
-#### Key files added/modified (invite)
-- `artifacts/api-server/src/routes/auth.ts` — `POST /api/subcontractors/:id/invite`, `GET /api/auth/invite/:token`, `POST /api/auth/invite/:token/accept`; imports `subcontractorsTable`, `and` from drizzle-orm
-- `artifacts/sitesort/src/pages/subcontractors/index.tsx` — `inviteTarget/inviteLink/inviteLoading/inviteCopied` state; `openInvite()` + `copyInviteLink()`; UserPlus button; share modal; `UserPlus`, `Copy`, `Check` icons
-- `artifacts/sitesort/src/pages/auth/register.tsx` — `inviteSchema` (name + password); `InviteData` type; `inviteToken/inviteData/inviteLoading/inviteSubmitting` state; invite form branch; `onInviteSubmit`; heading/subtitle changes
+### 2026-05-22, 2026-05-25 & 2026-05-26 — see CLAUDE_ARCHIVE.md for full detail
 
 ## End-of-session notes — 2026-05-27
 
@@ -185,22 +123,28 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 
 1. **Beta access flag** — `betaAccess` boolean column on `companies` table (default `false`); companies with `beta_access=true` bypass all Stripe subscription checks; `SubscriptionContext` treats them as fully active regardless of Stripe status; `GET/PATCH /api/companies/mine` now returns `betaAccess`
 
-### Key files modified
-- `lib/db/src/schema/companies.ts` — added `betaAccess: boolean` column
-- `artifacts/api-server/src/routes/auth.ts` — `betaAccess` included in both `GET` and `PATCH /api/companies/mine` responses
-- `artifacts/sitesort/src/contexts/subscription.tsx` — reads `betaAccess`; derives `effectiveStatus` and overrides `isCancelled` when true
+2. **Project progress tracking** — milestones-driven progress with Gantt timeline:
+   - New `milestones` table: `id`, `projectId`, `title`, `dueDate`, `completedAt` (nullable), `order`, cascade-delete on project removal
+   - 4 API endpoints: `GET/POST /api/projects/:id/milestones`, `PATCH/DELETE /api/projects/:id/milestones/:milestoneId`
+   - `progressPercent` in both `GET /projects` and `GET /projects/:projectId` now computed from completed/total milestones (was hardcoded from status)
+   - New "Progress" tab in project detail: large progress bar + %, milestone checklist (add/tick/delete with due dates), CSS Gantt timeline (diamond markers positioned at due dates, orange Today line, legend)
+   - Project list table: new "Progress" column with mini progress bar + %
 
-### How to enable beta access
-```sql
-UPDATE companies SET beta_access = true WHERE name = 'Company Name';
--- To revoke:
-UPDATE companies SET beta_access = false WHERE name = 'Company Name';
-```
+### Key files added/modified
+- `lib/db/src/schema/milestones.ts` — new table
+- `lib/db/src/schema/index.ts` — exports milestones table
+- `artifacts/api-server/src/routes/projects.ts` — `milestonesTable` import; `computeProgress()` helper; 4 milestone endpoints; real progress in list + detail
+- `artifacts/sitesort/src/pages/projects/detail.tsx` — `MilestoneItem` type; milestone state + fetch; `fetchMilestones()`; Progress tab with checklist + Gantt; `Plus`, `Trash2`, `Flag` icons
+- `artifacts/sitesort/src/pages/projects/index.tsx` — Progress column header + mini progress bar cell
+- `lib/db/src/schema/companies.ts` — `betaAccess` boolean column
+- `artifacts/api-server/src/routes/auth.ts` — `betaAccess` in `GET/PATCH /api/companies/mine`
+- `artifacts/sitesort/src/contexts/subscription.tsx` — reads `betaAccess`; overrides `isCancelled` and `effectiveStatus`
 
 ### Notes for next session
-- **Good next features**: message pagination (currently loads entire thread), read receipts per-message in DMs, push notifications (PWA), project progress tracking / Gantt view
+- **Good next features**: message pagination (currently loads entire thread), read receipts per-message in DMs, push notifications (PWA), admin UI to toggle beta access without raw SQL
 - **Stripe still needs manual setup**: activate Customer Portal in Stripe Dashboard; register all 5 webhook events (`checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `customer.subscription.trial_will_end`, `invoice.payment_failed`)
 - **When adding new DB schema files**: always run `npx tsc -p tsconfig.json` inside `lib/db/` after editing `src/schema/index.ts` to regenerate `dist/` before typechecking api-server
-- All commits are on `main`; push via `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts`
+- **Beta access SQL**: `UPDATE companies SET beta_access = true WHERE name = 'Company Name';`
+- All commits are on `main`; push via `cd /home/runner/workspace && /home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts`
 
 ## End-of-session notes — 2026-05-26 — see CLAUDE_ARCHIVE.md for full detail
