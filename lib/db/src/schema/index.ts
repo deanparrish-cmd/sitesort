@@ -16,3 +16,4 @@ export * from "./channel_messages";
 export * from "./channel_reads";
 export * from "./message_reactions";
 export * from "./channel_message_reactions";
+export * from "./milestones";

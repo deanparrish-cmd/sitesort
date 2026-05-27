@@ -1,11 +1,19 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { projectsTable, projectMembersTable, usersTable, documentsTable, documentDistributionsTable, permitsTable, notificationsTable, subcontractorsTable, companiesTable } from "@workspace/db/schema";
-import { eq, and, count, sql } from "drizzle-orm";
+import { projectsTable, projectMembersTable, usersTable, documentsTable, documentDistributionsTable, permitsTable, notificationsTable, subcontractorsTable, companiesTable, milestonesTable } from "@workspace/db/schema";
+import { eq, and, count, sql, asc } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 
 const router: IRouter = Router();
+
+async function computeProgress(projectId: string): Promise<number> {
+  const rows = await db.select({ completedAt: milestonesTable.completedAt })
+    .from(milestonesTable).where(eq(milestonesTable.projectId, projectId));
+  if (rows.length === 0) return 0;
+  const done = rows.filter(r => r.completedAt !== null).length;
+  return Math.round((done / rows.length) * 100);
+}
 
 const PLAN_PROJECT_LIMITS: Record<string, number> = {
   free: 1,
@@ -29,6 +37,7 @@ router.get("/projects", authenticate, async (req, res) => {
         .innerJoin(documentsTable, eq(documentsTable.id, documentDistributionsTable.documentId))
         .where(and(eq(documentsTable.projectId, p.id), eq(documentDistributionsTable.status, "pending")));
 
+      const progressPercent = await computeProgress(p.id);
       return {
         id: p.id,
         companyId: p.companyId,
@@ -40,7 +49,7 @@ router.get("/projects", authenticate, async (req, res) => {
         createdAt: p.createdAt.toISOString(),
         memberCount: Number(memberCount.count),
         alertCount: Number(docAlerts.count),
-        progressPercent: p.status === "complete" ? 100 : p.status === "on_hold" ? 50 : 30,
+        progressPercent,
       };
     }));
 
@@ -123,6 +132,7 @@ router.get("/projects/:projectId", authenticate, async (req, res) => {
       .innerJoin(documentsTable, eq(documentsTable.id, documentDistributionsTable.documentId))
       .where(and(eq(documentsTable.projectId, p.id), eq(documentDistributionsTable.status, "pending")));
 
+    const progressPercent = await computeProgress(p.id);
     res.json({
       id: p.id,
       companyId: p.companyId,
@@ -134,7 +144,7 @@ router.get("/projects/:projectId", authenticate, async (req, res) => {
       createdAt: p.createdAt.toISOString(),
       memberCount: Number(memberCount.count),
       alertCount: Number(docAlerts.count),
-      progressPercent: p.status === "complete" ? 100 : p.status === "on_hold" ? 50 : 30,
+      progressPercent,
       trades: p.trades ?? [],
       recentActivity: [],
     });
@@ -270,6 +280,91 @@ router.post("/projects/:projectId/tradespeople", authenticate, async (req, res) 
   } catch (err) {
     req.log.error({ err }, "Add tradesperson error");
     res.status(500).json({ error: "server_error", message: "Failed to add tradesperson" });
+  }
+});
+
+// ── Milestones ──────────────────────────────────────────────────────────────
+
+router.get("/projects/:projectId/milestones", authenticate, async (req, res) => {
+  try {
+    const project = await db.select({ id: projectsTable.id }).from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId))).limit(1);
+    if (!project.length) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+
+    const rows = await db.select().from(milestonesTable)
+      .where(eq(milestonesTable.projectId, req.params.projectId))
+      .orderBy(asc(milestonesTable.order), asc(milestonesTable.dueDate));
+
+    res.json(rows.map(m => ({
+      id: m.id, projectId: m.projectId, title: m.title, dueDate: m.dueDate,
+      completedAt: m.completedAt ? m.completedAt.toISOString() : null, order: m.order,
+    })));
+  } catch (err) {
+    req.log.error({ err }, "List milestones error");
+    res.status(500).json({ error: "server_error", message: "Failed to list milestones" });
+  }
+});
+
+router.post("/projects/:projectId/milestones", authenticate, async (req, res) => {
+  try {
+    const project = await db.select({ id: projectsTable.id }).from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId))).limit(1);
+    if (!project.length) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+
+    const { title, dueDate } = req.body;
+    if (!title?.trim() || !dueDate) { res.status(400).json({ error: "validation_error", message: "title and dueDate required" }); return; }
+
+    const [{ maxOrder }] = await db.select({ maxOrder: sql<number>`coalesce(max("order"), -1)` })
+      .from(milestonesTable).where(eq(milestonesTable.projectId, req.params.projectId));
+
+    const id = generateId();
+    await db.insert(milestonesTable).values({ id, projectId: req.params.projectId, title: title.trim(), dueDate, order: Number(maxOrder) + 1 });
+    res.status(201).json({ id, projectId: req.params.projectId, title: title.trim(), dueDate, completedAt: null, order: Number(maxOrder) + 1 });
+  } catch (err) {
+    req.log.error({ err }, "Create milestone error");
+    res.status(500).json({ error: "server_error", message: "Failed to create milestone" });
+  }
+});
+
+router.patch("/projects/:projectId/milestones/:milestoneId", authenticate, async (req, res) => {
+  try {
+    const project = await db.select({ id: projectsTable.id }).from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId))).limit(1);
+    if (!project.length) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+
+    const { title, dueDate, completed } = req.body;
+    const updates: Record<string, unknown> = {};
+    if (title !== undefined) updates.title = title.trim();
+    if (dueDate !== undefined) updates.dueDate = dueDate;
+    if (completed === true) updates.completedAt = new Date();
+    if (completed === false) updates.completedAt = null;
+
+    await db.update(milestonesTable).set(updates)
+      .where(and(eq(milestonesTable.id, req.params.milestoneId), eq(milestonesTable.projectId, req.params.projectId)));
+
+    const rows = await db.select().from(milestonesTable)
+      .where(eq(milestonesTable.id, req.params.milestoneId)).limit(1);
+    if (!rows.length) { res.status(404).json({ error: "not_found", message: "Milestone not found" }); return; }
+    const m = rows[0];
+    res.json({ id: m.id, projectId: m.projectId, title: m.title, dueDate: m.dueDate, completedAt: m.completedAt ? m.completedAt.toISOString() : null, order: m.order });
+  } catch (err) {
+    req.log.error({ err }, "Update milestone error");
+    res.status(500).json({ error: "server_error", message: "Failed to update milestone" });
+  }
+});
+
+router.delete("/projects/:projectId/milestones/:milestoneId", authenticate, async (req, res) => {
+  try {
+    const project = await db.select({ id: projectsTable.id }).from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId))).limit(1);
+    if (!project.length) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+
+    await db.delete(milestonesTable)
+      .where(and(eq(milestonesTable.id, req.params.milestoneId), eq(milestonesTable.projectId, req.params.projectId)));
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Delete milestone error");
+    res.status(500).json({ error: "server_error", message: "Failed to delete milestone" });
   }
 });
 

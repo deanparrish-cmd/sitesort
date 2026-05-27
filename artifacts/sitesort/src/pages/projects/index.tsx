@@ -419,6 +419,7 @@ export default function ProjectsList() {
                 <th className="px-6 py-4 font-semibold">Status</th>
                 <th className="px-6 py-4 font-semibold">Start Date</th>
                 <th className="px-6 py-4 font-semibold">Team</th>
+                <th className="px-6 py-4 font-semibold">Progress</th>
                 <th className="px-6 py-4 font-semibold text-right">Action</th>
               </tr>
             </thead>
@@ -449,6 +450,14 @@ export default function ProjectsList() {
                     </td>
                     <td className="px-6 py-4 font-medium">
                       {project.memberCount} members
+                    </td>
+                    <td className="px-6 py-4 min-w-[120px]">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 bg-muted rounded-full h-1.5 overflow-hidden">
+                          <div className="h-1.5 rounded-full bg-primary transition-all" style={{ width: `${project.progressPercent ?? 0}%` }} />
+                        </div>
+                        <span className="text-xs text-muted-foreground w-8 text-right">{project.progressPercent ?? 0}%</span>
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-right">
                       <Link href={`/projects/${project.id}`}>
