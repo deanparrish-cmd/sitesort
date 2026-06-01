@@ -255,6 +255,78 @@ function SecurityTab({ isCancelled }: { isCancelled: boolean }) {
         <Lock className="w-4 h-4" />
         {saving ? "Changing…" : "Change password"}
       </Button>
+
+      <SignOffPinSection isCancelled={isCancelled} />
+    </div>
+  );
+}
+
+function SignOffPinSection({ isCancelled }: { isCancelled: boolean }) {
+  const { data: user, refetch } = useGetMe();
+  const hasPin = !!(user as { hasPin?: boolean } | undefined)?.hasPin;
+  const [password, setPassword] = useState("");
+  const [pin, setPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState<StatusMsg | null>(null);
+
+  const onlyDigits = (v: string) => v.replace(/\D/g, "").slice(0, 4);
+
+  const save = async () => {
+    if (isCancelled) { setStatus({ type: "error", text: "Your subscription is cancelled. Renew your plan to continue." }); return; }
+    if (!password) { setStatus({ type: "error", text: "Enter your account password to confirm." }); return; }
+    if (!/^\d{4}$/.test(pin)) { setStatus({ type: "error", text: "PIN must be exactly 4 digits." }); return; }
+    if (pin !== confirmPin) { setStatus({ type: "error", text: "PINs do not match." }); return; }
+    setSaving(true);
+    setStatus(null);
+    try {
+      const res = await fetch("/api/auth/pin", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ currentPassword: password, pin }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setStatus({ type: "error", text: data.message ?? "Failed to save PIN." }); return; }
+      setStatus({ type: "success", text: hasPin ? "Sign-off PIN updated." : "Sign-off PIN set." });
+      setPassword(""); setPin(""); setConfirmPin("");
+      refetch();
+    } catch {
+      setStatus({ type: "error", text: "Network error. Please try again." });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-5 border-t pt-6">
+      <div className="flex items-center gap-2">
+        <h2 className="text-lg font-semibold">Sign-off PIN</h2>
+        {hasPin
+          ? <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Set</Badge>
+          : <Badge className="bg-amber-100 text-amber-700 border-amber-200">Not set</Badge>}
+      </div>
+      <p className="text-sm text-muted-foreground -mt-3">
+        A 4-digit PIN you enter to confirm sign-off on critical documents (drawings, method statements and safety docs).
+      </p>
+      <StatusBanner status={status} />
+      <div className="grid gap-4 max-w-md">
+        <div className="space-y-1.5">
+          <Label htmlFor="pin-pw">Account password</Label>
+          <Input id="pin-pw" type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" placeholder="Confirm it's you" />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="pin-new">{hasPin ? "New 4-digit PIN" : "Choose a 4-digit PIN"}</Label>
+          <Input id="pin-new" type="password" inputMode="numeric" value={pin} onChange={e => setPin(onlyDigits(e.target.value))} placeholder="••••" />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="pin-confirm">Confirm PIN</Label>
+          <Input id="pin-confirm" type="password" inputMode="numeric" value={confirmPin} onChange={e => setConfirmPin(onlyDigits(e.target.value))} placeholder="••••" />
+        </div>
+      </div>
+      <Button onClick={save} disabled={saving} className="gap-2">
+        <Lock className="w-4 h-4" />
+        {saving ? "Saving…" : hasPin ? "Update PIN" : "Set PIN"}
+      </Button>
     </div>
   );
 }

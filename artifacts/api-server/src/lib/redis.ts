@@ -24,6 +24,23 @@ const memClient = {
     }
     return entry.value;
   },
+  // Atomic increment within the single-threaded event loop. New keys start at 1
+  // with a far-future expiry; callers should set the real TTL via expire().
+  async incr(key: string): Promise<number> {
+    const now = Date.now() / 1000;
+    const entry = memStore.get(key);
+    if (!entry || entry.exp <= now) {
+      memStore.set(key, { value: "1", exp: now + 365 * 24 * 3600 });
+      return 1;
+    }
+    const next = parseInt(entry.value, 10) + 1;
+    entry.value = String(next);
+    return next;
+  },
+  async expire(key: string, ttl: number) {
+    const entry = memStore.get(key);
+    if (entry) entry.exp = Math.floor(Date.now() / 1000) + ttl;
+  },
   async del(key: string) {
     memStore.delete(key);
   },

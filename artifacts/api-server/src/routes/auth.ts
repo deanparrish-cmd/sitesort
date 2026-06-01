@@ -140,7 +140,7 @@ router.get("/auth/me", authenticate, async (req, res) => {
       return;
     }
     const user = users[0];
-    res.json({ id: user.id, companyId: user.companyId, email: user.email, name: user.name, role: user.role, phone: user.phone ?? null, avatarUrl: user.avatarUrl ?? null, createdAt: user.createdAt.toISOString(), lastActiveAt: user.lastActiveAt?.toISOString() ?? null });
+    res.json({ id: user.id, companyId: user.companyId, email: user.email, name: user.name, role: user.role, phone: user.phone ?? null, avatarUrl: user.avatarUrl ?? null, hasPin: !!user.pinHash, createdAt: user.createdAt.toISOString(), lastActiveAt: user.lastActiveAt?.toISOString() ?? null });
   } catch (err) {
     req.log.error({ err }, "Get me error");
     res.status(500).json({ error: "server_error", message: "Failed to get user" });
@@ -353,6 +353,42 @@ router.post("/auth/change-password", authenticate, async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Change password error");
     res.status(500).json({ error: "server_error", message: "Failed to change password" });
+  }
+});
+
+// Set, update, or reset the signed-in user's 4-digit sign-off PIN.
+// Requires the current account password (this also serves as the reset path
+// for a signed-in user who has forgotten their PIN).
+router.post("/auth/pin", authenticate, async (req, res) => {
+  try {
+    const { currentPassword, pin } = req.body;
+    if (!currentPassword || !pin) {
+      res.status(400).json({ error: "validation_error", message: "currentPassword and pin are required" });
+      return;
+    }
+    if (!/^\d{4}$/.test(String(pin))) {
+      res.status(400).json({ error: "validation_error", message: "PIN must be exactly 4 digits" });
+      return;
+    }
+
+    const users = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
+    if (users.length === 0) {
+      res.status(404).json({ error: "not_found", message: "User not found" });
+      return;
+    }
+    const user = users[0];
+    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!valid) {
+      res.status(401).json({ error: "invalid_credentials", message: "Current password is incorrect" });
+      return;
+    }
+
+    const pinHash = await bcrypt.hash(String(pin), 10);
+    await db.update(usersTable).set({ pinHash }).where(eq(usersTable.id, user.id));
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Set PIN error");
+    res.status(500).json({ error: "server_error", message: "Failed to set PIN" });
   }
 });
 

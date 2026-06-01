@@ -60,6 +60,8 @@ export interface User {
   phone?: string | null;
   createdAt: string;
   lastActiveAt?: string | null;
+  avatarUrl?: string | null;
+  hasPin?: boolean;
 }
 
 export interface AuthResponse {
@@ -176,6 +178,16 @@ export const DocumentStatus = {
   superseded: "superseded",
 } as const;
 
+export type DocumentMyDistributionStatus =
+  | (typeof DocumentMyDistributionStatus)[keyof typeof DocumentMyDistributionStatus]
+  | null;
+
+export const DocumentMyDistributionStatus = {
+  pending: "pending",
+  viewed: "viewed",
+  acknowledged: "acknowledged",
+} as const;
+
 export interface DistributionSummary {
   total: number;
   pending: number;
@@ -199,6 +211,7 @@ export interface Document {
   publicAccess: boolean;
   createdAt: string;
   distributionSummary: DistributionSummary;
+  myDistributionStatus?: DocumentMyDistributionStatus;
 }
 
 export type DistributionStatus =

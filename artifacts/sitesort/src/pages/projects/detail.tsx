@@ -22,6 +22,7 @@ import {
   useListProjectMembers,
   useUploadDocument,
   useUpdateProject,
+  useGetMe,
   DocumentType,
   UploadDocumentRequestType,
   UpdateProjectRequestStatus,
@@ -88,6 +89,102 @@ export default function ProjectDetail() {
   const [editDocStatus, setEditDocStatus] = useState("current");
   const [editDocVersion, setEditDocVersion] = useState(1);
   const [editError, setEditError] = useState<string | null>(null);
+
+  const { data: me } = useGetMe();
+  const hasPin = !!(me as { hasPin?: boolean } | undefined)?.hasPin;
+  const PIN_REQUIRED_TYPES = ["drawing", "method_statement", "safety"];
+  type SignOffDoc = { id: string; name: string; type: string };
+  const [signOffDoc, setSignOffDoc] = useState<SignOffDoc | null>(null);
+  const [signOffPin, setSignOffPin] = useState("");
+  const [signOffSubmitting, setSignOffSubmitting] = useState(false);
+  const [signOffError, setSignOffError] = useState<string | null>(null);
+  const [setPinMode, setSetPinMode] = useState(false);
+  const [setPinPassword, setSetPinPassword] = useState("");
+  const [setPinValue, setSetPinValue] = useState("");
+  const signOffNeedsPin = !!signOffDoc && PIN_REQUIRED_TYPES.includes(signOffDoc.type);
+  const onlyDigits = (v: string) => v.replace(/\D/g, "").slice(0, 4);
+
+  const openSignOff = (doc: SignOffDoc) => {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
+    setSignOffError(null);
+    setSignOffPin("");
+    setSetPinPassword("");
+    setSetPinValue("");
+    setSetPinMode(PIN_REQUIRED_TYPES.includes(doc.type) && !hasPin);
+    setSignOffDoc(doc);
+  };
+
+  const closeSignOff = () => {
+    setSignOffDoc(null);
+    setSignOffError(null);
+    setSignOffPin("");
+    setSetPinPassword("");
+    setSetPinValue("");
+    setSetPinMode(false);
+  };
+
+  const submitSignOff = async () => {
+    if (!signOffDoc) return;
+    const needsPin = PIN_REQUIRED_TYPES.includes(signOffDoc.type);
+    setSignOffError(null);
+
+    let pinToUse: string | undefined;
+    if (needsPin) {
+      if (setPinMode) {
+        if (!setPinPassword) { setSignOffError("Enter your account password to set a PIN."); return; }
+        if (!/^\d{4}$/.test(setPinValue)) { setSignOffError("PIN must be exactly 4 digits."); return; }
+        pinToUse = setPinValue;
+      } else {
+        if (!/^\d{4}$/.test(signOffPin)) { setSignOffError("Enter your 4-digit PIN."); return; }
+        pinToUse = signOffPin;
+      }
+    }
+
+    setSignOffSubmitting(true);
+    try {
+      if (needsPin && setPinMode) {
+        const pinRes = await fetch("/api/auth/pin", {
+          method: "POST",
+          headers: authHeaders(),
+          body: JSON.stringify({ currentPassword: setPinPassword, pin: setPinValue }),
+        });
+        const pinData = await pinRes.json().catch(() => ({}));
+        if (!pinRes.ok) { setSignOffError(pinData.message ?? "Could not set your PIN."); setSignOffSubmitting(false); return; }
+        await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      }
+
+      const res = await fetch(`/api/documents/${signOffDoc.id}/acknowledge`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify(pinToUse ? { pin: pinToUse } : {}),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok) {
+        toast({ title: "Signed off", description: `You signed off "${signOffDoc.name}".` });
+        await refetchDocs();
+        closeSignOff();
+        return;
+      }
+
+      if (res.status === 429) {
+        setSignOffError(data.message ?? "Too many incorrect attempts. Please try again later.");
+      } else if (data.error === "pin_not_set") {
+        setSetPinMode(true);
+        setSignOffError("Set a sign-off PIN to continue.");
+      } else if (typeof data.attemptsRemaining === "number") {
+        setSignOffError(`Incorrect PIN. ${data.attemptsRemaining} attempt${data.attemptsRemaining === 1 ? "" : "s"} remaining.`);
+        setSignOffPin("");
+      } else {
+        setSignOffError(data.message ?? "Could not sign off this document.");
+      }
+    } catch {
+      setSignOffError("Network error. Please try again.");
+    } finally {
+      setSignOffSubmitting(false);
+    }
+  };
+
   const { register, handleSubmit, reset, watch, setValue } = useForm<Record<string, any>>({ defaultValues: { type: "drawing" } });
   const { register: editRegister, handleSubmit: editHandleSubmit, reset: editReset } = useForm();
   
@@ -876,6 +973,22 @@ tr:last-child td{border-bottom:none}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-1">
+                          {!isSuperseded && (doc.myDistributionStatus === "pending" || doc.myDistributionStatus === "viewed") && (
+                            <button
+                              onClick={() => openSignOff({ id: doc.id, name: doc.name, type: doc.type })}
+                              className="flex items-center gap-1 px-2 py-1 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-xs font-semibold"
+                              title="Sign off this document"
+                            >
+                              <ClipboardCheck className="w-3.5 h-3.5" />
+                              Sign off
+                            </button>
+                          )}
+                          {doc.myDistributionStatus === "acknowledged" && (
+                            <span className="flex items-center gap-1 text-xs text-success font-semibold" title="You signed this off">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              Signed off
+                            </span>
+                          )}
                           <a
                             href={doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/")}
                             target="_blank"
@@ -1463,6 +1576,82 @@ tr:last-child td{border-bottom:none}
             <DialogFooter>
               <Button variant="ghost" onClick={() => setEditDocModal(null)}>Cancel</Button>
               <Button variant="accent" onClick={saveDocEdit} isLoading={editDocSaving}>Save</Button>
+            </DialogFooter>
+          </div>
+        )}
+      </Dialog>
+
+      <Dialog open={!!signOffDoc} onOpenChange={v => { if (!v) closeSignOff(); }}>
+        <DialogHeader>
+          <DialogTitle>{signOffNeedsPin ? "Sign off with your PIN" : "Confirm sign-off"}</DialogTitle>
+        </DialogHeader>
+        {signOffDoc && (
+          <div className="space-y-4">
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/40 border">
+              <ClipboardCheck className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="font-semibold text-sm truncate">{signOffDoc.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  Signing off confirms you have read and understood this document.
+                </p>
+              </div>
+            </div>
+
+            {signOffNeedsPin && setPinMode && (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  This is a critical document. Set a 4-digit sign-off PIN to continue — you'll use it to confirm future sign-offs.
+                </p>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold block">Account password</label>
+                  <Input
+                    type="password"
+                    value={setPinPassword}
+                    onChange={e => setSetPinPassword(e.target.value)}
+                    autoComplete="current-password"
+                    placeholder="Confirm it's you"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold block">Choose a 4-digit PIN</label>
+                  <Input
+                    type="password"
+                    inputMode="numeric"
+                    value={setPinValue}
+                    onChange={e => setSetPinValue(onlyDigits(e.target.value))}
+                    placeholder="••••"
+                  />
+                </div>
+              </div>
+            )}
+
+            {signOffNeedsPin && !setPinMode && (
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold block">Enter your 4-digit PIN</label>
+                <Input
+                  type="password"
+                  inputMode="numeric"
+                  value={signOffPin}
+                  onChange={e => setSignOffPin(onlyDigits(e.target.value))}
+                  onKeyDown={e => { if (e.key === "Enter") submitSignOff(); }}
+                  placeholder="••••"
+                  autoFocus
+                />
+              </div>
+            )}
+
+            {signOffError && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{signOffError}</span>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button variant="ghost" onClick={closeSignOff}>Cancel</Button>
+              <Button variant="accent" onClick={submitSignOff} isLoading={signOffSubmitting}>
+                {signOffNeedsPin && setPinMode ? "Set PIN & sign off" : "Sign off"}
+              </Button>
             </DialogFooter>
           </div>
         )}

@@ -24,6 +24,7 @@ export * from "./distributionStatus";
 export * from "./distributionSummary";
 export * from "./document";
 export * from "./documentDetail";
+export * from "./documentMyDistributionStatus";
 export * from "./documentStatus";
 export * from "./documentType";
 export * from "./errorResponse";

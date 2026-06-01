@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { documentsTable } from "./documents";
@@ -12,6 +12,7 @@ export const documentDistributionsTable = pgTable("document_distributions", {
   distributedAt: timestamp("distributed_at").notNull().defaultNow(),
   viewedAt: timestamp("viewed_at"),
   acknowledgedAt: timestamp("acknowledged_at"),
+  signedOffWithPin: boolean("signed_off_with_pin").notNull().default(false),
   deviceInfo: text("device_info"),
 });
 

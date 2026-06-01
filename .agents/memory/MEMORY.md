@@ -1,0 +1,1 @@
+- [Stale project-reference dist](stale-project-reference-dist.md) — after editing lib/db schema or running api codegen, rebuild the lib's .d.ts or tsc reports phantom "property does not exist"; runtime is unaffected.

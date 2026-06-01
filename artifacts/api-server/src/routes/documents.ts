@@ -1,10 +1,15 @@
 import { Router, type IRouter } from "express";
+import bcrypt from "bcryptjs";
 import { db } from "@workspace/db";
 import { documentsTable, documentDistributionsTable, usersTable, notificationsTable, projectsTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { sendDocumentNotificationEmail } from "../lib/email";
+import { isPinLockedOut, recordFailedPinAttempt, clearPinAttempts } from "../lib/pin-attempts";
+
+// Document types that require a PIN to sign off (critical compliance documents).
+const PIN_REQUIRED_TYPES = ["drawing", "method_statement", "safety"];
 
 const router: IRouter = Router();
 
@@ -34,8 +39,9 @@ router.get("/projects/:projectId/documents", authenticate, async (req, res) => {
     const docs = await db.select().from(documentsTable).where(and(...conditions)).orderBy(documentsTable.createdAt);
 
     const result = await Promise.all(docs.map(async (d) => {
-      const dists = await db.select({ status: documentDistributionsTable.status }).from(documentDistributionsTable).where(eq(documentDistributionsTable.documentId, d.id));
+      const dists = await db.select({ userId: documentDistributionsTable.userId, status: documentDistributionsTable.status }).from(documentDistributionsTable).where(eq(documentDistributionsTable.documentId, d.id));
       const uploaderRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, d.uploadedBy)).limit(1);
+      const myDist = dists.find(dist => dist.userId === req.user!.id);
       return {
         id: d.id,
         projectId: d.projectId,
@@ -52,6 +58,7 @@ router.get("/projects/:projectId/documents", authenticate, async (req, res) => {
         publicAccess: d.publicAccess,
         createdAt: d.createdAt.toISOString(),
         distributionSummary: getDistSummary(dists),
+        myDistributionStatus: myDist?.status ?? null,
       };
     }));
 
@@ -261,15 +268,71 @@ router.get("/documents/:documentId", authenticate, async (req, res) => {
 
 router.post("/documents/:documentId/acknowledge", authenticate, async (req, res) => {
   try {
+    const { pin } = req.body ?? {};
+
+    // Load the document (and verify tenant access) to determine whether it is a
+    // critical type that requires PIN-confirmed sign-off.
+    const docs = await db.select({ id: documentsTable.id, type: documentsTable.type, projectId: documentsTable.projectId })
+      .from(documentsTable).where(eq(documentsTable.id, req.params.documentId)).limit(1);
+    if (!docs[0]) {
+      res.status(404).json({ error: "not_found", message: "Document not found" });
+      return;
+    }
+    const project = await db.select({ id: projectsTable.id }).from(projectsTable)
+      .where(and(eq(projectsTable.id, docs[0].projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!project[0]) {
+      res.status(404).json({ error: "not_found", message: "Document not found" });
+      return;
+    }
+
+    // The user must actually be a distribution recipient of this document to sign it off.
     const distRecord = await db.select().from(documentDistributionsTable)
       .where(and(eq(documentDistributionsTable.documentId, req.params.documentId), eq(documentDistributionsTable.userId, req.user!.id)))
       .limit(1);
-
-    if (distRecord.length > 0) {
-      await db.update(documentDistributionsTable)
-        .set({ status: "acknowledged", acknowledgedAt: new Date(), viewedAt: distRecord[0].viewedAt ?? new Date() })
-        .where(eq(documentDistributionsTable.id, distRecord[0].id));
+    if (!distRecord[0]) {
+      res.status(403).json({ error: "not_distributed", message: "This document has not been shared with you to sign off." });
+      return;
     }
+
+    const requiresPin = PIN_REQUIRED_TYPES.includes(docs[0].type);
+
+    if (requiresPin) {
+      // Rate-limit PIN attempts per user.
+      if (await isPinLockedOut(req.user!.id)) {
+        res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
+        return;
+      }
+
+      const users = await db.select({ pinHash: usersTable.pinHash }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
+      const pinHash = users[0]?.pinHash ?? null;
+      if (!pinHash) {
+        res.status(400).json({ error: "pin_not_set", message: "You need to set a sign-off PIN before signing off critical documents." });
+        return;
+      }
+
+      if (!pin || !/^\d{4}$/.test(String(pin))) {
+        res.status(400).json({ error: "validation_error", message: "A 4-digit PIN is required to sign off this document." });
+        return;
+      }
+
+      const valid = await bcrypt.compare(String(pin), pinHash);
+      if (!valid) {
+        const { locked, remaining } = await recordFailedPinAttempt(req.user!.id);
+        if (locked) {
+          res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
+        } else {
+          res.status(401).json({ error: "invalid_pin", message: "Incorrect PIN", attemptsRemaining: remaining });
+        }
+        return;
+      }
+
+      await clearPinAttempts(req.user!.id);
+    }
+
+    await db.update(documentDistributionsTable)
+      .set({ status: "acknowledged", acknowledgedAt: new Date(), viewedAt: distRecord[0].viewedAt ?? new Date(), signedOffWithPin: requiresPin })
+      .where(eq(documentDistributionsTable.id, distRecord[0].id));
 
     res.json({ success: true, message: "Document acknowledged" });
   } catch (err) {

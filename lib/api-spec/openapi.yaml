@@ -893,6 +893,11 @@ components:
           type: string
           format: date-time
           nullable: true
+        avatarUrl:
+          type: string
+          nullable: true
+        hasPin:
+          type: boolean
       required: [id, companyId, email, name, role, createdAt]
 
     InviteUserRequest:
@@ -1050,6 +1055,10 @@ components:
           format: date-time
         distributionSummary:
           $ref: "#/components/schemas/DistributionSummary"
+        myDistributionStatus:
+          type: string
+          enum: [pending, viewed, acknowledged]
+          nullable: true
       required: [id, projectId, uploadedBy, uploaderName, name, type, version, fileUrl, fileSize, status, requiresAcknowledgment, publicAccess, createdAt, distributionSummary]
 
     DocumentDetail:

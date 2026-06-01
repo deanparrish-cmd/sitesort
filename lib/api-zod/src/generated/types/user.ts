@@ -16,4 +16,6 @@ export interface User {
   phone?: string | null;
   createdAt: Date;
   lastActiveAt?: Date | null;
+  avatarUrl?: string | null;
+  hasPin?: boolean;
 }

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DistributionSummary } from "./distributionSummary";
+import type { DocumentMyDistributionStatus } from "./documentMyDistributionStatus";
 import type { DocumentStatus } from "./documentStatus";
 import type { DocumentType } from "./documentType";
 
@@ -25,4 +26,5 @@ export interface Document {
   publicAccess: boolean;
   createdAt: Date;
   distributionSummary: DistributionSummary;
+  myDistributionStatus?: DocumentMyDistributionStatus;
 }

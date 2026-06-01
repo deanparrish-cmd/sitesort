@@ -48,6 +48,8 @@ export const LoginResponse = zod.object({
     phone: zod.string().nullish(),
     createdAt: zod.date(),
     lastActiveAt: zod.date().nullish(),
+    avatarUrl: zod.string().nullish(),
+    hasPin: zod.boolean().optional(),
   }),
   token: zod.string(),
 });
@@ -72,6 +74,8 @@ export const GetMeResponse = zod.object({
   phone: zod.string().nullish(),
   createdAt: zod.date(),
   lastActiveAt: zod.date().nullish(),
+  avatarUrl: zod.string().nullish(),
+  hasPin: zod.boolean().optional(),
 });
 
 /**
@@ -205,6 +209,9 @@ export const ListDocumentsResponseItem = zod.object({
     viewed: zod.number(),
     acknowledged: zod.number(),
   }),
+  myDistributionStatus: zod
+    .enum(["pending", "viewed", "acknowledged"])
+    .nullish(),
 });
 export const ListDocumentsResponse = zod.array(ListDocumentsResponseItem);
 
@@ -266,6 +273,9 @@ export const GetDocumentResponse = zod
       viewed: zod.number(),
       acknowledged: zod.number(),
     }),
+    myDistributionStatus: zod
+      .enum(["pending", "viewed", "acknowledged"])
+      .nullish(),
   })
   .and(
     zod.object({
@@ -725,6 +735,8 @@ export const ListUsersResponseItem = zod.object({
   phone: zod.string().nullish(),
   createdAt: zod.date(),
   lastActiveAt: zod.date().nullish(),
+  avatarUrl: zod.string().nullish(),
+  hasPin: zod.boolean().optional(),
 });
 export const ListUsersResponse = zod.array(ListUsersResponseItem);
 
@@ -762,6 +774,8 @@ export const UpdateUserResponse = zod.object({
   phone: zod.string().nullish(),
   createdAt: zod.date(),
   lastActiveAt: zod.date().nullish(),
+  avatarUrl: zod.string().nullish(),
+  hasPin: zod.boolean().optional(),
 });
 
 /**
@@ -828,6 +842,9 @@ export const GetQrContentResponse = zod.object({
         viewed: zod.number(),
         acknowledged: zod.number(),
       }),
+      myDistributionStatus: zod
+        .enum(["pending", "viewed", "acknowledged"])
+        .nullish(),
     }),
   ),
 });
