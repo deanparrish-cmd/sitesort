@@ -104,6 +104,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 40. Beta access flag — `betaAccess` boolean on `companies` table; companies with `beta_access=true` bypass all Stripe subscription checks (`isCancelled` always false, effective status always "active"); set via `UPDATE companies SET beta_access=true WHERE name='...'`
 41. Project progress tracking — `milestones` table (title, dueDate, completedAt, order; cascade-delete with project); 4 CRUD endpoints; `progressPercent` on list and detail now computed from completed/total milestones; "Progress" tab in project detail with progress bar, milestone checklist (add/tick/delete), and Gantt timeline (diamond markers, Today line); mini progress bar column added to project list table
 42. Onboarding checklist — dismissible card at top of dashboard showing 5 steps (create project, invite team member, upload document, add subcontractor, set milestones); completion derived from real DB data via `GET /api/onboarding/status`; progress bar; each incomplete step shows description + CTA link; X dismisses to localStorage; auto-hides when all done
+43. DM read receipts — single grey ✓ (sent) / double blue ✓✓ (seen) on outgoing DMs; `?after=` poll response includes `readUpdates [{id, readAt}]` so the sender's tick flips live within 5s without re-fetching the thread
 
 ## Uploads / File Serving
 
@@ -117,6 +118,28 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 ## Session Log
 
 ### 2026-05-22, 2026-05-25 & 2026-05-26 — see CLAUDE_ARCHIVE.md for full detail
+
+## End-of-session notes — 2026-06-06
+
+### Tasks completed today
+
+1. **DM read receipts** — WhatsApp-style double-tick indicator on sent DMs:
+   - API: `?after=` poll response now includes `readUpdates: [{ id, readAt }]` — all messages sent by the current user in this conversation that have been read; piggybacks on existing 5s poll, no new endpoint needed
+   - `POST /messages` 201 response now includes `readAt: null` so the indicator renders immediately on send
+   - Frontend: `Circle` icon replaced with `Check` (grey, sent) / `CheckCheck` (blue, seen) from Lucide; poll callback merges `readUpdates` into thread state so the tick flips within 5s of the recipient opening the conversation
+
+### Key files modified
+- `artifacts/api-server/src/routes/messages.ts` — `readUpdates` query in `?after=` branch; `readAt: null` in POST 201 response
+- `artifacts/sitesort/src/pages/messages/index.tsx` — `Check`/`CheckCheck` imports; updated indicator JSX; poll callback applies `readUpdates`
+
+### Notes for next session
+- **Good next features**: admin UI to toggle beta access without raw SQL, demo data seeder
+- **Stripe still needs manual setup**: activate Customer Portal in Stripe Dashboard; register all 5 webhook events (`checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `customer.subscription.trial_will_end`, `invoice.payment_failed`)
+- **When adding new DB schema files**: always run `npx tsc -p tsconfig.json` inside `lib/db/` after editing `src/schema/index.ts` to regenerate `dist/` before typechecking api-server
+- **Beta access SQL**: `UPDATE companies SET beta_access = true WHERE name = 'Company Name';`
+- **GitHub push command**: `cd /home/runner/workspace && /home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts` (do NOT use `npx tsx` — fails with "not found")
+- **Git add**: always prefix with `cd /home/runner/workspace &&` to avoid CWD drift from prior `cd` calls
+- All commits are on `main`
 
 ## End-of-session notes — 2026-06-05
 
@@ -143,15 +166,6 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 - `artifacts/api-server/src/routes/channels.ts` — same pagination for channel messages
 - `artifacts/sitesort/src/pages/messages/index.tsx` — `useLayoutEffect` import; pagination state/refs; updated fetch/poll callbacks; `loadOlderDm`/`loadOlderChannel`; "Load older" buttons; scroll anchor restoration
 - `artifacts/sitesort/src/pages/invoices/index.tsx` — `<object>` PDF embed; `window.open()` for all Open buttons; fallback UI inside `<object>`
-
-### Notes for next session
-- **Good next features**: read receipts per-message in DMs, admin UI to toggle beta access without raw SQL, demo data seeder
-- **Stripe still needs manual setup**: activate Customer Portal in Stripe Dashboard; register all 5 webhook events (`checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `customer.subscription.trial_will_end`, `invoice.payment_failed`)
-- **When adding new DB schema files**: always run `npx tsc -p tsconfig.json` inside `lib/db/` after editing `src/schema/index.ts` to regenerate `dist/` before typechecking api-server
-- **Beta access SQL**: `UPDATE companies SET beta_access = true WHERE name = 'Company Name';`
-- **GitHub push command**: `cd /home/runner/workspace && /home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts` (do NOT use `npx tsx` — fails with "not found")
-- **Git add**: always prefix with `cd /home/runner/workspace &&` to avoid CWD drift from prior `cd` calls
-- All commits are on `main`
 
 ## End-of-session notes — 2026-05-27
 
