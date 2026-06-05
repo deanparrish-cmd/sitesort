@@ -118,6 +118,33 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 
 ### 2026-05-22, 2026-05-25 & 2026-05-26 — see CLAUDE_ARCHIVE.md for full detail
 
+## End-of-session notes — 2026-06-05
+
+### Tasks completed today
+
+1. **Message pagination** — cursor-based pagination for both DM threads and project channel threads:
+   - API: `GET /api/messages/thread/:userId` and `GET /api/channels/:projectId/messages` now accept `?before=<id>` (load older page) and `?after=<id>` (poll for new messages)
+   - Default (no params): returns last 50 messages + `hasMore` flag; response format changed from array to `{ messages, hasMore }`
+   - `before`: fetches 50 messages before the cursor, oldest-first, with `hasMore` for further pages
+   - `after`: fetches all messages since cursor (capped at 100) — typically 0 on a quiet 5s poll
+   - Mark-as-read: initial load marks entire conversation; polls mark only new messages; load-older skips marking
+   - Frontend: initial load sets `dmHasMore`/`channelHasMore`; polls use `?after=<lastId>` and append-only (preserves loaded-older messages); "Load older messages" button at top of both thread panels
+   - Scroll position preserved on load-older via `scrollHeight` anchor + `useLayoutEffect` restoration; `skipScrollRef` suppresses auto-scroll-to-bottom during prepend
+
+### Key files modified
+- `artifacts/api-server/src/routes/messages.ts` — `lt`, `gt` imports; paginated thread endpoint; `{ messages, hasMore }` response
+- `artifacts/api-server/src/routes/channels.ts` — same pagination for channel messages
+- `artifacts/sitesort/src/pages/messages/index.tsx` — `useLayoutEffect` import; pagination state/refs; updated fetch/poll callbacks; `loadOlderDm`/`loadOlderChannel`; "Load older" buttons; scroll anchor restoration
+
+### Notes for next session
+- **Good next features**: read receipts per-message in DMs, admin UI to toggle beta access without raw SQL, demo data seeder
+- **Stripe still needs manual setup**: activate Customer Portal in Stripe Dashboard; register all 5 webhook events (`checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `customer.subscription.trial_will_end`, `invoice.payment_failed`)
+- **When adding new DB schema files**: always run `npx tsc -p tsconfig.json` inside `lib/db/` after editing `src/schema/index.ts` to regenerate `dist/` before typechecking api-server
+- **Beta access SQL**: `UPDATE companies SET beta_access = true WHERE name = 'Company Name';`
+- **GitHub push command**: `cd /home/runner/workspace && /home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts` (do NOT use `npx tsx` — fails with "not found")
+- **Git add**: always prefix with `cd /home/runner/workspace &&` to avoid CWD drift from prior `cd` calls
+- All commits are on `main`
+
 ## End-of-session notes — 2026-05-27
 
 ### Tasks completed today
