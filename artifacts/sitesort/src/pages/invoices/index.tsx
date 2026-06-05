@@ -500,16 +500,13 @@ export default function InvoicesPage() {
                           <Loader2 className="w-4 h-4 animate-spin text-primary" />
                         ) : inv.attachmentUrl ? (
                           <div className="flex items-center gap-1">
-                            <a
-                              href={fullUrl(inv.attachmentUrl)}
-                              target="_blank"
-                              rel="noreferrer"
+                            <button
                               className="flex items-center gap-1 text-xs text-primary hover:underline font-medium"
-                              onClick={e => e.stopPropagation()}
+                              onClick={e => { e.stopPropagation(); window.open(fullUrl(inv.attachmentUrl!), '_blank', 'noopener,noreferrer'); }}
                             >
                               <Paperclip className="w-3.5 h-3.5" />
                               Open
-                            </a>
+                            </button>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <button
@@ -608,14 +605,12 @@ export default function InvoicesPage() {
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 {viewingInvoice.attachmentUrl && (
-                  <a
-                    href={fullUrl(viewingInvoice.attachmentUrl)}
-                    target="_blank"
-                    rel="noreferrer"
+                  <button
+                    onClick={() => window.open(fullUrl(viewingInvoice.attachmentUrl!), '_blank', 'noopener,noreferrer')}
                     className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border bg-background hover:bg-muted transition-colors"
                   >
                     <ExternalLink className="w-3.5 h-3.5" /> Open in new tab
-                  </a>
+                  </button>
                 )}
                 {viewingInvoice.attachmentUrl && (
                   <DropdownMenu>
@@ -699,7 +694,7 @@ export default function InvoicesPage() {
                 {viewingInvoice.attachmentUrl ? (() => {
                   const url = fullUrl(viewingInvoice.attachmentUrl);
                   const isImg = /\.(png|jpe?g|webp|gif)$/i.test(url);
-                  const isPdf = /\.pdf$/i.test(url);
+                  const isPdf = /\.pdf$/i.test(url) || (!isImg);
                   if (isImg) {
                     return (
                       <div className="flex-1 flex items-center justify-center p-6 min-h-64">
@@ -713,11 +708,27 @@ export default function InvoicesPage() {
                   }
                   if (isPdf) {
                     return (
-                      <iframe
-                        src={url}
-                        title="Invoice PDF"
-                        className="flex-1 w-full min-h-[500px] border-0"
-                      />
+                      <div className="flex-1 flex flex-col min-h-[500px]">
+                        <object
+                          data={url}
+                          type="application/pdf"
+                          className="flex-1 w-full min-h-[500px]"
+                        >
+                          {/* Fallback when browser can't render PDF inline */}
+                          <div className="flex flex-col items-center justify-center h-full gap-4 p-8 text-center">
+                            <FileText className="w-12 h-12 text-muted-foreground/40" />
+                            <p className="text-sm text-muted-foreground">PDF preview not available in this browser.</p>
+                            <a
+                              href={url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                            >
+                              <ExternalLink className="w-4 h-4" /> Open PDF
+                            </a>
+                          </div>
+                        </object>
+                      </div>
                     );
                   }
                   return (
