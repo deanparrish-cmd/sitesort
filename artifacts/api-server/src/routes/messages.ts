@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { messagesTable, usersTable, notificationsTable, invoicesTable, documentsTable, photosTable, permitsTable, messageReactionsTable } from "@workspace/db/schema";
-import { eq, and, or, desc, sql } from "drizzle-orm";
+import { eq, and, or, desc, lt, gt, sql } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 
@@ -88,52 +88,84 @@ router.get("/messages/conversations", authenticate, async (req, res) => {
 });
 
 // GET /api/messages/thread/:userId — messages between current user and given user
+// Supports ?before=<id> (load older page), ?after=<id> (poll for new), default = last 50
 router.get("/messages/thread/:userId", authenticate, async (req, res) => {
   try {
     const me = req.user!.id;
-    const other = req.params.userId;
+    const other = req.params.userId as string;
     const companyId = req.user!.companyId;
     const role = req.user!.role;
     const canViewAll = role === "admin" || role === "project_manager";
+    const isViewAll = canViewAll && req.query.all === "true";
+    const before = req.query.before as string | undefined;
+    const after = req.query.after as string | undefined;
+    const PAGE_SIZE = 50;
 
-    let rows;
-    if (canViewAll && req.query.all === "true") {
-      // Manager viewing a conversation between two other users
-      const [a, b] = other.split(":");
-      rows = await db
-        .select()
-        .from(messagesTable)
-        .where(
-          and(
+    // Build base conversation filter
+    const convFilter = isViewAll
+      ? (() => {
+          const [a, b] = other.split(":");
+          return and(
             eq(messagesTable.companyId, companyId),
             or(
               and(eq(messagesTable.senderId, a), eq(messagesTable.recipientId, b)),
               and(eq(messagesTable.senderId, b), eq(messagesTable.recipientId, a))
             )
+          );
+        })()
+      : and(
+          eq(messagesTable.companyId, companyId),
+          or(
+            and(eq(messagesTable.senderId, me), eq(messagesTable.recipientId, other)),
+            and(eq(messagesTable.senderId, other), eq(messagesTable.recipientId, me))
           )
-        )
-        .orderBy(messagesTable.createdAt);
-    } else {
-      rows = await db
-        .select()
-        .from(messagesTable)
-        .where(
-          and(
-            eq(messagesTable.companyId, companyId),
-            or(
-              and(eq(messagesTable.senderId, me), eq(messagesTable.recipientId, other)),
-              and(eq(messagesTable.senderId, other), eq(messagesTable.recipientId, me))
-            )
-          )
-        )
-        .orderBy(messagesTable.createdAt);
+        );
 
-      // Mark unread messages as read
-      const unreadIds = rows.filter(r => r.recipientId === me && !r.readAt).map(r => r.id);
-      if (unreadIds.length) {
-        for (const id of unreadIds) {
-          await db.update(messagesTable).set({ readAt: new Date() }).where(eq(messagesTable.id, id));
+    // Resolve pivot date for cursor
+    let pivotDate: Date | undefined;
+    if (before || after) {
+      const pivot = await db.select({ createdAt: messagesTable.createdAt })
+        .from(messagesTable).where(eq(messagesTable.id, (before ?? after)!)).limit(1);
+      pivotDate = pivot[0]?.createdAt;
+    }
+
+    let rows: (typeof messagesTable.$inferSelect)[];
+    let hasMore = false;
+
+    if (after && pivotDate) {
+      // Poll: new messages since pivot, ascending, capped at 100
+      rows = await db.select().from(messagesTable)
+        .where(and(convFilter, gt(messagesTable.createdAt, pivotDate)))
+        .orderBy(messagesTable.createdAt).limit(100);
+    } else if (before && pivotDate) {
+      // Load older page: messages before pivot, descending then reversed
+      const fetched = await db.select().from(messagesTable)
+        .where(and(convFilter, lt(messagesTable.createdAt, pivotDate)))
+        .orderBy(desc(messagesTable.createdAt)).limit(PAGE_SIZE + 1);
+      hasMore = fetched.length > PAGE_SIZE;
+      rows = fetched.slice(0, PAGE_SIZE).reverse();
+    } else {
+      // Initial load: last PAGE_SIZE messages
+      const fetched = await db.select().from(messagesTable)
+        .where(convFilter)
+        .orderBy(desc(messagesTable.createdAt)).limit(PAGE_SIZE + 1);
+      hasMore = fetched.length > PAGE_SIZE;
+      rows = fetched.slice(0, PAGE_SIZE).reverse();
+    }
+
+    // Mark unread as read
+    if (!isViewAll && !before) {
+      if (after) {
+        // Poll: mark only the newly fetched messages
+        const unreadIds = rows.filter(r => r.recipientId === me && !r.readAt).map(r => r.id);
+        if (unreadIds.length) {
+          await db.update(messagesTable).set({ readAt: new Date() })
+            .where(sql`${messagesTable.id} = ANY(${unreadIds})`);
         }
+      } else {
+        // Initial load: mark all unread in this conversation (including older pages)
+        await db.update(messagesTable).set({ readAt: new Date() })
+          .where(and(convFilter, eq(messagesTable.recipientId, me), sql`${messagesTable.readAt} IS NULL`));
       }
     }
 
@@ -208,32 +240,35 @@ router.get("/messages/thread/:userId", authenticate, async (req, res) => {
       : [];
     const replyMap = Object.fromEntries(replyRows.map(r => [r.id, r]));
 
-    res.json(rows.map(m => ({
-      id: m.id,
-      senderId: m.senderId,
-      senderName: userMap[m.senderId] ?? "Unknown",
-      recipientId: m.recipientId,
-      content: m.content,
-      invoiceId: m.invoiceId ?? null,
-      invoice: m.invoiceId ? (invoiceMap[m.invoiceId] ?? null) : null,
-      attachmentType: m.attachmentType ?? null,
-      attachmentId: m.attachmentId ?? null,
-      attachment: m.attachmentType === "document" && m.attachmentId ? (docMap[m.attachmentId] ?? null)
-        : m.attachmentType === "photo" && m.attachmentId ? (photoMap[m.attachmentId] ?? null)
-        : m.attachmentType === "permit" && m.attachmentId ? (permitMap[m.attachmentId] ?? null)
-        : null,
-      reactions: reactionsFor(m.id),
-      replyToId: m.replyToId ?? null,
-      replyTo: m.replyToId ? (() => {
-        const q = replyMap[m.replyToId!];
-        if (!q) return null;
-        return { id: q.id, senderName: userMap[q.senderId] ?? "Unknown", content: q.content, attachmentType: q.attachmentType ?? null };
-      })() : null,
-      readAt: m.readAt?.toISOString() ?? null,
-      editedAt: m.editedAt?.toISOString() ?? null,
-      createdAt: m.createdAt.toISOString(),
-      mine: m.senderId === me,
-    })));
+    res.json({
+      hasMore,
+      messages: rows.map(m => ({
+        id: m.id,
+        senderId: m.senderId,
+        senderName: userMap[m.senderId] ?? "Unknown",
+        recipientId: m.recipientId,
+        content: m.content,
+        invoiceId: m.invoiceId ?? null,
+        invoice: m.invoiceId ? (invoiceMap[m.invoiceId] ?? null) : null,
+        attachmentType: m.attachmentType ?? null,
+        attachmentId: m.attachmentId ?? null,
+        attachment: m.attachmentType === "document" && m.attachmentId ? (docMap[m.attachmentId] ?? null)
+          : m.attachmentType === "photo" && m.attachmentId ? (photoMap[m.attachmentId] ?? null)
+          : m.attachmentType === "permit" && m.attachmentId ? (permitMap[m.attachmentId] ?? null)
+          : null,
+        reactions: reactionsFor(m.id),
+        replyToId: m.replyToId ?? null,
+        replyTo: m.replyToId ? (() => {
+          const q = replyMap[m.replyToId!];
+          if (!q) return null;
+          return { id: q.id, senderName: userMap[q.senderId] ?? "Unknown", content: q.content, attachmentType: q.attachmentType ?? null };
+        })() : null,
+        readAt: m.readAt?.toISOString() ?? null,
+        editedAt: m.editedAt?.toISOString() ?? null,
+        createdAt: m.createdAt.toISOString(),
+        mine: m.senderId === me,
+      })),
+    });
   } catch (err) {
     req.log.error({ err }, "Get thread error");
     res.status(500).json({ error: "server_error", message: "Failed to get thread" });

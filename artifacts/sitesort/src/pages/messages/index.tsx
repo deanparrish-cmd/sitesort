@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Send, Users, Eye, ArrowLeft, Circle, Pencil, Trash2, Mic, MicOff, User, Building2, Receipt, X, ExternalLink, FileText, Image, FileCheck, Paperclip, Hash, CornerUpLeft, Search, Zap } from "lucide-react";
+import { MessageSquare, Send, Users, Eye, ArrowLeft, Circle, Pencil, Trash2, Mic, MicOff, User, Building2, Receipt, X, ExternalLink, FileText, Image, FileCheck, Paperclip, Hash, CornerUpLeft, Search, Zap, ChevronUp, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSubscription } from "@/contexts/subscription";
 import { useToast } from "@/hooks/use-toast";
@@ -193,7 +193,26 @@ export default function MessagesPage() {
   const [searchChannels, setSearchChannels] = useState<ChannelSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [quickReplyOpen, setQuickReplyOpen] = useState(false);
+
+  // Pagination state
+  const [dmHasMore, setDmHasMore] = useState(false);
+  const [channelHasMore, setChannelHasMore] = useState(false);
+  const [loadingOlderDm, setLoadingOlderDm] = useState(false);
+  const [loadingOlderChannel, setLoadingOlderChannel] = useState(false);
+
   const threadEndRef = useRef<HTMLDivElement>(null);
+  const threadScrollRef = useRef<HTMLDivElement>(null);
+  const channelScrollRef = useRef<HTMLDivElement>(null);
+  // Scroll anchor: records pre-prepend scrollHeight so we can restore position
+  const scrollAnchorRef = useRef<number | null>(null);
+  const channelScrollAnchorRef = useRef<number | null>(null);
+  // Flag to suppress scroll-to-bottom during load-older
+  const skipScrollRef = useRef(false);
+  // Refs to current thread data for poll callbacks
+  const threadRef = useRef<Message[]>([]);
+  const channelThreadRef = useRef<ChannelMessage[]>([]);
+  const activeConvRef = useRef<Conversation | null>(null);
+  const activeChannelRef = useRef<Channel | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const dictateRef = useRef<any>(null);
@@ -206,9 +225,13 @@ export default function MessagesPage() {
 
   const fetchThread = useCallback(async (conv: Conversation) => {
     setLoadingThread(true);
-    const allParam = viewAll ? "?all=true" : "";
-    const r = await fetch(`/api/messages/thread/${conv.otherId}${allParam}`, { headers: authHeaders() });
-    if (r.ok) setThread(await r.json());
+    const params = viewAll ? "?all=true" : "";
+    const r = await fetch(`/api/messages/thread/${conv.otherId}${params}`, { headers: authHeaders() });
+    if (r.ok) {
+      const data = await r.json();
+      setThread(data.messages ?? data);
+      setDmHasMore(data.hasMore ?? false);
+    }
     setLoadingThread(false);
   }, [viewAll]);
 
@@ -221,37 +244,141 @@ export default function MessagesPage() {
     setLoadingChannelThread(true);
     const r = await fetch(`/api/channels/${ch.projectId}/messages`, { headers: authHeaders() });
     if (r.ok) {
-      setChannelThread(await r.json());
-      // Mark as read locally
+      const data = await r.json();
+      setChannelThread(data.messages ?? data);
+      setChannelHasMore(data.hasMore ?? false);
       setChannels(prev => prev.map(c => c.projectId === ch.projectId ? { ...c, unread: 0 } : c));
     }
     setLoadingChannelThread(false);
   }, []);
+
+  const loadOlderDm = useCallback(async () => {
+    if (!activeConv || !dmHasMore || loadingOlderDm) return;
+    const firstId = threadRef.current[0]?.id;
+    if (!firstId) return;
+    setLoadingOlderDm(true);
+    const container = threadScrollRef.current;
+    if (container) scrollAnchorRef.current = container.scrollHeight;
+    skipScrollRef.current = true;
+    const params = new URLSearchParams({ before: firstId });
+    if (viewAll) params.set("all", "true");
+    const r = await fetch(`/api/messages/thread/${activeConv.otherId}?${params}`, { headers: authHeaders() });
+    if (r.ok) {
+      const data = await r.json();
+      setThread(prev => [...(data.messages ?? []), ...prev]);
+      setDmHasMore(data.hasMore ?? false);
+    }
+    setLoadingOlderDm(false);
+  }, [activeConv, dmHasMore, loadingOlderDm, viewAll]);
+
+  const loadOlderChannel = useCallback(async () => {
+    if (!activeChannel || !channelHasMore || loadingOlderChannel) return;
+    const firstId = channelThreadRef.current[0]?.id;
+    if (!firstId) return;
+    setLoadingOlderChannel(true);
+    const container = channelScrollRef.current;
+    if (container) channelScrollAnchorRef.current = container.scrollHeight;
+    skipScrollRef.current = true;
+    const r = await fetch(`/api/channels/${activeChannel.projectId}/messages?before=${firstId}`, { headers: authHeaders() });
+    if (r.ok) {
+      const data = await r.json();
+      setChannelThread(prev => [...(data.messages ?? []), ...prev]);
+      setChannelHasMore(data.hasMore ?? false);
+    }
+    setLoadingOlderChannel(false);
+  }, [activeChannel, channelHasMore, loadingOlderChannel]);
 
   useEffect(() => {
     fetchConversations();
     fetchChannels();
   }, [fetchConversations, fetchChannels]);
 
-  useEffect(() => {
-    if (activeConv) {
-      fetchThread(activeConv);
-      pollRef.current = setInterval(() => fetchThread(activeConv), 5000);
-    }
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [activeConv, fetchThread]);
+  // Keep refs in sync so poll callbacks always have current data
+  useEffect(() => { threadRef.current = thread; }, [thread]);
+  useEffect(() => { channelThreadRef.current = channelThread; }, [channelThread]);
+  useEffect(() => { activeConvRef.current = activeConv; }, [activeConv]);
+  useEffect(() => { activeChannelRef.current = activeChannel; }, [activeChannel]);
 
   useEffect(() => {
-    if (activeChannel) {
-      fetchChannelThread(activeChannel);
-      channelPollRef.current = setInterval(() => fetchChannelThread(activeChannel), 5000);
-    }
+    if (!activeConv) return;
+    setThread([]);
+    setDmHasMore(false);
+    fetchThread(activeConv);
+
+    pollRef.current = setInterval(async () => {
+      const conv = activeConvRef.current;
+      if (!conv) return;
+      const lastId = threadRef.current[threadRef.current.length - 1]?.id;
+      if (!lastId) return;
+      const params = new URLSearchParams({ after: lastId });
+      if (viewAll) params.set("all", "true");
+      const r = await fetch(`/api/messages/thread/${conv.otherId}?${params}`, { headers: authHeaders() });
+      if (r.ok) {
+        const data = await r.json();
+        const newMsgs: Message[] = data.messages ?? [];
+        if (newMsgs.length > 0) {
+          setThread(prev => {
+            const existingIds = new Set(prev.map(m => m.id));
+            const fresh = newMsgs.filter(m => !existingIds.has(m.id));
+            return fresh.length > 0 ? [...prev, ...fresh] : prev;
+          });
+        }
+      }
+    }, 5000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [activeConv, fetchThread, viewAll]);
+
+  useEffect(() => {
+    if (!activeChannel) return;
+    setChannelThread([]);
+    setChannelHasMore(false);
+    fetchChannelThread(activeChannel);
+
+    channelPollRef.current = setInterval(async () => {
+      const ch = activeChannelRef.current;
+      if (!ch) return;
+      const lastId = channelThreadRef.current[channelThreadRef.current.length - 1]?.id;
+      if (!lastId) return;
+      const r = await fetch(`/api/channels/${ch.projectId}/messages?after=${lastId}`, { headers: authHeaders() });
+      if (r.ok) {
+        const data = await r.json();
+        const newMsgs: ChannelMessage[] = data.messages ?? [];
+        if (newMsgs.length > 0) {
+          setChannelThread(prev => {
+            const existingIds = new Set(prev.map(m => m.id));
+            const fresh = newMsgs.filter(m => !existingIds.has(m.id));
+            if (fresh.length > 0) {
+              setChannels(c => c.map(ch2 => ch2.projectId === ch.projectId ? { ...ch2, unread: 0 } : ch2));
+              return [...prev, ...fresh];
+            }
+            return prev;
+          });
+        }
+      }
+    }, 5000);
     return () => { if (channelPollRef.current) clearInterval(channelPollRef.current); };
   }, [activeChannel, fetchChannelThread]);
 
+  // Scroll to bottom on new messages (suppressed during load-older)
   useEffect(() => {
+    if (skipScrollRef.current) { skipScrollRef.current = false; return; }
     threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [thread, channelThread]);
+
+  // Restore scroll position after prepending older messages
+  useLayoutEffect(() => {
+    if (scrollAnchorRef.current !== null && threadScrollRef.current) {
+      threadScrollRef.current.scrollTop = threadScrollRef.current.scrollHeight - scrollAnchorRef.current;
+      scrollAnchorRef.current = null;
+    }
+  }, [thread]);
+
+  useLayoutEffect(() => {
+    if (channelScrollAnchorRef.current !== null && channelScrollRef.current) {
+      channelScrollRef.current.scrollTop = channelScrollRef.current.scrollHeight - channelScrollAnchorRef.current;
+      channelScrollAnchorRef.current = null;
+    }
+  }, [channelThread]);
 
   useEffect(() => {
     fetch("/api/messages/users", { headers: authHeaders() })
@@ -793,7 +920,7 @@ export default function MessagesPage() {
                                 const conv: Conversation = { otherId: r.otherId, otherName: r.otherName, otherRole: "", lastMessage: r.content, lastAt: r.createdAt, unread: 0 };
                                 setActiveConv(conv);
                                 setActiveChannel(null);
-                                setThread([]);
+                                setDmHasMore(false);
                               }}
                               className="w-full text-left px-4 py-2.5 hover:bg-muted/50 transition-colors"
                             >
@@ -835,7 +962,7 @@ export default function MessagesPage() {
                                 const ch = channels.find(c => c.projectId === r.projectId) ?? { projectId: r.projectId, projectName: r.projectName, lastMessage: "", lastAt: null, unread: 0 };
                                 setActiveChannel(ch);
                                 setActiveConv(null);
-                                setThread([]);
+                                setChannelHasMore(false);
                               }}
                               className="w-full text-left px-4 py-2.5 hover:bg-muted/50 transition-colors"
                             >
@@ -867,7 +994,7 @@ export default function MessagesPage() {
                     <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Project Channels</span>
                   </div>
                   {channels.map(ch => (
-                    <button key={ch.projectId} onClick={() => { setActiveChannel(ch); setActiveConv(null); setThread([]); setQuickReplyOpen(false); }}
+                    <button key={ch.projectId} onClick={() => { setActiveChannel(ch); setActiveConv(null); setChannelHasMore(false); setQuickReplyOpen(false); }}
                       className={cn(
                         "w-full text-left px-4 py-3 hover:bg-muted/50 transition-colors",
                         activeChannel?.projectId === ch.projectId && "bg-muted"
@@ -961,7 +1088,20 @@ export default function MessagesPage() {
               </div>
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              <div ref={threadScrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+                {/* Load older button */}
+                {dmHasMore && !loadingThread && (
+                  <div className="flex justify-center pb-2">
+                    <button
+                      onClick={loadOlderDm}
+                      disabled={loadingOlderDm}
+                      className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground border rounded-full px-3 py-1 bg-muted/50 hover:bg-muted transition-colors disabled:opacity-50"
+                    >
+                      {loadingOlderDm ? <Loader2 className="w-3 h-3 animate-spin" /> : <ChevronUp className="w-3 h-3" />}
+                      Load older messages
+                    </button>
+                  </div>
+                )}
                 {loadingThread ? (
                   <div className="flex justify-center pt-8">
                     <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />
@@ -1503,7 +1643,20 @@ export default function MessagesPage() {
               </div>
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              <div ref={channelScrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+                {/* Load older button */}
+                {channelHasMore && !loadingChannelThread && (
+                  <div className="flex justify-center pb-2">
+                    <button
+                      onClick={loadOlderChannel}
+                      disabled={loadingOlderChannel}
+                      className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground border rounded-full px-3 py-1 bg-muted/50 hover:bg-muted transition-colors disabled:opacity-50"
+                    >
+                      {loadingOlderChannel ? <Loader2 className="w-3 h-3 animate-spin" /> : <ChevronUp className="w-3 h-3" />}
+                      Load older messages
+                    </button>
+                  </div>
+                )}
                 {loadingChannelThread ? (
                   <div className="flex justify-center pt-8">
                     <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />

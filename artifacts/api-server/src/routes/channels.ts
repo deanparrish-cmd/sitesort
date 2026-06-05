@@ -6,7 +6,7 @@ import {
   usersTable, projectsTable, projectMembersTable,
   notificationsTable, documentsTable, photosTable, permitsTable,
 } from "@workspace/db/schema";
-import { eq, and, gt, sql, desc } from "drizzle-orm";
+import { eq, and, gt, lt, sql, desc } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 
@@ -166,11 +166,15 @@ router.get("/channels/search", authenticate, async (req, res) => {
 });
 
 // GET /api/channels/:projectId/messages — fetch thread + mark read
+// Supports ?before=<id> (load older page), ?after=<id> (poll for new), default = last 50
 router.get("/channels/:projectId/messages", authenticate, async (req, res) => {
   try {
     const { projectId } = req.params;
     const userId = req.user!.id;
     const companyId = req.user!.companyId;
+    const before = req.query.before as string | undefined;
+    const after = req.query.after as string | undefined;
+    const PAGE_SIZE = 50;
 
     // Verify project belongs to company
     const project = await db.select({ id: projectsTable.id })
@@ -179,10 +183,34 @@ router.get("/channels/:projectId/messages", authenticate, async (req, res) => {
       .limit(1);
     if (!project[0]) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
 
-    const rows = await db.select()
-      .from(channelMessagesTable)
-      .where(eq(channelMessagesTable.projectId, projectId))
-      .orderBy(channelMessagesTable.createdAt);
+    // Resolve pivot date for cursor
+    let pivotDate: Date | undefined;
+    if (before || after) {
+      const pivot = await db.select({ createdAt: channelMessagesTable.createdAt })
+        .from(channelMessagesTable).where(eq(channelMessagesTable.id, (before ?? after)!)).limit(1);
+      pivotDate = pivot[0]?.createdAt;
+    }
+
+    let rows: (typeof channelMessagesTable.$inferSelect)[];
+    let hasMore = false;
+
+    if (after && pivotDate) {
+      rows = await db.select().from(channelMessagesTable)
+        .where(and(eq(channelMessagesTable.projectId, projectId), gt(channelMessagesTable.createdAt, pivotDate)))
+        .orderBy(channelMessagesTable.createdAt).limit(100);
+    } else if (before && pivotDate) {
+      const fetched = await db.select().from(channelMessagesTable)
+        .where(and(eq(channelMessagesTable.projectId, projectId), lt(channelMessagesTable.createdAt, pivotDate)))
+        .orderBy(desc(channelMessagesTable.createdAt)).limit(PAGE_SIZE + 1);
+      hasMore = fetched.length > PAGE_SIZE;
+      rows = fetched.slice(0, PAGE_SIZE).reverse();
+    } else {
+      const fetched = await db.select().from(channelMessagesTable)
+        .where(eq(channelMessagesTable.projectId, projectId))
+        .orderBy(desc(channelMessagesTable.createdAt)).limit(PAGE_SIZE + 1);
+      hasMore = fetched.length > PAGE_SIZE;
+      rows = fetched.slice(0, PAGE_SIZE).reverse();
+    }
 
     // Sender names
     const senderIds = Array.from(new Set(rows.map(r => r.senderId)));
@@ -237,42 +265,47 @@ router.get("/channels/:projectId/messages", authenticate, async (req, res) => {
       : [];
     const replyMap = Object.fromEntries(replyRows.map(r => [r.id, r]));
 
-    // Mark as read
-    const now = new Date();
-    const existing = await db.select().from(channelReadsTable)
-      .where(and(eq(channelReadsTable.projectId, projectId), eq(channelReadsTable.userId, userId)))
-      .limit(1);
-    if (existing[0]) {
-      await db.update(channelReadsTable).set({ lastReadAt: now })
-        .where(and(eq(channelReadsTable.projectId, projectId), eq(channelReadsTable.userId, userId)));
-    } else {
-      await db.insert(channelReadsTable).values({ projectId, userId, lastReadAt: now });
+    // Mark as read (initial load and polls only; skip for "load older")
+    if (!before) {
+      const now = new Date();
+      const existing = await db.select().from(channelReadsTable)
+        .where(and(eq(channelReadsTable.projectId, projectId), eq(channelReadsTable.userId, userId)))
+        .limit(1);
+      if (existing[0]) {
+        await db.update(channelReadsTable).set({ lastReadAt: now })
+          .where(and(eq(channelReadsTable.projectId, projectId), eq(channelReadsTable.userId, userId)));
+      } else {
+        await db.insert(channelReadsTable).values({ projectId, userId, lastReadAt: now });
+      }
     }
 
-    res.json(rows.map(m => ({
-      id: m.id,
-      projectId: m.projectId,
-      senderId: m.senderId,
-      senderName: userMap[m.senderId]?.name ?? "Unknown",
-      senderRole: userMap[m.senderId]?.role ?? "",
-      content: m.content,
-      attachmentType: m.attachmentType ?? null,
-      attachmentId: m.attachmentId ?? null,
-      attachment: m.attachmentType === "document" && m.attachmentId ? (docMap[m.attachmentId] ?? null)
-        : m.attachmentType === "photo" && m.attachmentId ? (photoMap[m.attachmentId] ?? null)
-        : m.attachmentType === "permit" && m.attachmentId ? (permitMap[m.attachmentId] ?? null)
-        : null,
-      reactions: reactionsFor(m.id),
-      replyToId: m.replyToId ?? null,
-      replyTo: m.replyToId ? (() => {
-        const q = replyMap[m.replyToId!];
-        if (!q) return null;
-        return { id: q.id, senderName: userMap[q.senderId]?.name ?? "Unknown", content: q.content, attachmentType: q.attachmentType ?? null };
-      })() : null,
-      editedAt: m.editedAt?.toISOString() ?? null,
-      createdAt: m.createdAt.toISOString(),
-      mine: m.senderId === userId,
-    })));
+    res.json({
+      hasMore,
+      messages: rows.map(m => ({
+        id: m.id,
+        projectId: m.projectId,
+        senderId: m.senderId,
+        senderName: userMap[m.senderId]?.name ?? "Unknown",
+        senderRole: userMap[m.senderId]?.role ?? "",
+        content: m.content,
+        attachmentType: m.attachmentType ?? null,
+        attachmentId: m.attachmentId ?? null,
+        attachment: m.attachmentType === "document" && m.attachmentId ? (docMap[m.attachmentId] ?? null)
+          : m.attachmentType === "photo" && m.attachmentId ? (photoMap[m.attachmentId] ?? null)
+          : m.attachmentType === "permit" && m.attachmentId ? (permitMap[m.attachmentId] ?? null)
+          : null,
+        reactions: reactionsFor(m.id),
+        replyToId: m.replyToId ?? null,
+        replyTo: m.replyToId ? (() => {
+          const q = replyMap[m.replyToId!];
+          if (!q) return null;
+          return { id: q.id, senderName: userMap[q.senderId]?.name ?? "Unknown", content: q.content, attachmentType: q.attachmentType ?? null };
+        })() : null,
+        editedAt: m.editedAt?.toISOString() ?? null,
+        createdAt: m.createdAt.toISOString(),
+        mine: m.senderId === userId,
+      })),
+    });
   } catch (err) {
     req.log.error({ err }, "Get channel messages error");
     res.status(500).json({ error: "server_error", message: "Failed to get channel messages" });
