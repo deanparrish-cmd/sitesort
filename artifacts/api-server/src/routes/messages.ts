@@ -4,6 +4,7 @@ import { messagesTable, usersTable, notificationsTable, invoicesTable, documents
 import { eq, and, or, desc, lt, gt, sql } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
+import { sendNewMessageEmail } from "../lib/email";
 
 const router: IRouter = Router();
 
@@ -294,8 +295,8 @@ router.post("/messages", authenticate, async (req, res) => {
       return;
     }
 
-    // Verify recipient is in same company
-    const recipient = await db.select({ id: usersTable.id, name: usersTable.name })
+    // Verify recipient is in same company and fetch email prefs
+    const recipient = await db.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, emailNotifications: usersTable.emailNotifications })
       .from(usersTable)
       .where(and(eq(usersTable.id, recipientId), eq(usersTable.companyId, req.user!.companyId)))
       .limit(1);
@@ -320,7 +321,7 @@ router.post("/messages", authenticate, async (req, res) => {
     const senderRows = await db.select({ name: usersTable.name })
       .from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
     const senderName = senderRows[0]?.name ?? "Someone";
-    const preview = content.trim().length > 80 ? content.trim().slice(0, 77) + "…" : content.trim();
+    const preview = content?.trim().length > 80 ? content.trim().slice(0, 77) + "…" : content?.trim() ?? "";
 
     await db.insert(notificationsTable).values({
       id: generateId(),
@@ -331,6 +332,11 @@ router.post("/messages", authenticate, async (req, res) => {
       relatedEntityId: req.user!.id,
       relatedEntityType: "user",
     });
+
+    // Email notification if opted in
+    if (recipient[0].emailNotifications) {
+      sendNewMessageEmail(recipient[0].email, recipient[0].name, senderName, preview, false, "").catch(() => {});
+    }
 
     res.status(201).json({ id, recipientId, content: content?.trim() || "", invoiceId: invoiceId ?? null, invoice: null, attachmentType: attachmentType ?? null, attachmentId: attachmentId ?? null, attachment: null, readAt: null, createdAt: new Date().toISOString(), mine: true });
   } catch (err) {

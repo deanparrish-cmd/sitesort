@@ -14,6 +14,7 @@ export const usersTable = pgTable("users", {
   pinHash: text("pin_hash"),
   avatarUrl: text("avatar_url"),
   emailVerified: boolean("email_verified").notNull().default(false),
+  emailNotifications: boolean("email_notifications").notNull().default(true),
   emailVerificationToken: text("email_verification_token"),
   emailVerificationExpiry: timestamp("email_verification_expiry"),
   passwordResetToken: text("password_reset_token"),

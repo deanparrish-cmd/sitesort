@@ -135,6 +135,64 @@ export async function sendDocumentNotificationEmail(
   });
 }
 
+export async function sendNewMessageEmail(
+  to: string,
+  recipientName: string,
+  senderName: string,
+  preview: string,
+  isChannel: boolean,
+  contextName: string,
+) {
+  const link = `${APP_URL}/messages`;
+  const subject = isChannel
+    ? `New message in #${contextName} from ${senderName}`
+    : `New message from ${senderName}`;
+  const context = isChannel
+    ? `in the <strong>#${contextName}</strong> project channel`
+    : "in your direct messages";
+  return resend().emails.send({
+    from: FROM,
+    to,
+    subject,
+    html: layout(`
+      ${h(`New message from ${senderName}`)}
+      ${p(`Hi ${recipientName},`)}
+      ${p(`You have a new message ${context}.`)}
+      ${preview ? box(`<div style="font-size:15px;color:#374151;font-style:italic;">"${preview}"</div>`) : ""}
+      ${btn(link, "View Message")}
+      ${muted("You can manage email notifications in your SiteSort account settings.")}
+    `),
+  });
+}
+
+export async function sendPermitExpiryEmail(
+  to: string,
+  name: string,
+  permitType: string,
+  description: string,
+  projectName: string,
+  daysLeft: number,
+) {
+  const link = `${APP_URL}/compliance`;
+  const urgency = daysLeft <= 3 ? "🚨 Urgent:" : "⚠️";
+  return resend().emails.send({
+    from: FROM,
+    to,
+    subject: `${urgency} Permit expiring in ${daysLeft} day${daysLeft !== 1 ? "s" : ""} — ${projectName}`,
+    html: layout(`
+      ${h(`Permit expiring soon — ${projectName}`)}
+      ${p(`Hi ${name},`)}
+      ${p(`A permit you are responsible for on <strong>${projectName}</strong> expires in <strong>${daysLeft} day${daysLeft !== 1 ? "s" : ""}</strong>.`)}
+      ${box(`
+        <div style="font-size:15px;font-weight:600;color:#111827;margin-bottom:4px;text-transform:capitalize;">${permitType}</div>
+        <div style="font-size:13px;color:#6b7280;">${description}</div>
+      `, daysLeft <= 3 ? "#fef2f2" : "#fff7ed", daysLeft <= 3 ? "#fecaca" : "#fed7aa")}
+      ${btn(link, "View Compliance")}
+      ${muted("You can manage email notifications in your SiteSort account settings.")}
+    `),
+  });
+}
+
 export async function sendSafetyAlertEmail(
   to: string,
   name: string,

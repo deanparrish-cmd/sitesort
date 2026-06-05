@@ -338,11 +338,17 @@ function NotificationsTab() {
   const [toastEnabled, setToastEnabled] = useState(() => localStorage.getItem(NOTIF_TOAST_KEY) !== "false");
   const [osEnabled, setOsEnabled] = useState(() => localStorage.getItem(NOTIF_OS_KEY) !== "false");
   const [osPermission, setOsPermission] = useState<NotificationPermission | "unsupported">("unsupported");
+  const [emailEnabled, setEmailEnabled] = useState<boolean | null>(null);
+  const [emailSaving, setEmailSaving] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined" && "Notification" in window) {
       setOsPermission(Notification.permission);
     }
+    // Fetch current email preference from API
+    fetch("/api/auth/me", { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setEmailEnabled(data.emailNotifications ?? true); });
   }, []);
 
   const toggleToast = (val: boolean) => {
@@ -358,6 +364,17 @@ function NotificationsTab() {
     }
     setOsEnabled(val);
     localStorage.setItem(NOTIF_OS_KEY, String(val));
+  };
+
+  const toggleEmail = async (val: boolean) => {
+    setEmailSaving(true);
+    setEmailEnabled(val);
+    await fetch("/api/auth/me", {
+      method: "PATCH",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ emailNotifications: val }),
+    });
+    setEmailSaving(false);
   };
 
   return (
@@ -401,6 +418,22 @@ function NotificationsTab() {
               Browser notifications are blocked. To enable them, click the padlock icon in your browser's address bar and allow notifications for this site.
             </p>
           )}
+        </Card>
+
+        <Card className="p-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="font-medium text-sm">Email notifications</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Receive emails for new messages, permit expiry reminders, and document sign-off requests.
+              </p>
+            </div>
+            <Switch
+              checked={emailEnabled ?? true}
+              onCheckedChange={toggleEmail}
+              disabled={emailSaving || emailEnabled === null}
+            />
+          </div>
         </Card>
       </div>
     </div>

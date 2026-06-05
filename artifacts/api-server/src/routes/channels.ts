@@ -9,6 +9,7 @@ import {
 import { eq, and, gt, lt, sql, desc } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
+import { sendNewMessageEmail } from "../lib/email";
 
 const router: IRouter = Router();
 
@@ -351,6 +352,14 @@ router.post("/channels/:projectId/messages", authenticate, async (req, res) => {
       .from(projectMembersTable)
       .where(and(eq(projectMembersTable.projectId, projectId), sql`${projectMembersTable.userId} != ${userId} AND ${projectMembersTable.userId} IS NOT NULL`));
 
+    // Fetch member email prefs in one batch
+    const memberIds = members.map(m => m.userId).filter(Boolean) as string[];
+    const memberUsers = memberIds.length
+      ? await db.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, emailNotifications: usersTable.emailNotifications })
+          .from(usersTable).where(sql`${usersTable.id} = ANY(${memberIds})`)
+      : [];
+    const memberMap = new Map(memberUsers.map(u => [u.id, u]));
+
     for (const m of members) {
       if (!m.userId) continue;
       await db.insert(notificationsTable).values({
@@ -362,6 +371,10 @@ router.post("/channels/:projectId/messages", authenticate, async (req, res) => {
         relatedEntityId: projectId,
         relatedEntityType: "project",
       });
+      const mu = memberMap.get(m.userId);
+      if (mu?.emailNotifications) {
+        sendNewMessageEmail(mu.email, mu.name, senderName, preview, true, project[0].name).catch(() => {});
+      }
     }
 
     res.status(201).json({
