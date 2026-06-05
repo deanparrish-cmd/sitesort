@@ -90,7 +90,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 26. Global voice command navigation — mic button in sidebar and desktop header bar; Web Speech API listens for navigation and action commands; floating hint overlay with examples; toast feedback on match or no-match; hidden on unsupported browsers. Action commands: "new project" → `/projects?new=1`; "new invoice" → `/invoices?new=1`; "find invoice" / "recall invoice" → `/invoices?recall=1`; "add subcontractor" → `/subcontractors?new=1`; "find subcontractor [term]" → `/subcontractors?q=<term>` or `?find=1`; "upload compliance/certificate" → `/compliance?upload=1`; "find/recall compliance [term]" → `/compliance?q=<term>` or `?find=1`; "new/send message" → `/messages?new=1`; "send message to [name]" → `/messages?to=<name>`; "dictate message" → `/messages?dictate=1`; "log safety issue" / "report hazard" → `/projects?safety=1`; "add/new permit" → `/projects?permit=1` (opens add permit modal); "find/recall permit [term]" → `/compliance?q=<term>` (filters expiring permits by type/project); "upload/log/new photo" → `/projects?photo=1` (opens photo log modal); "recall/find/view photos" → `/projects?viewphoto=1` (navigates to project photos tab)
 27. Photo voice commands — "upload photo" / "log photo" / "new photo" opens a global photo log modal (project picker, category, voice-dictated description, zone, file upload with preview); "recall photos" / "find photos" navigates to the active project's Photos tab; Photos tab in project detail built out as a full colour-coded grid (thumbnail, category badge, reference number, zone, date, uploader); `?tab=photos` URL param selects the Photos tab on load
 28. Real user dashboard — personalised greeting, quick-action buttons, 4-stat cards (active projects/expiring items/pending sign-offs/unread messages), "Needs Attention" panel, recent activity feed, portfolio snapshot, site calendar
-29. Invoice document viewer — full-screen inline viewer panel; PDF via iframe, image via img tag, fallback open-in-tab; sidebar with invoice details; header actions: open in new tab, share, mark paid
+29. Invoice document viewer — full-screen inline viewer panel; PDF via `<object>` embed (fallback "Open PDF" button when inline blocked), image via `<img>`; sidebar with invoice details; header actions: `window.open()` open, share, mark paid
 30. Project detail report / PDF export — "Export Report" button generates a print-ready HTML report (team, permits, documents, finances, photos) and auto-triggers browser Save-as-PDF
 31. Subcontractor "Add to Project" — FolderPlus button on each sub card opens a dialog listing active projects; one-click add with inline per-project feedback (added/already linked/error)
 32. Enforced subcontractor directory-first workflow — removed "Add Person" form and dialog from the project Team tab; contacts must be added to the subcontractor directory first, then linked into a project via "Add from Subcontractor Directory"
@@ -131,10 +131,18 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
    - Frontend: initial load sets `dmHasMore`/`channelHasMore`; polls use `?after=<lastId>` and append-only (preserves loaded-older messages); "Load older messages" button at top of both thread panels
    - Scroll position preserved on load-older via `scrollHeight` anchor + `useLayoutEffect` restoration; `skipScrollRef` suppresses auto-scroll-to-bottom during prepend
 
+2. **Invoice document viewer fix** — replaced broken `<iframe>` PDF embed with `<object>`:
+   - Root cause: `<iframe>` renders blank/silently in Replit's sandboxed webview; `<a target="_blank">` new-tab navigation suppressed by popup blockers in the same environment
+   - PDF viewer changed from `<iframe src={url}>` to `<object data={url} type="application/pdf">` with a visible fallback ("PDF preview not available — Open PDF" button) when inline rendering fails
+   - All "Open" / "Open in new tab" buttons changed from `<a target="_blank">` to `window.open(url, '_blank', 'noopener,noreferrer')` via `onClick` — fires correctly in popup-blocked environments
+   - Table row "Open" link also converted to `<button onClick>` with `stopPropagation()` + `window.open()`
+   - Verified: GCS is correctly serving the file (HTTP 200, `Content-Type: application/pdf`, 548 KB in test)
+
 ### Key files modified
 - `artifacts/api-server/src/routes/messages.ts` — `lt`, `gt` imports; paginated thread endpoint; `{ messages, hasMore }` response
 - `artifacts/api-server/src/routes/channels.ts` — same pagination for channel messages
 - `artifacts/sitesort/src/pages/messages/index.tsx` — `useLayoutEffect` import; pagination state/refs; updated fetch/poll callbacks; `loadOlderDm`/`loadOlderChannel`; "Load older" buttons; scroll anchor restoration
+- `artifacts/sitesort/src/pages/invoices/index.tsx` — `<object>` PDF embed; `window.open()` for all Open buttons; fallback UI inside `<object>`
 
 ### Notes for next session
 - **Good next features**: read receipts per-message in DMs, admin UI to toggle beta access without raw SQL, demo data seeder
