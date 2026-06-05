@@ -298,7 +298,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       <div className="md:hidden flex items-center justify-between p-4 border-b bg-card">
         <div className="flex items-center gap-2">
           <Link href="/dashboard">
-            <img src={`${import.meta.env.BASE_URL}images/logo.png?v=5`} alt="SiteSort" className="h-10 w-auto object-contain" />
+            <img src={`${import.meta.env.BASE_URL}images/logo.png?v=5`} alt="SiteSort" className="h-8 w-auto shrink-0 object-contain" />
           </Link>
         </div>
         <div className="flex items-center gap-3">
