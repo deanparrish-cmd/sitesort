@@ -131,12 +131,21 @@ router.get("/messages/thread/:userId", authenticate, async (req, res) => {
 
     let rows: (typeof messagesTable.$inferSelect)[];
     let hasMore = false;
+    let readUpdates: { id: string; readAt: string }[] = [];
 
     if (after && pivotDate) {
       // Poll: new messages since pivot, ascending, capped at 100
       rows = await db.select().from(messagesTable)
         .where(and(convFilter, gt(messagesTable.createdAt, pivotDate)))
         .orderBy(messagesTable.createdAt).limit(100);
+
+      // Also return read receipts for sent messages so the sender's UI can update
+      if (!isViewAll) {
+        const readRows = await db.select({ id: messagesTable.id, readAt: messagesTable.readAt })
+          .from(messagesTable)
+          .where(and(convFilter, eq(messagesTable.senderId, me), sql`${messagesTable.readAt} IS NOT NULL`));
+        readUpdates = readRows.map(r => ({ id: r.id, readAt: r.readAt!.toISOString() }));
+      }
     } else if (before && pivotDate) {
       // Load older page: messages before pivot, descending then reversed
       const fetched = await db.select().from(messagesTable)
@@ -242,6 +251,7 @@ router.get("/messages/thread/:userId", authenticate, async (req, res) => {
 
     res.json({
       hasMore,
+      readUpdates,
       messages: rows.map(m => ({
         id: m.id,
         senderId: m.senderId,
@@ -322,7 +332,7 @@ router.post("/messages", authenticate, async (req, res) => {
       relatedEntityType: "user",
     });
 
-    res.status(201).json({ id, recipientId, content: content?.trim() || "", invoiceId: invoiceId ?? null, invoice: null, attachmentType: attachmentType ?? null, attachmentId: attachmentId ?? null, attachment: null, createdAt: new Date().toISOString(), mine: true });
+    res.status(201).json({ id, recipientId, content: content?.trim() || "", invoiceId: invoiceId ?? null, invoice: null, attachmentType: attachmentType ?? null, attachmentId: attachmentId ?? null, attachment: null, readAt: null, createdAt: new Date().toISOString(), mine: true });
   } catch (err) {
     req.log.error({ err }, "Send message error");
     res.status(500).json({ error: "server_error", message: "Failed to send message" });

@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Send, Users, Eye, ArrowLeft, Circle, Pencil, Trash2, Mic, MicOff, User, Building2, Receipt, X, ExternalLink, FileText, Image, FileCheck, Paperclip, Hash, CornerUpLeft, Search, Zap, ChevronUp, Loader2 } from "lucide-react";
+import { MessageSquare, Send, Users, Eye, ArrowLeft, Check, CheckCheck, Pencil, Trash2, Mic, MicOff, User, Building2, Receipt, X, ExternalLink, FileText, Image, FileCheck, Paperclip, Hash, CornerUpLeft, Search, Zap, ChevronUp, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSubscription } from "@/contexts/subscription";
 import { useToast } from "@/hooks/use-toast";
@@ -316,13 +316,18 @@ export default function MessagesPage() {
       if (r.ok) {
         const data = await r.json();
         const newMsgs: Message[] = data.messages ?? [];
-        if (newMsgs.length > 0) {
-          setThread(prev => {
-            const existingIds = new Set(prev.map(m => m.id));
-            const fresh = newMsgs.filter(m => !existingIds.has(m.id));
-            return fresh.length > 0 ? [...prev, ...fresh] : prev;
-          });
-        }
+        const receipts: { id: string; readAt: string }[] = data.readUpdates ?? [];
+        setThread(prev => {
+          // Apply new messages
+          const existingIds = new Set(prev.map(m => m.id));
+          const fresh = newMsgs.filter(m => !existingIds.has(m.id));
+          // Apply read receipt updates to existing messages
+          const receiptMap = new Map(receipts.map(r => [r.id, r.readAt]));
+          const updated = (fresh.length > 0 ? [...prev, ...fresh] : prev).map(m =>
+            (!m.readAt && receiptMap.has(m.id)) ? { ...m, readAt: receiptMap.get(m.id)! } : m
+          );
+          return updated;
+        });
       }
     }, 5000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
@@ -1328,7 +1333,9 @@ export default function MessagesPage() {
                         <div className={cn("flex items-center gap-1 px-1", msg.mine && !viewAll ? "flex-row-reverse" : "flex-row")}>
                           <span className="text-[10px] text-muted-foreground">{timeLabel(msg.createdAt)}</span>
                           {msg.mine && !viewAll && (
-                            <Circle className={cn("w-2 h-2", msg.readAt ? "fill-primary text-primary" : "fill-muted-foreground/40 text-muted-foreground/40")} />
+                            msg.readAt
+                              ? <CheckCheck className="w-3.5 h-3.5 text-primary" />
+                              : <Check className="w-3.5 h-3.5 text-muted-foreground/40" />
                           )}
                           {!viewAll && editingId !== msg.id && confirmDeleteId !== msg.id && (
                             <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">
