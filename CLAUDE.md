@@ -105,6 +105,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 41. Project progress tracking — `milestones` table (title, dueDate, completedAt, order; cascade-delete with project); 4 CRUD endpoints; `progressPercent` on list and detail now computed from completed/total milestones; "Progress" tab in project detail with progress bar, milestone checklist (add/tick/delete), and Gantt timeline (diamond markers, Today line); mini progress bar column added to project list table
 42. Onboarding checklist — dismissible card at top of dashboard showing 5 steps (create project, invite team member, upload document, add subcontractor, set milestones); completion derived from real DB data via `GET /api/onboarding/status`; progress bar; each incomplete step shows description + CTA link; X dismisses to localStorage; auto-hides when all done
 43. DM read receipts — single grey ✓ (sent) / double blue ✓✓ (seen) on outgoing DMs; `?after=` poll response includes `readUpdates [{id, readAt}]` so the sender's tick flips live within 5s without re-fetching the thread
+44. Admin beta access UI — "Companies & Beta Access" section on admin dashboard; table lists all companies with plan/status/user count and an orange toggle switch per row; `GET /api/admin/companies` + `PATCH /api/admin/companies/:id/beta-access`, both behind `requireAdmin` email guard; replaces raw SQL workflow
 
 ## Uploads / File Serving
 
@@ -128,18 +129,24 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
    - `POST /messages` 201 response now includes `readAt: null` so the indicator renders immediately on send
    - Frontend: `Circle` icon replaced with `Check` (grey, sent) / `CheckCheck` (blue, seen) from Lucide; poll callback merges `readUpdates` into thread state so the tick flips within 5s of the recipient opening the conversation
 
+2. **Admin beta access UI** — toggle beta access per company without raw SQL:
+   - API: `GET /api/admin/companies` lists all companies with id, name, tier, status, userCount, betaAccess, createdAt; `PATCH /api/admin/companies/:id/beta-access` accepts `{ betaAccess: boolean }`; both behind existing `requireAdmin` email guard (`ADMIN_EMAILS` list)
+   - Frontend: new "Companies & Beta Access" section on admin dashboard; table with plan badge, status badge, user count, created date, and an orange CSS toggle switch per row; clicking toggle calls API and refetches list in-place
+
 ### Key files modified
 - `artifacts/api-server/src/routes/messages.ts` — `readUpdates` query in `?after=` branch; `readAt: null` in POST 201 response
 - `artifacts/sitesort/src/pages/messages/index.tsx` — `Check`/`CheckCheck` imports; updated indicator JSX; poll callback applies `readUpdates`
+- `artifacts/api-server/src/routes/admin.ts` — `GET /api/admin/companies`; `PATCH /api/admin/companies/:id/beta-access`
+- `artifacts/sitesort/src/pages/admin/index.tsx` — `useCompanies` hook; `toggleBeta` handler; Companies & Beta Access section
 
 ### Notes for next session
-- **Good next features**: admin UI to toggle beta access without raw SQL, demo data seeder
+- **Good next features**: demo data seeder, message search improvements
+- **Beta access is now UI-driven** — use the admin dashboard toggle; raw SQL no longer needed
 - **Stripe still needs manual setup**: activate Customer Portal in Stripe Dashboard; register all 5 webhook events (`checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `customer.subscription.trial_will_end`, `invoice.payment_failed`)
 - **When adding new DB schema files**: always run `npx tsc -p tsconfig.json` inside `lib/db/` after editing `src/schema/index.ts` to regenerate `dist/` before typechecking api-server
-- **Beta access SQL**: `UPDATE companies SET beta_access = true WHERE name = 'Company Name';`
 - **GitHub push command**: `cd /home/runner/workspace && /home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts` (do NOT use `npx tsx` — fails with "not found")
-- **No `git pull` at session start**: there is no GitHub remote configured in git — pushes use the Replit Connectors SDK, not `git push`. Running `git pull` errors with "no tracking information". Use `git status` + `git log` only.
-- **Git add**: always prefix with `cd /home/runner/workspace &&` to avoid CWD drift from prior `cd` calls
+- **No `git pull` at session start**: no GitHub remote in git — pushes use Replit Connectors SDK. Use `git status` + `git log` only.
+- **Git add**: always prefix with `cd /home/runner/workspace &&` to avoid CWD drift
 - All commits are on `main`
 
 ## End-of-session notes — 2026-06-05
