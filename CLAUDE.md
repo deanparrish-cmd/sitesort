@@ -106,6 +106,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 42. Onboarding checklist — dismissible card at top of dashboard showing 5 steps (create project, invite team member, upload document, add subcontractor, set milestones); completion derived from real DB data via `GET /api/onboarding/status`; progress bar; each incomplete step shows description + CTA link; X dismisses to localStorage; auto-hides when all done
 43. DM read receipts — single grey ✓ (sent) / double blue ✓✓ (seen) on outgoing DMs; `?after=` poll response includes `readUpdates [{id, readAt}]` so the sender's tick flips live within 5s without re-fetching the thread
 44. Admin beta access UI — "Companies & Beta Access" section on admin dashboard; table lists all companies with plan/status/user count and an orange toggle switch per row; `GET /api/admin/companies` + `PATCH /api/admin/companies/:id/beta-access`, both behind `requireAdmin` email guard; replaces raw SQL workflow
+45. Email notifications — `emailNotifications` boolean on users table (default true); Settings > Notifications tab has email toggle backed by `PATCH /api/auth/me`; emails sent via Resend for: new DMs, new channel messages (per-member opt-in), permit expiry at ~7 days and ~1 day (daily server-side interval in `permit-reminders.ts`)
 
 ## Uploads / File Serving
 
@@ -125,23 +126,35 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 ### Tasks completed today
 
 1. **DM read receipts** — WhatsApp-style double-tick indicator on sent DMs:
-   - API: `?after=` poll response now includes `readUpdates: [{ id, readAt }]` — all messages sent by the current user in this conversation that have been read; piggybacks on existing 5s poll, no new endpoint needed
-   - `POST /messages` 201 response now includes `readAt: null` so the indicator renders immediately on send
-   - Frontend: `Circle` icon replaced with `Check` (grey, sent) / `CheckCheck` (blue, seen) from Lucide; poll callback merges `readUpdates` into thread state so the tick flips within 5s of the recipient opening the conversation
+   - API: `?after=` poll response now includes `readUpdates: [{ id, readAt }]`; piggybacks on existing 5s poll
+   - `POST /messages` 201 response includes `readAt: null` so indicator renders immediately on send
+   - Frontend: `Circle` replaced with `Check` (grey) / `CheckCheck` (blue) from Lucide; poll merges updates into thread state
 
 2. **Admin beta access UI** — toggle beta access per company without raw SQL:
-   - API: `GET /api/admin/companies` lists all companies with id, name, tier, status, userCount, betaAccess, createdAt; `PATCH /api/admin/companies/:id/beta-access` accepts `{ betaAccess: boolean }`; both behind existing `requireAdmin` email guard (`ADMIN_EMAILS` list)
-   - Frontend: new "Companies & Beta Access" section on admin dashboard; table with plan badge, status badge, user count, created date, and an orange CSS toggle switch per row; clicking toggle calls API and refetches list in-place
+   - `GET /api/admin/companies` + `PATCH /api/admin/companies/:id/beta-access`, both behind `requireAdmin`
+   - New "Companies & Beta Access" section on admin dashboard with orange CSS toggle per row
+
+3. **Email notifications** — full opt-in email system via Resend:
+   - `emailNotifications` boolean column on users table (default `true`); pushed to DB
+   - `GET/PATCH /api/auth/me` now exposes `emailNotifications`
+   - `email.ts`: `sendNewMessageEmail` (DM + channel variants) and `sendPermitExpiryEmail` templates
+   - `messages.ts`: emails recipient on new DM if opted in
+   - `channels.ts`: batch-fetches member email prefs, emails each opted-in member on channel post
+   - `permit-reminders.ts`: new file; `schedulePermitReminders()` runs 30s after startup then every 24h; emails responsible users for permits expiring in ~7 days and ~1 day; silently skips if `RESEND_API_KEY` unset
+   - Settings > Notifications: new "Email notifications" toggle card, backed by `PATCH /api/auth/me`
 
 ### Key files modified
-- `artifacts/api-server/src/routes/messages.ts` — `readUpdates` query in `?after=` branch; `readAt: null` in POST 201 response
-- `artifacts/sitesort/src/pages/messages/index.tsx` — `Check`/`CheckCheck` imports; updated indicator JSX; poll callback applies `readUpdates`
-- `artifacts/api-server/src/routes/admin.ts` — `GET /api/admin/companies`; `PATCH /api/admin/companies/:id/beta-access`
-- `artifacts/sitesort/src/pages/admin/index.tsx` — `useCompanies` hook; `toggleBeta` handler; Companies & Beta Access section
+- `lib/db/src/schema/users.ts` — `emailNotifications` boolean column
+- `artifacts/api-server/src/lib/email.ts` — `sendNewMessageEmail`, `sendPermitExpiryEmail`
+- `artifacts/api-server/src/lib/permit-reminders.ts` — new; daily permit expiry check
+- `artifacts/api-server/src/index.ts` — calls `schedulePermitReminders()` on startup
+- `artifacts/api-server/src/routes/auth.ts` — `emailNotifications` in GET/PATCH /auth/me
+- `artifacts/api-server/src/routes/messages.ts` — DM email trigger
+- `artifacts/api-server/src/routes/channels.ts` — channel message email trigger
+- `artifacts/sitesort/src/pages/settings/index.tsx` — email toggle in Notifications tab
 
 ### Notes for next session
-- **Good next features**: demo data seeder, message search improvements
-- **Beta access is now UI-driven** — use the admin dashboard toggle; raw SQL no longer needed
+- **Good next features**: demo data seeder, per-project dashboard mini-view
 - **Stripe still needs manual setup**: activate Customer Portal in Stripe Dashboard; register all 5 webhook events (`checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `customer.subscription.trial_will_end`, `invoice.payment_failed`)
 - **When adding new DB schema files**: always run `npx tsc -p tsconfig.json` inside `lib/db/` after editing `src/schema/index.ts` to regenerate `dist/` before typechecking api-server
 - **GitHub push command**: `cd /home/runner/workspace && /home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts` (do NOT use `npx tsx` — fails with "not found")
