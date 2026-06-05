@@ -9,7 +9,9 @@ import {
   Building2, Bell, TrendingUp, TrendingDown, Minus, AlertTriangle,
   CheckCircle2, AlertCircle, Download, RefreshCw, HardHat, Clock,
   Activity, Layers, Zap, UserCheck, UserX, Trophy, BarChart2, Search, Mic, MicOff,
+  FlaskConical,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 
 const ADMIN_EMAILS = ["dean.parrish@me.com", "amy-parrish@hotmail.co.uk"];
 const ORANGE = "#ea580c";
@@ -73,6 +75,14 @@ function useFeatureAdoption() {
     queryKey: ["admin-feature-adoption"],
     queryFn: () => apiFetch("/api/admin/feature-adoption"),
     staleTime: 60_000,
+  });
+}
+
+function useCompanies() {
+  return useQuery({
+    queryKey: ["admin-companies"],
+    queryFn: () => apiFetch("/api/admin/companies"),
+    staleTime: 30_000,
   });
 }
 
@@ -261,6 +271,22 @@ export default function AdminDashboard() {
   const { data: dormantUsers, isLoading: dormantLoading, refetch: refetchDormant } = useDormantUsers();
   const { data: lapsedUsers, isLoading: lapsedLoading, refetch: refetchLapsed } = useLapsedUsers();
   const { data: featureAdoption, isLoading: adoptionLoading, refetch: refetchAdoption } = useFeatureAdoption();
+  const { data: companies, isLoading: companiesLoading, refetch: refetchCompanies } = useCompanies();
+  const queryClient = useQueryClient();
+  const [betaTogglingId, setBetaTogglingId] = useState<string | null>(null);
+
+  async function toggleBeta(companyId: string, current: boolean) {
+    setBetaTogglingId(companyId);
+    const token = localStorage.getItem("sitesort_token");
+    await fetch(`/api/admin/companies/${companyId}/beta-access`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ betaAccess: !current }),
+    });
+    await refetchCompanies();
+    queryClient.invalidateQueries({ queryKey: ["admin-stats"] });
+    setBetaTogglingId(null);
+  }
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activitySearch, setActivitySearch] = useState("");
@@ -992,6 +1018,79 @@ export default function AdminDashboard() {
                 <p className="text-gray-600 text-xs">{s.note}</p>
               </Card>
             ))}
+          </div>
+        </section>
+
+        {/* ── Companies & Beta Access ── */}
+        <section>
+          <SectionTitle icon={FlaskConical} title="Companies & Beta Access" sub="Manage beta access per company — bypasses all Stripe subscription checks" />
+          <div className="rounded-xl border border-gray-800 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-800 bg-gray-900/60">
+                  <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3">Company</th>
+                  <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 hidden sm:table-cell">Plan</th>
+                  <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 hidden md:table-cell">Status</th>
+                  <th className="text-right text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 hidden md:table-cell">Users</th>
+                  <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 hidden lg:table-cell">Created</th>
+                  <th className="text-center text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3">Beta</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-800">
+                {companiesLoading ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <tr key={i}>
+                      <td className="px-5 py-3"><Skeleton className="h-4 w-32" /></td>
+                      <td className="px-5 py-3 hidden sm:table-cell"><Skeleton className="h-4 w-16" /></td>
+                      <td className="px-5 py-3 hidden md:table-cell"><Skeleton className="h-4 w-16" /></td>
+                      <td className="px-5 py-3 hidden md:table-cell"><Skeleton className="h-4 w-8 ml-auto" /></td>
+                      <td className="px-5 py-3 hidden lg:table-cell"><Skeleton className="h-4 w-24" /></td>
+                      <td className="px-5 py-3"><Skeleton className="h-6 w-12 mx-auto rounded-full" /></td>
+                    </tr>
+                  ))
+                ) : (companies ?? []).length === 0 ? (
+                  <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-600 text-sm">No companies found.</td></tr>
+                ) : (
+                  (companies as Array<{ id: string; name: string; subscriptionTier: string; subscriptionStatus: string; betaAccess: boolean; userCount: number; createdAt: string }>).map(c => (
+                    <tr key={c.id} className="hover:bg-gray-900/40 transition-colors">
+                      <td className="px-5 py-3 font-medium text-gray-200">{c.name}</td>
+                      <td className="px-5 py-3 hidden sm:table-cell">
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${
+                          c.subscriptionTier === "pro" ? "bg-purple-900/50 text-purple-300" :
+                          c.subscriptionTier === "team" ? "bg-blue-900/50 text-blue-300" :
+                          c.subscriptionTier === "solo" ? "bg-emerald-900/50 text-emerald-300" :
+                          "bg-gray-800 text-gray-400"
+                        }`}>{c.subscriptionTier}</span>
+                      </td>
+                      <td className="px-5 py-3 hidden md:table-cell">
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${
+                          c.subscriptionStatus === "active" ? "bg-emerald-900/40 text-emerald-400" :
+                          c.subscriptionStatus === "trialing" ? "bg-amber-900/40 text-amber-400" :
+                          c.subscriptionStatus === "cancelled" ? "bg-red-900/40 text-red-400" :
+                          "bg-gray-800 text-gray-400"
+                        }`}>{c.subscriptionStatus}</span>
+                      </td>
+                      <td className="px-5 py-3 text-right text-gray-400 text-xs hidden md:table-cell">{c.userCount}</td>
+                      <td className="px-5 py-3 text-gray-500 text-xs hidden lg:table-cell">{fmtDate(c.createdAt)}</td>
+                      <td className="px-5 py-3 text-center">
+                        <button
+                          onClick={() => toggleBeta(c.id, c.betaAccess)}
+                          disabled={betaTogglingId === c.id}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50 ${
+                            c.betaAccess ? "bg-orange-500" : "bg-gray-700"
+                          }`}
+                          title={c.betaAccess ? "Disable beta access" : "Enable beta access"}
+                        >
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            c.betaAccess ? "translate-x-6" : "translate-x-1"
+                          }`} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </section>
 

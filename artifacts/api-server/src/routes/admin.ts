@@ -704,6 +704,52 @@ router.get("/admin/export/users", authenticate, requireAdmin, async (req, res) =
   }
 });
 
+router.get("/admin/companies", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const companies = await db.select().from(companiesTable).orderBy(desc(companiesTable.createdAt));
+    const userCounts = await db.select({
+      companyId: usersTable.companyId,
+      c: count(),
+    }).from(usersTable).groupBy(usersTable.companyId);
+    const countMap = new Map(userCounts.map(r => [r.companyId, Number(r.c)]));
+    res.json(companies.map(c => ({
+      id: c.id,
+      name: c.name,
+      size: c.size,
+      subscriptionTier: c.subscriptionTier,
+      subscriptionStatus: c.subscriptionStatus,
+      betaAccess: c.betaAccess,
+      userCount: countMap.get(c.id) ?? 0,
+      createdAt: c.createdAt.toISOString(),
+    })));
+  } catch (err) {
+    req.log.error({ err }, "Admin companies error");
+    res.status(500).json({ error: "server_error", message: "Failed to load companies" });
+  }
+});
+
+router.patch("/admin/companies/:id/beta-access", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { betaAccess } = req.body;
+    if (typeof betaAccess !== "boolean") {
+      res.status(400).json({ error: "validation_error", message: "betaAccess must be a boolean" });
+      return;
+    }
+    const companyId = req.params.id as string;
+    const rows = await db.select({ id: companiesTable.id })
+      .from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
+    if (!rows[0]) {
+      res.status(404).json({ error: "not_found", message: "Company not found" });
+      return;
+    }
+    await db.update(companiesTable).set({ betaAccess }).where(eq(companiesTable.id, companyId));
+    res.json({ id: req.params.id, betaAccess });
+  } catch (err) {
+    req.log.error({ err }, "Admin toggle beta access error");
+    res.status(500).json({ error: "server_error", message: "Failed to update beta access" });
+  }
+});
+
 router.get("/admin/export/activity", authenticate, requireAdmin, async (req, res) => {
   try {
     const docs = await db.select({
