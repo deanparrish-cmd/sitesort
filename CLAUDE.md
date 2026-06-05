@@ -138,6 +138,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 - **When adding new DB schema files**: always run `npx tsc -p tsconfig.json` inside `lib/db/` after editing `src/schema/index.ts` to regenerate `dist/` before typechecking api-server
 - **Beta access SQL**: `UPDATE companies SET beta_access = true WHERE name = 'Company Name';`
 - **GitHub push command**: `cd /home/runner/workspace && /home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts` (do NOT use `npx tsx` — fails with "not found")
+- **No `git pull` at session start**: there is no GitHub remote configured in git — pushes use the Replit Connectors SDK, not `git push`. Running `git pull` errors with "no tracking information". Use `git status` + `git log` only.
 - **Git add**: always prefix with `cd /home/runner/workspace &&` to avoid CWD drift from prior `cd` calls
 - All commits are on `main`
 
