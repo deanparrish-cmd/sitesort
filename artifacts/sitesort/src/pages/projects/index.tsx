@@ -412,7 +412,7 @@ export default function ProjectsList() {
         </div>
 
         {/* Mobile card list */}
-        <div className="block sm:hidden divide-y">
+        <div className="block lg:hidden divide-y">
           {isLoading ? (
             <div className="px-4 py-8 text-center text-muted-foreground">Loading projects...</div>
           ) : filteredProjects?.length === 0 ? (
@@ -454,7 +454,7 @@ export default function ProjectsList() {
         </div>
 
         {/* Desktop table */}
-        <div className="hidden sm:block overflow-x-auto">
+        <div className="hidden lg:block overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="text-xs text-muted-foreground uppercase bg-muted/50 border-b">
               <tr>
