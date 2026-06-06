@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Mail, Lock, Building2, User } from "lucide-react";
 import { useRegister, RegisterRequestCompanySize } from "@workspace/api-client-react";
+import { captureAttribution } from "@/lib/attribution";
 
 const registerSchema = z.object({
   companyName: z.string().min(2, "Company name is required"),
@@ -37,6 +38,7 @@ export default function Register() {
   const [inviteSubmitting, setInviteSubmitting] = useState(false);
 
   useEffect(() => {
+    captureAttribution();
     const params = new URLSearchParams(window.location.search);
     const token = params.get("invite");
     if (!token) return;
