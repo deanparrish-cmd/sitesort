@@ -45,11 +45,13 @@ export default function ProjectDetail() {
   type InvoiceItem = { id: string; direction: string; counterpartyName: string; description: string; amount: string; currency: string; dueDate: string; status: string; reference?: string | null };
   type PhotoItem = { id: string; uploadedBy: string; uploaderName: string; photoUrl: string | null; category: string; description: string | null; zone: string | null; referenceNumber: string; takenAt: string };
   type MilestoneItem = { id: string; title: string; dueDate: string; completedAt: string | null; order: number };
+  type CheckinItem = { id: string; workerName: string; photoUrl: string; checkedInAt: string; lat: number | null; lng: number | null };
 
   const [permits, setPermits] = useState<PermitItem[]>([]);
   const [projectInvoices, setProjectInvoices] = useState<InvoiceItem[]>([]);
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [milestones, setMilestones] = useState<MilestoneItem[]>([]);
+  const [checkins, setCheckins] = useState<CheckinItem[]>([]);
   const [milestoneTitle, setMilestoneTitle] = useState("");
   const [milestoneDue, setMilestoneDue] = useState("");
   const [milestoneAdding, setMilestoneAdding] = useState(false);
@@ -73,7 +75,8 @@ export default function ProjectDetail() {
       fetch(`/api/projects/${projectId}/invoices`, { headers }).then(r => r.ok ? r.json() : []),
       fetch(`/api/projects/${projectId}/photos`, { headers }).then(r => r.ok ? r.json() : []),
       fetch(`/api/projects/${projectId}/milestones`, { headers }).then(r => r.ok ? r.json() : []),
-    ]).then(([p, inv, ph, ms]) => { setPermits(p); setProjectInvoices(inv); setPhotos(ph); setMilestones(ms); });
+      fetch(`/api/projects/${projectId}/checkins`, { headers }).then(r => r.ok ? r.json() : []),
+    ]).then(([p, inv, ph, ms, ci]) => { setPermits(p); setProjectInvoices(inv); setPhotos(ph); setMilestones(ms); setCheckins(ci); });
   }, [projectId]);
 
   const { isCancelled } = useSubscription();
@@ -640,6 +643,7 @@ tr:last-child td{border-bottom:none}
             { value: "documents", label: "Documents" },
             { value: "team", label: "Team" },
             { value: "photos", label: "Photos" },
+            { value: "checkins", label: `Check-ins${checkins.length > 0 ? ` (${checkins.length})` : ""}` },
             { value: "permits", label: "Permits" },
             { value: "finances", label: "Finances & Expiry" },
             { value: "qr", label: "Site Board QR" },
@@ -1542,6 +1546,44 @@ tr:last-child td{border-bottom:none}
               <p className="text-destructive text-center text-sm">Failed to generate QR code. Please try again.</p>
             )}
           </div>
+        </TabsContent>
+
+        <TabsContent value="checkins">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold">Site Check-Ins</h2>
+              <p className="text-muted-foreground text-sm mt-0.5">Workers who checked in on site via the QR code board.</p>
+            </div>
+            <span className="text-sm text-muted-foreground">{checkins.length} {checkins.length === 1 ? "check-in" : "check-ins"}</span>
+          </div>
+
+          {checkins.length === 0 ? (
+            <Card className="p-12 text-center border-dashed border-2">
+              <p className="text-muted-foreground font-medium">No check-ins yet.</p>
+              <p className="text-muted-foreground text-sm mt-1">Workers can check in by scanning the site board QR code.</p>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              {checkins.map(ci => {
+                const photoSrc = ci.photoUrl.startsWith("/uploads/") ? ci.photoUrl.replace("/uploads/", "/api/uploads/") : ci.photoUrl;
+                const dt = new Date(ci.checkedInAt);
+                return (
+                  <div key={ci.id} className="rounded-xl overflow-hidden border bg-card shadow-sm">
+                    <div className="aspect-square bg-muted relative">
+                      <img src={photoSrc} alt={ci.workerName} className="w-full h-full object-cover" />
+                    </div>
+                    <div className="p-3">
+                      <p className="font-semibold text-sm truncate">{ci.workerName}</p>
+                      <p className="text-muted-foreground text-xs mt-0.5">
+                        {dt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                      </p>
+                      <p className="text-muted-foreground text-xs">{dt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 

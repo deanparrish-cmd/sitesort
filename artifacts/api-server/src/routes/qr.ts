@@ -1,10 +1,23 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
 import { db } from "@workspace/db";
-import { qrCodesTable, documentsTable, projectsTable, projectMembersTable, usersTable, permitsTable } from "@workspace/db/schema";
-import { eq, and } from "drizzle-orm";
+import { qrCodesTable, documentsTable, projectsTable, projectMembersTable, usersTable, permitsTable, siteCheckinsTable } from "@workspace/db/schema";
+import { eq, and, desc } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { randomBytes } from "crypto";
+import multer from "multer";
+import path from "path";
+import { randomUUID } from "crypto";
+import { getBucket, objectKey } from "../lib/gcs";
+
+const checkinUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (["image/jpeg", "image/png", "image/webp"].includes(file.mimetype)) cb(null, true);
+    else cb(new Error("Images only"));
+  },
+});
 
 const router: IRouter = Router();
 
@@ -195,6 +208,77 @@ router.get("/site/:token", async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: "server_error", message: "Failed to load site board" });
+  }
+});
+
+// Public check-in endpoint — no auth required
+router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: Request, res: Response) => {
+  try {
+    const { workerName, lat, lng } = req.body;
+    if (!workerName?.trim()) {
+      res.status(400).json({ error: "validation_error", message: "workerName required" });
+      return;
+    }
+    if (!req.file) {
+      res.status(400).json({ error: "validation_error", message: "photo required" });
+      return;
+    }
+
+    const qr = await db.select().from(qrCodesTable)
+      .where(eq(qrCodesTable.token, req.params.token))
+      .then(r => r[0]);
+    if (!qr) {
+      res.status(404).json({ error: "not_found", message: "Invalid site token" });
+      return;
+    }
+
+    const ext = path.extname(req.file.originalname || ".jpg").toLowerCase() || ".jpg";
+    const filename = `checkin-${randomUUID()}${ext}`;
+    const key = objectKey(filename);
+    await getBucket().file(key).save(req.file.buffer, {
+      contentType: req.file.mimetype,
+      resumable: false,
+      metadata: { metadata: { originalName: req.file.originalname } },
+    });
+
+    const photoUrl = `/api/uploads/${filename}`;
+    const id = generateId();
+    const [checkin] = await db.insert(siteCheckinsTable).values({
+      id,
+      projectId: qr.projectId,
+      workerName: workerName.trim(),
+      photoUrl,
+      lat: lat ? parseFloat(lat) : null,
+      lng: lng ? parseFloat(lng) : null,
+    }).returning();
+
+    res.status(201).json({
+      ...checkin,
+      checkedInAt: checkin.checkedInAt.toISOString(),
+    });
+  } catch (err) {
+    res.status(500).json({ error: "server_error", message: "Check-in failed" });
+  }
+});
+
+// Authenticated — list all check-ins for a project
+router.get("/projects/:projectId/checkins", authenticate, async (req: Request, res: Response) => {
+  try {
+    const project = await db.select({ id: projectsTable.id }).from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!project[0]) {
+      res.status(404).json({ error: "not_found", message: "Project not found" });
+      return;
+    }
+
+    const checkins = await db.select().from(siteCheckinsTable)
+      .where(eq(siteCheckinsTable.projectId, req.params.projectId))
+      .orderBy(desc(siteCheckinsTable.checkedInAt));
+
+    res.json(checkins.map(c => ({ ...c, checkedInAt: c.checkedInAt.toISOString() })));
+  } catch (err) {
+    res.status(500).json({ error: "server_error", message: "Failed to load check-ins" });
   }
 });
 

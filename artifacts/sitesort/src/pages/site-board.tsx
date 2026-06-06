@@ -1,6 +1,45 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRoute } from "wouter";
-import { MapPin, Calendar, FileText, HardHat, ShieldCheck, AlertTriangle, Users, Mail, Phone, Clock } from "lucide-react";
+import { MapPin, Calendar, FileText, HardHat, ShieldCheck, AlertTriangle, Users, Mail, Phone, Clock, Camera, CheckCircle2, Loader2 } from "lucide-react";
+
+// Stamps date/time, project name and worker name onto the captured image via canvas
+async function stampPhoto(file: File, projectName: string, workerName: string): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+
+      const barH = Math.max(64, img.naturalHeight * 0.12);
+      ctx.fillStyle = "rgba(0,0,0,0.6)";
+      ctx.fillRect(0, img.naturalHeight - barH, img.naturalWidth, barH);
+
+      const fontSize = Math.max(14, Math.floor(barH * 0.28));
+      ctx.font = `bold ${fontSize}px system-ui, sans-serif`;
+      ctx.fillStyle = "#ffffff";
+      ctx.textBaseline = "top";
+
+      const pad = Math.floor(barH * 0.12);
+      const now = new Date();
+      const dateStr = now.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+      const timeStr = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+
+      ctx.fillText(`${workerName}  ·  ${dateStr} ${timeStr}`, pad, img.naturalHeight - barH + pad);
+      ctx.font = `${Math.floor(fontSize * 0.8)}px system-ui, sans-serif`;
+      ctx.fillStyle = "rgba(255,255,255,0.75)";
+      ctx.fillText(projectName, pad, img.naturalHeight - barH + pad + fontSize + 4);
+
+      canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("Canvas export failed")), "image/jpeg", 0.88);
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
 
 const TYPE_LABELS: Record<string, string> = {
   drawing: "Drawing",
@@ -21,6 +60,130 @@ function StatusBadge({ status }: { status: string }) {
     <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold ${s.color}`}>
       {s.label}
     </span>
+  );
+}
+
+function CheckInCard({ token, projectName }: { token: string; projectName: string }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [name, setName] = useState("");
+  const [status, setStatus] = useState<"idle" | "capturing" | "uploading" | "done" | "error">("idle");
+  const [preview, setPreview] = useState<string | null>(null);
+  const [capturedFile, setCapturedFile] = useState<File | null>(null);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCapturedFile(file);
+    setPreview(URL.createObjectURL(file));
+    setStatus("capturing");
+  };
+
+  const handleCheckin = async () => {
+    if (!name.trim()) { setErrorMsg("Please enter your name first."); return; }
+    if (!capturedFile) { fileRef.current?.click(); return; }
+
+    setStatus("uploading");
+    setErrorMsg("");
+    try {
+      let lat: number | null = null, lng: number | null = null;
+      try {
+        const pos = await new Promise<GeolocationPosition>((res, rej) =>
+          navigator.geolocation.getCurrentPosition(res, rej, { timeout: 5000 })
+        );
+        lat = pos.coords.latitude;
+        lng = pos.coords.longitude;
+      } catch { /* GPS optional */ }
+
+      const stamped = await stampPhoto(capturedFile, projectName, name.trim());
+      const fd = new FormData();
+      fd.append("photo", stamped, "checkin.jpg");
+      fd.append("workerName", name.trim());
+      if (lat !== null) fd.append("lat", String(lat));
+      if (lng !== null) fd.append("lng", String(lng));
+
+      const res = await fetch(`/api/site/${token}/checkin`, { method: "POST", body: fd });
+      if (!res.ok) throw new Error("Upload failed");
+      setStatus("done");
+    } catch (err) {
+      setErrorMsg("Check-in failed. Please try again.");
+      setStatus("capturing");
+    }
+  };
+
+  const reset = () => {
+    setStatus("idle");
+    setName("");
+    setPreview(null);
+    setCapturedFile(null);
+    setErrorMsg("");
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  if (status === "done") {
+    return (
+      <div className="bg-white rounded-2xl shadow-sm border p-6 text-center">
+        <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-3" />
+        <h3 className="text-lg font-bold text-gray-900">Checked In!</h3>
+        <p className="text-gray-500 text-sm mt-1">Your attendance has been recorded at {new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}.</p>
+        <button onClick={reset} className="mt-4 text-sm text-orange-600 font-medium hover:underline">Check in again</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+      <div className="bg-gradient-to-r from-orange-600 to-orange-500 px-5 py-4 flex items-center gap-3">
+        <Camera className="w-5 h-5 text-white" />
+        <h2 className="text-white font-bold text-base">Site Check-In</h2>
+      </div>
+      <div className="p-5 space-y-4">
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">Your Name</label>
+          <input
+            type="text"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder="e.g. John Smith"
+            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+          />
+        </div>
+
+        {preview && (
+          <div className="relative rounded-xl overflow-hidden border">
+            <img src={preview} alt="Check-in photo" className="w-full object-cover max-h-48" />
+            <button
+              onClick={() => { setPreview(null); setCapturedFile(null); setStatus("idle"); if (fileRef.current) fileRef.current.value = ""; }}
+              className="absolute top-2 right-2 bg-black/50 text-white rounded-full px-2 py-0.5 text-xs"
+            >
+              Retake
+            </button>
+          </div>
+        )}
+
+        {errorMsg && <p className="text-red-500 text-sm">{errorMsg}</p>}
+
+        <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFileChange} />
+
+        {status !== "capturing" ? (
+          <button
+            onClick={() => { if (!name.trim()) { setErrorMsg("Please enter your name first."); return; } setErrorMsg(""); fileRef.current?.click(); }}
+            className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
+          >
+            <Camera className="w-5 h-5" /> Take Check-In Photo
+          </button>
+        ) : (
+          <button
+            onClick={handleCheckin}
+            disabled={status === "uploading"}
+            className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
+          >
+            {status === "uploading" ? <><Loader2 className="w-5 h-5 animate-spin" /> Submitting…</> : <><CheckCircle2 className="w-5 h-5" /> Confirm Check-In</>}
+          </button>
+        )}
+        <p className="text-xs text-gray-400 text-center">Your photo will be date & time stamped and shared with the site manager.</p>
+      </div>
+    </div>
   );
 }
 
@@ -217,6 +380,9 @@ export default function SiteBoard() {
             </div>
           </div>
         )}
+
+        {/* Check-in */}
+        <CheckInCard token={token} projectName={project.name} />
 
         {/* Footer */}
         <div className="text-center text-xs text-gray-400 pb-4 pt-2">

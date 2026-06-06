@@ -17,3 +17,4 @@ export * from "./channel_reads";
 export * from "./message_reactions";
 export * from "./channel_message_reactions";
 export * from "./milestones";
+export * from "./site_checkins";
