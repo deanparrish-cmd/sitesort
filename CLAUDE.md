@@ -107,6 +107,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 43. DM read receipts — single grey ✓ (sent) / double blue ✓✓ (seen) on outgoing DMs; `?after=` poll response includes `readUpdates [{id, readAt}]` so the sender's tick flips live within 5s without re-fetching the thread
 44. Admin beta access UI — "Companies & Beta Access" section on admin dashboard; table lists all companies with plan/status/user count and an orange toggle switch per row; `GET /api/admin/companies` + `PATCH /api/admin/companies/:id/beta-access`, both behind `requireAdmin` email guard; replaces raw SQL workflow
 45. Email notifications — `emailNotifications` boolean on users table (default true); Settings > Notifications tab has email toggle backed by `PATCH /api/auth/me`; emails sent via Resend for: new DMs, new channel messages (per-member opt-in), permit expiry at ~7 days and ~1 day (daily server-side interval in `permit-reminders.ts`)
+46. QR site board check-in with date-stamped photo — anonymous workers scan QR code, enter name, take photo via device camera; Canvas API stamps name + date/time + project name onto image before upload; GPS captured optionally; `site_checkins` table stores record; Check-ins tab on project detail shows photo grid with worker name and timestamp; `POST /api/site/:token/checkin` (public multipart) + `GET /api/projects/:id/checkins` (auth)
 
 ## Uploads / File Serving
 
@@ -121,7 +122,34 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 
 ### 2026-05-22, 2026-05-25 & 2026-05-26 — see CLAUDE_ARCHIVE.md for full detail
 
-## End-of-session notes — 2026-06-06
+## End-of-session notes — 2026-06-06 (session 2)
+
+### Tasks completed today
+
+1. **QR site board check-in with date-stamped photo**:
+   - New `site_checkins` table: `id`, `projectId` (FK cascade), `workerName`, `photoUrl`, `checkedInAt`, `lat`, `lng`
+   - `POST /api/site/:token/checkin` — public, no auth, multipart; resolves project from QR token, uploads stamped photo to GCS, creates check-in record
+   - `GET /api/projects/:id/checkins` — authenticated; returns all check-ins newest-first
+   - Site board page: "Site Check-In" card with name input, camera trigger (`capture="environment"`), Canvas stamp (name · date · time bar + project name), optional GPS, retake option, success screen
+   - Project detail: new "Check-ins" tab with live count badge; photo grid showing stamped image, worker name, date and time
+
+### Key files modified
+- `lib/db/src/schema/site_checkins.ts` — new table
+- `lib/db/src/schema/index.ts` — exports site_checkins
+- `artifacts/api-server/src/routes/qr.ts` — check-in POST + GET endpoints; multer handler for unauthenticated photo upload
+- `artifacts/sitesort/src/pages/site-board.tsx` — `stampPhoto()` canvas helper + `CheckInCard` component
+- `artifacts/sitesort/src/pages/projects/detail.tsx` — `checkins` state, fetch, Check-ins tab
+
+### Notes for next session
+- **Good next features**: demo data seeder, per-project dashboard mini-view
+- **`lib/db/dist/` is gitignored** — do NOT include it in `git add`; it gets pushed to GitHub via the Replit push script automatically
+- **Stripe still needs manual setup**: activate Customer Portal in Stripe Dashboard; register all 5 webhook events (`checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `customer.subscription.trial_will_end`, `invoice.payment_failed`)
+- **When adding new DB schema files**: always run `npx tsc -p tsconfig.json` inside `lib/db/` after editing `src/schema/index.ts` to regenerate `dist/` before typechecking api-server
+- **GitHub push command**: `cd /home/runner/workspace && /home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts` (do NOT use `npx tsx` — fails with "not found")
+- **No `git pull` at session start**: no GitHub remote in git — pushes use Replit Connectors SDK. Use `git status` + `git log` only.
+- All commits are on `main`
+
+## End-of-session notes — 2026-06-06 (session 1)
 
 ### Tasks completed today
 
@@ -152,15 +180,6 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 - `artifacts/api-server/src/routes/messages.ts` — DM email trigger
 - `artifacts/api-server/src/routes/channels.ts` — channel message email trigger
 - `artifacts/sitesort/src/pages/settings/index.tsx` — email toggle in Notifications tab
-
-### Notes for next session
-- **Good next features**: demo data seeder, per-project dashboard mini-view
-- **Stripe still needs manual setup**: activate Customer Portal in Stripe Dashboard; register all 5 webhook events (`checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `customer.subscription.trial_will_end`, `invoice.payment_failed`)
-- **When adding new DB schema files**: always run `npx tsc -p tsconfig.json` inside `lib/db/` after editing `src/schema/index.ts` to regenerate `dist/` before typechecking api-server
-- **GitHub push command**: `cd /home/runner/workspace && /home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts` (do NOT use `npx tsx` — fails with "not found")
-- **No `git pull` at session start**: no GitHub remote in git — pushes use Replit Connectors SDK. Use `git status` + `git log` only.
-- **Git add**: always prefix with `cd /home/runner/workspace &&` to avoid CWD drift
-- All commits are on `main`
 
 ## End-of-session notes — 2026-06-05
 
