@@ -1,2 +1,3 @@
 - [Stale project-reference dist](stale-project-reference-dist.md) — after editing lib/db schema or running api codegen, rebuild the lib's .d.ts or tsc reports phantom "property does not exist"; runtime is unaffected.
 - [Pre-existing typecheck noise](pre-existing-typecheck-noise.md) — api-server drizzle TS2769 on .update/.insert and api-zod TS2308 dup-export are pre-existing & runtime-safe; filter tsc to lines you touched.
+- [SiteSort typecheck baseline](sitesort-typecheck-baseline.md) — ~10 pre-existing tsc errors in artifacts/sitesort (buttonVariants/DialogContent exports, enum comparisons, orval queryKey); Vite runs fine — only chase NEW errors naming your files.

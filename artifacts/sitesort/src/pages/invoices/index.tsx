@@ -17,6 +17,7 @@ import { useForm } from "react-hook-form";
 import { useListProjects } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
 import { useSubscription } from "@/contexts/subscription";
+import { useCapabilities } from "@/hooks/use-capabilities";
 import { useToast } from "@/hooks/use-toast";
 
 // Normalise stored URLs: old records may have /uploads/… which is only served
@@ -111,6 +112,7 @@ export default function InvoicesPage() {
   const { isCancelled } = useSubscription();
   const { toast } = useToast();
   const { data: projects } = useListProjects();
+  const caps = useCapabilities();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -167,13 +169,14 @@ export default function InvoicesPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("new") === "1") {
+      if (caps.isLoading) return;
       window.history.replaceState({}, "", "/invoices");
-      setModalOpen(true);
+      if (caps.canManageInvoices) setModalOpen(true);
     } else if (params.get("recall") === "1") {
       window.history.replaceState({}, "", "/invoices");
       toggleVoiceSearch();
     }
-  }, [toggleVoiceSearch]);
+  }, [toggleVoiceSearch, caps.isLoading, caps.canManageInvoices]);
 
   async function markPaid(id: string) {
     if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
@@ -332,9 +335,11 @@ export default function InvoicesPage() {
           <h1 className="text-3xl font-bold">Invoices</h1>
           <p className="text-muted-foreground">Track payments in and out.</p>
         </div>
-        <Button variant="accent" onClick={() => setModalOpen(true)}>
-          <Plus className="w-4 h-4 mr-2" /> New Invoice
-        </Button>
+        {caps.canManageInvoices && (
+          <Button variant="accent" onClick={() => setModalOpen(true)}>
+            <Plus className="w-4 h-4 mr-2" /> New Invoice
+          </Button>
+        )}
       </div>
 
       {/* Summary cards */}
@@ -582,19 +587,21 @@ export default function InvoicesPage() {
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
-                            <button
-                              title="Remove attachment"
-                              onClick={e => {
-                                e.stopPropagation();
-                                apiFetch(`/api/invoices/${inv.id}`, { method: "PATCH", body: JSON.stringify({ attachmentUrl: null }) })
-                                  .then(r => r.ok && setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, attachmentUrl: null } : i)));
-                              }}
-                              className="p-1 text-muted-foreground/50 hover:text-destructive transition-colors"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
+                            {caps.canManageInvoices && (
+                              <button
+                                title="Remove attachment"
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  apiFetch(`/api/invoices/${inv.id}`, { method: "PATCH", body: JSON.stringify({ attachmentUrl: null }) })
+                                    .then(r => r.ok && setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, attachmentUrl: null } : i)));
+                                }}
+                                className="p-1 text-muted-foreground/50 hover:text-destructive transition-colors"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            )}
                           </div>
-                        ) : (
+                        ) : caps.canManageInvoices ? (
                           <button
                             title="Attach invoice document"
                             onClick={() => triggerUpload(inv.id)}
@@ -606,7 +613,7 @@ export default function InvoicesPage() {
                             <Paperclip className="w-3.5 h-3.5" />
                             Attach
                           </button>
-                        )}
+                        ) : null}
                       </td>
 
                       <td className="px-5 py-3.5" onClick={e => e.stopPropagation()}>
@@ -618,14 +625,16 @@ export default function InvoicesPage() {
                           >
                             <Eye className="w-4 h-4" />
                           </button>
-                          {inv.status !== "paid" && (
+                          {inv.status !== "paid" && caps.canManageInvoices && (
                             <button onClick={e => { e.stopPropagation(); markPaid(inv.id); }} className="text-xs text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap">
                               Mark paid
                             </button>
                           )}
-                          <button onClick={e => { e.stopPropagation(); deleteInvoice(inv.id); }} className="text-xs text-muted-foreground hover:text-destructive transition-colors">
-                            Delete
-                          </button>
+                          {caps.canManageInvoices && (
+                            <button onClick={e => { e.stopPropagation(); deleteInvoice(inv.id); }} className="text-xs text-muted-foreground hover:text-destructive transition-colors">
+                              Delete
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

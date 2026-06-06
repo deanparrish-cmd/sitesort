@@ -12,6 +12,7 @@ import { useSubscription } from "@/contexts/subscription";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { formatDate, cn } from "@/lib/utils";
+import { useCapabilities } from "@/hooks/use-capabilities";
 
 export default function ProjectsList() {
   const { data: projects, isLoading } = useListProjects();
@@ -20,6 +21,7 @@ export default function ProjectsList() {
   const { isCancelled } = useSubscription();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const caps = useCapabilities();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -260,43 +262,47 @@ export default function ProjectsList() {
 
   // Auto-open create modal when navigated here via voice command (?new=1)
   useEffect(() => {
+    if (caps.isLoading) return;
     const params = new URLSearchParams(window.location.search);
     if (params.get("new") === "1") {
       window.history.replaceState({}, "", "/projects");
       if (isCancelled) setLocation("/settings?tab=billing");
-      else setIsModalOpen(true);
+      else if (caps.canManageProjects) setIsModalOpen(true);
     }
-  }, [isCancelled, setLocation]);
+  }, [isCancelled, setLocation, caps.isLoading, caps.canManageProjects]);
 
   // Auto-open safety modal via voice command (?safety=1)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("safety") === "1") {
+      if (caps.isLoading) return;
       window.history.replaceState({}, "", "/projects");
       if (isCancelled) setLocation("/settings?tab=billing");
-      else setSafetyOpen(true);
+      else if (caps.canLogPhoto) setSafetyOpen(true);
     }
-  }, [isCancelled, setLocation]);
+  }, [isCancelled, setLocation, caps.isLoading, caps.canLogPhoto]);
 
   // Auto-open permit modal via voice command (?permit=1)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("permit") === "1") {
+      if (caps.isLoading) return;
       window.history.replaceState({}, "", "/projects");
       if (isCancelled) setLocation("/settings?tab=billing");
-      else setPermitOpen(true);
+      else if (caps.canManageCompliance) setPermitOpen(true);
     }
-  }, [isCancelled, setLocation]);
+  }, [isCancelled, setLocation, caps.isLoading, caps.canManageCompliance]);
 
   // Auto-open photo upload modal via voice command (?photo=1)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("photo") === "1") {
+      if (caps.isLoading) return;
       window.history.replaceState({}, "", "/projects");
       if (isCancelled) setLocation("/settings?tab=billing");
-      else setPhotoOpen(true);
+      else if (caps.canLogPhoto) setPhotoOpen(true);
     }
-  }, [isCancelled, setLocation]);
+  }, [isCancelled, setLocation, caps.isLoading, caps.canLogPhoto]);
 
   // View photo log via voice command (?viewphoto=1) — go to first active project's photos tab
   useEffect(() => {
@@ -376,13 +382,15 @@ export default function ProjectsList() {
           <h1 className="text-3xl font-bold">Projects</h1>
           <p className="text-muted-foreground">Manage all your construction sites.</p>
         </div>
-        <Button
-          variant="accent"
-          onClick={() => isCancelled ? setLocation("/settings?tab=billing") : setIsModalOpen(true)}
-          title={isCancelled ? "Subscription ended — upgrade to create projects" : undefined}
-        >
-          <Plus className="w-5 h-5 mr-2" /> New Project
-        </Button>
+        {caps.canManageProjects && (
+          <Button
+            variant="accent"
+            onClick={() => isCancelled ? setLocation("/settings?tab=billing") : setIsModalOpen(true)}
+            title={isCancelled ? "Subscription ended — upgrade to create projects" : undefined}
+          >
+            <Plus className="w-5 h-5 mr-2" /> New Project
+          </Button>
+        )}
       </div>
 
       <div className="bg-card border rounded-2xl shadow-sm overflow-hidden">

@@ -29,6 +29,7 @@ import {
   UpdateProjectRequestStatus,
 } from "@workspace/api-client-react";
 import { formatDate, formatBytes, cn } from "@/lib/utils";
+import { useCapabilities } from "@/hooks/use-capabilities";
 import { useSubscription } from "@/contexts/subscription";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
@@ -95,6 +96,7 @@ export default function ProjectDetail() {
   const [editError, setEditError] = useState<string | null>(null);
 
   const { data: me } = useGetMe();
+  const caps = useCapabilities();
   const hasPin = !!(me as { hasPin?: boolean } | undefined)?.hasPin;
   const PIN_REQUIRED_TYPES = ["drawing", "method_statement", "safety"];
   type SignOffDoc = { id: string; name: string; type: string };
@@ -619,7 +621,9 @@ tr:last-child td{border-bottom:none}
               <Button variant="outline" size="sm" onClick={generateReport}>
                 <FileDown className="w-4 h-4 mr-2" /> Export Report
               </Button>
-              <Button variant="outline" onClick={openEdit}>Edit Details</Button>
+              {caps.canManageProjects && (
+                <Button variant="outline" onClick={openEdit}>Edit Details</Button>
+              )}
             </div>
           </div>
           
@@ -745,7 +749,9 @@ tr:last-child td{border-bottom:none}
                       {milestones.map(m => (
                         <div key={m.id} className={cn("flex items-center gap-3 p-3 rounded-lg border transition-colors", m.completedAt ? "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800" : "bg-card border-border")}>
                           <button
+                            disabled={!caps.canManageProjects}
                             onClick={async () => {
+                              if (!caps.canManageProjects) return;
                               if (isCancelled) { toast({ title: "Subscription required", variant: "destructive" }); return; }
                               await fetch(`/api/projects/${projectId}/milestones/${m.id}`, {
                                 method: "PATCH", headers: authHeaders(),
@@ -753,7 +759,7 @@ tr:last-child td{border-bottom:none}
                               });
                               fetchMilestones();
                             }}
-                            className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors", m.completedAt ? "border-green-500 bg-green-500 text-white" : "border-muted-foreground hover:border-primary")}
+                            className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors", m.completedAt ? "border-green-500 bg-green-500 text-white" : "border-muted-foreground hover:border-primary", !caps.canManageProjects && "cursor-default opacity-60")}
                           >
                             {m.completedAt && <CheckCircle2 className="w-4 h-4" />}
                           </button>
@@ -761,7 +767,7 @@ tr:last-child td{border-bottom:none}
                             <p className={cn("font-medium text-sm", m.completedAt && "line-through text-muted-foreground")}>{m.title}</p>
                             <p className="text-xs text-muted-foreground">Due {new Date(m.dueDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
                           </div>
-                          {!isCancelled && (
+                          {!isCancelled && caps.canManageProjects && (
                             <button onClick={async () => {
                               await fetch(`/api/projects/${projectId}/milestones/${m.id}`, { method: "DELETE", headers: authHeaders() });
                               fetchMilestones();
@@ -773,7 +779,7 @@ tr:last-child td{border-bottom:none}
                       ))}
                     </div>
 
-                    {!isCancelled && (
+                    {!isCancelled && caps.canManageProjects && (
                       <div className="flex gap-2 pt-2 border-t">
                         <Input
                           placeholder="Milestone title"
@@ -899,9 +905,11 @@ tr:last-child td{border-bottom:none}
                   </button>
                 )}
               </div>
-              <Button variant="accent" onClick={() => setIsUploadOpen(true)}>
-                <Upload className="w-4 h-4 mr-2" /> Upload Document
-              </Button>
+              {caps.canUploadDocument && (
+                <Button variant="accent" onClick={() => setIsUploadOpen(true)}>
+                  <Upload className="w-4 h-4 mr-2" /> Upload Document
+                </Button>
+              )}
             </div>
             <div className="flex gap-2 flex-wrap items-center">
               <Button
@@ -1101,14 +1109,16 @@ tr:last-child td{border-bottom:none}
                               History
                             </button>
                           )}
-                          <button
-                            onClick={() => openDocEdit(doc)}
-                            className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs"
-                            title="Edit status / version"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                            Edit
-                          </button>
+                          {caps.canUploadDocument && (
+                            <button
+                              onClick={() => openDocEdit(doc)}
+                              className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs"
+                              title="Edit status / version"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                              Edit
+                            </button>
+                          )}
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <button className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs" title="Share">
@@ -1168,11 +1178,13 @@ tr:last-child td{border-bottom:none}
         </TabsContent>
 
         <TabsContent value="team">
-          <div className="flex justify-end mb-4">
-            <Button variant="outline" size="sm" onClick={openFromDirectory}>
-              <UserPlus className="w-4 h-4 mr-2" /> Add from Subcontractor Directory
-            </Button>
-          </div>
+          {caps.canManageTeam && (
+            <div className="flex justify-end mb-4">
+              <Button variant="outline" size="sm" onClick={openFromDirectory}>
+                <UserPlus className="w-4 h-4 mr-2" /> Add from Subcontractor Directory
+              </Button>
+            </div>
+          )}
           {(!members || members.length === 0) ? (
             <div className="bg-card p-12 rounded-xl border text-center border-dashed border-2">
               <Users className="w-12 h-12 mx-auto text-muted-foreground mb-4 opacity-50" />
@@ -1219,7 +1231,8 @@ tr:last-child td{border-bottom:none}
                   <div key={member.id} className="bg-card border rounded-xl p-5 flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        <label className="relative cursor-pointer group shrink-0" title="Click to upload photo">
+                        <label className={cn("relative shrink-0", caps.canManageTeam ? "cursor-pointer group" : "cursor-default")} title={caps.canManageTeam ? "Click to upload photo" : undefined}>
+                          {caps.canManageTeam && (
                           <input type="file" accept="image/*" className="hidden" onChange={async e => {
                             const file = e.target.files?.[0]; if (!file) return;
                             const token = localStorage.getItem("sitesort_token");
@@ -1230,6 +1243,7 @@ tr:last-child td{border-bottom:none}
                             await fetch(`/api/projects/${projectId}/members/${member.id}/avatar`, { method: "PATCH", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ avatarUrl: url }) });
                             await queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/members`] });
                           }} />
+                          )}
                           <div className={cn("w-14 h-14 rounded-xl flex items-center justify-center shrink-0 overflow-hidden", isSubcontractor ? "bg-orange-500/10" : "bg-primary/10")}>
                             {member.avatarUrl ? (
                               <img src={member.avatarUrl} alt={member.name} className="w-full h-full object-cover" />
@@ -1239,9 +1253,11 @@ tr:last-child td{border-bottom:none}
                               </span>
                             )}
                           </div>
-                          <div className="absolute inset-0 rounded-xl bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <Camera className="w-4 h-4 text-white" />
-                          </div>
+                          {caps.canManageTeam && (
+                            <div className="absolute inset-0 rounded-xl bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <Camera className="w-4 h-4 text-white" />
+                            </div>
+                          )}
                         </label>
                         <div>
                           <p className="font-bold text-base leading-tight">{member.name}</p>
@@ -1295,10 +1311,12 @@ tr:last-child td{border-bottom:none}
                             ) : (
                               <span className="text-sm text-muted-foreground italic">Add phone number</span>
                             )}
-                            <button
-                              onClick={() => { setEditingPhoneId(member.id); setPhoneInput(member.phone ?? ""); }}
-                              className="ml-1 opacity-0 group-hover/phone:opacity-100 transition-opacity text-muted-foreground hover:text-primary shrink-0"
-                            ><Pencil className="w-3 h-3" /></button>
+                            {caps.canManageTeam && (
+                              <button
+                                onClick={() => { setEditingPhoneId(member.id); setPhoneInput(member.phone ?? ""); }}
+                                className="ml-1 opacity-0 group-hover/phone:opacity-100 transition-opacity text-muted-foreground hover:text-primary shrink-0"
+                              ><Pencil className="w-3 h-3" /></button>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1327,13 +1345,15 @@ tr:last-child td{border-bottom:none}
                           <p className="text-xs text-muted-foreground italic">No site schedule set</p>
                         )}
                       </div>
-                      <button
-                        onClick={() => openSchedule(member)}
-                        className="ml-2 p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-primary transition-colors shrink-0"
-                        title="Edit schedule"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
+                      {caps.canManageTeam && (
+                        <button
+                          onClick={() => openSchedule(member)}
+                          className="ml-2 p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-primary transition-colors shrink-0"
+                          title="Edit schedule"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
 
                     {isSubcontractor && (
@@ -1353,7 +1373,7 @@ tr:last-child td{border-bottom:none}
                     </div>
                   );
                 })}
-                {addingTrade ? (
+                {caps.canManageProjects && (addingTrade ? (
                   <div className="flex items-center gap-2 px-2">
                     <input
                       autoFocus
@@ -1373,7 +1393,7 @@ tr:last-child td{border-bottom:none}
                   >
                     <FolderOpen className="w-4 h-4" />+ Add Trade Folder
                   </button>
-                )}
+                ))}
               </div>
             );
           })()}

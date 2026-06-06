@@ -14,6 +14,7 @@ import {
 import { useForm } from "react-hook-form";
 import { cn } from "@/lib/utils";
 import { useSubscription } from "@/contexts/subscription";
+import { useCapabilities } from "@/hooks/use-capabilities";
 import { useToast } from "@/hooks/use-toast";
 
 type InsuranceStatus = "valid" | "expiring_soon" | "expired" | "none";
@@ -146,6 +147,7 @@ type EditFormData = AddFormData & { reliabilityRating: string; paymentHold: bool
 export default function SubcontractorsPage() {
   const { isCancelled } = useSubscription();
   const { toast } = useToast();
+  const caps = useCapabilities();
   const [subs, setSubs] = useState<Sub[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -252,8 +254,9 @@ export default function SubcontractorsPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("new") === "1") {
+      if (caps.isLoading) return;
       window.history.replaceState({}, "", "/subcontractors");
-      if (!isCancelled) {
+      if (!isCancelled && caps.canManageSubcontractors) {
         setAddOpen(true);
         setAddError(null);
         reset();
@@ -391,9 +394,11 @@ export default function SubcontractorsPage() {
           <h1 className="text-3xl font-bold">Subcontractors</h1>
           <p className="text-muted-foreground">Directory of all your subcontractors, grouped by trade.</p>
         </div>
-        <Button variant="accent" onClick={() => { setAddOpen(true); setAddError(null); reset(); setSelectedTradesAdd([]); }}>
-          <Plus className="w-4 h-4 mr-2" /> Add Subcontractor
-        </Button>
+        {caps.canManageSubcontractors && (
+          <Button variant="accent" onClick={() => { setAddOpen(true); setAddError(null); reset(); setSelectedTradesAdd([]); }}>
+            <Plus className="w-4 h-4 mr-2" /> Add Subcontractor
+          </Button>
+        )}
       </div>
 
       {/* Summary */}
@@ -446,7 +451,7 @@ export default function SubcontractorsPage() {
           <HardHat className="w-12 h-12 mx-auto text-muted-foreground/30 mb-4" />
           <h3 className="font-bold text-lg mb-1">{search ? "No results" : "No subcontractors yet"}</h3>
           <p className="text-muted-foreground text-sm mb-6">{search ? "Try a different search." : "Add your first subcontractor to get started."}</p>
-          {!search && <Button variant="accent" onClick={() => setAddOpen(true)}><Plus className="w-4 h-4 mr-2" />Add Subcontractor</Button>}
+          {!search && caps.canManageSubcontractors && <Button variant="accent" onClick={() => setAddOpen(true)}><Plus className="w-4 h-4 mr-2" />Add Subcontractor</Button>}
         </Card>
       ) : (
         <div className="space-y-3">
@@ -522,32 +527,36 @@ export default function SubcontractorsPage() {
                           <RatingStars rating={sub.reliabilityRating} />
                         </div>
 
-                        {/* Add to project */}
-                        <button
-                          onClick={() => setShareTarget(sub)}
-                          className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors shrink-0"
-                          title="Add to a project"
-                        >
-                          <FolderPlus className="w-3.5 h-3.5" />
-                        </button>
+                        {caps.canManageSubcontractors && (
+                          <>
+                            {/* Add to project */}
+                            <button
+                              onClick={() => setShareTarget(sub)}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors shrink-0"
+                              title="Add to a project"
+                            >
+                              <FolderPlus className="w-3.5 h-3.5" />
+                            </button>
 
-                        {/* Invite to SiteSort */}
-                        <button
-                          onClick={() => openInvite(sub)}
-                          className="p-1.5 rounded-lg text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50 transition-colors shrink-0"
-                          title="Invite to SiteSort"
-                        >
-                          <UserPlus className="w-3.5 h-3.5" />
-                        </button>
+                            {/* Invite to SiteSort */}
+                            <button
+                              onClick={() => openInvite(sub)}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50 transition-colors shrink-0"
+                              title="Invite to SiteSort"
+                            >
+                              <UserPlus className="w-3.5 h-3.5" />
+                            </button>
 
-                        {/* Edit */}
-                        <button
-                          onClick={() => openEdit(sub)}
-                          className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors shrink-0"
-                          title="Edit"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
+                            {/* Edit */}
+                            <button
+                              onClick={() => openEdit(sub)}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors shrink-0"
+                              title="Edit"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     ))}
                   </div>

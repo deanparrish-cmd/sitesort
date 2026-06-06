@@ -14,6 +14,7 @@ import {
 import { useListProjects, useGetComplianceOverview } from "@workspace/api-client-react";
 import type { ExpiringInsuranceItem, ExpiringPermitItem } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
+import { useCapabilities } from "@/hooks/use-capabilities";
 
 type CalEvent = { date: string; label: string; type: "project-start" | "project-end" | "permit" | "insurance" | "invoice-out" | "invoice-in" };
 type ExpiryAlert = { label: string; expiryDate: string; kind: "permit" | "insurance"; daysLeft: number };
@@ -198,6 +199,7 @@ export default function Dashboard() {
   const [, navigate] = useLocation();
   const { data: projects, isLoading: projectsLoading } = useListProjects();
   const { data: compliance } = useGetComplianceOverview();
+  const caps = useCapabilities();
 
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -325,23 +327,29 @@ export default function Dashboard() {
           <p className="text-muted-foreground mt-1">{dateLabel}</p>
         </div>
         <div className="flex flex-wrap gap-2 sm:flex-nowrap">
-          <Button variant="accent" size="sm" onClick={() => navigate("/projects?new=1")}>
-            <Plus className="w-4 h-4 mr-1.5" /> New Project
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => navigate("/projects?photo=1")}>
-            <Camera className="w-4 h-4 mr-1.5" /> Log Photo
-          </Button>
+          {caps.canManageProjects && (
+            <Button variant="accent" size="sm" onClick={() => navigate("/projects?new=1")}>
+              <Plus className="w-4 h-4 mr-1.5" /> New Project
+            </Button>
+          )}
+          {caps.canLogPhoto && (
+            <Button variant="outline" size="sm" onClick={() => navigate("/projects?photo=1")}>
+              <Camera className="w-4 h-4 mr-1.5" /> Log Photo
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={() => navigate("/messages?new=1")}>
             <MessageSquare className="w-4 h-4 mr-1.5" /> Message
           </Button>
-          <Button variant="outline" size="sm" onClick={() => navigate("/compliance?upload=1")}>
-            <FilePlus className="w-4 h-4 mr-1.5" /> Upload Doc
-          </Button>
+          {caps.canUploadDocument && (
+            <Button variant="outline" size="sm" onClick={() => navigate("/compliance?upload=1")}>
+              <FilePlus className="w-4 h-4 mr-1.5" /> Upload Doc
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Onboarding checklist */}
-      {onboarding && !onboardingDismissed && (() => {
+      {/* Onboarding checklist — setup actions are manager-only */}
+      {onboarding && !onboardingDismissed && caps.canManageProjects && (() => {
         const steps = [
           { key: "hasProject",       done: onboarding.hasProject,       title: "Create your first project",         desc: "Set up a project with a name, address, and start date.",  href: "/projects?new=1",       cta: "Create project" },
           { key: "hasTeamMember",    done: onboarding.hasTeamMember,    title: "Invite a team member",              desc: "Add a colleague to one of your projects.",                 href: "/subcontractors?new=1", cta: "Add to directory" },

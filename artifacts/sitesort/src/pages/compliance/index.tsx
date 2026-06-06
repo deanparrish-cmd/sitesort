@@ -15,6 +15,7 @@ import {
   ExternalLink, Share2, Mail, MessageCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useCapabilities } from "@/hooks/use-capabilities";
 
 type InsuranceItem = { subcontractorId: string; subcontractorName: string; insuranceType: string; expiryDate: string; status: string; certificateUrl?: string | null };
 type PermitItem = { permitId: string; projectId: string; projectName: string; permitType: string; expiryDate: string; status: string };
@@ -45,6 +46,7 @@ function ExpiryBadge({ days }: { days: number }) {
 }
 
 export default function CompliancePage() {
+  const caps = useCapabilities();
   const [insurance, setInsurance] = useState<InsuranceItem[]>([]);
   const [permits, setPermits] = useState<PermitItem[]>([]);
   const [acks, setAcks] = useState<AckItem[]>([]);
@@ -112,9 +114,12 @@ export default function CompliancePage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("upload") === "1") {
+      if (caps.isLoading) return;
       window.history.replaceState({}, "", "/compliance");
-      setHighlightUpload(true);
-      setTimeout(() => setHighlightUpload(false), 4000);
+      if (caps.canManageCompliance) {
+        setHighlightUpload(true);
+        setTimeout(() => setHighlightUpload(false), 4000);
+      }
     } else if (params.get("q")) {
       const term = params.get("q")!;
       window.history.replaceState({}, "", "/compliance");
@@ -123,7 +128,7 @@ export default function CompliancePage() {
       window.history.replaceState({}, "", "/compliance");
       toggleVoice();
     }
-  }, [toggleVoice]);
+  }, [toggleVoice, caps.isLoading, caps.canManageCompliance]);
 
   // ── file upload ──
   const uploadFile = useCallback(async (file: File, prefilledSubId?: string) => {
@@ -153,8 +158,9 @@ export default function CompliancePage() {
     }
   }, []);
 
-  // ── global drag events ──
+  // ── global drag events (manager-only upload) ──
   useEffect(() => {
+    if (!caps.canManageCompliance) return;
     const onDragEnter = (e: DragEvent) => {
       if (!e.dataTransfer?.types.includes("Files")) return;
       dragCounter.current++;
@@ -189,7 +195,7 @@ export default function CompliancePage() {
       document.removeEventListener("drop", onDrop);
       document.removeEventListener("paste", onPaste);
     };
-  }, [uploadFile, rowHoverId]);
+  }, [uploadFile, rowHoverId, caps.canManageCompliance]);
 
   // ── assign uploaded file ──
   const assignFile = async () => {
@@ -265,31 +271,33 @@ export default function CompliancePage() {
         )}
       </div>
 
-      {/* ── Upload tip banner ── */}
-      <div
-        className={cn(
-          "flex items-center gap-3 p-4 mb-6 border rounded-xl text-sm cursor-pointer transition-all",
-          highlightUpload
-            ? "bg-primary/15 border-primary shadow-lg shadow-primary/20 animate-pulse ring-2 ring-primary/40"
-            : "bg-primary/5 border-primary/20 hover:bg-primary/10"
-        )}
-        onClick={() => fileInputRef.current?.click()}
-      >
-        <Upload className={cn("w-5 h-5 shrink-0", highlightUpload ? "text-primary" : "text-primary")} />
-        <p className="text-muted-foreground flex-1">
-          {highlightUpload
-            ? <span className="font-semibold text-primary">Tap here to select your compliance document</span>
-            : <><span className="font-semibold text-foreground">Drag &amp; drop</span> insurance certs or documents from your desktop, email or WhatsApp — or{" "}<span className="text-primary underline font-medium">browse files</span>. Paste (⌘V) also works.</>
-          }
-        </p>
-        <input
-          ref={fileInputRef}
-          type="file"
-          className="hidden"
-          accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
-          onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = ""; }}
-        />
-      </div>
+      {/* ── Upload tip banner (manager-only) ── */}
+      {caps.canManageCompliance && (
+        <div
+          className={cn(
+            "flex items-center gap-3 p-4 mb-6 border rounded-xl text-sm cursor-pointer transition-all",
+            highlightUpload
+              ? "bg-primary/15 border-primary shadow-lg shadow-primary/20 animate-pulse ring-2 ring-primary/40"
+              : "bg-primary/5 border-primary/20 hover:bg-primary/10"
+          )}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <Upload className={cn("w-5 h-5 shrink-0", highlightUpload ? "text-primary" : "text-primary")} />
+          <p className="text-muted-foreground flex-1">
+            {highlightUpload
+              ? <span className="font-semibold text-primary">Tap here to select your compliance document</span>
+              : <><span className="font-semibold text-foreground">Drag &amp; drop</span> insurance certs or documents from your desktop, email or WhatsApp — or{" "}<span className="text-primary underline font-medium">browse files</span>. Paste (⌘V) also works.</>
+            }
+          </p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
+            onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = ""; }}
+          />
+        </div>
+      )}
 
       {/* ── Voice search ── */}
       <div className="relative max-w-sm mb-8">
@@ -402,13 +410,15 @@ export default function CompliancePage() {
                                 </DropdownMenu>
                               </>
                             )}
-                            <button
-                              onClick={() => uploadFile(new File([], ""), ins.subcontractorId)}
-                              className="text-xs text-primary hover:underline flex items-center gap-0.5"
-                              title="Upload new certificate"
-                            >
-                              <Upload className="w-3 h-3" />
-                            </button>
+                            {caps.canManageCompliance && (
+                              <button
+                                onClick={() => uploadFile(new File([], ""), ins.subcontractorId)}
+                                className="text-xs text-primary hover:underline flex items-center gap-0.5"
+                                title="Upload new certificate"
+                              >
+                                <Upload className="w-3 h-3" />
+                              </button>
+                            )}
                             <Link href="/subcontractors" className="text-xs text-muted-foreground hover:text-primary flex items-center gap-0.5">
                               View <ArrowRight className="w-3 h-3" />
                             </Link>
