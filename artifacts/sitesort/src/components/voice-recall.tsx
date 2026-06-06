@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { cn, formatDate } from "@/lib/utils";
+import { pickAudioMimeType, audioExtension } from "@/lib/audio";
 
 interface RecallResult {
   id: string;
@@ -50,7 +51,8 @@ export function VoiceRecall({ projectId, documents = [] }: VoiceRecallProps) {
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      const mimeType = pickAudioMimeType();
+      const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
 
@@ -60,7 +62,8 @@ export function VoiceRecall({ projectId, documents = [] }: VoiceRecallProps) {
 
       mediaRecorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+        const type = mediaRecorder.mimeType || mimeType || "audio/webm";
+        const blob = new Blob(chunksRef.current, { type });
         await sendAudio(blob);
       };
 
@@ -92,7 +95,7 @@ export function VoiceRecall({ projectId, documents = [] }: VoiceRecallProps) {
   const sendAudio = async (blob: Blob) => {
     try {
       const formData = new FormData();
-      formData.append("audio", blob, "recording.webm");
+      formData.append("audio", blob, `recording.${audioExtension(blob.type)}`);
 
       // Auth token injected automatically by the fetch interceptor in api-setup.ts
       const res = await fetch(`/api/projects/${projectId}/voice-recall`, {

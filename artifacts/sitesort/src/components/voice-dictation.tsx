@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from "react";
 import { Mic, Square, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { pickAudioMimeType, audioExtension } from "@/lib/audio";
 
 interface VoiceDictationProps {
   projectId: string;
@@ -35,7 +36,7 @@ export function VoiceDictation({
     async (blob: Blob) => {
       try {
         const formData = new FormData();
-        formData.append("audio", blob, "recording.webm");
+        formData.append("audio", blob, `recording.${audioExtension(blob.type)}`);
         // Auth token injected automatically by the fetch interceptor in api-setup.ts
         const res = await fetch(`/api/projects/${projectId}/transcribe`, {
           method: "POST",
@@ -72,7 +73,8 @@ export function VoiceDictation({
     setSeconds(0);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      const mimeType = pickAudioMimeType();
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       recorderRef.current = recorder;
       chunksRef.current = [];
 
@@ -81,7 +83,8 @@ export function VoiceDictation({
       };
       recorder.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+        const type = recorder.mimeType || mimeType || "audio/webm";
+        const blob = new Blob(chunksRef.current, { type });
         await sendAudio(blob);
       };
 
