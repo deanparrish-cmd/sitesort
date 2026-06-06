@@ -411,7 +411,50 @@ export default function ProjectsList() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Mobile card list */}
+        <div className="block sm:hidden divide-y">
+          {isLoading ? (
+            <div className="px-4 py-8 text-center text-muted-foreground">Loading projects...</div>
+          ) : filteredProjects?.length === 0 ? (
+            <div className="px-4 py-8 text-center text-muted-foreground">No projects found.</div>
+          ) : (
+            filteredProjects?.map((project) => (
+              <Link key={project.id} href={`/projects/${project.id}`}>
+                <div className="px-4 py-4 hover:bg-muted/30 transition-colors active:bg-muted/50">
+                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                    <div className="font-bold text-base leading-tight">{project.name}</div>
+                    <Badge variant={project.status === 'active' ? 'success' : project.status === 'complete' ? 'secondary' : 'warning'} className="shrink-0 mt-0.5">
+                      {project.status.replace('_', ' ').toUpperCase()}
+                    </Badge>
+                  </div>
+                  <div className="text-xs text-muted-foreground flex items-center gap-1 mb-2">
+                    <MapPin className="w-3 h-3 shrink-0" />
+                    <span className="truncate">{project.address}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground mb-2">
+                    <span><span className="font-medium text-foreground">Start:</span> {formatDate(project.startDate)}</span>
+                    {(project as any).targetEndDate && (
+                      <span><span className="font-medium text-foreground">End:</span> {formatDate((project as any).targetEndDate)}</span>
+                    )}
+                    <span>{project.memberCount} members</span>
+                  </div>
+                  {project.alertCount > 0 && (
+                    <Badge variant="destructive" className="mb-2">{project.alertCount} Alerts</Badge>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 bg-muted rounded-full h-1.5 overflow-hidden">
+                      <div className="h-1.5 rounded-full bg-primary transition-all" style={{ width: `${project.progressPercent ?? 0}%` }} />
+                    </div>
+                    <span className="text-xs text-muted-foreground w-8 text-right">{project.progressPercent ?? 0}%</span>
+                  </div>
+                </div>
+              </Link>
+            ))
+          )}
+        </div>
+
+        {/* Desktop table */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="text-xs text-muted-foreground uppercase bg-muted/50 border-b">
               <tr>
@@ -425,9 +468,9 @@ export default function ProjectsList() {
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={5} className="px-6 py-8 text-center text-muted-foreground">Loading projects...</td></tr>
+                <tr><td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">Loading projects...</td></tr>
               ) : filteredProjects?.length === 0 ? (
-                <tr><td colSpan={5} className="px-6 py-8 text-center text-muted-foreground">No projects found.</td></tr>
+                <tr><td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">No projects found.</td></tr>
               ) : (
                 filteredProjects?.map((project) => (
                   <tr key={project.id} className="bg-card border-b hover:bg-muted/30 transition-colors group">
