@@ -126,7 +126,9 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 
 ### Tasks completed today
 
-1. **QR site board check-in with date-stamped photo**:
+1. **Mobile header logo size** — increased from `h-8` to inline `style={{ height: '72px' }}` on the `md:hidden` mobile header in `sidebar-layout.tsx`; used inline style rather than Tailwind class to guarantee the size isn't affected by CSS purging.
+
+2. **QR site board check-in with date-stamped photo**:
    - New `site_checkins` table: `id`, `projectId` (FK cascade), `workerName`, `photoUrl`, `checkedInAt`, `lat`, `lng`
    - `POST /api/site/:token/checkin` — public, no auth, multipart; resolves project from QR token, uploads stamped photo to GCS, creates check-in record
    - `GET /api/projects/:id/checkins` — authenticated; returns all check-ins newest-first
@@ -134,6 +136,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
    - Project detail: new "Check-ins" tab with live count badge; photo grid showing stamped image, worker name, date and time
 
 ### Key files modified
+- `artifacts/sitesort/src/components/layout/sidebar-layout.tsx` — mobile logo height inline style
 - `lib/db/src/schema/site_checkins.ts` — new table
 - `lib/db/src/schema/index.ts` — exports site_checkins
 - `artifacts/api-server/src/routes/qr.ts` — check-in POST + GET endpoints; multer handler for unauthenticated photo upload
@@ -142,6 +145,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 
 ### Notes for next session
 - **Good next features**: demo data seeder, per-project dashboard mini-view
+- **API server does NOT hot-reload** — `dev` command is `build && start` with no watch mode; after editing any backend file, run `pnpm --filter @workspace/api-server run build` then restart the node process (`kill <pid>` + `PORT=8080 node --enable-source-maps ./dist/index.mjs &`)
 - **`lib/db/dist/` is gitignored** — do NOT include it in `git add`; it gets pushed to GitHub via the Replit push script automatically
 - **Stripe still needs manual setup**: activate Customer Portal in Stripe Dashboard; register all 5 webhook events (`checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `customer.subscription.trial_will_end`, `invoice.payment_failed`)
 - **When adding new DB schema files**: always run `npx tsc -p tsconfig.json` inside `lib/db/` after editing `src/schema/index.ts` to regenerate `dist/` before typechecking api-server
