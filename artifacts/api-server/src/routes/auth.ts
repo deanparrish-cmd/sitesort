@@ -12,6 +12,7 @@ import { isLockedOut, recordFailedAttempt, clearAttempts } from "../lib/login-at
 import {
   sendVerificationEmail,
   sendPasswordResetEmail,
+  sendWelcomeEmail,
 } from "../lib/email";
 
 const router: IRouter = Router();
@@ -175,6 +176,10 @@ router.post("/auth/verify-email", async (req, res) => {
       emailVerificationToken: null,
       emailVerificationExpiry: null,
     }).where(eq(usersTable.id, user.id));
+
+    sendWelcomeEmail(user.email, user.name).catch(err =>
+      req.log.error({ err }, "Failed to send welcome email"),
+    );
 
     res.json({ success: true });
   } catch (err) {
