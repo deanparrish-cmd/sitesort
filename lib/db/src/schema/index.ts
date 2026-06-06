@@ -20,3 +20,4 @@ export * from "./channel_message_reactions";
 export * from "./milestones";
 export * from "./site_checkins";
 export * from "./daily_reports";
+export * from "./daily_notes";

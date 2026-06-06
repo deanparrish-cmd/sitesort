@@ -10,6 +10,7 @@ import {
   usersTable,
   notificationsTable,
   dailyReportsTable,
+  dailyNotesTable,
   type DailyReportData,
 } from "@workspace/db/schema";
 import { and, eq, gte, lt, inArray, isNotNull } from "drizzle-orm";
@@ -91,9 +92,10 @@ function dateLabel(dateStr: string): string {
 
 async function buildReportData(
   projectId: string,
+  reportDate: string,
   startUtc: Date,
   endUtc: Date,
-): Promise<{ data: DailyReportData; checkinCount: number; documentEventCount: number; photoCount: number }> {
+): Promise<{ data: DailyReportData; checkinCount: number; documentEventCount: number; photoCount: number; noteCount: number }> {
   const checkins = await db
     .select({
       id: siteCheckinsTable.id,
@@ -196,6 +198,24 @@ async function buildReportData(
     )
     .orderBy(photosTable.takenAt);
 
+  const noteRows = await db
+    .select({
+      id: dailyNotesTable.id,
+      body: dailyNotesTable.body,
+      source: dailyNotesTable.source,
+      createdAt: dailyNotesTable.createdAt,
+      authorName: usersTable.name,
+    })
+    .from(dailyNotesTable)
+    .leftJoin(usersTable, eq(usersTable.id, dailyNotesTable.authorId))
+    .where(
+      and(
+        eq(dailyNotesTable.projectId, projectId),
+        eq(dailyNotesTable.noteDate, reportDate),
+      ),
+    )
+    .orderBy(dailyNotesTable.createdAt);
+
   const uploaded = docRows
     .filter((d) => !d.previousVersionId)
     .map((d) => ({
@@ -253,6 +273,13 @@ async function buildReportData(
       photoUrl: p.photoUrl ?? null,
       takenAt: p.takenAt.toISOString(),
     })),
+    siteManagerNotes: noteRows.map((n) => ({
+      id: n.id,
+      authorName: n.authorName ?? "Unknown",
+      body: n.body,
+      source: n.source,
+      at: n.createdAt.toISOString(),
+    })),
   };
 
   return {
@@ -260,6 +287,7 @@ async function buildReportData(
     checkinCount: data.subcontractorsOnSite.length,
     documentEventCount: uploaded.length + amended.length + viewed.length + signedOff.length,
     photoCount: data.sitePhotos.length,
+    noteCount: data.siteManagerNotes.length,
   };
 }
 
@@ -271,7 +299,7 @@ export async function generateDailyReportForProject(
 ): Promise<{ reportId: string; created: boolean }> {
   const startUtc = londonWallClockUtc(reportDate, 0);
   const endUtc = londonWallClockUtc(addDaysStr(reportDate, 1), 0);
-  const { data, checkinCount, documentEventCount, photoCount } = await buildReportData(projectId, startUtc, endUtc);
+  const { data, checkinCount, documentEventCount, photoCount, noteCount } = await buildReportData(projectId, reportDate, startUtc, endUtc);
 
   return db.transaction(async (tx) => {
     const id = generateId();
@@ -303,11 +331,11 @@ export async function generateDailyReportForProject(
       .from(projectMembersTable)
       .where(and(eq(projectMembersTable.projectId, projectId), eq(projectMembersTable.role, "manager")));
 
-    const total = checkinCount + documentEventCount + photoCount;
+    const total = checkinCount + documentEventCount + photoCount + noteCount;
     const summary =
       total === 0
         ? "No site activity recorded today."
-        : `${checkinCount} subcontractor check-in${checkinCount === 1 ? "" : "s"} · ${documentEventCount} document update${documentEventCount === 1 ? "" : "s"} · ${photoCount} site photo${photoCount === 1 ? "" : "s"}.`;
+        : `${checkinCount} subcontractor check-in${checkinCount === 1 ? "" : "s"} · ${documentEventCount} document update${documentEventCount === 1 ? "" : "s"} · ${photoCount} site photo${photoCount === 1 ? "" : "s"} · ${noteCount} site note${noteCount === 1 ? "" : "s"}.`;
 
     for (const m of managers) {
       if (!m.userId) continue;

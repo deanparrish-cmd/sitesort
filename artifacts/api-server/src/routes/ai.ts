@@ -128,4 +128,42 @@ ${JSON.stringify(docList, null, 2)}`;
   }
 );
 
+// Plain speech-to-text: transcribe a short audio clip and return the text.
+// Used by the dictation buttons (photo descriptions, the spoken daily report).
+router.post(
+  "/projects/:projectId/transcribe",
+  authenticate,
+  upload.single("audio"),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        res.status(400).json({ error: "validation_error", message: "No audio file provided" });
+        return;
+      }
+
+      // Verify the caller has access to this project (tenant scoping).
+      const project = await db.select({ id: projectsTable.id }).from(projectsTable)
+        .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
+        .limit(1);
+      if (!project[0]) {
+        res.status(404).json({ error: "not_found", message: "Project not found" });
+        return;
+      }
+
+      const openai = getOpenAI();
+      const audioBuffer = req.file.buffer;
+      const transcription = await openai.audio.transcriptions.create({
+        model: "whisper-1",
+        file: new File([audioBuffer], "audio.webm", { type: req.file.mimetype || "audio/webm" }),
+        language: "en",
+      });
+
+      res.json({ transcript: transcription.text.trim() });
+    } catch (err: any) {
+      req.log.error({ err }, "Transcription error");
+      res.status(500).json({ error: "server_error", message: err?.message ?? "Transcription failed" });
+    }
+  },
+);
+
 export default router;

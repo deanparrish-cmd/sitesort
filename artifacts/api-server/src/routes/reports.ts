@@ -1,9 +1,10 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { dailyReportsTable, projectsTable } from "@workspace/db/schema";
+import { dailyReportsTable, dailyNotesTable, projectsTable, usersTable } from "@workspace/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
 import { generateDailyReportForProject } from "../lib/daily-reports";
+import { generateId } from "../lib/id";
 
 const router: IRouter = Router();
 
@@ -11,6 +12,10 @@ const INTERNAL_ROLES = ["admin", "project_manager", "site_worker"];
 
 function isInternal(role: string): boolean {
   return INTERNAL_ROLES.includes(role);
+}
+
+function londonToday(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 }
 
 // List daily reports for a project (most recent first).
@@ -103,6 +108,103 @@ router.get("/daily-reports/:id", authenticate, async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Get daily report error");
     res.status(500).json({ error: "server_error", message: "Failed to load report" });
+  }
+});
+
+// List site notes (e.g. the spoken daily report) for a project on a given day.
+// Defaults to today (Europe/London). Used to show what has already been logged.
+router.get("/projects/:projectId/daily-notes", authenticate, async (req, res) => {
+  try {
+    if (!isInternal(req.user!.role)) {
+      res.status(403).json({ error: "forbidden", message: "Not allowed to view notes" });
+      return;
+    }
+
+    const project = await db
+      .select({ id: projectsTable.id })
+      .from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!project[0]) {
+      res.status(404).json({ error: "not_found", message: "Project not found" });
+      return;
+    }
+
+    const date = (req.query.date as string | undefined) ?? londonToday();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      res.status(400).json({ error: "validation_error", message: "date must be YYYY-MM-DD" });
+      return;
+    }
+
+    const notes = await db
+      .select({
+        id: dailyNotesTable.id,
+        body: dailyNotesTable.body,
+        source: dailyNotesTable.source,
+        noteDate: dailyNotesTable.noteDate,
+        createdAt: dailyNotesTable.createdAt,
+        authorName: usersTable.name,
+      })
+      .from(dailyNotesTable)
+      .leftJoin(usersTable, eq(usersTable.id, dailyNotesTable.authorId))
+      .where(and(eq(dailyNotesTable.projectId, req.params.projectId), eq(dailyNotesTable.noteDate, date)))
+      .orderBy(desc(dailyNotesTable.createdAt));
+
+    res.json(
+      notes.map((n) => ({
+        id: n.id,
+        body: n.body,
+        source: n.source,
+        noteDate: n.noteDate,
+        authorName: n.authorName ?? "Unknown",
+        createdAt: n.createdAt.toISOString(),
+      })),
+    );
+  } catch (err) {
+    req.log.error({ err }, "List daily notes error");
+    res.status(500).json({ error: "server_error", message: "Failed to list notes" });
+  }
+});
+
+// Add a site note (overall spoken daily report) for the current day. Internal staff only.
+router.post("/projects/:projectId/daily-notes", authenticate, async (req, res) => {
+  try {
+    if (!isInternal(req.user!.role)) {
+      res.status(403).json({ error: "forbidden", message: "Not allowed to add notes" });
+      return;
+    }
+
+    const project = await db
+      .select({ id: projectsTable.id })
+      .from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!project[0]) {
+      res.status(404).json({ error: "not_found", message: "Project not found" });
+      return;
+    }
+
+    const body = typeof req.body?.body === "string" ? req.body.body.trim() : "";
+    if (!body) {
+      res.status(400).json({ error: "validation_error", message: "Note text is required" });
+      return;
+    }
+
+    const source = req.body?.source === "text" ? "text" : "voice";
+    const id = generateId();
+    await db.insert(dailyNotesTable).values({
+      id,
+      projectId: req.params.projectId,
+      authorId: req.user!.id,
+      noteDate: londonToday(),
+      body,
+      source,
+    });
+
+    res.status(201).json({ id });
+  } catch (err) {
+    req.log.error({ err }, "Create daily note error");
+    res.status(500).json({ error: "server_error", message: "Failed to save note" });
   }
 });
 

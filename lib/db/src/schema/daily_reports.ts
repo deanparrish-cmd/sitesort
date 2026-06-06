@@ -32,6 +32,13 @@ export type DailyReportData = {
     photoUrl: string | null;
     takenAt: string;
   }[];
+  siteManagerNotes: {
+    id: string;
+    authorName: string;
+    body: string;
+    source: string;
+    at: string;
+  }[];
 };
 
 // One immutable end-of-day snapshot per project per day. The collated activity is

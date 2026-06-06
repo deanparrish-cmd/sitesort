@@ -10,12 +10,13 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag } from "lucide-react";
+import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Mic } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { Textarea } from "@/components/ui/textarea";
 import { InsuranceCertZone } from "@/components/ui/insurance-cert-zone";
 import { VoiceRecall } from "@/components/voice-recall";
+import { VoiceDictation } from "@/components/voice-dictation";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetProject,
@@ -59,8 +60,10 @@ export default function ProjectDetail() {
       signedOff: { documentId: string; documentName: string; documentVersion: number; userName: string; userRole: string; signedOffWithPin: boolean; at: string }[];
     };
     sitePhotos: { id: string; referenceNumber: string; category: string; description: string | null; zone: string | null; uploaderName: string; photoUrl: string | null; takenAt: string }[];
+    siteManagerNotes: { id: string; authorName: string; body: string; source: string; at: string }[];
   };
   type ReportDetail = ReportSummary & { projectId: string; projectName: string; data: DailyReportData };
+  type DailyNote = { id: string; body: string; source: string; noteDate: string; authorName: string; createdAt: string };
 
   const [permits, setPermits] = useState<PermitItem[]>([]);
   const [projectInvoices, setProjectInvoices] = useState<InvoiceItem[]>([]);
@@ -79,6 +82,9 @@ export default function ProjectDetail() {
   const [photoZone, setPhotoZone] = useState("");
   const [photoSubmitting, setPhotoSubmitting] = useState(false);
   const [photoFormKey, setPhotoFormKey] = useState(0);
+  const [todayNotes, setTodayNotes] = useState<DailyNote[]>([]);
+  const [noteBody, setNoteBody] = useState("");
+  const [noteSubmitting, setNoteSubmitting] = useState(false);
 
   const authHeaders = () => {
     const t = localStorage.getItem("sitesort_token");
@@ -98,6 +104,32 @@ export default function ProjectDetail() {
   const fetchReports = () => {
     fetch(`/api/projects/${projectId}/daily-reports`, { headers: authHeaders() })
       .then(r => r.ok ? r.json() : []).then(setReports);
+  };
+
+  const fetchTodayNotes = () => {
+    fetch(`/api/projects/${projectId}/daily-notes`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : []).then(setTodayNotes);
+  };
+
+  const submitDailyNote = async (body: string, source: "voice" | "text") => {
+    const text = body.trim();
+    if (!text) return;
+    setNoteSubmitting(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/daily-notes`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ body: text, source }),
+      });
+      if (!res.ok) throw new Error("Failed to save note");
+      toast({ title: "Daily report saved", description: "Added to today's site report." });
+      setNoteBody("");
+      fetchTodayNotes();
+    } catch {
+      toast({ title: "Could not save", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setNoteSubmitting(false);
+    }
   };
 
   const openReportDetail = async (id: string) => {
@@ -145,7 +177,8 @@ export default function ProjectDetail() {
       fetch(`/api/projects/${projectId}/milestones`, { headers }).then(r => r.ok ? r.json() : []),
       fetch(`/api/projects/${projectId}/checkins`, { headers }).then(r => r.ok ? r.json() : []),
       fetch(`/api/projects/${projectId}/daily-reports`, { headers }).then(r => r.ok ? r.json() : []),
-    ]).then(([p, inv, ph, ms, ci, rep]) => { setPermits(p); setProjectInvoices(inv); setPhotos(ph); setMilestones(ms); setCheckins(ci); setReports(rep); });
+      fetch(`/api/projects/${projectId}/daily-notes`, { headers }).then(r => r.ok ? r.json() : []),
+    ]).then(([p, inv, ph, ms, ci, rep, notes]) => { setPermits(p); setProjectInvoices(inv); setPhotos(ph); setMilestones(ms); setCheckins(ci); setReports(rep); setTodayNotes(notes); });
   }, [projectId]);
 
   useEffect(() => {
@@ -1535,8 +1568,16 @@ tr:last-child td{border-bottom:none}
                       />
                       <div className="grid sm:grid-cols-2 gap-3">
                         <div>
-                          <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Note (optional)</label>
-                          <Textarea value={photoNote} onChange={e => setPhotoNote(e.target.value)} placeholder="What does this photo show?" rows={2} />
+                          <div className="flex items-center justify-between mb-1.5">
+                            <label className="text-xs font-medium text-muted-foreground block">Note (optional)</label>
+                            <VoiceDictation
+                              projectId={projectId}
+                              maxSeconds={30}
+                              label="Dictate"
+                              onTranscript={t => setPhotoNote(prev => (prev.trim() ? prev.trim() + " " + t : t))}
+                            />
+                          </div>
+                          <Textarea value={photoNote} onChange={e => setPhotoNote(e.target.value)} placeholder="What does this photo show? Type or tap Dictate to speak." rows={2} />
                         </div>
                         <div>
                           <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Zone / location (optional)</label>
@@ -1548,6 +1589,48 @@ tr:last-child td{border-bottom:none}
                           {photoSubmitting ? "Logging…" : "Log photo"}
                         </Button>
                       </div>
+                    </CardContent>
+                  </Card>
+                )}
+                {caps.canLogPhoto && (
+                  <Card className="mb-6">
+                    <CardContent className="pt-6 space-y-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h4 className="font-semibold text-sm mb-1">Daily oral report</h4>
+                          <p className="text-xs text-muted-foreground">Speak an overall summary of the day. It's transcribed and added to today's site report.</p>
+                        </div>
+                        <VoiceDictation
+                          projectId={projectId}
+                          maxSeconds={120}
+                          label="Record"
+                          onTranscript={t => setNoteBody(prev => (prev.trim() ? prev.trim() + " " + t : t))}
+                        />
+                      </div>
+                      <Textarea
+                        value={noteBody}
+                        onChange={e => setNoteBody(e.target.value)}
+                        placeholder="Tap Record and speak your daily report, or type it here…"
+                        rows={3}
+                      />
+                      <div className="flex justify-end">
+                        <Button onClick={() => submitDailyNote(noteBody, "voice")} disabled={!noteBody.trim() || noteSubmitting}>
+                          {noteSubmitting ? "Saving…" : "Save to today's report"}
+                        </Button>
+                      </div>
+                      {todayNotes.length > 0 && (
+                        <div className="border-t pt-3 space-y-2">
+                          <p className="text-xs font-semibold text-muted-foreground">Logged today</p>
+                          {todayNotes.map(n => (
+                            <div key={n.id} className="rounded-lg border bg-muted/30 p-3">
+                              <p className="text-sm text-foreground whitespace-pre-wrap">{n.body}</p>
+                              <p className="text-[10px] text-muted-foreground mt-1">
+                                {n.authorName} · {formatDate(n.createdAt)}{n.source === "voice" ? " · spoken" : ""}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 )}
@@ -1965,6 +2048,20 @@ tr:last-child td{border-bottom:none}
                           {p.description && <p className="text-[11px] text-foreground line-clamp-2">{p.description}</p>}
                           <p className="text-[10px] text-muted-foreground">{time(p.takenAt)} · {p.uploaderName}</p>
                         </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {d.siteManagerNotes.length > 0 && (
+                <div>
+                  <h4 className="flex items-center gap-2 font-semibold text-sm mb-2"><Mic className="w-4 h-4 text-primary" />Site reports ({d.siteManagerNotes.length})</h4>
+                  <div className="space-y-2">
+                    {d.siteManagerNotes.map(n => (
+                      <div key={n.id} className="rounded-lg border bg-muted/30 p-3">
+                        <p className="text-[13px] text-foreground whitespace-pre-wrap">{n.body}</p>
+                        <p className="text-[10px] text-muted-foreground mt-1">{time(n.at)} · {n.authorName}{n.source === "voice" ? " · spoken" : ""}</p>
                       </div>
                     ))}
                   </div>
