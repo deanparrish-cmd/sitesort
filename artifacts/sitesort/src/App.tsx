@@ -39,17 +39,6 @@ const queryClient = new QueryClient({
   }
 });
 
-// Placeholder components for unimplemented routes to ensure app runs without errors
-const PlaceholderPage = ({ title }: { title: string }) => (
-  <div className="min-h-screen flex items-center justify-center bg-background">
-    <div className="text-center p-8 bg-card border rounded-2xl shadow-sm max-w-md w-full">
-      <h1 className="text-2xl font-bold mb-2">{title}</h1>
-      <p className="text-muted-foreground">This feature is currently under construction.</p>
-      <a href="/dashboard" className="text-primary mt-4 inline-block hover:underline font-semibold">Return to Dashboard</a>
-    </div>
-  </div>
-);
-
 function Router() {
   return (
     <Switch>
