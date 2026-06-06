@@ -23,6 +23,7 @@ import {
   useUploadDocument,
   useUpdateProject,
   useGetMe,
+  useGetDocumentAuditLog,
   DocumentType,
   UploadDocumentRequestType,
   UpdateProjectRequestStatus,
@@ -106,6 +107,15 @@ export default function ProjectDetail() {
   const [setPinValue, setSetPinValue] = useState("");
   const signOffNeedsPin = !!signOffDoc && PIN_REQUIRED_TYPES.includes(signOffDoc.type);
   const onlyDigits = (v: string) => v.replace(/\D/g, "").slice(0, 4);
+
+  // Immutable acknowledgment audit trail — admins & project managers only.
+  const myRole = (me as { role?: string } | undefined)?.role;
+  const canViewAudit = myRole === "admin" || myRole === "project_manager";
+  const [auditDoc, setAuditDoc] = useState<{ id: string; name: string } | null>(null);
+  const { data: auditEntries, isLoading: auditLoading } = useGetDocumentAuditLog(
+    auditDoc?.id ?? "",
+    { query: { enabled: !!auditDoc && canViewAudit } },
+  );
 
   const openSignOff = (doc: SignOffDoc) => {
     if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
@@ -1003,6 +1013,16 @@ tr:last-child td{border-bottom:none}
                             <ExternalLink className="w-3.5 h-3.5" />
                             Open
                           </a>
+                          {canViewAudit && (
+                            <button
+                              onClick={() => setAuditDoc({ id: doc.id, name: doc.name })}
+                              className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs"
+                              title="View sign-off audit history"
+                            >
+                              <Clock className="w-3.5 h-3.5" />
+                              History
+                            </button>
+                          )}
                           <button
                             onClick={() => openDocEdit(doc)}
                             className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs"
@@ -1694,6 +1714,58 @@ tr:last-child td{border-bottom:none}
               <Button variant="accent" onClick={submitSignOff} isLoading={signOffSubmitting}>
                 {signOffNeedsPin && setPinMode ? "Set PIN & sign off" : "Sign off"}
               </Button>
+            </DialogFooter>
+          </div>
+        )}
+      </Dialog>
+
+      <Dialog open={!!auditDoc} onOpenChange={v => { if (!v) setAuditDoc(null); }}>
+        <DialogHeader>
+          <DialogTitle>Sign-off audit history</DialogTitle>
+        </DialogHeader>
+        {auditDoc && (
+          <div className="space-y-4">
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/40 border">
+              <ShieldCheck className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="font-semibold text-sm truncate">{auditDoc.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  A permanent, tamper-proof record of every sign-off. Entries can never be edited or deleted.
+                </p>
+              </div>
+            </div>
+
+            {auditLoading ? (
+              <p className="text-sm text-muted-foreground py-6 text-center">Loading history…</p>
+            ) : !auditEntries || auditEntries.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-6 text-center">No sign-offs recorded yet for this document.</p>
+            ) : (
+              <div className="max-h-80 overflow-y-auto space-y-2 -mx-1 px-1">
+                {auditEntries.map(entry => (
+                  <div key={entry.id} className="flex items-start gap-3 p-3 rounded-lg border bg-card">
+                    <div className="w-9 h-9 rounded-full bg-success/10 text-success flex items-center justify-center shrink-0">
+                      <CheckCircle2 className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-semibold text-sm">{entry.userName}</p>
+                        <Badge variant="secondary" className="text-[10px] capitalize">{entry.userRole.replace(/_/g, " ")}</Badge>
+                        <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-[10px] font-bold">v{entry.documentVersion}</span>
+                        {entry.signedOffWithPin && (
+                          <Badge variant="success" className="text-[10px]"><ShieldCheck className="w-3 h-3 mr-1" /> PIN verified</Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Acknowledged on {formatDate(entry.createdAt)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setAuditDoc(null)}>Close</Button>
             </DialogFooter>
           </div>
         )}

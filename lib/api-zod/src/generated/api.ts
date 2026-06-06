@@ -352,6 +352,31 @@ export const GetDocumentDistributionsResponse = zod.array(
 );
 
 /**
+ * Read-only, append-only history of sign-offs. Restricted to admins and project managers.
+ * @summary Get the immutable acknowledgment audit trail for a document
+ */
+export const GetDocumentAuditLogParams = zod.object({
+  documentId: zod.coerce.string(),
+});
+
+export const GetDocumentAuditLogResponseItem = zod.object({
+  id: zod.string(),
+  documentId: zod.string(),
+  documentVersion: zod.number(),
+  userId: zod.string(),
+  userName: zod.string(),
+  userRole: zod.string(),
+  action: zod.string(),
+  signedOffWithPin: zod.boolean(),
+  ipAddress: zod.string().nullish(),
+  userAgent: zod.string().nullish(),
+  createdAt: zod.date(),
+});
+export const GetDocumentAuditLogResponse = zod.array(
+  GetDocumentAuditLogResponseItem,
+);
+
+/**
  * @summary List members of a project
  */
 export const ListProjectMembersParams = zod.object({

@@ -270,6 +270,20 @@ export interface DistributeRequest {
   userIds: string[];
 }
 
+export interface AuditLogEntry {
+  id: string;
+  documentId: string;
+  documentVersion: number;
+  userId: string;
+  userName: string;
+  userRole: string;
+  action: string;
+  signedOffWithPin: boolean;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  createdAt: string;
+}
+
 export type ProjectMemberRole =
   (typeof ProjectMemberRole)[keyof typeof ProjectMemberRole];
 

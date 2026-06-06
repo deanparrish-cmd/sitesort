@@ -1,8 +1,8 @@
 import { Router, type IRouter } from "express";
 import bcrypt from "bcryptjs";
 import { db } from "@workspace/db";
-import { documentsTable, documentDistributionsTable, usersTable, notificationsTable, projectsTable } from "@workspace/db/schema";
-import { eq, and } from "drizzle-orm";
+import { documentsTable, documentDistributionsTable, usersTable, notificationsTable, projectsTable, acknowledgmentAuditTable } from "@workspace/db/schema";
+import { eq, and, desc } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { sendDocumentNotificationEmail } from "../lib/email";
@@ -272,7 +272,7 @@ router.post("/documents/:documentId/acknowledge", authenticate, async (req, res)
 
     // Load the document (and verify tenant access) to determine whether it is a
     // critical type that requires PIN-confirmed sign-off.
-    const docs = await db.select({ id: documentsTable.id, type: documentsTable.type, projectId: documentsTable.projectId })
+    const docs = await db.select({ id: documentsTable.id, type: documentsTable.type, projectId: documentsTable.projectId, version: documentsTable.version })
       .from(documentsTable).where(eq(documentsTable.id, req.params.documentId)).limit(1);
     if (!docs[0]) {
       res.status(404).json({ error: "not_found", message: "Document not found" });
@@ -330,9 +330,30 @@ router.post("/documents/:documentId/acknowledge", authenticate, async (req, res)
       await clearPinAttempts(req.user!.id);
     }
 
-    await db.update(documentDistributionsTable)
-      .set({ status: "acknowledged", acknowledgedAt: new Date(), viewedAt: distRecord[0].viewedAt ?? new Date(), signedOffWithPin: requiresPin })
-      .where(eq(documentDistributionsTable.id, distRecord[0].id));
+    // Snapshot the actor's name/role so the audit record survives later user changes.
+    const actorRows = await db.select({ name: usersTable.name, role: usersTable.role })
+      .from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
+
+    // Atomically update the distribution and write the immutable audit entry:
+    // either both the sign-off and its append-only audit record persist, or neither does.
+    await db.transaction(async (tx) => {
+      await tx.update(documentDistributionsTable)
+        .set({ status: "acknowledged", acknowledgedAt: new Date(), viewedAt: distRecord[0].viewedAt ?? new Date(), signedOffWithPin: requiresPin })
+        .where(eq(documentDistributionsTable.id, distRecord[0].id));
+
+      await tx.insert(acknowledgmentAuditTable).values({
+        id: generateId(),
+        documentId: req.params.documentId,
+        documentVersion: docs[0].version,
+        userId: req.user!.id,
+        userName: actorRows[0]?.name ?? "Unknown",
+        userRole: actorRows[0]?.role ?? req.user!.role,
+        action: "acknowledged",
+        signedOffWithPin: requiresPin,
+        ipAddress: req.ip ?? null,
+        userAgent: req.headers["user-agent"] ?? null,
+      });
+    });
 
     res.json({ success: true, message: "Document acknowledged" });
   } catch (err) {
@@ -431,6 +452,52 @@ router.get("/documents/:documentId/distributions", authenticate, async (req, res
   } catch (err) {
     req.log.error({ err }, "Get distributions error");
     res.status(500).json({ error: "server_error", message: "Failed to get distributions" });
+  }
+});
+
+// Read-only, append-only audit trail for a document's sign-offs.
+// Restricted to admins and project managers (compliance oversight roles).
+router.get("/documents/:documentId/audit-log", authenticate, async (req, res) => {
+  try {
+    if (req.user!.role !== "admin" && req.user!.role !== "project_manager") {
+      res.status(403).json({ error: "forbidden", message: "Only admins and project managers can view the audit log." });
+      return;
+    }
+
+    const docs = await db.select({ projectId: documentsTable.projectId }).from(documentsTable)
+      .where(eq(documentsTable.id, req.params.documentId)).limit(1);
+    if (!docs[0]) {
+      res.status(404).json({ error: "not_found", message: "Document not found" });
+      return;
+    }
+    const project = await db.select({ id: projectsTable.id }).from(projectsTable)
+      .where(and(eq(projectsTable.id, docs[0].projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!project[0]) {
+      res.status(404).json({ error: "not_found", message: "Document not found" });
+      return;
+    }
+
+    const entries = await db.select().from(acknowledgmentAuditTable)
+      .where(eq(acknowledgmentAuditTable.documentId, req.params.documentId))
+      .orderBy(desc(acknowledgmentAuditTable.createdAt));
+
+    res.json(entries.map(e => ({
+      id: e.id,
+      documentId: e.documentId,
+      documentVersion: e.documentVersion,
+      userId: e.userId,
+      userName: e.userName,
+      userRole: e.userRole,
+      action: e.action,
+      signedOffWithPin: e.signedOffWithPin,
+      ipAddress: e.ipAddress ?? null,
+      userAgent: e.userAgent ?? null,
+      createdAt: e.createdAt.toISOString(),
+    })));
+  } catch (err) {
+    req.log.error({ err }, "Get audit log error");
+    res.status(500).json({ error: "server_error", message: "Failed to get audit log" });
   }
 });
 

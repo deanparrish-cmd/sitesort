@@ -17,6 +17,8 @@ tags:
     description: Document management
   - name: distributions
     description: Document distributions
+  - name: audit
+    description: Immutable acknowledgment audit trail
   - name: team
     description: Team management
   - name: subcontractors
@@ -358,6 +360,40 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Distribution"
+
+  /documents/{documentId}/audit-log:
+    get:
+      operationId: getDocumentAuditLog
+      tags: [audit]
+      summary: Get the immutable acknowledgment audit trail for a document
+      description: Read-only, append-only history of sign-offs. Restricted to admins and project managers.
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Audit trail entries (newest first)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditLogEntry"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /projects/{projectId}/members:
     get:
@@ -1158,6 +1194,36 @@ components:
           format: date-time
           nullable: true
       required: [id, documentId, userId, userName, userRole, status, distributedAt]
+
+    AuditLogEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        documentId:
+          type: string
+        documentVersion:
+          type: integer
+        userId:
+          type: string
+        userName:
+          type: string
+        userRole:
+          type: string
+        action:
+          type: string
+        signedOffWithPin:
+          type: boolean
+        ipAddress:
+          type: string
+          nullable: true
+        userAgent:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, documentId, documentVersion, userId, userName, userRole, action, signedOffWithPin, createdAt]
 
     ProjectMember:
       type: object

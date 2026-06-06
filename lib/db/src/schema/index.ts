@@ -5,6 +5,7 @@ export * from "./projects";
 export * from "./project_members";
 export * from "./documents";
 export * from "./document_distributions";
+export * from "./acknowledgment_audit";
 export * from "./insurance_records";
 export * from "./permits";
 export * from "./photos";

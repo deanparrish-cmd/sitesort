@@ -20,6 +20,7 @@ import type {
   AcknowledgeRequest,
   AddInsuranceRequest,
   AddMemberRequest,
+  AuditLogEntry,
   AuthResponse,
   ComplianceOverview,
   CreatePermitRequest,
@@ -1340,6 +1341,96 @@ export function useGetDocumentDistributions<
     documentId,
     options,
   );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Read-only, append-only history of sign-offs. Restricted to admins and project managers.
+ * @summary Get the immutable acknowledgment audit trail for a document
+ */
+export const getGetDocumentAuditLogUrl = (documentId: string) => {
+  return `/api/documents/${documentId}/audit-log`;
+};
+
+export const getDocumentAuditLog = async (
+  documentId: string,
+  options?: RequestInit,
+): Promise<AuditLogEntry[]> => {
+  return customFetch<AuditLogEntry[]>(getGetDocumentAuditLogUrl(documentId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDocumentAuditLogQueryKey = (documentId: string) => {
+  return [`/api/documents/${documentId}/audit-log`] as const;
+};
+
+export const getGetDocumentAuditLogQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDocumentAuditLog>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  documentId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDocumentAuditLog>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetDocumentAuditLogQueryKey(documentId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getDocumentAuditLog>>
+  > = ({ signal }) =>
+    getDocumentAuditLog(documentId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!documentId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDocumentAuditLog>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDocumentAuditLogQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDocumentAuditLog>>
+>;
+export type GetDocumentAuditLogQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get the immutable acknowledgment audit trail for a document
+ */
+
+export function useGetDocumentAuditLog<
+  TData = Awaited<ReturnType<typeof getDocumentAuditLog>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  documentId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDocumentAuditLog>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDocumentAuditLogQueryOptions(documentId, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

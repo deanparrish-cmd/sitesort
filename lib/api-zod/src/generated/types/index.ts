@@ -12,6 +12,7 @@ export * from "./addInsuranceRequest";
 export * from "./addInsuranceRequestType";
 export * from "./addMemberRequest";
 export * from "./addMemberRequestRole";
+export * from "./auditLogEntry";
 export * from "./authResponse";
 export * from "./complianceOverview";
 export * from "./createPermitRequest";
