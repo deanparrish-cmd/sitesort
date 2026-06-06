@@ -20,6 +20,7 @@ import messagesRouter from "./messages";
 import channelsRouter from "./channels";
 import billingRouter from "./billing";
 import onboardingRouter from "./onboarding";
+import reportsRouter from "./reports";
 
 const router: IRouter = Router();
 
@@ -44,5 +45,6 @@ router.use(messagesRouter);
 router.use(channelsRouter);
 router.use(billingRouter);
 router.use(onboardingRouter);
+router.use(reportsRouter);
 
 export default router;

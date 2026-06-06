@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { FileDropZone } from "@/components/ui/file-drop-zone";
+import { Textarea } from "@/components/ui/textarea";
 import { InsuranceCertZone } from "@/components/ui/insurance-cert-zone";
 import { VoiceRecall } from "@/components/voice-recall";
 import { useQueryClient } from "@tanstack/react-query";
@@ -48,15 +49,36 @@ export default function ProjectDetail() {
   type PhotoItem = { id: string; uploadedBy: string; uploaderName: string; photoUrl: string | null; category: string; description: string | null; zone: string | null; referenceNumber: string; takenAt: string };
   type MilestoneItem = { id: string; title: string; dueDate: string; completedAt: string | null; order: number };
   type CheckinItem = { id: string; workerName: string; photoUrl: string; checkedInAt: string; lat: number | null; lng: number | null };
+  type ReportSummary = { id: string; reportDate: string; generatedAt: string; checkinCount: number; documentEventCount: number; photoCount: number };
+  type DailyReportData = {
+    subcontractorsOnSite: { id: string; workerName: string; checkedInAt: string; photoUrl: string | null }[];
+    documentActivity: {
+      uploaded: { documentId: string; name: string; type: string; version: number; uploaderName: string; at: string }[];
+      amended: { documentId: string; name: string; type: string; version: number; uploaderName: string; at: string }[];
+      viewed: { documentId: string; documentName: string; userName: string; at: string }[];
+      signedOff: { documentId: string; documentName: string; documentVersion: number; userName: string; userRole: string; signedOffWithPin: boolean; at: string }[];
+    };
+    sitePhotos: { id: string; referenceNumber: string; category: string; description: string | null; zone: string | null; uploaderName: string; photoUrl: string | null; takenAt: string }[];
+  };
+  type ReportDetail = ReportSummary & { projectId: string; projectName: string; data: DailyReportData };
 
   const [permits, setPermits] = useState<PermitItem[]>([]);
   const [projectInvoices, setProjectInvoices] = useState<InvoiceItem[]>([]);
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [milestones, setMilestones] = useState<MilestoneItem[]>([]);
   const [checkins, setCheckins] = useState<CheckinItem[]>([]);
+  const [reports, setReports] = useState<ReportSummary[]>([]);
+  const [openReport, setOpenReport] = useState<ReportDetail | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
   const [milestoneTitle, setMilestoneTitle] = useState("");
   const [milestoneDue, setMilestoneDue] = useState("");
   const [milestoneAdding, setMilestoneAdding] = useState(false);
+  const [photoUploadUrl, setPhotoUploadUrl] = useState<string | null>(null);
+  const [photoTag, setPhotoTag] = useState<string>("snag");
+  const [photoNote, setPhotoNote] = useState("");
+  const [photoZone, setPhotoZone] = useState("");
+  const [photoSubmitting, setPhotoSubmitting] = useState(false);
+  const [photoFormKey, setPhotoFormKey] = useState(0);
 
   const authHeaders = () => {
     const t = localStorage.getItem("sitesort_token");
@@ -66,6 +88,50 @@ export default function ProjectDetail() {
   const fetchMilestones = () => {
     fetch(`/api/projects/${projectId}/milestones`, { headers: authHeaders() })
       .then(r => r.ok ? r.json() : []).then(setMilestones);
+  };
+
+  const fetchPhotos = () => {
+    fetch(`/api/projects/${projectId}/photos`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : []).then(setPhotos);
+  };
+
+  const fetchReports = () => {
+    fetch(`/api/projects/${projectId}/daily-reports`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : []).then(setReports);
+  };
+
+  const openReportDetail = async (id: string) => {
+    setReportLoading(true);
+    try {
+      const r = await fetch(`/api/daily-reports/${id}`, { headers: authHeaders() });
+      if (r.ok) setOpenReport(await r.json());
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  const submitSnagPhoto = async () => {
+    if (!photoUploadUrl) return;
+    setPhotoSubmitting(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/photos`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ photoUrl: photoUploadUrl, category: photoTag, description: photoNote.trim() || null, zone: photoZone.trim() || null }),
+      });
+      if (!res.ok) throw new Error("Failed to log photo");
+      toast({ title: "Photo logged", description: "Added to today's site activity." });
+      setPhotoUploadUrl(null);
+      setPhotoNote("");
+      setPhotoZone("");
+      setPhotoTag("snag");
+      setPhotoFormKey(k => k + 1);
+      fetchPhotos();
+    } catch {
+      toast({ title: "Could not log photo", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setPhotoSubmitting(false);
+    }
   };
 
   useEffect(() => {
@@ -78,7 +144,15 @@ export default function ProjectDetail() {
       fetch(`/api/projects/${projectId}/photos`, { headers }).then(r => r.ok ? r.json() : []),
       fetch(`/api/projects/${projectId}/milestones`, { headers }).then(r => r.ok ? r.json() : []),
       fetch(`/api/projects/${projectId}/checkins`, { headers }).then(r => r.ok ? r.json() : []),
-    ]).then(([p, inv, ph, ms, ci]) => { setPermits(p); setProjectInvoices(inv); setPhotos(ph); setMilestones(ms); setCheckins(ci); });
+      fetch(`/api/projects/${projectId}/daily-reports`, { headers }).then(r => r.ok ? r.json() : []),
+    ]).then(([p, inv, ph, ms, ci, rep]) => { setPermits(p); setProjectInvoices(inv); setPhotos(ph); setMilestones(ms); setCheckins(ci); setReports(rep); });
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!projectId) return;
+    const rid = new URLSearchParams(window.location.search).get("report");
+    if (rid) openReportDetail(rid);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
   const { isCancelled } = useSubscription();
@@ -657,6 +731,7 @@ tr:last-child td{border-bottom:none}
             { value: "documents", label: "Documents" },
             { value: "team", label: "Team" },
             { value: "photos", label: "Photos" },
+            ...(caps.isInternal ? [{ value: "reports", label: "Daily Reports" }] : []),
             { value: "checkins", label: `Check-ins${checkins.length > 0 ? ` (${checkins.length})` : ""}` },
             { value: "permits", label: "Permits" },
             { value: "finances", label: "Finances & Expiry" },
@@ -1403,13 +1478,21 @@ tr:last-child td{border-bottom:none}
           {(() => {
             const CATEGORY_LABELS: Record<string, string> = {
               general: "General", progress: "Progress", snag: "Snag", safety_concern: "Safety Concern",
+              mistake: "Mistake", work_completed: "Work completed",
             };
             const CATEGORY_COLOURS: Record<string, string> = {
               general: "bg-blue-50 border-blue-200 text-blue-700",
               progress: "bg-emerald-50 border-emerald-200 text-emerald-700",
               snag: "bg-orange-50 border-orange-200 text-orange-700",
               safety_concern: "bg-red-50 border-red-200 text-red-700",
+              mistake: "bg-rose-50 border-rose-200 text-rose-700",
+              work_completed: "bg-teal-50 border-teal-200 text-teal-700",
             };
+            const TAG_OPTIONS = [
+              { value: "snag", label: "Snag" },
+              { value: "mistake", label: "Mistake" },
+              { value: "work_completed", label: "Work completed" },
+            ];
             return (
               <div>
                 <div className="flex items-center gap-2 mb-6">
@@ -1417,6 +1500,57 @@ tr:last-child td{border-bottom:none}
                   <h3 className="font-bold text-lg">Photo Log</h3>
                   <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{photos.length}</span>
                 </div>
+                {caps.canLogPhoto && (
+                  <Card className="mb-6">
+                    <CardContent className="pt-6 space-y-4">
+                      <div>
+                        <h4 className="font-semibold text-sm mb-1">Log a site photo</h4>
+                        <p className="text-xs text-muted-foreground">Tag it so it shows up in today's daily site report.</p>
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Tag</label>
+                        <div className="flex flex-wrap gap-2">
+                          {TAG_OPTIONS.map(opt => (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => setPhotoTag(opt.value)}
+                              className={cn(
+                                "text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors",
+                                photoTag === opt.value
+                                  ? (CATEGORY_COLOURS[opt.value] ?? "bg-primary/10 border-primary text-primary")
+                                  : "bg-background border-border text-muted-foreground hover:border-primary/40"
+                              )}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <FileDropZone
+                        key={photoFormKey}
+                        accept=".jpg,.jpeg,.png,.webp"
+                        onUploaded={f => setPhotoUploadUrl(f.url)}
+                        onCleared={() => setPhotoUploadUrl(null)}
+                      />
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Note (optional)</label>
+                          <Textarea value={photoNote} onChange={e => setPhotoNote(e.target.value)} placeholder="What does this photo show?" rows={2} />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Zone / location (optional)</label>
+                          <Input value={photoZone} onChange={e => setPhotoZone(e.target.value)} placeholder="e.g. Level 2, East wing" />
+                        </div>
+                      </div>
+                      <div className="flex justify-end">
+                        <Button onClick={submitSnagPhoto} disabled={!photoUploadUrl || photoSubmitting}>
+                          {photoSubmitting ? "Logging…" : "Log photo"}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
                 {photos.length === 0 ? (
                   <Card><CardContent className="py-12 text-center text-muted-foreground text-sm">
                     No photos logged yet. Use voice commands or the sidebar to log a photo.
@@ -1453,6 +1587,42 @@ tr:last-child td{border-bottom:none}
             );
           })()}
         </TabsContent>
+
+        {caps.isInternal && (
+          <TabsContent value="reports">
+            <div className="flex items-center gap-2 mb-2">
+              <ClipboardCheck className="w-5 h-5 text-primary" />
+              <h3 className="font-bold text-lg">Daily Site Reports</h3>
+            </div>
+            <p className="text-sm text-muted-foreground mb-6">Auto-generated each evening (~18:00). Each report collates the day's subcontractor check-ins, document activity and tagged site photos.</p>
+            {reports.length === 0 ? (
+              <Card><CardContent className="py-12 text-center text-muted-foreground text-sm">
+                No daily reports yet. The first one will appear after today's site activity is collated this evening.
+              </CardContent></Card>
+            ) : (
+              <div className="space-y-2">
+                {[...reports].sort((a, b) => b.reportDate.localeCompare(a.reportDate)).map(rep => (
+                  <Card
+                    key={rep.id}
+                    onClick={() => openReportDetail(rep.id)}
+                    className="flex items-center gap-4 px-4 py-4 cursor-pointer transition-colors hover:bg-muted/50"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                      <FileText className="w-5 h-5 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm">{formatDate(rep.reportDate)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {rep.checkinCount} check-in{rep.checkinCount === 1 ? "" : "s"} · {rep.documentEventCount} document update{rep.documentEventCount === 1 ? "" : "s"} · {rep.photoCount} site photo{rep.photoCount === 1 ? "" : "s"}
+                      </p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        )}
 
         <TabsContent value="finances">
           {(() => {
@@ -1705,6 +1875,105 @@ tr:last-child td{border-bottom:none}
           )}
         </TabsContent>
       </Tabs>
+
+      <Dialog open={!!openReport || reportLoading} onOpenChange={v => { if (!v) setOpenReport(null); }}>
+        <DialogHeader>
+          <DialogTitle>{openReport ? `Daily site report — ${formatDate(openReport.reportDate)}` : "Loading report…"}</DialogTitle>
+        </DialogHeader>
+        {reportLoading && !openReport ? (
+          <div className="py-10 flex justify-center"><RefreshCw className="w-6 h-6 text-muted-foreground animate-spin" /></div>
+        ) : openReport ? (() => {
+          const d = openReport.data;
+          const REPORT_CATEGORY_LABELS: Record<string, string> = {
+            general: "General", progress: "Progress", snag: "Snag", safety_concern: "Safety Concern",
+            mistake: "Mistake", work_completed: "Work completed",
+          };
+          const totalEvents = openReport.checkinCount + openReport.documentEventCount + openReport.photoCount;
+          const time = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+          return (
+            <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-1">
+              <p className="text-xs text-muted-foreground">{openReport.projectName} · generated {formatDate(openReport.generatedAt)}</p>
+              {totalEvents === 0 && (
+                <Card><CardContent className="py-8 text-center text-muted-foreground text-sm">No site activity was recorded on this day.</CardContent></Card>
+              )}
+
+              {d.subcontractorsOnSite.length > 0 && (
+                <div>
+                  <h4 className="flex items-center gap-2 font-semibold text-sm mb-2"><Users className="w-4 h-4 text-primary" />Subcontractors on site ({d.subcontractorsOnSite.length})</h4>
+                  <div className="space-y-1.5">
+                    {d.subcontractorsOnSite.map(c => (
+                      <div key={c.id} className="flex items-center justify-between text-sm border rounded-lg px-3 py-2">
+                        <span className="font-medium">{c.workerName}</span>
+                        <span className="text-xs text-muted-foreground">checked in {time(c.checkedInAt)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {openReport.documentEventCount > 0 && (
+                <div>
+                  <h4 className="flex items-center gap-2 font-semibold text-sm mb-2"><FileText className="w-4 h-4 text-primary" />Document activity ({openReport.documentEventCount})</h4>
+                  <div className="space-y-1.5">
+                    {d.documentActivity.uploaded.map(e => (
+                      <div key={`u-${e.documentId}-${e.at}`} className="flex items-center gap-2 text-sm border rounded-lg px-3 py-2">
+                        <Upload className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span className="flex-1 min-w-0 truncate"><span className="font-medium">{e.name}</span> uploaded by {e.uploaderName}</span>
+                        <span className="text-xs text-muted-foreground shrink-0">{time(e.at)}</span>
+                      </div>
+                    ))}
+                    {d.documentActivity.amended.map(e => (
+                      <div key={`a-${e.documentId}-${e.at}`} className="flex items-center gap-2 text-sm border rounded-lg px-3 py-2">
+                        <Pencil className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span className="flex-1 min-w-0 truncate"><span className="font-medium">{e.name}</span> amended (v{e.version}) by {e.uploaderName}</span>
+                        <span className="text-xs text-muted-foreground shrink-0">{time(e.at)}</span>
+                      </div>
+                    ))}
+                    {d.documentActivity.signedOff.map(e => (
+                      <div key={`s-${e.documentId}-${e.at}`} className="flex items-center gap-2 text-sm border rounded-lg px-3 py-2">
+                        <ShieldCheck className="w-3.5 h-3.5 text-primary shrink-0" />
+                        <span className="flex-1 min-w-0 truncate"><span className="font-medium">{e.documentName}</span> signed off by {e.userName}</span>
+                        <span className="text-xs text-muted-foreground shrink-0">{time(e.at)}</span>
+                      </div>
+                    ))}
+                    {d.documentActivity.viewed.map(e => (
+                      <div key={`v-${e.documentId}-${e.at}`} className="flex items-center gap-2 text-sm border rounded-lg px-3 py-2">
+                        <Eye className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                        <span className="flex-1 min-w-0 truncate"><span className="font-medium">{e.documentName}</span> viewed by {e.userName}</span>
+                        <span className="text-xs text-muted-foreground shrink-0">{time(e.at)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {d.sitePhotos.length > 0 && (
+                <div>
+                  <h4 className="flex items-center gap-2 font-semibold text-sm mb-2"><Camera className="w-4 h-4 text-primary" />Site photos ({d.sitePhotos.length})</h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {d.sitePhotos.map(p => (
+                      <div key={p.id} className="rounded-lg border overflow-hidden">
+                        {p.photoUrl ? (
+                          <a href={p.photoUrl} target="_blank" rel="noopener noreferrer">
+                            <img src={p.photoUrl} alt={p.description ?? p.category} className="w-full h-28 object-cover" />
+                          </a>
+                        ) : (
+                          <div className="w-full h-28 bg-muted flex items-center justify-center"><Camera className="w-6 h-6 text-muted-foreground" /></div>
+                        )}
+                        <div className="p-2 space-y-1">
+                          <span className="text-[10px] font-bold">{REPORT_CATEGORY_LABELS[p.category] ?? p.category}</span>
+                          {p.description && <p className="text-[11px] text-foreground line-clamp-2">{p.description}</p>}
+                          <p className="text-[10px] text-muted-foreground">{time(p.takenAt)} · {p.uploaderName}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })() : null}
+      </Dialog>
 
       <Dialog open={!!editDocModal} onOpenChange={v => { if (!v) setEditDocModal(null); }}>
         <DialogHeader>

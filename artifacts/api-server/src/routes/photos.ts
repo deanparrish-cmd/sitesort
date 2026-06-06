@@ -47,11 +47,26 @@ router.get("/projects/:projectId/photos", authenticate, async (req, res) => {
   }
 });
 
+const INTERNAL_ROLES = ["admin", "project_manager", "site_worker"];
+
 router.post("/projects/:projectId/photos", authenticate, async (req, res) => {
   try {
+    if (!INTERNAL_ROLES.includes(req.user!.role)) {
+      res.status(403).json({ error: "forbidden", message: "Not allowed to log photos" });
+      return;
+    }
+
     const { photoUrl, category, description, zone, latitude, longitude } = req.body;
     if (!category) {
       res.status(400).json({ error: "validation_error", message: "category required" });
+      return;
+    }
+
+    const project = await db.select({ id: projectsTable.id }).from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!project[0]) {
+      res.status(404).json({ error: "not_found", message: "Project not found" });
       return;
     }
 

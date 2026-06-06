@@ -12,6 +12,7 @@ import {
   CheckCheck,
   Check,
   CreditCard,
+  ClipboardCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -59,6 +60,8 @@ function notifIcon(type: string) {
       return <CreditCard className="w-5 h-5 text-orange-500" />;
     case "payment_failed":
       return <CreditCard className="w-5 h-5 text-red-500" />;
+    case "daily_report":
+      return <ClipboardCheck className="w-5 h-5 text-teal-500" />;
     default:
       return <Bell className="w-5 h-5 text-muted-foreground" />;
   }
@@ -76,6 +79,8 @@ function notifBg(type: string) {
       return "bg-orange-100";
     case "payment_failed":
       return "bg-red-100";
+    case "daily_report":
+      return "bg-teal-100";
     default:
       return "bg-muted";
   }
@@ -148,6 +153,16 @@ export default function NotificationsPage() {
 
   const handleClick = async (n: Notification) => {
     if (!n.read) await markRead(n.id);
+    if (n.type === "daily_report" && n.relatedEntityId) {
+      try {
+        const res = await fetch(`/api/daily-reports/${n.relatedEntityId}`, { headers: authHeaders() });
+        if (res.ok) {
+          const r = await res.json();
+          setLocation(`/projects/${r.projectId}?tab=reports&report=${n.relatedEntityId}`);
+          return;
+        }
+      } catch { /* fall through */ }
+    }
     const link = notifLink(n);
     if (link) setLocation(link);
   };
