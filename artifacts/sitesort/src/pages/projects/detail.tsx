@@ -933,6 +933,84 @@ tr:last-child td{border-bottom:none}
           </div>
 
           <div className="bg-card border rounded-xl shadow-sm overflow-hidden">
+            {/* Mobile card list */}
+            <div className="block lg:hidden divide-y">
+              {(documents ?? []).filter(d =>
+                (selectedDocType === 'all' || d.type === selectedDocType) &&
+                (selectedStatus === 'all' || d.status === selectedStatus) &&
+                (searchQuery === '' || d.name.toLowerCase().includes(searchQuery.toLowerCase()))
+              ).map(doc => {
+                const isSuperseded = doc.status === 'superseded';
+                return (
+                  <div key={doc.id} className={cn("px-4 py-4", isSuperseded && "opacity-70 bg-muted/20")}>
+                    <div className="flex items-start gap-3 mb-2">
+                      <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center shrink-0", isSuperseded ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary")}>
+                        <FileText className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={cn("font-bold text-sm leading-tight", isSuperseded && "line-through text-muted-foreground")}>{doc.name}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{formatBytes(doc.fileSize)} · By {doc.uploaderName}</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 mb-2.5">
+                      <span className="font-mono bg-muted px-2 py-0.5 rounded text-xs font-bold">v{doc.version}</span>
+                      {isSuperseded
+                        ? <Badge variant="destructive" className="text-[10px]"><AlertTriangle className="w-3 h-3 mr-1"/>SUPERSEDED</Badge>
+                        : <Badge variant="success" className="text-[10px]">CURRENT</Badge>
+                      }
+                      <span className="text-xs text-muted-foreground capitalize">{doc.type.replace('_', ' ')}</span>
+                      <span className="text-xs text-muted-foreground">· {formatDate(doc.createdAt)}</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs mb-3">
+                      <span className="flex items-center gap-1 text-success"><CheckCircle2 className="w-3.5 h-3.5"/> {doc.distributionSummary.acknowledged} ack</span>
+                      <span className="flex items-center gap-1 text-primary"><Eye className="w-3.5 h-3.5"/> {doc.distributionSummary.viewed} viewed</span>
+                      <span className="flex items-center gap-1 text-muted-foreground"><EyeOff className="w-3.5 h-3.5"/> {doc.distributionSummary.pending} pending</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {!isSuperseded && (doc.myDistributionStatus === "pending" || doc.myDistributionStatus === "viewed") && (
+                        <button
+                          onClick={() => openSignOff({ id: doc.id, name: doc.name, type: doc.type })}
+                          className="flex items-center gap-1 px-2 py-1 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-xs font-semibold"
+                        >
+                          <ClipboardCheck className="w-3 h-3" />Sign off
+                        </button>
+                      )}
+                      {doc.myDistributionStatus === "acknowledged" && (
+                        <span className="flex items-center gap-1 text-xs text-success font-semibold"><CheckCircle2 className="w-3 h-3" />Signed off</span>
+                      )}
+                      <a
+                        href={doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/")}
+                        target="_blank" rel="noreferrer"
+                        className="flex items-center gap-1 text-xs text-primary hover:underline font-medium"
+                      >
+                        <ExternalLink className="w-3 h-3" />Open
+                      </a>
+                      {canViewAudit && (
+                        <button onClick={() => setAuditDoc({ id: doc.id, name: doc.name })}
+                          className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs">
+                          <Clock className="w-3 h-3" />History
+                        </button>
+                      )}
+                      <button onClick={() => openDocEdit(doc)}
+                        className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs">
+                        <Pencil className="w-3 h-3" />Edit
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+              {documents !== undefined && (documents ?? []).filter(d =>
+                (selectedDocType === 'all' || d.type === selectedDocType) &&
+                (selectedStatus === 'all' || d.status === selectedStatus) &&
+                (searchQuery === '' || d.name.toLowerCase().includes(searchQuery.toLowerCase()))
+              ).length === 0 && (
+                <div className="px-6 py-12 text-center text-muted-foreground">
+                  {documents.length === 0 ? 'No documents uploaded yet.' : 'No documents match your filters.'}
+                </div>
+              )}
+            </div>
+            {/* Desktop table */}
+            <div className="hidden lg:block">
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-muted-foreground uppercase bg-muted/50 border-b">
                 <tr>
@@ -1085,9 +1163,10 @@ tr:last-child td{border-bottom:none}
                 )}
               </tbody>
             </table>
+            </div>
           </div>
         </TabsContent>
-        
+
         <TabsContent value="team">
           <div className="flex justify-end mb-4">
             <Button variant="outline" size="sm" onClick={openFromDirectory}>

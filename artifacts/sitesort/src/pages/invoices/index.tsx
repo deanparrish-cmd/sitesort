@@ -429,7 +429,60 @@ export default function InvoicesPage() {
             <p className="text-sm text-muted-foreground/70 mt-1">Add your first invoice to track payments.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+            {/* Mobile card list */}
+            <div className="block lg:hidden divide-y">
+              {filtered.map(inv => {
+                const isRowDragTarget = dragRowId === inv.id;
+                const isUploading = uploadingId === inv.id;
+                return (
+                  <div
+                    key={inv.id}
+                    onClick={() => setViewingInvoice(inv)}
+                    onDragOver={e => { e.preventDefault(); setDragRowId(inv.id); lastDragRowRef.current = inv.id; }}
+                    className={cn(
+                      "px-4 py-3.5 cursor-pointer transition-colors",
+                      isRowDragTarget ? "bg-primary/10 outline outline-2 outline-primary/40" : "hover:bg-muted/20"
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className={cn(
+                          "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0",
+                          inv.direction === "inbound" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                        )}>
+                          {inv.counterpartyName.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-sm truncate">{inv.counterpartyName}</p>
+                          {inv.reference && <p className="text-xs text-muted-foreground truncate">{inv.reference}</p>}
+                        </div>
+                      </div>
+                      <span className="font-bold tabular-nums text-sm shrink-0">{fmtAmount(inv.currency, inv.amount)}</span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {inv.direction === "inbound"
+                        ? <span className="flex items-center gap-1 text-xs text-emerald-600 font-medium"><ArrowDownCircle className="w-3.5 h-3.5" />In</span>
+                        : <span className="flex items-center gap-1 text-xs text-rose-600 font-medium"><ArrowUpCircle className="w-3.5 h-3.5" />Out</span>
+                      }
+                      <StatusBadge invoice={inv} />
+                      <span className="text-xs text-muted-foreground">Due {fmtDate(inv.dueDate)}</span>
+                      {isUploading && <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />}
+                      {inv.attachmentUrl && !isUploading && (
+                        <button
+                          onClick={e => { e.stopPropagation(); window.open(fullUrl(inv.attachmentUrl!), '_blank', 'noopener,noreferrer'); }}
+                          className="flex items-center gap-1 text-xs text-primary hover:underline font-medium"
+                        >
+                          <Paperclip className="w-3 h-3" />File
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {/* Desktop table */}
+            <div className="hidden lg:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/30">
@@ -580,7 +633,8 @@ export default function InvoicesPage() {
                 })}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         )}
       </Card>
 

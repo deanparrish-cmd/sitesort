@@ -674,6 +674,7 @@ export default function AdminDashboard() {
         <section>
           <SectionTitle icon={BarChart2} title="Feature Usage" sub="Which features are used most" />
           <Card className="p-0 overflow-hidden">
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-800 bg-gray-900/60">
@@ -706,6 +707,7 @@ export default function AdminDashboard() {
                 }
               </tbody>
             </table>
+            </div>
           </Card>
         </section>
 
@@ -748,6 +750,7 @@ export default function AdminDashboard() {
         <section>
           <SectionTitle icon={Trophy} title="Power Users" sub="Top 10 most active users by document & photo uploads" />
           <Card className="p-0 overflow-hidden">
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-800 bg-gray-900/60">
@@ -779,6 +782,7 @@ export default function AdminDashboard() {
                 }
               </tbody>
             </table>
+            </div>
           </Card>
         </section>
 
@@ -1025,6 +1029,7 @@ export default function AdminDashboard() {
         <section>
           <SectionTitle icon={FlaskConical} title="Companies & Beta Access" sub="Manage beta access per company — bypasses all Stripe subscription checks" />
           <div className="rounded-xl border border-gray-800 overflow-hidden">
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-800 bg-gray-900/60">
@@ -1091,6 +1096,7 @@ export default function AdminDashboard() {
                 )}
               </tbody>
             </table>
+            </div>
           </div>
         </section>
 
