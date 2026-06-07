@@ -15,17 +15,17 @@ const PLANS = {
   solo: {
     name: "SiteSort Solo",
     description: "1 project — monthly subscription",
-    amount: 2900,
+    priceId: process.env.STRIPE_PRICE_SOLO,
   },
   team: {
     name: "SiteSort Team",
     description: "Up to 5 projects — monthly subscription",
-    amount: 7900,
+    priceId: process.env.STRIPE_PRICE_TEAM,
   },
   pro: {
     name: "SiteSort Pro",
     description: "Unlimited projects — monthly subscription",
-    amount: 14900,
+    priceId: process.env.STRIPE_PRICE_PRO,
   },
 } as const;
 
@@ -44,6 +44,10 @@ router.post("/billing/checkout", authenticate, async (req, res) => {
     res.status(400).json({ error: `Unknown plan: ${planId}` });
     return;
   }
+  if (!plan.priceId) {
+    res.status(500).json({ error: `Stripe price ID is not configured for plan: ${planId}` });
+    return;
+  }
 
   const user = req.user!;
   const stripe = new Stripe(apiKey);
@@ -54,15 +58,7 @@ router.post("/billing/checkout", authenticate, async (req, res) => {
       customer_email: user.email,
       line_items: [
         {
-          price_data: {
-            currency: "gbp",
-            product_data: {
-              name: plan.name,
-              description: plan.description,
-            },
-            unit_amount: plan.amount,
-            recurring: { interval: "month" },
-          },
+          price: plan.priceId,
           quantity: 1,
         },
       ],
