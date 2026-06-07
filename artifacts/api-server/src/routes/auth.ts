@@ -290,7 +290,14 @@ router.post("/auth/reset-password", async (req, res) => {
       passwordHash,
       passwordResetToken: null,
       passwordResetExpiry: null,
+      emailVerified: true,
+      emailVerificationToken: null,
+      emailVerificationExpiry: null,
     }).where(eq(usersTable.id, user.id));
+
+    await clearAttempts(user.email).catch((err) =>
+      req.log.error({ err }, "Failed to clear login attempts after reset"),
+    );
 
     res.json({ success: true });
   } catch (err) {
