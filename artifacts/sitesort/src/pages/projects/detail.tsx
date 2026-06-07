@@ -15,7 +15,6 @@ import { QRCodeSVG } from "qrcode.react";
 import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { Textarea } from "@/components/ui/textarea";
 import { InsuranceCertZone } from "@/components/ui/insurance-cert-zone";
-import { VoiceRecall } from "@/components/voice-recall";
 import { VoiceDictation } from "@/components/voice-dictation";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -994,9 +993,6 @@ tr:last-child td{border-bottom:none}
         </TabsContent>
 
         <TabsContent value="documents">
-          <div className="mb-6">
-            <VoiceRecall projectId={projectId} documents={documents?.map(d => ({ id: d.id, name: d.name, type: d.type, version: d.version, status: d.status, fileUrl: d.fileUrl, createdAt: String(d.createdAt) }))} />
-          </div>
           <div className="flex flex-col gap-3 mb-6">
             <div className="flex gap-3 items-center">
               <div className="relative flex-1 max-w-sm">
