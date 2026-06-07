@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { execSync } from "node:child_process";
 import { build as esbuild } from "esbuild";
 import esbuildPluginPino from "esbuild-plugin-pino";
 import { rm } from "node:fs/promises";
@@ -118,6 +119,20 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     `,
     },
   });
+
+  // Build the React frontend so Express can serve it
+  console.log("Building frontend...");
+  const workspaceRoot = path.resolve(artifactDir, "../..");
+  execSync("pnpm --filter @workspace/sitesort run build", {
+    cwd: workspaceRoot,
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      PORT: process.env.PORT ?? "18299",
+      BASE_PATH: process.env.BASE_PATH ?? "/",
+    },
+  });
+  console.log("Frontend build complete.");
 }
 
 buildAll().catch((err) => {
