@@ -3,7 +3,7 @@ import { Resend } from "resend";
 const FROM = "SiteSort <noreply@mail.sitesort.co.uk>";
 const REPLY_TO = "SiteSort Support <support@sitesort.co.uk>";
 const SUPPORT_EMAIL = "support@sitesort.co.uk";
-const APP_URL = process.env.APP_URL ?? "https://sitesort.co.uk";
+const APP_URL = process.env.APP_URL ?? "https://www.sitesort.co.uk";
 
 function resend() {
   const key = process.env.RESEND_API_KEY;
@@ -42,7 +42,7 @@ function layout(body: string): string {
 </td></tr>
 <tr><td style="padding:40px;">${body}</td></tr>
 <tr><td style="background:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;text-align:center;">
-  <p style="color:#9ca3af;font-size:12px;line-height:1.6;margin:0;">SiteSort &middot; <a href="https://sitesort.co.uk" style="color:#ea580c;text-decoration:none;">sitesort.co.uk</a><br>Questions? Email us at <a href="mailto:${SUPPORT_EMAIL}" style="color:#ea580c;text-decoration:none;">${SUPPORT_EMAIL}</a></p>
+  <p style="color:#9ca3af;font-size:12px;line-height:1.6;margin:0;">SiteSort &middot; <a href="https://www.sitesort.co.uk" style="color:#ea580c;text-decoration:none;">sitesort.co.uk</a><br>Questions? Email us at <a href="mailto:${SUPPORT_EMAIL}" style="color:#ea580c;text-decoration:none;">${SUPPORT_EMAIL}</a></p>
 </td></tr>
 </table>
 </td></tr></table>
@@ -57,7 +57,7 @@ function textLayout(body: string): string {
 ${body.trim()}
 
 --------------------------------------------------------
-SiteSort · https://sitesort.co.uk
+SiteSort · https://www.sitesort.co.uk
 Questions? Email us at ${SUPPORT_EMAIL}`;
 }
 

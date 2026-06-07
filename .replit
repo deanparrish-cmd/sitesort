@@ -33,6 +33,6 @@ packages = ["haskellPackages.hinit"]
 [userenv]
 
 [userenv.shared]
-APP_URL = "https://sitesort.co.uk"
+APP_URL = "https://www.sitesort.co.uk"
 [env]
 PATH = "/home/runner/.local/bin:/home/runner/workspace/.local/bin:$PATH"
