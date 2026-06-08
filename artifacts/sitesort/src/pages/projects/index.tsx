@@ -106,7 +106,7 @@ export default function ProjectsList() {
   }, [safetyOpen, projects, safetyProjectId]);
 
   // ── Permit modal state ──
-  const PERMIT_TYPES = ["Hot Work", "Scaffolding", "Working at Height", "Confined Space Entry", "Excavation", "Electrical Work", "Demolition", "Asbestos Removal", "Other"];
+  const PERMIT_TYPES = ["CSCS Check", "IPAF Certificate", "Hot Works", "Working at Heights", "Scaffolding Inspection", "Confined Space Entry", "Excavation", "Electrical Isolation", "Demolition", "Asbestos", "Method Statement", "Other"];
 
   const [permitOpen, setPermitOpen] = useState(false);
   const [permitProjectId, setPermitProjectId] = useState("");
@@ -149,7 +149,7 @@ export default function ProjectsList() {
 
   const closePermitModal = useCallback(() => {
     permitDictateRef.current?.stop();
-    setPermitOpen(false); setPermitProjectId(""); setPermitType("Hot Work");
+    setPermitOpen(false); setPermitProjectId(""); setPermitType("Hot Works");
     setPermitDesc(""); setPermitResponsibleId(""); setPermitStart(""); setPermitExpiry("");
     setPermitError(null); setPermitSuccess(false); setPermitDictating(false);
   }, []);

@@ -64,7 +64,17 @@ export default function ProjectDetail() {
   type ReportDetail = ReportSummary & { projectId: string; projectName: string; data: DailyReportData };
   type DailyNote = { id: string; body: string; source: string; noteDate: string; authorName: string; createdAt: string };
 
+  const PERMIT_TYPES = ["CSCS Check", "IPAF Certificate", "Hot Works", "Working at Heights", "Scaffolding Inspection", "Confined Space Entry", "Excavation", "Electrical Isolation", "Demolition", "Asbestos", "Method Statement", "Other"];
+
   const [permits, setPermits] = useState<PermitItem[]>([]);
+  const [permitAddOpen, setPermitAddOpen] = useState(false);
+  const [newPermitType, setNewPermitType] = useState("Hot Works");
+  const [newPermitDesc, setNewPermitDesc] = useState("");
+  const [newPermitResponsibleId, setNewPermitResponsibleId] = useState("");
+  const [newPermitStart, setNewPermitStart] = useState("");
+  const [newPermitExpiry, setNewPermitExpiry] = useState("");
+  const [newPermitSubmitting, setNewPermitSubmitting] = useState(false);
+  const [newPermitError, setNewPermitError] = useState<string | null>(null);
   const [projectInvoices, setProjectInvoices] = useState<InvoiceItem[]>([]);
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [milestones, setMilestones] = useState<MilestoneItem[]>([]);
@@ -343,6 +353,37 @@ export default function ProjectDetail() {
     });
     await queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/members`] });
     setEditingPhoneId(null);
+  };
+
+  const submitNewPermit = async () => {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
+    if (!newPermitDesc.trim() || !newPermitResponsibleId || !newPermitStart || !newPermitExpiry) {
+      setNewPermitError("Please fill in all required fields."); return;
+    }
+    setNewPermitSubmitting(true); setNewPermitError(null);
+    try {
+      const token = localStorage.getItem("sitesort_token");
+      const res = await fetch(`/api/projects/${projectId}/permits`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ type: newPermitType, description: newPermitDesc.trim(), responsibleUserId: newPermitResponsibleId, startDate: newPermitStart, expiryDate: newPermitExpiry }),
+      });
+      if (!res.ok) throw new Error("Failed to create permit");
+      const newP = await res.json();
+      setPermits(prev => [...prev, { id: newP.id, type: newP.type, description: newP.description, startDate: newP.startDate, expiryDate: newP.expiryDate, status: newP.status, responsibleName: newP.responsibleUserName }]);
+      setPermitAddOpen(false); setNewPermitType("Hot Works"); setNewPermitDesc(""); setNewPermitResponsibleId(""); setNewPermitStart(""); setNewPermitExpiry(""); setNewPermitError(null);
+    } catch {
+      setNewPermitError("Failed to save permit. Please try again.");
+    } finally {
+      setNewPermitSubmitting(false);
+    }
+  };
+
+  const deletePermit = async (permitId: string) => {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
+    const token = localStorage.getItem("sitesort_token");
+    await fetch(`/api/permits/${permitId}`, { method: "DELETE", headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    setPermits(prev => prev.filter(p => p.id !== permitId));
   };
 
   const [selectedDocType, setSelectedDocType] = useState<string>("all");
@@ -765,7 +806,7 @@ tr:last-child td{border-bottom:none}
             { value: "photos", label: "Photos" },
             ...(caps.isInternal ? [{ value: "reports", label: "Daily Reports" }] : []),
             { value: "checkins", label: `Check-ins${checkins.length > 0 ? ` (${checkins.length})` : ""}` },
-            { value: "permits", label: "Permits" },
+            { value: "permits", label: "Compliance" },
             { value: "finances", label: "Finances & Expiry" },
             { value: "qr", label: "Site Board QR" },
           ].map(tab => (
@@ -1799,6 +1840,164 @@ tr:last-child td{border-bottom:none}
           </TabsContent>
         )}
 
+        <TabsContent value="permits">
+          {(() => {
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+            const daysLeft = (dateStr: string) => Math.ceil((new Date(dateStr + "T00:00:00").getTime() - today.getTime()) / 86400000);
+            const fmtDate = (s: string) => new Date(s + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+
+            const active = [...permits].filter(p => { const d = daysLeft(p.expiryDate); return d > 30; }).sort((a, b) => a.expiryDate.localeCompare(b.expiryDate));
+            const expiring = [...permits].filter(p => { const d = daysLeft(p.expiryDate); return d >= 0 && d <= 30; }).sort((a, b) => a.expiryDate.localeCompare(b.expiryDate));
+            const expired = [...permits].filter(p => daysLeft(p.expiryDate) < 0).sort((a, b) => b.expiryDate.localeCompare(a.expiryDate));
+
+            const permitRow = (p: PermitItem, accent: string) => {
+              const days = daysLeft(p.expiryDate);
+              const statusLabel = days < 0 ? "Expired" : days === 0 ? "Expires today" : days <= 7 ? `${days}d left` : days <= 30 ? `${days}d left` : "Active";
+              return (
+                <div key={p.id} className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-4 py-3 rounded-xl border ${accent}`}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-semibold text-sm">{p.type}</p>
+                      <Badge className={`text-[10px] border ${days < 0 ? "bg-red-100 text-red-700 border-red-200" : days <= 7 ? "bg-orange-100 text-orange-700 border-orange-200" : days <= 30 ? "bg-yellow-100 text-yellow-700 border-yellow-200" : "bg-emerald-100 text-emerald-700 border-emerald-200"}`}>{statusLabel}</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">{p.description}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{fmtDate(p.startDate)} – {fmtDate(p.expiryDate)}{p.responsibleName ? ` · ${p.responsibleName}` : ""}</p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Share">
+                          <Share2 className="w-3.5 h-3.5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-44">
+                        <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
+                          const subject = encodeURIComponent(`Permit – ${p.type}`);
+                          const body = encodeURIComponent(`Permit details:\n\nType: ${p.type}\nDescription: ${p.description}\nStart: ${fmtDate(p.startDate)}\nExpiry: ${fmtDate(p.expiryDate)} (${statusLabel})${p.responsibleName ? `\nResponsible: ${p.responsibleName}` : ""}\nProject: ${project?.name ?? ""}`);
+                          window.open(`mailto:?subject=${subject}&body=${body}`);
+                        }}>
+                          <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
+                          const text = encodeURIComponent(`${p.type} permit – ${project?.name ?? ""}\n${p.description}\nExpiry: ${fmtDate(p.expiryDate)} (${statusLabel})${p.responsibleName ? `\nResponsible: ${p.responsibleName}` : ""}`);
+                          window.open(`https://wa.me/?text=${text}`, "_blank");
+                        }}>
+                          <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    {caps.canManageTeam && (
+                      <button
+                        onClick={() => { if (confirm(`Delete "${p.type}" permit?`)) deletePermit(p.id); }}
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-red-50 transition-colors"
+                        title="Delete permit"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            };
+
+            return (
+              <div className="space-y-6">
+                {/* Header */}
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-xl font-bold">Project Compliance</h2>
+                    <p className="text-sm text-muted-foreground mt-0.5">Permits, certifications and insurance for this project.</p>
+                  </div>
+                  {caps.canManageTeam && (
+                    <Button variant="accent" size="sm" onClick={() => setPermitAddOpen(true)}>
+                      <Plus className="w-4 h-4 mr-1.5" /> Add Permit
+                    </Button>
+                  )}
+                </div>
+
+                {/* Permits list */}
+                {permits.length === 0 ? (
+                  <Card><CardContent className="py-12 text-center border-dashed border-2">
+                    <ClipboardCheck className="w-10 h-10 mx-auto text-muted-foreground/30 mb-3" />
+                    <p className="font-semibold text-muted-foreground">No permits or certifications added yet.</p>
+                    <p className="text-sm text-muted-foreground mt-1">Add CSCS checks, IPAF certificates, hot works permits, and more.</p>
+                    {caps.canManageTeam && <Button variant="outline" size="sm" className="mt-4" onClick={() => setPermitAddOpen(true)}><Plus className="w-4 h-4 mr-1.5" />Add Permit</Button>}
+                  </CardContent></Card>
+                ) : (
+                  <div className="space-y-6">
+                    {expired.length > 0 && (
+                      <section>
+                        <div className="flex items-center gap-2 mb-3">
+                          <AlertTriangle className="w-4 h-4 text-destructive" />
+                          <h3 className="font-bold text-sm uppercase tracking-wide text-destructive">Expired</h3>
+                          <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{expired.length}</span>
+                        </div>
+                        <div className="space-y-2">{expired.map(p => permitRow(p, "bg-red-50 border-red-200"))}</div>
+                      </section>
+                    )}
+                    {expiring.length > 0 && (
+                      <section>
+                        <div className="flex items-center gap-2 mb-3">
+                          <Clock className="w-4 h-4 text-orange-600" />
+                          <h3 className="font-bold text-sm uppercase tracking-wide text-orange-600">Expiring Soon</h3>
+                          <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{expiring.length}</span>
+                        </div>
+                        <div className="space-y-2">{expiring.map(p => permitRow(p, "bg-orange-50 border-orange-200"))}</div>
+                      </section>
+                    )}
+                    {active.length > 0 && (
+                      <section>
+                        <div className="flex items-center gap-2 mb-3">
+                          <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                          <h3 className="font-bold text-sm uppercase tracking-wide text-emerald-600">Active</h3>
+                          <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{active.length}</span>
+                        </div>
+                        <div className="space-y-2">{active.map(p => permitRow(p, "bg-emerald-50 border-emerald-200"))}</div>
+                      </section>
+                    )}
+                  </div>
+                )}
+
+                {/* Team Insurance */}
+                {members && (members as any[]).length > 0 && (
+                  <section>
+                    <div className="flex items-center gap-2 mb-3">
+                      <UserCheck className="w-4 h-4 text-primary" />
+                      <h3 className="font-bold text-sm uppercase tracking-wide text-muted-foreground">Team Insurance</h3>
+                      <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{(members as any[]).length}</span>
+                    </div>
+                    <div className="space-y-2">
+                      {(members as any[]).map((m: any) => (
+                        <div key={m.id} className={`flex items-center justify-between gap-3 px-4 py-3 rounded-xl border ${m.complianceStatus === "hold" ? "bg-red-50 border-red-200" : m.complianceStatus === "warning" ? "bg-orange-50 border-orange-200" : "bg-card border-border"}`}>
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-xs font-extrabold ${m.complianceStatus === "hold" ? "bg-red-100 text-red-700" : m.complianceStatus === "warning" ? "bg-orange-100 text-orange-700" : "bg-primary/10 text-primary"}`}>
+                              {m.name.split(" ").map((w: string) => w[0]).slice(0, 2).join("")}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-semibold text-sm truncate">{m.name}</p>
+                              <p className="text-xs text-muted-foreground capitalize">{m.role.replace(/_/g, " ")}</p>
+                            </div>
+                          </div>
+                          <div className="shrink-0">
+                            {m.complianceStatus === "hold"
+                              ? <Badge variant="destructive" className="text-[10px]"><AlertTriangle className="w-3 h-3 mr-1" />Insurance Expired</Badge>
+                              : m.complianceStatus === "warning"
+                              ? <Badge className="text-[10px] bg-orange-100 text-orange-700 border-orange-200"><AlertTriangle className="w-3 h-3 mr-1" />Insurance Expiring</Badge>
+                              : m.pliCertUrl
+                              ? <Badge variant="success" className="text-[10px]"><ShieldCheck className="w-3 h-3 mr-1" />Insured{m.pliExpiryDate ? ` · ${new Date(m.pliExpiryDate + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}` : ""}</Badge>
+                              : <Badge variant="secondary" className="text-[10px]">No cert on file</Badge>
+                            }
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
+              </div>
+            );
+          })()}
+        </TabsContent>
+
         <TabsContent value="finances">
           {(() => {
             const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -2661,6 +2860,65 @@ tr:last-child td{border-bottom:none}
             <Button type="submit" variant="accent">Save Schedule</Button>
           </DialogFooter>
         </form>
+      </Dialog>
+
+      {/* Add Permit Dialog */}
+      <Dialog open={permitAddOpen} onOpenChange={v => { if (!v) { setPermitAddOpen(false); setNewPermitError(null); } }}>
+        <DialogHeader>
+          <DialogTitle>Add Permit / Certification</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 pt-2">
+          <div>
+            <label className="text-sm font-semibold mb-1.5 block">Type</label>
+            <select
+              value={newPermitType}
+              onChange={e => setNewPermitType(e.target.value)}
+              className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              {PERMIT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-sm font-semibold mb-1.5 block">Description / Reference</label>
+            <Input
+              placeholder="e.g. Hot works on roof — contractor Jones Ltd"
+              value={newPermitDesc}
+              onChange={e => setNewPermitDesc(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-sm font-semibold mb-1.5 block">Responsible Person</label>
+            <select
+              value={newPermitResponsibleId}
+              onChange={e => setNewPermitResponsibleId(e.target.value)}
+              className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="">Select person…</option>
+              {(members as any[] ?? []).map((m: any) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-semibold mb-1.5 block">Start Date</label>
+              <Input type="date" value={newPermitStart} onChange={e => setNewPermitStart(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-sm font-semibold mb-1.5 block">Expiry Date</label>
+              <Input type="date" value={newPermitExpiry} onChange={e => setNewPermitExpiry(e.target.value)} />
+            </div>
+          </div>
+          {newPermitError && (
+            <p className="flex items-center gap-1.5 text-sm text-destructive"><AlertTriangle className="w-4 h-4 shrink-0" />{newPermitError}</p>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setPermitAddOpen(false)}>Cancel</Button>
+          <Button variant="accent" onClick={submitNewPermit} disabled={newPermitSubmitting}>
+            {newPermitSubmitting ? "Saving…" : "Save Permit"}
+          </Button>
+        </DialogFooter>
       </Dialog>
     </SidebarLayout>
   );

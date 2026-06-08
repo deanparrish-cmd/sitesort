@@ -121,4 +121,26 @@ router.patch("/permits/:permitId", authenticate, async (req, res) => {
   }
 });
 
+router.delete("/permits/:permitId", authenticate, async (req, res) => {
+  try {
+    const existing = await db.select().from(permitsTable).where(eq(permitsTable.id, req.params.permitId)).limit(1);
+    if (!existing[0]) {
+      res.status(404).json({ error: "not_found", message: "Permit not found" });
+      return;
+    }
+    const project = await db.select().from(projectsTable)
+      .where(and(eq(projectsTable.id, existing[0].projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!project[0]) {
+      res.status(404).json({ error: "not_found", message: "Permit not found" });
+      return;
+    }
+    await db.delete(permitsTable).where(eq(permitsTable.id, req.params.permitId));
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Delete permit error");
+    res.status(500).json({ error: "server_error", message: "Failed to delete permit" });
+  }
+});
+
 export default router;
