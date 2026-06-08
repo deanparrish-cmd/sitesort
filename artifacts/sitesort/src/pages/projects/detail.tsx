@@ -1106,6 +1106,45 @@ tr:last-child td{border-bottom:none}
                         className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs">
                         <Pencil className="w-3 h-3" />Edit
                       </button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs">
+                            <Share2 className="w-3 h-3" />Share
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                          <DropdownMenuItem
+                            className="gap-2 cursor-pointer"
+                            onClick={() => {
+                              const norm = doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/");
+                              const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
+                              const subject = encodeURIComponent(`Document – ${doc.name}`);
+                              const body = encodeURIComponent(`Hi,\n\nPlease find the document "${doc.name}" (v${doc.version}) here:\n\n${url}`);
+                              window.open(`mailto:?subject=${subject}&body=${body}`);
+                            }}
+                          >
+                            <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="gap-2 cursor-pointer"
+                            onClick={() => {
+                              const norm = doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/");
+                              const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
+                              const text = encodeURIComponent(`Document: ${doc.name} (v${doc.version})\n${url}`);
+                              window.open(`https://wa.me/?text=${text}`, "_blank");
+                            }}
+                          >
+                            <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="gap-2 cursor-pointer"
+                            onClick={() => setSharingDoc({ id: doc.id, name: doc.name, version: doc.version, fileUrl: doc.fileUrl })}
+                          >
+                            <Users className="w-4 h-4 text-primary" /> Share with project team
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 );
