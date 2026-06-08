@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   Plus, Search, ArrowDownCircle, ArrowUpCircle, CheckCircle2, Clock,
-  AlertTriangle, Receipt, Mic, MicOff, Paperclip, Upload, Loader2, X,
+  AlertTriangle, Receipt, Paperclip, Upload, Loader2, X,
   Share2, Mail, MessageCircle, Eye, ExternalLink, FileText, Image, Download,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
@@ -134,27 +134,6 @@ export default function InvoicesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const clickUploadIdRef = useRef<string | null>(null);
 
-  const [listening, setListening] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const recognitionRef = useRef<any>(null);
-  const voiceSupported = typeof window !== "undefined" && !!(
-    (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-  );
-  const toggleVoiceSearch = useCallback(() => {
-    if (listening) { recognitionRef.current?.stop(); return; }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const SpeechRec = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
-    if (!SpeechRec) return;
-    const rec = new SpeechRec();
-    rec.continuous = false; rec.interimResults = true; rec.lang = "en-GB";
-    rec.onstart = () => setListening(true);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    rec.onresult = (e: any) => setSearch(Array.from(e.results as any[]).map((r: any) => r[0].transcript).join(""));
-    rec.onend = () => { setListening(false); recognitionRef.current = null; };
-    rec.onerror = () => { setListening(false); recognitionRef.current = null; };
-    rec.start(); recognitionRef.current = rec;
-  }, [listening]);
-
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
     defaultValues: { direction: "inbound", currency: "GBP" },
   });
@@ -168,18 +147,15 @@ export default function InvoicesPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Auto-open modal or activate voice search when navigated here via voice command
+  // Auto-open modal when navigated here via ?new=1
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("new") === "1") {
       if (caps.isLoading) return;
       window.history.replaceState({}, "", "/invoices");
       if (caps.canManageInvoices) setModalOpen(true);
-    } else if (params.get("recall") === "1") {
-      window.history.replaceState({}, "", "/invoices");
-      toggleVoiceSearch();
     }
-  }, [toggleVoiceSearch, caps.isLoading, caps.canManageInvoices]);
+  }, [caps.isLoading, caps.canManageInvoices]);
 
   async function markPaid(id: string) {
     if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
@@ -415,18 +391,11 @@ export default function InvoicesPage() {
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
           <Input
-            placeholder={listening ? "Listening…" : "Search invoices…"}
-            className={cn("pl-9", voiceSupported ? "pr-10" : "", listening && "border-orange-400 ring-1 ring-orange-400/60")}
+            placeholder="Search invoices…"
+            className="pl-9"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
-          {voiceSupported && (
-            <button type="button" onClick={toggleVoiceSearch} title={listening ? "Stop" : "Search by voice"}
-              className={cn("absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md transition-colors",
-                listening ? "text-orange-500 animate-pulse" : "text-muted-foreground hover:text-primary")}>
-              {listening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-            </button>
-          )}
         </div>
         <div className="flex flex-wrap gap-2">
           {(["all", "inbound", "outbound", "pending", "paid"] as const).map(f => (

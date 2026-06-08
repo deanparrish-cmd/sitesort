@@ -10,12 +10,11 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Mic, Pin } from "lucide-react";
+import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { Textarea } from "@/components/ui/textarea";
 import { InsuranceCertZone } from "@/components/ui/insurance-cert-zone";
-import { VoiceDictation } from "@/components/voice-dictation";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetProject,
@@ -147,7 +146,7 @@ export default function ProjectDetail() {
       .then(r => r.ok ? r.json() : []).then(setTodayNotes);
   };
 
-  const submitDailyNote = async (body: string, source: "voice" | "text") => {
+  const submitDailyNote = async (body: string) => {
     const text = body.trim();
     if (!text) return;
     setNoteSubmitting(true);
@@ -155,7 +154,7 @@ export default function ProjectDetail() {
       const res = await fetch(`/api/projects/${projectId}/daily-notes`, {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify({ body: text, source }),
+        body: JSON.stringify({ body: text, source: "text" }),
       });
       if (!res.ok) throw new Error("Failed to save note");
       toast({ title: "Daily report saved", description: "Added to today's site report." });
@@ -1715,14 +1714,8 @@ tr:last-child td{border-bottom:none}
                         <div>
                           <div className="flex items-center justify-between mb-1.5">
                             <label className="text-xs font-medium text-muted-foreground block">Note (optional)</label>
-                            <VoiceDictation
-                              projectId={projectId}
-                              maxSeconds={30}
-                              label="Dictate"
-                              onTranscript={t => setPhotoNote(prev => (prev.trim() ? prev.trim() + " " + t : t))}
-                            />
                           </div>
-                          <Textarea value={photoNote} onChange={e => setPhotoNote(e.target.value)} placeholder="What does this photo show? Type or tap Dictate to speak." rows={2} />
+                          <Textarea value={photoNote} onChange={e => setPhotoNote(e.target.value)} placeholder="What does this photo show?" rows={2} />
                         </div>
                         <div>
                           <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Zone / location (optional)</label>
@@ -1742,24 +1735,18 @@ tr:last-child td{border-bottom:none}
                     <CardContent className="pt-6 space-y-4">
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <h4 className="font-semibold text-sm mb-1">Daily oral report</h4>
-                          <p className="text-xs text-muted-foreground">Speak an overall summary of the day. It's transcribed and added to today's site report.</p>
+                          <h4 className="font-semibold text-sm mb-1">Daily report</h4>
+                          <p className="text-xs text-muted-foreground">Type an overall summary of the day. It's added to today's site report.</p>
                         </div>
-                        <VoiceDictation
-                          projectId={projectId}
-                          maxSeconds={120}
-                          label="Record"
-                          onTranscript={t => setNoteBody(prev => (prev.trim() ? prev.trim() + " " + t : t))}
-                        />
                       </div>
                       <Textarea
                         value={noteBody}
                         onChange={e => setNoteBody(e.target.value)}
-                        placeholder="Tap Record and speak your daily report, or type it here…"
+                        placeholder="Type your daily report here…"
                         rows={3}
                       />
                       <div className="flex justify-end">
-                        <Button onClick={() => submitDailyNote(noteBody, "voice")} disabled={!noteBody.trim() || noteSubmitting}>
+                        <Button onClick={() => submitDailyNote(noteBody)} disabled={!noteBody.trim() || noteSubmitting}>
                           {noteSubmitting ? "Saving…" : "Save to today's report"}
                         </Button>
                       </div>
@@ -1781,7 +1768,7 @@ tr:last-child td{border-bottom:none}
                 )}
                 {photos.length === 0 ? (
                   <Card><CardContent className="py-12 text-center text-muted-foreground text-sm">
-                    No photos logged yet. Use voice commands or the sidebar to log a photo.
+                    No photos logged yet. Use the sidebar to log a photo.
                   </CardContent></Card>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
@@ -2576,7 +2563,7 @@ tr:last-child td{border-bottom:none}
 
               {d.siteManagerNotes.length > 0 && (
                 <div>
-                  <h4 className="flex items-center gap-2 font-semibold text-sm mb-2"><Mic className="w-4 h-4 text-primary" />Site reports ({d.siteManagerNotes.length})</h4>
+                  <h4 className="flex items-center gap-2 font-semibold text-sm mb-2"><ClipboardCheck className="w-4 h-4 text-primary" />Site reports ({d.siteManagerNotes.length})</h4>
                   <div className="space-y-2">
                     {d.siteManagerNotes.map(n => (
                       <div key={n.id} className="rounded-lg border bg-muted/30 p-3">

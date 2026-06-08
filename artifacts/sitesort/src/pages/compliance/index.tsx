@@ -10,7 +10,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  ShieldAlert, ShieldX, FileSignature, Search, Mic, MicOff,
+  ShieldAlert, ShieldX, FileSignature, Search,
   CheckCircle2, ArrowRight, Upload, FileText, AlertTriangle, Loader2, Calendar,
   ExternalLink, Share2, Mail, MessageCircle,
 } from "lucide-react";
@@ -53,12 +53,6 @@ export default function CompliancePage() {
   const [subs, setSubs] = useState<Sub[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [listening, setListening] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const recognitionRef = useRef<any>(null);
-  const voiceSupported = typeof window !== "undefined" && !!(
-    (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-  );
 
   // ── drag / upload state ──
   const [isDragOver, setIsDragOver] = useState(false);
@@ -94,23 +88,7 @@ export default function CompliancePage() {
 
   const [highlightUpload, setHighlightUpload] = useState(false);
 
-  // ── voice search ──
-  const toggleVoice = useCallback(() => {
-    if (listening) { recognitionRef.current?.stop(); return; }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const SpeechRec = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
-    if (!SpeechRec) return;
-    const rec = new SpeechRec();
-    rec.continuous = false; rec.interimResults = true; rec.lang = "en-GB";
-    rec.onstart = () => setListening(true);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    rec.onresult = (e: any) => setSearch(Array.from(e.results as any[]).map((r: any) => r[0].transcript).join(""));
-    rec.onend = () => { setListening(false); recognitionRef.current = null; };
-    rec.onerror = () => { setListening(false); recognitionRef.current = null; };
-    rec.start(); recognitionRef.current = rec;
-  }, [listening]);
-
-  // ── voice command param handling ──
+  // ── URL param handling ──
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("upload") === "1") {
@@ -124,11 +102,8 @@ export default function CompliancePage() {
       const term = params.get("q")!;
       window.history.replaceState({}, "", "/compliance");
       setSearch(term);
-    } else if (params.get("find") === "1") {
-      window.history.replaceState({}, "", "/compliance");
-      toggleVoice();
     }
-  }, [toggleVoice, caps.isLoading, caps.canManageCompliance]);
+  }, [caps.isLoading, caps.canManageCompliance]);
 
   // ── file upload ──
   const uploadFile = useCallback(async (file: File, prefilledSubId?: string) => {
@@ -299,22 +274,15 @@ export default function CompliancePage() {
         </div>
       )}
 
-      {/* ── Voice search ── */}
+      {/* ── Search ── */}
       <div className="relative max-w-sm mb-8">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
         <Input
-          placeholder={listening ? "Listening…" : "Search by name, project or type…"}
-          className={cn("pl-9", voiceSupported ? "pr-10" : "", listening && "border-orange-400 ring-1 ring-orange-400/60")}
+          placeholder="Search by name, project or type…"
+          className="pl-9"
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
-        {voiceSupported && (
-          <button type="button" onClick={toggleVoice} title={listening ? "Stop" : "Search by voice"}
-            className={cn("absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md transition-colors",
-              listening ? "text-orange-500 animate-pulse" : "text-muted-foreground hover:text-primary")}>
-            {listening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-          </button>
-        )}
       </div>
 
       {loading ? (

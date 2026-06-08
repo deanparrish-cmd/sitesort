@@ -6,12 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, Building, MapPin, Calendar, Mic, MicOff, Sparkles, AlertTriangle, CheckCircle2, Camera, Loader2, ClipboardCheck } from "lucide-react";
+import { Search, Plus, Building, MapPin, Calendar, Sparkles, AlertTriangle, CheckCircle2, Camera, Loader2, ClipboardCheck } from "lucide-react";
 import { useListProjects, useCreateProject } from "@workspace/api-client-react";
 import { useSubscription } from "@/contexts/subscription";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
-import { formatDate, cn } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
 import { useCapabilities } from "@/hooks/use-capabilities";
 
 export default function ProjectsList() {
@@ -29,10 +29,6 @@ export default function ProjectsList() {
   const [search, setSearch] = useState("");
   const { register, handleSubmit, reset } = useForm();
 
-  const [listening, setListening] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const recognitionRef = useRef<any>(null);
-
   // Safety issue state
   const [safetyOpen, setSafetyOpen] = useState(false);
   const [safetyProjectId, setSafetyProjectId] = useState("");
@@ -43,33 +39,11 @@ export default function ProjectsList() {
   const [safetyUploading, setSafetyUploading] = useState(false);
   const [safetyError, setSafetyError] = useState<string | null>(null);
   const [safetyRefNum, setSafetyRefNum] = useState<string | null>(null);
-  const [safetyDictating, setSafetyDictating] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const safetyDictateRef = useRef<any>(null);
   const safetyFileRef = useRef<HTMLInputElement>(null);
 
-  const toggleSafetyDictate = useCallback(() => {
-    if (safetyDictating) { safetyDictateRef.current?.stop(); return; }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const SpeechRec = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
-    if (!SpeechRec) return;
-    const rec = new SpeechRec();
-    rec.continuous = true; rec.interimResults = false; rec.lang = "en-GB";
-    rec.onstart = () => setSafetyDictating(true);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    rec.onresult = (e: any) => {
-      const t = Array.from(e.results as any[]).map((r: any) => r[0].transcript).join(" ");
-      setSafetyDesc(prev => prev + (prev ? " " : "") + t);
-    };
-    rec.onend = () => { setSafetyDictating(false); safetyDictateRef.current = null; };
-    rec.onerror = () => { setSafetyDictating(false); safetyDictateRef.current = null; };
-    rec.start(); safetyDictateRef.current = rec;
-  }, [safetyDictating]);
-
   const closeSafetyModal = useCallback(() => {
-    safetyDictateRef.current?.stop();
     setSafetyOpen(false); setSafetyProjectId(""); setSafetyDesc(""); setSafetyZone("");
-    setSafetyPhotoUrl(null); setSafetyError(null); setSafetyRefNum(null); setSafetyDictating(false);
+    setSafetyPhotoUrl(null); setSafetyError(null); setSafetyRefNum(null);
   }, []);
 
   const uploadSafetyPhoto = useCallback(async (file: File) => {
@@ -118,10 +92,7 @@ export default function ProjectsList() {
   const [permitSubmitting, setPermitSubmitting] = useState(false);
   const [permitError, setPermitError] = useState<string | null>(null);
   const [permitSuccess, setPermitSuccess] = useState(false);
-  const [permitDictating, setPermitDictating] = useState(false);
   const [teamUsers, setTeamUsers] = useState<{ id: string; name: string; role: string }[]>([]);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const permitDictateRef = useRef<any>(null);
 
   useEffect(() => {
     const token = localStorage.getItem("sitesort_token");
@@ -129,29 +100,10 @@ export default function ProjectsList() {
       .then(r => r.ok ? r.json() : []).then(setTeamUsers);
   }, []);
 
-  const togglePermitDictate = useCallback(() => {
-    if (permitDictating) { permitDictateRef.current?.stop(); return; }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const SpeechRec = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
-    if (!SpeechRec) return;
-    const rec = new SpeechRec();
-    rec.continuous = true; rec.interimResults = false; rec.lang = "en-GB";
-    rec.onstart = () => setPermitDictating(true);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    rec.onresult = (e: any) => {
-      const t = Array.from(e.results as any[]).map((r: any) => r[0].transcript).join(" ");
-      setPermitDesc(prev => prev + (prev ? " " : "") + t);
-    };
-    rec.onend = () => { setPermitDictating(false); permitDictateRef.current = null; };
-    rec.onerror = () => { setPermitDictating(false); permitDictateRef.current = null; };
-    rec.start(); permitDictateRef.current = rec;
-  }, [permitDictating]);
-
   const closePermitModal = useCallback(() => {
-    permitDictateRef.current?.stop();
     setPermitOpen(false); setPermitProjectId(""); setPermitType("Hot Works");
     setPermitDesc(""); setPermitResponsibleId(""); setPermitStart(""); setPermitExpiry("");
-    setPermitError(null); setPermitSuccess(false); setPermitDictating(false);
+    setPermitError(null); setPermitSuccess(false);
   }, []);
 
   const submitPermit = useCallback(async () => {
@@ -197,34 +149,12 @@ export default function ProjectsList() {
   const [photoSubmitting, setPhotoSubmitting] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [photoRefNum, setPhotoRefNum] = useState<string | null>(null);
-  const [photoDictating, setPhotoDictating] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const photoDictateRef = useRef<any>(null);
   const photoFileRef = useRef<HTMLInputElement>(null);
 
-  const togglePhotoDictate = useCallback(() => {
-    if (photoDictating) { photoDictateRef.current?.stop(); return; }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const SpeechRec = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
-    if (!SpeechRec) return;
-    const rec = new SpeechRec();
-    rec.continuous = true; rec.interimResults = false; rec.lang = "en-GB";
-    rec.onstart = () => setPhotoDictating(true);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    rec.onresult = (e: any) => {
-      const t = Array.from(e.results as any[]).map((r: any) => r[0].transcript).join(" ");
-      setPhotoDesc(prev => prev + (prev ? " " : "") + t);
-    };
-    rec.onend = () => { setPhotoDictating(false); photoDictateRef.current = null; };
-    rec.onerror = () => { setPhotoDictating(false); photoDictateRef.current = null; };
-    rec.start(); photoDictateRef.current = rec;
-  }, [photoDictating]);
-
   const closePhotoModal = useCallback(() => {
-    photoDictateRef.current?.stop();
     setPhotoOpen(false); setPhotoProjectId(""); setPhotoCategory("progress");
     setPhotoDesc(""); setPhotoZone(""); setPhotoUrl(null);
-    setPhotoError(null); setPhotoRefNum(null); setPhotoDictating(false);
+    setPhotoError(null); setPhotoRefNum(null);
   }, []);
 
   const uploadPhotoFile = useCallback(async (file: File) => {
@@ -260,7 +190,7 @@ export default function ProjectsList() {
     }
   }, [photoOpen, projects, photoProjectId]);
 
-  // Auto-open create modal when navigated here via voice command (?new=1)
+  // Auto-open create modal when navigated here (?new=1)
   useEffect(() => {
     if (caps.isLoading) return;
     const params = new URLSearchParams(window.location.search);
@@ -271,7 +201,7 @@ export default function ProjectsList() {
     }
   }, [isCancelled, setLocation, caps.isLoading, caps.canManageProjects]);
 
-  // Auto-open safety modal via voice command (?safety=1)
+  // Auto-open safety modal (?safety=1)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("safety") === "1") {
@@ -282,7 +212,7 @@ export default function ProjectsList() {
     }
   }, [isCancelled, setLocation, caps.isLoading, caps.canLogPhoto]);
 
-  // Auto-open permit modal via voice command (?permit=1)
+  // Auto-open permit modal (?permit=1)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("permit") === "1") {
@@ -293,7 +223,7 @@ export default function ProjectsList() {
     }
   }, [isCancelled, setLocation, caps.isLoading, caps.canManageCompliance]);
 
-  // Auto-open photo upload modal via voice command (?photo=1)
+  // Auto-open photo upload modal (?photo=1)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("photo") === "1") {
@@ -304,7 +234,7 @@ export default function ProjectsList() {
     }
   }, [isCancelled, setLocation, caps.isLoading, caps.canLogPhoto]);
 
-  // View photo log via voice command (?viewphoto=1) — go to first active project's photos tab
+  // View photo log (?viewphoto=1) — go to first active project's photos tab
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("viewphoto") === "1" && projects) {
@@ -314,7 +244,7 @@ export default function ProjectsList() {
     }
   }, [projects, setLocation]);
 
-  // Open specific project by name via voice command (?openproject=<name>)
+  // Open specific project by name (?openproject=<name>)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const nameQuery = params.get("openproject");
@@ -326,30 +256,6 @@ export default function ProjectsList() {
     );
     if (match) setLocation(`/projects/${match.id}`);
   }, [projects, setLocation]);
-  const voiceSupported = typeof window !== "undefined" && !!(
-    (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-  );
-
-  function toggleVoiceSearch() {
-    if (listening) { recognitionRef.current?.stop(); return; }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const SpeechRec = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
-    if (!SpeechRec) return;
-    const rec = new SpeechRec();
-    rec.continuous = false;
-    rec.interimResults = true;
-    rec.lang = "en-GB";
-    rec.onstart = () => setListening(true);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    rec.onresult = (e: any) => {
-      const transcript = Array.from(e.results as any[]).map((r: any) => r[0].transcript).join("");
-      setSearch(transcript);
-    };
-    rec.onend = () => { setListening(false); recognitionRef.current = null; };
-    rec.onerror = () => { setListening(false); recognitionRef.current = null; };
-    rec.start();
-    recognitionRef.current = rec;
-  }
 
   const filteredProjects = projects?.filter(p => 
     p.name.toLowerCase().includes(search.toLowerCase()) || 
@@ -398,24 +304,11 @@ export default function ProjectsList() {
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             <Input
-              placeholder={listening ? "Listening…" : "Search projects by name or address…"}
-              className={cn("pl-9", voiceSupported ? "pr-10" : "", listening && "border-orange-400 ring-1 ring-orange-400/60")}
+              placeholder="Search projects by name or address…"
+              className="pl-9"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
-            {voiceSupported && (
-              <button
-                type="button"
-                onClick={toggleVoiceSearch}
-                title={listening ? "Stop listening" : "Search by voice"}
-                className={cn(
-                  "absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md transition-colors",
-                  listening ? "text-orange-500 animate-pulse" : "text-muted-foreground hover:text-primary"
-                )}
-              >
-                {listening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-              </button>
-            )}
           </div>
         </div>
 
@@ -626,19 +519,10 @@ export default function ProjectsList() {
                 <textarea
                   value={photoDesc}
                   onChange={e => setPhotoDesc(e.target.value)}
-                  placeholder={photoDictating ? "Listening…" : "Describe what the photo shows…"}
+                  placeholder="Describe what the photo shows…"
                   rows={2}
-                  className={cn("w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring pr-10",
-                    photoDictating && "border-orange-400 ring-1 ring-orange-400/60")}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
                 />
-                {voiceSupported && (
-                  <button type="button" onClick={togglePhotoDictate}
-                    title={photoDictating ? "Stop dictating" : "Dictate description"}
-                    className={cn("absolute right-2 top-2 p-1 rounded transition-colors",
-                      photoDictating ? "text-orange-500 animate-pulse" : "text-muted-foreground hover:text-primary")}>
-                    {photoDictating ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                  </button>
-                )}
               </div>
             </div>
 
@@ -727,19 +611,10 @@ export default function ProjectsList() {
                 <textarea
                   value={permitDesc}
                   onChange={e => setPermitDesc(e.target.value)}
-                  placeholder={permitDictating ? "Listening… describe the permit scope" : "Describe the work covered by this permit…"}
+                  placeholder="Describe the work covered by this permit…"
                   rows={3}
-                  className={cn("w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring pr-10",
-                    permitDictating && "border-orange-400 ring-1 ring-orange-400/60")}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
                 />
-                {voiceSupported && (
-                  <button type="button" onClick={togglePermitDictate}
-                    title={permitDictating ? "Stop dictating" : "Dictate description"}
-                    className={cn("absolute right-2 top-2 p-1 rounded transition-colors",
-                      permitDictating ? "text-orange-500 animate-pulse" : "text-muted-foreground hover:text-primary")}>
-                    {permitDictating ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                  </button>
-                )}
               </div>
             </div>
 
@@ -818,19 +693,10 @@ export default function ProjectsList() {
                 <textarea
                   value={safetyDesc}
                   onChange={e => setSafetyDesc(e.target.value)}
-                  placeholder={safetyDictating ? "Listening… describe the safety issue" : "Describe the hazard or safety concern…"}
+                  placeholder="Describe the hazard or safety concern…"
                   rows={3}
-                  className={cn("w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring pr-10",
-                    safetyDictating && "border-orange-400 ring-1 ring-orange-400/60")}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
                 />
-                {voiceSupported && (
-                  <button type="button" onClick={toggleSafetyDictate}
-                    title={safetyDictating ? "Stop dictating" : "Dictate description"}
-                    className={cn("absolute right-2 top-2 p-1 rounded transition-colors",
-                      safetyDictating ? "text-orange-500 animate-pulse" : "text-muted-foreground hover:text-primary")}>
-                    {safetyDictating ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                  </button>
-                )}
               </div>
             </div>
 

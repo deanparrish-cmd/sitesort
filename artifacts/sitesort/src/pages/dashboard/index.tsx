@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
   Building2, AlertTriangle, ChevronLeft, ChevronRight, ArrowRight,
-  ShieldAlert, FileSignature, Users, Bell, Search, Mic, MicOff,
+  ShieldAlert, FileSignature, Users, Bell, Search,
   MessageSquare, Camera, FilePlus, Plus, AlertCircle, CreditCard,
   FileText, CheckCircle2, Clock, TrendingUp, Zap, X, Circle,
 } from "lucide-react";
@@ -220,25 +220,6 @@ export default function Dashboard() {
   }, []);
 
   const [search, setSearch] = useState("");
-  const [listening, setListening] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const recognitionRef = useRef<any>(null);
-  const voiceSupported = typeof window !== "undefined" && !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
-
-  function toggleVoiceSearch() {
-    if (listening) { recognitionRef.current?.stop(); return; }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const SpeechRec = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
-    if (!SpeechRec) return;
-    const rec = new SpeechRec();
-    rec.continuous = false; rec.interimResults = true; rec.lang = "en-GB";
-    rec.onstart = () => setListening(true);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    rec.onresult = (e: any) => { const t = Array.from(e.results as any[]).map((r: any) => r[0].transcript).join(""); setSearch(t); };
-    rec.onend = () => { setListening(false); recognitionRef.current = null; };
-    rec.onerror = () => { setListening(false); recognitionRef.current = null; };
-    rec.start(); recognitionRef.current = rec;
-  }
 
   const { calendarEvents, expiryAlerts } = useMemo(() => {
     const events: CalEvent[] = [];
@@ -471,22 +452,11 @@ export default function Dashboard() {
             <div className="relative flex-1 max-w-xs">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
               <Input
-                placeholder={listening ? "Listening…" : "Search projects…"}
-                className={cn("pl-9", voiceSupported ? "pr-10" : "", listening && "border-orange-400 ring-1 ring-orange-400/60")}
+                placeholder="Search projects…"
+                className="pl-9"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />
-              {voiceSupported && (
-                <button
-                  type="button"
-                  onClick={toggleVoiceSearch}
-                  className={cn("absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md transition-colors",
-                    listening ? "text-orange-500 animate-pulse" : "text-muted-foreground hover:text-primary"
-                  )}
-                >
-                  {listening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                </button>
-              )}
             </div>
           </div>
 

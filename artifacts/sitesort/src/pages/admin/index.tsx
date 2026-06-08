@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState, useRef } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -8,7 +8,7 @@ import {
   Users, FileText, PenLine, ClipboardCheck, ShieldCheck, QrCode, Camera,
   Building2, Bell, TrendingUp, TrendingDown, Minus, AlertTriangle,
   CheckCircle2, AlertCircle, Download, RefreshCw, HardHat, Clock,
-  Activity, Layers, Zap, UserCheck, UserX, Trophy, BarChart2, Search, Mic, MicOff,
+  Activity, Layers, Zap, UserCheck, UserX, Trophy, BarChart2, Search,
   FlaskConical,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -290,26 +290,6 @@ export default function AdminDashboard() {
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activitySearch, setActivitySearch] = useState("");
-  const [activityListening, setActivityListening] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const activityRecognitionRef = useRef<any>(null);
-  const voiceSupported = typeof window !== "undefined" && !!(
-    (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-  );
-  function toggleActivityVoice() {
-    if (activityListening) { activityRecognitionRef.current?.stop(); return; }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const SpeechRec = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
-    if (!SpeechRec) return;
-    const rec = new SpeechRec();
-    rec.continuous = false; rec.interimResults = true; rec.lang = "en-GB";
-    rec.onstart = () => setActivityListening(true);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    rec.onresult = (e: any) => setActivitySearch(Array.from(e.results as any[]).map((r: any) => r[0].transcript).join(""));
-    rec.onend = () => { setActivityListening(false); activityRecognitionRef.current = null; };
-    rec.onerror = () => { setActivityListening(false); activityRecognitionRef.current = null; };
-    rec.start(); activityRecognitionRef.current = rec;
-  }
 
   const refetchAll = useCallback(async () => {
     setIsRefreshing(true);
@@ -460,17 +440,11 @@ export default function AdminDashboard() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
             <input
               type="text"
-              placeholder={activityListening ? "Listening…" : "Filter by type, user or detail…"}
+              placeholder="Filter by type, user or detail…"
               value={activitySearch}
               onChange={e => setActivitySearch(e.target.value)}
-              className={`w-full bg-gray-800 border rounded-lg pl-9 ${voiceSupported ? "pr-10" : "pr-3"} py-2 text-sm text-gray-200 placeholder-gray-500 outline-none focus:ring-1 transition-colors ${activityListening ? "border-orange-500 ring-orange-500/40" : "border-gray-700 focus:border-gray-500"}`}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-9 pr-3 py-2 text-sm text-gray-200 placeholder-gray-500 outline-none focus:ring-1 transition-colors focus:border-gray-500"
             />
-            {voiceSupported && (
-              <button type="button" onClick={toggleActivityVoice} title={activityListening ? "Stop" : "Search by voice"}
-                className={`absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded transition-colors ${activityListening ? "text-orange-500 animate-pulse" : "text-gray-500 hover:text-gray-300"}`}>
-                {activityListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-              </button>
-            )}
           </div>
           <Card className="p-0 overflow-hidden">
             <div className="overflow-x-auto">

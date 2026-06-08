@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Send, Users, Eye, ArrowLeft, Check, CheckCheck, Pencil, Trash2, Mic, MicOff, User, Building2, Receipt, X, ExternalLink, FileText, Image, FileCheck, Paperclip, Hash, CornerUpLeft, Search, Zap, ChevronUp, Loader2 } from "lucide-react";
+import { MessageSquare, Send, Users, Eye, ArrowLeft, Check, CheckCheck, Pencil, Trash2, User, Building2, Receipt, X, ExternalLink, FileText, Image, FileCheck, Paperclip, Hash, CornerUpLeft, Search, Zap, ChevronUp, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSubscription } from "@/contexts/subscription";
 import { useToast } from "@/hooks/use-toast";
@@ -151,7 +151,6 @@ export default function MessagesPage() {
   const [editDraft, setEditDraft] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [pendingTo, setPendingTo] = useState<string | null>(null);
-  const [autoDictate, setAutoDictate] = useState(false);
 
   // Project channel state
   const [channels, setChannels] = useState<Channel[]>([]);
@@ -185,7 +184,6 @@ export default function MessagesPage() {
   const [attachPickerItems, setAttachPickerItems] = useState<(DocAttachment | PhotoAttachment | PermitAttachment)[]>([]);
   const [attachPickerLoading, setAttachPickerLoading] = useState(false);
   const [attachedItem, setAttachedItem] = useState<{ type: AttachTab; data: DocAttachment | PhotoAttachment | PermitAttachment } | null>(null);
-  const [dictating, setDictating] = useState(false);
   const [emojiPickerId, setEmojiPickerId] = useState<string | null>(null);
   const [replyingTo, setReplyingTo] = useState<ReplyTo | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -214,9 +212,6 @@ export default function MessagesPage() {
   const activeConvRef = useRef<Conversation | null>(null);
   const activeChannelRef = useRef<Channel | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const dictateRef = useRef<any>(null);
-  const voiceSupported = typeof window !== "undefined" && !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
 
   const fetchConversations = useCallback(async () => {
     const r = await fetch(`/api/messages/conversations${viewAll ? "?all=true" : ""}`, { headers: authHeaders() });
@@ -391,35 +386,6 @@ export default function MessagesPage() {
       .then(setTeamUsers);
   }, []);
 
-  // Voice dictation
-  const startDictation = useCallback(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const SpeechRec = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
-    if (!SpeechRec) return;
-    const rec = new SpeechRec();
-    rec.continuous = true; rec.interimResults = false; rec.lang = "en-GB";
-    rec.onstart = () => setDictating(true);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    rec.onresult = (e: any) => {
-      const transcript = Array.from(e.results as any[]).map((r: any) => r[0].transcript).join(" ");
-      setDraft(prev => prev + (prev ? " " : "") + transcript);
-    };
-    rec.onend = () => { setDictating(false); dictateRef.current = null; };
-    rec.onerror = () => { setDictating(false); dictateRef.current = null; };
-    rec.start(); dictateRef.current = rec;
-  }, []);
-
-  const stopDictation = useCallback(() => {
-    dictateRef.current?.stop();
-    setDictating(false);
-  }, []);
-
-  const toggleDictation = useCallback(() => {
-    if (dictating) stopDictation(); else startDictation();
-  }, [dictating, startDictation, stopDictation]);
-
-  useEffect(() => () => { dictateRef.current?.stop(); }, []);
-
   // Debounced search
   useEffect(() => {
     const q = searchQuery.trim();
@@ -437,7 +403,7 @@ export default function MessagesPage() {
     return () => clearTimeout(t);
   }, [searchQuery]);
 
-  // Handle voice-command params
+  // Handle URL params
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("new") === "1") {
@@ -446,9 +412,6 @@ export default function MessagesPage() {
     } else if (params.get("to")) {
       window.history.replaceState({}, "", "/messages");
       setPendingTo(params.get("to")!.toLowerCase());
-    } else if (params.get("dictate") === "1") {
-      window.history.replaceState({}, "", "/messages");
-      setAutoDictate(true);
     }
   }, []);
 
@@ -465,14 +428,6 @@ export default function MessagesPage() {
       setNewChatOpen(true);
     }
   }, [pendingTo, teamUsers]);
-
-  // Auto-start dictation when conversation opens via voice command
-  useEffect(() => {
-    if (autoDictate && activeConv && !viewAll) {
-      setAutoDictate(false);
-      startDictation();
-    }
-  }, [autoDictate, activeConv, viewAll, startDictation]);
 
   async function sendMessage() {
     if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
@@ -1606,19 +1561,10 @@ export default function MessagesPage() {
                     <Input
                       value={draft}
                       onChange={e => setDraft(e.target.value)}
-                      placeholder={dictating ? "Listening… speak your message" : (attachedInvoice || attachedItem) ? "Add a note (optional)…" : "Type a message…"}
-                      className={cn("flex-1", dictating && "border-orange-400 ring-1 ring-orange-400/60")}
+                      placeholder={(attachedInvoice || attachedItem) ? "Add a note (optional)…" : "Type a message…"}
+                      className="flex-1"
                       onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
                     />
-                    {voiceSupported && (
-                      <Button type="button" size="sm" variant="ghost"
-                        title={dictating ? "Stop dictating" : "Dictate message"}
-                        className={cn("px-2 shrink-0", dictating && "text-orange-500 animate-pulse")}
-                        onClick={toggleDictation}
-                      >
-                        {dictating ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                      </Button>
-                    )}
                     <Button type="submit" size="sm" disabled={(!draft.trim() && !attachedInvoice && !attachedItem) || sending} className="px-3">
                       <Send className="w-4 h-4" />
                     </Button>
@@ -1948,15 +1894,9 @@ export default function MessagesPage() {
                     <Zap className="w-4 h-4" />
                   </Button>
                   <Input value={draft} onChange={e => setDraft(e.target.value)}
-                    placeholder={dictating ? "Listening…" : attachedItem ? "Add a note (optional)…" : `Message #${activeChannel.projectName}…`}
-                    className={cn("flex-1", dictating && "border-orange-400 ring-1 ring-orange-400/60")}
+                    placeholder={attachedItem ? "Add a note (optional)…" : `Message #${activeChannel.projectName}…`}
+                    className="flex-1"
                     onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChannelMessage(); } }} />
-                  {voiceSupported && (
-                    <Button type="button" size="sm" variant="ghost" title={dictating ? "Stop" : "Dictate"}
-                      className={cn("px-2 shrink-0", dictating && "text-orange-500 animate-pulse")} onClick={toggleDictation}>
-                      {dictating ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                    </Button>
-                  )}
                   <Button type="submit" size="sm" disabled={(!draft.trim() && !attachedItem) || sending} className="px-3">
                     <Send className="w-4 h-4" />
                   </Button>

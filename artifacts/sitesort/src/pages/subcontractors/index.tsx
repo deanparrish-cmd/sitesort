@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,7 @@ import {
 import {
   Plus, Search, ChevronDown, ChevronRight, HardHat, Mail, Phone,
   ShieldCheck, ShieldAlert, ShieldX, Shield, Star, AlertTriangle,
-  Users, Pencil, X, FolderOpen, Mic, MicOff, MessageSquare,
+  Users, Pencil, X, FolderOpen, MessageSquare,
   FolderPlus, CheckCircle2, Loader2, Building2, UserPlus, Copy, Check,
   Share2, MessageCircle,
 } from "lucide-react";
@@ -210,38 +210,6 @@ export default function SubcontractorsPage() {
     }
   }
 
-  const [listening, setListening] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const recognitionRef = useRef<any>(null);
-  const voiceSupported = typeof window !== "undefined" && !!(
-    (window as unknown as Record<string, unknown>).SpeechRecognition ||
-    (window as unknown as Record<string, unknown>).webkitSpeechRecognition
-  );
-
-  const toggleVoiceSearch = useCallback(() => {
-    if (listening) {
-      recognitionRef.current?.stop();
-      return;
-    }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const SpeechRec = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
-    if (!SpeechRec) return;
-    const rec = new SpeechRec();
-    rec.continuous = false;
-    rec.interimResults = true;
-    rec.lang = "en-GB";
-    rec.onstart = () => setListening(true);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    rec.onresult = (e: any) => {
-      const transcript = Array.from(e.results as any[]).map((r: any) => r[0].transcript).join("");
-      setSearch(transcript);
-    };
-    rec.onend = () => { setListening(false); recognitionRef.current = null; };
-    rec.onerror = () => { setListening(false); recognitionRef.current = null; };
-    rec.start();
-    recognitionRef.current = rec;
-  }, [listening]);
-
   const { register, handleSubmit, reset, formState: { errors } } = useForm<AddFormData>();
   const { register: editReg, handleSubmit: editSubmit, reset: editReset } = useForm<EditFormData>();
 
@@ -254,7 +222,7 @@ export default function SubcontractorsPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Handle voice-command params: ?new=1 opens modal, ?find=1 activates mic, ?q=term pre-fills search
+  // Handle params: ?new=1 opens modal, ?q=term pre-fills search
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("new") === "1") {
@@ -270,11 +238,8 @@ export default function SubcontractorsPage() {
       const term = params.get("q")!;
       window.history.replaceState({}, "", "/subcontractors");
       setSearch(term);
-    } else if (params.get("find") === "1") {
-      window.history.replaceState({}, "", "/subcontractors");
-      toggleVoiceSearch();
     }
-  }, [isCancelled, toggleVoiceSearch, reset]);
+  }, [isCancelled, reset]);
 
   // Group subs by trade — a sub can appear in multiple trade groups
   const grouped = useMemo(() => {
@@ -421,28 +386,15 @@ export default function SubcontractorsPage() {
         </Card>
       </div>
 
-      {/* Search + Voice */}
+      {/* Search */}
       <div className="relative max-w-sm mb-6">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
         <Input
-          placeholder={listening ? "Listening…" : "Search by name, trade or company…"}
-          className={cn("pl-9", voiceSupported ? "pr-10" : "", listening && "border-orange-400 ring-1 ring-orange-400/60")}
+          placeholder="Search by name, trade or company…"
+          className="pl-9"
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
-        {voiceSupported && (
-          <button
-            type="button"
-            onClick={toggleVoiceSearch}
-            title={listening ? "Stop listening" : "Search by voice"}
-            className={cn(
-              "absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md transition-colors",
-              listening ? "text-orange-500 animate-pulse" : "text-muted-foreground hover:text-primary"
-            )}
-          >
-            {listening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-          </button>
-        )}
       </div>
 
       {/* Directory */}

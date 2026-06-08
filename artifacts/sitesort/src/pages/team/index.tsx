@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Users, Search, Mic, MicOff, Mail, Phone, ShieldCheck, Share2, MessageCircle } from "lucide-react";
+import { Users, Search, Mail, Phone, ShieldCheck, Share2, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type TeamMember = {
@@ -48,12 +48,6 @@ export default function TeamPage() {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [listening, setListening] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const recognitionRef = useRef<any>(null);
-  const voiceSupported = typeof window !== "undefined" && !!(
-    (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-  );
 
   useEffect(() => {
     const token = localStorage.getItem("sitesort_token");
@@ -62,21 +56,6 @@ export default function TeamPage() {
       .then(setMembers)
       .finally(() => setLoading(false));
   }, []);
-
-  function toggleVoice() {
-    if (listening) { recognitionRef.current?.stop(); return; }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const SpeechRec = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
-    if (!SpeechRec) return;
-    const rec = new SpeechRec();
-    rec.continuous = false; rec.interimResults = true; rec.lang = "en-GB";
-    rec.onstart = () => setListening(true);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    rec.onresult = (e: any) => setSearch(Array.from(e.results as any[]).map((r: any) => r[0].transcript).join(""));
-    rec.onend = () => { setListening(false); recognitionRef.current = null; };
-    rec.onerror = () => { setListening(false); recognitionRef.current = null; };
-    rec.start(); recognitionRef.current = rec;
-  }
 
   const q = search.toLowerCase();
   const filtered = members.filter(m =>
@@ -101,22 +80,15 @@ export default function TeamPage() {
         </div>
       </div>
 
-      {/* Voice search */}
+      {/* Search */}
       <div className="relative max-w-sm mb-8">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
         <Input
-          placeholder={listening ? "Listening…" : "Search by name, email or role…"}
-          className={cn("pl-9", voiceSupported ? "pr-10" : "", listening && "border-orange-400 ring-1 ring-orange-400/60")}
+          placeholder="Search by name, email or role…"
+          className="pl-9"
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
-        {voiceSupported && (
-          <button type="button" onClick={toggleVoice} title={listening ? "Stop" : "Search by voice"}
-            className={cn("absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md transition-colors",
-              listening ? "text-orange-500 animate-pulse" : "text-muted-foreground hover:text-primary")}>
-            {listening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-          </button>
-        )}
       </div>
 
       {loading ? (
