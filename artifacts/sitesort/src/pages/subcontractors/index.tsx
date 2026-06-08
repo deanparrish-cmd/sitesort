@@ -318,7 +318,11 @@ export default function SubcontractorsPage() {
     setNoteDraft("");
     setNotesLoading(true);
     const res = await apiFetch(`/api/subcontractors/${sub.id}/notes`);
-    if (res.ok) setNotesList(await res.json());
+    if (res.ok) {
+      const data: SubNote[] = await res.json();
+      data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setNotesList(data);
+    }
     setNotesLoading(false);
   }
 
