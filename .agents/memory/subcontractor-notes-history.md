@@ -1,14 +1,14 @@
 ---
-name: Per-subcontractor timestamped notes pattern
-description: How the subcontractor notes/reminders history is modelled (dedicated table, not the single notes text field).
+name: Subcontractor notes — two distinct concepts
+description: Don't conflate the static subcontractor blurb with the timestamped reminders log.
 ---
 
-# Subcontractor notes history
+# Subcontractor notes
 
-Subcontractors have TWO distinct note concepts — don't conflate them:
-- `subcontractors.notes` (single free-text column) — a static "about" blurb edited in the Add/Edit dialog.
-- `subcontractor_notes` table — an append-only, timestamped LOG (id, subcontractorId FK, authorId FK, body, createdAt defaultNow), one row per reminder/conversation. Surfaced via the StickyNote "Notes & Reminders" dialog on each subcontractor card.
+A subcontractor has TWO separate note concepts — keep them distinct:
+- A single static "about" blurb (edited in the Add/Edit dialog).
+- An append-only, timestamped reminders LOG (one row per entry), surfaced via the "Notes & Reminders" dialog.
 
-**Why:** The user wanted a date+time-stamped record of chasing expiring insurance/permits — i.e. history, not a single overwritten field.
+**Why:** The user wanted a date+time-stamped history of chasing expiring insurance/permits — history, not one overwritten field. Modelled on the existing daily-notes log pattern.
 
-**How to apply:** This mirrors the `daily_notes` pattern. API: `GET/POST /subcontractors/:id/notes` in api-server subcontractors.ts — both MUST verify the sub belongs to `req.user.companyId` before read/write (tenant scoping), POST sets authorId from `req.user.id` (never client), GET joins users for authorName and orders `desc(createdAt)`. Write gating is UI-only (`caps.canManageSubcontractors`); add a server capability check if policy hardening is needed.
+**How to apply:** Any per-record "history/log" feature here should be a dedicated child table (not a text column), and its API must tenant-scope by the parent's companyId on both read and write, with authorId taken from the session (never the client body).
