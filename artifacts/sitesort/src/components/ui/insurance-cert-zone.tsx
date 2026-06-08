@@ -111,9 +111,9 @@ export function InsuranceCertZone({ memberId, projectId, existingCertUrl, existi
           <span className="flex-1 text-left">Add PLI Certificate</span>
         )}
         {hasCert && existingCertUrl && (
-          <a href={existingCertUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="hover:text-primary">
+          <button onClick={e => { e.stopPropagation(); window.open(existingCertUrl, '_blank', 'noopener,noreferrer'); }} className="hover:text-primary">
             <ExternalLink className="w-3 h-3" />
-          </a>
+          </button>
         )}
       </button>
     );
@@ -145,7 +145,7 @@ export function InsuranceCertZone({ memberId, projectId, existingCertUrl, existi
         ) : uploadedUrl ? (
           <><ShieldCheck className="w-4 h-4 text-success shrink-0" /><span className="flex-1 truncate text-success font-medium">{uploadedName}</span><button onClick={e => { e.stopPropagation(); setUploadedUrl(null); setUploadedName(null); }} className="text-muted-foreground hover:text-destructive ml-auto"><X className="w-3.5 h-3.5" /></button></>
         ) : existingCertUrl && !uploadedUrl ? (
-          <><ShieldCheck className="w-4 h-4 text-success shrink-0" /><span className="flex-1 text-success font-medium">Certificate on file</span><a href={existingCertUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="text-muted-foreground hover:text-primary ml-auto"><ExternalLink className="w-3.5 h-3.5" /></a></>
+          <><ShieldCheck className="w-4 h-4 text-success shrink-0" /><span className="flex-1 text-success font-medium">Certificate on file</span><button onClick={e => { e.stopPropagation(); window.open(existingCertUrl, '_blank', 'noopener,noreferrer'); }} className="text-muted-foreground hover:text-primary ml-auto"><ExternalLink className="w-3.5 h-3.5" /></button></>
         ) : (
           <><Upload className="w-4 h-4 text-muted-foreground shrink-0" /><span className="text-muted-foreground">Drop, paste or <span className="text-primary underline">browse</span></span></>
         )}

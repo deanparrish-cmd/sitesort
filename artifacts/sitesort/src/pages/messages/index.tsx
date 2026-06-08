@@ -1188,14 +1188,12 @@ export default function MessagesPage() {
                                 </div>
                                 {msg.invoice.attachmentUrl && (
                                   <div className="px-3 pb-2">
-                                    <a
-                                      href={msg.invoice.attachmentUrl.replace(/^\/uploads\//, "/api/uploads/")}
-                                      target="_blank"
-                                      rel="noreferrer"
+                                    <button
+                                      onClick={() => { const u = msg.invoice?.attachmentUrl?.replace(/^\/uploads\//, "/api/uploads/"); if (u) window.open(u, '_blank', 'noopener,noreferrer'); }}
                                       className="inline-flex items-center gap-1 text-primary hover:underline text-[11px] font-medium"
                                     >
                                       <ExternalLink className="w-3 h-3" /> View document
-                                    </a>
+                                    </button>
                                   </div>
                                 )}
                               </div>
@@ -1218,10 +1216,10 @@ export default function MessagesPage() {
                                   <div className="px-3 py-2 space-y-0.5">
                                     <p className="font-semibold text-foreground">{doc.name}</p>
                                     <p className="text-muted-foreground capitalize">{doc.type} · v{doc.version}</p>
-                                    <a href={doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/")} target="_blank" rel="noreferrer"
+                                    <button onClick={() => window.open(doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/"), '_blank', 'noopener,noreferrer')}
                                       className="inline-flex items-center gap-1 text-primary hover:underline text-[11px] font-medium mt-1">
                                       <ExternalLink className="w-3 h-3" /> View document
-                                    </a>
+                                    </button>
                                   </div>
                                 </div>
                               );
@@ -1279,10 +1277,10 @@ export default function MessagesPage() {
                                     <p className="text-muted-foreground">{permit.description}</p>
                                     <p className="text-muted-foreground">Expires: {expiry.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
                                     {permit.documentUrl && (
-                                      <a href={permit.documentUrl.replace(/^\/uploads\//, "/api/uploads/")} target="_blank" rel="noreferrer"
+                                      <button onClick={() => window.open(permit.documentUrl!.replace(/^\/uploads\//, "/api/uploads/"), '_blank', 'noopener,noreferrer')}
                                         className="inline-flex items-center gap-1 text-primary hover:underline text-[11px] font-medium mt-1">
                                         <ExternalLink className="w-3 h-3" /> View permit
-                                      </a>
+                                      </button>
                                     )}
                                   </div>
                                 </div>
@@ -1728,7 +1726,7 @@ export default function MessagesPage() {
                                   <div className="px-3 py-2 space-y-0.5">
                                     <p className="font-semibold">{doc.name}</p>
                                     <p className="text-muted-foreground capitalize">{doc.type} · v{doc.version}</p>
-                                    <a href={doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/")} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline text-[11px] font-medium mt-1"><ExternalLink className="w-3 h-3" /> View</a>
+                                    <button onClick={() => window.open(doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/"), '_blank', 'noopener,noreferrer')} className="inline-flex items-center gap-1 text-primary hover:underline text-[11px] font-medium mt-1"><ExternalLink className="w-3 h-3" /> View</button>
                                   </div>
                                 </div>
                               );
@@ -1766,7 +1764,7 @@ export default function MessagesPage() {
                                     <p className="font-semibold capitalize">{permit.type}</p>
                                     <p className="text-muted-foreground">{permit.description}</p>
                                     <p className="text-muted-foreground">Expires: {new Date(permit.expiryDate + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
-                                    {permit.documentUrl && <a href={permit.documentUrl.replace(/^\/uploads\//, "/api/uploads/")} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline text-[11px] font-medium mt-1"><ExternalLink className="w-3 h-3" /> View permit</a>}
+                                    {permit.documentUrl && <button onClick={() => window.open(permit.documentUrl!.replace(/^\/uploads\//, "/api/uploads/"), '_blank', 'noopener,noreferrer')} className="inline-flex items-center gap-1 text-primary hover:underline text-[11px] font-medium mt-1"><ExternalLink className="w-3 h-3" /> View permit</button>}
                                   </div>
                                 </div>
                               );

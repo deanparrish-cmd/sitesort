@@ -1090,13 +1090,12 @@ tr:last-child td{border-bottom:none}
                       {doc.myDistributionStatus === "acknowledged" && (
                         <span className="flex items-center gap-1 text-xs text-success font-semibold"><CheckCircle2 className="w-3 h-3" />Signed off</span>
                       )}
-                      <a
-                        href={doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/")}
-                        target="_blank" rel="noreferrer"
+                      <button
+                        onClick={() => window.open(doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/"), '_blank', 'noopener,noreferrer')}
                         className="flex items-center gap-1 text-xs text-primary hover:underline font-medium"
                       >
                         <ExternalLink className="w-3 h-3" />Open
-                      </a>
+                      </button>
                       {canViewAudit && (
                         <button onClick={() => setAuditDoc({ id: doc.id, name: doc.name })}
                           className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs">
@@ -1193,16 +1192,14 @@ tr:last-child td{border-bottom:none}
                               Signed off
                             </span>
                           )}
-                          <a
-                            href={doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/")}
-                            target="_blank"
-                            rel="noreferrer"
+                          <button
+                            onClick={() => window.open(doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/"), '_blank', 'noopener,noreferrer')}
                             className="flex items-center gap-1 text-xs text-primary hover:underline font-medium"
                             title="Open document"
                           >
                             <ExternalLink className="w-3.5 h-3.5" />
                             Open
-                          </a>
+                          </button>
                           {canViewAudit && (
                             <button
                               onClick={() => setAuditDoc({ id: doc.id, name: doc.name })}
@@ -2401,7 +2398,7 @@ tr:last-child td{border-bottom:none}
             <div className="space-y-5">
               <div className="px-4 py-3 bg-muted/50 rounded-lg text-sm">
                 <p className="font-semibold truncate">{sharingDoc.name}</p>
-                <p className="text-muted-foreground text-xs">v{sharingDoc.version} · <a href={docUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">Open document</a></p>
+                <p className="text-muted-foreground text-xs">v{sharingDoc.version} · <button onClick={() => window.open(docUrl, '_blank', 'noopener,noreferrer')} className="text-primary hover:underline">Open document</button></p>
               </div>
 
               {withEmail.length > 0 && (

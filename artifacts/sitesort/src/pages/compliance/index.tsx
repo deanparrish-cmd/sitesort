@@ -368,15 +368,13 @@ export default function CompliancePage() {
                             <ExpiryBadge days={days} />
                             {ins.certificateUrl && (
                               <>
-                                <a
-                                  href={ins.certificateUrl!.replace(/^\/uploads\//, "/api/uploads/")}
-                                  target="_blank"
-                                  rel="noreferrer"
+                                <button
+                                  onClick={() => window.open(ins.certificateUrl!.replace(/^\/uploads\//, "/api/uploads/"), '_blank', 'noopener,noreferrer')}
                                   className="text-xs text-primary hover:underline flex items-center gap-0.5"
                                   title="Open certificate"
                                 >
                                   <ExternalLink className="w-3 h-3" />
-                                </a>
+                                </button>
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
                                     <button className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs" title="Share certificate">
