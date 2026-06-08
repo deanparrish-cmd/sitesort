@@ -100,15 +100,15 @@ export default function LandingPage() {
               Control the chaos of <br className="hidden sm:block" />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-800 to-orange-400">site information.</span>
             </h1>
-            <img
-              src={builtForBeam}
-              alt="Built for UK construction SMEs"
-              className="mx-auto h-14 sm:h-16 md:h-20 w-auto mb-8 drop-shadow-xl"
-            />
             <p className="text-lg md:text-xl text-muted-foreground mb-10 leading-relaxed max-w-2xl mx-auto">
               The single source of truth for your site teams. Distribute the right documents,
               track compliance, and keep subcontractors current — without the paperwork headache.
             </p>
+            <img
+              src={builtForBeam}
+              alt="Built for UK construction SMEs"
+              className="mx-auto h-14 sm:h-16 md:h-20 w-auto mb-10 drop-shadow-xl"
+            />
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link href={registerHref} className="w-full sm:w-auto">
                 <Button size="lg" variant="accent" className="w-full sm:w-auto group">
