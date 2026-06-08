@@ -141,17 +141,31 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 
 6. **Share on subcontractor cards** — Email/WhatsApp Share dropdown added to both the desktop action icon bar and the mobile bottom action bar; content includes company name, contact name, email, phone, trades
 
+7. **Per-project Compliance tab** — the "Permits" tab in project detail was listed but had no content; built it out as a full per-project Compliance tab:
+   - Updated `PERMIT_TYPES` list across project detail and projects index to include: `"CSCS Check"`, `"IPAF Certificate"`, `"Hot Works"`, `"Working at Heights"`, `"Scaffolding Inspection"`, `"Confined Space Entry"`, `"Excavation"`, `"Electrical Isolation"`, `"Demolition"`, `"Asbestos"`, `"Method Statement"`, `"Other"`
+   - Tab label changed from "Permits" to "Compliance" (tab value stays `"permits"` to avoid breaking URL routing)
+   - Permits grouped by status: Expired (red), Expiring Soon (amber), Active (green)
+   - Each permit row: type badge, description, responsible person, start/expiry dates, status badge, Share dropdown (Email/WhatsApp), Delete button
+   - "Add Permit" Dialog: type selector from PERMIT_TYPES, description, responsible person (team selector), start/expiry dates
+   - `submitNewPermit()` POSTs to `/api/projects/:id/permits`; `deletePermit(id)` DELETEs `/api/permits/:id`
+   - Team Insurance section below permits shows each member with their PLI cert status
+   - `DELETE /permits/:permitId` endpoint added to `permits.ts` — verifies permit belongs to user's company before deleting
+
 ### Key files modified
-- `artifacts/sitesort/src/pages/projects/detail.tsx` — Share in mobile doc card; Share on project Team tab member cards
+- `artifacts/sitesort/src/pages/projects/detail.tsx` — Share in mobile doc card; Share on project Team tab member cards; full Compliance tab; Add Permit dialog; `deletePermit()` + `submitNewPermit()`; `PERMIT_TYPES` constant
+- `artifacts/sitesort/src/pages/projects/index.tsx` — updated `PERMIT_TYPES` list; default reset `"Hot Works"`
 - `artifacts/sitesort/src/pages/compliance/index.tsx` — Share on permits + sign-offs; responsive layouts
 - `artifacts/sitesort/src/pages/invoices/index.tsx` — Share on mobile invoice card
 - `artifacts/sitesort/src/pages/team/index.tsx` — Share on team member cards
 - `artifacts/sitesort/src/pages/subcontractors/index.tsx` — Share on sub cards (desktop + mobile)
 - `artifacts/api-server/src/routes/compliance.ts` — `fileUrl` added to `pendingAcknowledgments` response
+- `artifacts/api-server/src/routes/permits.ts` — `DELETE /permits/:permitId` endpoint added
 
 ### Notes for next session
 - **Share pattern is now consistent across all entities** — DropdownMenu with `<Mail>` (mailto:) and `<MessageCircle>` (wa.me) items; always use `window.open()` not `<a target="_blank">`
 - **Two-layout pages** (mobile card + desktop table): documents tab, invoices — any new actions added to one must be added to both
+- **Per-project Compliance tab** at `TabsContent value="permits"` in project detail — tab label is "Compliance" but value must stay `"permits"` to keep URL routing intact
+- **PERMIT_TYPES** defined in both `detail.tsx` and `projects/index.tsx` — keep in sync
 - **API server does NOT hot-reload** — after editing any backend file: `pnpm --filter @workspace/api-server run build` then restart node process
 - **GitHub push command**: `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts`
 - All commits are on `main`

@@ -106,6 +106,19 @@
 - `POST /api/auth/invite/:token/accept` creates user (role `subcontractor`, `emailVerified: true`), marks `inviteUsedAt`
 - Key files: `routes/auth.ts`, `subcontractors/index.tsx`, `auth/register.tsx`
 
+## 2026-06-05
+
+1. **Message pagination** — cursor-based (`?before=<id>` / `?after=<id>`) for DM threads and channel threads; default returns last 50 + `hasMore`; "Load older messages" button; scroll-position preserved via `scrollHeight` anchor + `useLayoutEffect`
+2. **Invoice document viewer fix** — replaced broken `<iframe>` with `<object>` PDF embed + fallback button; all "Open" links converted from `<a target="_blank">` to `window.open()`
+- Key files: `routes/messages.ts`, `routes/channels.ts`, `messages/index.tsx`, `invoices/index.tsx`
+
+## 2026-05-27
+
+1. **Beta access flag** — `betaAccess` boolean on `companies` table; bypasses all Stripe checks; `GET/PATCH /api/companies/mine` returns `betaAccess`; `SubscriptionContext` overrides `isCancelled` and `effectiveStatus`
+2. **Project progress tracking** — `milestones` table; 4 CRUD endpoints; `progressPercent` computed from milestones; Progress tab in project detail (progress bar, checklist, Gantt timeline); mini progress bar in project list
+3. **Onboarding checklist** — dismissible card on dashboard; 5 steps derived from real DB data via `GET /api/onboarding/status`; localStorage dismiss key `sitesort_onboarding_dismissed`
+- Key files: `lib/db/src/schema/milestones.ts`, `routes/projects.ts`, `routes/onboarding.ts`, `projects/detail.tsx`, `projects/index.tsx`, `dashboard/index.tsx`, `lib/db/src/schema/companies.ts`, `contexts/subscription.tsx`
+
 ## 2026-05-22 (detailed log)
 
 ### Stripe webhook handler
