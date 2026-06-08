@@ -193,6 +193,16 @@ export default function InvoicesPage() {
     if (paidInvoice) setMoveToInvoice({ ...paidInvoice, status: "paid" });
   }
 
+  async function markUnpaid(id: string) {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
+    const res = await apiFetch(`/api/invoices/${id}`, { method: "PATCH", body: JSON.stringify({ status: "pending" }) });
+    if (!res.ok) {
+      toast({ title: "Couldn't update invoice", description: "Please try again.", variant: "destructive" });
+      return;
+    }
+    setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, status: "pending" } : inv));
+  }
+
   async function moveToProject(invoiceId: string, projectId: string) {
     if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
     setMovingProject(true);
@@ -672,6 +682,11 @@ export default function InvoicesPage() {
                               Mark paid
                             </button>
                           )}
+                          {inv.status === "paid" && caps.canManageInvoices && (
+                            <button onClick={e => { e.stopPropagation(); markUnpaid(inv.id); }} className="text-xs text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap">
+                              Mark unpaid
+                            </button>
+                          )}
                           {caps.canManageInvoices && (
                             <button onClick={e => { e.stopPropagation(); deleteInvoice(inv.id); }} className="text-xs text-muted-foreground hover:text-destructive transition-colors">
                               Delete
@@ -740,6 +755,14 @@ export default function InvoicesPage() {
                     className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
                   >
                     <CheckCircle2 className="w-3.5 h-3.5" /> Mark paid
+                  </button>
+                )}
+                {viewingInvoice.status === "paid" && (
+                  <button
+                    onClick={() => { markUnpaid(viewingInvoice.id); setViewingInvoice(prev => prev ? { ...prev, status: "pending" } : null); }}
+                    className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-border bg-muted text-muted-foreground hover:bg-muted/70 transition-colors"
+                  >
+                    <Clock className="w-3.5 h-3.5" /> Mark unpaid
                   </button>
                 )}
                 <button
