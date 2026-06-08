@@ -430,7 +430,7 @@ export default function ProjectsList() {
               <Link key={project.id} href={`/projects/${project.id}`}>
                 <div className="px-4 py-4 hover:bg-muted/30 transition-colors active:bg-muted/50">
                   <div className="flex items-start justify-between gap-2 mb-1.5">
-                    <div className="font-bold text-base leading-tight">{project.name}</div>
+                    <div className="font-bold text-base leading-tight min-w-0 flex-1 truncate">{project.name}</div>
                     <Badge variant={project.status === 'active' ? 'success' : project.status === 'complete' ? 'secondary' : 'warning'} className="shrink-0 mt-0.5">
                       {project.status.replace('_', ' ').toUpperCase()}
                     </Badge>

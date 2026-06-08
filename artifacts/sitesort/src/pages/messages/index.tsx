@@ -1079,10 +1079,10 @@ export default function MessagesPage() {
                 <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center text-[11px] font-bold text-primary shrink-0">
                   {activeConv.otherName.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
                 </div>
-                <div>
-                  <p className="font-bold text-sm">{activeConv.otherName}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold text-sm truncate">{activeConv.otherName}</p>
                   {activeConv.otherRole && (
-                    <p className="text-[10px] text-muted-foreground capitalize">{activeConv.otherRole.replace(/_/g, " ")}</p>
+                    <p className="text-[10px] text-muted-foreground capitalize truncate">{activeConv.otherRole.replace(/_/g, " ")}</p>
                   )}
                 </div>
                 {viewAll && (
