@@ -122,6 +122,54 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 
 ### 2026-05-22, 2026-05-25 & 2026-05-26 — see CLAUDE_ARCHIVE.md for full detail
 
+## End-of-session notes — 2026-06-08
+
+### Tasks completed today
+
+1. **Mobile subcontractor card layout fix** — phone number was overlapping action icons in the single horizontal flex row:
+   - Restructured each card into two sections: top (avatar + stacked text info with no competing elements) and a mobile-only bottom bar (`flex sm:hidden`) with insurance badge on the left and all action icons (call/SMS/WhatsApp/email + folder/invite/edit) on the right
+   - Desktop single-row layout unchanged (`hidden sm:flex`)
+
+2. **Additional mobile layout fixes** (found via audit of all pages):
+   - `projects/index.tsx`: project name div missing `min-w-0 flex-1 truncate` — long names pushed status badge off-screen on mobile
+   - `messages/index.tsx`: thread header name container missing `min-w-0 flex-1` — long contact name could collide with Manager View badge
+   - `compliance/index.tsx`: insurance rows changed from always-horizontal to `flex-col sm:flex-row` with `flex-wrap` on the right side (date + badge + 4 action links were overflowing on mobile)
+
+3. **Invoice attachment viewer fix** — `<object data="...pdf">` was rendering blank on mobile and in sandboxed iframe environments; Chrome's fallback content inside `<object>` is never shown:
+   - Replaced with a reliable file card UI: PDF icon + "Open PDF" button (`window.open()`) + "Download" anchor (`<a href download>`)
+   - Same card pattern for non-image/non-PDF file types; image viewer unchanged
+
+4. **Systematic file-open link audit** — found 9 remaining `<a target="_blank">` file links that could be suppressed in sandboxed environments:
+   - `compliance/index.tsx`: insurance certificate open icon
+   - `insurance-cert-zone.tsx`: PLI cert open icon (collapsed + expanded states)
+   - `messages/index.tsx`: invoice attachment, DM doc/permit "View" links, channel doc/permit "View" links (5 links)
+   - `projects/detail.tsx`: documents tab "Open", distribution table "Open", sharing dialog "Open document"
+   - All converted to `window.open()` via `onClick` — consistent with codebase standard
+
+5. **Share (Email + WhatsApp) added to photos, permits, and check-ins** in project detail:
+   - **Photos tab**: Share dropdown (DropdownMenu) in card footer; email includes ref number, category, description, zone, date, and URL; thumbnail click now opens full-size via `window.open()`
+   - **Permits section**: Share dropdown on each permit row (right side); email/WhatsApp includes type, description, expiry, status label, responsible person, project name
+   - **Check-ins tab**: Share dropdown in card footer alongside date/time; email/WhatsApp includes worker name, date, time, project, and stamped photo URL; photo thumbnail click opens full-size
+   - URL normalisation consistent throughout: `.replace(/^\/uploads\//, "/api/uploads/")` then absolute URL via `window.location.origin`
+
+### Key files modified
+- `artifacts/sitesort/src/pages/subcontractors/index.tsx` — two-section mobile card layout
+- `artifacts/sitesort/src/pages/projects/index.tsx` — min-w-0/truncate on mobile project name
+- `artifacts/sitesort/src/pages/messages/index.tsx` — thread header min-w-0; file-open links → window.open()
+- `artifacts/sitesort/src/pages/compliance/index.tsx` — responsive insurance rows; cert link → window.open()
+- `artifacts/sitesort/src/pages/invoices/index.tsx` — replaced `<object>` PDF embed with file card UI
+- `artifacts/sitesort/src/pages/projects/detail.tsx` — doc open links → window.open(); share dropdowns on photos, permits, check-ins
+- `artifacts/sitesort/src/components/ui/insurance-cert-zone.tsx` — cert view links → window.open()
+
+### Notes for next session
+- **Good next features**: demo data seeder, per-project dashboard mini-view
+- **All file-open links now use `window.open()`** — do NOT use `<a target="_blank">` for file links; it's blocked in Replit's sandboxed webview
+- **No `<object>` or `<iframe>` PDF embeds** — these fail silently on mobile and in sandboxed environments; use the file card pattern (icon + Open button + Download link) instead
+- **Share pattern**: use `DropdownMenu` with Email (`window.open("mailto:?subject=...&body=...")`) and WhatsApp (`window.open("https://wa.me/?text=...")`) items; always normalise file URLs before including them
+- **API server does NOT hot-reload** — after editing any backend file: `pnpm --filter @workspace/api-server run build` then restart node process
+- **GitHub push command**: `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts`
+- All commits are on `main`
+
 ## End-of-session notes — 2026-06-06 (session 2)
 
 ### Tasks completed today
