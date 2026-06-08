@@ -16,7 +16,7 @@ import {
   Minus,
 } from "lucide-react";
 import { captureAttribution, withAttribution } from "@/lib/attribution";
-import builtForBeam from "@assets/built_for_1780917566837.jpeg";
+import builtForBeam from "@assets/built_for_beam_nobg.png";
 
 const faqs = [
   {
