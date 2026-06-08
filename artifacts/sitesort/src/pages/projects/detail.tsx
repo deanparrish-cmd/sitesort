@@ -1407,7 +1407,37 @@ tr:last-child td{border-bottom:none}
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-1 shrink-0">
-                        <Badge variant="secondary" className="text-[10px] capitalize">{member.role.replace('_', ' ')}</Badge>
+                        <div className="flex items-center gap-1">
+                          <Badge variant="secondary" className="text-[10px] capitalize">{member.role.replace('_', ' ')}</Badge>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Share contact">
+                                <Share2 className="w-3.5 h-3.5" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44">
+                              <DropdownMenuItem
+                                className="gap-2 cursor-pointer"
+                                onClick={() => {
+                                  const subject = encodeURIComponent(`Contact – ${member.name}`);
+                                  const body = encodeURIComponent(`Hi,\n\nHere are the contact details for ${member.name}:\n\nRole: ${member.role.replace(/_/g, " ")}${member.trades?.length ? `\nTrades: ${member.trades.join(", ")}` : ""}\nEmail: ${member.email ?? "N/A"}${member.phone ? `\nPhone: ${member.phone}` : ""}`);
+                                  window.open(`mailto:?subject=${subject}&body=${body}`);
+                                }}
+                              >
+                                <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="gap-2 cursor-pointer"
+                                onClick={() => {
+                                  const text = encodeURIComponent(`${member.name} (${member.role.replace(/_/g, " ")})${member.trades?.length ? `\nTrades: ${member.trades.join(", ")}` : ""}\nEmail: ${member.email ?? "N/A"}${member.phone ? `\nPhone: ${member.phone}` : ""}`);
+                                  window.open(`https://wa.me/?text=${text}`, "_blank");
+                                }}
+                              >
+                                <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                         {complianceBadge}
                       </div>
                     </div>

@@ -3,7 +3,10 @@ import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Users, Search, Mic, MicOff, Mail, Phone, ShieldCheck } from "lucide-react";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Users, Search, Mic, MicOff, Mail, Phone, ShieldCheck, Share2, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type TeamMember = {
@@ -146,7 +149,37 @@ export default function TeamPage() {
                             {m.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
                           </span>
                         </div>
-                        <RoleBadge role={m.role} />
+                        <div className="flex items-center gap-1.5">
+                          <RoleBadge role={m.role} />
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Share contact">
+                                <Share2 className="w-3.5 h-3.5" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44">
+                              <DropdownMenuItem
+                                className="gap-2 cursor-pointer"
+                                onClick={() => {
+                                  const subject = encodeURIComponent(`Contact – ${m.name}`);
+                                  const body = encodeURIComponent(`Hi,\n\nHere are the contact details for ${m.name}:\n\nRole: ${m.role.replace(/_/g, " ")}\nEmail: ${m.email}${m.phone ? `\nPhone: ${m.phone}` : ""}`);
+                                  window.open(`mailto:?subject=${subject}&body=${body}`);
+                                }}
+                              >
+                                <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="gap-2 cursor-pointer"
+                                onClick={() => {
+                                  const text = encodeURIComponent(`${m.name} (${m.role.replace(/_/g, " ")})\nEmail: ${m.email}${m.phone ? `\nPhone: ${m.phone}` : ""}`);
+                                  window.open(`https://wa.me/?text=${text}`, "_blank");
+                                }}
+                              >
+                                <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </div>
                       <p className="font-bold text-sm mb-0.5">{m.name}</p>
                       <div className="space-y-1 mt-2">
