@@ -486,18 +486,18 @@ export default function SubcontractorsPage() {
                           </div>
 
                           {/* Info */}
-                          <div className="flex-1 min-w-0">
+                          <div className="flex-1 min-w-0 overflow-hidden">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <p className="font-bold text-sm">{sub.companyName}</p>
+                              <p className="font-bold text-sm truncate">{sub.companyName}</p>
                               {sub.paymentHold && (
-                                <Badge variant="destructive" className="text-[10px] gap-1"><AlertTriangle className="w-3 h-3" />Payment Hold</Badge>
+                                <Badge variant="destructive" className="text-[10px] gap-1 shrink-0"><AlertTriangle className="w-3 h-3" />Payment Hold</Badge>
                               )}
                             </div>
                             <p className="text-xs text-muted-foreground truncate">{sub.contactName}</p>
                             <div className="flex flex-col gap-0.5 mt-0.5">
                               {sub.contactPhone && (
-                                <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                  <Phone className="w-3 h-3 shrink-0" />{sub.contactPhone}
+                                <span className="text-xs text-muted-foreground flex items-center gap-1 min-w-0">
+                                  <Phone className="w-3 h-3 shrink-0" /><span className="truncate">{sub.contactPhone}</span>
                                 </span>
                               )}
                               {sub.contactEmail && (
@@ -521,7 +521,7 @@ export default function SubcontractorsPage() {
                           </div>
 
                           {/* Desktop-only: status + all action icons */}
-                          <div className="hidden sm:flex items-center gap-1 shrink-0">
+                          <div className="hidden md:flex items-center gap-1 shrink-0">
                             <div className="flex flex-col items-end gap-1.5 mr-1">
                               {insuranceBadge(sub.insuranceStatus)}
                               <RatingStars rating={sub.reliabilityRating} />
@@ -544,7 +544,7 @@ export default function SubcontractorsPage() {
                         </div>
 
                         {/* Mobile-only bottom bar: insurance badge left, action icons right */}
-                        <div className="flex sm:hidden items-center justify-between mt-2 pt-2 border-t border-border/40">
+                        <div className="flex md:hidden items-center justify-between mt-2 pt-2 border-t border-border/40">
                           <div className="flex items-center gap-2">
                             {insuranceBadge(sub.insuranceStatus)}
                             <RatingStars rating={sub.reliabilityRating} />
