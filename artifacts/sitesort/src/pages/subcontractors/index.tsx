@@ -475,88 +475,97 @@ export default function SubcontractorsPage() {
                 {open && (
                   <div className="border-t divide-y">
                     {members.map(sub => (
-                      <div key={sub.id} className={cn("flex items-center gap-3 px-5 py-4 hover:bg-muted/10 transition-colors", sub.paymentHold && "bg-red-50/50 dark:bg-red-950/10")}>
-                        {/* Avatar */}
-                        <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                          <span className="font-extrabold text-primary text-sm">
-                            {sub.companyName.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
-                          </span>
-                        </div>
+                      <div key={sub.id} className={cn("px-4 py-3 hover:bg-muted/10 transition-colors", sub.paymentHold && "bg-red-50/50 dark:bg-red-950/10")}>
+                        {/* Top row: avatar + info + desktop-only actions */}
+                        <div className="flex items-start gap-3">
+                          {/* Avatar */}
+                          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                            <span className="font-extrabold text-primary text-sm">
+                              {sub.companyName.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
+                            </span>
+                          </div>
 
-                        {/* Info */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="font-bold text-sm">{sub.companyName}</p>
-                            {sub.paymentHold && (
-                              <Badge variant="destructive" className="text-[10px] gap-1"><AlertTriangle className="w-3 h-3" />Payment Hold</Badge>
-                            )}
-                          </div>
-                          <p className="text-xs text-muted-foreground truncate">{sub.contactName}</p>
-                          <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
-                            {sub.contactPhone && (
-                              <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                <Phone className="w-3 h-3 shrink-0" />{sub.contactPhone}
-                              </span>
-                            )}
-                            {sub.contactEmail && (
-                              <span className="text-xs text-muted-foreground flex items-center gap-1 truncate">
-                                <Mail className="w-3 h-3 shrink-0" />{sub.contactEmail}
-                              </span>
-                            )}
-                          </div>
-                          {sub.trades.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-1.5">
-                              {sub.trades.map(t => (
-                                <span key={t} className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-orange-50 text-orange-700 border border-orange-200 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800">
-                                  {t}
-                                </span>
-                              ))}
+                          {/* Info */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-bold text-sm">{sub.companyName}</p>
+                              {sub.paymentHold && (
+                                <Badge variant="destructive" className="text-[10px] gap-1"><AlertTriangle className="w-3 h-3" />Payment Hold</Badge>
+                              )}
                             </div>
-                          )}
-                          {sub.notes && (
-                            <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2 italic">{sub.notes}</p>
-                          )}
+                            <p className="text-xs text-muted-foreground truncate">{sub.contactName}</p>
+                            <div className="flex flex-col gap-0.5 mt-0.5">
+                              {sub.contactPhone && (
+                                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <Phone className="w-3 h-3 shrink-0" />{sub.contactPhone}
+                                </span>
+                              )}
+                              {sub.contactEmail && (
+                                <span className="text-xs text-muted-foreground flex items-center gap-1 min-w-0">
+                                  <Mail className="w-3 h-3 shrink-0" /><span className="truncate">{sub.contactEmail}</span>
+                                </span>
+                              )}
+                            </div>
+                            {sub.trades.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1.5">
+                                {sub.trades.map(t => (
+                                  <span key={t} className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-orange-50 text-orange-700 border border-orange-200 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800">
+                                    {t}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {sub.notes && (
+                              <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2 italic">{sub.notes}</p>
+                            )}
+                          </div>
+
+                          {/* Desktop-only: status + all action icons */}
+                          <div className="hidden sm:flex items-center gap-1 shrink-0">
+                            <div className="flex flex-col items-end gap-1.5 mr-1">
+                              {insuranceBadge(sub.insuranceStatus)}
+                              <RatingStars rating={sub.reliabilityRating} />
+                            </div>
+                            <ContactActions email={sub.contactEmail} phone={sub.contactPhone} />
+                            {caps.canManageSubcontractors && (
+                              <>
+                                <button onClick={() => setShareTarget(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Add to a project">
+                                  <FolderPlus className="w-3.5 h-3.5" />
+                                </button>
+                                <button onClick={() => openInvite(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50 transition-colors" title="Invite to SiteSort">
+                                  <UserPlus className="w-3.5 h-3.5" />
+                                </button>
+                                <button onClick={() => openEdit(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Edit">
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
 
-                        {/* Contact actions */}
-                        <ContactActions email={sub.contactEmail} phone={sub.contactPhone} />
-
-                        {/* Status */}
-                        <div className="flex flex-col items-end gap-1.5 shrink-0">
-                          {insuranceBadge(sub.insuranceStatus)}
-                          <RatingStars rating={sub.reliabilityRating} />
+                        {/* Mobile-only bottom bar: insurance badge left, action icons right */}
+                        <div className="flex sm:hidden items-center justify-between mt-2 pt-2 border-t border-border/40">
+                          <div className="flex items-center gap-2">
+                            {insuranceBadge(sub.insuranceStatus)}
+                            <RatingStars rating={sub.reliabilityRating} />
+                          </div>
+                          <div className="flex items-center gap-0.5">
+                            <ContactActions email={sub.contactEmail} phone={sub.contactPhone} />
+                            {caps.canManageSubcontractors && (
+                              <>
+                                <button onClick={() => setShareTarget(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Add to a project">
+                                  <FolderPlus className="w-3.5 h-3.5" />
+                                </button>
+                                <button onClick={() => openInvite(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50 transition-colors" title="Invite to SiteSort">
+                                  <UserPlus className="w-3.5 h-3.5" />
+                                </button>
+                                <button onClick={() => openEdit(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Edit">
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
-
-                        {caps.canManageSubcontractors && (
-                          <>
-                            {/* Add to project */}
-                            <button
-                              onClick={() => setShareTarget(sub)}
-                              className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors shrink-0"
-                              title="Add to a project"
-                            >
-                              <FolderPlus className="w-3.5 h-3.5" />
-                            </button>
-
-                            {/* Invite to SiteSort */}
-                            <button
-                              onClick={() => openInvite(sub)}
-                              className="p-1.5 rounded-lg text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50 transition-colors shrink-0"
-                              title="Invite to SiteSort"
-                            >
-                              <UserPlus className="w-3.5 h-3.5" />
-                            </button>
-
-                            {/* Edit */}
-                            <button
-                              onClick={() => openEdit(sub)}
-                              className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors shrink-0"
-                              title="Edit"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                          </>
-                        )}
                       </div>
                     ))}
                   </div>
