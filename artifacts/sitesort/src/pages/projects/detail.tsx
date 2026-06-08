@@ -1636,9 +1636,9 @@ tr:last-child td{border-bottom:none}
                     {[...photos].sort((a, b) => b.takenAt.localeCompare(a.takenAt)).map(photo => (
                       <div key={photo.id} className="rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow">
                         {photo.photoUrl ? (
-                          <a href={photo.photoUrl} target="_blank" rel="noopener noreferrer">
-                            <img src={photo.photoUrl} alt={photo.description ?? photo.category} className="w-full h-36 object-cover" />
-                          </a>
+                          <div className="cursor-pointer" onClick={() => window.open(photo.photoUrl!.replace(/^\/uploads\//, "/api/uploads/"), '_blank', 'noopener,noreferrer')}>
+                            <img src={photo.photoUrl.replace(/^\/uploads\//, "/api/uploads/")} alt={photo.description ?? photo.category} className="w-full h-36 object-cover" />
+                          </div>
                         ) : (
                           <div className="w-full h-36 bg-muted flex items-center justify-center">
                             <Camera className="w-8 h-8 text-muted-foreground" />
@@ -1653,7 +1653,37 @@ tr:last-child td{border-bottom:none}
                           </div>
                           {photo.description && <p className="text-xs text-foreground line-clamp-2">{photo.description}</p>}
                           {photo.zone && <p className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="w-3 h-3" />{photo.zone}</p>}
-                          <p className="text-[10px] text-muted-foreground">{formatDate(photo.takenAt)} · {photo.uploaderName}</p>
+                          <div className="flex items-center justify-between gap-2 pt-0.5">
+                            <p className="text-[10px] text-muted-foreground">{formatDate(photo.takenAt)} · {photo.uploaderName}</p>
+                            {photo.photoUrl && (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button className="p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-colors shrink-0" title="Share photo">
+                                    <Share2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-44">
+                                  <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
+                                    const norm = photo.photoUrl!.replace(/^\/uploads\//, "/api/uploads/");
+                                    const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
+                                    const subject = encodeURIComponent(`Site Photo – ${photo.referenceNumber}`);
+                                    const body = encodeURIComponent(`Site photo from ${project?.name ?? "project"}:\n\nCategory: ${photo.category}\nRef: ${photo.referenceNumber}${photo.description ? `\nNote: ${photo.description}` : ""}${photo.zone ? `\nZone: ${photo.zone}` : ""}\nDate: ${formatDate(photo.takenAt)}\n\n${url}`);
+                                    window.open(`mailto:?subject=${subject}&body=${body}`);
+                                  }}>
+                                    <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
+                                    const norm = photo.photoUrl!.replace(/^\/uploads\//, "/api/uploads/");
+                                    const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
+                                    const text = encodeURIComponent(`Site photo – ${photo.referenceNumber} · ${photo.category}${photo.description ? `\n${photo.description}` : ""}\n${url}`);
+                                    window.open(`https://wa.me/?text=${text}`, "_blank");
+                                  }}>
+                                    <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -1742,14 +1772,38 @@ tr:last-child td{border-bottom:none}
                       {[...permits].sort((a, b) => a.expiryDate.localeCompare(b.expiryDate)).map(p => {
                         const days = daysLeft(p.expiryDate);
                         return (
-                          <div key={p.id} className={`flex items-center justify-between gap-4 px-4 py-3 rounded-xl border ${statusStyle(days)}`}>
-                            <div className="min-w-0">
+                          <div key={p.id} className={`flex items-center justify-between gap-3 px-4 py-3 rounded-xl border ${statusStyle(days)}`}>
+                            <div className="min-w-0 flex-1">
                               <p className="font-semibold text-sm truncate">{p.type}</p>
                               <p className="text-xs opacity-70 truncate">{p.description}{p.responsibleName ? ` · ${p.responsibleName}` : ""}</p>
                             </div>
-                            <div className="text-right shrink-0">
-                              <p className="text-xs font-semibold">{statusLabel(days)}</p>
-                              <p className="text-xs opacity-70">{fmtDate(p.expiryDate)}</p>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <div className="text-right">
+                                <p className="text-xs font-semibold">{statusLabel(days)}</p>
+                                <p className="text-xs opacity-70">{fmtDate(p.expiryDate)}</p>
+                              </div>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-white/50 transition-colors" title="Share permit">
+                                    <Share2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-44">
+                                  <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
+                                    const subject = encodeURIComponent(`Permit – ${p.type}`);
+                                    const body = encodeURIComponent(`Permit details:\n\nType: ${p.type}\nDescription: ${p.description}\nExpiry: ${fmtDate(p.expiryDate)} (${statusLabel(days)})${p.responsibleName ? `\nResponsible: ${p.responsibleName}` : ""}\nProject: ${project?.name ?? ""}`);
+                                    window.open(`mailto:?subject=${subject}&body=${body}`);
+                                  }}>
+                                    <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
+                                    const text = encodeURIComponent(`Permit – ${p.type}\nExpiry: ${fmtDate(p.expiryDate)} (${statusLabel(days)})\n${p.description}${p.responsibleName ? `\nResponsible: ${p.responsibleName}` : ""}`);
+                                    window.open(`https://wa.me/?text=${text}`, "_blank");
+                                  }}>
+                                    <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                           </div>
                         );
@@ -1932,17 +1986,43 @@ tr:last-child td{border-bottom:none}
               {checkins.map(ci => {
                 const photoSrc = ci.photoUrl.startsWith("/uploads/") ? ci.photoUrl.replace("/uploads/", "/api/uploads/") : ci.photoUrl;
                 const dt = new Date(ci.checkedInAt);
+                const dateStr = dt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+                const timeStr = dt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
                 return (
                   <div key={ci.id} className="rounded-xl overflow-hidden border bg-card shadow-sm">
-                    <div className="aspect-square bg-muted relative">
+                    <div className="aspect-square bg-muted relative cursor-pointer" onClick={() => window.open(photoSrc, '_blank', 'noopener,noreferrer')}>
                       <img src={photoSrc} alt={ci.workerName} className="w-full h-full object-cover" />
                     </div>
                     <div className="p-3">
                       <p className="font-semibold text-sm truncate">{ci.workerName}</p>
-                      <p className="text-muted-foreground text-xs mt-0.5">
-                        {dt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                      </p>
-                      <p className="text-muted-foreground text-xs">{dt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</p>
+                      <p className="text-muted-foreground text-xs mt-0.5">{dateStr}</p>
+                      <div className="flex items-center justify-between gap-2 mt-0.5">
+                        <p className="text-muted-foreground text-xs">{timeStr}</p>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-colors shrink-0" title="Share check-in">
+                              <Share2 className="w-3.5 h-3.5" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
+                              const url = photoSrc.startsWith("http") ? photoSrc : `${window.location.origin}${photoSrc}`;
+                              const subject = encodeURIComponent(`Site Check-In – ${ci.workerName}`);
+                              const body = encodeURIComponent(`Site check-in record:\n\nWorker: ${ci.workerName}\nDate: ${dateStr} at ${timeStr}\nProject: ${project?.name ?? ""}\n\nPhoto: ${url}`);
+                              window.open(`mailto:?subject=${subject}&body=${body}`);
+                            }}>
+                              <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
+                              const url = photoSrc.startsWith("http") ? photoSrc : `${window.location.origin}${photoSrc}`;
+                              const text = encodeURIComponent(`Site check-in – ${ci.workerName}\n${dateStr} at ${timeStr}\n${url}`);
+                              window.open(`https://wa.me/?text=${text}`, "_blank");
+                            }}>
+                              <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </div>
                   </div>
                 );
