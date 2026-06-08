@@ -13,7 +13,7 @@ import {
   ShieldCheck, ShieldAlert, ShieldX, Shield, Star, AlertTriangle,
   Users, Pencil, X, FolderOpen, MessageSquare,
   FolderPlus, CheckCircle2, Loader2, Building2, UserPlus, Copy, Check,
-  Share2, MessageCircle,
+  Share2, MessageCircle, StickyNote, Clock, Send,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { cn } from "@/lib/utils";
@@ -36,6 +36,20 @@ type Sub = {
   insuranceStatus: InsuranceStatus;
   createdAt: string;
 };
+
+type SubNote = {
+  id: string;
+  body: string;
+  authorName: string;
+  createdAt: string;
+};
+
+function formatNoteTime(iso: string) {
+  return new Date(iso).toLocaleString("en-GB", {
+    day: "numeric", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+}
 
 const TRADE_CATEGORIES = [
   "Builders",
@@ -178,6 +192,13 @@ export default function SubcontractorsPage() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteCopied, setInviteCopied] = useState(false);
 
+  // Notes state
+  const [notesTarget, setNotesTarget] = useState<Sub | null>(null);
+  const [notesList, setNotesList] = useState<SubNote[]>([]);
+  const [notesLoading, setNotesLoading] = useState(false);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [noteSubmitting, setNoteSubmitting] = useState(false);
+
   useEffect(() => {
     if (!shareTarget) return;
     setShareProjectsLoading(true);
@@ -289,6 +310,36 @@ export default function SubcontractorsPage() {
     await navigator.clipboard.writeText(inviteLink);
     setInviteCopied(true);
     setTimeout(() => setInviteCopied(false), 2000);
+  }
+
+  async function openNotes(sub: Sub) {
+    setNotesTarget(sub);
+    setNotesList([]);
+    setNoteDraft("");
+    setNotesLoading(true);
+    const res = await apiFetch(`/api/subcontractors/${sub.id}/notes`);
+    if (res.ok) setNotesList(await res.json());
+    setNotesLoading(false);
+  }
+
+  async function addNote() {
+    if (!notesTarget) return;
+    const body = noteDraft.trim();
+    if (!body) return;
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
+    setNoteSubmitting(true);
+    const res = await apiFetch(`/api/subcontractors/${notesTarget.id}/notes`, {
+      method: "POST",
+      body: JSON.stringify({ body }),
+    });
+    if (res.ok) {
+      const created: SubNote = await res.json();
+      setNotesList(prev => [created, ...prev]);
+      setNoteDraft("");
+    } else {
+      toast({ title: "Couldn't save note", description: "Please try again.", variant: "destructive" });
+    }
+    setNoteSubmitting(false);
   }
 
   async function onAdd(data: AddFormData) {
@@ -483,6 +534,9 @@ export default function SubcontractorsPage() {
                               <RatingStars rating={sub.reliabilityRating} />
                             </div>
                             <ContactActions email={sub.contactEmail} phone={sub.contactPhone} />
+                            <button onClick={() => openNotes(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors" title="Notes & reminders log">
+                              <StickyNote className="w-3.5 h-3.5" />
+                            </button>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <button className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Share contact">
@@ -529,6 +583,9 @@ export default function SubcontractorsPage() {
                           </div>
                           <div className="flex items-center gap-0.5">
                             <ContactActions email={sub.contactEmail} phone={sub.contactPhone} />
+                            <button onClick={() => openNotes(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors" title="Notes & reminders log">
+                              <StickyNote className="w-3.5 h-3.5" />
+                            </button>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <button className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Share contact">
@@ -872,6 +929,77 @@ export default function SubcontractorsPage() {
         )}
         <DialogFooter>
           <Button variant="outline" onClick={() => { setInviteTarget(null); setInviteLink(null); }}>Close</Button>
+        </DialogFooter>
+      </Dialog>
+
+      {/* Notes & reminders log dialog */}
+      <Dialog open={!!notesTarget} onOpenChange={open => { if (!open) { setNotesTarget(null); setNotesList([]); setNoteDraft(""); } }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <StickyNote className="w-4 h-4 text-amber-600" /> Notes & Reminders
+          </DialogTitle>
+        </DialogHeader>
+        {notesTarget && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/40">
+              <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                {notesTarget.companyName.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <p className="font-semibold text-sm truncate">{notesTarget.companyName}</p>
+                <p className="text-xs text-muted-foreground truncate">{notesTarget.contactName}</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Record reminders and conversations — e.g. chasing expiring insurance or permits. Each note is automatically date &amp; time stamped.
+            </p>
+
+            {caps.canManageSubcontractors && (
+              <div className="space-y-2">
+                <textarea
+                  placeholder="e.g. Reminded John his public liability insurance expires next month…"
+                  rows={3}
+                  value={noteDraft}
+                  onChange={e => setNoteDraft(e.target.value)}
+                  onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); addNote(); } }}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                />
+                <div className="flex justify-end">
+                  <Button variant="accent" size="sm" onClick={addNote} disabled={noteSubmitting || !noteDraft.trim()}>
+                    {noteSubmitting ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Saving…</> : <><Send className="w-3.5 h-3.5 mr-1.5" />Add Note</>}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className="border-t pt-3 max-h-72 overflow-y-auto -mr-1 pr-1">
+              {notesLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : notesList.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <StickyNote className="w-8 h-8 text-muted-foreground/30 mb-2" />
+                  <p className="text-sm text-muted-foreground">No notes yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {notesList.map(n => (
+                    <div key={n.id} className="rounded-lg border bg-muted/30 p-3">
+                      <p className="text-[13px] text-foreground whitespace-pre-wrap">{n.body}</p>
+                      <p className="text-[10px] text-muted-foreground mt-1.5 flex items-center gap-1">
+                        <Clock className="w-3 h-3" />{formatNoteTime(n.createdAt)} · {n.authorName}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => { setNotesTarget(null); setNotesList([]); setNoteDraft(""); }}>Close</Button>
         </DialogFooter>
       </Dialog>
     </SidebarLayout>

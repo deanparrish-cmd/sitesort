@@ -5,3 +5,4 @@
 - [SiteSort typecheck baseline](sitesort-typecheck-baseline.md) — ~10 pre-existing tsc errors in artifacts/sitesort (buttonVariants/DialogContent exports, enum comparisons, orval queryKey); Vite runs fine — only chase NEW errors naming your files.
 - [Email template verification](email-template-verification.md) — render api-server emails offline by mocking fetch; Resend serializes replyTo→reply_to; bundle with esbuild into the package dir (no tsx).
 - [SiteSort invoice-project ownership](sitesort-invoice-project-ownership.md) — projectId is the single source of truth for where an invoice shows; move sets it, mark-unpaid clears it; gate share on attachment, mutations on capability.
+- [Subcontractor notes history](subcontractor-notes-history.md) — two note concepts: static `subcontractors.notes` blurb vs append-only timestamped `subcontractor_notes` log (mirrors daily_notes).

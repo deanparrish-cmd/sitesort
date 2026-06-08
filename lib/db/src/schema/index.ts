@@ -1,6 +1,7 @@
 export * from "./companies";
 export * from "./users";
 export * from "./subcontractors";
+export * from "./subcontractor_notes";
 export * from "./projects";
 export * from "./project_members";
 export * from "./documents";

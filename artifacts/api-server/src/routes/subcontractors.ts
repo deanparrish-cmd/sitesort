@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { subcontractorsTable, insuranceRecordsTable, projectMembersTable, projectsTable } from "@workspace/db/schema";
-import { eq, and } from "drizzle-orm";
+import { subcontractorsTable, insuranceRecordsTable, projectMembersTable, projectsTable, subcontractorNotesTable, usersTable } from "@workspace/db/schema";
+import { eq, and, desc } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 
@@ -183,6 +183,79 @@ router.post("/subcontractors/:subcontractorId/insurance", authenticate, async (r
   } catch (err) {
     req.log.error({ err }, "Add insurance error");
     res.status(500).json({ error: "server_error", message: "Failed to add insurance record" });
+  }
+});
+
+// List timestamped notes for a subcontractor (most recent first)
+router.get("/subcontractors/:subcontractorId/notes", authenticate, async (req, res) => {
+  try {
+    const sub = await db.select({ id: subcontractorsTable.id }).from(subcontractorsTable)
+      .where(and(eq(subcontractorsTable.id, req.params.subcontractorId), eq(subcontractorsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!sub[0]) {
+      res.status(404).json({ error: "not_found", message: "Subcontractor not found" });
+      return;
+    }
+
+    const notes = await db
+      .select({
+        id: subcontractorNotesTable.id,
+        body: subcontractorNotesTable.body,
+        createdAt: subcontractorNotesTable.createdAt,
+        authorName: usersTable.name,
+      })
+      .from(subcontractorNotesTable)
+      .leftJoin(usersTable, eq(usersTable.id, subcontractorNotesTable.authorId))
+      .where(eq(subcontractorNotesTable.subcontractorId, req.params.subcontractorId))
+      .orderBy(desc(subcontractorNotesTable.createdAt));
+
+    res.json(notes.map(n => ({
+      id: n.id,
+      body: n.body,
+      authorName: n.authorName ?? "Unknown",
+      createdAt: n.createdAt.toISOString(),
+    })));
+  } catch (err) {
+    req.log.error({ err }, "List subcontractor notes error");
+    res.status(500).json({ error: "server_error", message: "Failed to list notes" });
+  }
+});
+
+// Add a timestamped note to a subcontractor
+router.post("/subcontractors/:subcontractorId/notes", authenticate, async (req, res) => {
+  try {
+    const sub = await db.select({ id: subcontractorsTable.id }).from(subcontractorsTable)
+      .where(and(eq(subcontractorsTable.id, req.params.subcontractorId), eq(subcontractorsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!sub[0]) {
+      res.status(404).json({ error: "not_found", message: "Subcontractor not found" });
+      return;
+    }
+
+    const body = typeof req.body?.body === "string" ? req.body.body.trim() : "";
+    if (!body) {
+      res.status(400).json({ error: "validation_error", message: "Note text is required" });
+      return;
+    }
+
+    const id = generateId();
+    const inserted = await db.insert(subcontractorNotesTable).values({
+      id,
+      subcontractorId: req.params.subcontractorId,
+      authorId: req.user!.id,
+      body,
+    }).returning({ createdAt: subcontractorNotesTable.createdAt });
+
+    const author = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
+    res.status(201).json({
+      id,
+      body,
+      authorName: author[0]?.name ?? "Unknown",
+      createdAt: (inserted[0]?.createdAt ?? new Date()).toISOString(),
+    });
+  } catch (err) {
+    req.log.error({ err }, "Add subcontractor note error");
+    res.status(500).json({ error: "server_error", message: "Failed to add note" });
   }
 });
 
