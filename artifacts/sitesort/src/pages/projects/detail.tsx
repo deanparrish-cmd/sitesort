@@ -10,7 +10,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Mic } from "lucide-react";
+import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Mic, Pin } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { Textarea } from "@/components/ui/textarea";
@@ -187,7 +187,8 @@ export default function ProjectDetail() {
       fetch(`/api/projects/${projectId}/checkins`, { headers }).then(r => r.ok ? r.json() : []),
       fetch(`/api/projects/${projectId}/daily-reports`, { headers }).then(r => r.ok ? r.json() : []),
       fetch(`/api/projects/${projectId}/daily-notes`, { headers }).then(r => r.ok ? r.json() : []),
-    ]).then(([p, inv, ph, ms, ci, rep, notes]) => { setPermits(p); setProjectInvoices(inv); setPhotos(ph); setMilestones(ms); setCheckins(ci); setReports(rep); setTodayNotes(notes); });
+      fetch(`/api/projects/${projectId}/qr-pins`, { headers }).then(r => r.ok ? r.json() : []),
+    ]).then(([p, inv, ph, ms, ci, rep, notes, pins]) => { setPermits(p); setProjectInvoices(inv); setPhotos(ph); setMilestones(ms); setCheckins(ci); setReports(rep); setTodayNotes(notes); if (Array.isArray(pins)) setQrPins(pins); });
   }, [projectId]);
 
   useEffect(() => {
@@ -394,6 +395,20 @@ export default function ProjectDetail() {
   const [qrLoading, setQrLoading] = useState(false);
   const [qrFetched, setQrFetched] = useState(false);
   const qrSvgRef = useRef<HTMLDivElement>(null);
+  const [qrPins, setQrPins] = useState<{ id: string; itemType: string; itemId: string }[]>([]);
+  const isPinned = (itemType: string, itemId: string) => qrPins.some(p => p.itemType === itemType && p.itemId === itemId);
+  const togglePin = async (itemType: string, itemId: string) => {
+    const h = authHeaders();
+    const pinned = isPinned(itemType, itemId);
+    if (pinned) {
+      await fetch(`/api/projects/${projectId}/qr-pins`, { method: "DELETE", headers: h, body: JSON.stringify({ itemType, itemId }) });
+      setQrPins(prev => prev.filter(p => !(p.itemType === itemType && p.itemId === itemId)));
+    } else {
+      const res = await fetch(`/api/projects/${projectId}/qr-pins`, { method: "POST", headers: h, body: JSON.stringify({ itemType, itemId }) });
+      const data = await res.json().catch(() => ({}));
+      if (data.id) setQrPins(prev => [...prev, data]);
+    }
+  };
 
   const loadQr = async () => {
     setQrLoading(true);
@@ -797,7 +812,7 @@ tr:last-child td{border-bottom:none}
       </div>
 
       <Tabs defaultValue={defaultTab}>
-        <TabsList className="mb-6 w-full justify-start overflow-x-auto bg-transparent border-b rounded-none p-0 h-auto">
+        <TabsList className="mb-6 w-full h-auto flex-col gap-1 bg-muted p-1.5 rounded-xl md:flex-row md:gap-0 md:justify-start md:overflow-x-auto md:bg-transparent md:border-b md:rounded-none md:p-0">
           {[
             { value: "overview", label: "Overview" },
             { value: "progress", label: "Progress" },
@@ -810,10 +825,10 @@ tr:last-child td{border-bottom:none}
             { value: "finances", label: "Finances & Expiry" },
             { value: "qr", label: "Site Board QR" },
           ].map(tab => (
-            <TabsTrigger 
+            <TabsTrigger
               key={tab.value}
               value={tab.value}
-              className="px-6 py-3 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-primary"
+              className="w-full justify-start rounded-lg py-2.5 px-4 md:w-auto md:rounded-none md:px-6 md:py-3 md:justify-center md:border-b-2 md:border-transparent"
             >
               {tab.label}
             </TabsTrigger>
@@ -2226,7 +2241,105 @@ tr:last-child td{border-bottom:none}
                     <li>Active permits and expiry dates</li>
                     <li>Public documents on display</li>
                     <li>Trades currently working on site</li>
+                    <li>Any items you pin below</li>
                   </ul>
+                </div>
+
+                {/* Board Contents — pin management */}
+                <div className="w-full border-t pt-5">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Pin className="w-4 h-4 text-primary" />
+                    <h3 className="font-semibold text-sm">Board Contents</h3>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-4">Pin specific items to highlight them for workers who scan this QR code.</p>
+
+                  {/* Documents */}
+                  {(documents?.length ?? 0) > 0 && (
+                    <div className="mb-4">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Documents</p>
+                      <div className="rounded-xl border divide-y">
+                        {documents?.filter(d => (d as any).status === "current").map(doc => {
+                          const pinned = isPinned("document", doc.id!);
+                          return (
+                            <div key={doc.id} className="flex items-center gap-3 px-3 py-2.5">
+                              <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{doc.name}</p>
+                                <p className="text-xs text-muted-foreground">{doc.type} · v{doc.version}</p>
+                              </div>
+                              <button
+                                onClick={() => togglePin("document", doc.id!)}
+                                className={cn("p-1.5 rounded-lg transition-colors", pinned ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-muted")}
+                                title={pinned ? "Unpin from board" : "Pin to board"}
+                              >
+                                <Pin className="w-4 h-4" fill={pinned ? "currentColor" : "none"} />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Photos */}
+                  {photos.length > 0 && (
+                    <div className="mb-4">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Photos</p>
+                      <div className="rounded-xl border divide-y">
+                        {photos.slice(0, 20).map(photo => {
+                          const pinned = isPinned("photo", photo.id);
+                          return (
+                            <div key={photo.id} className="flex items-center gap-3 px-3 py-2.5">
+                              <Camera className="w-4 h-4 text-muted-foreground shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{photo.referenceNumber} — {photo.category}</p>
+                                {photo.description && <p className="text-xs text-muted-foreground truncate">{photo.description}</p>}
+                              </div>
+                              <button
+                                onClick={() => togglePin("photo", photo.id)}
+                                className={cn("p-1.5 rounded-lg transition-colors", pinned ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-muted")}
+                                title={pinned ? "Unpin from board" : "Pin to board"}
+                              >
+                                <Pin className="w-4 h-4" fill={pinned ? "currentColor" : "none"} />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Permits */}
+                  {permits.length > 0 && (
+                    <div className="mb-4">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Permits</p>
+                      <div className="rounded-xl border divide-y">
+                        {permits.map(permit => {
+                          const pinned = isPinned("permit", permit.id);
+                          return (
+                            <div key={permit.id} className="flex items-center gap-3 px-3 py-2.5">
+                              <ShieldCheck className="w-4 h-4 text-muted-foreground shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{permit.type}</p>
+                                <p className="text-xs text-muted-foreground">Expires {new Date(permit.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
+                              </div>
+                              <button
+                                onClick={() => togglePin("permit", permit.id)}
+                                className={cn("p-1.5 rounded-lg transition-colors", pinned ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-muted")}
+                                title={pinned ? "Unpin from board" : "Pin to board"}
+                              >
+                                <Pin className="w-4 h-4" fill={pinned ? "currentColor" : "none"} />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {(documents?.length ?? 0) === 0 && photos.length === 0 && permits.length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-4">No items to pin yet. Add documents, photos, or permits to the project first.</p>
+                  )}
                 </div>
               </div>
             ) : (

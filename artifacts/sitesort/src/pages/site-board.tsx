@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useRoute } from "wouter";
-import { MapPin, Calendar, FileText, HardHat, ShieldCheck, AlertTriangle, Users, Mail, Phone, Clock, Camera, CheckCircle2, Loader2 } from "lucide-react";
+import { MapPin, Calendar, FileText, HardHat, ShieldCheck, AlertTriangle, Users, Mail, Phone, Clock, Camera, CheckCircle2, Loader2, Pin } from "lucide-react";
 
 // Stamps date/time, project name and worker name onto the captured image via canvas
 async function stampPhoto(file: File, projectName: string, workerName: string): Promise<Blob> {
@@ -230,7 +230,7 @@ export default function SiteBoard() {
     );
   }
 
-  const { project, siteManager, teamSize, permits, documents, generatedAt } = data;
+  const { project, siteManager, teamSize, permits, documents, pinnedItems = [], generatedAt } = data;
 
   const activePermits = permits.filter((p: any) => {
     const expiry = new Date(p.expiryDate);
@@ -380,6 +380,92 @@ export default function SiteBoard() {
             </div>
           </div>
         )}
+
+        {/* Pinned to this board */}
+        {pinnedItems.length > 0 && (() => {
+          const pinnedDocs = pinnedItems.filter((p: any) => p.itemType === "document");
+          const pinnedPhotos = pinnedItems.filter((p: any) => p.itemType === "photo");
+          const pinnedPermits = pinnedItems.filter((p: any) => p.itemType === "permit");
+          const statusColors: Record<string, string> = { active: "bg-green-100 text-green-800", expiring_soon: "bg-amber-100 text-amber-800", expired: "bg-red-100 text-red-800" };
+          const statusLabels: Record<string, string> = { active: "Active", expiring_soon: "Expiring Soon", expired: "Expired" };
+          return (
+            <div className="bg-white rounded-xl shadow-sm border p-5">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                <Pin className="w-4 h-4" /> Pinned to this Board
+              </h2>
+
+              {pinnedDocs.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-2">Documents</p>
+                  <div className="space-y-0 divide-y">
+                    {pinnedDocs.map((doc: any) => (
+                      <div key={doc.id} className="flex items-center justify-between gap-3 py-2.5">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <FileText className="w-4 h-4 text-gray-400 shrink-0" />
+                          <div className="min-w-0">
+                            <p className="font-medium text-gray-900 text-sm truncate">{doc.name}</p>
+                            <p className="text-gray-400 text-xs">{TYPE_LABELS[doc.type] ?? doc.type} · v{doc.version}</p>
+                          </div>
+                        </div>
+                        {doc.fileUrl && (
+                          <button onClick={() => window.open(doc.fileUrl)} className="shrink-0 text-orange-600 text-xs font-semibold hover:underline">View</button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {pinnedPhotos.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-2">Photos</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {pinnedPhotos.map((photo: any) => (
+                      <div key={photo.id} className="rounded-lg overflow-hidden border bg-gray-50">
+                        {photo.photoUrl && (
+                          <img
+                            src={photo.photoUrl}
+                            alt={photo.referenceNumber}
+                            className="w-full h-24 object-cover cursor-pointer"
+                            onClick={() => window.open(photo.photoUrl)}
+                          />
+                        )}
+                        <div className="px-2 py-1.5">
+                          <p className="text-xs font-medium text-gray-700 truncate">{photo.referenceNumber}</p>
+                          <p className="text-xs text-gray-400 truncate capitalize">{photo.category}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {pinnedPermits.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-2">Permits</p>
+                  <div className="space-y-0 divide-y">
+                    {pinnedPermits.map((permit: any) => (
+                      <div key={permit.id} className="flex items-start justify-between gap-2 py-2.5">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-gray-900 text-sm">{permit.type}</p>
+                          {permit.description && <p className="text-gray-500 text-xs mt-0.5 truncate">{permit.description}</p>}
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[permit.status] ?? "bg-gray-100 text-gray-700"}`}>
+                            {statusLabels[permit.status] ?? permit.status}
+                          </span>
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            {new Date(permit.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Check-in */}
         <CheckInCard token={token} projectName={project.name} />

@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db } from "@workspace/db";
-import { qrCodesTable, documentsTable, projectsTable, projectMembersTable, usersTable, permitsTable, siteCheckinsTable } from "@workspace/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { qrCodesTable, qrBoardPinsTable, documentsTable, projectsTable, projectMembersTable, usersTable, permitsTable, photosTable, invoicesTable, siteCheckinsTable } from "@workspace/db/schema";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { randomBytes } from "crypto";
@@ -130,6 +130,54 @@ router.delete("/projects/:projectId/qr-codes/:id", authenticate, async (req, res
   }
 });
 
+// List pinned items for a project's QR board
+router.get("/projects/:projectId/qr-pins", authenticate, async (req, res) => {
+  try {
+    const project = await db.select({ id: projectsTable.id }).from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!project[0]) { res.status(404).json({ error: "not_found" }); return; }
+    const pins = await db.select().from(qrBoardPinsTable).where(eq(qrBoardPinsTable.projectId, req.params.projectId));
+    res.json(pins.map(p => ({ id: p.id, itemType: p.itemType, itemId: p.itemId })));
+  } catch (err) {
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+// Pin an item to the QR board
+router.post("/projects/:projectId/qr-pins", authenticate, async (req, res) => {
+  try {
+    const project = await db.select({ id: projectsTable.id }).from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!project[0]) { res.status(404).json({ error: "not_found" }); return; }
+    const { itemType, itemId } = req.body;
+    if (!itemType || !itemId) { res.status(400).json({ error: "validation_error", message: "itemType and itemId required" }); return; }
+    const id = generateId();
+    await db.insert(qrBoardPinsTable).values({ id, projectId: req.params.projectId, itemType, itemId }).onConflictDoNothing();
+    res.status(201).json({ id, itemType, itemId });
+  } catch (err) {
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+// Unpin an item from the QR board
+router.delete("/projects/:projectId/qr-pins", authenticate, async (req, res) => {
+  try {
+    const project = await db.select({ id: projectsTable.id }).from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!project[0]) { res.status(404).json({ error: "not_found" }); return; }
+    const { itemType, itemId } = req.body;
+    await db.delete(qrBoardPinsTable).where(
+      and(eq(qrBoardPinsTable.projectId, req.params.projectId), eq(qrBoardPinsTable.itemType, itemType), eq(qrBoardPinsTable.itemId, itemId))
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
 // Public site board endpoint — no auth required
 router.get("/site/:token", async (req, res) => {
   try {
@@ -170,10 +218,28 @@ router.get("/site/:token", async (req, res) => {
       name: documentsTable.name,
       type: documentsTable.type,
       version: documentsTable.version,
+      fileUrl: documentsTable.fileUrl,
       createdAt: documentsTable.createdAt,
       publicAccess: documentsTable.publicAccess,
     }).from(documentsTable)
       .where(and(eq(documentsTable.projectId, qr.projectId), eq(documentsTable.status, "current")));
+
+    // Resolve pinned items for this board
+    const pins = await db.select().from(qrBoardPinsTable)
+      .where(eq(qrBoardPinsTable.projectId, qr.projectId));
+
+    const docPinIds = pins.filter(p => p.itemType === "document").map(p => p.itemId);
+    const photoPinIds = pins.filter(p => p.itemType === "photo").map(p => p.itemId);
+    const permitPinIds = pins.filter(p => p.itemType === "permit").map(p => p.itemId);
+
+    const [pinnedDocs, pinnedPhotos, pinnedPermitRows] = await Promise.all([
+      docPinIds.length > 0 ? db.select().from(documentsTable).where(inArray(documentsTable.id, docPinIds)) : Promise.resolve([]),
+      photoPinIds.length > 0 ? db.select().from(photosTable).where(inArray(photosTable.id, photoPinIds)) : Promise.resolve([]),
+      permitPinIds.length > 0 ? db.select().from(permitsTable).where(inArray(permitsTable.id, permitPinIds)) : Promise.resolve([]),
+    ]);
+
+    const normaliseUrl = (url: string) =>
+      url.startsWith("/uploads/") ? url.replace("/uploads/", "/api/uploads/") : url;
 
     const siteManager = members.find(m => m.role === "manager") ?? members[0] ?? null;
 
@@ -204,6 +270,31 @@ router.get("/site/:token", async (req, res) => {
           version: d.version,
           uploadedAt: d.createdAt,
         })),
+      pinnedItems: [
+        ...pinnedDocs.map(d => ({
+          itemType: "document",
+          id: d.id,
+          name: d.name,
+          type: d.type,
+          version: d.version,
+          fileUrl: normaliseUrl(d.fileUrl),
+        })),
+        ...pinnedPhotos.map(p => ({
+          itemType: "photo",
+          id: p.id,
+          referenceNumber: p.referenceNumber,
+          category: p.category,
+          description: p.description,
+          photoUrl: p.photoUrl ? normaliseUrl(p.photoUrl) : null,
+        })),
+        ...pinnedPermitRows.map(p => {
+          const now = new Date();
+          const expiry = new Date(p.expiryDate);
+          const daysUntil = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+          const status = daysUntil < 0 ? "expired" : daysUntil <= 30 ? "expiring_soon" : "active";
+          return { itemType: "permit", id: p.id, type: p.type, description: p.description, expiryDate: p.expiryDate, status };
+        }),
+      ],
       generatedAt: new Date().toISOString(),
     });
   } catch (err) {
