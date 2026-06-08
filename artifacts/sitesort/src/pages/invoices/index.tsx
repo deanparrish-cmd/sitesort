@@ -11,7 +11,7 @@ import {
 import {
   Plus, Search, ArrowDownCircle, ArrowUpCircle, CheckCircle2, Clock,
   AlertTriangle, Receipt, Mic, MicOff, Paperclip, Upload, Loader2, X,
-  Share2, Mail, MessageCircle, Eye, ExternalLink, FileText, Image,
+  Share2, Mail, MessageCircle, Eye, ExternalLink, FileText, Image, Download,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { useListProjects } from "@workspace/api-client-react";
@@ -771,41 +771,56 @@ export default function InvoicesPage() {
                   }
                   if (isPdf) {
                     return (
-                      <div className="flex-1 flex flex-col min-h-[500px]">
-                        <object
-                          data={url}
-                          type="application/pdf"
-                          className="flex-1 w-full min-h-[500px]"
-                        >
-                          {/* Fallback when browser can't render PDF inline */}
-                          <div className="flex flex-col items-center justify-center h-full gap-4 p-8 text-center">
-                            <FileText className="w-12 h-12 text-muted-foreground/40" />
-                            <p className="text-sm text-muted-foreground">PDF preview not available in this browser.</p>
-                            <a
-                              href={url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                            >
-                              <ExternalLink className="w-4 h-4" /> Open PDF
-                            </a>
-                          </div>
-                        </object>
+                      <div className="flex-1 flex flex-col items-center justify-center gap-6 p-8 text-center">
+                        <div className="w-20 h-20 rounded-2xl bg-red-50 dark:bg-red-950/30 flex items-center justify-center">
+                          <FileText className="w-10 h-10 text-red-500" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-base mb-1">PDF Document</p>
+                          <p className="text-sm text-muted-foreground">Open the document in your browser or download it to your device.</p>
+                        </div>
+                        <div className="flex flex-wrap justify-center gap-3">
+                          <button
+                            onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
+                            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-colors"
+                          >
+                            <ExternalLink className="w-4 h-4" /> Open PDF
+                          </button>
+                          <a
+                            href={url}
+                            download
+                            className="flex items-center gap-2 px-5 py-2.5 rounded-xl border font-medium text-sm hover:bg-muted transition-colors"
+                          >
+                            <Download className="w-4 h-4" /> Download
+                          </a>
+                        </div>
                       </div>
                     );
                   }
                   return (
-                    <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8 text-center">
-                      <FileText className="w-12 h-12 text-muted-foreground/40" />
-                      <p className="text-sm text-muted-foreground">Preview not available for this file type.</p>
-                      <a
-                        href={url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center gap-2 text-sm font-medium text-primary hover:underline"
-                      >
-                        <ExternalLink className="w-4 h-4" /> Open file
-                      </a>
+                    <div className="flex-1 flex flex-col items-center justify-center gap-6 p-8 text-center">
+                      <div className="w-20 h-20 rounded-2xl bg-muted flex items-center justify-center">
+                        <FileText className="w-10 h-10 text-muted-foreground/60" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-base mb-1">Document attached</p>
+                        <p className="text-sm text-muted-foreground">Open or download the attached document.</p>
+                      </div>
+                      <div className="flex flex-wrap justify-center gap-3">
+                        <button
+                          onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
+                          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-colors"
+                        >
+                          <ExternalLink className="w-4 h-4" /> Open file
+                        </button>
+                        <a
+                          href={url}
+                          download
+                          className="flex items-center gap-2 px-5 py-2.5 rounded-xl border font-medium text-sm hover:bg-muted transition-colors"
+                        >
+                          <Download className="w-4 h-4" /> Download
+                        </a>
+                      </div>
                     </div>
                   );
                 })() : (
