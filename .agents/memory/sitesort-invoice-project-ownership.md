@@ -1,8 +1,8 @@
 ---
 name: SiteSort invoice ↔ project ownership
-description: Where invoices appear once assigned to a project, and the share-button precondition.
+description: The rule for where invoices live once assigned to a project, and the unpaid round-trip.
 ---
-- The main Invoices page (`artifacts/sitesort/src/pages/invoices/index.tsx`) shows ONLY invoices with no project (projectId falsy). Its summary totals are computed from `unassigned` for the same reason.
-- Invoices assigned/"moved" to a project (projectId set) are intentionally hidden from the main list and instead live in that project's Finances tab (`artifacts/sitesort/src/pages/projects/detail.tsx`), which fetches `/api/projects/:id/invoices`.
-- **Why:** user expectation is "move" = leave the main page and belong to the project. Keep both surfaces consistent if you add new invoice views.
-- View/Share controls (open attachment in new tab, email/whatsapp) must be gated behind `inv.attachmentUrl` — the share helpers dereference `attachmentUrl!` and throw on null. This applies on every surface (mobile cards, desktop table, viewer modal, project Finances rows).
+- An invoice's `projectId` is the single source of truth for where it shows: null = main Invoices page; set = that project's Finances tab only. The two surfaces must never both show the same invoice.
+- **Why:** the user treats "move to project" as a real move (leaves the main list and its totals), and "mark unpaid" as the reverse — marking unpaid must clear `projectId` so the invoice returns to the main page.
+- **How to apply:** any new write that changes an invoice's paid/project state must keep status and projectId consistent with this rule, and any new invoice view must filter by projectId the same way.
+- Invoice share/view helpers dereference the attachment URL and throw when it is absent — always gate view/share controls behind a present attachment. Gate invoice mutation controls behind the invoice-management capability, matching the main Invoices page.

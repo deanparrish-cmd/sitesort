@@ -4,4 +4,4 @@
 - [Pre-existing typecheck noise](pre-existing-typecheck-noise.md) — api-server drizzle TS2769 on .update/.insert and api-zod TS2308 dup-export are pre-existing & runtime-safe; filter tsc to lines you touched.
 - [SiteSort typecheck baseline](sitesort-typecheck-baseline.md) — ~10 pre-existing tsc errors in artifacts/sitesort (buttonVariants/DialogContent exports, enum comparisons, orval queryKey); Vite runs fine — only chase NEW errors naming your files.
 - [Email template verification](email-template-verification.md) — render api-server emails offline by mocking fetch; Resend serializes replyTo→reply_to; bundle with esbuild into the package dir (no tsx).
-- [SiteSort invoice-project ownership](sitesort-invoice-project-ownership.md) — main Invoices list shows only unassigned (projectId null); assigned ones live under each project's Finances tab; share helpers require attachmentUrl.
+- [SiteSort invoice-project ownership](sitesort-invoice-project-ownership.md) — projectId is the single source of truth for where an invoice shows; move sets it, mark-unpaid clears it; gate share on attachment, mutations on capability.

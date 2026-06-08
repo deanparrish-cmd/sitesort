@@ -195,12 +195,12 @@ export default function InvoicesPage() {
 
   async function markUnpaid(id: string) {
     if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
-    const res = await apiFetch(`/api/invoices/${id}`, { method: "PATCH", body: JSON.stringify({ status: "pending" }) });
+    const res = await apiFetch(`/api/invoices/${id}`, { method: "PATCH", body: JSON.stringify({ status: "pending", projectId: null }) });
     if (!res.ok) {
       toast({ title: "Couldn't update invoice", description: "Please try again.", variant: "destructive" });
       return;
     }
-    setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, status: "pending" } : inv));
+    setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, status: "pending", projectId: null } : inv));
   }
 
   async function moveToProject(invoiceId: string, projectId: string) {

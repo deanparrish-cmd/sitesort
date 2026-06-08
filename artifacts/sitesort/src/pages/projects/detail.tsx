@@ -119,6 +119,13 @@ export default function ProjectDetail() {
     );
     window.open(`https://wa.me/?text=${text}`, "_blank");
   };
+  const markInvoiceUnpaid = async (id: string) => {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
+    const res = await fetch(`/api/invoices/${id}`, { method: "PATCH", headers: authHeaders(), body: JSON.stringify({ status: "pending", projectId: null }) });
+    if (!res.ok) { toast({ title: "Couldn't update invoice", description: "Please try again.", variant: "destructive" }); return; }
+    setProjectInvoices(prev => prev.filter(inv => inv.id !== id));
+    toast({ title: "Moved back to Invoices", description: "This invoice is now unpaid and back on the main Invoices page." });
+  };
 
   const fetchMilestones = () => {
     fetch(`/api/projects/${projectId}/milestones`, { headers: authHeaders() })
@@ -2201,32 +2208,43 @@ tr:last-child td{border-bottom:none}
                                 <p className="font-bold text-sm">{fmtAmt(inv.currency, inv.amount)}</p>
                                 <p className="text-xs opacity-70">{paid ? "Paid" : statusLabel(days)} · {fmtDate(inv.dueDate)}</p>
                               </div>
-                              {inv.attachmentUrl && (
-                                <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-1">
+                                {inv.attachmentUrl && (
+                                  <>
+                                    <button
+                                      onClick={() => window.open(invoiceFullUrl(inv.attachmentUrl!), "_blank", "noopener,noreferrer")}
+                                      title="View invoice"
+                                      className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
+                                    >
+                                      <Eye className="w-4 h-4" />
+                                    </button>
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <button title="Share invoice" className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-colors">
+                                          <Share2 className="w-4 h-4" />
+                                        </button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end" className="w-44">
+                                        <DropdownMenuItem onClick={() => shareInvoiceEmail(inv)} className="gap-2 cursor-pointer">
+                                          <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => shareInvoiceWhatsApp(inv)} className="gap-2 cursor-pointer">
+                                          <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </>
+                                )}
+                                {paid && caps.canManageInvoices && (
                                   <button
-                                    onClick={() => window.open(invoiceFullUrl(inv.attachmentUrl!), "_blank", "noopener,noreferrer")}
-                                    title="View invoice"
+                                    onClick={() => markInvoiceUnpaid(inv.id)}
+                                    title="Mark unpaid and move back to Invoices"
                                     className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
                                   >
-                                    <Eye className="w-4 h-4" />
+                                    <Clock className="w-4 h-4" />
                                   </button>
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                      <button title="Share invoice" className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-colors">
-                                        <Share2 className="w-4 h-4" />
-                                      </button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end" className="w-44">
-                                      <DropdownMenuItem onClick={() => shareInvoiceEmail(inv)} className="gap-2 cursor-pointer">
-                                        <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem onClick={() => shareInvoiceWhatsApp(inv)} className="gap-2 cursor-pointer">
-                                        <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
-                                      </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
-                                </div>
-                              )}
+                                )}
+                              </div>
                             </div>
                           </div>
                         );
