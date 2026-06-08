@@ -45,7 +45,7 @@ export default function ProjectDetail() {
   const { data: members } = useListProjectMembers(projectId, { query: { enabled: !!projectId } });
 
   type PermitItem = { id: string; type: string; description: string; startDate: string; expiryDate: string; status: string; responsibleName?: string };
-  type InvoiceItem = { id: string; direction: string; counterpartyName: string; description: string; amount: string; currency: string; dueDate: string; status: string; reference?: string | null };
+  type InvoiceItem = { id: string; direction: string; counterpartyName: string; description: string; amount: string; currency: string; dueDate: string; status: string; reference?: string | null; attachmentUrl?: string | null };
   type PhotoItem = { id: string; uploadedBy: string; uploaderName: string; photoUrl: string | null; category: string; description: string | null; zone: string | null; referenceNumber: string; takenAt: string };
   type MilestoneItem = { id: string; title: string; dueDate: string; completedAt: string | null; order: number };
   type CheckinItem = { id: string; workerName: string; photoUrl: string; checkedInAt: string; lat: number | null; lng: number | null };
@@ -98,6 +98,26 @@ export default function ProjectDetail() {
   const authHeaders = () => {
     const t = localStorage.getItem("sitesort_token");
     return t ? { Authorization: `Bearer ${t}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" } as Record<string, string>;
+  };
+
+  const invoiceFullUrl = (attachmentUrl: string) => {
+    const normalised = attachmentUrl.replace(/^\/uploads\//, "/api/uploads/");
+    return normalised.startsWith("http") ? normalised : `${window.location.origin}${normalised}`;
+  };
+  const shareInvoiceEmail = (inv: InvoiceItem) => {
+    const url = invoiceFullUrl(inv.attachmentUrl!);
+    const subject = encodeURIComponent(`Invoice – ${inv.counterpartyName}`);
+    const body = encodeURIComponent(
+      `Hi,\n\nPlease find the invoice document attached below:\n\n${url}\n\nRef: ${inv.reference ?? "N/A"} | Amount: ${inv.currency} ${Number(inv.amount).toFixed(2)}\n\nRegards`
+    );
+    window.open(`mailto:?subject=${subject}&body=${body}`);
+  };
+  const shareInvoiceWhatsApp = (inv: InvoiceItem) => {
+    const url = invoiceFullUrl(inv.attachmentUrl!);
+    const text = encodeURIComponent(
+      `Invoice document – ${inv.counterpartyName}\nRef: ${inv.reference ?? "N/A"} | ${inv.currency} ${Number(inv.amount).toFixed(2)}\n${url}`
+    );
+    window.open(`https://wa.me/?text=${text}`, "_blank");
   };
 
   const fetchMilestones = () => {
@@ -2176,9 +2196,37 @@ tr:last-child td{border-bottom:none}
                                 <p className="text-xs opacity-70 truncate">{inv.description}{inv.reference ? ` · ${inv.reference}` : ""}</p>
                               </div>
                             </div>
-                            <div className="text-right shrink-0">
-                              <p className="font-bold text-sm">{fmtAmt(inv.currency, inv.amount)}</p>
-                              <p className="text-xs opacity-70">{paid ? "Paid" : statusLabel(days)} · {fmtDate(inv.dueDate)}</p>
+                            <div className="flex items-center gap-3 shrink-0">
+                              <div className="text-right">
+                                <p className="font-bold text-sm">{fmtAmt(inv.currency, inv.amount)}</p>
+                                <p className="text-xs opacity-70">{paid ? "Paid" : statusLabel(days)} · {fmtDate(inv.dueDate)}</p>
+                              </div>
+                              {inv.attachmentUrl && (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => window.open(invoiceFullUrl(inv.attachmentUrl!), "_blank", "noopener,noreferrer")}
+                                    title="View invoice"
+                                    className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                  </button>
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <button title="Share invoice" className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-colors">
+                                        <Share2 className="w-4 h-4" />
+                                      </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-44">
+                                      <DropdownMenuItem onClick={() => shareInvoiceEmail(inv)} className="gap-2 cursor-pointer">
+                                        <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => shareInvoiceWhatsApp(inv)} className="gap-2 cursor-pointer">
+                                        <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
+                              )}
                             </div>
                           </div>
                         );

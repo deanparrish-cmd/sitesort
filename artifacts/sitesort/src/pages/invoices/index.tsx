@@ -322,6 +322,7 @@ export default function InvoicesPage() {
   }
 
   const filtered = invoices.filter(inv => {
+    if (inv.projectId) return false;
     const matchSearch = inv.counterpartyName.toLowerCase().includes(search.toLowerCase()) ||
       inv.description.toLowerCase().includes(search.toLowerCase()) ||
       (inv.reference ?? "").toLowerCase().includes(search.toLowerCase());
@@ -338,9 +339,10 @@ export default function InvoicesPage() {
     return a.dueDate.localeCompare(b.dueDate);
   });
 
-  const totalInbound = invoices.filter(i => i.direction === "inbound" && i.status !== "paid").reduce((s, i) => s + Number(i.amount), 0);
-  const totalOutbound = invoices.filter(i => i.direction === "outbound" && i.status !== "paid").reduce((s, i) => s + Number(i.amount), 0);
-  const overdue = invoices.filter(i => i.status !== "paid" && daysUntil(i.dueDate) < 0).length;
+  const unassigned = invoices.filter(i => !i.projectId);
+  const totalInbound = unassigned.filter(i => i.direction === "inbound" && i.status !== "paid").reduce((s, i) => s + Number(i.amount), 0);
+  const totalOutbound = unassigned.filter(i => i.direction === "outbound" && i.status !== "paid").reduce((s, i) => s + Number(i.amount), 0);
+  const overdue = unassigned.filter(i => i.status !== "paid" && daysUntil(i.dueDate) < 0).length;
 
   return (
     <SidebarLayout>
@@ -465,7 +467,7 @@ export default function InvoicesPage() {
           <div className="flex flex-col items-center justify-center py-16 text-center px-4">
             <Receipt className="w-10 h-10 text-muted-foreground/30 mb-3" />
             <p className="font-semibold text-muted-foreground">No invoices found</p>
-            <p className="text-sm text-muted-foreground/70 mt-1">Add your first invoice to track payments.</p>
+            <p className="text-sm text-muted-foreground/70 mt-1">Add your first invoice to track payments. Invoices moved to a project appear under that project's Finances tab.</p>
           </div>
         ) : (
           <>
@@ -515,24 +517,26 @@ export default function InvoicesPage() {
                           <Paperclip className="w-3 h-3" />File
                         </button>
                       )}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button
-                            onClick={e => e.stopPropagation()}
-                            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary font-medium"
-                          >
-                            <Share2 className="w-3 h-3" />Share
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-40">
-                          <DropdownMenuItem onClick={e => { e.stopPropagation(); shareEmail(inv); }} className="gap-2 cursor-pointer">
-                            <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={e => { e.stopPropagation(); shareWhatsApp(inv); }} className="gap-2 cursor-pointer">
-                            <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      {inv.attachmentUrl && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              onClick={e => e.stopPropagation()}
+                              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary font-medium"
+                            >
+                              <Share2 className="w-3 h-3" />Share
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-40">
+                            <DropdownMenuItem onClick={e => { e.stopPropagation(); shareEmail(inv); }} className="gap-2 cursor-pointer">
+                              <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={e => { e.stopPropagation(); shareWhatsApp(inv); }} className="gap-2 cursor-pointer">
+                              <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </div>
                   </div>
                 );
