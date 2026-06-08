@@ -812,7 +812,7 @@ tr:last-child td{border-bottom:none}
       </div>
 
       <Tabs defaultValue={defaultTab}>
-        <TabsList className="mb-6 w-full h-auto flex-col gap-1 bg-muted p-1.5 rounded-xl md:flex-row md:gap-0 md:justify-start md:overflow-x-auto md:bg-transparent md:border-b md:rounded-none md:p-0">
+        <TabsList className="mb-6 w-full h-auto flex flex-wrap justify-start gap-1.5 bg-muted p-1.5 rounded-xl">
           {[
             { value: "overview", label: "Overview" },
             { value: "progress", label: "Progress" },
@@ -828,7 +828,7 @@ tr:last-child td{border-bottom:none}
             <TabsTrigger
               key={tab.value}
               value={tab.value}
-              className="w-full justify-start rounded-lg py-2.5 px-4 md:w-auto md:rounded-none md:px-6 md:py-3 md:justify-center md:border-b-2 md:border-transparent"
+              className="flex-1 sm:flex-none justify-center rounded-lg py-2 px-3 sm:px-4 text-sm whitespace-nowrap"
             >
               {tab.label}
             </TabsTrigger>
