@@ -99,7 +99,7 @@ export default function LandingPage() {
             <img
               src={builtForBeam}
               alt="Built for UK construction SMEs"
-              className="mx-auto h-16 sm:h-20 w-auto mb-8"
+              className="mx-auto h-16 sm:h-20 w-auto mb-8 drop-shadow-xl"
             />
             <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold text-primary tracking-tight mb-8 leading-tight">
               Control the chaos of <br className="hidden sm:block" />
