@@ -122,6 +122,40 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 
 ### 2026-05-22, 2026-05-25 & 2026-05-26 — see CLAUDE_ARCHIVE.md for full detail
 
+## End-of-session notes — 2026-06-09
+
+### Tasks completed today
+
+1. **CLAUDE.md maintenance** — trimmed file from 30k+ chars to 24k by moving 2026-06-05 and 2026-05-27 session logs to CLAUDE_ARCHIVE.md
+
+2. **Share button on documents mobile card** — the documents tab in project detail has two layouts (mobile card `block lg:hidden` + desktop table `hidden lg:block`); Share dropdown (Email / WhatsApp / Share with project team) existed only in the desktop table; added matching Share dropdown to the mobile card action row
+
+3. **Share added across compliance page** — all three compliance sections now have share on mobile:
+   - **Expiring Insurance** — already had share ✓
+   - **Expiring Permits** — added Email + WhatsApp share (permit type, project, expiry); layout made responsive (`flex-col sm:flex-row` like insurance rows)
+   - **Pending Sign-offs** — added Open button + Email/WhatsApp share with document link; layout made responsive; API extended to return `fileUrl` on `pendingAcknowledgments`
+
+4. **Share on invoice mobile card** — desktop table had Share dropdown; mobile card had only a "File" open button; added Email/WhatsApp Share dropdown to mobile card with `e.stopPropagation()` to prevent opening the viewer
+
+5. **Share on team member cards** — both the `/team` page and the project detail Team tab; Share2 icon added to card top-right corner; Email + WhatsApp with name, role, trades, email, phone
+
+6. **Share on subcontractor cards** — Email/WhatsApp Share dropdown added to both the desktop action icon bar and the mobile bottom action bar; content includes company name, contact name, email, phone, trades
+
+### Key files modified
+- `artifacts/sitesort/src/pages/projects/detail.tsx` — Share in mobile doc card; Share on project Team tab member cards
+- `artifacts/sitesort/src/pages/compliance/index.tsx` — Share on permits + sign-offs; responsive layouts
+- `artifacts/sitesort/src/pages/invoices/index.tsx` — Share on mobile invoice card
+- `artifacts/sitesort/src/pages/team/index.tsx` — Share on team member cards
+- `artifacts/sitesort/src/pages/subcontractors/index.tsx` — Share on sub cards (desktop + mobile)
+- `artifacts/api-server/src/routes/compliance.ts` — `fileUrl` added to `pendingAcknowledgments` response
+
+### Notes for next session
+- **Share pattern is now consistent across all entities** — DropdownMenu with `<Mail>` (mailto:) and `<MessageCircle>` (wa.me) items; always use `window.open()` not `<a target="_blank">`
+- **Two-layout pages** (mobile card + desktop table): documents tab, invoices — any new actions added to one must be added to both
+- **API server does NOT hot-reload** — after editing any backend file: `pnpm --filter @workspace/api-server run build` then restart node process
+- **GitHub push command**: `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts`
+- All commits are on `main`
+
 ## End-of-session notes — 2026-06-08
 
 ### Tasks completed today
@@ -240,69 +274,4 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 - `artifacts/api-server/src/routes/channels.ts` — channel message email trigger
 - `artifacts/sitesort/src/pages/settings/index.tsx` — email toggle in Notifications tab
 
-## End-of-session notes — 2026-06-05
-
-### Tasks completed today
-
-1. **Message pagination** — cursor-based pagination for both DM threads and project channel threads:
-   - API: `GET /api/messages/thread/:userId` and `GET /api/channels/:projectId/messages` now accept `?before=<id>` (load older page) and `?after=<id>` (poll for new messages)
-   - Default (no params): returns last 50 messages + `hasMore` flag; response format changed from array to `{ messages, hasMore }`
-   - `before`: fetches 50 messages before the cursor, oldest-first, with `hasMore` for further pages
-   - `after`: fetches all messages since cursor (capped at 100) — typically 0 on a quiet 5s poll
-   - Mark-as-read: initial load marks entire conversation; polls mark only new messages; load-older skips marking
-   - Frontend: initial load sets `dmHasMore`/`channelHasMore`; polls use `?after=<lastId>` and append-only (preserves loaded-older messages); "Load older messages" button at top of both thread panels
-   - Scroll position preserved on load-older via `scrollHeight` anchor + `useLayoutEffect` restoration; `skipScrollRef` suppresses auto-scroll-to-bottom during prepend
-
-2. **Invoice document viewer fix** — replaced broken `<iframe>` PDF embed with `<object>`:
-   - Root cause: `<iframe>` renders blank/silently in Replit's sandboxed webview; `<a target="_blank">` new-tab navigation suppressed by popup blockers in the same environment
-   - PDF viewer changed from `<iframe src={url}>` to `<object data={url} type="application/pdf">` with a visible fallback ("PDF preview not available — Open PDF" button) when inline rendering fails
-   - All "Open" / "Open in new tab" buttons changed from `<a target="_blank">` to `window.open(url, '_blank', 'noopener,noreferrer')` via `onClick` — fires correctly in popup-blocked environments
-   - Table row "Open" link also converted to `<button onClick>` with `stopPropagation()` + `window.open()`
-   - Verified: GCS is correctly serving the file (HTTP 200, `Content-Type: application/pdf`, 548 KB in test)
-
-### Key files modified
-- `artifacts/api-server/src/routes/messages.ts` — `lt`, `gt` imports; paginated thread endpoint; `{ messages, hasMore }` response
-- `artifacts/api-server/src/routes/channels.ts` — same pagination for channel messages
-- `artifacts/sitesort/src/pages/messages/index.tsx` — `useLayoutEffect` import; pagination state/refs; updated fetch/poll callbacks; `loadOlderDm`/`loadOlderChannel`; "Load older" buttons; scroll anchor restoration
-- `artifacts/sitesort/src/pages/invoices/index.tsx` — `<object>` PDF embed; `window.open()` for all Open buttons; fallback UI inside `<object>`
-
-## End-of-session notes — 2026-05-27
-
-### Tasks completed today
-
-1. **Beta access flag** — `betaAccess` boolean column on `companies` table (default `false`); companies with `beta_access=true` bypass all Stripe subscription checks; `SubscriptionContext` treats them as fully active regardless of Stripe status; `GET/PATCH /api/companies/mine` now returns `betaAccess`
-
-2. **Project progress tracking** — milestones-driven progress with Gantt timeline:
-   - New `milestones` table: `id`, `projectId`, `title`, `dueDate`, `completedAt` (nullable), `order`, cascade-delete on project removal
-   - 4 API endpoints: `GET/POST /api/projects/:id/milestones`, `PATCH/DELETE /api/projects/:id/milestones/:milestoneId`
-   - `progressPercent` in both `GET /projects` and `GET /projects/:projectId` now computed from completed/total milestones (was hardcoded from status)
-   - New "Progress" tab in project detail: large progress bar + %, milestone checklist (add/tick/delete with due dates), CSS Gantt timeline (diamond markers positioned at due dates, orange Today line, legend)
-   - Project list table: new "Progress" column with mini progress bar + %
-
-3. **Onboarding checklist** — dismissible card at top of dashboard:
-   - 5 steps: create project, invite team member, upload document, add subcontractor, set milestones
-   - All completion states derived from real DB data — no new table; single `GET /api/onboarding/status` call
-   - Progress bar (X/5); incomplete steps show description + CTA link; completed steps show green tick + strikethrough
-   - X button dismisses permanently (`sitesort_onboarding_dismissed` in localStorage); auto-hides when all done
-
-### Key files added/modified
-- `lib/db/src/schema/milestones.ts` — new table
-- `lib/db/src/schema/index.ts` — exports milestones table
-- `artifacts/api-server/src/routes/projects.ts` — `milestonesTable` import; `computeProgress()` helper; 4 milestone endpoints; real progress in list + detail
-- `artifacts/api-server/src/routes/onboarding.ts` — new file; `GET /api/onboarding/status`
-- `artifacts/api-server/src/routes/index.ts` — registers onboarding router
-- `artifacts/sitesort/src/pages/projects/detail.tsx` — Progress tab with checklist + Gantt
-- `artifacts/sitesort/src/pages/projects/index.tsx` — Progress column header + mini progress bar
-- `artifacts/sitesort/src/pages/dashboard/index.tsx` — onboarding checklist card; `OnboardingStatus` type; fetch + dismiss state
-- `lib/db/src/schema/companies.ts` — `betaAccess` boolean column
-- `artifacts/api-server/src/routes/auth.ts` — `betaAccess` in `GET/PATCH /api/companies/mine`
-- `artifacts/sitesort/src/contexts/subscription.tsx` — reads `betaAccess`; overrides `isCancelled` and `effectiveStatus`
-
-### Notes for next session
-- **Good next features**: message pagination (currently loads entire thread), read receipts per-message in DMs, admin UI to toggle beta access without raw SQL, demo data seeder
-- **Stripe still needs manual setup**: activate Customer Portal in Stripe Dashboard; register all 5 webhook events (`checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `customer.subscription.trial_will_end`, `invoice.payment_failed`)
-- **When adding new DB schema files**: always run `npx tsc -p tsconfig.json` inside `lib/db/` after editing `src/schema/index.ts` to regenerate `dist/` before typechecking api-server
-- **Beta access SQL**: `UPDATE companies SET beta_access = true WHERE name = 'Company Name';`
-- All commits are on `main`; push via `cd /home/runner/workspace && /home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts`
-
-## End-of-session notes — 2026-05-26 — see CLAUDE_ARCHIVE.md for full detail
+## End-of-session notes — 2026-06-05 & 2026-05-27 — see CLAUDE_ARCHIVE.md for full detail
