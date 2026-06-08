@@ -152,6 +152,12 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
    - **Check-ins tab**: Share dropdown in card footer alongside date/time; email/WhatsApp includes worker name, date, time, project, and stamped photo URL; photo thumbnail click opens full-size
    - URL normalisation consistent throughout: `.replace(/^\/uploads\//, "/api/uploads/")` then absolute URL via `window.location.origin`
 
+6. **Invoice attachment `{"error":"not_found"}` investigation**:
+   - GCS confirmed working — `GET /api/uploads/:filename` streams correctly for files that exist
+   - Specific PDF `dccbf650-91e2-4597-8cb9-a3e17a098003.pdf` was missing from GCS (uploaded in an earlier session when storage may have been configured differently; file permanently lost)
+   - Fixed by nulling out the orphaned `attachment_url` on that invoice row — UI now shows "Attach document" so user can re-upload
+   - All other attachments tested and confirmed working
+
 ### Key files modified
 - `artifacts/sitesort/src/pages/subcontractors/index.tsx` — two-section mobile card layout
 - `artifacts/sitesort/src/pages/projects/index.tsx` — min-w-0/truncate on mobile project name
@@ -166,6 +172,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 - **All file-open links now use `window.open()`** — do NOT use `<a target="_blank">` for file links; it's blocked in Replit's sandboxed webview
 - **No `<object>` or `<iframe>` PDF embeds** — these fail silently on mobile and in sandboxed environments; use the file card pattern (icon + Open button + Download link) instead
 - **Share pattern**: use `DropdownMenu` with Email (`window.open("mailto:?subject=...&body=...")`) and WhatsApp (`window.open("https://wa.me/?text=...")`) items; always normalise file URLs before including them
+- **GCS file serving**: `GET /api/uploads/:filename` streams from GCS bucket `replit-objstore-8ff09467-8d72-4a2a-902a-af340cf33a56` with prefix `.private`; `objectKey(filename)` → `.private/uploads/<filename>`; `{"error":"not_found"}` means the file genuinely doesn't exist in GCS (not a code bug)
 - **API server does NOT hot-reload** — after editing any backend file: `pnpm --filter @workspace/api-server run build` then restart node process
 - **GitHub push command**: `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts`
 - All commits are on `main`
