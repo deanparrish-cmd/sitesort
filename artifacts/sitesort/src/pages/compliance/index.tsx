@@ -19,7 +19,7 @@ import { useCapabilities } from "@/hooks/use-capabilities";
 
 type InsuranceItem = { subcontractorId: string; subcontractorName: string; insuranceType: string; expiryDate: string; status: string; certificateUrl?: string | null };
 type PermitItem = { permitId: string; projectId: string; projectName: string; permitType: string; expiryDate: string; status: string };
-type AckItem = { documentId: string; documentName: string; projectId: string; projectName: string; pendingCount: number };
+type AckItem = { documentId: string; documentName: string; projectId: string; projectName: string; pendingCount: number; fileUrl?: string | null };
 type Sub = { id: string; companyName: string; contactName: string };
 
 const INSURANCE_TYPES = [
@@ -448,16 +448,45 @@ export default function CompliancePage() {
                   const days = daysLeft(p.expiryDate);
                   return (
                     <div key={p.permitId}
-                      className={cn("flex items-center justify-between gap-4 px-4 py-3 rounded-xl border",
+                      className={cn("flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 px-4 py-3 rounded-xl border",
                         days < 0 ? "bg-red-50 border-red-200" : days <= 7 ? "bg-orange-50 border-orange-200" : "bg-yellow-50 border-yellow-200"
                       )}>
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <p className="font-semibold text-sm">{p.permitType}</p>
                         <p className="text-xs text-muted-foreground">{p.projectName}</p>
                       </div>
-                      <div className="flex items-center gap-3 shrink-0">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-xs text-muted-foreground">{fmtDate(p.expiryDate)}</p>
                         <ExpiryBadge days={days} />
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs" title="Share permit">
+                              <Share2 className="w-3 h-3" />
+                              Share
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuItem
+                              className="gap-2 cursor-pointer"
+                              onClick={() => {
+                                const subject = encodeURIComponent(`Permit Expiry – ${p.permitType}`);
+                                const body = encodeURIComponent(`Hi,\n\nPlease note the following permit is expiring soon:\n\nType: ${p.permitType}\nProject: ${p.projectName}\nExpiry: ${fmtDate(p.expiryDate)}\n\nPlease take action in SiteSort.`);
+                                window.open(`mailto:?subject=${subject}&body=${body}`);
+                              }}
+                            >
+                              <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="gap-2 cursor-pointer"
+                              onClick={() => {
+                                const text = encodeURIComponent(`Permit expiry alert:\nType: ${p.permitType}\nProject: ${p.projectName}\nExpiry: ${fmtDate(p.expiryDate)}\nPlease action in SiteSort.`);
+                                window.open(`https://wa.me/?text=${text}`, "_blank");
+                              }}
+                            >
+                              <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                         <Link href={`/projects/${p.projectId}`} className="text-xs text-muted-foreground hover:text-primary flex items-center gap-0.5">
                           View <ArrowRight className="w-3 h-3" />
                         </Link>
@@ -484,13 +513,55 @@ export default function CompliancePage() {
             ) : (
               <div className="space-y-2">
                 {filteredAcks.map(a => (
-                  <div key={a.documentId} className="flex items-center justify-between gap-4 px-4 py-3 rounded-xl border bg-blue-50 border-blue-200">
-                    <div className="min-w-0">
+                  <div key={a.documentId} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 px-4 py-3 rounded-xl border bg-blue-50 border-blue-200">
+                    <div className="min-w-0 flex-1">
                       <p className="font-semibold text-sm">{a.documentName}</p>
                       <p className="text-xs text-muted-foreground">{a.projectName}</p>
                     </div>
-                    <div className="flex items-center gap-3 shrink-0">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <Badge className="text-[10px] bg-blue-100 text-blue-700 border-blue-200">{a.pendingCount} pending</Badge>
+                      {a.fileUrl && (
+                        <button
+                          onClick={() => window.open(a.fileUrl!.replace(/^\/uploads\//, "/api/uploads/"), '_blank', 'noopener,noreferrer')}
+                          className="text-xs text-primary hover:underline flex items-center gap-0.5"
+                          title="Open document"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                        </button>
+                      )}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs" title="Share document">
+                            <Share2 className="w-3 h-3" />
+                            Share
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                          <DropdownMenuItem
+                            className="gap-2 cursor-pointer"
+                            onClick={() => {
+                              const norm = a.fileUrl?.replace(/^\/uploads\//, "/api/uploads/") ?? "";
+                              const url = norm ? (norm.startsWith("http") ? norm : `${window.location.origin}${norm}`) : "";
+                              const subject = encodeURIComponent(`Sign-off Required – ${a.documentName}`);
+                              const body = encodeURIComponent(`Hi,\n\nThe document "${a.documentName}" on project "${a.projectName}" requires sign-off from ${a.pendingCount} team member${a.pendingCount !== 1 ? "s" : ""}.\n\n${url ? `Document: ${url}\n\n` : ""}Please sign off in SiteSort.`);
+                              window.open(`mailto:?subject=${subject}&body=${body}`);
+                            }}
+                          >
+                            <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="gap-2 cursor-pointer"
+                            onClick={() => {
+                              const norm = a.fileUrl?.replace(/^\/uploads\//, "/api/uploads/") ?? "";
+                              const url = norm ? (norm.startsWith("http") ? norm : `${window.location.origin}${norm}`) : "";
+                              const text = encodeURIComponent(`Sign-off needed: "${a.documentName}" on "${a.projectName}" – ${a.pendingCount} pending.${url ? `\n${url}` : ""}`);
+                              window.open(`https://wa.me/?text=${text}`, "_blank");
+                            }}
+                          >
+                            <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                       <Link href={`/projects/${a.projectId}`} className="text-xs text-muted-foreground hover:text-primary flex items-center gap-0.5">
                         View <ArrowRight className="w-3 h-3" />
                       </Link>

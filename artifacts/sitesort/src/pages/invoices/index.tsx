@@ -481,6 +481,24 @@ export default function InvoicesPage() {
                           <Paperclip className="w-3 h-3" />File
                         </button>
                       )}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            onClick={e => e.stopPropagation()}
+                            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary font-medium"
+                          >
+                            <Share2 className="w-3 h-3" />Share
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-40">
+                          <DropdownMenuItem onClick={e => { e.stopPropagation(); shareEmail(inv); }} className="gap-2 cursor-pointer">
+                            <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={e => { e.stopPropagation(); shareWhatsApp(inv); }} className="gap-2 cursor-pointer">
+                            <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 );

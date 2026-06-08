@@ -60,6 +60,7 @@ router.get("/compliance", authenticate, async (req, res) => {
       projectId: string;
       projectName: string;
       pendingCount: number;
+      fileUrl: string | null;
     }> = [];
 
     if (projectIds.length > 0) {
@@ -98,6 +99,7 @@ router.get("/compliance", authenticate, async (req, res) => {
             projectId: doc.projectId,
             projectName: proj?.name ?? "Unknown",
             pendingCount: pending.length,
+            fileUrl: doc.fileUrl ?? null,
           });
         }
       }
