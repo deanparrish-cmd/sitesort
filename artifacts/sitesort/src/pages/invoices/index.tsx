@@ -55,6 +55,7 @@ type Invoice = {
   status: "pending" | "paid" | "overdue";
   reference?: string | null;
   attachmentUrl?: string | null;
+  projectId?: string | null;
   createdAt: string;
 };
 
@@ -121,6 +122,8 @@ export default function InvoicesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
+  const [moveToInvoice, setMoveToInvoice] = useState<Invoice | null>(null);
+  const [movingProject, setMovingProject] = useState(false);
 
   // drag-and-drop state
   const [isDragOver, setIsDragOver] = useState(false);
@@ -180,8 +183,29 @@ export default function InvoicesPage() {
 
   async function markPaid(id: string) {
     if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
-    await apiFetch(`/api/invoices/${id}`, { method: "PATCH", body: JSON.stringify({ status: "paid" }) });
+    const res = await apiFetch(`/api/invoices/${id}`, { method: "PATCH", body: JSON.stringify({ status: "paid" }) });
+    if (!res.ok) {
+      toast({ title: "Couldn't mark as paid", description: "Please try again.", variant: "destructive" });
+      return;
+    }
     setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, status: "paid" } : inv));
+    const paidInvoice = invoices.find(inv => inv.id === id);
+    if (paidInvoice) setMoveToInvoice({ ...paidInvoice, status: "paid" });
+  }
+
+  async function moveToProject(invoiceId: string, projectId: string) {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
+    setMovingProject(true);
+    const res = await apiFetch(`/api/invoices/${invoiceId}`, { method: "PATCH", body: JSON.stringify({ projectId }) });
+    setMovingProject(false);
+    if (res.ok) {
+      setInvoices(prev => prev.map(inv => inv.id === invoiceId ? { ...inv, projectId } : inv));
+      const projectName = projects?.find(p => p.id === projectId)?.name ?? "project";
+      toast({ title: "Invoice moved", description: `Invoice moved to ${projectName}.` });
+      setMoveToInvoice(null);
+    } else {
+      toast({ title: "Couldn't move invoice", description: "Please try again.", variant: "destructive" });
+    }
   }
 
   async function deleteInvoice(id: string) {
@@ -945,6 +969,40 @@ export default function InvoicesPage() {
               <Button type="submit" variant="accent" disabled={submitting}>{submitting ? "Saving…" : "Save Invoice"}</Button>
             </DialogFooter>
           </form>
+      </Dialog>
+
+      <Dialog open={!!moveToInvoice} onOpenChange={open => { if (!open) setMoveToInvoice(null); }}>
+        <DialogHeader>
+          <DialogTitle>Move to</DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            Invoice marked as paid. Choose a project to move it to.
+          </p>
+        </DialogHeader>
+        <div className="max-h-80 overflow-y-auto -mx-1 px-1 space-y-1">
+          {(projects ?? []).length === 0 && (
+            <p className="text-sm text-muted-foreground py-4 text-center">No projects yet.</p>
+          )}
+          {(projects ?? []).map(p => (
+            <button
+              key={p.id}
+              type="button"
+              disabled={movingProject}
+              onClick={() => moveToInvoice && moveToProject(moveToInvoice.id, p.id)}
+              className={cn(
+                "w-full text-left rounded-lg border px-4 py-3 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50 flex items-center justify-between gap-2",
+                moveToInvoice?.projectId === p.id ? "border-accent bg-accent/5" : "border-border"
+              )}
+            >
+              <span>{p.name}</span>
+              {moveToInvoice?.projectId === p.id && <CheckCircle2 className="w-4 h-4 text-accent shrink-0" />}
+            </button>
+          ))}
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => setMoveToInvoice(null)}>
+            {movingProject ? "Moving…" : "Skip"}
+          </Button>
+        </DialogFooter>
       </Dialog>
     </SidebarLayout>
   );

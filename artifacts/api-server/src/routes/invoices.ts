@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { invoicesTable } from "@workspace/db/schema";
+import { invoicesTable, projectsTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
 import { randomUUID } from "crypto";
@@ -66,10 +66,20 @@ router.post("/invoices", authenticate, async (req, res) => {
 
 router.patch("/invoices/:id", authenticate, async (req, res) => {
   try {
-    const { status, attachmentUrl } = req.body;
+    const { status, attachmentUrl, projectId } = req.body;
     const updates: Record<string, unknown> = {};
     if (status !== undefined) updates.status = status;
     if (attachmentUrl !== undefined) updates.attachmentUrl = attachmentUrl;
+    if (projectId !== undefined) {
+      if (projectId) {
+        const [project] = await db
+          .select({ id: projectsTable.id })
+          .from(projectsTable)
+          .where(and(eq(projectsTable.id, projectId), eq(projectsTable.companyId, req.user!.companyId)));
+        if (!project) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+      }
+      updates.projectId = projectId || null;
+    }
     if (Object.keys(updates).length === 0) { res.status(400).json({ error: "validation_error", message: "Nothing to update" }); return; }
     const [updated] = await db
       .update(invoicesTable)
