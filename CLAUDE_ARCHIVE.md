@@ -1,5 +1,31 @@
 # SiteSort – Session Log Archive
 
+## End-of-session notes — 2026-06-06 (session 2)
+
+### Tasks completed
+1. **Mobile header logo size** — increased from `h-8` to inline `style={{ height: '72px' }}` on the `md:hidden` mobile header in `sidebar-layout.tsx`; used inline style rather than Tailwind class to guarantee the size isn't affected by CSS purging.
+2. **QR site board check-in with date-stamped photo**: New `site_checkins` table; `POST /api/site/:token/checkin` (public multipart, stamps photo via Canvas API, uploads to GCS, records GPS); `GET /api/projects/:id/checkins` (auth); Check-ins tab in project detail with photo grid; site-board "Site Check-In" card with camera trigger, retake option, success screen.
+
+### Key files modified
+- `artifacts/sitesort/src/components/layout/sidebar-layout.tsx` — mobile logo height inline style
+- `lib/db/src/schema/site_checkins.ts` — new table
+- `artifacts/api-server/src/routes/qr.ts` — check-in POST + GET endpoints
+- `artifacts/sitesort/src/pages/site-board.tsx` — `stampPhoto()` canvas helper + `CheckInCard`
+- `artifacts/sitesort/src/pages/projects/detail.tsx` — `checkins` state, fetch, Check-ins tab
+
+## End-of-session notes — 2026-06-06 (session 1)
+
+### Tasks completed
+1. **DM read receipts** — `?after=` poll response includes `readUpdates: [{id, readAt}]`; grey ✓ (sent) / blue ✓✓ (seen); indicator updates live within 5s.
+2. **Admin beta access UI** — `GET/PATCH /api/admin/companies` + `/beta-access`; orange toggle per company row on admin dashboard.
+3. **Email notifications via Resend** — `emailNotifications` boolean on users; `email.ts` templates for DM/channel/permit-expiry; `permit-reminders.ts` daily cron (30s after startup, then 24h); Settings > Notifications email toggle.
+
+### Key files modified
+- `lib/db/src/schema/users.ts` — `emailNotifications` boolean column
+- `artifacts/api-server/src/lib/email.ts`, `permit-reminders.ts` — email helpers + scheduler
+- `artifacts/api-server/src/routes/auth.ts`, `messages.ts`, `channels.ts` — email triggers
+- `artifacts/sitesort/src/pages/settings/index.tsx` — email toggle
+
 ## 2026-03-26
 - Built and completed all 10 core features of the SiteSort platform
 - Added `scripts/src/github-setup.ts` to create the GitHub repo via Replit Connectors SDK

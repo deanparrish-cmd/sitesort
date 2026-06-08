@@ -108,6 +108,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 44. Admin beta access UI — "Companies & Beta Access" section on admin dashboard; table lists all companies with plan/status/user count and an orange toggle switch per row; `GET /api/admin/companies` + `PATCH /api/admin/companies/:id/beta-access`, both behind `requireAdmin` email guard; replaces raw SQL workflow
 45. Email notifications — `emailNotifications` boolean on users table (default true); Settings > Notifications tab has email toggle backed by `PATCH /api/auth/me`; emails sent via Resend for: new DMs, new channel messages (per-member opt-in), permit expiry at ~7 days and ~1 day (daily server-side interval in `permit-reminders.ts`)
 46. QR site board check-in with date-stamped photo — anonymous workers scan QR code, enter name, take photo via device camera; Canvas API stamps name + date/time + project name onto image before upload; GPS captured optionally; `site_checkins` table stores record; Check-ins tab on project detail shows photo grid with worker name and timestamp; `POST /api/site/:token/checkin` (public multipart) + `GET /api/projects/:id/checkins` (auth)
+47. QR board pin management — managers pin specific documents, photos, and permits to the site board QR; `qr_board_pins` table (unique per project+type+item, cascade-delete); `GET/POST/DELETE /api/projects/:id/qr-pins`; public `GET /api/site/:token` now resolves and returns `pinnedItems` with full data (doc fileUrl, photo thumbnail, permit status); project detail QR tab shows "Board Contents" panel with thumbtack toggle per item; site-board public page shows "Pinned to this Board" section with View buttons, photo grid, and status badges
 
 ## Uploads / File Serving
 
@@ -121,6 +122,32 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 ## Session Log
 
 ### 2026-05-22, 2026-05-25 & 2026-05-26 — see CLAUDE_ARCHIVE.md for full detail
+
+## End-of-session notes — 2026-06-10
+
+### Tasks completed today
+
+1. **QR board pin management (feature #47)** — completed the half-built feature end-to-end:
+   - **DB**: `qr_board_pins` table (`id`, `projectId` FK cascade, `itemType`, `itemId`, `pinnedAt`; unique constraint on `projectId+itemType+itemId`); pushed via `drizzle-kit push`
+   - **API — management endpoints**: `GET /api/projects/:id/qr-pins`, `POST /api/projects/:id/qr-pins`, `DELETE /api/projects/:id/qr-pins` (body: `{itemType, itemId}`); all authenticated; `onConflictDoNothing` on insert
+   - **API — public site board**: `GET /api/site/:token` now batch-fetches pinned docs/photos/permits and returns `pinnedItems` array with full data (document `fileUrl`, photo `photoUrl` + `referenceNumber`, permit computed `status`); URL normalisation via `normaliseUrl()` helper
+   - **Frontend — QR tab**: "Board Contents" panel below the QR code; three sections (Documents, Photos, Permits) each with a thumbtack `<Pin>` toggle button (filled orange = pinned); state loaded at component mount alongside other project data; `isPinned()` / `togglePin()` helpers
+   - **Frontend — site board public page**: new "Pinned to this Board" card with document rows (View button → `window.open()`), 2-column photo thumbnail grid, permit rows with colour-coded status badge (Active/Expiring Soon/Expired)
+
+### Key files modified
+- `lib/db/src/schema/qr_board_pins.ts` — new table
+- `lib/db/src/schema/index.ts` — exports `qrBoardPinsTable`
+- `artifacts/api-server/src/routes/qr.ts` — 3 pin endpoints + `pinnedItems` in public site board response
+- `artifacts/sitesort/src/pages/projects/detail.tsx` — `Pin` icon import; `qrPins` state; `isPinned`/`togglePin`; Board Contents panel in QR tab; pin fetch added to main `useEffect`
+- `artifacts/sitesort/src/pages/site-board.tsx` — `Pin` icon import; `pinnedItems` destructured; "Pinned to this Board" section
+
+### Notes for next session
+- **Pin toggle UX**: `<Pin fill="currentColor">` when pinned, `fill="none"` when not; button has `text-primary bg-primary/10` when active
+- **`qrBoardPinsTable`** uses `onConflictDoNothing` on insert — safe to call POST twice without error
+- **Public site board items**: only pinned items the manager explicitly chose are shown in `pinnedItems`; general permits/docs sections remain unchanged
+- **API server does NOT hot-reload** — after editing any backend file: `pnpm --filter @workspace/api-server run build` then restart node process
+- **GitHub push command**: `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts`
+- All commits are on `main`
 
 ## End-of-session notes — 2026-06-09
 
@@ -225,67 +252,4 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 - **GitHub push command**: `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts`
 - All commits are on `main`
 
-## End-of-session notes — 2026-06-06 (session 2)
-
-### Tasks completed today
-
-1. **Mobile header logo size** — increased from `h-8` to inline `style={{ height: '72px' }}` on the `md:hidden` mobile header in `sidebar-layout.tsx`; used inline style rather than Tailwind class to guarantee the size isn't affected by CSS purging.
-
-2. **QR site board check-in with date-stamped photo**:
-   - New `site_checkins` table: `id`, `projectId` (FK cascade), `workerName`, `photoUrl`, `checkedInAt`, `lat`, `lng`
-   - `POST /api/site/:token/checkin` — public, no auth, multipart; resolves project from QR token, uploads stamped photo to GCS, creates check-in record
-   - `GET /api/projects/:id/checkins` — authenticated; returns all check-ins newest-first
-   - Site board page: "Site Check-In" card with name input, camera trigger (`capture="environment"`), Canvas stamp (name · date · time bar + project name), optional GPS, retake option, success screen
-   - Project detail: new "Check-ins" tab with live count badge; photo grid showing stamped image, worker name, date and time
-
-### Key files modified
-- `artifacts/sitesort/src/components/layout/sidebar-layout.tsx` — mobile logo height inline style
-- `lib/db/src/schema/site_checkins.ts` — new table
-- `lib/db/src/schema/index.ts` — exports site_checkins
-- `artifacts/api-server/src/routes/qr.ts` — check-in POST + GET endpoints; multer handler for unauthenticated photo upload
-- `artifacts/sitesort/src/pages/site-board.tsx` — `stampPhoto()` canvas helper + `CheckInCard` component
-- `artifacts/sitesort/src/pages/projects/detail.tsx` — `checkins` state, fetch, Check-ins tab
-
-### Notes for next session
-- **Good next features**: demo data seeder, per-project dashboard mini-view
-- **API server does NOT hot-reload** — `dev` command is `build && start` with no watch mode; after editing any backend file, run `pnpm --filter @workspace/api-server run build` then restart the node process (`kill <pid>` + `PORT=8080 node --enable-source-maps ./dist/index.mjs &`)
-- **`lib/db/dist/` is gitignored** — do NOT include it in `git add`; it gets pushed to GitHub via the Replit push script automatically
-- **Stripe still needs manual setup**: activate Customer Portal in Stripe Dashboard; register all 5 webhook events (`checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `customer.subscription.trial_will_end`, `invoice.payment_failed`)
-- **When adding new DB schema files**: always run `npx tsc -p tsconfig.json` inside `lib/db/` after editing `src/schema/index.ts` to regenerate `dist/` before typechecking api-server
-- **GitHub push command**: `cd /home/runner/workspace && /home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts` (do NOT use `npx tsx` — fails with "not found")
-- **No `git pull` at session start**: no GitHub remote in git — pushes use Replit Connectors SDK. Use `git status` + `git log` only.
-- All commits are on `main`
-
-## End-of-session notes — 2026-06-06 (session 1)
-
-### Tasks completed today
-
-1. **DM read receipts** — WhatsApp-style double-tick indicator on sent DMs:
-   - API: `?after=` poll response now includes `readUpdates: [{ id, readAt }]`; piggybacks on existing 5s poll
-   - `POST /messages` 201 response includes `readAt: null` so indicator renders immediately on send
-   - Frontend: `Circle` replaced with `Check` (grey) / `CheckCheck` (blue) from Lucide; poll merges updates into thread state
-
-2. **Admin beta access UI** — toggle beta access per company without raw SQL:
-   - `GET /api/admin/companies` + `PATCH /api/admin/companies/:id/beta-access`, both behind `requireAdmin`
-   - New "Companies & Beta Access" section on admin dashboard with orange CSS toggle per row
-
-3. **Email notifications** — full opt-in email system via Resend:
-   - `emailNotifications` boolean column on users table (default `true`); pushed to DB
-   - `GET/PATCH /api/auth/me` now exposes `emailNotifications`
-   - `email.ts`: `sendNewMessageEmail` (DM + channel variants) and `sendPermitExpiryEmail` templates
-   - `messages.ts`: emails recipient on new DM if opted in
-   - `channels.ts`: batch-fetches member email prefs, emails each opted-in member on channel post
-   - `permit-reminders.ts`: new file; `schedulePermitReminders()` runs 30s after startup then every 24h; emails responsible users for permits expiring in ~7 days and ~1 day; silently skips if `RESEND_API_KEY` unset
-   - Settings > Notifications: new "Email notifications" toggle card, backed by `PATCH /api/auth/me`
-
-### Key files modified
-- `lib/db/src/schema/users.ts` — `emailNotifications` boolean column
-- `artifacts/api-server/src/lib/email.ts` — `sendNewMessageEmail`, `sendPermitExpiryEmail`
-- `artifacts/api-server/src/lib/permit-reminders.ts` — new; daily permit expiry check
-- `artifacts/api-server/src/index.ts` — calls `schedulePermitReminders()` on startup
-- `artifacts/api-server/src/routes/auth.ts` — `emailNotifications` in GET/PATCH /auth/me
-- `artifacts/api-server/src/routes/messages.ts` — DM email trigger
-- `artifacts/api-server/src/routes/channels.ts` — channel message email trigger
-- `artifacts/sitesort/src/pages/settings/index.tsx` — email toggle in Notifications tab
-
-## End-of-session notes — 2026-06-05 & 2026-05-27 — see CLAUDE_ARCHIVE.md for full detail
+## End-of-session notes — 2026-06-05, 2026-05-27 & 2026-06-06 — see CLAUDE_ARCHIVE.md for full detail
