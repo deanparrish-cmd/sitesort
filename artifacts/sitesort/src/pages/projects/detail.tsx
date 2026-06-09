@@ -43,7 +43,7 @@ export default function ProjectDetail() {
   const { data: documents, refetch: refetchDocs } = useListDocuments(projectId, undefined, { query: { enabled: !!projectId } });
   const { data: members } = useListProjectMembers(projectId, { query: { enabled: !!projectId } });
 
-  type PermitItem = { id: string; type: string; description: string; startDate: string; expiryDate: string; status: string; responsibleName?: string };
+  type PermitItem = { id: string; type: string; description: string; startDate: string; expiryDate: string; status: string; responsibleName?: string; documentUrl?: string | null };
   type InvoiceItem = { id: string; direction: string; counterpartyName: string; description: string; amount: string; currency: string; dueDate: string; status: string; reference?: string | null; attachmentUrl?: string | null };
   type PhotoItem = { id: string; uploadedBy: string; uploaderName: string; photoUrl: string | null; category: string; description: string | null; zone: string | null; referenceNumber: string; takenAt: string };
   type MilestoneItem = { id: string; title: string; dueDate: string; completedAt: string | null; order: number };
@@ -72,6 +72,7 @@ export default function ProjectDetail() {
   const [newPermitResponsibleId, setNewPermitResponsibleId] = useState("");
   const [newPermitStart, setNewPermitStart] = useState("");
   const [newPermitExpiry, setNewPermitExpiry] = useState("");
+  const [newPermitCertUrl, setNewPermitCertUrl] = useState<string | null>(null);
   const [newPermitSubmitting, setNewPermitSubmitting] = useState(false);
   const [newPermitError, setNewPermitError] = useState<string | null>(null);
   const [projectInvoices, setProjectInvoices] = useState<InvoiceItem[]>([]);
@@ -393,12 +394,12 @@ export default function ProjectDetail() {
       const res = await fetch(`/api/projects/${projectId}/permits`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ type: newPermitType, description: newPermitDesc.trim(), responsibleUserId: newPermitResponsibleId, startDate: newPermitStart, expiryDate: newPermitExpiry }),
+        body: JSON.stringify({ type: newPermitType, description: newPermitDesc.trim(), responsibleUserId: newPermitResponsibleId, startDate: newPermitStart, expiryDate: newPermitExpiry, documentUrl: newPermitCertUrl ?? undefined }),
       });
       if (!res.ok) throw new Error("Failed to create permit");
       const newP = await res.json();
-      setPermits(prev => [...prev, { id: newP.id, type: newP.type, description: newP.description, startDate: newP.startDate, expiryDate: newP.expiryDate, status: newP.status, responsibleName: newP.responsibleUserName }]);
-      setPermitAddOpen(false); setNewPermitType("Hot Works"); setNewPermitDesc(""); setNewPermitResponsibleId(""); setNewPermitStart(""); setNewPermitExpiry(""); setNewPermitError(null);
+      setPermits(prev => [...prev, { id: newP.id, type: newP.type, description: newP.description, startDate: newP.startDate, expiryDate: newP.expiryDate, status: newP.status, responsibleName: newP.responsibleUserName, documentUrl: newP.documentUrl ?? null }]);
+      setPermitAddOpen(false); setNewPermitType("Hot Works"); setNewPermitDesc(""); setNewPermitResponsibleId(""); setNewPermitStart(""); setNewPermitExpiry(""); setNewPermitCertUrl(null); setNewPermitError(null);
     } catch {
       setNewPermitError("Failed to save permit. Please try again.");
     } finally {
@@ -1938,25 +1939,48 @@ tr:last-child td{border-bottom:none}
                     <p className="text-xs text-muted-foreground mt-0.5">{fmtDate(p.startDate)} – {fmtDate(p.expiryDate)}{p.responsibleName ? ` · ${p.responsibleName}` : ""}</p>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
+                    {p.documentUrl && (() => {
+                      const norm = p.documentUrl.replace(/^\/uploads\//, "/api/uploads/");
+                      const certUrl = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
+                      return (
+                        <button
+                          onClick={() => window.open(certUrl, "_blank", "noopener,noreferrer")}
+                          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-primary hover:bg-primary/10 font-medium transition-colors"
+                          title="Open certificate"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" /> Certificate
+                        </button>
+                      );
+                    })()}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <button className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Share">
                           <Share2 className="w-3.5 h-3.5" />
                         </button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-44">
+                      <DropdownMenuContent align="end" className="w-48">
                         <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
+                          const certLine = p.documentUrl ? `\nCertificate: ${window.location.origin}${p.documentUrl.replace(/^\/uploads\//, "/api/uploads/")}` : "";
                           const subject = encodeURIComponent(`Permit – ${p.type}`);
-                          const body = encodeURIComponent(`Permit details:\n\nType: ${p.type}\nDescription: ${p.description}\nStart: ${fmtDate(p.startDate)}\nExpiry: ${fmtDate(p.expiryDate)} (${statusLabel})${p.responsibleName ? `\nResponsible: ${p.responsibleName}` : ""}\nProject: ${project?.name ?? ""}`);
+                          const body = encodeURIComponent(`Permit details:\n\nType: ${p.type}\nDescription: ${p.description}\nStart: ${fmtDate(p.startDate)}\nExpiry: ${fmtDate(p.expiryDate)} (${statusLabel})${p.responsibleName ? `\nResponsible: ${p.responsibleName}` : ""}\nProject: ${project?.name ?? ""}${certLine}`);
                           window.open(`mailto:?subject=${subject}&body=${body}`);
                         }}>
                           <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
                         </DropdownMenuItem>
                         <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
-                          const text = encodeURIComponent(`${p.type} permit – ${project?.name ?? ""}\n${p.description}\nExpiry: ${fmtDate(p.expiryDate)} (${statusLabel})${p.responsibleName ? `\nResponsible: ${p.responsibleName}` : ""}`);
+                          const certLine = p.documentUrl ? `\nCertificate: ${window.location.origin}${p.documentUrl.replace(/^\/uploads\//, "/api/uploads/")}` : "";
+                          const text = encodeURIComponent(`${p.type} permit – ${project?.name ?? ""}\n${p.description}\nExpiry: ${fmtDate(p.expiryDate)} (${statusLabel})${p.responsibleName ? `\nResponsible: ${p.responsibleName}` : ""}${certLine}`);
                           window.open(`https://wa.me/?text=${text}`, "_blank");
                         }}>
                           <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
+                          const fakeDoc = { id: p.id, name: `${p.type} – ${p.description}`, version: 1, fileUrl: p.documentUrl ?? "" };
+                          if (p.documentUrl) setSharingDoc(fakeDoc);
+                          else toast({ title: "No certificate attached", description: "Attach a certificate to share it with the project team.", variant: "destructive" });
+                        }}>
+                          <Users className="w-4 h-4 text-primary" /> Share with project team
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -1982,11 +2006,18 @@ tr:last-child td{border-bottom:none}
                     <h2 className="text-xl font-bold">Project Compliance</h2>
                     <p className="text-sm text-muted-foreground mt-0.5">Permits, certifications and insurance for this project.</p>
                   </div>
-                  {caps.canManageTeam && (
-                    <Button variant="accent" size="sm" onClick={() => setPermitAddOpen(true)}>
-                      <Plus className="w-4 h-4 mr-1.5" /> Add Permit
-                    </Button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {caps.canUploadDocument && (
+                      <Button variant="outline" size="sm" onClick={() => { setValue("type", "permit"); setIsUploadOpen(true); }}>
+                        <Upload className="w-4 h-4 mr-1.5" /> Upload Doc
+                      </Button>
+                    )}
+                    {caps.canManageTeam && (
+                      <Button variant="accent" size="sm" onClick={() => setPermitAddOpen(true)}>
+                        <Plus className="w-4 h-4 mr-1.5" /> Add Permit
+                      </Button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Permits list */}
@@ -2031,6 +2062,103 @@ tr:last-child td{border-bottom:none}
                     )}
                   </div>
                 )}
+
+                {/* Compliance Documents */}
+                {(() => {
+                  const complianceDocs = (documents ?? []).filter(d => ["permit", "safety", "method_statement"].includes(d.type));
+                  return (
+                    <section>
+                      <div className="flex items-center justify-between gap-4 mb-3">
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-primary" />
+                          <h3 className="font-bold text-sm uppercase tracking-wide text-muted-foreground">Compliance Documents</h3>
+                          <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{complianceDocs.length}</span>
+                        </div>
+                      </div>
+                      {complianceDocs.length === 0 ? (
+                        <div
+                          className="border-2 border-dashed rounded-xl p-8 text-center hover:border-primary/40 hover:bg-primary/5 transition-colors"
+                          onClick={() => caps.canUploadDocument && (setValue("type", "permit"), setIsUploadOpen(true))}
+                          style={{ cursor: caps.canUploadDocument ? "pointer" : "default" }}
+                        >
+                          <Upload className="w-8 h-8 mx-auto text-muted-foreground/30 mb-2" />
+                          <p className="font-semibold text-muted-foreground">No compliance documents yet.</p>
+                          <p className="text-sm text-muted-foreground mt-1">Upload permits, method statements, and safety documents here.</p>
+                          {caps.canUploadDocument && (
+                            <Button variant="outline" size="sm" className="mt-4" onClick={e => { e.stopPropagation(); setValue("type", "permit"); setIsUploadOpen(true); }}>
+                              <Upload className="w-3.5 h-3.5 mr-1.5" /> Upload Document
+                            </Button>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {complianceDocs.map(doc => {
+                            const norm = doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/");
+                            const docUrl = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
+                            const isSuperseded = doc.status === "superseded";
+                            return (
+                              <div key={doc.id} className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-4 py-3 rounded-xl border ${isSuperseded ? "opacity-60 bg-muted/20" : "bg-card"}`}>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <FileText className="w-4 h-4 text-primary shrink-0" />
+                                    <p className={`font-semibold text-sm truncate ${isSuperseded ? "line-through text-muted-foreground" : ""}`}>{doc.name}</p>
+                                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground capitalize">{doc.type.replace(/_/g, " ")}</span>
+                                    <span className="font-mono text-[10px] bg-muted px-1.5 py-0.5 rounded">v{doc.version}</span>
+                                    {isSuperseded && <span className="text-[10px] font-semibold text-destructive bg-red-100 px-1.5 py-0.5 rounded">Superseded</span>}
+                                  </div>
+                                  <p className="text-xs text-muted-foreground mt-0.5 ml-6">{formatDate(doc.createdAt)} · {doc.uploaderName}</p>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button
+                                    onClick={() => window.open(docUrl, "_blank", "noopener,noreferrer")}
+                                    className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-primary hover:bg-primary/10 font-medium transition-colors"
+                                    title="Open document"
+                                  >
+                                    <ExternalLink className="w-3.5 h-3.5" /> Open
+                                  </button>
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <button className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Share">
+                                        <Share2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-44">
+                                      <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
+                                        const subject = encodeURIComponent(`Document – ${doc.name}`);
+                                        const body = encodeURIComponent(`Hi,\n\nPlease find the document "${doc.name}" (v${doc.version}) here:\n\n${docUrl}`);
+                                        window.open(`mailto:?subject=${subject}&body=${body}`);
+                                      }}>
+                                        <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
+                                        const text = encodeURIComponent(`Document: ${doc.name} (v${doc.version})\n${docUrl}`);
+                                        window.open(`https://wa.me/?text=${text}`, "_blank");
+                                      }}>
+                                        <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
+                                      </DropdownMenuItem>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => setSharingDoc({ id: doc.id, name: doc.name, version: doc.version, fileUrl: doc.fileUrl })}>
+                                        <Users className="w-4 h-4 text-primary" /> Share with project team
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {caps.canUploadDocument && (
+                            <button
+                              onClick={() => { setValue("type", "permit"); setIsUploadOpen(true); }}
+                              className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed rounded-xl text-sm text-muted-foreground hover:border-primary/50 hover:text-primary hover:bg-primary/5 transition-colors"
+                            >
+                              <Upload className="w-4 h-4" /> Upload another document
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </section>
+                  );
+                })()}
 
                 {/* Team Insurance */}
                 {members && (members as any[]).length > 0 && (
@@ -3154,7 +3282,7 @@ tr:last-child td{border-bottom:none}
       </Dialog>
 
       {/* Add Permit Dialog */}
-      <Dialog open={permitAddOpen} onOpenChange={v => { if (!v) { setPermitAddOpen(false); setNewPermitError(null); } }}>
+      <Dialog open={permitAddOpen} onOpenChange={v => { if (!v) { setPermitAddOpen(false); setNewPermitCertUrl(null); setNewPermitError(null); } }}>
         <DialogHeader>
           <DialogTitle>Add Permit / Certification</DialogTitle>
         </DialogHeader>
@@ -3199,6 +3327,18 @@ tr:last-child td{border-bottom:none}
               <label className="text-sm font-semibold mb-1.5 block">Expiry Date</label>
               <Input type="date" value={newPermitExpiry} onChange={e => setNewPermitExpiry(e.target.value)} />
             </div>
+          </div>
+          <div>
+            <label className="text-sm font-semibold mb-1.5 block">Certificate / Document <span className="text-muted-foreground font-normal">(optional)</span></label>
+            <FileDropZone
+              onUploaded={f => setNewPermitCertUrl(f.url)}
+              onCleared={() => setNewPermitCertUrl(null)}
+            />
+            {newPermitCertUrl && (
+              <p className="mt-1.5 text-xs text-emerald-600 flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Certificate uploaded
+              </p>
+            )}
           </div>
           {newPermitError && (
             <p className="flex items-center gap-1.5 text-sm text-destructive"><AlertTriangle className="w-4 h-4 shrink-0" />{newPermitError}</p>
