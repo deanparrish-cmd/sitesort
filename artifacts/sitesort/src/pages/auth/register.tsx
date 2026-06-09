@@ -37,12 +37,12 @@ const registerSchema = z.object({
   companyName: z.string().min(2, "Company name is required"),
   adminName: z.string().min(2, "Your name is required"),
   email: z.string().email("Please enter a valid email"),
-  confirmEmail: z.string().email("Please confirm your email"),
   password: z.string().min(8, "Password must be at least 8 characters"),
+  confirmPassword: z.string().min(1, "Please confirm your password"),
   companySize: z.nativeEnum(RegisterRequestCompanySize),
-}).refine(data => data.email === data.confirmEmail, {
-  message: "Email addresses don't match",
-  path: ["confirmEmail"],
+}).refine(data => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
 });
 
 const inviteSchema = z.object({
@@ -60,6 +60,7 @@ export default function Register() {
   const [selectedPlan, setSelectedPlan] = useState<PlanId | null>(null);
   const [redirecting, setRedirecting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const registerMutation = useRegister();
 
   // Invite flow
@@ -121,7 +122,7 @@ export default function Register() {
 
     try {
       if (!token) {
-        const { confirmEmail: _ignored, ...registerData } = data;
+        const { confirmPassword: _ignored, ...registerData } = data;
         const response = await registerMutation.mutateAsync({ data: registerData });
         token = response.token;
         localStorage.setItem("sitesort_token", token);
@@ -354,16 +355,6 @@ export default function Register() {
 
               <div>
                 <Input
-                  {...register("confirmEmail")}
-                  type="email"
-                  placeholder="Confirm Email"
-                  icon={<Mail className="w-5 h-5" />}
-                />
-                {errors.confirmEmail && <p className="text-destructive text-sm mt-1 ml-1">{errors.confirmEmail.message}</p>}
-              </div>
-
-              <div>
-                <Input
                   {...register("password")}
                   type={showPassword ? "text" : "password"}
                   placeholder="Create Password"
@@ -380,6 +371,26 @@ export default function Register() {
                   }
                 />
                 {errors.password && <p className="text-destructive text-sm mt-1 ml-1">{errors.password.message}</p>}
+              </div>
+
+              <div>
+                <Input
+                  {...register("confirmPassword")}
+                  type={showConfirmPassword ? "text" : "password"}
+                  placeholder="Confirm Password"
+                  icon={<Lock className="w-5 h-5" />}
+                  rightAction={
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(p => !p)}
+                      className="text-muted-foreground hover:text-foreground transition-colors"
+                      tabIndex={-1}
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  }
+                />
+                {errors.confirmPassword && <p className="text-destructive text-sm mt-1 ml-1">{errors.confirmPassword.message}</p>}
               </div>
 
               <Button type="submit" variant="accent" className="w-full mt-6" size="lg" isLoading={isSubmitting}>
