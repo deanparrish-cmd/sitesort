@@ -41,6 +41,8 @@ type SubNote = {
   id: string;
   body: string;
   authorName: string;
+  projectId: string | null;
+  projectName: string | null;
   createdAt: string;
 };
 
@@ -956,7 +958,7 @@ export default function SubcontractorsPage() {
             </div>
 
             <p className="text-xs text-muted-foreground">
-              Record reminders and conversations — e.g. chasing expiring insurance or permits. Each note is automatically date &amp; time stamped.
+              Notes added here are <span className="font-medium text-foreground">general</span> — they appear in every project this subcontractor is linked to. Project-specific notes can be added from within a project's Team tab.
             </p>
 
             {caps.canManageSubcontractors && (
@@ -991,8 +993,15 @@ export default function SubcontractorsPage() {
                 <div className="space-y-2">
                   {notesList.map(n => (
                     <div key={n.id} className="rounded-lg border bg-muted/30 p-3">
-                      <p className="text-[13px] text-foreground whitespace-pre-wrap">{n.body}</p>
-                      <p className="text-[10px] text-muted-foreground mt-1.5 flex items-center gap-1">
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <p className="text-[13px] text-foreground whitespace-pre-wrap flex-1">{n.body}</p>
+                        {n.projectId ? (
+                          <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-primary/10 text-primary">{n.projectName ?? "Project"}</span>
+                        ) : (
+                          <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground">General</span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground flex items-center gap-1">
                         <Clock className="w-3 h-3" />{formatNoteTime(n.createdAt)} · {n.authorName}
                       </p>
                     </div>

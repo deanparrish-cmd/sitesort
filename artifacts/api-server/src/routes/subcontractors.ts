@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { subcontractorsTable, insuranceRecordsTable, projectMembersTable, projectsTable, subcontractorNotesTable, usersTable } from "@workspace/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, or, isNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 
@@ -187,6 +187,8 @@ router.post("/subcontractors/:subcontractorId/insurance", authenticate, async (r
 });
 
 // List timestamped notes for a subcontractor (most recent first)
+// ?projectId=<id> → returns general notes + notes scoped to that project
+// no projectId   → returns all notes (directory overview)
 router.get("/subcontractors/:subcontractorId/notes", authenticate, async (req, res) => {
   try {
     const sub = await db.select({ id: subcontractorsTable.id }).from(subcontractorsTable)
@@ -197,22 +199,33 @@ router.get("/subcontractors/:subcontractorId/notes", authenticate, async (req, r
       return;
     }
 
+    const projectId = typeof req.query.projectId === "string" ? req.query.projectId : null;
+
+    const scopeFilter = projectId
+      ? or(isNull(subcontractorNotesTable.projectId), eq(subcontractorNotesTable.projectId, projectId))
+      : undefined;
+
     const notes = await db
       .select({
         id: subcontractorNotesTable.id,
         body: subcontractorNotesTable.body,
         createdAt: subcontractorNotesTable.createdAt,
+        projectId: subcontractorNotesTable.projectId,
         authorName: usersTable.name,
+        projectName: projectsTable.name,
       })
       .from(subcontractorNotesTable)
       .leftJoin(usersTable, eq(usersTable.id, subcontractorNotesTable.authorId))
-      .where(eq(subcontractorNotesTable.subcontractorId, req.params.subcontractorId))
+      .leftJoin(projectsTable, eq(projectsTable.id, subcontractorNotesTable.projectId))
+      .where(and(eq(subcontractorNotesTable.subcontractorId, req.params.subcontractorId), scopeFilter))
       .orderBy(desc(subcontractorNotesTable.createdAt));
 
     res.json(notes.map(n => ({
       id: n.id,
       body: n.body,
       authorName: n.authorName ?? "Unknown",
+      projectId: n.projectId ?? null,
+      projectName: n.projectName ?? null,
       createdAt: n.createdAt.toISOString(),
     })));
   } catch (err) {
@@ -237,6 +250,7 @@ router.post("/subcontractors/:subcontractorId/notes", authenticate, async (req, 
       res.status(400).json({ error: "validation_error", message: "Note text is required" });
       return;
     }
+    const projectId = typeof req.body?.projectId === "string" ? req.body.projectId : null;
 
     const id = generateId();
     const inserted = await db.insert(subcontractorNotesTable).values({
@@ -244,13 +258,19 @@ router.post("/subcontractors/:subcontractorId/notes", authenticate, async (req, 
       subcontractorId: req.params.subcontractorId,
       authorId: req.user!.id,
       body,
+      projectId,
     }).returning({ createdAt: subcontractorNotesTable.createdAt });
 
-    const author = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
+    const [author, project] = await Promise.all([
+      db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1),
+      projectId ? db.select({ name: projectsTable.name }).from(projectsTable).where(eq(projectsTable.id, projectId)).limit(1) : Promise.resolve([]),
+    ]);
     res.status(201).json({
       id,
       body,
       authorName: author[0]?.name ?? "Unknown",
+      projectId,
+      projectName: (project as any)[0]?.name ?? null,
       createdAt: (inserted[0]?.createdAt ?? new Date()).toISOString(),
     });
   } catch (err) {

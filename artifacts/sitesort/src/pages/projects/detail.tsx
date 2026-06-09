@@ -10,7 +10,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin } from "lucide-react";
+import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, StickyNote, Send, Loader2 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { Textarea } from "@/components/ui/textarea";
@@ -532,6 +532,42 @@ export default function ProjectDetail() {
   };
   type SharingDoc = { id: string; name: string; version: number; fileUrl: string };
   const [sharingDoc, setSharingDoc] = useState<SharingDoc | null>(null);
+
+  // Sub notes dialog (project Team tab)
+  type SubNote = { id: string; body: string; authorName: string; projectId: string | null; projectName: string | null; createdAt: string };
+  const [subNotesTarget, setSubNotesTarget] = useState<{ id: string; name: string } | null>(null);
+  const [subNotesList, setSubNotesList] = useState<SubNote[]>([]);
+  const [subNotesLoading, setSubNotesLoading] = useState(false);
+  const [subNoteDraft, setSubNoteDraft] = useState("");
+  const [subNoteScope, setSubNoteScope] = useState<"general" | "project">("general");
+  const [subNoteSubmitting, setSubNoteSubmitting] = useState(false);
+
+  async function openSubNotes(memberId: string, memberName: string) {
+    setSubNotesTarget({ id: memberId, name: memberName });
+    setSubNotesList([]);
+    setSubNotesLoading(true);
+    const token = localStorage.getItem("sitesort_token");
+    const res = await fetch(`/api/subcontractors/${memberId}/notes?projectId=${projectId}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (res.ok) setSubNotesList(await res.json());
+    setSubNotesLoading(false);
+  }
+
+  async function submitSubNote() {
+    if (!subNotesTarget || !subNoteDraft.trim()) return;
+    setSubNoteSubmitting(true);
+    const token = localStorage.getItem("sitesort_token");
+    const res = await fetch(`/api/subcontractors/${subNotesTarget.id}/notes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ body: subNoteDraft.trim(), projectId: subNoteScope === "project" ? projectId : null }),
+    });
+    if (res.ok) {
+      const created: SubNote = await res.json();
+      setSubNotesList(prev => [created, ...prev]);
+      setSubNoteDraft("");
+    }
+    setSubNoteSubmitting(false);
+  }
 
   const { register: schedRegister, handleSubmit: schedHandleSubmit, reset: schedReset, setValue: schedSetValue, watch: schedWatch } = useForm();
 
@@ -1491,6 +1527,15 @@ tr:last-child td{border-bottom:none}
                       <div className="flex flex-col items-end gap-1 shrink-0">
                         <div className="flex items-center gap-1">
                           <Badge variant="secondary" className="text-[10px] capitalize">{member.role.replace('_', ' ')}</Badge>
+                          {isSubcontractor && (
+                            <button
+                              onClick={() => openSubNotes(member.subcontractorId, member.name)}
+                              className="p-1 rounded-md text-muted-foreground hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
+                              title="Notes & reminders"
+                            >
+                              <StickyNote className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <button className="p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Share contact">
@@ -3026,6 +3071,86 @@ tr:last-child td{border-bottom:none}
             <Button type="submit" variant="accent">Save Schedule</Button>
           </DialogFooter>
         </form>
+      </Dialog>
+
+      {/* Subcontractor Notes dialog (project context) */}
+      <Dialog open={!!subNotesTarget} onOpenChange={open => { if (!open) { setSubNotesTarget(null); setSubNotesList([]); setSubNoteDraft(""); setSubNoteScope("general"); } }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <StickyNote className="w-4 h-4 text-amber-600" /> Notes & Reminders — {subNotesTarget?.name}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <p className="text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">General notes</span> appear across all projects this subcontractor is linked to. <span className="font-medium text-foreground">This project only</span> notes stay here.
+          </p>
+
+          {caps.canManageSubcontractors && (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setSubNoteScope("general")}
+                  className={`flex-1 text-xs font-semibold py-1.5 rounded-lg border transition-colors ${subNoteScope === "general" ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-input hover:border-primary/50"}`}
+                >
+                  General (all projects)
+                </button>
+                <button
+                  onClick={() => setSubNoteScope("project")}
+                  className={`flex-1 text-xs font-semibold py-1.5 rounded-lg border transition-colors ${subNoteScope === "project" ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-input hover:border-primary/50"}`}
+                >
+                  This project only
+                </button>
+              </div>
+              <textarea
+                placeholder={subNoteScope === "general" ? "e.g. Insurance expires March 2027 — chase renewal…" : "e.g. Running 2 days behind on Block A…"}
+                rows={3}
+                value={subNoteDraft}
+                onChange={e => setSubNoteDraft(e.target.value)}
+                onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); submitSubNote(); } }}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+              />
+              <div className="flex justify-end">
+                <Button variant="accent" size="sm" onClick={submitSubNote} disabled={subNoteSubmitting || !subNoteDraft.trim()}>
+                  {subNoteSubmitting ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Saving…</> : <><Send className="w-3.5 h-3.5 mr-1.5" />Add Note</>}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <div className="border-t pt-3 max-h-72 overflow-y-auto -mr-1 pr-1">
+            {subNotesLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : subNotesList.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <StickyNote className="w-8 h-8 text-muted-foreground/30 mb-2" />
+                <p className="text-sm text-muted-foreground">No notes yet.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {subNotesList.map(n => (
+                  <div key={n.id} className="rounded-lg border bg-muted/30 p-3">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <p className="text-[13px] text-foreground whitespace-pre-wrap flex-1">{n.body}</p>
+                      {n.projectId ? (
+                        <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-primary/10 text-primary">This project</span>
+                      ) : (
+                        <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground">General</span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                      <Clock className="w-3 h-3" />{new Date(n.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })} · {n.authorName}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => { setSubNotesTarget(null); setSubNotesList([]); setSubNoteDraft(""); setSubNoteScope("general"); }}>Close</Button>
+        </DialogFooter>
       </Dialog>
 
       {/* Add Permit Dialog */}
