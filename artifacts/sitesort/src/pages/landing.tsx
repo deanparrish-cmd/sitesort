@@ -302,9 +302,9 @@ export default function LandingPage() {
                     Most popular
                   </div>
                 )}
-                <div className={`w-16 h-16 rounded-xl overflow-hidden flex items-center justify-center mb-4 ring-1 ${plan.highlight ? "ring-primary/30" : "ring-border"}`}>
+                <div className="w-16 h-16 rounded-xl overflow-hidden flex items-center justify-center mb-4 ring-1 ring-primary/30">
                   <img
-                    src={`${import.meta.env.BASE_URL}images/${plan.image}?v=2`}
+                    src={`${import.meta.env.BASE_URL}images/${plan.image}?v=3`}
                     alt={`SiteSort ${plan.name}`}
                     className="w-full h-full object-cover"
                   />
