@@ -196,3 +196,42 @@
 - Recall flow: `?viewphoto=1` navigates to active project's `/projects/:id?tab=photos`
 - Photos tab in project detail: colour-coded grid (thumbnail, category badge, reference number, zone, date, uploader)
 - `?tab=photos` URL param selects Photos tab on load
+
+## End-of-session notes — 2026-06-08
+
+### Tasks completed today
+
+1. **Mobile subcontractor card layout fix** — two-section card: top (avatar + info) + mobile-only bottom bar with insurance badge + action icons. Desktop unchanged.
+2. **Mobile layout fixes** — projects/index.tsx: `min-w-0 flex-1 truncate` on project name; messages/index.tsx: `min-w-0 flex-1` on thread header; compliance/index.tsx: `flex-col sm:flex-row` insurance rows.
+3. **Invoice attachment viewer** — replaced `<object>` PDF embed with file card (Open PDF button + Download link); image viewer unchanged.
+4. **File-open link audit** — 9 `<a target="_blank">` links converted to `window.open()` across compliance, insurance-cert-zone, messages, projects/detail.
+5. **Share dropdowns on photos, permits, check-ins** in project detail — Email + WhatsApp with URL normalisation.
+6. **Invoice attachment not_found fix** — orphaned GCS file nulled out on the DB row.
+
+### Notes
+- All file-open links use `window.open()` — no `<a target="_blank">` for file links
+- No `<object>` or `<iframe>` PDF embeds — use file card pattern
+- GCS `{"error":"not_found"}` = file genuinely missing, not a code bug
+
+## End-of-session notes — 2026-06-09 (share buttons + per-project compliance tab)
+
+### Tasks completed today
+
+1. **Share on mobile doc card** — added Share dropdown to the mobile card layout in the documents tab (was desktop-only).
+2. **Share across compliance page** — Expiring Permits and Pending Sign-offs got Email + WhatsApp share; responsive layouts; API returns `fileUrl` on `pendingAcknowledgments`.
+3. **Share on invoice mobile card**, **team member cards**, **subcontractor cards**.
+4. **Per-project Compliance tab** — full build-out of the previously empty Permits tab:
+   - PERMIT_TYPES list expanded (CSCS Check, IPAF, Hot Works, etc.)
+   - Tab label "Compliance", value stays `"permits"` for URL routing
+   - Permits grouped Expired/Expiring Soon/Active; Add Permit dialog; Delete endpoint
+   - Team Insurance section below permits
+
+### Notes
+- **Per-project Compliance tab** at `TabsContent value="permits"` — label "Compliance", value must stay `"permits"`
+- **PERMIT_TYPES** defined in both `detail.tsx` and `projects/index.tsx` — keep in sync
+
+## End-of-session notes — 2026-06-09 (CLAUDE.md housekeeping)
+
+- Voice features removed by user (do not re-add Web Speech API features)
+- Feature #45 (subcontractor notes) and #46 (invoice project organisation) added by Replit Agent
+- Features renumbered 1–46

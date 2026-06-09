@@ -69,7 +69,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 5. Compliance photo log (timestamped, GPS metadata, reference numbers)
 6. Subcontractor insurance monitor (valid/expiring_soon/expired)
 7. QR code site board integration
-8. Permit management (active/expiring/expired, responsible persons)
+8. Permit management (active/expiring/expired, responsible persons, certificate file attachment, Open Certificate button)
 9. Compliance center (aggregate view across projects, drag-and-drop certificate upload)
 10. Team management (admin/project_manager/site_worker/subcontractor roles)
 11. Subcontractor cards — call/email/SMS/WhatsApp action buttons, visible contact details, trade badges, notes field
@@ -106,7 +106,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 42. Email notifications — `emailNotifications` boolean on users table (default true); Settings > Notifications tab has email toggle backed by `PATCH /api/auth/me`; emails sent via Resend for: new DMs, new channel messages (per-member opt-in), permit expiry at ~7 days and ~1 day (daily server-side interval in `permit-reminders.ts`)
 43. QR site board check-in with date-stamped photo — anonymous workers scan QR code, enter name, take photo via device camera; Canvas API stamps name + date/time + project name onto image before upload; GPS captured optionally; `site_checkins` table stores record; Check-ins tab on project detail shows photo grid with worker name and timestamp; `POST /api/site/:token/checkin` (public multipart) + `GET /api/projects/:id/checkins` (auth)
 44. QR board pin management — managers pin specific documents, photos, and permits to the site board QR; `qr_board_pins` table (unique per project+type+item, cascade-delete); `GET/POST/DELETE /api/projects/:id/qr-pins`; public `GET /api/site/:token` now resolves and returns `pinnedItems` with full data (doc fileUrl, photo thumbnail, permit status); project detail QR tab shows "Board Contents" panel with thumbtack toggle per item; site-board public page shows "Pinned to this Board" section with View buttons, photo grid, and status badges
-45. Subcontractor notes/reminders log — StickyNote button on each sub card opens a "Notes & Reminders" dialog; append-only, timestamped history per subcontractor (date/time + author name); add form gated on `canManageSubcontractors`; Ctrl/Cmd+Enter submits; newest note shown first; `subcontractor_notes` table (id, subcontractorId FK, authorId FK, body, createdAt); `GET/POST /api/subcontractors/:id/notes` (tenant-scoped, IDOR-safe)
+45. Subcontractor notes/reminders log — StickyNote button on each sub card opens a "Notes & Reminders" dialog; append-only, timestamped history per subcontractor (date/time + author name); add form gated on `canManageSubcontractors`; Ctrl/Cmd+Enter submits; newest note shown first; `subcontractor_notes` table (id, subcontractorId FK, authorId FK, body, projectId FK nullable, createdAt); `GET/POST /api/subcontractors/:id/notes` (tenant-scoped, IDOR-safe); notes scoped as General (all projects) or project-specific; project Team tab has its own StickyNote button per subcontractor with a General/This-project-only toggle; directory page shows "General" or project-name badge per note
 46. Invoice project organisation — invoices linked to a project after marking as paid (popup picker); can be unlinked back to the main list; project detail shows its invoices with viewer and share actions; paid invoices can be reversed to pending; project nav tabs wrap to new lines on mobile instead of scrolling
 
 ## Uploads / File Serving
@@ -122,18 +122,45 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 
 ### 2026-05-22, 2026-05-25 & 2026-05-26 — see CLAUDE_ARCHIVE.md for full detail
 
-## End-of-session notes — 2026-06-09 (CLAUDE.md housekeeping)
+## End-of-session notes — 2026-06-09 (compliance documents + certificate attachment)
 
-### Changes made (Replit Agent work since last Claude Code session)
+### Tasks completed today
 
-- **Voice features removed** — voice search inputs, the global voice command mic button, voice dictation component, and all `?new=1`/`?recall=1`/`?photo=1`/`?dictate=1` URL-driven openers stripped from every page; `sidebar-layout.tsx` and `voice-dictation.tsx` deleted; references removed from items 13, 15, 25, 26, 27 in old features list. Features list renumbered (47 → 46 items).
-- **Subcontractor notes/reminders log** added as feature #45 — `subcontractor_notes` table; `GET/POST /api/subcontractors/:id/notes`; StickyNote dialog on each sub card.
-- **Invoice project organisation** added as feature #46 — link invoices to a project after marking paid; unlink back to main list; reverse paid→pending; project detail invoice view; mobile nav tab wrapping.
-- **AGENTS.md** created — handover doc for shell-based AI agents (Codex, Claude Code) working in the Replit environment.
+1. **Subcontractor notes project scoping (feature #45 enhancement)** — committed in-progress Replit Agent work:
+   - `subcontractor_notes.projectId` nullable FK added (DB already pushed)
+   - API `GET ?projectId=` filter returns general + project-scoped notes together; POST accepts `projectId`
+   - Directory page shows "General" or project-name pill badge per note
+   - Project Team tab: StickyNote button on each subcontractor member opens a notes dialog with "General (all projects)" / "This project only" scope toggle
+
+2. **Compliance Documents section in project compliance tab** — new section between Permits list and Team Insurance:
+   - Shows documents of type `permit`, `safety`, `method_statement` from the project
+   - Empty state is a dashed drop zone; clicking opens the upload dialog pre-set to "Permit" type
+   - Each doc row: Open button + Share dropdown (Email, WhatsApp, Share with project team) — reuses existing `setSharingDoc` dialog
+   - When docs exist, "Upload another document" dashed button at bottom
+
+3. **Certificate attachment on Add Permit dialog** — `FileDropZone` field added (optional):
+   - Saves URL to `permits.document_url` column (already existed in DB and API)
+   - Permit rows with a certificate show an **Open Certificate** button
+   - Email and WhatsApp share now includes the certificate URL in message body
+   - "Share with project team" opens team sharing dialog (toast if no cert attached)
+
+4. **Certificate open button on global compliance page** — `expiringPermits` in `GET /api/compliance` now returns `documentUrl`; permit rows show an **Open Certificate** button when a URL is present
+
+### Key files modified
+- `lib/db/src/schema/subcontractor_notes.ts` — `projectId` FK
+- `artifacts/api-server/src/routes/subcontractors.ts` — project-scoped notes API
+- `artifacts/api-server/src/routes/compliance.ts` — `documentUrl` added to `expiringPermits`
+- `artifacts/sitesort/src/pages/projects/detail.tsx` — notes scope dialog; compliance documents section; cert FileDropZone in Add Permit; Certificate button on permit rows
+- `artifacts/sitesort/src/pages/subcontractors/index.tsx` — General/project badge on notes
+- `artifacts/sitesort/src/pages/compliance/index.tsx` — Certificate button on permit rows
 
 ### Notes for next session
-- **Voice is gone** — do not re-add any voice/speech/Web Speech API features; user deliberately removed them
-- **Features now numbered 1–46** (3 voice items removed, 2 new items added at end)
+- **Compliance Documents filter**: shows docs of type `permit`, `safety`, `method_statement` only — drawing/general docs remain in the Documents tab
+- **`permits.document_url`** column already existed in schema; no DB migration needed for cert attachment
+- **Upload dialog pre-set**: opening upload from compliance tab calls `setValue("type", "permit")` before `setIsUploadOpen(true)` — same form as Documents tab
+- **API server does NOT hot-reload** — after editing any backend file: `pnpm --filter @workspace/api-server run build` then restart node process
+- **GitHub push command**: `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts`
+- All commits are on `main`
 
 ## End-of-session notes — 2026-06-10
 
@@ -161,107 +188,4 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 - **GitHub push command**: `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts`
 - All commits are on `main`
 
-## End-of-session notes — 2026-06-09
-
-### Tasks completed today
-
-1. **CLAUDE.md maintenance** — trimmed file from 30k+ chars to 24k by moving 2026-06-05 and 2026-05-27 session logs to CLAUDE_ARCHIVE.md
-
-2. **Share button on documents mobile card** — the documents tab in project detail has two layouts (mobile card `block lg:hidden` + desktop table `hidden lg:block`); Share dropdown (Email / WhatsApp / Share with project team) existed only in the desktop table; added matching Share dropdown to the mobile card action row
-
-3. **Share added across compliance page** — all three compliance sections now have share on mobile:
-   - **Expiring Insurance** — already had share ✓
-   - **Expiring Permits** — added Email + WhatsApp share (permit type, project, expiry); layout made responsive (`flex-col sm:flex-row` like insurance rows)
-   - **Pending Sign-offs** — added Open button + Email/WhatsApp share with document link; layout made responsive; API extended to return `fileUrl` on `pendingAcknowledgments`
-
-4. **Share on invoice mobile card** — desktop table had Share dropdown; mobile card had only a "File" open button; added Email/WhatsApp Share dropdown to mobile card with `e.stopPropagation()` to prevent opening the viewer
-
-5. **Share on team member cards** — both the `/team` page and the project detail Team tab; Share2 icon added to card top-right corner; Email + WhatsApp with name, role, trades, email, phone
-
-6. **Share on subcontractor cards** — Email/WhatsApp Share dropdown added to both the desktop action icon bar and the mobile bottom action bar; content includes company name, contact name, email, phone, trades
-
-7. **Per-project Compliance tab** — the "Permits" tab in project detail was listed but had no content; built it out as a full per-project Compliance tab:
-   - Updated `PERMIT_TYPES` list across project detail and projects index to include: `"CSCS Check"`, `"IPAF Certificate"`, `"Hot Works"`, `"Working at Heights"`, `"Scaffolding Inspection"`, `"Confined Space Entry"`, `"Excavation"`, `"Electrical Isolation"`, `"Demolition"`, `"Asbestos"`, `"Method Statement"`, `"Other"`
-   - Tab label changed from "Permits" to "Compliance" (tab value stays `"permits"` to avoid breaking URL routing)
-   - Permits grouped by status: Expired (red), Expiring Soon (amber), Active (green)
-   - Each permit row: type badge, description, responsible person, start/expiry dates, status badge, Share dropdown (Email/WhatsApp), Delete button
-   - "Add Permit" Dialog: type selector from PERMIT_TYPES, description, responsible person (team selector), start/expiry dates
-   - `submitNewPermit()` POSTs to `/api/projects/:id/permits`; `deletePermit(id)` DELETEs `/api/permits/:id`
-   - Team Insurance section below permits shows each member with their PLI cert status
-   - `DELETE /permits/:permitId` endpoint added to `permits.ts` — verifies permit belongs to user's company before deleting
-
-### Key files modified
-- `artifacts/sitesort/src/pages/projects/detail.tsx` — Share in mobile doc card; Share on project Team tab member cards; full Compliance tab; Add Permit dialog; `deletePermit()` + `submitNewPermit()`; `PERMIT_TYPES` constant
-- `artifacts/sitesort/src/pages/projects/index.tsx` — updated `PERMIT_TYPES` list; default reset `"Hot Works"`
-- `artifacts/sitesort/src/pages/compliance/index.tsx` — Share on permits + sign-offs; responsive layouts
-- `artifacts/sitesort/src/pages/invoices/index.tsx` — Share on mobile invoice card
-- `artifacts/sitesort/src/pages/team/index.tsx` — Share on team member cards
-- `artifacts/sitesort/src/pages/subcontractors/index.tsx` — Share on sub cards (desktop + mobile)
-- `artifacts/api-server/src/routes/compliance.ts` — `fileUrl` added to `pendingAcknowledgments` response
-- `artifacts/api-server/src/routes/permits.ts` — `DELETE /permits/:permitId` endpoint added
-
-### Notes for next session
-- **Share pattern is now consistent across all entities** — DropdownMenu with `<Mail>` (mailto:) and `<MessageCircle>` (wa.me) items; always use `window.open()` not `<a target="_blank">`
-- **Two-layout pages** (mobile card + desktop table): documents tab, invoices — any new actions added to one must be added to both
-- **Per-project Compliance tab** at `TabsContent value="permits"` in project detail — tab label is "Compliance" but value must stay `"permits"` to keep URL routing intact
-- **PERMIT_TYPES** defined in both `detail.tsx` and `projects/index.tsx` — keep in sync
-- **API server does NOT hot-reload** — after editing any backend file: `pnpm --filter @workspace/api-server run build` then restart node process
-- **GitHub push command**: `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts`
-- All commits are on `main`
-
-## End-of-session notes — 2026-06-08
-
-### Tasks completed today
-
-1. **Mobile subcontractor card layout fix** — phone number was overlapping action icons in the single horizontal flex row:
-   - Restructured each card into two sections: top (avatar + stacked text info with no competing elements) and a mobile-only bottom bar (`flex sm:hidden`) with insurance badge on the left and all action icons (call/SMS/WhatsApp/email + folder/invite/edit) on the right
-   - Desktop single-row layout unchanged (`hidden sm:flex`)
-
-2. **Additional mobile layout fixes** (found via audit of all pages):
-   - `projects/index.tsx`: project name div missing `min-w-0 flex-1 truncate` — long names pushed status badge off-screen on mobile
-   - `messages/index.tsx`: thread header name container missing `min-w-0 flex-1` — long contact name could collide with Manager View badge
-   - `compliance/index.tsx`: insurance rows changed from always-horizontal to `flex-col sm:flex-row` with `flex-wrap` on the right side (date + badge + 4 action links were overflowing on mobile)
-
-3. **Invoice attachment viewer fix** — `<object data="...pdf">` was rendering blank on mobile and in sandboxed iframe environments; Chrome's fallback content inside `<object>` is never shown:
-   - Replaced with a reliable file card UI: PDF icon + "Open PDF" button (`window.open()`) + "Download" anchor (`<a href download>`)
-   - Same card pattern for non-image/non-PDF file types; image viewer unchanged
-
-4. **Systematic file-open link audit** — found 9 remaining `<a target="_blank">` file links that could be suppressed in sandboxed environments:
-   - `compliance/index.tsx`: insurance certificate open icon
-   - `insurance-cert-zone.tsx`: PLI cert open icon (collapsed + expanded states)
-   - `messages/index.tsx`: invoice attachment, DM doc/permit "View" links, channel doc/permit "View" links (5 links)
-   - `projects/detail.tsx`: documents tab "Open", distribution table "Open", sharing dialog "Open document"
-   - All converted to `window.open()` via `onClick` — consistent with codebase standard
-
-5. **Share (Email + WhatsApp) added to photos, permits, and check-ins** in project detail:
-   - **Photos tab**: Share dropdown (DropdownMenu) in card footer; email includes ref number, category, description, zone, date, and URL; thumbnail click now opens full-size via `window.open()`
-   - **Permits section**: Share dropdown on each permit row (right side); email/WhatsApp includes type, description, expiry, status label, responsible person, project name
-   - **Check-ins tab**: Share dropdown in card footer alongside date/time; email/WhatsApp includes worker name, date, time, project, and stamped photo URL; photo thumbnail click opens full-size
-   - URL normalisation consistent throughout: `.replace(/^\/uploads\//, "/api/uploads/")` then absolute URL via `window.location.origin`
-
-6. **Invoice attachment `{"error":"not_found"}` investigation**:
-   - GCS confirmed working — `GET /api/uploads/:filename` streams correctly for files that exist
-   - Specific PDF `dccbf650-91e2-4597-8cb9-a3e17a098003.pdf` was missing from GCS (uploaded in an earlier session when storage may have been configured differently; file permanently lost)
-   - Fixed by nulling out the orphaned `attachment_url` on that invoice row — UI now shows "Attach document" so user can re-upload
-   - All other attachments tested and confirmed working
-
-### Key files modified
-- `artifacts/sitesort/src/pages/subcontractors/index.tsx` — two-section mobile card layout
-- `artifacts/sitesort/src/pages/projects/index.tsx` — min-w-0/truncate on mobile project name
-- `artifacts/sitesort/src/pages/messages/index.tsx` — thread header min-w-0; file-open links → window.open()
-- `artifacts/sitesort/src/pages/compliance/index.tsx` — responsive insurance rows; cert link → window.open()
-- `artifacts/sitesort/src/pages/invoices/index.tsx` — replaced `<object>` PDF embed with file card UI
-- `artifacts/sitesort/src/pages/projects/detail.tsx` — doc open links → window.open(); share dropdowns on photos, permits, check-ins
-- `artifacts/sitesort/src/components/ui/insurance-cert-zone.tsx` — cert view links → window.open()
-
-### Notes for next session
-- **Good next features**: demo data seeder, per-project dashboard mini-view
-- **All file-open links now use `window.open()`** — do NOT use `<a target="_blank">` for file links; it's blocked in Replit's sandboxed webview
-- **No `<object>` or `<iframe>` PDF embeds** — these fail silently on mobile and in sandboxed environments; use the file card pattern (icon + Open button + Download link) instead
-- **Share pattern**: use `DropdownMenu` with Email (`window.open("mailto:?subject=...&body=...")`) and WhatsApp (`window.open("https://wa.me/?text=...")`) items; always normalise file URLs before including them
-- **GCS file serving**: `GET /api/uploads/:filename` streams from GCS bucket `replit-objstore-8ff09467-8d72-4a2a-902a-af340cf33a56` with prefix `.private`; `objectKey(filename)` → `.private/uploads/<filename>`; `{"error":"not_found"}` means the file genuinely doesn't exist in GCS (not a code bug)
-- **API server does NOT hot-reload** — after editing any backend file: `pnpm --filter @workspace/api-server run build` then restart node process
-- **GitHub push command**: `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts`
-- All commits are on `main`
-
-## End-of-session notes — 2026-06-05, 2026-05-27 & 2026-06-06 — see CLAUDE_ARCHIVE.md for full detail
+## End-of-session notes — 2026-06-05, 2026-05-27, 2026-06-06, 2026-06-08 & 2026-06-09 — see CLAUDE_ARCHIVE.md for full detail
