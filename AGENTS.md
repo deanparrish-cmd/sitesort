@@ -1,0 +1,111 @@
+# AGENTS.md — SiteSort handover for AI coding assistants
+
+This file briefs a shell-based AI coding agent (Codex, Claude Code, etc.) working on
+this project inside the Replit environment. Read it fully before making changes.
+
+## What this project is
+
+**SiteSort** — a full-stack construction site information management SaaS for SME
+construction companies (UK). It is a pnpm monorepo written in TypeScript.
+
+- **API**: Express 5, served under `/api`, listens on port **8080**.
+- **Frontend**: React + Vite (`@workspace/sitesort`), dev server on port **18299**, served at `/`.
+- **Database**: PostgreSQL via Drizzle ORM. Connection comes from the `DATABASE_URL` env var.
+- **Auth**: JWT. Token is stored in the browser as `sitesort_token` in `localStorage` and
+  sent as `Authorization: Bearer <token>`. The server signs with `JWT_SECRET`.
+- **Billing**: Stripe.
+- **API codegen**: Orval generates React Query hooks + Zod schemas from an OpenAPI spec.
+
+The end user is **non-technical**. When explaining things in chat, use plain English.
+
+## Environment: this runs on Replit — do NOT recreate it
+
+The database, secrets, run commands and hosting are all managed by Replit. You do **not**
+need to set up Postgres, create `.env` files, or configure deployment. The required secrets
+(`DATABASE_URL`, `JWT_SECRET`, Stripe keys, object-storage settings, `APP_URL`) are already
+present in the shell environment — read them via `process.env`, never hardcode or print them.
+
+Some things are Replit-specific and are best left to the Replit Agent rather than a shell
+agent:
+- Starting/stopping the app ("workflows"), the live preview, and publishing/deployment.
+- Adding or changing secrets.
+- Database checkpoints / rollbacks.
+
+If you hit one of those, tell the user to ask the Replit Agent.
+
+## Repository layout
+
+```text
+artifacts/
+  api-server/   # Express API (port 8080, served at /api). Bundled with esbuild.
+  sitesort/     # React + Vite frontend (port 18299, served at /).
+lib/
+  api-spec/         # OpenAPI spec + Orval codegen config
+  api-client-react/ # Generated React Query hooks (do not hand-edit generated files)
+  api-zod/          # Generated Zod schemas (do not hand-edit generated files)
+  db/               # Drizzle schema + DB connection
+scripts/            # Utility scripts
+pnpm-workspace.yaml
+tsconfig.base.json  # shared TS options
+tsconfig.json       # root TS project references
+package.json        # root
+```
+
+## Commands you will actually use
+
+Always run from the repo root. **Use `pnpm` only** — npm/yarn are blocked.
+
+| Task | Command |
+| --- | --- |
+| Install deps | `pnpm install` |
+| Typecheck everything | `pnpm run typecheck` |
+| Run API codegen (after editing the OpenAPI spec) | `pnpm --filter @workspace/api-spec run codegen` |
+| Push DB schema changes | `pnpm --filter @workspace/db run push` |
+| Start the API (dev) | `pnpm --filter @workspace/api-server run dev` |
+| Start the frontend (dev) | `pnpm --filter @workspace/sitesort run dev` |
+| Typecheck just the API | `pnpm --filter @workspace/api-server run typecheck` |
+| Typecheck just the frontend | `pnpm --filter @workspace/sitesort run typecheck` |
+
+Note: the API `dev` script runs a full `build` (esbuild) then `start`, and the build step
+also builds the frontend. The frontend `dev` script is Vite with hot reload.
+
+## How to make common changes
+
+- **Add/modify an API endpoint**: edit the relevant file in `artifacts/api-server/src/routes/`.
+  Every endpoint must be company-scoped — check the resource belongs to `req.user.companyId`
+  before reading or writing it (this prevents one company seeing another's data). Take the
+  acting user from `req.user.id`, never from the request body.
+- **Add/modify a database table**: edit/add a schema file in `lib/db/src/schema/`, export it
+  from `lib/db/src/schema/index.ts`, then run `pnpm --filter @workspace/db run push`.
+- **Frontend pages/components**: live in `artifacts/sitesort/src/`. Pages are under
+  `src/pages/<feature>/`. UI uses Tailwind + lucide-react icons. React Query for data.
+
+## Known gotchas (will save you time)
+
+- **Stale type definitions after a schema or codegen change**: after editing `lib/db` schema
+  or running API codegen, the TypeScript checker can report phantom "property does not exist"
+  errors in code that consumes the library, even though the app runs fine at runtime. Rebuild
+  the library's type definitions before trusting `tsc`:
+  `pnpm --filter @workspace/db exec tsc -p tsconfig.json`, then re-run the typecheck.
+- **Pre-existing typecheck noise**: `pnpm run typecheck` currently surfaces a handful of
+  long-standing, runtime-safe errors (some Drizzle `.update`/`.insert` overload warnings in
+  the API, a duplicate-export note in `api-zod`, and a few in the `sitesort` UI). These are a
+  known baseline — only chase NEW errors that name the files you actually changed.
+- **Generated files**: anything in `lib/api-client-react/` and `lib/api-zod/` is generated by
+  Orval. Don't hand-edit it — change the OpenAPI spec in `lib/api-spec/` and re-run codegen.
+- **Use Git as your safety net**: a shell agent doesn't create Replit checkpoints, so commit
+  before and after meaningful changes. This repo is connected to GitHub.
+
+## House rules (the user's preferences)
+
+- Do exactly what's asked — nothing more, nothing less. Don't add speculative features.
+- Don't over-engineer. Prefer the simplest change that fits the existing patterns.
+- Keep the existing file/folder structure and conventions.
+- Explain what you did in plain, non-technical English.
+- Never display or hardcode secret values.
+
+## Test / demo login
+
+- Email: `paul@acme.com`
+- Password: `password123`
+- Company: Acme Construction
