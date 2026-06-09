@@ -28,7 +28,16 @@ const upload = multer({
   },
 });
 
-router.post("/upload", authenticate, upload.single("file"), async (req: Request, res: Response) => {
+router.post("/upload", authenticate, (req: Request, res: Response, next) => {
+  upload.single("file")(req, res, (err) => {
+    if (err) {
+      // multer errors (file type, size limit) must be caught here — they bypass the route handler
+      res.status(400).json({ error: "upload_error", message: err.message ?? "Upload failed" });
+      return;
+    }
+    next();
+  });
+}, async (req: Request, res: Response) => {
   if (!req.file) {
     res.status(400).json({ error: "validation_error", message: "No file provided" });
     return;
