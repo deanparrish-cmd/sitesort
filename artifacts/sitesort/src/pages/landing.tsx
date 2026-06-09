@@ -274,12 +274,14 @@ export default function LandingPage() {
                 name: "Solo",
                 tagline: "Perfect for a single site",
                 price: "£29",
+                image: "plan-solo.jpeg",
                 features: ["1 active project", "Unlimited team members", "Document version control", "QR site boards", "Compliance tracking"],
               },
               {
                 name: "Team",
                 tagline: "For growing contractors",
                 price: "£79",
+                image: "plan-team.jpeg",
                 features: ["Up to 5 active projects", "Unlimited team members", "Document version control", "QR site boards", "Compliance tracking"],
                 highlight: true,
               },
@@ -287,6 +289,7 @@ export default function LandingPage() {
                 name: "Pro",
                 tagline: "Full access to every feature",
                 price: "£149",
+                image: "plan-pro.jpeg",
                 features: ["Unlimited projects", "Unlimited team members", "Document version control", "QR site boards", "Compliance tracking"],
               },
             ].map(plan => (
@@ -299,8 +302,12 @@ export default function LandingPage() {
                     Most popular
                   </div>
                 )}
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-4 ${plan.highlight ? "bg-gradient-to-br from-orange-500 to-orange-600" : "bg-muted"}`}>
-                  <Sparkles className={`w-5 h-5 ${plan.highlight ? "text-white" : "text-muted-foreground"}`} />
+                <div className={`w-16 h-16 rounded-xl overflow-hidden flex items-center justify-center mb-4 ring-1 ${plan.highlight ? "ring-primary/30" : "ring-border"}`}>
+                  <img
+                    src={`${import.meta.env.BASE_URL}images/${plan.image}`}
+                    alt={`SiteSort ${plan.name}`}
+                    className="w-full h-full object-cover"
+                  />
                 </div>
                 <h3 className="text-lg font-bold text-foreground">SiteSort {plan.name}</h3>
                 <p className="text-sm text-muted-foreground mb-4">{plan.tagline}</p>
