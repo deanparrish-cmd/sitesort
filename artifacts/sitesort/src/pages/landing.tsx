@@ -171,7 +171,8 @@ export default function LandingPage() {
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-primary mb-4">Everything you need to run a safe site</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto text-lg">
-              Replace disjointed WhatsApp groups and overflowing email inboxes with purpose-built tools.
+              Replace disjointed WhatsApp groups, overflowing email inboxes and paper files with
+              purpose-built tools, showing only relevant and up to date information.
             </p>
           </div>
 
