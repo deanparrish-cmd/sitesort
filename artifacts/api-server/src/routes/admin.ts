@@ -12,6 +12,17 @@ import {
   notificationsTable,
   projectsTable,
   subcontractorsTable,
+  projectMembersTable,
+  messagesTable,
+  channelMessagesTable,
+  channelReadsTable,
+  invoicesTable,
+  shareLogsTable,
+  subcontractorNotesTable,
+  milestonesTable,
+  siteCheckinsTable,
+  qrBoardPinsTable,
+  acknowledgmentAuditTable,
 } from "@workspace/db/schema";
 import { eq, gte, lt, and, desc, sql, count, isNotNull, inArray } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
@@ -747,6 +758,80 @@ router.patch("/admin/companies/:id/beta-access", authenticate, requireAdmin, asy
   } catch (err) {
     req.log.error({ err }, "Admin toggle beta access error");
     res.status(500).json({ error: "server_error", message: "Failed to update beta access" });
+  }
+});
+
+router.delete("/admin/companies/:id", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const companyId = req.params.id as string;
+    const rows = await db.select({ id: companiesTable.id })
+      .from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
+    if (!rows[0]) {
+      res.status(404).json({ error: "not_found", message: "Company not found" });
+      return;
+    }
+
+    // Get project and subcontractor IDs first for cascading deletes
+    const projects = await db.select({ id: projectsTable.id }).from(projectsTable).where(eq(projectsTable.companyId, companyId));
+    const projectIds = projects.map(p => p.id);
+    const subs = await db.select({ id: subcontractorsTable.id }).from(subcontractorsTable).where(eq(subcontractorsTable.companyId, companyId));
+    const subIds = subs.map(s => s.id);
+    const users = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.companyId, companyId));
+    const userIds = users.map(u => u.id);
+
+    await db.transaction(async (tx) => {
+      // Share logs
+      await tx.delete(shareLogsTable).where(eq(shareLogsTable.companyId, companyId));
+      // Messages & channels
+      await tx.delete(messagesTable).where(eq(messagesTable.companyId, companyId));
+      await tx.delete(channelMessagesTable).where(eq(channelMessagesTable.companyId, companyId));
+      // Invoices
+      await tx.delete(invoicesTable).where(eq(invoicesTable.companyId, companyId));
+      // Notifications + acknowledgment audit + channel reads
+      if (userIds.length) {
+        await tx.delete(notificationsTable).where(inArray(notificationsTable.userId, userIds));
+        await tx.delete(acknowledgmentAuditTable).where(inArray(acknowledgmentAuditTable.userId, userIds));
+        await tx.delete(channelReadsTable).where(inArray(channelReadsTable.userId, userIds));
+      }
+      // Subcontractor notes
+      if (subIds.length) await tx.delete(subcontractorNotesTable).where(inArray(subcontractorNotesTable.subcontractorId, subIds));
+      if (userIds.length) {
+        const userNotes = await tx.select({ id: subcontractorNotesTable.id }).from(subcontractorNotesTable).where(inArray(subcontractorNotesTable.authorId, userIds));
+        if (userNotes.length) await tx.delete(subcontractorNotesTable).where(inArray(subcontractorNotesTable.id, userNotes.map(n => n.id)));
+      }
+      // Insurance records
+      if (subIds.length) await tx.delete(insuranceRecordsTable).where(inArray(insuranceRecordsTable.subcontractorId, subIds));
+      // Project-scoped data
+      if (projectIds.length) {
+        await tx.delete(qrBoardPinsTable).where(inArray(qrBoardPinsTable.projectId, projectIds));
+        await tx.delete(milestonesTable).where(inArray(milestonesTable.projectId, projectIds));
+        await tx.delete(siteCheckinsTable).where(inArray(siteCheckinsTable.projectId, projectIds));
+        await tx.delete(photosTable).where(inArray(photosTable.projectId, projectIds));
+        await tx.delete(permitsTable).where(inArray(permitsTable.projectId, projectIds));
+        await tx.delete(qrCodesTable).where(inArray(qrCodesTable.projectId, projectIds));
+
+        // Documents (with distributions + audit)
+        const docs = await tx.select({ id: documentsTable.id }).from(documentsTable).where(inArray(documentsTable.projectId, projectIds));
+        const docIds = docs.map(d => d.id);
+        if (docIds.length) {
+          await tx.delete(documentDistributionsTable).where(inArray(documentDistributionsTable.documentId, docIds));
+          await tx.delete(acknowledgmentAuditTable).where(inArray(acknowledgmentAuditTable.documentId, docIds));
+        }
+        await tx.delete(documentsTable).where(inArray(documentsTable.projectId, projectIds));
+        await tx.delete(projectMembersTable).where(inArray(projectMembersTable.projectId, projectIds));
+      }
+      // Projects, subcontractors, users
+      if (projectIds.length) await tx.delete(projectsTable).where(inArray(projectsTable.id, projectIds));
+      if (subIds.length) await tx.delete(subcontractorsTable).where(inArray(subcontractorsTable.id, subIds));
+      if (userIds.length) await tx.delete(usersTable).where(inArray(usersTable.id, userIds));
+      // Finally the company
+      await tx.delete(companiesTable).where(eq(companiesTable.id, companyId));
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Admin delete company error");
+    res.status(500).json({ error: "server_error", message: "Failed to delete company" });
   }
 });
 
