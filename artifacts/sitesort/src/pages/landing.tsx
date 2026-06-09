@@ -96,6 +96,11 @@ export default function LandingPage() {
       <main id="top" className="pt-32 pb-16 lg:pt-44 lg:pb-28 overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="text-center max-w-3xl mx-auto slide-up">
+            <img
+              src={builtForBeam}
+              alt="Built for UK construction SMEs"
+              className="mx-auto w-full max-w-xl md:max-w-2xl h-auto mb-10 drop-shadow-xl"
+            />
             <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold text-primary tracking-tight mb-8 leading-tight">
               Control the chaos of <br className="hidden sm:block" />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-800 to-orange-400">site information.</span>
@@ -104,11 +109,6 @@ export default function LandingPage() {
               The single source of truth for your site teams. Distribute the right documents,
               track compliance, and keep subcontractors current — without the paperwork headache.
             </p>
-            <img
-              src={builtForBeam}
-              alt="Built for UK construction SMEs"
-              className="mx-auto h-14 sm:h-16 md:h-20 w-auto mb-10 drop-shadow-xl"
-            />
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link href={registerHref} className="w-full sm:w-auto">
                 <Button size="lg" variant="accent" className="w-full sm:w-auto group">
