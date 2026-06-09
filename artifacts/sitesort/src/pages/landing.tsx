@@ -106,8 +106,9 @@ export default function LandingPage() {
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-800 to-orange-400">site information.</span>
             </h1>
             <p className="text-lg md:text-xl text-muted-foreground mb-10 leading-relaxed max-w-2xl mx-auto">
-              The single source of truth for your site teams. Distribute the right documents,
-              track compliance, and keep subcontractors current — without the paperwork headache.
+              All of your site information in one place. Distribute the right documents,
+              track compliance and progress without the paperwork headache. Never work from
+              the wrong drawings again.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link href={registerHref} className="w-full sm:w-auto">
