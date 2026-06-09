@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Mail, Lock, Building2, User, CreditCard } from "lucide-react";
+import { Mail, Lock, Building2, User, CreditCard, Eye, EyeOff } from "lucide-react";
 import { useRegister, RegisterRequestCompanySize } from "@workspace/api-client-react";
 import { captureAttribution } from "@/lib/attribution";
 
@@ -37,8 +37,12 @@ const registerSchema = z.object({
   companyName: z.string().min(2, "Company name is required"),
   adminName: z.string().min(2, "Your name is required"),
   email: z.string().email("Please enter a valid email"),
+  confirmEmail: z.string().email("Please confirm your email"),
   password: z.string().min(8, "Password must be at least 8 characters"),
   companySize: z.nativeEnum(RegisterRequestCompanySize),
+}).refine(data => data.email === data.confirmEmail, {
+  message: "Email addresses don't match",
+  path: ["confirmEmail"],
 });
 
 const inviteSchema = z.object({
@@ -55,6 +59,7 @@ export default function Register() {
   const [error, setError] = useState<string | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<PlanId | null>(null);
   const [redirecting, setRedirecting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const registerMutation = useRegister();
 
   // Invite flow
@@ -100,10 +105,27 @@ export default function Register() {
   const onSubmit = async (data: RegisterForm) => {
     if (!selectedPlan) return;
     setError(null);
+
+    // If user already registered this session (e.g. went back from Stripe to change plan),
+    // reuse their existing token instead of trying to register again.
+    let token: string | null = null;
+    const existingToken = localStorage.getItem("sitesort_token");
+    if (existingToken) {
+      try {
+        const payload = JSON.parse(atob(existingToken.split(".")[1]));
+        if (payload.email === data.email) token = existingToken;
+      } catch {
+        // token unreadable — fall through to register
+      }
+    }
+
     try {
-      const response = await registerMutation.mutateAsync({ data });
-      const token = response.token;
-      localStorage.setItem("sitesort_token", token);
+      if (!token) {
+        const { confirmEmail: _ignored, ...registerData } = data;
+        const response = await registerMutation.mutateAsync({ data: registerData });
+        token = response.token;
+        localStorage.setItem("sitesort_token", token);
+      }
 
       setRedirecting(true);
       const checkoutRes = await fetch("/api/billing/checkout", {
@@ -332,10 +354,30 @@ export default function Register() {
 
               <div>
                 <Input
+                  {...register("confirmEmail")}
+                  type="email"
+                  placeholder="Confirm Email"
+                  icon={<Mail className="w-5 h-5" />}
+                />
+                {errors.confirmEmail && <p className="text-destructive text-sm mt-1 ml-1">{errors.confirmEmail.message}</p>}
+              </div>
+
+              <div>
+                <Input
                   {...register("password")}
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   placeholder="Create Password"
                   icon={<Lock className="w-5 h-5" />}
+                  rightAction={
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(p => !p)}
+                      className="text-muted-foreground hover:text-foreground transition-colors"
+                      tabIndex={-1}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  }
                 />
                 {errors.password && <p className="text-destructive text-sm mt-1 ml-1">{errors.password.message}</p>}
               </div>
