@@ -52,6 +52,7 @@ router.get("/compliance", authenticate, async (req, res) => {
       permitType: string;
       expiryDate: string;
       status: string;
+      documentUrl: string | null;
     }> = [];
 
     let pendingAcknowledgments: Array<{
@@ -83,6 +84,7 @@ router.get("/compliance", authenticate, async (req, res) => {
             permitType: permit.type,
             expiryDate: permit.expiryDate,
             status,
+            documentUrl: permit.documentUrl ?? null,
           });
         }
       }

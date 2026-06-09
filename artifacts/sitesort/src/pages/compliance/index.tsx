@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 import { useCapabilities } from "@/hooks/use-capabilities";
 
 type InsuranceItem = { subcontractorId: string; subcontractorName: string; insuranceType: string; expiryDate: string; status: string; certificateUrl?: string | null };
-type PermitItem = { permitId: string; projectId: string; projectName: string; permitType: string; expiryDate: string; status: string };
+type PermitItem = { permitId: string; projectId: string; projectName: string; permitType: string; expiryDate: string; status: string; documentUrl?: string | null };
 type AckItem = { documentId: string; documentName: string; projectId: string; projectName: string; pendingCount: number; fileUrl?: string | null };
 type Sub = { id: string; companyName: string; contactName: string };
 
@@ -426,6 +426,19 @@ export default function CompliancePage() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-xs text-muted-foreground">{fmtDate(p.expiryDate)}</p>
                         <ExpiryBadge days={days} />
+                        {p.documentUrl && (() => {
+                          const norm = p.documentUrl!.replace(/^\/uploads\//, "/api/uploads/");
+                          const certUrl = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
+                          return (
+                            <button
+                              onClick={() => window.open(certUrl, "_blank", "noopener,noreferrer")}
+                              className="flex items-center gap-1 px-1.5 py-1 rounded text-primary hover:bg-primary/10 transition-colors text-xs font-medium"
+                              title="Open certificate"
+                            >
+                              <ExternalLink className="w-3 h-3" /> Certificate
+                            </button>
+                          );
+                        })()}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <button className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs" title="Share permit">
