@@ -3393,8 +3393,8 @@ tr:last-child td{border-bottom:none}
               className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="">Select person…</option>
-              {(members as any[] ?? []).map((m: any) => (
-                <option key={m.id} value={m.id}>{m.name}</option>
+              {(members as any[] ?? []).filter((m: any) => !!m.userId).map((m: any) => (
+                <option key={m.id} value={m.userId}>{m.name}</option>
               ))}
             </select>
           </div>
