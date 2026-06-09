@@ -5,9 +5,33 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Mail, Lock, Building2, User } from "lucide-react";
+import { Mail, Lock, Building2, User, CreditCard } from "lucide-react";
 import { useRegister, RegisterRequestCompanySize } from "@workspace/api-client-react";
 import { captureAttribution } from "@/lib/attribution";
+
+const PLANS = {
+  solo: {
+    name: "Solo",
+    price: "£29",
+    tagline: "Perfect for a single site",
+    features: ["1 active project", "Unlimited team members", "QR site boards"],
+  },
+  team: {
+    name: "Team",
+    price: "£79",
+    tagline: "For growing contractors",
+    features: ["Up to 5 active projects", "Unlimited team members", "QR site boards"],
+    popular: true as const,
+  },
+  pro: {
+    name: "Pro",
+    price: "£149",
+    tagline: "Full access to every feature",
+    features: ["Unlimited projects", "Unlimited team members", "QR site boards"],
+  },
+} as const;
+
+type PlanId = keyof typeof PLANS;
 
 const registerSchema = z.object({
   companyName: z.string().min(2, "Company name is required"),
@@ -29,6 +53,8 @@ type InviteData = { name: string; email: string; companyName: string };
 export default function Register() {
   const [, setLocation] = useLocation();
   const [error, setError] = useState<string | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<PlanId | null>(null);
+  const [redirecting, setRedirecting] = useState(false);
   const registerMutation = useRegister();
 
   // Invite flow
@@ -40,6 +66,10 @@ export default function Register() {
   useEffect(() => {
     captureAttribution();
     const params = new URLSearchParams(window.location.search);
+
+    const planParam = params.get("plan") as PlanId | null;
+    if (planParam && planParam in PLANS) setSelectedPlan(planParam);
+
     const token = params.get("invite");
     if (!token) return;
     setInviteToken(token);
@@ -68,12 +98,35 @@ export default function Register() {
   }, [inviteData, setInviteValue]);
 
   const onSubmit = async (data: RegisterForm) => {
+    if (!selectedPlan) return;
     setError(null);
     try {
       const response = await registerMutation.mutateAsync({ data });
-      localStorage.setItem("sitesort_token", response.token);
+      const token = response.token;
+      localStorage.setItem("sitesort_token", token);
+
+      setRedirecting(true);
+      const checkoutRes = await fetch("/api/billing/checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({ plan: selectedPlan }),
+      });
+
+      if (checkoutRes.ok) {
+        const json = await checkoutRes.json();
+        if (json.url) {
+          window.location.href = json.url;
+          return;
+        }
+      }
+
+      // Stripe not configured — go straight to dashboard
       setLocation("/dashboard");
     } catch (err: any) {
+      setRedirecting(false);
       setError(err.message || "Registration failed. Please try again.");
     }
   };
@@ -99,6 +152,9 @@ export default function Register() {
     }
   };
 
+  const plan = selectedPlan ? PLANS[selectedPlan] : null;
+  const isSubmitting = registerMutation.isPending || redirecting;
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted/30 relative py-12">
       <div className="absolute inset-0 z-0 opacity-20">
@@ -123,8 +179,14 @@ export default function Register() {
             </>
           ) : (
             <>
-              <h1 className="text-3xl font-display font-bold text-primary">Create Account</h1>
-              <p className="text-muted-foreground mt-2">Get started with SiteSort</p>
+              <h1 className="text-3xl font-display font-bold text-primary">
+                {selectedPlan ? "Create Account" : "Start free trial"}
+              </h1>
+              <p className="text-muted-foreground mt-2 text-center">
+                {selectedPlan
+                  ? `SiteSort ${plan!.name} — ${plan!.price}/month`
+                  : "Choose your plan, then add your details"}
+              </p>
             </>
           )}
         </div>
@@ -168,10 +230,63 @@ export default function Register() {
           </form>
         )}
 
-        {/* Normal registration flow */}
-        {!inviteToken && (
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-            <div className="space-y-5">
+        {/* Plan selection — shown when no plan chosen yet */}
+        {!inviteToken && !selectedPlan && (
+          <div className="space-y-3">
+            {(Object.entries(PLANS) as [PlanId, (typeof PLANS)[PlanId]][]).map(([id, p]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setSelectedPlan(id)}
+                className={`w-full text-left rounded-xl border-2 px-5 py-4 transition-all hover:border-primary/60 hover:shadow-sm ${
+                  "popular" in p && p.popular
+                    ? "border-primary/30 bg-gradient-to-br from-orange-50/50 to-amber-50/30"
+                    : "border-border bg-card"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-semibold text-foreground flex items-center gap-2">
+                      SiteSort {p.name}
+                      {"popular" in p && p.popular && (
+                        <span className="text-[10px] font-semibold uppercase tracking-wide bg-orange-500 text-white px-2 py-0.5 rounded-full">
+                          Popular
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-sm text-muted-foreground mt-0.5">{p.tagline}</div>
+                  </div>
+                  <div className="text-right shrink-0 ml-4">
+                    <div className="font-bold text-foreground text-lg">{p.price}</div>
+                    <div className="text-xs text-muted-foreground">/month</div>
+                  </div>
+                </div>
+              </button>
+            ))}
+            <p className="text-center text-xs text-muted-foreground pt-2">
+              14-day free trial on every plan. No charge until it ends.
+            </p>
+          </div>
+        )}
+
+        {/* Account details form — shown once a plan is selected */}
+        {!inviteToken && selectedPlan && (
+          <>
+            <div className="flex items-center justify-between mb-6 px-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-lg">
+              <div className="text-sm">
+                <span className="font-semibold text-emerald-900">SiteSort {plan!.name}</span>
+                <span className="text-emerald-700"> · {plan!.price}/mo · 14-day free trial</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedPlan(null)}
+                className="text-xs text-emerald-700 hover:text-emerald-900 underline underline-offset-2 shrink-0 ml-3"
+              >
+                Change
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
               <div>
                 <Input
                   {...register("companyName")}
@@ -194,7 +309,7 @@ export default function Register() {
                 {errors.companySize && <p className="text-destructive text-sm mt-1 ml-1">{errors.companySize.message}</p>}
               </div>
 
-              <div className="h-px bg-border my-4"></div>
+              <div className="h-px bg-border my-1"></div>
 
               <div>
                 <Input
@@ -224,12 +339,16 @@ export default function Register() {
                 />
                 {errors.password && <p className="text-destructive text-sm mt-1 ml-1">{errors.password.message}</p>}
               </div>
-            </div>
 
-            <Button type="submit" variant="accent" className="w-full mt-8" size="lg" isLoading={registerMutation.isPending}>
-              Create Account
-            </Button>
-          </form>
+              <Button type="submit" variant="accent" className="w-full mt-6" size="lg" isLoading={isSubmitting}>
+                <CreditCard className="w-4 h-4 mr-2" />
+                {redirecting ? "Redirecting to payment…" : "Start free trial"}
+              </Button>
+              <p className="text-center text-xs text-muted-foreground -mt-1">
+                No charge for 14 days. Then {plan!.price}/month. Cancel any time.
+              </p>
+            </form>
+          </>
         )}
 
         <div className="mt-8 text-center text-sm text-muted-foreground">

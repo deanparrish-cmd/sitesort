@@ -315,12 +315,12 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
-                <Link href={registerHref}>
+                <a href={withAttribution(`/register?plan=${plan.name.toLowerCase()}`)}>
                   <Button variant={plan.highlight ? "default" : "outline"} className="w-full gap-2">
                     <CreditCard className="w-4 h-4" />
                     Start free trial
                   </Button>
-                </Link>
+                </a>
                 <p className="text-[11px] text-muted-foreground text-center mt-2">Then {plan.price}/month. Cancel any time.</p>
               </div>
             ))}

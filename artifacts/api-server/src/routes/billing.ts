@@ -62,8 +62,8 @@ router.post("/billing/checkout", authenticate, async (req, res) => {
           quantity: 1,
         },
       ],
-      success_url: `${APP_URL}/settings?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${APP_URL}/settings?checkout=cancelled`,
+      success_url: `${APP_URL}/dashboard?checkout=success`,
+      cancel_url: `${APP_URL}/register`,
       payment_method_collection: "always",
       subscription_data: {
         trial_period_days: 14,
