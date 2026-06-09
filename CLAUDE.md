@@ -188,4 +188,37 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 - **GitHub push command**: `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts`
 - All commits are on `main`
 
+## End-of-session notes — 2026-06-10 (sign-up flow fixes + drag-and-drop)
+
+### Tasks completed today
+
+1. **Sign-up flow fixes** — three improvements to `artifacts/sitesort/src/pages/auth/register.tsx`:
+   - **"Email already registered" on plan change**: when a user goes back from Stripe Checkout to change plan, their JWT is already in localStorage. `onSubmit` now decodes the token, checks `payload.email === data.email`, and if matched skips `registerMutation` entirely — goes straight to a new `/api/billing/checkout` call for the new plan. No duplicate-email error.
+   - **Confirm email field**: added `confirmEmail` to Zod schema with `.refine()` match check; field rendered below email input; `confirmEmail` stripped before API call (backend never sees it)
+   - **Password visibility toggle**: `Eye`/`EyeOff` icons via new `rightAction` prop on the `Input` component (`artifacts/sitesort/src/components/ui/input.tsx`); `showPassword` state toggles `type="text"/"password"`
+
+2. **Drag-and-drop file upload fixed globally**:
+   - **Dialog backdrop** (`artifacts/sitesort/src/components/ui/dialog.tsx`): backdrop is now `pointer-events-none` so it never intercepts drag/drop events; click-to-close moved to outer wrapper with `e.target === e.currentTarget` guard
+   - **FileDropZone** (`artifacts/sitesort/src/components/ui/file-drop-zone.tsx`): added document-level `dragover` + `drop` prevention handlers while mounted — ensures "allow drop" cursor and prevents browser file-navigation anywhere the component is visible
+   - **InsuranceCertZone** (`artifacts/sitesort/src/components/ui/insurance-cert-zone.tsx`): same document-level handlers while `expanded === true`
+   - **Upload route multer errors** (`artifacts/api-server/src/routes/upload.ts`): wrapped `upload.single()` in a callback so multer rejections (file type, size) return JSON `{error, message}` instead of an HTML error page — frontend now shows the real reason (e.g. "File type not allowed: image/heic") instead of generic "Upload failed"
+
+3. **Database cleanup** — deleted 4 automated test accounts (`@test.com`) from the companies/users tables
+
+### Key files modified
+- `artifacts/sitesort/src/pages/auth/register.tsx` — plan-change token reuse, confirm email, password eye icon
+- `artifacts/sitesort/src/components/ui/input.tsx` — `rightAction` prop
+- `artifacts/sitesort/src/components/ui/dialog.tsx` — `pointer-events-none` backdrop
+- `artifacts/sitesort/src/components/ui/file-drop-zone.tsx` — document-level drag handlers
+- `artifacts/sitesort/src/components/ui/insurance-cert-zone.tsx` — document-level drag handlers
+- `artifacts/api-server/src/routes/upload.ts` — multer JSON error handling
+
+### Notes for next session
+- **API server rebuild**: after any backend change run `pnpm --filter @workspace/api-server run build`, then start with `PORT=8080 node artifacts/api-server/dist/index.mjs`
+- **API server dist**: outputs to `artifacts/api-server/dist/index.mjs` (ESM, not CJS)
+- **Replit auto-manages the server** — don't kill/restart manually unless necessary
+- **GitHub push command**: `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts`
+- **Remaining test accounts in DB**: Acme Construction (demo), Beta Builds (bob@betabuilds.com), Test SiteSort (amy-parrish@hotmail.co.uk), Test SiteSort 2 (dean.parrish@me.com)
+- All commits are on `main`
+
 ## End-of-session notes — 2026-06-05, 2026-05-27, 2026-06-06, 2026-06-08 & 2026-06-09 — see CLAUDE_ARCHIVE.md for full detail
