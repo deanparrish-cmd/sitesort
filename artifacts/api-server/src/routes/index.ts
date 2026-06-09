@@ -21,6 +21,7 @@ import channelsRouter from "./channels";
 import billingRouter from "./billing";
 import onboardingRouter from "./onboarding";
 import reportsRouter from "./reports";
+import shareLogsRouter from "./share-logs";
 
 const router: IRouter = Router();
 
@@ -46,5 +47,6 @@ router.use(channelsRouter);
 router.use(billingRouter);
 router.use(onboardingRouter);
 router.use(reportsRouter);
+router.use(shareLogsRouter);
 
 export default router;
