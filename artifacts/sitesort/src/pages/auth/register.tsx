@@ -61,6 +61,7 @@ export default function Register() {
   const [redirecting, setRedirecting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showInvitePassword, setShowInvitePassword] = useState(false);
   const registerMutation = useRegister();
 
   // Invite flow
@@ -241,9 +242,19 @@ export default function Register() {
             <div>
               <Input
                 {...inviteRegister("password")}
-                type="password"
+                type={showInvitePassword ? "text" : "password"}
                 placeholder="Create Password"
                 icon={<Lock className="w-5 h-5" />}
+                rightAction={
+                  <button
+                    type="button"
+                    onClick={() => setShowInvitePassword(p => !p)}
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showInvitePassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                }
               />
               {inviteErrors.password && <p className="text-destructive text-sm mt-1 ml-1">{inviteErrors.password.message}</p>}
             </div>
