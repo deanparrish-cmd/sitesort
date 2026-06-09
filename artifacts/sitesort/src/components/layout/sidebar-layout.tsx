@@ -117,9 +117,12 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
   }, [location]);
 
   useEffect(() => {
-    // Redirect to login if unauthenticated
+    // Redirect to login if unauthenticated, preserving ?checkout= so the
+    // login page can show the appropriate post-registration message.
     if (error) {
-      setLocation("/login");
+      const params = new URLSearchParams(window.location.search);
+      const checkout = params.get("checkout");
+      setLocation(checkout ? `/login?checkout=${checkout}` : "/login");
     }
   }, [error, setLocation]);
 

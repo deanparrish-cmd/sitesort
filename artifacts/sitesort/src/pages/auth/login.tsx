@@ -21,6 +21,7 @@ export default function Login() {
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
   const [resendState, setResendState] = useState<"idle" | "sending" | "sent">("idle");
   const loginMutation = useLogin();
+  const checkoutParam = new URLSearchParams(window.location.search).get("checkout");
 
   const { register, handleSubmit, formState: { errors } } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema)
@@ -75,6 +76,17 @@ export default function Login() {
           <h1 className="text-3xl font-display font-bold text-primary">Welcome back</h1>
           <p className="text-muted-foreground mt-2">Log in to your SiteSort account</p>
         </div>
+
+        {checkoutParam === "success" && !error && !unverifiedEmail && (
+          <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-lg dark:bg-emerald-950/30 dark:border-emerald-800">
+            <p className="text-emerald-800 dark:text-emerald-300 text-sm font-semibold mb-1">
+              Registration successful — your 14-day free trial has started!
+            </p>
+            <p className="text-emerald-700 dark:text-emerald-400 text-sm">
+              Log in below to access your SiteSort account. No charge will be made during your trial.
+            </p>
+          </div>
+        )}
 
         {error && (
           <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm font-medium">

@@ -64,6 +64,10 @@ export default function ForgotPassword() {
             <p className="text-muted-foreground text-sm">
               If an account exists for that email, you'll receive a password reset link within a few minutes.
             </p>
+            <p className="text-muted-foreground text-sm">
+              Don't see it? Check your spam or junk folder. If you still can't find it, email us at{" "}
+              <a href="mailto:support@sitesort.co.uk" className="text-primary hover:underline">support@sitesort.co.uk</a>.
+            </p>
             <Button variant="outline" className="mt-2 w-full" onClick={() => setLocation("/login")}>
               Back to Login
             </Button>

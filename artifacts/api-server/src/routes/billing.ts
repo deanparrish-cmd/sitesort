@@ -227,6 +227,15 @@ router.post("/billing/webhook", async (req, res) => {
             session.subscription as string,
           );
           await handleSubscriptionUpsert(subscription);
+
+          // Completing Stripe checkout proves the user controls their email,
+          // so auto-verify to avoid blocking login after the redirect back.
+          const userId = session.metadata?.userId;
+          if (userId) {
+            await db.update(usersTable)
+              .set({ emailVerified: true, emailVerificationToken: null, emailVerificationExpiry: null })
+              .where(and(eq(usersTable.id, userId), eq(usersTable.emailVerified, false)));
+          }
         }
         break;
       }
