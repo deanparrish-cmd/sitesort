@@ -2329,6 +2329,15 @@ tr:last-child td{border-bottom:none}
                                 <p className="text-xs font-semibold">{statusLabel(days)}</p>
                                 <p className="text-xs opacity-70">{fmtDate(p.expiryDate)}</p>
                               </div>
+                              {p.documentUrl && (
+                                <button
+                                  onClick={() => window.open(p.documentUrl!.replace(/^\/uploads\//, "/api/uploads/"), "_blank", "noopener,noreferrer")}
+                                  title="Open certificate"
+                                  className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-white/50 transition-colors"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <button className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-white/50 transition-colors" title="Share permit">
@@ -2336,15 +2345,20 @@ tr:last-child td{border-bottom:none}
                                   </button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-44">
+                                  {p.documentUrl && (
+                                    <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => window.open(p.documentUrl!.replace(/^\/uploads\//, "/api/uploads/"), "_blank", "noopener,noreferrer")}>
+                                      <ExternalLink className="w-4 h-4 text-muted-foreground" /> Open Certificate
+                                    </DropdownMenuItem>
+                                  )}
                                   <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
                                     const subject = encodeURIComponent(`Permit – ${p.type}`);
-                                    const body = encodeURIComponent(`Permit details:\n\nType: ${p.type}\nDescription: ${p.description}\nExpiry: ${fmtDate(p.expiryDate)} (${statusLabel(days)})${p.responsibleName ? `\nResponsible: ${p.responsibleName}` : ""}\nProject: ${project?.name ?? ""}`);
+                                    const body = encodeURIComponent(`Permit details:\n\nType: ${p.type}\nDescription: ${p.description}\nExpiry: ${fmtDate(p.expiryDate)} (${statusLabel(days)})${p.responsibleName ? `\nResponsible: ${p.responsibleName}` : ""}${p.documentUrl ? `\nCertificate: ${p.documentUrl.replace(/^\/uploads\//, "/api/uploads/")}` : ""}\nProject: ${project?.name ?? ""}`);
                                     window.open(`mailto:?subject=${subject}&body=${body}`);
                                   }}>
                                     <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
                                   </DropdownMenuItem>
                                   <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
-                                    const text = encodeURIComponent(`Permit – ${p.type}\nExpiry: ${fmtDate(p.expiryDate)} (${statusLabel(days)})\n${p.description}${p.responsibleName ? `\nResponsible: ${p.responsibleName}` : ""}`);
+                                    const text = encodeURIComponent(`Permit – ${p.type}\nExpiry: ${fmtDate(p.expiryDate)} (${statusLabel(days)})\n${p.description}${p.responsibleName ? `\nResponsible: ${p.responsibleName}` : ""}${p.documentUrl ? `\nCertificate: ${p.documentUrl.replace(/^\/uploads\//, "/api/uploads/")}` : ""}`);
                                     window.open(`https://wa.me/?text=${text}`, "_blank");
                                   }}>
                                     <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
@@ -2382,14 +2396,38 @@ tr:last-child td{border-bottom:none}
                                 <p className="text-xs text-muted-foreground capitalize">{doc.type.replace("_", " ")} · v{doc.version}</p>
                               </div>
                             </div>
-                            <div className="text-right shrink-0">
-                              {isSuperseded
-                                ? <Badge variant="secondary" className="text-[10px]">Superseded</Badge>
-                                : pending > 0
-                                ? <Badge className="text-[10px] bg-yellow-100 text-yellow-700 border-yellow-200">{pending} pending sign-off</Badge>
-                                : <Badge variant="success" className="text-[10px]">All signed off</Badge>
-                              }
-                              <p className="text-xs text-muted-foreground mt-0.5">{formatDate(doc.createdAt)}</p>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <div className="text-right">
+                                {isSuperseded
+                                  ? <Badge variant="secondary" className="text-[10px]">Superseded</Badge>
+                                  : pending > 0
+                                  ? <Badge className="text-[10px] bg-yellow-100 text-yellow-700 border-yellow-200">{pending} pending sign-off</Badge>
+                                  : <Badge variant="success" className="text-[10px]">All signed off</Badge>
+                                }
+                                <p className="text-xs text-muted-foreground mt-0.5">{formatDate(doc.createdAt)}</p>
+                              </div>
+                              <button
+                                onClick={() => window.open(doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/"), "_blank", "noopener,noreferrer")}
+                                title="Open document"
+                                className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-white/50 transition-colors"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button title="Share document" className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-white/50 transition-colors">
+                                    <Share2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-44">
+                                  <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => shareDocEmail(doc)}>
+                                    <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => shareDocWhatsApp(doc)}>
+                                    <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                           </div>
                         );
