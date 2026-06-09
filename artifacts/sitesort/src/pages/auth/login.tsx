@@ -39,7 +39,10 @@ export default function Login() {
       if (err?.data?.error === "email_not_verified") {
         setUnverifiedEmail(data.email);
       } else {
-        setError(err?.data?.message || err.message || "Invalid credentials. Please try again.");
+        setError(
+          (err?.data?.message || err.message || "Invalid email or password.") +
+          " If you've just registered, please try again or contact support@sitesort.co.uk."
+        );
       }
     }
   };

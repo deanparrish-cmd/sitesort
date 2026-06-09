@@ -34,8 +34,6 @@ router.post("/auth/register", async (req, res) => {
     const companyId = generateId();
     const userId = generateId();
     const passwordHash = await bcrypt.hash(password, 10);
-    const verificationToken = randomBytes(32).toString("hex");
-    const verificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     await db.insert(companiesTable).values({
       id: companyId,
@@ -50,13 +48,13 @@ router.post("/auth/register", async (req, res) => {
       passwordHash,
       name: adminName,
       role: "admin",
-      emailVerified: false,
-      emailVerificationToken: verificationToken,
-      emailVerificationExpiry: verificationExpiry,
+      emailVerified: true,
     });
 
-    sendVerificationEmail(email, adminName, verificationToken).catch(err =>
-      req.log.error({ err }, "Failed to send verification email"),
+    // Send a welcome email — no verification step needed since all
+    // sign-ups go through Stripe checkout which confirms email ownership.
+    sendWelcomeEmail(email, adminName).catch(err =>
+      req.log.error({ err }, "Failed to send welcome email"),
     );
 
     const token = generateToken({ id: userId, companyId, role: "admin", email });
