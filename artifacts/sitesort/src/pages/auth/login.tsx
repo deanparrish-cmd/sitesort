@@ -124,6 +124,10 @@ export default function Login() {
             <Input
               {...register("email")}
               type="email"
+              inputMode="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               placeholder="Email address"
               icon={<Mail className="w-5 h-5" />}
             />

@@ -4,5 +4,6 @@
 - [Pre-existing typecheck noise](pre-existing-typecheck-noise.md) — api-server drizzle TS2769 on .update/.insert and api-zod TS2308 dup-export are pre-existing & runtime-safe; filter tsc to lines you touched.
 - [SiteSort typecheck baseline](sitesort-typecheck-baseline.md) — ~10 pre-existing tsc errors in artifacts/sitesort (buttonVariants/DialogContent exports, enum comparisons, orval queryKey); Vite runs fine — only chase NEW errors naming your files.
 - [Email template verification](email-template-verification.md) — render api-server emails offline by mocking fetch; Resend serializes replyTo→reply_to; bundle with esbuild into the package dir (no tsx).
+- [Auth email normalization](email-normalization-auth.md) — trim+lowercase on every users.email write (incl invite-accept) in lockstep with lookups; auth inputs need autoCapitalize=none; @me.com≠@icloud.com is a data issue, not code.
 - [SiteSort invoice-project ownership](sitesort-invoice-project-ownership.md) — projectId is the single source of truth for where an invoice shows; move sets it, mark-unpaid clears it; gate share on attachment, mutations on capability.
 - [Subcontractor notes](subcontractor-notes-history.md) — two concepts: static blurb vs append-only timestamped reminders log; tenant-scope log APIs.

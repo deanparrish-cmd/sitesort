@@ -358,6 +358,10 @@ export default function Register() {
                 <Input
                   {...register("email")}
                   type="email"
+                  inputMode="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   placeholder="Work Email"
                   icon={<Mail className="w-5 h-5" />}
                 />

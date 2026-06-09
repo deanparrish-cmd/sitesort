@@ -19,11 +19,12 @@ const router: IRouter = Router();
 
 router.post("/auth/register", async (req, res) => {
   try {
-    const { companyName, adminName, email, password, companySize } = req.body;
-    if (!companyName || !adminName || !email || !password) {
+    const { companyName, adminName, email: rawEmail, password, companySize } = req.body;
+    if (!companyName || !adminName || !rawEmail || !password) {
       res.status(400).json({ error: "validation_error", message: "All fields are required" });
       return;
     }
+    const email = String(rawEmail).trim().toLowerCase();
 
     const existing = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
     if (existing.length > 0) {
@@ -70,11 +71,12 @@ router.post("/auth/register", async (req, res) => {
 
 router.post("/auth/login", async (req, res) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) {
+    const { email: rawEmail, password } = req.body;
+    if (!rawEmail || !password) {
       res.status(400).json({ error: "validation_error", message: "Email and password required" });
       return;
     }
+    const email = String(rawEmail).trim().toLowerCase();
 
     if (await isLockedOut(email)) {
       res.status(429).json({ error: "too_many_attempts", message: "Account locked due to too many failed attempts. Try again in 15 minutes." });
@@ -188,11 +190,12 @@ router.post("/auth/verify-email", async (req, res) => {
 
 router.post("/auth/resend-verification", async (req, res) => {
   try {
-    const { email } = req.body;
-    if (!email) {
+    const { email: rawEmail } = req.body;
+    if (!rawEmail) {
       res.status(400).json({ error: "validation_error", message: "Email required" });
       return;
     }
+    const email = String(rawEmail).trim().toLowerCase();
 
     const users = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
     // Always return success to prevent email enumeration
@@ -223,11 +226,12 @@ router.post("/auth/resend-verification", async (req, res) => {
 
 router.post("/auth/forgot-password", async (req, res) => {
   try {
-    const { email } = req.body;
-    if (!email) {
+    const { email: rawEmail } = req.body;
+    if (!rawEmail) {
       res.status(400).json({ error: "validation_error", message: "Email required" });
       return;
     }
+    const email = String(rawEmail).trim().toLowerCase();
 
     const users = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
     // Always return success to prevent email enumeration
@@ -483,7 +487,7 @@ router.post("/auth/invite/:token/accept", async (req, res) => {
     if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Invalid invite link" }); return; }
     if (rows[0].inviteUsedAt) { res.status(410).json({ error: "invite_used", message: "This invite has already been used" }); return; }
 
-    const email = rows[0].contactEmail;
+    const email = String(rows[0].contactEmail).trim().toLowerCase();
     const companyId = rows[0].companyId;
 
     const existing = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
