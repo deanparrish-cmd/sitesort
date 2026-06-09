@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Upload, FileText, X, Loader2, AlertTriangle } from "lucide-react";
 import { cn, formatBytes } from "@/lib/utils";
 
@@ -25,6 +25,22 @@ export function FileDropZone({ onUploaded, onCleared, accept = ACCEPTED_EXTS, cl
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dragCounter = useRef(0);
+
+  // Prevent the browser from opening dropped files as a new page (whole document).
+  // Also ensures a "copy" cursor appears over the dialog backdrop or any surrounding
+  // area, so the user doesn't think drag-and-drop is disabled.
+  useEffect(() => {
+    const allow = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes("Files")) e.preventDefault();
+    };
+    const block = (e: DragEvent) => { e.preventDefault(); };
+    document.addEventListener("dragover", allow);
+    document.addEventListener("drop", block);
+    return () => {
+      document.removeEventListener("dragover", allow);
+      document.removeEventListener("drop", block);
+    };
+  }, []);
 
   const uploadFile = useCallback(async (file: File) => {
     setError(null);

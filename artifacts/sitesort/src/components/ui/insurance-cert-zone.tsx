@@ -67,6 +67,21 @@ export function InsuranceCertZone({ memberId, projectId, existingCertUrl, existi
     return () => zone.removeEventListener("paste", onPaste);
   }, [onPaste]);
 
+  // Prevent browser from navigating to the file when dragging over surrounding areas.
+  useEffect(() => {
+    if (!expanded) return;
+    const allow = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes("Files")) e.preventDefault();
+    };
+    const block = (e: DragEvent) => { e.preventDefault(); };
+    document.addEventListener("dragover", allow);
+    document.addEventListener("drop", block);
+    return () => {
+      document.removeEventListener("dragover", allow);
+      document.removeEventListener("drop", block);
+    };
+  }, [expanded]);
+
   const save = async () => {
     if (!uploadedUrl && !existingCertUrl) { setError("Please upload a certificate first."); return; }
     if (!expiryDate) { setError("Please enter an expiry date."); return; }

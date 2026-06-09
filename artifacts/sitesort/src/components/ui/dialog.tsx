@@ -12,12 +12,12 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-primary/40 backdrop-blur-sm transition-opacity fade-in" 
-        onClick={() => onOpenChange?.(false)}
-      />
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      onClick={(e) => { if (e.target === e.currentTarget) onOpenChange?.(false); }}
+    >
+      {/* Backdrop — pointer-events-none so it never intercepts drag/drop events */}
+      <div className="fixed inset-0 bg-primary/40 backdrop-blur-sm transition-opacity fade-in pointer-events-none" />
       {/* Dialog */}
       <div className="z-50 w-full max-w-lg scale-100 p-6 opacity-100 slide-up">
         <div className="relative flex w-full flex-col rounded-2xl border bg-background p-6 shadow-2xl">
