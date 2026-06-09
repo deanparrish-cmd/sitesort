@@ -153,7 +153,7 @@ export default function LandingPage() {
             {[
               { stat: "10,000+", label: "Documents kept current" },
               { stat: "100%", label: "Version-controlled drawings" },
-              { stat: "Zero", label: "Apps to install on site" },
+              { stat: "Zero", label: "Sales meetings, hidden costs or lengthy onboarding" },
               { stat: "14 days", label: "Free on every plan" },
             ].map(item => (
               <div key={item.label}>
