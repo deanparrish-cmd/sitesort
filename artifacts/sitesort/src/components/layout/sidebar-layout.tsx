@@ -139,15 +139,18 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const navItems = [
+  const mainNavItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, badge: 0 },
     { name: "Projects", href: "/projects", icon: Building2, badge: 0 },
     { name: "Contacts", href: "/subcontractors", icon: Users, badge: 0 },
+    { name: "In House Team", href: "/team", icon: Users, badge: 0 },
+    { name: "Messages", href: "/messages", icon: MessageSquare, badge: unreadMsgCount },
+  ];
+
+  const adminNavItems = [
     { name: "Compliance Center", href: "/compliance", icon: ShieldCheck, badge: 0 },
     { name: "Invoices", href: "/invoices", icon: Receipt, badge: 0 },
     { name: "QR Codes", href: "/qr", icon: QrCode, badge: 0 },
-    { name: "In House Team", href: "/team", icon: Users, badge: 0 },
-    { name: "Messages", href: "/messages", icon: MessageSquare, badge: unreadMsgCount },
     ...(user?.role === "admin"
       ? [{ name: "Admin", href: "/admin", icon: ShieldAlert, badge: 0 }]
       : []),
@@ -194,32 +197,64 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
           </Link>
         </div>
 
-        <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
-          {navItems.map((item) => {
-            const isActive = location.startsWith(item.href);
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200",
-                  isActive
-                    ? "bg-primary text-primary-foreground shadow-md shadow-primary/10"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                )}
-                onClick={() => setIsMobileOpen(false)}
-              >
-                <item.icon className={cn("w-5 h-5", isActive ? "text-primary-foreground" : "text-muted-foreground")} />
-                <span className="flex-1">{item.name}</span>
-                {item.badge > 0 && (
-                  <span className={cn(
-                    "text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center",
-                    isActive ? "bg-primary-foreground text-primary" : "bg-primary text-primary-foreground"
-                  )}>{item.badge}</span>
-                )}
-              </Link>
-            )
-          })}
+        <nav className="flex-1 px-4 py-6 overflow-y-auto">
+          <div className="space-y-1">
+            {mainNavItems.map((item) => {
+              const isActive = location.startsWith(item.href);
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className={cn(
+                    "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200",
+                    isActive
+                      ? "bg-primary text-primary-foreground shadow-md shadow-primary/10"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                  onClick={() => setIsMobileOpen(false)}
+                >
+                  <item.icon className={cn("w-5 h-5", isActive ? "text-primary-foreground" : "text-muted-foreground")} />
+                  <span className="flex-1">{item.name}</span>
+                  {item.badge > 0 && (
+                    <span className={cn(
+                      "text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center",
+                      isActive ? "bg-primary-foreground text-primary" : "bg-primary text-primary-foreground"
+                    )}>{item.badge}</span>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+
+          <div className="my-4 border-t border-border" />
+
+          <div className="space-y-1">
+            {adminNavItems.map((item) => {
+              const isActive = location.startsWith(item.href);
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className={cn(
+                    "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200",
+                    isActive
+                      ? "bg-primary text-primary-foreground shadow-md shadow-primary/10"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                  onClick={() => setIsMobileOpen(false)}
+                >
+                  <item.icon className={cn("w-5 h-5", isActive ? "text-primary-foreground" : "text-muted-foreground")} />
+                  <span className="flex-1">{item.name}</span>
+                  {item.badge > 0 && (
+                    <span className={cn(
+                      "text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center",
+                      isActive ? "bg-primary-foreground text-primary" : "bg-primary text-primary-foreground"
+                    )}>{item.badge}</span>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
         </nav>
 
         <div className="p-4 border-t">
