@@ -21,13 +21,26 @@ type InsuranceItem = { subcontractorId: string; subcontractorName: string; insur
 type PermitItem = { permitId: string; projectId: string; projectName: string; permitType: string; expiryDate: string; status: string; documentUrl?: string | null };
 type AckItem = { documentId: string; documentName: string; projectId: string; projectName: string; pendingCount: number; fileUrl?: string | null };
 type Sub = { id: string; companyName: string; contactName: string };
+type Project = { id: string; name: string };
+type ContactProject = { id: string; name: string };
 
-const INSURANCE_TYPES = [
-  { value: "public_liability", label: "Public Liability" },
-  { value: "employers_liability", label: "Employer's Liability" },
+const DOCUMENT_TYPES = [
+  { value: "insurance_certificate", label: "Insurance Certificate" },
+  { value: "method_statement",      label: "Method Statement" },
+  { value: "risk_assessment",       label: "Risk Assessment" },
+  { value: "permit",                label: "Permit to Work" },
+  { value: "certificate",           label: "Compliance Certificate" },
+  { value: "drawing",               label: "Drawing" },
+  { value: "safety",                label: "Safety Document" },
+  { value: "general",               label: "Other" },
+];
+
+const INSURANCE_SUBTYPES = [
+  { value: "public_liability",       label: "Public Liability" },
+  { value: "employers_liability",    label: "Employer's Liability" },
   { value: "professional_indemnity", label: "Professional Indemnity" },
-  { value: "contractors_all_risk", label: "Contractor's All Risk" },
-  { value: "other", label: "Other" },
+  { value: "contractors_all_risk",   label: "Contractor's All Risk" },
+  { value: "other",                  label: "Other" },
 ];
 
 function daysLeft(dateStr: string) {
@@ -51,6 +64,7 @@ export default function CompliancePage() {
   const [permits, setPermits] = useState<PermitItem[]>([]);
   const [acks, setAcks] = useState<AckItem[]>([]);
   const [subs, setSubs] = useState<Sub[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
@@ -60,9 +74,12 @@ export default function CompliancePage() {
   const [uploading, setUploading] = useState(false);
   const [droppedFile, setDroppedFile] = useState<{ url: string; name: string } | null>(null);
   const [assignOpen, setAssignOpen] = useState(false);
+  const [assignDocType, setAssignDocType] = useState("insurance_certificate");
+  const [assignProjectId, setAssignProjectId] = useState("");
   const [assignSubId, setAssignSubId] = useState("");
-  const [assignType, setAssignType] = useState("public_liability");
+  const [assignInsSubType, setAssignInsSubType] = useState("public_liability");
   const [assignExpiry, setAssignExpiry] = useState("");
+  const [contactProjects, setContactProjects] = useState<ContactProject[]>([]);
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
   const [assignSuccess, setAssignSuccess] = useState(false);
@@ -81,10 +98,20 @@ export default function CompliancePage() {
   useEffect(() => {
     loadCompliance();
     const token = localStorage.getItem("sitesort_token");
-    fetch("/api/subcontractors", { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-      .then(r => r.ok ? r.json() : [])
-      .then(setSubs);
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+    fetch("/api/subcontractors", { headers }).then(r => r.ok ? r.json() : []).then(setSubs);
+    fetch("/api/projects", { headers }).then(r => r.ok ? r.json() : [])
+      .then((all: any[]) => setProjects(all.filter(p => p.status === "active").map(p => ({ id: p.id, name: p.name }))));
   }, [loadCompliance]);
+
+  // When contact changes, fetch which projects they're linked to
+  useEffect(() => {
+    if (!assignSubId || assignDocType !== "insurance_certificate") { setContactProjects([]); return; }
+    const token = localStorage.getItem("sitesort_token");
+    fetch(`/api/subcontractors/${assignSubId}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setContactProjects(d?.assignedProjects ?? []));
+  }, [assignSubId, assignDocType]);
 
   const [highlightUpload, setHighlightUpload] = useState(false);
 
@@ -120,9 +147,12 @@ export default function CompliancePage() {
       if (!res.ok) throw new Error("Upload failed");
       const data = await res.json();
       setDroppedFile({ url: data.url, name: file.name });
+      setAssignDocType("insurance_certificate");
+      setAssignProjectId("");
       setAssignSubId(prefilledSubId ?? "");
-      setAssignType("public_liability");
+      setAssignInsSubType("public_liability");
       setAssignExpiry("");
+      setContactProjects([]);
       setAssignError(null);
       setAssignSuccess(false);
       setAssignOpen(true);
@@ -174,31 +204,44 @@ export default function CompliancePage() {
 
   // ── assign uploaded file ──
   const assignFile = async () => {
-    if (!droppedFile || !assignSubId || !assignExpiry) {
-      setAssignError("Please select a subcontractor and set an expiry date.");
-      return;
-    }
-    setAssigning(true);
-    setAssignError(null);
-    try {
-      const token = localStorage.getItem("sitesort_token");
-      const res = await fetch(`/api/subcontractors/${assignSubId}/insurance`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ type: assignType, certificateUrl: droppedFile.url, expiryDate: assignExpiry }),
-      });
-      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message ?? "Save failed"); }
-      setAssignSuccess(true);
-      setTimeout(() => {
-        setAssignOpen(false);
-        setDroppedFile(null);
-        setAssignSuccess(false);
-        loadCompliance();
-      }, 1200);
-    } catch (e: any) {
-      setAssignError(e.message ?? "Failed to save. Please try again.");
-    } finally {
-      setAssigning(false);
+    if (!droppedFile) return;
+    const token = localStorage.getItem("sitesort_token");
+    const headers = { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+
+    if (assignDocType === "insurance_certificate") {
+      if (!assignSubId || !assignExpiry) {
+        setAssignError("Please select a contact and set an expiry date.");
+        return;
+      }
+      setAssigning(true); setAssignError(null);
+      try {
+        const res = await fetch(`/api/subcontractors/${assignSubId}/insurance`, {
+          method: "POST", headers,
+          body: JSON.stringify({ type: assignInsSubType, certificateUrl: droppedFile.url, expiryDate: assignExpiry }),
+        });
+        if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message ?? "Save failed"); }
+        setAssignSuccess(true);
+        setTimeout(() => { setAssignOpen(false); setDroppedFile(null); setAssignSuccess(false); loadCompliance(); }, 2000);
+      } catch (e: any) {
+        setAssignError(e.message ?? "Failed to save. Please try again.");
+      } finally { setAssigning(false); }
+    } else {
+      if (!assignProjectId) {
+        setAssignError("Please select a project.");
+        return;
+      }
+      setAssigning(true); setAssignError(null);
+      try {
+        const res = await fetch(`/api/projects/${assignProjectId}/documents`, {
+          method: "POST", headers,
+          body: JSON.stringify({ name: droppedFile.name, type: assignDocType, fileUrl: droppedFile.url }),
+        });
+        if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message ?? "Save failed"); }
+        setAssignSuccess(true);
+        setTimeout(() => { setAssignOpen(false); setDroppedFile(null); setAssignSuccess(false); loadCompliance(); }, 1500);
+      } catch (e: any) {
+        setAssignError(e.message ?? "Failed to save. Please try again.");
+      } finally { setAssigning(false); }
     }
   };
 
@@ -565,7 +608,20 @@ export default function CompliancePage() {
         {assignSuccess ? (
           <div className="flex flex-col items-center py-8 gap-3">
             <CheckCircle2 className="w-12 h-12 text-emerald-500" />
-            <p className="font-semibold text-emerald-600">Certificate saved successfully</p>
+            <p className="font-semibold text-emerald-600">
+              {assignDocType === "insurance_certificate" ? "Insurance certificate saved" : "Document filed to project"}
+            </p>
+            {assignDocType === "insurance_certificate" && contactProjects.length > 0 && (
+              <div className="w-full space-y-1 pt-2">
+                <p className="text-xs text-muted-foreground text-center mb-2">This contact is linked to {contactProjects.length} project{contactProjects.length !== 1 ? "s" : ""}:</p>
+                {contactProjects.map(p => (
+                  <a key={p.id} href={`/projects/${p.id}`} className="flex items-center justify-between px-3 py-2 rounded-lg border bg-muted/40 hover:bg-muted transition-colors text-sm font-medium">
+                    {p.name}
+                    <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           <div className="space-y-4 pt-2">
@@ -577,41 +633,80 @@ export default function CompliancePage() {
             )}
 
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Contact</label>
+              <label className="text-sm font-medium mb-1.5 block">Document Type</label>
               <select
-                value={assignSubId}
-                onChange={e => setAssignSubId(e.target.value)}
+                value={assignDocType}
+                onChange={e => { setAssignDocType(e.target.value); setAssignSubId(""); setAssignProjectId(""); setContactProjects([]); }}
                 className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               >
-                <option value="">Select subcontractor…</option>
-                {subs.map(s => (
-                  <option key={s.id} value={s.id}>{s.companyName} — {s.contactName}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-sm font-medium mb-1.5 block">Insurance Type</label>
-              <select
-                value={assignType}
-                onChange={e => setAssignType(e.target.value)}
-                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                {INSURANCE_TYPES.map(t => (
+                {DOCUMENT_TYPES.map(t => (
                   <option key={t.value} value={t.value}>{t.label}</option>
                 ))}
               </select>
             </div>
 
-            <div>
-              <label className="text-sm font-medium mb-1.5 block">Expiry Date</label>
-              <Input
-                type="date"
-                value={assignExpiry}
-                onChange={e => setAssignExpiry(e.target.value)}
-                icon={<Calendar className="w-4 h-4" />}
-              />
-            </div>
+            {assignDocType === "insurance_certificate" ? (
+              <>
+                <div>
+                  <label className="text-sm font-medium mb-1.5 block">Contact</label>
+                  <select
+                    value={assignSubId}
+                    onChange={e => setAssignSubId(e.target.value)}
+                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">Select contact…</option>
+                    {subs.map(s => (
+                      <option key={s.id} value={s.id}>{s.companyName} — {s.contactName}</option>
+                    ))}
+                  </select>
+                  {assignSubId && contactProjects.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-xs text-muted-foreground">Linked to {contactProjects.length} project{contactProjects.length !== 1 ? "s" : ""}:</p>
+                      {contactProjects.map(p => (
+                        <div key={p.id} className="flex items-center justify-between px-3 py-1.5 rounded-md bg-muted/50 border text-xs font-medium">
+                          {p.name}
+                          <a href={`/projects/${p.id}`} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-primary">
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium mb-1.5 block">Insurance Type</label>
+                  <select
+                    value={assignInsSubType}
+                    onChange={e => setAssignInsSubType(e.target.value)}
+                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    {INSURANCE_SUBTYPES.map(t => (
+                      <option key={t.value} value={t.value}>{t.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium mb-1.5 block">Expiry Date</label>
+                  <Input type="date" value={assignExpiry} onChange={e => setAssignExpiry(e.target.value)} icon={<Calendar className="w-4 h-4" />} />
+                </div>
+              </>
+            ) : (
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Project</label>
+                <select
+                  value={assignProjectId}
+                  onChange={e => setAssignProjectId(e.target.value)}
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="">Select project…</option>
+                  {projects.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {assignError && (
               <p className="flex items-center gap-1.5 text-sm text-destructive">
@@ -625,7 +720,7 @@ export default function CompliancePage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => { setAssignOpen(false); setDroppedFile(null); }}>Cancel</Button>
             <Button variant="accent" onClick={assignFile} disabled={assigning}>
-              {assigning ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving…</> : "Save Certificate"}
+              {assigning ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving…</> : assignDocType === "insurance_certificate" ? "Save Certificate" : "File Document"}
             </Button>
           </DialogFooter>
         )}
