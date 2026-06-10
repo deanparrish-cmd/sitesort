@@ -2553,6 +2553,17 @@ tr:last-child td{border-bottom:none}
                   </Button>
                 </div>
 
+                {siteBoardUrl && (
+                  <a
+                    href={siteBoardUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-1.5 w-full px-3 py-2 rounded-lg border border-primary/30 bg-primary/5 text-primary text-sm font-medium hover:bg-primary/10 transition-colors"
+                  >
+                    <QrCode className="w-4 h-4" /> View Site Board
+                  </a>
+                )}
+
                 <div className="w-full bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
                   <p className="font-semibold mb-1">What workers will see when they scan:</p>
                   <ul className="list-disc list-inside space-y-1 text-blue-700 text-xs">
