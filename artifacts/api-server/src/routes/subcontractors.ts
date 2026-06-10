@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { subcontractorsTable, insuranceRecordsTable, projectMembersTable, projectsTable, subcontractorNotesTable, usersTable } from "@workspace/db/schema";
-import { eq, and, desc, or, isNull } from "drizzle-orm";
+import { eq, and, desc, or, isNull, isNotNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 
@@ -172,6 +172,15 @@ router.post("/subcontractors/:subcontractorId/insurance", authenticate, async (r
       res.status(404).json({ error: "not_found", message: "Subcontractor not found" });
       return;
     }
+
+    // Archive any existing non-archived record of the same type for this subcontractor
+    await db.update(insuranceRecordsTable)
+      .set({ archivedAt: new Date() })
+      .where(and(
+        eq(insuranceRecordsTable.subcontractorId, req.params.subcontractorId),
+        eq(insuranceRecordsTable.type, type),
+        isNull(insuranceRecordsTable.archivedAt),
+      ));
 
     const status = computeRecordStatus(expiryDate);
     const id = generateId();

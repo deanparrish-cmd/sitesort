@@ -14,6 +14,7 @@ export const permitsTable = pgTable("permits", {
   expiryDate: date("expiry_date").notNull(),
   documentUrl: text("document_url"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  archivedAt: timestamp("archived_at"),
 });
 
 export const insertPermitSchema = createInsertSchema(permitsTable).omit({ createdAt: true });

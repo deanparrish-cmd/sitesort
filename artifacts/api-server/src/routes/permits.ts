@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { permitsTable, usersTable, projectsTable } from "@workspace/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 
@@ -68,6 +68,15 @@ router.post("/projects/:projectId/permits", authenticate, async (req, res) => {
       res.status(400).json({ error: "validation_error", message: "type, description, responsibleUserId, startDate, expiryDate required" });
       return;
     }
+
+    // Archive any existing non-archived permit of the same type for this project
+    await db.update(permitsTable)
+      .set({ archivedAt: new Date() })
+      .where(and(
+        eq(permitsTable.projectId, req.params.projectId),
+        eq(permitsTable.type, type),
+        isNull(permitsTable.archivedAt),
+      ));
 
     const id = generateId();
     await db.insert(permitsTable).values({

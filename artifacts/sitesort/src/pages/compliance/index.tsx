@@ -11,13 +11,15 @@ import {
 import {
   ShieldAlert, ShieldX, FileSignature, Search,
   CheckCircle2, Upload, FileText, AlertTriangle, Loader2, Calendar,
-  ExternalLink, Share2, Mail, MessageCircle,
+  ExternalLink, Share2, Mail, MessageCircle, Archive, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCapabilities } from "@/hooks/use-capabilities";
 
 type InsuranceItem = { subcontractorId: string; subcontractorName: string; insuranceType: string; expiryDate: string; status: string; certificateUrl?: string | null };
+type ArchivedInsuranceItem = { id: string; subcontractorId: string; subcontractorName: string; insuranceType: string; expiryDate: string; certificateUrl?: string | null; archivedAt: string };
 type PermitItem = { permitId: string; projectId: string; projectName: string; permitType: string; expiryDate: string; status: string; documentUrl?: string | null };
+type ArchivedPermitItem = { id: string; projectId: string; projectName: string; permitType: string; expiryDate: string; documentUrl?: string | null; archivedAt: string };
 type AckItem = { documentId: string; documentName: string; projectId: string; projectName: string; pendingCount: number; fileUrl?: string | null };
 type Sub = { id: string; companyName: string; contactName: string };
 type Project = { id: string; name: string };
@@ -60,7 +62,11 @@ function ExpiryBadge({ days }: { days: number }) {
 export default function CompliancePage() {
   const caps = useCapabilities();
   const [insurance, setInsurance] = useState<InsuranceItem[]>([]);
+  const [archivedInsurance, setArchivedInsurance] = useState<ArchivedInsuranceItem[]>([]);
   const [permits, setPermits] = useState<PermitItem[]>([]);
+  const [archivedPermits, setArchivedPermits] = useState<ArchivedPermitItem[]>([]);
+  const [showArchivedIns, setShowArchivedIns] = useState(false);
+  const [showArchivedPermits, setShowArchivedPermits] = useState(false);
   const [acks, setAcks] = useState<AckItem[]>([]);
   const [subs, setSubs] = useState<Sub[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -90,7 +96,13 @@ export default function CompliancePage() {
     const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
     fetch("/api/compliance", { headers })
       .then(r => r.ok ? r.json() : { expiringInsurance: [], expiringPermits: [], pendingAcknowledgments: [] })
-      .then(d => { setInsurance(d.expiringInsurance ?? []); setPermits(d.expiringPermits ?? []); setAcks(d.pendingAcknowledgments ?? []); })
+      .then(d => {
+        setInsurance(d.expiringInsurance ?? []);
+        setArchivedInsurance(d.archivedInsurance ?? []);
+        setPermits(d.expiringPermits ?? []);
+        setArchivedPermits(d.archivedPermits ?? []);
+        setAcks(d.pendingAcknowledgments ?? []);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -429,6 +441,66 @@ export default function CompliancePage() {
             )}
           </section>
 
+          {/* ── Archived Insurance ── */}
+          {archivedInsurance.length > 0 && (
+            <section>
+              <button
+                onClick={() => setShowArchivedIns(v => !v)}
+                className="flex items-center gap-2 mb-3 text-muted-foreground hover:text-foreground transition-colors w-full text-left"
+              >
+                <Archive className="w-4 h-4" />
+                <span className="font-semibold text-sm">Archived Insurance Certificates</span>
+                <span className="text-xs bg-muted px-2 py-0.5 rounded-full">{archivedInsurance.length}</span>
+                {showArchivedIns ? <ChevronUp className="w-4 h-4 ml-auto" /> : <ChevronDown className="w-4 h-4 ml-auto" />}
+              </button>
+              {showArchivedIns && (
+                <div className="space-y-2">
+                  {[...archivedInsurance].sort((a, b) => b.archivedAt.localeCompare(a.archivedAt)).map(ins => (
+                    <div key={ins.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 px-4 py-3 rounded-xl border bg-muted/40 border-border opacity-80">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-sm truncate">{ins.subcontractorName}</p>
+                        <p className="text-xs text-muted-foreground capitalize">{ins.insuranceType.replace(/_/g, " ")} · expired {fmtDate(ins.expiryDate)} · archived {new Date(ins.archivedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
+                      </div>
+                      {ins.certificateUrl && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => window.open(ins.certificateUrl!.replace(/^\/uploads\//, "/api/uploads/"), "_blank", "noopener,noreferrer")}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
+                          >
+                            <ExternalLink className="w-3 h-3" /> Open
+                          </button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors">
+                                <Share2 className="w-3 h-3" /> Share
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44">
+                              <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
+                                const norm = ins.certificateUrl!.replace(/^\/uploads\//, "/api/uploads/");
+                                const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
+                                window.open(`mailto:?subject=${encodeURIComponent(`Insurance Certificate – ${ins.subcontractorName}`)}&body=${encodeURIComponent(`Archived certificate:\n${url}\nExpiry: ${fmtDate(ins.expiryDate)}`)}`);
+                              }}>
+                                <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
+                                const norm = ins.certificateUrl!.replace(/^\/uploads\//, "/api/uploads/");
+                                const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
+                                window.open(`https://wa.me/?text=${encodeURIComponent(`Archived insurance certificate – ${ins.subcontractorName}\n${url}`)}`, "_blank");
+                              }}>
+                                <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
           {/* ── Expiring Permits ── */}
           <section>
             <div className="flex items-center gap-2 mb-3">
@@ -506,6 +578,66 @@ export default function CompliancePage() {
               </div>
             )}
           </section>
+
+          {/* ── Archived Permits ── */}
+          {archivedPermits.length > 0 && (
+            <section>
+              <button
+                onClick={() => setShowArchivedPermits(v => !v)}
+                className="flex items-center gap-2 mb-3 text-muted-foreground hover:text-foreground transition-colors w-full text-left"
+              >
+                <Archive className="w-4 h-4" />
+                <span className="font-semibold text-sm">Archived Permits</span>
+                <span className="text-xs bg-muted px-2 py-0.5 rounded-full">{archivedPermits.length}</span>
+                {showArchivedPermits ? <ChevronUp className="w-4 h-4 ml-auto" /> : <ChevronDown className="w-4 h-4 ml-auto" />}
+              </button>
+              {showArchivedPermits && (
+                <div className="space-y-2">
+                  {[...archivedPermits].sort((a, b) => b.archivedAt.localeCompare(a.archivedAt)).map(p => (
+                    <div key={p.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 px-4 py-3 rounded-xl border bg-muted/40 border-border opacity-80">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-sm truncate">{p.permitType}</p>
+                        <p className="text-xs text-muted-foreground">{p.projectName} · expired {fmtDate(p.expiryDate)} · archived {new Date(p.archivedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
+                      </div>
+                      {p.documentUrl && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => { const norm = p.documentUrl!.replace(/^\/uploads\//, "/api/uploads/"); window.open(norm.startsWith("http") ? norm : `${window.location.origin}${norm}`, "_blank", "noopener,noreferrer"); }}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
+                          >
+                            <ExternalLink className="w-3 h-3" /> Open
+                          </button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors">
+                                <Share2 className="w-3 h-3" /> Share
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44">
+                              <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
+                                const norm = p.documentUrl!.replace(/^\/uploads\//, "/api/uploads/");
+                                const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
+                                window.open(`mailto:?subject=${encodeURIComponent(`Archived Permit – ${p.permitType}`)}&body=${encodeURIComponent(`Archived permit document:\n${url}\nProject: ${p.projectName}\nExpiry: ${fmtDate(p.expiryDate)}`)}`);
+                              }}>
+                                <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
+                                const norm = p.documentUrl!.replace(/^\/uploads\//, "/api/uploads/");
+                                const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
+                                window.open(`https://wa.me/?text=${encodeURIComponent(`Archived permit – ${p.permitType} (${p.projectName})\n${url}`)}`, "_blank");
+                              }}>
+                                <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
 
           {/* ── Pending Sign-offs ── */}
           <section>
