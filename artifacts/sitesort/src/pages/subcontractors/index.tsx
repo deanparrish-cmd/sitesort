@@ -571,12 +571,13 @@ export default function SubcontractorsPage() {
                           <div className="flex-1 min-w-0 overflow-hidden">
                             <div className="flex items-center gap-2 flex-wrap">
                               <p className="font-bold text-sm truncate">{sub.companyName}</p>
-                              {sub.contactType && sub.contactType !== "subcontractor" && (
+                              {sub.contactType && (
                                 <Badge className={cn("text-[10px] shrink-0",
-                                  sub.contactType === "merchant"     && "bg-blue-100 text-blue-700 border-blue-200",
-                                  sub.contactType === "supplier"     && "bg-purple-100 text-purple-700 border-purple-200",
-                                  sub.contactType === "professional" && "bg-teal-100 text-teal-700 border-teal-200",
-                                  sub.contactType === "other"        && "bg-muted text-muted-foreground",
+                                  sub.contactType === "subcontractor" && "bg-orange-100 text-orange-700 border-orange-200",
+                                  sub.contactType === "merchant"      && "bg-blue-100 text-blue-700 border-blue-200",
+                                  sub.contactType === "supplier"      && "bg-purple-100 text-purple-700 border-purple-200",
+                                  sub.contactType === "professional"  && "bg-teal-100 text-teal-700 border-teal-200",
+                                  sub.contactType === "other"         && "bg-muted text-muted-foreground",
                                 )}>{CONTACT_TYPE_LABELS[sub.contactType]}</Badge>
                               )}
                               {sub.paymentHold && (
