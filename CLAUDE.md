@@ -108,6 +108,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 44. QR board pin management — managers pin specific documents, photos, and permits to the site board QR; `qr_board_pins` table (unique per project+type+item, cascade-delete); `GET/POST/DELETE /api/projects/:id/qr-pins`; public `GET /api/site/:token` now resolves and returns `pinnedItems` with full data (doc fileUrl, photo thumbnail, permit status); project detail QR tab shows "Board Contents" panel with thumbtack toggle per item; site-board public page shows "Pinned to this Board" section with View buttons, photo grid, and status badges
 45. Subcontractor notes/reminders log — StickyNote button on each sub card opens a "Notes & Reminders" dialog; append-only, timestamped history per subcontractor (date/time + author name); add form gated on `canManageSubcontractors`; Ctrl/Cmd+Enter submits; newest note shown first; `subcontractor_notes` table (id, subcontractorId FK, authorId FK, body, projectId FK nullable, createdAt); `GET/POST /api/subcontractors/:id/notes` (tenant-scoped, IDOR-safe); notes scoped as General (all projects) or project-specific; project Team tab has its own StickyNote button per subcontractor with a General/This-project-only toggle; directory page shows "General" or project-name badge per note
 46. Invoice project organisation — invoices linked to a project after marking as paid (popup picker); can be unlinked back to the main list; project detail shows its invoices with viewer and share actions; paid invoices can be reversed to pending; project nav tabs wrap to new lines on mobile instead of scrolling
+47. Superseded document archiving — `archivedAt` column on `insurance_records` and `permits`; uploading a new insurance cert for the same contact+type auto-archives the old one; creating a new permit of the same type for the same project auto-archives the old one; Compliance Centre shows collapsible "Superseded" sections for insurance, permits, and documents (status=superseded) with Open/Share buttons; project Permits tab splits active/expiring/expired vs. a collapsible Superseded section; contact cards and insuranceStatus only reflect non-archived records; QR board pins and Finances permit list exclude archived permits
 
 ## Uploads / File Serving
 
@@ -200,17 +201,52 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 1. **Contact type filter chips on Contacts page** (`artifacts/sitesort/src/pages/subcontractors/index.tsx`):
    - Pill buttons: All · Subcontractor · Merchant · Supplier · Professional Services · Other
    - Active chip fills with type colour; works alongside existing text search
-   - `typeFilter` state applied in `grouped` useMemo; dependency array updated
-   - Filter chips rendered inline with the search bar (flex row, wraps on mobile)
 
-2. **UK English** — "Compliance Center" → "Compliance Centre" in sidebar nav (`sidebar-layout.tsx`); page heading was already correct; no other US spellings found in visible UI text
+2. **UK English** — "Compliance Center" → "Compliance Centre" in sidebar nav
 
 ### Key files modified
 - `artifacts/sitesort/src/components/layout/sidebar-layout.tsx` — "Compliance Centre" spelling
 - `artifacts/sitesort/src/pages/subcontractors/index.tsx` — `typeFilter` state + filter chip UI
 
+---
+
+## End-of-session notes — 2026-06-10 (Compliance Centre superseded archiving)
+
+### Tasks completed today
+
+1. **Compliance Centre UI polish**
+   - Removed the small Upload (up-arrow) icon button from expiring insurance rows
+   - Open and Share pills restyled to solid `bg-gray-800 text-white` across all three sections (insurance, permits, sign-offs)
+
+2. **Superseded archiving — insurance & permits**
+   - Added `archivedAt` (nullable timestamp) to `insurance_records` and `permits` DB tables; pushed via drizzle-kit
+   - `POST /api/subcontractors/:id/insurance` — before inserting, sets `archivedAt=now()` on any existing non-archived record of the same type for that contact
+   - `POST /api/projects/:id/permits` — before inserting, sets `archivedAt=now()` on any existing non-archived permit of the same type for that project
+   - Compliance API (`GET /api/compliance`) now filters active lists to `archivedAt IS NULL`; returns separate `archivedInsurance` and `archivedPermits` arrays
+   - Compliance Centre shows collapsible "Superseded Insurance Certificates" and "Superseded Permits" sections (collapsed by default) with Open/Share buttons
+
+3. **Superseded documents in Compliance Centre**
+   - No DB change needed — documents already use `status="superseded"`
+   - Compliance API fetches `status="superseded"` docs and returns `archivedDocuments` array
+   - Compliance Centre shows collapsible "Superseded Documents" section
+
+4. **Superseded concept applied across all areas**
+   - **Project Permits tab**: `formatPermit` now returns `archivedAt`; tab computes `livePermits` vs `supersededPermits`; Active/Expiring/Expired sections only show live permits; collapsible "Superseded" section at bottom
+   - **Finances & QR board**: permit counts and lists exclude `archivedAt` permits
+   - **Contacts API**: all three subcontractor GET endpoints (`list`, `get`, `update`) now filter insurance records to `archivedAt IS NULL` — contact cards and `insuranceStatus` only reflect current certificates
+
+### Key files modified
+- `lib/db/src/schema/insurance_records.ts` — `archivedAt` column
+- `lib/db/src/schema/permits.ts` — `archivedAt` column
+- `artifacts/api-server/src/routes/compliance.ts` — filtered active lists; added archived arrays
+- `artifacts/api-server/src/routes/subcontractors.ts` — archive-on-insert; filter archived from all GET responses
+- `artifacts/api-server/src/routes/permits.ts` — archive-on-insert; `archivedAt` in `formatPermit`
+- `artifacts/sitesort/src/pages/compliance/index.tsx` — pill restyle; superseded sections; renamed Archived→Superseded
+- `artifacts/sitesort/src/pages/projects/detail.tsx` — `PermitItem.archivedAt`; superseded permit section; archive-aware filters
+
 ### Notes for next session
-- **Filter chips** use `CONTACT_TYPE_LABELS` entries prefixed with `["all", "All"]`; colour logic mirrors the badge colours on cards/headers
+- **Superseded label**: UI says "Superseded" everywhere (not "Archived") — keep consistent
+- **Document superseding**: triggered by existing `POST /api/projects/:id/documents` with `supersededDocumentId` or same-name auto-supersede — no new endpoint needed
 - **GitHub push command**: `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts` (must run from `/home/runner/workspace`)
 - **API server rebuild**: `pnpm --filter @workspace/api-server run build` after any backend change
 - All commits are on `main`
