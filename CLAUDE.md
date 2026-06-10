@@ -109,6 +109,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 45. Subcontractor notes/reminders log — StickyNote button on each sub card opens a "Notes & Reminders" dialog; append-only, timestamped history per subcontractor (date/time + author name); add form gated on `canManageSubcontractors`; Ctrl/Cmd+Enter submits; newest note shown first; `subcontractor_notes` table (id, subcontractorId FK, authorId FK, body, projectId FK nullable, createdAt); `GET/POST /api/subcontractors/:id/notes` (tenant-scoped, IDOR-safe); notes scoped as General (all projects) or project-specific; project Team tab has its own StickyNote button per subcontractor with a General/This-project-only toggle; directory page shows "General" or project-name badge per note
 46. Invoice project organisation — invoices linked to a project after marking as paid (popup picker); can be unlinked back to the main list; project detail shows its invoices with viewer and share actions; paid invoices can be reversed to pending; project nav tabs wrap to new lines on mobile instead of scrolling
 47. Superseded document archiving — `archivedAt` column on `insurance_records` and `permits`; uploading a new insurance cert for the same contact+type auto-archives the old one; creating a new permit of the same type for the same project auto-archives the old one; Compliance Centre shows collapsible "Superseded" sections for insurance, permits, and documents (status=superseded) with Open/Share buttons; project Permits tab splits active/expiring/expired vs. a collapsible Superseded section; contact cards and insuranceStatus only reflect non-archived records; QR board pins and Finances permit list exclude archived permits
+48. Site Issues log — `status` + `resolvedAt` columns on `photos` table; new snags/safety_concern photos auto-set `status="open"`; `GET /api/photos/:id` returns full data; `PATCH /api/photos/:id` for status updates (open/in_progress/resolved); `GET /api/issues` returns all snag+safety_concern photos company-wide; new `/issues` page (sidebar: Site Issues) with summary counts, type/status/search filters, thumbnail list, full detail modal with GPS, share, and resolve actions; project Photos tab cards now open a detail modal instead of raw image; dashboard safety_concern activity click deep-links to `?tab=photos&photo=<id>` auto-opening the modal uploading a new insurance cert for the same contact+type auto-archives the old one; creating a new permit of the same type for the same project auto-archives the old one; Compliance Centre shows collapsible "Superseded" sections for insurance, permits, and documents (status=superseded) with Open/Share buttons; project Permits tab splits active/expiring/expired vs. a collapsible Superseded section; contact cards and insuranceStatus only reflect non-archived records; QR board pins and Finances permit list exclude archived permits
 
 ## Uploads / File Serving
 
@@ -247,6 +248,57 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 ### Notes for next session
 - **Superseded label**: UI says "Superseded" everywhere (not "Archived") — keep consistent
 - **Document superseding**: triggered by existing `POST /api/projects/:id/documents` with `supersededDocumentId` or same-name auto-supersede — no new endpoint needed
+- **GitHub push command**: `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts` (must run from `/home/runner/workspace`)
+- **API server rebuild**: `pnpm --filter @workspace/api-server run build` after any backend change
+- All commits are on `main`
+
+---
+
+## End-of-session notes — 2026-06-10 (invoice tablet fix + site issues log)
+
+### Tasks completed today
+
+1. **Invoice page tablet fix** (`artifacts/sitesort/src/pages/invoices/index.tsx`):
+   - Changed mobile-card / table breakpoint from `lg` (1024px) to `md` (768px) — tablets now see the full table with Mark paid, Delete, Attach actions directly
+   - Description column changed from `hidden md:table-cell` → `hidden lg:table-cell` to avoid crowding the table on tablet (512px content area)
+   - Viewer header buttons made responsive: `hidden sm:inline` text labels — icon-only on phone, icon+text on 640px+
+
+2. **Site Issues log — new page `/issues`** (feature #48):
+   - `status` (text, nullable) and `resolvedAt` (timestamp, nullable) columns added to `photos` table; pushed via drizzle-kit
+   - New snags & safety_concern photos auto-get `status = "open"` on creation
+   - `GET /api/photos/:photoId` now returns full data: description, zone, uploader name, project name, GPS coords, status, resolvedAt
+   - `PATCH /api/photos/:photoId` — update status (open / in_progress / resolved); sets resolvedAt on resolve
+   - `GET /api/issues` — returns all snag + safety_concern photos across all company projects, ordered by takenAt
+   - New page `artifacts/sitesort/src/pages/issues/index.tsx` — summary cards (Open/In Progress/Resolved counts), filter by type + status + search, thumbnail list, click-to-open full detail modal
+   - Detail modal: full-size photo, description, zone, logged by/date, project, GPS with map link, resolved timestamp, status update buttons (Open / In Progress / Resolved), quick resolve/re-open in header
+   - "Site Issues" added to sidebar nav (AlertTriangle icon, between Compliance Centre and Invoices)
+   - Route `/issues` added to `App.tsx`
+
+3. **Photo detail modal in project Photos tab** (`artifacts/sitesort/src/pages/projects/detail.tsx`):
+   - Clicking any photo card now opens a full detail overlay (was previously just opening the image in a new tab)
+   - Same information layout as the Issues page detail modal
+   - `PhotoItem` type extended with `status`, `resolvedAt`, `latitude`, `longitude`
+   - `updatePhotoStatus()` helper — PATCH + updates local state + syncs viewingPhoto
+   - Snag/safety_concern photos show Open/In Progress/Resolved status badges on cards and in modal
+
+4. **Dashboard activity click deep-link fix** (`artifacts/sitesort/src/pages/dashboard/index.tsx`):
+   - Safety concern activity now navigates to `/projects/:id?tab=photos&photo=<photoId>`
+   - `fetchPhotos()` detects `?photo=` param after load and auto-opens the detail modal for that specific photo; cleans param from URL
+
+### Key files modified
+- `lib/db/src/schema/photos.ts` — `status`, `resolvedAt` columns
+- `artifacts/api-server/src/routes/photos.ts` — `formatPhoto()` helper; full GET/:id; PATCH/:id; GET /issues; status on POST
+- `artifacts/sitesort/src/pages/invoices/index.tsx` — tablet breakpoint fix; viewer header responsive
+- `artifacts/sitesort/src/pages/issues/index.tsx` — new page (created)
+- `artifacts/sitesort/src/pages/projects/detail.tsx` — photo detail modal; PhotoItem type; updatePhotoStatus; deep-link param handling
+- `artifacts/sitesort/src/pages/dashboard/index.tsx` — deep-link navigation fix
+- `artifacts/sitesort/src/components/layout/sidebar-layout.tsx` — Site Issues nav item
+- `artifacts/sitesort/src/App.tsx` — /issues route
+
+### Notes for next session
+- **Issues feature numbering**: feature #48 in the features list
+- **Photo status on existing records**: existing snag/safety_concern photos have `status = null` in the DB; the UI treats null as "open" — a migration to backfill `status = 'open'` would clean this up if desired
+- **Issues page — managers only for status updates**: `caps.canManageProjects` gates status changes; site workers can view but not resolve
 - **GitHub push command**: `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts` (must run from `/home/runner/workspace`)
 - **API server rebuild**: `pnpm --filter @workspace/api-server run build` after any backend change
 - All commits are on `main`
