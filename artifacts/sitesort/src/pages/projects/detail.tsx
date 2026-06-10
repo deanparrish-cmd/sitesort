@@ -10,7 +10,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, StickyNote, Send, Loader2, History } from "lucide-react";
+import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronUp, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, StickyNote, Send, Loader2, History, Archive } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { Textarea } from "@/components/ui/textarea";
@@ -43,7 +43,7 @@ export default function ProjectDetail() {
   const { data: documents, refetch: refetchDocs } = useListDocuments(projectId, undefined, { query: { enabled: !!projectId } });
   const { data: members } = useListProjectMembers(projectId, { query: { enabled: !!projectId } });
 
-  type PermitItem = { id: string; type: string; description: string; startDate: string; expiryDate: string; status: string; responsibleName?: string; documentUrl?: string | null };
+  type PermitItem = { id: string; type: string; description: string; startDate: string; expiryDate: string; status: string; responsibleName?: string; documentUrl?: string | null; archivedAt?: string | null };
   type InvoiceItem = { id: string; direction: string; counterpartyName: string; description: string; amount: string; currency: string; dueDate: string; status: string; reference?: string | null; attachmentUrl?: string | null };
   type PhotoItem = { id: string; uploadedBy: string; uploaderName: string; photoUrl: string | null; category: string; description: string | null; zone: string | null; referenceNumber: string; takenAt: string };
   type MilestoneItem = { id: string; title: string; dueDate: string; completedAt: string | null; order: number };
@@ -67,6 +67,7 @@ export default function ProjectDetail() {
 
   const [permits, setPermits] = useState<PermitItem[]>([]);
   const [permitAddOpen, setPermitAddOpen] = useState(false);
+  const [showSupersededPermits, setShowSupersededPermits] = useState(false);
   const [newPermitType, setNewPermitType] = useState("Hot Works");
   const [newPermitDesc, setNewPermitDesc] = useState("");
   const [newPermitResponsibleId, setNewPermitResponsibleId] = useState("");
@@ -2063,9 +2064,11 @@ tr:last-child td{border-bottom:none}
             const daysLeft = (dateStr: string) => Math.ceil((new Date(dateStr + "T00:00:00").getTime() - today.getTime()) / 86400000);
             const fmtDate = (s: string) => new Date(s + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
-            const active = [...permits].filter(p => { const d = daysLeft(p.expiryDate); return d > 30; }).sort((a, b) => a.expiryDate.localeCompare(b.expiryDate));
-            const expiring = [...permits].filter(p => { const d = daysLeft(p.expiryDate); return d >= 0 && d <= 30; }).sort((a, b) => a.expiryDate.localeCompare(b.expiryDate));
-            const expired = [...permits].filter(p => daysLeft(p.expiryDate) < 0).sort((a, b) => b.expiryDate.localeCompare(a.expiryDate));
+            const livePermits = [...permits].filter(p => !p.archivedAt);
+            const supersededPermits = [...permits].filter(p => !!p.archivedAt).sort((a, b) => (b.archivedAt ?? "").localeCompare(a.archivedAt ?? ""));
+            const active = livePermits.filter(p => { const d = daysLeft(p.expiryDate); return d > 30; }).sort((a, b) => a.expiryDate.localeCompare(b.expiryDate));
+            const expiring = livePermits.filter(p => { const d = daysLeft(p.expiryDate); return d >= 0 && d <= 30; }).sort((a, b) => a.expiryDate.localeCompare(b.expiryDate));
+            const expired = livePermits.filter(p => daysLeft(p.expiryDate) < 0).sort((a, b) => b.expiryDate.localeCompare(a.expiryDate));
 
             const permitRow = (p: PermitItem, accent: string) => {
               const days = daysLeft(p.expiryDate);
@@ -2170,7 +2173,7 @@ tr:last-child td{border-bottom:none}
                 </div>
 
                 {/* Permits list */}
-                {permits.length === 0 ? (
+                {livePermits.length === 0 && supersededPermits.length === 0 ? (
                   <Card><CardContent className="py-12 text-center border-dashed border-2">
                     <ClipboardCheck className="w-10 h-10 mx-auto text-muted-foreground/30 mb-3" />
                     <p className="font-semibold text-muted-foreground">No permits or certifications added yet.</p>
@@ -2207,6 +2210,22 @@ tr:last-child td{border-bottom:none}
                           <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{active.length}</span>
                         </div>
                         <div className="space-y-2">{active.map(p => permitRow(p, "bg-emerald-50 border-emerald-200"))}</div>
+                      </section>
+                    )}
+                    {supersededPermits.length > 0 && (
+                      <section>
+                        <button
+                          onClick={() => setShowSupersededPermits(v => !v)}
+                          className="flex items-center gap-2 mb-3 text-muted-foreground hover:text-foreground transition-colors w-full text-left"
+                        >
+                          <Archive className="w-4 h-4" />
+                          <span className="font-bold text-sm uppercase tracking-wide">Superseded</span>
+                          <span className="text-xs font-semibold bg-muted px-2 py-0.5 rounded-full">{supersededPermits.length}</span>
+                          {showSupersededPermits ? <ChevronUp className="w-4 h-4 ml-auto" /> : <ChevronDown className="w-4 h-4 ml-auto" />}
+                        </button>
+                        {showSupersededPermits && (
+                          <div className="space-y-2">{supersededPermits.map(p => permitRow(p, "bg-muted/30 border-border opacity-70"))}</div>
+                        )}
                       </section>
                     )}
                   </div>
@@ -2421,13 +2440,13 @@ tr:last-child td{border-bottom:none}
                   <div className="flex items-center gap-2 mb-4">
                     <ClipboardCheck className="w-5 h-5 text-primary" />
                     <h3 className="font-bold text-lg">Permit Expiry</h3>
-                    <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{permits.length}</span>
+                    <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{permits.filter(p => !p.archivedAt).length}</span>
                   </div>
-                  {permits.length === 0 ? (
+                  {permits.filter(p => !p.archivedAt).length === 0 ? (
                     <Card><CardContent className="py-8 text-center text-muted-foreground text-sm">No permits on this project.</CardContent></Card>
                   ) : (
                     <div className="space-y-2">
-                      {[...permits].sort((a, b) => a.expiryDate.localeCompare(b.expiryDate)).map(p => {
+                      {[...permits].filter(p => !p.archivedAt).sort((a, b) => a.expiryDate.localeCompare(b.expiryDate)).map(p => {
                         const days = daysLeft(p.expiryDate);
                         return (
                           <div key={p.id} className={`flex items-center justify-between gap-3 px-4 py-3 rounded-xl border ${statusStyle(days)}`}>
@@ -2762,11 +2781,11 @@ tr:last-child td{border-bottom:none}
                   )}
 
                   {/* Permits */}
-                  {permits.length > 0 && (
+                  {permits.filter(p => !p.archivedAt).length > 0 && (
                     <div className="mb-4">
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Permits</p>
                       <div className="rounded-xl border divide-y">
-                        {permits.map(permit => {
+                        {permits.filter(p => !p.archivedAt).map(permit => {
                           const pinned = isPinned("permit", permit.id);
                           return (
                             <div key={permit.id} className="flex items-center gap-3 px-3 py-2.5">

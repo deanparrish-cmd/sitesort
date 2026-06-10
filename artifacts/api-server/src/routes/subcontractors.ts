@@ -27,7 +27,8 @@ router.get("/subcontractors", authenticate, async (req, res) => {
   try {
     const subs = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.companyId, req.user!.companyId));
     const result = await Promise.all(subs.map(async (s) => {
-      const insurance = await db.select().from(insuranceRecordsTable).where(eq(insuranceRecordsTable.subcontractorId, s.id));
+      const insurance = await db.select().from(insuranceRecordsTable)
+        .where(and(eq(insuranceRecordsTable.subcontractorId, s.id), isNull(insuranceRecordsTable.archivedAt)));
       return {
         id: s.id,
         companyId: s.companyId,
@@ -93,7 +94,8 @@ router.get("/subcontractors/:subcontractorId", authenticate, async (req, res) =>
     }
 
     const s = subs[0];
-    const insurance = await db.select().from(insuranceRecordsTable).where(eq(insuranceRecordsTable.subcontractorId, s.id));
+    const insurance = await db.select().from(insuranceRecordsTable)
+      .where(and(eq(insuranceRecordsTable.subcontractorId, s.id), isNull(insuranceRecordsTable.archivedAt)));
     const memberRows = await db.select({ projectId: projectMembersTable.projectId }).from(projectMembersTable).where(eq(projectMembersTable.subcontractorId, s.id));
     const assignedProjects = await Promise.all(memberRows.map(async (m) => {
       const proj = await db.select({ id: projectsTable.id, name: projectsTable.name }).from(projectsTable).where(eq(projectsTable.id, m.projectId)).limit(1);
@@ -148,7 +150,8 @@ router.patch("/subcontractors/:subcontractorId", authenticate, async (req, res) 
       return;
     }
     const s = subs[0];
-    const insurance = await db.select().from(insuranceRecordsTable).where(eq(insuranceRecordsTable.subcontractorId, s.id));
+    const insurance = await db.select().from(insuranceRecordsTable)
+      .where(and(eq(insuranceRecordsTable.subcontractorId, s.id), isNull(insuranceRecordsTable.archivedAt)));
 
     res.json({ id: s.id, companyId: s.companyId, companyName: s.companyName, contactName: s.contactName, contactEmail: s.contactEmail, contactPhone: s.contactPhone ?? null, contactType: s.contactType ?? "subcontractor", trades: s.trades ?? [], reliabilityRating: s.reliabilityRating ? Number(s.reliabilityRating) : null, paymentHold: s.paymentHold, notes: s.notes ?? null, insuranceStatus: computeInsuranceStatus(insurance), insuranceRecords: insurance.map(r => ({ id: r.id, type: r.type, certificateUrl: r.certificateUrl, expiryDate: r.expiryDate, status: r.status })), createdAt: s.createdAt.toISOString() });
   } catch (err) {

@@ -17,7 +17,7 @@ function computePermitStatus(expiryDate: string): "active" | "expiring_today" | 
   return "active";
 }
 
-async function formatPermit(p: { id: string; projectId: string; type: string; description: string; responsibleUserId: string; startDate: string; expiryDate: string; documentUrl: string | null; createdAt: Date }) {
+async function formatPermit(p: { id: string; projectId: string; type: string; description: string; responsibleUserId: string; startDate: string; expiryDate: string; documentUrl: string | null; createdAt: Date; archivedAt?: Date | null }) {
   const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, p.responsibleUserId)).limit(1);
   return {
     id: p.id,
@@ -31,6 +31,7 @@ async function formatPermit(p: { id: string; projectId: string; type: string; de
     status: computePermitStatus(p.expiryDate),
     documentUrl: p.documentUrl ?? null,
     createdAt: p.createdAt.toISOString(),
+    archivedAt: p.archivedAt?.toISOString() ?? null,
   };
 }
 
@@ -90,7 +91,7 @@ router.post("/projects/:projectId/permits", authenticate, async (req, res) => {
       documentUrl: documentUrl ?? null,
     });
 
-    const p = { id, projectId: req.params.projectId, type, description, responsibleUserId, startDate, expiryDate, documentUrl: documentUrl ?? null, createdAt: new Date() };
+    const p = { id, projectId: req.params.projectId, type, description, responsibleUserId, startDate, expiryDate, documentUrl: documentUrl ?? null, createdAt: new Date(), archivedAt: null };
     res.status(201).json(await formatPermit(p));
   } catch (err) {
     req.log.error({ err }, "Create permit error");
