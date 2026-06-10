@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Link } from "wouter";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   ShieldAlert, ShieldX, FileSignature, Search,
-  CheckCircle2, ArrowRight, Upload, FileText, AlertTriangle, Loader2, Calendar,
+  CheckCircle2, Upload, FileText, AlertTriangle, Loader2, Calendar,
   ExternalLink, Share2, Mail, MessageCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -582,9 +581,6 @@ export default function CompliancePage() {
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
-                      <Link href={`/projects/${a.projectId}`} className="text-xs text-muted-foreground hover:text-primary flex items-center gap-0.5">
-                        View <ArrowRight className="w-3 h-3" />
-                      </Link>
                     </div>
                   </div>
                 ))}
