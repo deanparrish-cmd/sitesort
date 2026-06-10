@@ -101,6 +101,11 @@ export default function ProjectDetail() {
   const [todayNotes, setTodayNotes] = useState<DailyNote[]>([]);
   const [noteBody, setNoteBody] = useState("");
   const [noteSubmitting, setNoteSubmitting] = useState(false);
+  const [ovPhotoOpen, setOvPhotoOpen] = useState(false);
+  const [ovPhotoUrl, setOvPhotoUrl] = useState<string | null>(null);
+  const [ovPhotoNote, setOvPhotoNote] = useState("");
+  const [ovPhotoKey, setOvPhotoKey] = useState(0);
+  const [ovPhotoSubmitting, setOvPhotoSubmitting] = useState(false);
 
   const authHeaders = () => {
     const t = localStorage.getItem("sitesort_token");
@@ -254,6 +259,29 @@ export default function ProjectDetail() {
       toast({ title: "Could not log photo", description: "Please try again.", variant: "destructive" });
     } finally {
       setPhotoSubmitting(false);
+    }
+  };
+
+  const submitOverviewPhoto = async () => {
+    if (!ovPhotoUrl) return;
+    setOvPhotoSubmitting(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/photos`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ photoUrl: ovPhotoUrl, category: "general", description: ovPhotoNote.trim() || null, zone: null }),
+      });
+      if (!res.ok) throw new Error();
+      toast({ title: "Photo logged", description: "Added to the photo log." });
+      setOvPhotoUrl(null);
+      setOvPhotoNote("");
+      setOvPhotoKey(k => k + 1);
+      setOvPhotoOpen(false);
+      fetchPhotos();
+    } catch {
+      toast({ title: "Could not log photo", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setOvPhotoSubmitting(false);
     }
   };
 
@@ -845,7 +873,7 @@ tr:last-child td{border-bottom:none}
   </div>
 </div>
 <section>
-  <h2>In House Team<span class="count">${allMembersArr.length}</span></h2>
+  <h2>Team<span class="count">${allMembersArr.length}</span></h2>
   ${allMembersArr.length ? `<table><thead><tr><th>Name</th><th>Role</th><th>Email</th><th>Phone</th></tr></thead><tbody>${teamRows}</tbody></table>` : `<p class="empty">No team members added yet.</p>`}
 </section>
 <section>
@@ -935,7 +963,7 @@ tr:last-child td{border-bottom:none}
             { value: "overview", label: "Overview" },
             { value: "progress", label: "Progress" },
             { value: "documents", label: "Documents" },
-            { value: "team", label: "In House Team" },
+            { value: "team", label: "Team" },
             { value: "photos", label: "Photos" },
             ...(caps.isInternal ? [{ value: "reports", label: "Daily Reports" }] : []),
             { value: "checkins", label: `Check-ins${checkins.length > 0 ? ` (${checkins.length})` : ""}` },
@@ -954,26 +982,106 @@ tr:last-child td{border-bottom:none}
         </TabsList>
 
         <TabsContent value="overview">
-          <div className="grid md:grid-cols-2 gap-6">
-            <Card>
-              <CardContent className="pt-6">
-                <h3 className="font-bold text-lg mb-4">Recent Activity</h3>
-                <div className="space-y-4">
-                  {project.recentActivity?.map(act => (
-                    <div key={act.id} className="flex gap-3 text-sm">
-                      <div className="w-2 h-2 mt-1.5 rounded-full bg-primary shrink-0"></div>
-                      <div>
-                        <p className="font-medium text-foreground">{act.description}</p>
-                        <p className="text-muted-foreground text-xs">{formatDate(act.createdAt)} by {act.userName || 'System'}</p>
-                      </div>
+          <div className="space-y-6">
+            {(caps.canLogPhoto || caps.canUploadDocument) && (
+              <Card>
+                <CardContent className="pt-5 space-y-3">
+                  <h3 className="font-semibold text-sm text-foreground">Post an update</h3>
+                  <Textarea
+                    value={noteBody}
+                    onChange={e => setNoteBody(e.target.value)}
+                    placeholder="Write a site update…"
+                    rows={3}
+                  />
+                  {ovPhotoOpen && (
+                    <div className="space-y-2">
+                      <FileDropZone
+                        key={ovPhotoKey}
+                        accept=".jpg,.jpeg,.png,.webp"
+                        onUploaded={f => setOvPhotoUrl(f.url)}
+                        onCleared={() => setOvPhotoUrl(null)}
+                      />
+                      <Input
+                        value={ovPhotoNote}
+                        onChange={e => setOvPhotoNote(e.target.value)}
+                        placeholder="Caption (optional)"
+                      />
                     </div>
-                  ))}
-                  {(!project.recentActivity || project.recentActivity.length === 0) && (
-                    <p className="text-muted-foreground">No recent activity.</p>
                   )}
-                </div>
-              </CardContent>
-            </Card>
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex gap-2">
+                      {caps.canUploadDocument && (
+                        <button
+                          type="button"
+                          onClick={() => setIsUploadOpen(true)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors"
+                        >
+                          <FileText className="w-3.5 h-3.5" /> Document
+                        </button>
+                      )}
+                      {caps.canLogPhoto && (
+                        <button
+                          type="button"
+                          onClick={() => setOvPhotoOpen(o => !o)}
+                          className={cn(
+                            "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium transition-colors",
+                            ovPhotoOpen
+                              ? "border-primary/25 bg-primary/5 text-primary hover:bg-primary/15"
+                              : "border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted"
+                          )}
+                        >
+                          <Camera className="w-3.5 h-3.5" /> Photo
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {ovPhotoOpen && ovPhotoUrl && (
+                        <Button size="sm" variant="outline" onClick={submitOverviewPhoto} isLoading={ovPhotoSubmitting}>
+                          Log photo
+                        </Button>
+                      )}
+                      {caps.canLogPhoto && (
+                        <Button size="sm" onClick={() => submitDailyNote(noteBody)} disabled={!noteBody.trim() || noteSubmitting}>
+                          {noteSubmitting ? "Saving…" : "Save update"}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  {todayNotes.length > 0 && (
+                    <div className="border-t pt-3 space-y-2">
+                      <p className="text-xs font-semibold text-muted-foreground">Posted today</p>
+                      {todayNotes.map(n => (
+                        <div key={n.id} className="rounded-lg border bg-muted/30 p-3">
+                          <p className="text-sm text-foreground whitespace-pre-wrap">{n.body}</p>
+                          <p className="text-[10px] text-muted-foreground mt-1">{n.authorName} · {formatDate(n.createdAt)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+            <div className="grid md:grid-cols-2 gap-6">
+              <Card>
+                <CardContent className="pt-6">
+                  <h3 className="font-bold text-lg mb-4">Recent Activity</h3>
+                  <div className="space-y-4">
+                    {project.recentActivity?.map(act => (
+                      <div key={act.id} className="flex gap-3 text-sm">
+                        <div className="w-2 h-2 mt-1.5 rounded-full bg-primary shrink-0"></div>
+                        <div>
+                          <p className="font-medium text-foreground">{act.description}</p>
+                          <p className="text-muted-foreground text-xs">{formatDate(act.createdAt)} by {act.userName || 'System'}</p>
+                        </div>
+                      </div>
+                    ))}
+                    {(!project.recentActivity || project.recentActivity.length === 0) && (
+                      <p className="text-muted-foreground">No recent activity.</p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </TabsContent>
 
