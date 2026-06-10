@@ -429,9 +429,6 @@ export default function CompliancePage() {
                                 <Upload className="w-3 h-3" />
                               </button>
                             )}
-                            <Link href="/subcontractors" className="text-xs text-muted-foreground hover:text-primary flex items-center gap-0.5">
-                              View <ArrowRight className="w-3 h-3" />
-                            </Link>
                           </>
                         )}
                       </div>
@@ -512,9 +509,6 @@ export default function CompliancePage() {
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
-                        <Link href={`/projects/${p.projectId}`} className="text-xs text-muted-foreground hover:text-primary flex items-center gap-0.5">
-                          View <ArrowRight className="w-3 h-3" />
-                        </Link>
                       </div>
                     </div>
                   );
