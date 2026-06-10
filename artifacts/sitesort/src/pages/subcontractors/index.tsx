@@ -238,6 +238,9 @@ export default function SubcontractorsPage() {
   const [notesLoading, setNotesLoading] = useState(false);
   const [noteDraft, setNoteDraft] = useState("");
   const [noteSubmitting, setNoteSubmitting] = useState(false);
+  const [noteScope, setNoteScope] = useState<"general" | "project">("general");
+  const [noteProjectId, setNoteProjectId] = useState("");
+  const [noteProjects, setNoteProjects] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
     if (!shareTarget) return;
@@ -366,12 +369,21 @@ export default function SubcontractorsPage() {
     setNotesTarget(sub);
     setNotesList([]);
     setNoteDraft("");
+    setNoteScope("general");
+    setNoteProjectId("");
     setNotesLoading(true);
-    const res = await apiFetch(`/api/subcontractors/${sub.id}/notes`);
-    if (res.ok) {
-      const data: SubNote[] = await res.json();
+    const [notesRes, projectsRes] = await Promise.all([
+      apiFetch(`/api/subcontractors/${sub.id}/notes`),
+      apiFetch("/api/projects"),
+    ]);
+    if (notesRes.ok) {
+      const data: SubNote[] = await notesRes.json();
       data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       setNotesList(data);
+    }
+    if (projectsRes.ok) {
+      const all = await projectsRes.json();
+      setNoteProjects((all as any[]).filter(p => p.status === "active").map(p => ({ id: p.id, name: p.name })));
     }
     setNotesLoading(false);
   }
@@ -381,10 +393,14 @@ export default function SubcontractorsPage() {
     const body = noteDraft.trim();
     if (!body) return;
     if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
+    if (noteScope === "project" && !noteProjectId) {
+      toast({ title: "Select a project", description: "Choose a project or switch to General.", variant: "destructive" });
+      return;
+    }
     setNoteSubmitting(true);
     const res = await apiFetch(`/api/subcontractors/${notesTarget.id}/notes`, {
       method: "POST",
-      body: JSON.stringify({ body }),
+      body: JSON.stringify({ body, projectId: noteScope === "project" ? noteProjectId : null }),
     });
     if (res.ok) {
       const created: SubNote = await res.json();
@@ -630,9 +646,6 @@ export default function SubcontractorsPage() {
                                   </span>
                                 ))}
                               </div>
-                            )}
-                            {sub.notes && (
-                              <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2 italic">{sub.notes}</p>
                             )}
                             {sub.insuranceRecords?.length > 0 && (
                               <div className="mt-2 space-y-1">
@@ -1081,7 +1094,7 @@ export default function SubcontractorsPage() {
       </Dialog>
 
       {/* Notes & reminders log dialog */}
-      <Dialog open={!!notesTarget} onOpenChange={open => { if (!open) { setNotesTarget(null); setNotesList([]); setNoteDraft(""); } }}>
+      <Dialog open={!!notesTarget} onOpenChange={open => { if (!open) { setNotesTarget(null); setNotesList([]); setNoteDraft(""); setNoteScope("general"); setNoteProjectId(""); } }}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <StickyNote className="w-4 h-4 text-amber-600" /> Notes & Reminders
@@ -1100,13 +1113,37 @@ export default function SubcontractorsPage() {
             </div>
 
             <p className="text-xs text-muted-foreground">
-              Notes added here are <span className="font-medium text-foreground">general</span> — they appear in every project this subcontractor is linked to. Project-specific notes can be added from within a project's Team tab.
+              <span className="font-medium text-foreground">General notes</span> appear across all projects this contact is linked to. <span className="font-medium text-foreground">Project notes</span> stay within a single project.
             </p>
 
             {caps.canManageSubcontractors && (
               <div className="space-y-2">
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setNoteScope("general")}
+                    className={`flex-1 text-xs font-semibold py-1.5 rounded-lg border transition-colors ${noteScope === "general" ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-input hover:border-primary/50"}`}
+                  >
+                    General (all projects)
+                  </button>
+                  <button
+                    onClick={() => setNoteScope("project")}
+                    className={`flex-1 text-xs font-semibold py-1.5 rounded-lg border transition-colors ${noteScope === "project" ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-input hover:border-primary/50"}`}
+                  >
+                    Specific project
+                  </button>
+                </div>
+                {noteScope === "project" && (
+                  <select
+                    value={noteProjectId}
+                    onChange={e => setNoteProjectId(e.target.value)}
+                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">Select project…</option>
+                    {noteProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                )}
                 <textarea
-                  placeholder="e.g. Reminded John his public liability insurance expires next month…"
+                  placeholder={noteScope === "general" ? "e.g. Reminded John his public liability insurance expires next month…" : "e.g. Running 2 days behind on Block A…"}
                   rows={3}
                   value={noteDraft}
                   onChange={e => setNoteDraft(e.target.value)}
@@ -1154,7 +1191,7 @@ export default function SubcontractorsPage() {
           </div>
         )}
         <DialogFooter>
-          <Button variant="outline" onClick={() => { setNotesTarget(null); setNotesList([]); setNoteDraft(""); }}>Close</Button>
+          <Button variant="outline" onClick={() => { setNotesTarget(null); setNotesList([]); setNoteDraft(""); setNoteScope("general"); setNoteProjectId(""); }}>Close</Button>
         </DialogFooter>
       </Dialog>
     </SidebarLayout>
