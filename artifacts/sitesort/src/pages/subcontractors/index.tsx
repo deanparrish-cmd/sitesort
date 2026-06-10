@@ -216,6 +216,7 @@ export default function SubcontractorsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [selectedTradesAdd, setSelectedTradesAdd] = useState<string[]>([]);
   const [selectedTradesEdit, setSelectedTradesEdit] = useState<string[]>([]);
+  const [typeFilter, setTypeFilter] = useState<ContactType | "all">("all");
 
   // Share-to-project state
   type ProjectLinkStatus = "idle" | "loading" | "added" | "already" | "error";
@@ -306,11 +307,14 @@ export default function SubcontractorsPage() {
   // Group contacts: subcontractors by trade, others by their contact type
   const grouped = useMemo(() => {
     const q = search.toLowerCase();
-    const filtered = subs.filter(s =>
-      s.companyName.toLowerCase().includes(q) ||
-      s.contactName.toLowerCase().includes(q) ||
-      s.trades.some(t => t.toLowerCase().includes(q))
-    );
+    const filtered = subs.filter(s => {
+      if (typeFilter !== "all" && (s.contactType ?? "subcontractor") !== typeFilter) return false;
+      return (
+        s.companyName.toLowerCase().includes(q) ||
+        s.contactName.toLowerCase().includes(q) ||
+        s.trades.some(t => t.toLowerCase().includes(q))
+      );
+    });
 
     const map: Record<string, Sub[]> = {};
     for (const s of filtered) {
@@ -329,7 +333,7 @@ export default function SubcontractorsPage() {
     const unknownTradeKeys = Object.keys(map).filter(t => !TRADE_CATEGORIES.includes(t) && !Object.values(CONTACT_TYPE_GROUP_LABELS).includes(t)).sort();
     const typeGroupKeys = Object.values(CONTACT_TYPE_GROUP_LABELS).filter(g => map[g]);
     return { map, orderedKeys: [...tradeKeys, ...unknownTradeKeys, ...typeGroupKeys] };
-  }, [subs, search]);
+  }, [subs, search, typeFilter]);
 
   const toggleTrade = (trade: string) =>
     setOpenTrades(prev => ({ ...prev, [trade]: !(prev[trade] ?? true) }));
@@ -489,15 +493,36 @@ export default function SubcontractorsPage() {
         </Card>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-sm mb-6">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-        <Input
-          placeholder="Search by name, trade or company…"
-          className="pl-9"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
+      {/* Search + type filter */}
+      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+        <div className="relative max-w-sm w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          <Input
+            placeholder="Search by name, trade or company…"
+            className="pl-9"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {([["all", "All"], ...Object.entries(CONTACT_TYPE_LABELS)] as [ContactType | "all", string][]).map(([value, label]) => (
+            <button
+              key={value}
+              onClick={() => setTypeFilter(value)}
+              className={cn(
+                "px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors",
+                typeFilter === value
+                  ? value === "all"         ? "bg-foreground text-background border-foreground"
+                  : value === "subcontractor" ? "bg-orange-500 text-white border-orange-500"
+                  : value === "merchant"     ? "bg-blue-500 text-white border-blue-500"
+                  : value === "supplier"     ? "bg-purple-500 text-white border-purple-500"
+                  : value === "professional" ? "bg-teal-500 text-white border-teal-500"
+                  :                           "bg-muted-foreground text-background border-muted-foreground"
+                  : "bg-background text-muted-foreground border-input hover:border-primary/50"
+              )}
+            >{label}</button>
+          ))}
+        </div>
       </div>
 
       {/* Directory */}
