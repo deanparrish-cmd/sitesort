@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db } from "@workspace/db";
-import { qrCodesTable, qrBoardPinsTable, documentsTable, projectsTable, projectMembersTable, usersTable, permitsTable, photosTable, invoicesTable, siteCheckinsTable } from "@workspace/db/schema";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { qrCodesTable, qrBoardPinsTable, documentsTable, projectsTable, projectMembersTable, usersTable, permitsTable, photosTable, invoicesTable, siteCheckinsTable, subcontractorsTable, insuranceRecordsTable } from "@workspace/db/schema";
+import { eq, and, desc, inArray, isNull, gte } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { randomBytes } from "crypto";
@@ -204,6 +204,7 @@ router.get("/site/:token", async (req, res) => {
         id: usersTable.id,
         name: usersTable.name,
         email: usersTable.email,
+        phone: usersTable.phone,
         role: projectMembersTable.role,
       })
       .from(projectMembersTable)
@@ -253,7 +254,7 @@ router.get("/site/:token", async (req, res) => {
         targetEndDate: project.targetEndDate ?? null,
         trades: project.trades ?? [],
       },
-      siteManager: siteManager ? { name: siteManager.name, email: siteManager.email } : null,
+      siteManager: siteManager ? { name: siteManager.name, email: siteManager.email, phone: siteManager.phone ?? null } : null,
       teamSize: members.length,
       permits: permits.map(p => ({
         id: p.id,
@@ -302,12 +303,12 @@ router.get("/site/:token", async (req, res) => {
   }
 });
 
-// Public check-in endpoint — no auth required
+// Public check-in endpoint — validates contact registration and insurance before recording
 router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: Request, res: Response) => {
   try {
-    const { workerName, lat, lng } = req.body;
-    if (!workerName?.trim()) {
-      res.status(400).json({ error: "validation_error", message: "workerName required" });
+    const { workerName, companyName, lat, lng } = req.body;
+    if (!workerName?.trim() || !companyName?.trim()) {
+      res.status(400).json({ error: "validation_error", message: "workerName and companyName required" });
       return;
     }
     if (!req.file) {
@@ -320,6 +321,47 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
       .then(r => r[0]);
     if (!qr) {
       res.status(404).json({ error: "not_found", message: "Invalid site token" });
+      return;
+    }
+
+    // Find all subcontractor contacts linked to this project
+    const projectContacts = await db
+      .select({
+        id: subcontractorsTable.id,
+        contactName: subcontractorsTable.contactName,
+        companyName: subcontractorsTable.companyName,
+      })
+      .from(projectMembersTable)
+      .innerJoin(subcontractorsTable, eq(subcontractorsTable.id, projectMembersTable.subcontractorId))
+      .where(eq(projectMembersTable.projectId, qr.projectId));
+
+    // Case-insensitive match on name + company
+    const nameLower = workerName.trim().toLowerCase();
+    const companyLower = companyName.trim().toLowerCase();
+    const matched = projectContacts.find(c =>
+      c.contactName.toLowerCase() === nameLower &&
+      c.companyName.toLowerCase() === companyLower
+    );
+
+    if (!matched) {
+      res.status(403).json({ error: "check_in_blocked", reason: "not_registered" });
+      return;
+    }
+
+    // Check for at least one valid (non-archived, non-expired) insurance certificate
+    const today = new Date().toISOString().split("T")[0];
+    const validInsurance = await db
+      .select({ id: insuranceRecordsTable.id })
+      .from(insuranceRecordsTable)
+      .where(and(
+        eq(insuranceRecordsTable.subcontractorId, matched.id),
+        isNull(insuranceRecordsTable.archivedAt),
+        gte(insuranceRecordsTable.expiryDate, today),
+      ))
+      .limit(1);
+
+    if (validInsurance.length === 0) {
+      res.status(403).json({ error: "check_in_blocked", reason: "no_valid_insurance" });
       return;
     }
 
@@ -338,6 +380,7 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
       id,
       projectId: qr.projectId,
       workerName: workerName.trim(),
+      companyName: companyName.trim(),
       photoUrl,
       lat: lat ? parseFloat(lat) : null,
       lng: lng ? parseFloat(lng) : null,

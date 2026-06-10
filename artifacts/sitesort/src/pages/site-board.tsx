@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRoute } from "wouter";
-import { MapPin, Calendar, FileText, HardHat, ShieldCheck, AlertTriangle, Users, Mail, Phone, Clock, Camera, CheckCircle2, Loader2, Pin } from "lucide-react";
+import { MapPin, Calendar, FileText, HardHat, ShieldCheck, AlertTriangle, Users, Mail, Phone, Clock, Camera, CheckCircle2, Loader2, Pin, XCircle, Building2 } from "lucide-react";
 
-// Stamps date/time, project name and worker name onto the captured image via canvas
 async function stampPhoto(file: File, projectName: string, workerName: string): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -63,10 +62,28 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function CheckInCard({ token, projectName }: { token: string; projectName: string }) {
+interface SiteManager {
+  name: string;
+  email: string;
+  phone: string | null;
+}
+
+function CheckInCard({
+  token,
+  projectName,
+  siteManager,
+  onCheckedIn,
+}: {
+  token: string;
+  projectName: string;
+  siteManager: SiteManager | null;
+  onCheckedIn: () => void;
+}) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState("");
+  const [companyName, setCompanyName] = useState("");
   const [status, setStatus] = useState<"idle" | "capturing" | "uploading" | "done" | "error">("idle");
+  const [blockedReason, setBlockedReason] = useState<"not_registered" | "no_valid_insurance" | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [capturedFile, setCapturedFile] = useState<File | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
@@ -80,7 +97,8 @@ function CheckInCard({ token, projectName }: { token: string; projectName: strin
   };
 
   const handleCheckin = async () => {
-    if (!name.trim()) { setErrorMsg("Please enter your name first."); return; }
+    if (!name.trim()) { setErrorMsg("Please enter your name."); return; }
+    if (!companyName.trim()) { setErrorMsg("Please enter your company name."); return; }
     if (!capturedFile) { fileRef.current?.click(); return; }
 
     setStatus("uploading");
@@ -99,13 +117,24 @@ function CheckInCard({ token, projectName }: { token: string; projectName: strin
       const fd = new FormData();
       fd.append("photo", stamped, "checkin.jpg");
       fd.append("workerName", name.trim());
+      fd.append("companyName", companyName.trim());
       if (lat !== null) fd.append("lat", String(lat));
       if (lng !== null) fd.append("lng", String(lng));
 
       const res = await fetch(`/api/site/${token}/checkin`, { method: "POST", body: fd });
+
+      if (res.status === 403) {
+        const body = await res.json();
+        setBlockedReason(body.reason ?? "not_registered");
+        setStatus("idle");
+        return;
+      }
+
       if (!res.ok) throw new Error("Upload failed");
+
       setStatus("done");
-    } catch (err) {
+      setTimeout(() => onCheckedIn(), 2000);
+    } catch {
       setErrorMsg("Check-in failed. Please try again.");
       setStatus("capturing");
     }
@@ -114,19 +143,83 @@ function CheckInCard({ token, projectName }: { token: string; projectName: strin
   const reset = () => {
     setStatus("idle");
     setName("");
+    setCompanyName("");
     setPreview(null);
     setCapturedFile(null);
     setErrorMsg("");
+    setBlockedReason(null);
     if (fileRef.current) fileRef.current.value = "";
   };
 
+  // Access blocked screen
+  if (blockedReason) {
+    return (
+      <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+        <div className="bg-gradient-to-r from-red-700 to-red-500 px-5 py-4 flex items-center gap-3">
+          <XCircle className="w-5 h-5 text-white" />
+          <h2 className="text-white font-bold text-base">Site Access Not Permitted</h2>
+        </div>
+        <div className="p-6 text-center space-y-4">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto">
+            <AlertTriangle className="w-8 h-8 text-red-500" />
+          </div>
+          <div>
+            <p className="font-bold text-gray-900 text-lg mb-1">Access Denied</p>
+            <p className="text-gray-600 text-sm">
+              {blockedReason === "not_registered"
+                ? "Your name and company could not be verified against the registered contacts for this project."
+                : "Your insurance certificate has expired or has not been submitted to the site manager."}
+            </p>
+          </div>
+
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-left">
+            <p className="text-amber-800 font-semibold text-sm text-center mb-3">
+              Please contact the site manager before entering the site.
+            </p>
+            {siteManager ? (
+              <div className="space-y-2">
+                <p className="font-bold text-gray-900 text-center">{siteManager.name}</p>
+                <a
+                  href={`mailto:${siteManager.email}`}
+                  className="flex items-center justify-center gap-2 bg-white border border-amber-300 rounded-lg px-3 py-2 text-amber-800 text-sm font-medium hover:bg-amber-50 transition-colors"
+                >
+                  <Mail className="w-4 h-4" /> {siteManager.email}
+                </a>
+                {siteManager.phone && (
+                  <a
+                    href={`tel:${siteManager.phone}`}
+                    className="flex items-center justify-center gap-2 bg-white border border-amber-300 rounded-lg px-3 py-2 text-amber-800 text-sm font-medium hover:bg-amber-50 transition-colors"
+                  >
+                    <Phone className="w-4 h-4" /> {siteManager.phone}
+                  </a>
+                )}
+              </div>
+            ) : (
+              <p className="text-amber-700 text-sm text-center">Contact the site manager for assistance.</p>
+            )}
+          </div>
+
+          <button
+            onClick={reset}
+            className="text-sm text-orange-600 font-medium hover:underline"
+          >
+            Try again with different details
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Success screen
   if (status === "done") {
     return (
       <div className="bg-white rounded-2xl shadow-sm border p-6 text-center">
-        <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-3" />
-        <h3 className="text-lg font-bold text-gray-900">Checked In!</h3>
-        <p className="text-gray-500 text-sm mt-1">Your attendance has been recorded at {new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}.</p>
-        <button onClick={reset} className="mt-4 text-sm text-orange-600 font-medium hover:underline">Check in again</button>
+        <CheckCircle2 className="w-14 h-14 text-green-500 mx-auto mb-3" />
+        <h3 className="text-xl font-bold text-gray-900">Check-In Verified!</h3>
+        <p className="text-gray-500 text-sm mt-1 mb-3">
+          Your attendance has been recorded at {new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}.
+        </p>
+        <p className="text-green-600 text-sm font-medium">Loading site information…</p>
       </div>
     );
   }
@@ -135,9 +228,13 @@ function CheckInCard({ token, projectName }: { token: string; projectName: strin
     <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
       <div className="bg-gradient-to-r from-orange-600 to-orange-500 px-5 py-4 flex items-center gap-3">
         <Camera className="w-5 h-5 text-white" />
-        <h2 className="text-white font-bold text-base">Site Check-In</h2>
+        <h2 className="text-white font-bold text-base">Site Check-In Required</h2>
       </div>
       <div className="p-5 space-y-4">
+        <p className="text-gray-500 text-sm">
+          Complete your check-in to access site information. Your details must match the registered contacts for this project.
+        </p>
+
         <div>
           <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">Your Name</label>
           <input
@@ -145,6 +242,19 @@ function CheckInCard({ token, projectName }: { token: string; projectName: strin
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="e.g. John Smith"
+            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
+            <Building2 className="w-3.5 h-3.5" /> Company Name
+          </label>
+          <input
+            type="text"
+            value={companyName}
+            onChange={e => setCompanyName(e.target.value)}
+            placeholder="e.g. Acme Electrical Ltd"
             className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
           />
         </div>
@@ -167,7 +277,12 @@ function CheckInCard({ token, projectName }: { token: string; projectName: strin
 
         {status !== "capturing" ? (
           <button
-            onClick={() => { if (!name.trim()) { setErrorMsg("Please enter your name first."); return; } setErrorMsg(""); fileRef.current?.click(); }}
+            onClick={() => {
+              if (!name.trim()) { setErrorMsg("Please enter your name."); return; }
+              if (!companyName.trim()) { setErrorMsg("Please enter your company name."); return; }
+              setErrorMsg("");
+              fileRef.current?.click();
+            }}
             className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
           >
             <Camera className="w-5 h-5" /> Take Check-In Photo
@@ -178,10 +293,18 @@ function CheckInCard({ token, projectName }: { token: string; projectName: strin
             disabled={status === "uploading"}
             className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
           >
-            {status === "uploading" ? <><Loader2 className="w-5 h-5 animate-spin" /> Submitting…</> : <><CheckCircle2 className="w-5 h-5" /> Confirm Check-In</>}
+            {status === "uploading"
+              ? <><Loader2 className="w-5 h-5 animate-spin" /> Verifying &amp; Submitting…</>
+              : <><CheckCircle2 className="w-5 h-5" /> Confirm Check-In</>}
           </button>
         )}
-        <p className="text-xs text-gray-400 text-center">Your photo will be date & time stamped and shared with the site manager.</p>
+
+        <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-500 space-y-1">
+          <p className="font-semibold text-gray-600">Check-in requirements:</p>
+          <p>✓ Name and company must match your project registration</p>
+          <p>✓ Valid insurance certificate must be on record</p>
+          <p>✓ Site photo required</p>
+        </div>
       </div>
     </div>
   );
@@ -194,6 +317,7 @@ export default function SiteBoard() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [checkedIn, setCheckedIn] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -232,6 +356,32 @@ export default function SiteBoard() {
 
   const { project, siteManager, teamSize, permits, documents, pinnedItems = [], generatedAt } = data;
 
+  // Gate: show check-in form until the worker has successfully checked in
+  if (!checkedIn) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-orange-50 to-white">
+        <div className="bg-gradient-to-r from-orange-700 to-orange-500 text-white px-4 py-8">
+          <div className="max-w-2xl mx-auto">
+            <p className="text-orange-200 text-sm font-medium uppercase tracking-wider mb-1">SiteSort — Site Board</p>
+            <h1 className="text-2xl sm:text-3xl font-extrabold leading-tight">{project.name}</h1>
+            <div className="flex items-center gap-2 mt-2 text-orange-100">
+              <MapPin className="w-4 h-4 shrink-0" />
+              <span className="text-sm">{project.address}</span>
+            </div>
+          </div>
+        </div>
+        <div className="max-w-2xl mx-auto px-4 py-6">
+          <CheckInCard
+            token={token}
+            projectName={project.name}
+            siteManager={siteManager}
+            onCheckedIn={() => setCheckedIn(true)}
+          />
+        </div>
+      </div>
+    );
+  }
+
   const activePermits = permits.filter((p: any) => {
     const expiry = new Date(p.expiryDate);
     return expiry >= new Date();
@@ -264,6 +414,12 @@ export default function SiteBoard() {
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
+        {/* Verified badge */}
+        <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+          <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
+          <p className="text-green-800 text-sm font-medium">Check-in verified — you are cleared to access the site.</p>
+        </div>
+
         {/* Key info strip */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <div className="bg-white rounded-xl shadow-sm border p-4">
@@ -318,6 +474,14 @@ export default function SiteBoard() {
             >
               <Mail className="w-4 h-4" /> {siteManager.email}
             </a>
+            {siteManager.phone && (
+              <a
+                href={`tel:${siteManager.phone}`}
+                className="flex items-center gap-2 text-orange-600 font-medium text-sm mt-1 hover:underline"
+              >
+                <Phone className="w-4 h-4" /> {siteManager.phone}
+              </a>
+            )}
           </div>
         )}
 
@@ -466,9 +630,6 @@ export default function SiteBoard() {
             </div>
           );
         })()}
-
-        {/* Check-in */}
-        <CheckInCard token={token} projectName={project.name} />
 
         {/* Footer */}
         <div className="text-center text-xs text-gray-400 pb-4 pt-2">

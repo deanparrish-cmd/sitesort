@@ -5,6 +5,7 @@ export const siteCheckinsTable = pgTable("site_checkins", {
   id: text("id").primaryKey(),
   projectId: text("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
   workerName: text("worker_name").notNull(),
+  companyName: text("company_name"),
   photoUrl: text("photo_url").notNull(),
   checkedInAt: timestamp("checked_in_at").notNull().defaultNow(),
   lat: real("lat"),
