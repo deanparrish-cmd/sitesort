@@ -13,7 +13,7 @@ import {
   ShieldCheck, ShieldAlert, ShieldX, Shield, Star, AlertTriangle,
   Users, Pencil, X, FolderOpen, MessageSquare,
   FolderPlus, CheckCircle2, Loader2, Building2, UserPlus, Copy, Check,
-  Share2, MessageCircle, StickyNote, Clock, Send,
+  Share2, MessageCircle, StickyNote, Clock, Send, FileText, ExternalLink,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { cn } from "@/lib/utils";
@@ -40,6 +40,14 @@ const CONTACT_TYPE_GROUP_LABELS: Record<string, string> = {
   other: "Other Contacts",
 };
 
+type InsuranceRecord = {
+  id: string;
+  type: string;
+  certificateUrl: string;
+  expiryDate: string;
+  status: string;
+};
+
 type Sub = {
   id: string;
   companyName: string;
@@ -52,6 +60,7 @@ type Sub = {
   paymentHold: boolean;
   notes: string | null;
   insuranceStatus: InsuranceStatus;
+  insuranceRecords: InsuranceRecord[];
   createdAt: string;
 };
 
@@ -88,6 +97,10 @@ const TRADE_CATEGORIES = [
   "Demolition",
   "Other",
 ];
+
+function normaliseUrl(url: string) {
+  return url.startsWith("/uploads/") ? `/api${url}` : url;
+}
 
 function insuranceBadge(status: InsuranceStatus) {
   if (status === "valid") return <Badge className="gap-1 text-[10px] bg-emerald-100 text-emerald-700 border-emerald-200"><ShieldCheck className="w-3 h-3" />Insurance OK</Badge>;
@@ -558,6 +571,23 @@ export default function SubcontractorsPage() {
                             )}
                             {sub.notes && (
                               <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2 italic">{sub.notes}</p>
+                            )}
+                            {sub.insuranceRecords?.length > 0 && (
+                              <div className="mt-2 space-y-1">
+                                {sub.insuranceRecords.map(r => {
+                                  const expired = r.status === "expired";
+                                  const expiring = r.status === "expiring_soon";
+                                  return (
+                                    <div key={r.id} className={cn("flex items-center gap-1.5 text-[10px] font-medium px-2 py-1 rounded-md border", expired ? "bg-red-50 border-red-200 text-red-700" : expiring ? "bg-yellow-50 border-yellow-200 text-yellow-700" : "bg-emerald-50 border-emerald-200 text-emerald-700")}>
+                                      <FileText className="w-3 h-3 shrink-0" />
+                                      <span className="truncate">{r.type} — expires {new Date(r.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
+                                      <button onClick={() => window.open(normaliseUrl(r.certificateUrl), "_blank")} className="ml-auto shrink-0 hover:opacity-70" title="Open certificate">
+                                        <ExternalLink className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
                             )}
                           </div>
 

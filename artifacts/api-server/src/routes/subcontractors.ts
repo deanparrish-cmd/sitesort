@@ -41,6 +41,7 @@ router.get("/subcontractors", authenticate, async (req, res) => {
         paymentHold: s.paymentHold,
         notes: s.notes ?? null,
         insuranceStatus: computeInsuranceStatus(insurance),
+        insuranceRecords: insurance.map(r => ({ id: r.id, type: r.type, certificateUrl: r.certificateUrl, expiryDate: r.expiryDate, status: r.status })),
         createdAt: s.createdAt.toISOString(),
       };
     }));
@@ -73,7 +74,7 @@ router.post("/subcontractors", authenticate, async (req, res) => {
       paymentHold: false,
     });
 
-    res.status(201).json({ id, companyId: req.user!.companyId, companyName, contactName, contactEmail, contactPhone: contactPhone ?? null, contactType: contactType ?? "subcontractor", trades: trades ?? [], reliabilityRating: null, paymentHold: false, notes: notes ?? null, insuranceStatus: "none", createdAt: new Date().toISOString() });
+    res.status(201).json({ id, companyId: req.user!.companyId, companyName, contactName, contactEmail, contactPhone: contactPhone ?? null, contactType: contactType ?? "subcontractor", trades: trades ?? [], reliabilityRating: null, paymentHold: false, notes: notes ?? null, insuranceStatus: "none", insuranceRecords: [], createdAt: new Date().toISOString() });
   } catch (err) {
     req.log.error({ err }, "Create subcontractor error");
     res.status(500).json({ error: "server_error", message: "Failed to create subcontractor" });
@@ -149,7 +150,7 @@ router.patch("/subcontractors/:subcontractorId", authenticate, async (req, res) 
     const s = subs[0];
     const insurance = await db.select().from(insuranceRecordsTable).where(eq(insuranceRecordsTable.subcontractorId, s.id));
 
-    res.json({ id: s.id, companyId: s.companyId, companyName: s.companyName, contactName: s.contactName, contactEmail: s.contactEmail, contactPhone: s.contactPhone ?? null, contactType: s.contactType ?? "subcontractor", trades: s.trades ?? [], reliabilityRating: s.reliabilityRating ? Number(s.reliabilityRating) : null, paymentHold: s.paymentHold, notes: s.notes ?? null, insuranceStatus: computeInsuranceStatus(insurance), createdAt: s.createdAt.toISOString() });
+    res.json({ id: s.id, companyId: s.companyId, companyName: s.companyName, contactName: s.contactName, contactEmail: s.contactEmail, contactPhone: s.contactPhone ?? null, contactType: s.contactType ?? "subcontractor", trades: s.trades ?? [], reliabilityRating: s.reliabilityRating ? Number(s.reliabilityRating) : null, paymentHold: s.paymentHold, notes: s.notes ?? null, insuranceStatus: computeInsuranceStatus(insurance), insuranceRecords: insurance.map(r => ({ id: r.id, type: r.type, certificateUrl: r.certificateUrl, expiryDate: r.expiryDate, status: r.status })), createdAt: s.createdAt.toISOString() });
   } catch (err) {
     req.log.error({ err }, "Update subcontractor error");
     res.status(500).json({ error: "server_error", message: "Failed to update subcontractor" });
