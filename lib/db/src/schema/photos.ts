@@ -16,6 +16,8 @@ export const photosTable = pgTable("photos", {
   latitude: numeric("latitude"),
   longitude: numeric("longitude"),
   takenAt: timestamp("taken_at").notNull().defaultNow(),
+  status: text("status"),
+  resolvedAt: timestamp("resolved_at"),
 });
 
 export const insertPhotoSchema = createInsertSchema(photosTable).omit({ takenAt: true });

@@ -26,6 +26,7 @@ import TeamPage from "@/pages/team";
 import MessagesPage from "@/pages/messages";
 import NotificationsPage from "@/pages/notifications";
 import SettingsPage from "@/pages/settings";
+import IssuesPage from "@/pages/issues";
 
 // Set up the fetch interceptor for auth
 setupApiInterceptor();
@@ -65,6 +66,7 @@ function Router() {
       <Route path="/settings" component={SettingsPage} />
 
       <Route path="/invoices" component={InvoicesPage} />
+      <Route path="/issues" component={IssuesPage} />
 
       {/* Admin */}
       <Route path="/admin" component={AdminDashboard} />

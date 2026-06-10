@@ -318,7 +318,7 @@ export default function Dashboard() {
       const res = await fetch(`/api/photos/${n.relatedEntityId}`, { headers: h }).catch(() => null);
       if (res?.ok) {
         const photo = await res.json();
-        navigate(`/projects/${photo.projectId}?tab=photos`);
+        navigate(`/projects/${photo.projectId}?tab=photos&photo=${n.relatedEntityId}`);
         return;
       }
     }
