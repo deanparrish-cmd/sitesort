@@ -1060,13 +1060,15 @@ export default function SubcontractorsPage() {
                 </div>
 
                 <div className="flex gap-2">
-                  <a
-                    href={`https://wa.me/${inviteTarget.contactPhone?.replace(/\D/g, "") ?? ""}?text=${encodeURIComponent(`You've been invited to join SiteSort. Click here to create your account: ${inviteLink}`)}`}
-                    target="_blank" rel="noreferrer"
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-[#25D366] text-white text-xs font-semibold hover:opacity-90 transition-opacity"
-                  >
-                    WhatsApp
-                  </a>
+                  {inviteTarget.contactPhone && (
+                    <a
+                      href={`https://wa.me/${inviteTarget.contactPhone.replace(/\D/g, "")}?text=${encodeURIComponent(`You've been invited to join SiteSort. Click here to create your account: ${inviteLink}`)}`}
+                      target="_blank" rel="noreferrer"
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-[#25D366] text-white text-xs font-semibold hover:opacity-90 transition-opacity"
+                    >
+                      WhatsApp
+                    </a>
+                  )}
                   <a
                     href={`mailto:${inviteTarget.contactEmail}?subject=${encodeURIComponent("You've been invited to SiteSort")}&body=${encodeURIComponent(`Hi ${inviteTarget.contactName},\n\nYou've been invited to join SiteSort. Click the link below to create your account:\n\n${inviteLink}\n\nSee you on site!`)}`}
                     className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-muted text-foreground text-xs font-semibold hover:bg-muted/70 transition-colors border"

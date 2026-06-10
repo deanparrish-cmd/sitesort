@@ -265,11 +265,11 @@ export default function ProjectsList() {
   const onSubmit = async (data: any) => {
     setCreateError(null);
     try {
-      await createMutation.mutateAsync({ data });
+      const newProject = await createMutation.mutateAsync({ data });
       await queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
       setIsModalOpen(false);
       reset();
-      setLocation("/dashboard");
+      setLocation(`/projects/${(newProject as any).id}`);
     } catch (e: any) {
       if (e?.status === 403 && (e?.data as any)?.error === "plan_limit") {
         setIsModalOpen(false);
@@ -374,7 +374,11 @@ export default function ProjectsList() {
                 <tr><td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">No projects found.</td></tr>
               ) : (
                 filteredProjects?.map((project) => (
-                  <tr key={project.id} className="bg-card border-b hover:bg-muted/30 transition-colors group">
+                  <tr
+                    key={project.id}
+                    onClick={() => setLocation(`/projects/${project.id}`)}
+                    className="bg-card border-b hover:bg-muted/30 transition-colors cursor-pointer group"
+                  >
                     <td className="px-6 py-4">
                       <div className="font-bold text-foreground text-base mb-1">{project.name}</div>
                       <div className="text-muted-foreground flex items-center gap-1 text-xs">
@@ -404,11 +408,9 @@ export default function ProjectsList() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <Link href={`/projects/${project.id}`}>
-                        <Button variant="outline" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity">
-                          View Site
-                        </Button>
-                      </Link>
+                      <Button variant="outline" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                        View Site
+                      </Button>
                     </td>
                   </tr>
                 ))
