@@ -7,10 +7,11 @@ import { authenticate } from "../middlewares/auth";
 
 const router: IRouter = Router();
 
-function computeInsuranceStatus(records: Array<{ status: string }>): "valid" | "expiring_soon" | "expired" | "none" {
+function computeInsuranceStatus(records: Array<{ expiryDate: string }>): "valid" | "expiring_soon" | "expired" | "none" {
   if (records.length === 0) return "none";
-  if (records.some(r => r.status === "expired")) return "expired";
-  if (records.some(r => r.status === "expiring_soon")) return "expiring_soon";
+  const statuses = records.map(r => computeRecordStatus(r.expiryDate));
+  if (statuses.some(s => s === "expired")) return "expired";
+  if (statuses.some(s => s === "expiring_soon")) return "expiring_soon";
   return "valid";
 }
 
@@ -42,7 +43,7 @@ router.get("/subcontractors", authenticate, async (req, res) => {
         paymentHold: s.paymentHold,
         notes: s.notes ?? null,
         insuranceStatus: computeInsuranceStatus(insurance),
-        insuranceRecords: insurance.map(r => ({ id: r.id, type: r.type, certificateUrl: r.certificateUrl, expiryDate: r.expiryDate, status: r.status })),
+        insuranceRecords: insurance.map(r => ({ id: r.id, type: r.type, certificateUrl: r.certificateUrl, expiryDate: r.expiryDate, status: computeRecordStatus(r.expiryDate) })),
         createdAt: s.createdAt.toISOString(),
       };
     }));
@@ -116,7 +117,7 @@ router.get("/subcontractors/:subcontractorId", authenticate, async (req, res) =>
       notes: s.notes ?? null,
       insuranceStatus: computeInsuranceStatus(insurance),
       createdAt: s.createdAt.toISOString(),
-      insuranceRecords: insurance.map(r => ({ ...r, expiryDate: r.expiryDate, createdAt: r.createdAt.toISOString() })),
+      insuranceRecords: insurance.map(r => ({ ...r, status: computeRecordStatus(r.expiryDate), expiryDate: r.expiryDate, createdAt: r.createdAt.toISOString() })),
       assignedProjects: assignedProjects.filter(Boolean),
     });
   } catch (err) {
@@ -153,7 +154,7 @@ router.patch("/subcontractors/:subcontractorId", authenticate, async (req, res) 
     const insurance = await db.select().from(insuranceRecordsTable)
       .where(and(eq(insuranceRecordsTable.subcontractorId, s.id), isNull(insuranceRecordsTable.archivedAt)));
 
-    res.json({ id: s.id, companyId: s.companyId, companyName: s.companyName, contactName: s.contactName, contactEmail: s.contactEmail, contactPhone: s.contactPhone ?? null, contactType: s.contactType ?? "subcontractor", trades: s.trades ?? [], reliabilityRating: s.reliabilityRating ? Number(s.reliabilityRating) : null, paymentHold: s.paymentHold, notes: s.notes ?? null, insuranceStatus: computeInsuranceStatus(insurance), insuranceRecords: insurance.map(r => ({ id: r.id, type: r.type, certificateUrl: r.certificateUrl, expiryDate: r.expiryDate, status: r.status })), createdAt: s.createdAt.toISOString() });
+    res.json({ id: s.id, companyId: s.companyId, companyName: s.companyName, contactName: s.contactName, contactEmail: s.contactEmail, contactPhone: s.contactPhone ?? null, contactType: s.contactType ?? "subcontractor", trades: s.trades ?? [], reliabilityRating: s.reliabilityRating ? Number(s.reliabilityRating) : null, paymentHold: s.paymentHold, notes: s.notes ?? null, insuranceStatus: computeInsuranceStatus(insurance), insuranceRecords: insurance.map(r => ({ id: r.id, type: r.type, certificateUrl: r.certificateUrl, expiryDate: r.expiryDate, status: computeRecordStatus(r.expiryDate) })), createdAt: s.createdAt.toISOString() });
   } catch (err) {
     req.log.error({ err }, "Update subcontractor error");
     res.status(500).json({ error: "server_error", message: "Failed to update subcontractor" });

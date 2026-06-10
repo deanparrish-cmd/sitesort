@@ -1551,7 +1551,7 @@ tr:last-child td{border-bottom:none}
                   : member.complianceStatus === "warning"
                   ? <Badge variant="warning" className="text-[10px]"><AlertTriangle className="w-3 h-3 mr-1"/>Insurance Expiring</Badge>
                   : member.complianceStatus === "hold"
-                  ? <Badge variant="destructive" className="text-[10px]"><AlertTriangle className="w-3 h-3 mr-1"/>On Hold</Badge>
+                  ? <Badge variant="destructive" className="text-[10px]"><AlertTriangle className="w-3 h-3 mr-1"/>Site Access Denied</Badge>
                   : null;
 
                 return (
@@ -2205,7 +2205,7 @@ tr:last-child td{border-bottom:none}
                           </div>
                           <div className="shrink-0">
                             {m.complianceStatus === "hold"
-                              ? <Badge variant="destructive" className="text-[10px]"><AlertTriangle className="w-3 h-3 mr-1" />Insurance Expired</Badge>
+                              ? <Badge variant="destructive" className="text-[10px]"><AlertTriangle className="w-3 h-3 mr-1" />Site Access Denied</Badge>
                               : m.complianceStatus === "warning"
                               ? <Badge className="text-[10px] bg-orange-100 text-orange-700 border-orange-200"><AlertTriangle className="w-3 h-3 mr-1" />Insurance Expiring</Badge>
                               : m.pliCertUrl

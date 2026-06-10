@@ -1,16 +1,26 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { projectMembersTable, usersTable, subcontractorsTable, insuranceRecordsTable, projectsTable } from "@workspace/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 
 const router: IRouter = Router();
 
-function getInsuranceStatus(records: Array<{ status: string }>): string {
+function computeRecordStatus(expiryDate: string): "valid" | "expiring_soon" | "expired" {
+  const expiry = new Date(expiryDate);
+  const now = new Date();
+  const daysUntilExpiry = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  if (daysUntilExpiry < 0) return "expired";
+  if (daysUntilExpiry <= 30) return "expiring_soon";
+  return "valid";
+}
+
+function getInsuranceStatus(records: Array<{ expiryDate: string }>): string {
   if (records.length === 0) return "none";
-  if (records.some(r => r.status === "expired")) return "hold";
-  if (records.some(r => r.status === "expiring_soon")) return "warning";
+  const statuses = records.map(r => computeRecordStatus(r.expiryDate));
+  if (statuses.some(s => s === "expired")) return "hold";
+  if (statuses.some(s => s === "expiring_soon")) return "warning";
   return "ok";
 }
 
@@ -62,12 +72,12 @@ router.get("/projects/:projectId/members", authenticate, async (req, res) => {
         if (subRows[0]?.paymentHold) {
           complianceStatus = "hold";
         } else {
-          const insuranceRows = await db.select({ status: insuranceRecordsTable.status }).from(insuranceRecordsTable).where(eq(insuranceRecordsTable.subcontractorId, m.subcontractorId));
+          const insuranceRows = await db.select({ expiryDate: insuranceRecordsTable.expiryDate }).from(insuranceRecordsTable).where(and(eq(insuranceRecordsTable.subcontractorId, m.subcontractorId), isNull(insuranceRecordsTable.archivedAt)));
           complianceStatus = getInsuranceStatus(insuranceRows);
         }
         const pliRows = await db.select({ certificateUrl: insuranceRecordsTable.certificateUrl, expiryDate: insuranceRecordsTable.expiryDate })
           .from(insuranceRecordsTable)
-          .where(and(eq(insuranceRecordsTable.subcontractorId, m.subcontractorId), eq(insuranceRecordsTable.type, "public_liability")))
+          .where(and(eq(insuranceRecordsTable.subcontractorId, m.subcontractorId), eq(insuranceRecordsTable.type, "public_liability"), isNull(insuranceRecordsTable.archivedAt)))
           .limit(1);
         pliCertUrl = pliRows[0]?.certificateUrl ?? null;
         pliExpiryDate = pliRows[0]?.expiryDate ?? null;

@@ -110,7 +110,7 @@ function normaliseUrl(url: string) {
 function insuranceBadge(status: InsuranceStatus) {
   if (status === "valid") return <Badge className="gap-1 text-[10px] bg-emerald-100 text-emerald-700 border-emerald-200"><ShieldCheck className="w-3 h-3" />Insurance OK</Badge>;
   if (status === "expiring_soon") return <Badge className="gap-1 text-[10px] bg-yellow-100 text-yellow-700 border-yellow-200"><ShieldAlert className="w-3 h-3" />Expiring Soon</Badge>;
-  if (status === "expired") return <Badge variant="destructive" className="gap-1 text-[10px]"><ShieldX className="w-3 h-3" />Insurance Expired</Badge>;
+  if (status === "expired") return <Badge variant="destructive" className="gap-1 text-[10px]"><ShieldX className="w-3 h-3" />Site Access Denied</Badge>;
   return <Badge variant="secondary" className="gap-1 text-[10px]"><Shield className="w-3 h-3" />No Insurance</Badge>;
 }
 
@@ -653,12 +653,15 @@ export default function SubcontractorsPage() {
                                   const expired = r.status === "expired";
                                   const expiring = r.status === "expiring_soon";
                                   return (
-                                    <div key={r.id} className={cn("flex items-center gap-1.5 text-[10px] font-medium px-2 py-1 rounded-md border", expired ? "bg-red-50 border-red-200 text-red-700" : expiring ? "bg-yellow-50 border-yellow-200 text-yellow-700" : "bg-emerald-50 border-emerald-200 text-emerald-700")}>
-                                      <FileText className="w-3 h-3 shrink-0" />
-                                      <span className="truncate">{r.type} — expires {new Date(r.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
-                                      <button onClick={() => window.open(normaliseUrl(r.certificateUrl), "_blank")} className="ml-auto shrink-0 hover:opacity-70" title="Open certificate">
-                                        <ExternalLink className="w-3 h-3" />
-                                      </button>
+                                    <div key={r.id} className={cn("flex flex-col gap-0.5 text-[10px] font-medium px-2 py-1.5 rounded-md border", expired ? "bg-red-50 border-red-300 text-red-700" : expiring ? "bg-yellow-50 border-yellow-200 text-yellow-700" : "bg-emerald-50 border-emerald-200 text-emerald-700")}>
+                                      <div className="flex items-center gap-1.5">
+                                        <FileText className="w-3 h-3 shrink-0" />
+                                        <span className="truncate">{r.type} — {expired ? "expired" : "expires"} {new Date(r.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
+                                        <button onClick={() => window.open(normaliseUrl(r.certificateUrl), "_blank")} className="ml-auto shrink-0 hover:opacity-70" title="Open certificate">
+                                          <ExternalLink className="w-3 h-3" />
+                                        </button>
+                                      </div>
+                                      {expired && <span className="text-[9px] font-bold text-red-700 uppercase tracking-wide">Site access denied — new document required</span>}
                                     </div>
                                   );
                                 })}
