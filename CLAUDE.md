@@ -221,4 +221,47 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 - **Remaining test accounts in DB**: Acme Construction (demo), Beta Builds (bob@betabuilds.com), Test SiteSort (amy-parrish@hotmail.co.uk), Test SiteSort 2 (dean.parrish@me.com)
 - All commits are on `main`
 
+## End-of-session notes — 2026-06-10 (rename + contacts overhaul)
+
+### Tasks completed today
+
+1. **Global rename — Subcontractors → Contacts, Team → In House Team**
+   - Sidebar nav, page headings, tab labels, button text, empty states, dialog titles, onboarding steps, stat cards, PDF report section, projects list column header — all updated across 7 files
+   - Stripe plan names ("Team" plan) intentionally left unchanged
+
+2. **Sidebar reorganised into two groups**
+   - Top group: Dashboard · Projects · Contacts · In House Team · Messages
+   - Bottom group: Compliance Center · Invoices · QR Codes · Admin · Settings
+   - Thin divider between groups; `mainNavItems` / `adminNavItems` arrays in `sidebar-layout.tsx`
+
+3. **Contact type field on Contacts directory**
+   - `contactType` column added to `subcontractors` DB table (default `"subcontractor"`); pushed via drizzle-kit
+   - Options: `subcontractor` · `merchant` · `supplier` · `professional` · `other`
+   - Add/Edit form shows Contact Type selector at top; Trade Types section only visible when type is `subcontractor`
+   - Directory groups non-subcontractor contacts under Merchants / Suppliers / Professional Services / Other Contacts sections below trade groups
+   - Group header shows coloured folder icon + type badge; individual cards also show type badge
+
+4. **Insurance certificates surfaced on contact cards**
+   - `GET /api/subcontractors` list now returns `insuranceRecords[]` per contact
+   - Contact card renders each record as a coloured pill (green/yellow/red by status) with type, expiry date, and external-link icon to open the certificate
+   - Certificates uploaded within any project automatically appear on the contact's card
+
+### Key files modified
+- `artifacts/sitesort/src/components/layout/sidebar-layout.tsx` — two nav groups, label renames
+- `artifacts/sitesort/src/pages/subcontractors/index.tsx` — contact type field, grouping logic, badges, insurance records display
+- `artifacts/sitesort/src/pages/team/index.tsx` — heading rename
+- `artifacts/sitesort/src/pages/projects/detail.tsx` — tab label, button text, dialog titles, report HTML
+- `artifacts/sitesort/src/pages/projects/index.tsx` — Team column rename
+- `artifacts/sitesort/src/pages/dashboard/index.tsx` — onboarding steps, stat card subtitles
+- `artifacts/sitesort/src/pages/compliance/index.tsx` — field label rename
+- `lib/db/src/schema/subcontractors.ts` — `contactType` column
+- `artifacts/api-server/src/routes/subcontractors.ts` — `contactType` + `insuranceRecords` in all endpoints
+
+### Notes for next session
+- **`contactType` default**: existing rows have `"subcontractor"` from the DB column default — no migration needed
+- **Non-subcontractor contacts skip trades**: `onAdd`/`onEdit` send `trades: []` when type ≠ subcontractor
+- **GitHub push command**: `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts` (must run from `/home/runner/workspace`)
+- **API server rebuild**: `pnpm --filter @workspace/api-server run build` after any backend change
+- All commits are on `main`
+
 ## End-of-session notes — 2026-06-05, 2026-05-27, 2026-06-06, 2026-06-08 & 2026-06-09 — see CLAUDE_ARCHIVE.md for full detail
