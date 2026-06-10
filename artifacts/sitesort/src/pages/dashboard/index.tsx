@@ -9,7 +9,7 @@ import {
   Building2, AlertTriangle, ChevronLeft, ChevronRight, ArrowRight,
   ShieldAlert, FileSignature, Users, Bell, Search,
   MessageSquare, Camera, FilePlus, Plus, AlertCircle, CreditCard,
-  FileText, CheckCircle2, Clock, TrendingUp, Zap, X, Circle,
+  FileText, CheckCircle2, Clock, TrendingUp, Zap, X, Circle, ClipboardCheck,
 } from "lucide-react";
 import { useListProjects, useGetComplianceOverview } from "@workspace/api-client-react";
 import type { ExpiringInsuranceItem, ExpiringPermitItem } from "@workspace/api-client-react";
@@ -35,6 +35,7 @@ function notifIcon(type: string) {
     case "new_message":    return <MessageSquare className="w-4 h-4 text-blue-500" />;
     case "document_uploaded": return <FileText className="w-4 h-4 text-indigo-500" />;
     case "safety_concern": return <AlertTriangle className="w-4 h-4 text-amber-500" />;
+    case "daily_report":   return <ClipboardCheck className="w-4 h-4 text-teal-500" />;
     case "trial_ending":   return <CreditCard className="w-4 h-4 text-orange-500" />;
     case "payment_failed": return <CreditCard className="w-4 h-4 text-red-500" />;
     default:               return <Bell className="w-4 h-4 text-muted-foreground" />;
