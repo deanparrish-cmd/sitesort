@@ -453,7 +453,7 @@ export default function CompliancePage() {
                 className="flex items-center gap-2 mb-3 text-muted-foreground hover:text-foreground transition-colors w-full text-left"
               >
                 <Archive className="w-4 h-4" />
-                <span className="font-semibold text-sm">Archived Insurance Certificates</span>
+                <span className="font-semibold text-sm">Superseded Insurance Certificates</span>
                 <span className="text-xs bg-muted px-2 py-0.5 rounded-full">{archivedInsurance.length}</span>
                 {showArchivedIns ? <ChevronUp className="w-4 h-4 ml-auto" /> : <ChevronDown className="w-4 h-4 ml-auto" />}
               </button>
@@ -483,14 +483,14 @@ export default function CompliancePage() {
                               <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
                                 const norm = ins.certificateUrl!.replace(/^\/uploads\//, "/api/uploads/");
                                 const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
-                                window.open(`mailto:?subject=${encodeURIComponent(`Insurance Certificate – ${ins.subcontractorName}`)}&body=${encodeURIComponent(`Archived certificate:\n${url}\nExpiry: ${fmtDate(ins.expiryDate)}`)}`);
+                                window.open(`mailto:?subject=${encodeURIComponent(`Insurance Certificate – ${ins.subcontractorName}`)}&body=${encodeURIComponent(`Superseded certificate:\n${url}\nExpiry: ${fmtDate(ins.expiryDate)}`)}`);
                               }}>
                                 <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
                               </DropdownMenuItem>
                               <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
                                 const norm = ins.certificateUrl!.replace(/^\/uploads\//, "/api/uploads/");
                                 const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
-                                window.open(`https://wa.me/?text=${encodeURIComponent(`Archived insurance certificate – ${ins.subcontractorName}\n${url}`)}`, "_blank");
+                                window.open(`https://wa.me/?text=${encodeURIComponent(`Superseded insurance certificate – ${ins.subcontractorName}\n${url}`)}`, "_blank");
                               }}>
                                 <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
                               </DropdownMenuItem>
@@ -583,7 +583,7 @@ export default function CompliancePage() {
             )}
           </section>
 
-          {/* ── Archived Permits ── */}
+          {/* ── Superseded Permits ── */}
           {archivedPermits.length > 0 && (
             <section>
               <button
@@ -591,7 +591,7 @@ export default function CompliancePage() {
                 className="flex items-center gap-2 mb-3 text-muted-foreground hover:text-foreground transition-colors w-full text-left"
               >
                 <Archive className="w-4 h-4" />
-                <span className="font-semibold text-sm">Archived Permits</span>
+                <span className="font-semibold text-sm">Superseded Permits</span>
                 <span className="text-xs bg-muted px-2 py-0.5 rounded-full">{archivedPermits.length}</span>
                 {showArchivedPermits ? <ChevronUp className="w-4 h-4 ml-auto" /> : <ChevronDown className="w-4 h-4 ml-auto" />}
               </button>
@@ -621,14 +621,14 @@ export default function CompliancePage() {
                               <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
                                 const norm = p.documentUrl!.replace(/^\/uploads\//, "/api/uploads/");
                                 const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
-                                window.open(`mailto:?subject=${encodeURIComponent(`Archived Permit – ${p.permitType}`)}&body=${encodeURIComponent(`Archived permit document:\n${url}\nProject: ${p.projectName}\nExpiry: ${fmtDate(p.expiryDate)}`)}`);
+                                window.open(`mailto:?subject=${encodeURIComponent(`Superseded Permit – ${p.permitType}`)}&body=${encodeURIComponent(`Superseded permit document:\n${url}\nProject: ${p.projectName}\nExpiry: ${fmtDate(p.expiryDate)}`)}`);
                               }}>
                                 <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
                               </DropdownMenuItem>
                               <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
                                 const norm = p.documentUrl!.replace(/^\/uploads\//, "/api/uploads/");
                                 const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
-                                window.open(`https://wa.me/?text=${encodeURIComponent(`Archived permit – ${p.permitType} (${p.projectName})\n${url}`)}`, "_blank");
+                                window.open(`https://wa.me/?text=${encodeURIComponent(`Superseded permit – ${p.permitType} (${p.projectName})\n${url}`)}`, "_blank");
                               }}>
                                 <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
                               </DropdownMenuItem>
@@ -715,7 +715,7 @@ export default function CompliancePage() {
             )}
           </section>
 
-          {/* ── Archived Documents ── */}
+          {/* ── Superseded Documents ── */}
           {archivedDocs.length > 0 && (
             <section>
               <button
@@ -723,7 +723,7 @@ export default function CompliancePage() {
                 className="flex items-center gap-2 mb-3 text-muted-foreground hover:text-foreground transition-colors w-full text-left"
               >
                 <Archive className="w-4 h-4" />
-                <span className="font-semibold text-sm">Archived Documents</span>
+                <span className="font-semibold text-sm">Superseded Documents</span>
                 <span className="text-xs bg-muted px-2 py-0.5 rounded-full">{archivedDocs.length}</span>
                 {showArchivedDocs ? <ChevronUp className="w-4 h-4 ml-auto" /> : <ChevronDown className="w-4 h-4 ml-auto" />}
               </button>
@@ -752,14 +752,14 @@ export default function CompliancePage() {
                             <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
                               const norm = doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/");
                               const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
-                              window.open(`mailto:?subject=${encodeURIComponent(`Archived Document – ${doc.name}`)}&body=${encodeURIComponent(`Archived document (v${doc.version}):\n${url}\nProject: ${doc.projectName}`)}`);
+                              window.open(`mailto:?subject=${encodeURIComponent(`Superseded Document – ${doc.name}`)}&body=${encodeURIComponent(`Superseded document (v${doc.version}):\n${url}\nProject: ${doc.projectName}`)}`);
                             }}>
                               <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
                             </DropdownMenuItem>
                             <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
                               const norm = doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/");
                               const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
-                              window.open(`https://wa.me/?text=${encodeURIComponent(`Archived document – ${doc.name} (v${doc.version})\n${doc.projectName}\n${url}`)}`, "_blank");
+                              window.open(`https://wa.me/?text=${encodeURIComponent(`Superseded document – ${doc.name} (v${doc.version})\n${doc.projectName}\n${url}`)}`, "_blank");
                             }}>
                               <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
                             </DropdownMenuItem>
