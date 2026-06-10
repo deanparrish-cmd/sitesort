@@ -292,4 +292,26 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 - **API server rebuild**: `pnpm --filter @workspace/api-server run build` after any backend change
 - All commits are on `main`
 
+## End-of-session notes — 2026-06-10 (contacts filter + UK English)
+
+### Tasks completed today
+
+1. **Contact type filter chips on Contacts page** (`artifacts/sitesort/src/pages/subcontractors/index.tsx`):
+   - Pill buttons: All · Subcontractor · Merchant · Supplier · Professional Services · Other
+   - Active chip fills with type colour; works alongside existing text search
+   - `typeFilter` state applied in `grouped` useMemo; dependency array updated
+   - Filter chips rendered inline with the search bar (flex row, wraps on mobile)
+
+2. **UK English** — "Compliance Center" → "Compliance Centre" in sidebar nav (`sidebar-layout.tsx`); page heading was already correct; no other US spellings found in visible UI text
+
+### Key files modified
+- `artifacts/sitesort/src/components/layout/sidebar-layout.tsx` — "Compliance Centre" spelling
+- `artifacts/sitesort/src/pages/subcontractors/index.tsx` — `typeFilter` state + filter chip UI
+
+### Notes for next session
+- **Filter chips** use `CONTACT_TYPE_LABELS` entries prefixed with `["all", "All"]`; colour logic mirrors the badge colours on cards/headers
+- **GitHub push command**: `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts` (must run from `/home/runner/workspace`)
+- **API server rebuild**: `pnpm --filter @workspace/api-server run build` after any backend change
+- All commits are on `main`
+
 ## End-of-session notes — 2026-06-05, 2026-05-27, 2026-06-06, 2026-06-08 & 2026-06-09 — see CLAUDE_ARCHIVE.md for full detail
