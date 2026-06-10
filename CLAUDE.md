@@ -264,4 +264,32 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 - **API server rebuild**: `pnpm --filter @workspace/api-server run build` after any backend change
 - All commits are on `main`
 
+## End-of-session notes — 2026-06-10 (file document dialog + contact type UX)
+
+### Tasks completed today
+
+1. **"File this document" dialog redesigned** (`artifacts/sitesort/src/pages/compliance/index.tsx`):
+   - **Document Type** selector replaces "Insurance Type": Insurance Certificate, Method Statement, Risk Assessment, Permit to Work, Compliance Certificate, Drawing, Safety Document, Other
+   - **Insurance Certificate path**: Contact selector + Insurance sub-type + Expiry Date; once a contact is chosen their linked projects appear inline with navigation links; success screen shows all linked projects with click-through links
+   - **Other document types**: Project selector (active projects only) → `POST /api/projects/:id/documents` to file directly into that project's Documents tab
+   - `projects` state fetched on page load from `/api/projects`; `contactProjects` fetched lazily when contact changes via `GET /api/subcontractors/:id`
+
+2. **Contact type badge on group headers** — each trade group shows orange folder + "Subcontractor" badge; Merchant/Supplier/Professional Services/Other groups show their colour-matched badge and folder icon; `GROUP_LABEL_TO_TYPE` reverse map added
+
+3. **Contact type badge on individual cards** — all cards now show their type badge (Subcontractor = orange, matching group header colour scheme)
+
+4. **Insurance certificates surfaced on contact cards** — `GET /api/subcontractors` list returns `insuranceRecords[]` per contact; card renders each as a coloured pill with type, expiry date, and open-certificate link
+
+### Key files modified
+- `artifacts/sitesort/src/pages/compliance/index.tsx` — full dialog redesign; new `DOCUMENT_TYPES` / `INSURANCE_SUBTYPES` constants; `assignDocType`, `assignProjectId`, `assignInsSubType`, `contactProjects` state; two-path `assignFile` function
+- `artifacts/sitesort/src/pages/subcontractors/index.tsx` — `GROUP_LABEL_TO_TYPE` reverse map; type badges on group headers and cards; `insuranceRecords` display; `normaliseUrl` helper
+- `artifacts/api-server/src/routes/subcontractors.ts` — `contactType` + `insuranceRecords` in list/create/update responses
+
+### Notes for next session
+- **File dialog paths**: insurance cert → `POST /api/subcontractors/:id/insurance`; all other types → `POST /api/projects/:id/documents`
+- **Contact linked projects**: fetched from `GET /api/subcontractors/:id` `.assignedProjects` array (already returned by single-contact endpoint)
+- **GitHub push command**: `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts` (must run from `/home/runner/workspace`)
+- **API server rebuild**: `pnpm --filter @workspace/api-server run build` after any backend change
+- All commits are on `main`
+
 ## End-of-session notes — 2026-06-05, 2026-05-27, 2026-06-06, 2026-06-08 & 2026-06-09 — see CLAUDE_ARCHIVE.md for full detail
