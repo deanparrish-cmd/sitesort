@@ -259,7 +259,15 @@ export default function ProjectDetail() {
       fetch(`/api/projects/${projectId}/daily-reports`, { headers }).then(r => r.ok ? r.json() : []),
       fetch(`/api/projects/${projectId}/daily-notes`, { headers }).then(r => r.ok ? r.json() : []),
       fetch(`/api/projects/${projectId}/qr-pins`, { headers }).then(r => r.ok ? r.json() : []),
-    ]).then(([p, inv, ph, ms, ci, rep, notes, pins]) => { setPermits(p); setProjectInvoices(inv); setPhotos(ph); setMilestones(ms); setCheckins(ci); setReports(rep); setTodayNotes(notes); if (Array.isArray(pins)) setQrPins(pins); });
+      fetch(`/api/projects/${projectId}/qr-codes`, { headers }).then(r => r.ok ? r.json() : []),
+    ]).then(([p, inv, ph, ms, ci, rep, notes, pins, qrCodes]) => {
+      setPermits(p); setProjectInvoices(inv); setPhotos(ph); setMilestones(ms); setCheckins(ci); setReports(rep); setTodayNotes(notes);
+      if (Array.isArray(pins)) setQrPins(pins);
+      if (Array.isArray(qrCodes) && qrCodes.length > 0) {
+        const qr = qrCodes.find((q: any) => q.category === "site_board") ?? qrCodes[0];
+        setSiteBoardUrl(qr.siteUrl);
+      }
+    });
   }, [projectId]);
 
   useEffect(() => {
@@ -462,6 +470,7 @@ export default function ProjectDetail() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
 
+  const [siteBoardUrl, setSiteBoardUrl] = useState<string | null>(null);
   const [qrCode, setQrCode] = useState<{ token: string; siteUrl: string } | null>(null);
   const [qrLoading, setQrLoading] = useState(false);
   const [qrFetched, setQrFetched] = useState(false);
@@ -494,6 +503,7 @@ export default function ProjectDetail() {
       if (Array.isArray(existing) && existing.length > 0) {
         const qr = existing.find((q: any) => q.category === "site_board") ?? existing[0];
         setQrCode({ token: qr.token, siteUrl: buildUrl(qr.token) });
+        setSiteBoardUrl(buildUrl(qr.token));
         setQrFetched(true);
         return;
       }
@@ -2659,12 +2669,24 @@ tr:last-child td{border-bottom:none}
         </TabsContent>
 
         <TabsContent value="checkins">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex items-center justify-between gap-4">
             <div>
               <h2 className="text-xl font-bold">Site Check-Ins</h2>
               <p className="text-muted-foreground text-sm mt-0.5">Workers who checked in on site via the QR code board.</p>
             </div>
-            <span className="text-sm text-muted-foreground">{checkins.length} {checkins.length === 1 ? "check-in" : "check-ins"}</span>
+            <div className="flex items-center gap-3 shrink-0">
+              {siteBoardUrl && (
+                <a
+                  href={siteBoardUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted transition-colors text-sm font-medium"
+                >
+                  <QrCode className="w-3.5 h-3.5 text-primary" /> View Site Board
+                </a>
+              )}
+              <span className="text-sm text-muted-foreground">{checkins.length} {checkins.length === 1 ? "check-in" : "check-ins"}</span>
+            </div>
           </div>
 
           {checkins.length === 0 ? (
