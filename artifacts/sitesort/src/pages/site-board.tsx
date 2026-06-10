@@ -384,11 +384,12 @@ export default function SiteBoard() {
 
   const activePermits = permits.filter((p: any) => {
     const expiry = new Date(p.expiryDate);
-    return expiry >= new Date();
+    return !isNaN(expiry.getTime()) && expiry >= new Date();
   });
 
   const expiringPermits = permits.filter((p: any) => {
     const expiry = new Date(p.expiryDate);
+    if (isNaN(expiry.getTime())) return false;
     const now = new Date();
     const daysUntil = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
     return daysUntil >= 0 && daysUntil <= 30;
@@ -634,7 +635,7 @@ export default function SiteBoard() {
         {/* Footer */}
         <div className="text-center text-xs text-gray-400 pb-4 pt-2">
           <p>Powered by <span className="font-semibold text-orange-500">SiteSort</span></p>
-          <p className="mt-0.5">Last updated {new Date(generatedAt).toLocaleString("en-GB")}</p>
+          <p className="mt-0.5">Last updated {generatedAt ? new Date(generatedAt).toLocaleString("en-GB") : "—"}</p>
         </div>
       </div>
     </div>

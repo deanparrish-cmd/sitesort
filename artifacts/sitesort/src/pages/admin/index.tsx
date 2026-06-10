@@ -615,7 +615,7 @@ export default function AdminDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-800/60">
-                    {s.retention.atRiskUsers.map((u: any) => (
+                    {s?.retention?.atRiskUsers?.map((u: any) => (
                       <tr key={u.id} className="hover:bg-gray-800/30">
                         <td className="py-2.5 pr-4 text-gray-200 font-medium">{u.name}</td>
                         <td className="py-2.5 pr-4 text-gray-400 text-xs">{u.email}</td>

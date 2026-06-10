@@ -1291,7 +1291,7 @@ export default function MessagesPage() {
                               : <Check className="w-3.5 h-3.5 text-muted-foreground/40" />
                           )}
                           {!viewAll && editingId !== msg.id && confirmDeleteId !== msg.id && (
-                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">
+                            <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex gap-0.5">
                               <button
                                 onClick={() => { setReplyingTo({ id: msg.id, senderName: msg.senderName, content: msg.content, attachmentType: msg.attachmentType }); setEmojiPickerId(null); }}
                                 className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
@@ -1752,7 +1752,7 @@ export default function MessagesPage() {
                         <div className={cn("flex items-center gap-1 px-1", msg.mine ? "flex-row-reverse" : "flex-row")}>
                           <span className="text-[10px] text-muted-foreground">{timeLabel(msg.createdAt)}</span>
                           {editingId !== msg.id && confirmDeleteId !== msg.id && (
-                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">
+                            <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex gap-0.5">
                               <button
                                 onClick={() => { setReplyingTo({ id: msg.id, senderName: msg.senderName, content: msg.content, attachmentType: msg.attachmentType }); setEmojiPickerId(null); }}
                                 className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"

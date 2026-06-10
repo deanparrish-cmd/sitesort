@@ -37,6 +37,7 @@ function RoleBadge({ role }: { role: string }) {
 function formatLastActive(iso: string | null) {
   if (!iso) return "Never";
   const d = new Date(iso);
+  if (isNaN(d.getTime())) return "Never";
   const diff = Math.floor((Date.now() - d.getTime()) / 86400000);
   if (diff === 0) return "Today";
   if (diff === 1) return "Yesterday";
@@ -125,7 +126,7 @@ export default function TeamPage() {
                           <RoleBadge role={m.role} />
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <button className="p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Share contact">
+                              <button className="p-2 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Share contact">
                                 <Share2 className="w-3.5 h-3.5" />
                               </button>
                             </DropdownMenuTrigger>
