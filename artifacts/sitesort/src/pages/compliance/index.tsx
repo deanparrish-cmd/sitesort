@@ -20,6 +20,7 @@ type InsuranceItem = { subcontractorId: string; subcontractorName: string; insur
 type ArchivedInsuranceItem = { id: string; subcontractorId: string; subcontractorName: string; insuranceType: string; expiryDate: string; certificateUrl?: string | null; archivedAt: string };
 type PermitItem = { permitId: string; projectId: string; projectName: string; permitType: string; expiryDate: string; status: string; documentUrl?: string | null };
 type ArchivedPermitItem = { id: string; projectId: string; projectName: string; permitType: string; expiryDate: string; documentUrl?: string | null; archivedAt: string };
+type ArchivedDocItem = { id: string; name: string; type: string; version: number; fileUrl: string; projectId: string; projectName: string; createdAt: string };
 type AckItem = { documentId: string; documentName: string; projectId: string; projectName: string; pendingCount: number; fileUrl?: string | null };
 type Sub = { id: string; companyName: string; contactName: string };
 type Project = { id: string; name: string };
@@ -65,8 +66,10 @@ export default function CompliancePage() {
   const [archivedInsurance, setArchivedInsurance] = useState<ArchivedInsuranceItem[]>([]);
   const [permits, setPermits] = useState<PermitItem[]>([]);
   const [archivedPermits, setArchivedPermits] = useState<ArchivedPermitItem[]>([]);
+  const [archivedDocs, setArchivedDocs] = useState<ArchivedDocItem[]>([]);
   const [showArchivedIns, setShowArchivedIns] = useState(false);
   const [showArchivedPermits, setShowArchivedPermits] = useState(false);
+  const [showArchivedDocs, setShowArchivedDocs] = useState(false);
   const [acks, setAcks] = useState<AckItem[]>([]);
   const [subs, setSubs] = useState<Sub[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -102,6 +105,7 @@ export default function CompliancePage() {
         setPermits(d.expiringPermits ?? []);
         setArchivedPermits(d.archivedPermits ?? []);
         setAcks(d.pendingAcknowledgments ?? []);
+        setArchivedDocs(d.archivedDocuments ?? []);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -710,6 +714,64 @@ export default function CompliancePage() {
               </div>
             )}
           </section>
+
+          {/* ── Archived Documents ── */}
+          {archivedDocs.length > 0 && (
+            <section>
+              <button
+                onClick={() => setShowArchivedDocs(v => !v)}
+                className="flex items-center gap-2 mb-3 text-muted-foreground hover:text-foreground transition-colors w-full text-left"
+              >
+                <Archive className="w-4 h-4" />
+                <span className="font-semibold text-sm">Archived Documents</span>
+                <span className="text-xs bg-muted px-2 py-0.5 rounded-full">{archivedDocs.length}</span>
+                {showArchivedDocs ? <ChevronUp className="w-4 h-4 ml-auto" /> : <ChevronDown className="w-4 h-4 ml-auto" />}
+              </button>
+              {showArchivedDocs && (
+                <div className="space-y-2">
+                  {[...archivedDocs].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(doc => (
+                    <div key={doc.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 px-4 py-3 rounded-xl border bg-muted/40 border-border opacity-80">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-sm truncate">{doc.name}</p>
+                        <p className="text-xs text-muted-foreground capitalize">{doc.type.replace(/_/g, " ")} · v{doc.version} · {doc.projectName}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => { const norm = doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/"); window.open(norm.startsWith("http") ? norm : `${window.location.origin}${norm}`, "_blank", "noopener,noreferrer"); }}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
+                        >
+                          <ExternalLink className="w-3 h-3" /> Open
+                        </button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors">
+                              <Share2 className="w-3 h-3" /> Share
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
+                              const norm = doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/");
+                              const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
+                              window.open(`mailto:?subject=${encodeURIComponent(`Archived Document – ${doc.name}`)}&body=${encodeURIComponent(`Archived document (v${doc.version}):\n${url}\nProject: ${doc.projectName}`)}`);
+                            }}>
+                              <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
+                              const norm = doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/");
+                              const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
+                              window.open(`https://wa.me/?text=${encodeURIComponent(`Archived document – ${doc.name} (v${doc.version})\n${doc.projectName}\n${url}`)}`, "_blank");
+                            }}>
+                              <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
 
         </div>
       )}

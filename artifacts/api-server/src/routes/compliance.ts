@@ -100,6 +100,17 @@ router.get("/compliance", authenticate, async (req, res) => {
       fileUrl: string | null;
     }> = [];
 
+    let archivedDocuments: Array<{
+      id: string;
+      name: string;
+      type: string;
+      version: number;
+      fileUrl: string;
+      projectId: string;
+      projectName: string;
+      createdAt: string;
+    }> = [];
+
     if (projectIds.length > 0) {
       const allPermits = await db.select().from(permitsTable)
         .where(and(inArray(permitsTable.projectId, projectIds), isNull(permitsTable.archivedAt)));
@@ -157,9 +168,25 @@ router.get("/compliance", authenticate, async (req, res) => {
           });
         }
       }
+
+      const supersededDocs = await db.select().from(documentsTable)
+        .where(and(inArray(documentsTable.projectId, projectIds), eq(documentsTable.status, "superseded")));
+      for (const doc of supersededDocs) {
+        const proj = myProjects.find(p => p.id === doc.projectId);
+        archivedDocuments.push({
+          id: doc.id,
+          name: doc.name,
+          type: doc.type,
+          version: doc.version,
+          fileUrl: doc.fileUrl,
+          projectId: doc.projectId,
+          projectName: proj?.name ?? "Unknown",
+          createdAt: doc.createdAt.toISOString(),
+        });
+      }
     }
 
-    res.json({ expiringInsurance, archivedInsurance, expiringPermits, archivedPermits, pendingAcknowledgments });
+    res.json({ expiringInsurance, archivedInsurance, expiringPermits, archivedPermits, pendingAcknowledgments, archivedDocuments });
   } catch (err) {
     req.log.error({ err }, "Compliance overview error");
     res.status(500).json({ error: "server_error", message: "Failed to get compliance overview" });
