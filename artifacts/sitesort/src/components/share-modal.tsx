@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { QRCodeCanvas } from "qrcode.react";
 import {
   Share2, Mail, MessageCircle, Users, Send, ExternalLink,
-  Download, Clock, Loader2, CheckCircle2,
+  Download, Clock, Loader2, CheckCircle2, Pin, PinOff,
 } from "lucide-react";
 
 type ShareLog = {
@@ -48,6 +48,8 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
   const [selectedUserId, setSelectedUserId] = useState("");
   const [sending, setSending] = useState(false);
   const [sentTo, setSentTo] = useState<string | null>(null);
+  const [isPinned, setIsPinned] = useState(false);
+  const [pinLoading, setPinLoading] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const token = () => localStorage.getItem("sitesort_token");
@@ -55,9 +57,10 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
 
   const fullUrl = fileUrl ? normaliseUrl(fileUrl) : null;
   const hasAttachment = MSG_ATTACHMENT_TYPES.has(entityType);
+  const canPin = hasAttachment && !!projectId;
 
   useEffect(() => {
-    if (!open) { setTab("share"); setSentTo(null); setSelectedUserId(""); }
+    if (!open) { setTab("share"); setSentTo(null); setSelectedUserId(""); setIsPinned(false); }
   }, [open]);
 
   useEffect(() => {
@@ -67,6 +70,18 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
       .then((data: any[]) => setMembers(data.filter((m: any) => m.userId)))
       .catch(() => {});
   }, [open, projectId]);
+
+  useEffect(() => {
+    if (tab !== "qr" || !open || !canPin) return;
+    fetch(`/api/projects/${projectId}/qr-pins`, {
+      headers: token() ? { Authorization: `Bearer ${token()}` } : {},
+    })
+      .then(r => r.ok ? r.json() : [])
+      .then((pins: { itemType: string; itemId: string }[]) => {
+        setIsPinned(pins.some(p => p.itemType === entityType && p.itemId === entityId));
+      })
+      .catch(() => {});
+  }, [tab, open, canPin, projectId, entityType, entityId]);
 
   useEffect(() => {
     if (tab !== "history" || !open) return;
@@ -143,6 +158,19 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
     logShare("individual", member.name);
     setSending(false);
     setSentTo(member.name);
+  };
+
+  const togglePin = async () => {
+    if (!canPin) return;
+    setPinLoading(true);
+    const method = isPinned ? "DELETE" : "POST";
+    await fetch(`/api/projects/${projectId}/qr-pins`, {
+      method,
+      headers: authH(),
+      body: JSON.stringify({ itemType: entityType, itemId: entityId }),
+    }).catch(() => {});
+    setIsPinned(v => !v);
+    setPinLoading(false);
   };
 
   const downloadQr = () => {
@@ -273,6 +301,34 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
                     Copy Link
                   </button>
                 </div>
+
+                {canPin && (
+                  <div className="w-full border-t pt-4">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 text-center">Site Board</p>
+                    <button
+                      onClick={togglePin}
+                      disabled={pinLoading}
+                      className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg border text-sm font-medium transition-colors disabled:opacity-40 ${
+                        isPinned
+                          ? "bg-primary/10 border-primary/30 text-primary hover:bg-primary/20"
+                          : "border-border bg-background hover:bg-muted text-foreground"
+                      }`}
+                    >
+                      {pinLoading ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : isPinned ? (
+                        <><PinOff className="w-4 h-4" /> Remove from Site Board</>
+                      ) : (
+                        <><Pin className="w-4 h-4" /> Add to Site Board</>
+                      )}
+                    </button>
+                    <p className="text-xs text-muted-foreground text-center mt-2">
+                      {isPinned
+                        ? "Visible to anyone who scans the site QR code"
+                        : "Pin so workers can access it by scanning the site QR code"}
+                    </p>
+                  </div>
+                )}
               </>
             ) : (
               <p className="text-sm text-muted-foreground py-8 text-center">No file available for QR code.</p>
