@@ -1266,27 +1266,27 @@ tr:last-child td{border-bottom:none}
                       )}
                       <button
                         onClick={() => window.open(doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/"), '_blank', 'noopener,noreferrer')}
-                        className="flex items-center gap-1 text-xs text-primary hover:underline font-medium"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-primary/25 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/15 transition-colors"
                       >
                         <ExternalLink className="w-3 h-3" />Open
                       </button>
                       {canViewAudit && (
                         <button onClick={() => setAuditDoc({ id: doc.id, name: doc.name })}
-                          className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs">
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors">
                           <Clock className="w-3 h-3" />History
                         </button>
                       )}
                       <button onClick={() => openDocEdit(doc)}
-                        className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs">
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors">
                         <Pencil className="w-3 h-3" />Edit
                       </button>
                       <button onClick={() => openShareHistory("document", doc.id, doc.name)}
-                        className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs" title="Share history">
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors" title="Share history">
                         <History className="w-3 h-3" />History
                       </button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs">
+                          <button className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors">
                             <Share2 className="w-3 h-3" />Share
                           </button>
                         </DropdownMenuTrigger>
@@ -1394,7 +1394,7 @@ tr:last-child td{border-bottom:none}
                           )}
                           <button
                             onClick={() => window.open(doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/"), '_blank', 'noopener,noreferrer')}
-                            className="flex items-center gap-1 text-xs text-primary hover:underline font-medium"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-primary/25 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/15 transition-colors"
                             title="Open document"
                           >
                             <ExternalLink className="w-3.5 h-3.5" />
@@ -1403,7 +1403,7 @@ tr:last-child td{border-bottom:none}
                           {canViewAudit && (
                             <button
                               onClick={() => setAuditDoc({ id: doc.id, name: doc.name })}
-                              className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors"
                               title="View sign-off audit history"
                             >
                               <Clock className="w-3.5 h-3.5" />
@@ -1413,7 +1413,7 @@ tr:last-child td{border-bottom:none}
                           {caps.canUploadDocument && (
                             <button
                               onClick={() => openDocEdit(doc)}
-                              className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors"
                               title="Edit status / version"
                             >
                               <Pencil className="w-3.5 h-3.5" />
@@ -1422,7 +1422,7 @@ tr:last-child td{border-bottom:none}
                           )}
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <button className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs" title="Share">
+                              <button className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors" title="Share">
                                 <Share2 className="w-3.5 h-3.5" />
                                 Share
                               </button>
@@ -1874,8 +1874,9 @@ tr:last-child td{border-bottom:none}
                             {photo.photoUrl && (
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <button className="p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-colors shrink-0" title="Share photo">
+                                  <button className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors" title="Share photo">
                                     <Share2 className="w-3.5 h-3.5" />
+                                    Share
                                   </button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-44">
@@ -1978,7 +1979,7 @@ tr:last-child td{border-bottom:none}
                       return (
                         <button
                           onClick={() => window.open(certUrl, "_blank", "noopener,noreferrer")}
-                          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-primary hover:bg-primary/10 font-medium transition-colors"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-primary/25 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/15 transition-colors"
                           title="Open certificate"
                         >
                           <ExternalLink className="w-3.5 h-3.5" /> Certificate
@@ -1987,8 +1988,9 @@ tr:last-child td{border-bottom:none}
                     })()}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <button className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Share">
+                        <button className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors" title="Share">
                           <Share2 className="w-3.5 h-3.5" />
+                          Share
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-48">
@@ -2150,15 +2152,16 @@ tr:last-child td{border-bottom:none}
                                 <div className="flex items-center gap-1 shrink-0">
                                   <button
                                     onClick={() => window.open(docUrl, "_blank", "noopener,noreferrer")}
-                                    className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-primary hover:bg-primary/10 font-medium transition-colors"
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-primary/25 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/15 transition-colors"
                                     title="Open document"
                                   >
                                     <ExternalLink className="w-3.5 h-3.5" /> Open
                                   </button>
                                   <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
-                                      <button className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Share">
+                                      <button className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors" title="Share">
                                         <Share2 className="w-3.5 h-3.5" />
+                                        Share
                                       </button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end" className="w-44">

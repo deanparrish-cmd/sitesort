@@ -381,14 +381,15 @@ export default function CompliancePage() {
                               <>
                                 <button
                                   onClick={() => window.open(ins.certificateUrl!.replace(/^\/uploads\//, "/api/uploads/"), '_blank', 'noopener,noreferrer')}
-                                  className="text-xs text-primary hover:underline flex items-center gap-0.5"
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-primary/25 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/15 transition-colors"
                                   title="Open certificate"
                                 >
                                   <ExternalLink className="w-3 h-3" />
+                                  Open
                                 </button>
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
-                                    <button className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs" title="Share certificate">
+                                    <button className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors" title="Share certificate">
                                       <Share2 className="w-3 h-3" />
                                       Share
                                     </button>
@@ -475,7 +476,7 @@ export default function CompliancePage() {
                           return (
                             <button
                               onClick={() => window.open(certUrl, "_blank", "noopener,noreferrer")}
-                              className="flex items-center gap-1 px-1.5 py-1 rounded text-primary hover:bg-primary/10 transition-colors text-xs font-medium"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-primary/25 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/15 transition-colors"
                               title="Open certificate"
                             >
                               <ExternalLink className="w-3 h-3" /> Certificate
@@ -484,7 +485,7 @@ export default function CompliancePage() {
                         })()}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <button className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs" title="Share permit">
+                            <button className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors" title="Share permit">
                               <Share2 className="w-3 h-3" />
                               Share
                             </button>
@@ -547,15 +548,16 @@ export default function CompliancePage() {
                       {a.fileUrl && (
                         <button
                           onClick={() => window.open(a.fileUrl!.replace(/^\/uploads\//, "/api/uploads/"), '_blank', 'noopener,noreferrer')}
-                          className="text-xs text-primary hover:underline flex items-center gap-0.5"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-primary/25 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/15 transition-colors"
                           title="Open document"
                         >
                           <ExternalLink className="w-3 h-3" />
+                          Open
                         </button>
                       )}
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs" title="Share document">
+                          <button className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors" title="Share document">
                             <Share2 className="w-3 h-3" />
                             Share
                           </button>
