@@ -297,6 +297,46 @@ export default function Dashboard() {
 
   const recentActivity = notifications.slice(0, 8);
 
+  const handleActivityClick = async (n: Notification) => {
+    // Optimistically mark as read
+    setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x));
+    fetch(`/api/notifications/${n.id}/read`, { method: "PATCH", headers: authHeaders() }).catch(() => {});
+
+    const h = authHeaders();
+
+    if (n.type === "daily_report" && n.relatedEntityId) {
+      const res = await fetch(`/api/daily-reports/${n.relatedEntityId}`, { headers: h }).catch(() => null);
+      if (res?.ok) {
+        const r = await res.json();
+        navigate(`/projects/${r.projectId}?tab=reports&report=${n.relatedEntityId}`);
+        return;
+      }
+    }
+
+    if (n.type === "safety_concern" && n.relatedEntityId) {
+      const res = await fetch(`/api/photos/${n.relatedEntityId}`, { headers: h }).catch(() => null);
+      if (res?.ok) {
+        const photo = await res.json();
+        navigate(`/projects/${photo.projectId}?tab=photos`);
+        return;
+      }
+    }
+
+    if (n.type === "document_uploaded" && n.relatedEntityId) {
+      const res = await fetch(`/api/documents/${n.relatedEntityId}`, { headers: h }).catch(() => null);
+      if (res?.ok) {
+        const doc = await res.json();
+        navigate(`/projects/${doc.projectId}?tab=documents`);
+        return;
+      }
+    }
+
+    if (n.type === "new_message") { navigate("/messages"); return; }
+    if (n.type === "trial_ending" || n.type === "payment_failed") { navigate("/settings?tab=billing"); return; }
+
+    navigate("/notifications");
+  };
+
   return (
     <SidebarLayout>
       {/* Header */}
@@ -536,7 +576,11 @@ export default function Dashboard() {
               ) : (
                 <div className="divide-y">
                   {recentActivity.map(n => (
-                    <Link key={n.id} href="/notifications">
+                    <button
+                      key={n.id}
+                      onClick={() => handleActivityClick(n)}
+                      className="w-full text-left"
+                    >
                       <div className={cn(
                         "flex items-start gap-3 px-4 py-3 hover:bg-muted/50 transition-colors cursor-pointer",
                         !n.read && "bg-primary/5"
@@ -550,7 +594,7 @@ export default function Dashboard() {
                         </div>
                         <span className="text-xs text-muted-foreground flex-shrink-0 mt-0.5">{timeAgo(n.createdAt)}</span>
                       </div>
-                    </Link>
+                    </button>
                   ))}
                 </div>
               )}

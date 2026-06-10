@@ -47,6 +47,23 @@ router.get("/projects/:projectId/photos", authenticate, async (req, res) => {
   }
 });
 
+router.get("/photos/:photoId", authenticate, async (req, res) => {
+  try {
+    const rows = await db.select().from(photosTable).where(eq(photosTable.id, req.params.photoId)).limit(1);
+    if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Photo not found" }); return; }
+    const photo = rows[0];
+    const project = await db.select({ id: projectsTable.id })
+      .from(projectsTable)
+      .where(and(eq(projectsTable.id, photo.projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!project[0]) { res.status(404).json({ error: "not_found", message: "Photo not found" }); return; }
+    res.json({ id: photo.id, projectId: photo.projectId, category: photo.category, referenceNumber: photo.referenceNumber });
+  } catch (err) {
+    req.log.error({ err }, "Get photo error");
+    res.status(500).json({ error: "server_error", message: "Failed to get photo" });
+  }
+});
+
 const INTERNAL_ROLES = ["admin", "project_manager", "site_worker"];
 
 router.post("/projects/:projectId/photos", authenticate, async (req, res) => {

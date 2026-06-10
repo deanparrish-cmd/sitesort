@@ -88,10 +88,9 @@ function notifBg(type: string) {
 
 function notifLink(n: Notification): string | null {
   if (n.type === "new_message") return "/messages";
-  if (n.type === "document_uploaded" && n.relatedEntityId) return `/projects/${n.relatedEntityId}`;
-  if (n.type === "safety_concern" && n.relatedEntityId) return `/projects/${n.relatedEntityId}`;
   if (n.type === "trial_ending") return "/settings?tab=billing";
   if (n.type === "payment_failed") return "/settings?tab=billing";
+  // safety_concern, document_uploaded, daily_report resolved async in handleClick
   return null;
 }
 
@@ -153,6 +152,7 @@ export default function NotificationsPage() {
 
   const handleClick = async (n: Notification) => {
     if (!n.read) await markRead(n.id);
+
     if (n.type === "daily_report" && n.relatedEntityId) {
       try {
         const res = await fetch(`/api/daily-reports/${n.relatedEntityId}`, { headers: authHeaders() });
@@ -163,6 +163,29 @@ export default function NotificationsPage() {
         }
       } catch { /* fall through */ }
     }
+
+    if (n.type === "safety_concern" && n.relatedEntityId) {
+      try {
+        const res = await fetch(`/api/photos/${n.relatedEntityId}`, { headers: authHeaders() });
+        if (res.ok) {
+          const photo = await res.json();
+          setLocation(`/projects/${photo.projectId}?tab=photos`);
+          return;
+        }
+      } catch { /* fall through */ }
+    }
+
+    if (n.type === "document_uploaded" && n.relatedEntityId) {
+      try {
+        const res = await fetch(`/api/documents/${n.relatedEntityId}`, { headers: authHeaders() });
+        if (res.ok) {
+          const doc = await res.json();
+          setLocation(`/projects/${doc.projectId}?tab=documents`);
+          return;
+        }
+      } catch { /* fall through */ }
+    }
+
     const link = notifLink(n);
     if (link) setLocation(link);
   };

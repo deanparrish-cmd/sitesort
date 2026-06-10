@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { QRCodeCanvas } from "qrcode.react";
 import {
   Share2, Mail, MessageCircle, Users, Send, ExternalLink,
-  Download, Clock, Loader2, CheckCircle2, Pin, PinOff, QrCode,
+  Download, Clock, Loader2, CheckCircle2, Pin, PinOff, QrCode, ChevronDown,
 } from "lucide-react";
 
 type ShareLog = {
@@ -13,6 +13,7 @@ type ShareLog = {
   method: string; recipientInfo: string | null; sentByName: string; createdAt: string;
 };
 type Member = { id: string; name: string; userId: string | null };
+type Project = { id: string; name: string };
 
 export interface ShareModalProps {
   open: boolean;
@@ -51,46 +52,61 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
   const [isPinned, setIsPinned] = useState(false);
   const [pinLoading, setPinLoading] = useState(false);
   const [siteBoardUrl, setSiteBoardUrl] = useState<string | null>(null);
+  // Project picker — used when no projectId prop is supplied (e.g. insurance certs in Compliance)
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState("");
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const token = () => localStorage.getItem("sitesort_token");
   const authH = () => ({ "Content-Type": "application/json", ...(token() ? { Authorization: `Bearer ${token()}` } : {}) });
+
+  // Effective project id: either the prop (project-context pages) or user-selected
+  const effectiveProjectId = projectId || selectedProjectId || null;
 
   const fullUrl = fileUrl ? normaliseUrl(fileUrl) : null;
   const hasAttachment = MSG_ATTACHMENT_TYPES.has(entityType);
   const canPin = hasAttachment && !!projectId;
 
   useEffect(() => {
-    if (!open) { setTab("share"); setSentTo(null); setSelectedUserId(""); setIsPinned(false); setSiteBoardUrl(null); }
+    if (!open) {
+      setTab("share"); setSentTo(null); setSelectedUserId(""); setIsPinned(false);
+      setSiteBoardUrl(null); setSelectedProjectId(""); setMembers([]);
+    }
   }, [open]);
 
+  // Load project list when no projectId prop is given (e.g. Compliance Centre insurance)
   useEffect(() => {
-    if (!open || !projectId) return;
-    fetch(`/api/projects/${projectId}/members`, { headers: token() ? { Authorization: `Bearer ${token()}` } : {} })
+    if (!open || projectId) return;
+    fetch("/api/projects", { headers: token() ? { Authorization: `Bearer ${token()}` } : {} })
       .then(r => r.ok ? r.json() : [])
-      .then((data: any[]) => setMembers(data.filter((m: any) => m.userId)))
+      .then((data: any[]) => setProjects(data.filter((p: any) => p.status !== "archived")))
       .catch(() => {});
   }, [open, projectId]);
 
+  // Load members whenever effectiveProjectId is known
   useEffect(() => {
-    if (tab !== "qr" || !open || !projectId) return;
-    const h: Record<string, string> = token() ? { Authorization: `Bearer ${token()}` } : {};
-    // Fetch site board URL
-    fetch(`/api/projects/${projectId}/qr-codes`, { headers: h })
+    if (!open || !effectiveProjectId) return;
+    fetch(`/api/projects/${effectiveProjectId}/members`, { headers: token() ? { Authorization: `Bearer ${token()}` } : {} })
       .then(r => r.ok ? r.json() : [])
-      .then((codes: { siteUrl: string }[]) => {
-        setSiteBoardUrl(codes[0]?.siteUrl ?? null);
-      })
+      .then((data: any[]) => setMembers(data.filter((m: any) => m.userId)))
       .catch(() => {});
-    // Fetch pin status
+  }, [open, effectiveProjectId]);
+
+  useEffect(() => {
+    if (tab !== "qr" || !open || !effectiveProjectId) return;
+    const h: Record<string, string> = token() ? { Authorization: `Bearer ${token()}` } : {};
+    fetch(`/api/projects/${effectiveProjectId}/qr-codes`, { headers: h })
+      .then(r => r.ok ? r.json() : [])
+      .then((codes: { siteUrl: string }[]) => { setSiteBoardUrl(codes[0]?.siteUrl ?? null); })
+      .catch(() => {});
     if (!canPin) return;
-    fetch(`/api/projects/${projectId}/qr-pins`, { headers: h })
+    fetch(`/api/projects/${effectiveProjectId}/qr-pins`, { headers: h })
       .then(r => r.ok ? r.json() : [])
       .then((pins: { itemType: string; itemId: string }[]) => {
         setIsPinned(pins.some(p => p.itemType === entityType && p.itemId === entityId));
       })
       .catch(() => {});
-  }, [tab, open, projectId, canPin, entityType, entityId]);
+  }, [tab, open, effectiveProjectId, canPin, entityType, entityId]);
 
   useEffect(() => {
     if (tab !== "history" || !open) return;
@@ -107,7 +123,7 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
     fetch("/api/share-logs", {
       method: "POST",
       headers: authH(),
-      body: JSON.stringify({ entityType, entityId, entityName, method, recipientInfo, projectId }),
+      body: JSON.stringify({ entityType, entityId, entityName, method, recipientInfo, projectId: effectiveProjectId }),
     }).catch(() => {});
   };
 
@@ -129,7 +145,7 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
   };
 
   const shareProjectTeam = async () => {
-    if (!projectId) return;
+    if (!effectiveProjectId) return;
     setSending(true);
     setSentTo(null);
     const userIds = members.map(m => m.userId).filter(Boolean);
@@ -192,6 +208,10 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
     logShare("qr");
   };
 
+  const selectedProjectName = !projectId && selectedProjectId
+    ? projects.find(p => p.id === selectedProjectId)?.name
+    : null;
+
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
       <DialogHeader>
@@ -202,7 +222,7 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
       </DialogHeader>
 
         {/* Tabs */}
-        <div className="flex border-b -mx-6 px-6">
+        <div className="flex border-b -mx-4 sm:-mx-6 px-4 sm:px-6">
           {(["share", "qr", "history"] as const).map(t => (
             <button
               key={t}
@@ -244,9 +264,50 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
               </div>
             </div>
 
-            {projectId && (
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">In App</p>
+            {/* In App — always shown; project picker appears when no prop projectId */}
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">In App</p>
+
+              {/* Project picker — only when projectId is not supplied by the caller */}
+              {!projectId && !selectedProjectId && (
+                <div className="space-y-1.5">
+                  <p className="text-xs text-muted-foreground">Choose a project to share with its team:</p>
+                  <div className="relative">
+                    <Select
+                      value={selectedProjectId}
+                      onValueChange={val => { setSelectedProjectId(val); setSelectedUserId(""); setMembers([]); }}
+                    >
+                      <SelectTrigger className="w-full text-sm h-10">
+                        <SelectValue placeholder={projects.length ? "Select a project…" : "Loading projects…"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {projects.map(p => (
+                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {!projects.length && (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground absolute right-8 top-3 pointer-events-none" />
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Project label + change button when user has picked a project */}
+              {!projectId && selectedProjectId && (
+                <div className="flex items-center gap-2 mb-2 text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">{selectedProjectName}</span>
+                  <button
+                    onClick={() => { setSelectedProjectId(""); setMembers([]); setSelectedUserId(""); setSentTo(null); }}
+                    className="flex items-center gap-0.5 hover:text-foreground transition-colors"
+                  >
+                    <ChevronDown className="w-3 h-3" /> Change
+                  </button>
+                </div>
+              )}
+
+              {/* Team and Individual controls — shown once we have a project */}
+              {effectiveProjectId && (
                 <div className="space-y-2">
                   <button
                     disabled={sending || members.length === 0}
@@ -255,7 +316,7 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
                   >
                     <Users className="w-4 h-4 text-primary shrink-0" />
                     <span className="text-left">
-                      <span className="block">Project Team</span>
+                      <span className="block">Share with Project Team</span>
                       <span className="text-xs text-muted-foreground font-normal">{members.length} member{members.length !== 1 ? "s" : ""}</span>
                     </span>
                     {sending && <Loader2 className="w-4 h-4 ml-auto animate-spin" />}
@@ -264,7 +325,7 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
                   <div className="flex gap-2">
                     <Select value={selectedUserId} onValueChange={setSelectedUserId}>
                       <SelectTrigger className="flex-1 text-sm h-10">
-                        <SelectValue placeholder={members.length ? "Choose a team member…" : "No members"} />
+                        <SelectValue placeholder={members.length ? "Choose an individual…" : "No members"} />
                       </SelectTrigger>
                       <SelectContent>
                         {members.map(m => (
@@ -282,8 +343,8 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
                     </button>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         )}
 
