@@ -235,3 +235,60 @@
 - Voice features removed by user (do not re-add Web Speech API features)
 - Feature #45 (subcontractor notes) and #46 (invoice project organisation) added by Replit Agent
 - Features renumbered 1–46
+
+## End-of-session notes — 2026-06-09 (compliance documents + certificate attachment)
+
+### Tasks completed
+
+1. **Subcontractor notes project scoping (feature #45 enhancement)**:
+   - `subcontractor_notes.projectId` nullable FK added (DB already pushed)
+   - API `GET ?projectId=` filter returns general + project-scoped notes together; POST accepts `projectId`
+   - Directory page shows "General" or project-name pill badge per note
+   - Project Team tab: StickyNote button on each subcontractor member opens a notes dialog with "General (all projects)" / "This project only" scope toggle
+
+2. **Compliance Documents section in project compliance tab** — shows `permit`, `safety`, `method_statement` docs; empty state is a dashed drop zone; each doc row has Open + Share dropdown
+
+3. **Certificate attachment on Add Permit dialog** — `FileDropZone` field saved to `permits.document_url`; permit rows show Open Certificate button; Email/WhatsApp share includes cert URL
+
+4. **Certificate open button on global compliance page** — `expiringPermits` in `GET /api/compliance` returns `documentUrl`; permit rows show Open Certificate button when present
+
+### Key files
+- `lib/db/src/schema/subcontractor_notes.ts`, `artifacts/api-server/src/routes/subcontractors.ts`, `artifacts/api-server/src/routes/compliance.ts`
+- `artifacts/sitesort/src/pages/projects/detail.tsx`, `artifacts/sitesort/src/pages/subcontractors/index.tsx`, `artifacts/sitesort/src/pages/compliance/index.tsx`
+
+## End-of-session notes — 2026-06-10 (QR board pin management)
+
+### Tasks completed
+
+1. **QR board pin management (feature #44 completion)**:
+   - `qr_board_pins` table (`id`, `projectId` FK cascade, `itemType`, `itemId`, `pinnedAt`; unique constraint)
+   - `GET/POST/DELETE /api/projects/:id/qr-pins`; `onConflictDoNothing` on insert
+   - `GET /api/site/:token` returns `pinnedItems` array with full data; `normaliseUrl()` helper
+   - Project QR tab: "Board Contents" panel with thumbtack `<Pin>` toggle per item
+   - Site board public page: "Pinned to this Board" section with doc/photo/permit rows
+
+### Key files
+- `lib/db/src/schema/qr_board_pins.ts`, `lib/db/src/schema/index.ts`
+- `artifacts/api-server/src/routes/qr.ts`
+- `artifacts/sitesort/src/pages/projects/detail.tsx`, `artifacts/sitesort/src/pages/site-board.tsx`
+
+## End-of-session notes — 2026-06-10 (sign-up flow fixes + drag-and-drop)
+
+### Tasks completed
+
+1. **Sign-up flow fixes** (`artifacts/sitesort/src/pages/auth/register.tsx`):
+   - Plan-change token reuse: decodes JWT on submit, skips register if email matches, goes direct to billing checkout
+   - Confirm email field: Zod `.refine()` match check; stripped before API call
+   - Password visibility toggle: `Eye`/`EyeOff` via `rightAction` prop on `Input` component
+
+2. **Drag-and-drop fixed globally**:
+   - Dialog backdrop `pointer-events-none`; click-to-close moved to outer wrapper
+   - `FileDropZone` + `InsuranceCertZone`: document-level `dragover`/`drop` prevention while mounted
+   - Upload route multer errors now return JSON instead of HTML
+
+3. Database cleanup — deleted 4 automated `@test.com` test accounts
+
+### Key files
+- `artifacts/sitesort/src/pages/auth/register.tsx`, `artifacts/sitesort/src/components/ui/input.tsx`
+- `artifacts/sitesort/src/components/ui/dialog.tsx`, `artifacts/sitesort/src/components/ui/file-drop-zone.tsx`
+- `artifacts/sitesort/src/components/ui/insurance-cert-zone.tsx`, `artifacts/api-server/src/routes/upload.ts`
