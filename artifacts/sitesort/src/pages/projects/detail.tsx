@@ -12,6 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronUp, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, StickyNote, Send, Loader2, History, Archive } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
+import { ShareModal } from "@/components/share-modal";
 import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { Textarea } from "@/components/ui/textarea";
 import { InsuranceCertZone } from "@/components/ui/insurance-cert-zone";
@@ -78,11 +79,18 @@ export default function ProjectDetail() {
   const [newPermitError, setNewPermitError] = useState<string | null>(null);
 
   type ShareLog = { id: string; entityType: string; entityId: string; entityName: string; method: string; recipientInfo: string | null; sentByName: string; createdAt: string };
-  const [shareHistoryItem, setShareHistoryItem] = useState<{ entityType: string; entityId: string; entityName: string } | null>(null);
-  const [shareHistoryLog, setShareHistoryLog] = useState<ShareLog[]>([]);
-  const [shareHistoryLoading, setShareHistoryLoading] = useState(false);
   const [projectShareLog, setProjectShareLog] = useState<ShareLog[]>([]);
   const [projectShareLogLoading, setProjectShareLogLoading] = useState(false);
+  const loadProjectShareLog = async () => {
+    setProjectShareLogLoading(true);
+    const token = localStorage.getItem("sitesort_token");
+    const res = await fetch(`/api/share-logs?projectId=${projectId}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (res.ok) setProjectShareLog(await res.json());
+    setProjectShareLogLoading(false);
+  };
+
   const [projectInvoices, setProjectInvoices] = useState<InvoiceItem[]>([]);
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [milestones, setMilestones] = useState<MilestoneItem[]>([]);
@@ -111,54 +119,6 @@ export default function ProjectDetail() {
   const authHeaders = () => {
     const t = localStorage.getItem("sitesort_token");
     return t ? { Authorization: `Bearer ${t}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" } as Record<string, string>;
-  };
-
-  const logShare = (params: { entityType: string; entityId: string; entityName: string; method: string; recipientInfo?: string }) => {
-    const token = localStorage.getItem("sitesort_token");
-    fetch("/api/share-logs", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      body: JSON.stringify({ ...params, projectId }),
-    }).catch(() => {});
-  };
-
-  const shareDocEmail = (doc: { id: string; name: string; version: number; fileUrl: string }, recipientInfo?: string) => {
-    const norm = doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/");
-    const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
-    const subject = encodeURIComponent(`Document – ${doc.name}`);
-    const body = encodeURIComponent(`Hi,\n\nPlease find the document "${doc.name}" (v${doc.version}) here:\n\n${url}`);
-    window.open(`mailto:?subject=${subject}&body=${body}`);
-    logShare({ entityType: "document", entityId: doc.id, entityName: doc.name, method: "email", recipientInfo });
-  };
-
-  const shareDocWhatsApp = (doc: { id: string; name: string; version: number; fileUrl: string }, recipientInfo?: string) => {
-    const norm = doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/");
-    const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
-    const text = encodeURIComponent(`Document: ${doc.name} (v${doc.version})\n${url}`);
-    window.open(`https://wa.me/?text=${text}`, "_blank");
-    logShare({ entityType: "document", entityId: doc.id, entityName: doc.name, method: "whatsapp", recipientInfo });
-  };
-
-  const openShareHistory = async (entityType: string, entityId: string, entityName: string) => {
-    setShareHistoryItem({ entityType, entityId, entityName });
-    setShareHistoryLoading(true);
-    setShareHistoryLog([]);
-    const token = localStorage.getItem("sitesort_token");
-    const res = await fetch(`/api/share-logs?entityType=${entityType}&entityId=${entityId}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (res.ok) setShareHistoryLog(await res.json());
-    setShareHistoryLoading(false);
-  };
-
-  const loadProjectShareLog = async () => {
-    setProjectShareLogLoading(true);
-    const token = localStorage.getItem("sitesort_token");
-    const res = await fetch(`/api/share-logs?projectId=${projectId}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (res.ok) setProjectShareLog(await res.json());
-    setProjectShareLogLoading(false);
   };
 
   const invoiceFullUrl = (attachmentUrl: string) => {
@@ -615,7 +575,7 @@ export default function ProjectDetail() {
     }
     setLinkingSubId(null);
   };
-  type SharingDoc = { id: string; name: string; version: number; fileUrl: string };
+  type SharingDoc = { type: string; id: string; name: string; version: number | null; fileUrl: string };
   const [sharingDoc, setSharingDoc] = useState<SharingDoc | null>(null);
 
   // Sub notes dialog (project Team tab)
@@ -1389,32 +1349,10 @@ tr:last-child td{border-bottom:none}
                         className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors">
                         <Pencil className="w-3 h-3" />Edit
                       </button>
-                      <button onClick={() => openShareHistory("document", doc.id, doc.name)}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors" title="Share history">
-                        <History className="w-3 h-3" />History
+                      <button onClick={() => setSharingDoc({ type: "document", id: doc.id, name: doc.name, version: doc.version, fileUrl: doc.fileUrl })}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors">
+                        <Share2 className="w-3 h-3" />Share
                       </button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors">
-                            <Share2 className="w-3 h-3" />Share
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-44">
-                          <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => shareDocEmail(doc)}>
-                            <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => shareDocWhatsApp(doc)}>
-                            <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            className="gap-2 cursor-pointer"
-                            onClick={() => { setSharingDoc({ id: doc.id, name: doc.name, version: doc.version, fileUrl: doc.fileUrl }); logShare({ entityType: "document", entityId: doc.id, entityName: doc.name, method: "team" }); }}
-                          >
-                            <Users className="w-4 h-4 text-primary" /> Share with project team
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
                     </div>
                   </div>
                 );
@@ -1529,33 +1467,13 @@ tr:last-child td{border-bottom:none}
                               Edit
                             </button>
                           )}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors" title="Share">
-                                <Share2 className="w-3.5 h-3.5" />
-                                Share
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-44">
-                              <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => shareDocEmail(doc)}>
-                                <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => shareDocWhatsApp(doc)}>
-                                <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                className="gap-2 cursor-pointer"
-                                onClick={() => { setSharingDoc({ id: doc.id, name: doc.name, version: doc.version, fileUrl: doc.fileUrl }); logShare({ entityType: "document", entityId: doc.id, entityName: doc.name, method: "team" }); }}
-                              >
-                                <Users className="w-4 h-4 text-primary" /> Share with project team
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => openShareHistory("document", doc.id, doc.name)}>
-                                <History className="w-4 h-4 text-muted-foreground" /> Share history
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          <button
+                            onClick={() => setSharingDoc({ type: "document", id: doc.id, name: doc.name, version: doc.version, fileUrl: doc.fileUrl })}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors"
+                            title="Share"
+                          >
+                            <Share2 className="w-3.5 h-3.5" /> Share
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -1981,35 +1899,13 @@ tr:last-child td{border-bottom:none}
                           <div className="flex items-center justify-between gap-2 pt-0.5">
                             <p className="text-[10px] text-muted-foreground">{formatDate(photo.takenAt)} · {photo.uploaderName}</p>
                             {photo.photoUrl && (
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <button className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors" title="Share photo">
-                                    <Share2 className="w-3.5 h-3.5" />
-                                    Share
-                                  </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-44">
-                                  <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
-                                    const norm = photo.photoUrl!.replace(/^\/uploads\//, "/api/uploads/");
-                                    const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
-                                    const subject = encodeURIComponent(`Site Photo – ${photo.referenceNumber}`);
-                                    const body = encodeURIComponent(`Site photo from ${project?.name ?? "project"}:\n\nCategory: ${photo.category}\nRef: ${photo.referenceNumber}${photo.description ? `\nNote: ${photo.description}` : ""}${photo.zone ? `\nZone: ${photo.zone}` : ""}\nDate: ${formatDate(photo.takenAt)}\n\n${url}`);
-                                    window.open(`mailto:?subject=${subject}&body=${body}`);
-                                    logShare({ entityType: "photo", entityId: photo.id, entityName: `Photo ${photo.referenceNumber}`, method: "email" });
-                                  }}>
-                                    <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
-                                    const norm = photo.photoUrl!.replace(/^\/uploads\//, "/api/uploads/");
-                                    const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
-                                    const text = encodeURIComponent(`Site photo – ${photo.referenceNumber} · ${photo.category}${photo.description ? `\n${photo.description}` : ""}\n${url}`);
-                                    window.open(`https://wa.me/?text=${text}`, "_blank");
-                                    logShare({ entityType: "photo", entityId: photo.id, entityName: `Photo ${photo.referenceNumber}`, method: "whatsapp" });
-                                  }}>
-                                    <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                              <button
+                                onClick={() => setSharingDoc({ type: "photo", id: photo.id, name: `Photo ${photo.referenceNumber}`, version: null, fileUrl: photo.photoUrl! })}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors"
+                                title="Share photo"
+                              >
+                                <Share2 className="w-3.5 h-3.5" /> Share
+                              </button>
                             )}
                           </div>
                         </div>
@@ -2097,45 +1993,13 @@ tr:last-child td{border-bottom:none}
                         </button>
                       );
                     })()}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors" title="Share">
-                          <Share2 className="w-3.5 h-3.5" />
-                          Share
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48">
-                        <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
-                          const certLine = p.documentUrl ? `\nCertificate: ${window.location.origin}${p.documentUrl.replace(/^\/uploads\//, "/api/uploads/")}` : "";
-                          const subject = encodeURIComponent(`Permit – ${p.type}`);
-                          const body = encodeURIComponent(`Permit details:\n\nType: ${p.type}\nDescription: ${p.description}\nStart: ${fmtDate(p.startDate)}\nExpiry: ${fmtDate(p.expiryDate)} (${statusLabel})${p.responsibleName ? `\nResponsible: ${p.responsibleName}` : ""}\nProject: ${project?.name ?? ""}${certLine}`);
-                          window.open(`mailto:?subject=${subject}&body=${body}`);
-                          logShare({ entityType: "permit", entityId: p.id, entityName: p.type, method: "email" });
-                        }}>
-                          <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
-                          const certLine = p.documentUrl ? `\nCertificate: ${window.location.origin}${p.documentUrl.replace(/^\/uploads\//, "/api/uploads/")}` : "";
-                          const text = encodeURIComponent(`${p.type} permit – ${project?.name ?? ""}\n${p.description}\nExpiry: ${fmtDate(p.expiryDate)} (${statusLabel})${p.responsibleName ? `\nResponsible: ${p.responsibleName}` : ""}${certLine}`);
-                          window.open(`https://wa.me/?text=${text}`, "_blank");
-                          logShare({ entityType: "permit", entityId: p.id, entityName: p.type, method: "whatsapp" });
-                        }}>
-                          <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
-                          const fakeDoc = { id: p.id, name: `${p.type} – ${p.description}`, version: 1, fileUrl: p.documentUrl ?? "" };
-                          if (p.documentUrl) { setSharingDoc(fakeDoc); logShare({ entityType: "permit", entityId: p.id, entityName: p.type, method: "team" }); }
-                          else toast({ title: "No certificate attached", description: "Attach a certificate to share it with the project team.", variant: "destructive" });
-                        }}>
-                          <Users className="w-4 h-4 text-primary" /> Share with project team
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => openShareHistory("permit", p.id, p.type)}>
-                          <History className="w-4 h-4 text-muted-foreground" /> Share history
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <button
+                      onClick={() => setSharingDoc({ type: "permit", id: p.id, name: `${p.type} – ${p.description}`, version: null, fileUrl: p.documentUrl ?? "" })}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors"
+                      title="Share"
+                    >
+                      <Share2 className="w-3.5 h-3.5" /> Share
+                    </button>
                     {caps.canManageTeam && (
                       <button
                         onClick={() => { if (confirm(`Delete "${p.type}" permit?`)) deletePermit(p.id); }}
@@ -2284,30 +2148,13 @@ tr:last-child td{border-bottom:none}
                                   >
                                     <ExternalLink className="w-3.5 h-3.5" /> Open
                                   </button>
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                      <button className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors" title="Share">
-                                        <Share2 className="w-3.5 h-3.5" />
-                                        Share
-                                      </button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end" className="w-44">
-                                      <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => { shareDocEmail(doc); }}>
-                                        <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => { shareDocWhatsApp(doc); }}>
-                                        <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
-                                      </DropdownMenuItem>
-                                      <DropdownMenuSeparator />
-                                      <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => { setSharingDoc({ id: doc.id, name: doc.name, version: doc.version, fileUrl: doc.fileUrl }); logShare({ entityType: "document", entityId: doc.id, entityName: doc.name, method: "team" }); }}>
-                                        <Users className="w-4 h-4 text-primary" /> Share with project team
-                                      </DropdownMenuItem>
-                                      <DropdownMenuSeparator />
-                                      <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => openShareHistory("document", doc.id, doc.name)}>
-                                        <History className="w-4 h-4 text-muted-foreground" /> Share history
-                                      </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
+                                  <button
+                                    onClick={() => setSharingDoc({ type: "document", id: doc.id, name: doc.name, version: doc.version, fileUrl: doc.fileUrl })}
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors"
+                                    title="Share"
+                                  >
+                                    <Share2 className="w-3.5 h-3.5" /> Share
+                                  </button>
                                 </div>
                               </div>
                             );
@@ -2543,21 +2390,13 @@ tr:last-child td{border-bottom:none}
                               >
                                 <ExternalLink className="w-3.5 h-3.5" />
                               </button>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <button title="Share document" className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-white/50 transition-colors">
-                                    <Share2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-44">
-                                  <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => shareDocEmail(doc)}>
-                                    <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => shareDocWhatsApp(doc)}>
-                                    <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                              <button
+                                onClick={() => setSharingDoc({ type: "document", id: doc.id, name: doc.name, version: doc.version, fileUrl: doc.fileUrl })}
+                                title="Share document"
+                                className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-white/50 transition-colors"
+                              >
+                                <Share2 className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                           </div>
                         );
@@ -2850,32 +2689,13 @@ tr:last-child td{border-bottom:none}
                       <p className="text-muted-foreground text-xs mt-0.5">{dateStr}</p>
                       <div className="flex items-center justify-between gap-2 mt-0.5">
                         <p className="text-muted-foreground text-xs">{timeStr}</p>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button className="p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-colors shrink-0" title="Share check-in">
-                              <Share2 className="w-3.5 h-3.5" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-44">
-                            <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
-                              const url = photoSrc.startsWith("http") ? photoSrc : `${window.location.origin}${photoSrc}`;
-                              const subject = encodeURIComponent(`Site Check-In – ${ci.workerName}`);
-                              const body = encodeURIComponent(`Site check-in record:\n\nWorker: ${ci.workerName}\nDate: ${dateStr} at ${timeStr}\nProject: ${project?.name ?? ""}\n\nPhoto: ${url}`);
-                              window.open(`mailto:?subject=${subject}&body=${body}`);
-                              logShare({ entityType: "checkin", entityId: ci.id, entityName: `Check-in: ${ci.workerName}`, method: "email" });
-                            }}>
-                              <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
-                              const url = photoSrc.startsWith("http") ? photoSrc : `${window.location.origin}${photoSrc}`;
-                              const text = encodeURIComponent(`Site check-in – ${ci.workerName}\n${dateStr} at ${timeStr}\n${url}`);
-                              window.open(`https://wa.me/?text=${text}`, "_blank");
-                              logShare({ entityType: "checkin", entityId: ci.id, entityName: `Check-in: ${ci.workerName}`, method: "whatsapp" });
-                            }}>
-                              <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        <button
+                          onClick={() => setSharingDoc({ type: "photo", id: ci.id, name: `Check-in: ${ci.workerName}`, version: null, fileUrl: photoSrc })}
+                          className="p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-colors shrink-0"
+                          title="Share check-in"
+                        >
+                          <Share2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -3315,92 +3135,16 @@ tr:last-child td{border-bottom:none}
         </DialogFooter>
       </Dialog>
 
-      <Dialog open={!!sharingDoc} onOpenChange={v => { if (!v) setSharingDoc(null); }}>
-        <DialogHeader>
-          <DialogTitle>Share with project team</DialogTitle>
-        </DialogHeader>
-        {sharingDoc && (() => {
-          const norm = sharingDoc.fileUrl.replace(/^\/uploads\//, "/api/uploads/");
-          const docUrl = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
-          const allMembers = (members as any[]) ?? [];
-          const withEmail = allMembers.filter((m: any) => m.email);
-          const withPhone = allMembers.filter((m: any) => m.phone);
-          const emailSubject = encodeURIComponent(`Document – ${sharingDoc.name}`);
-          const emailBody = encodeURIComponent(`Hi,\n\nPlease find the document "${sharingDoc.name}" (v${sharingDoc.version}) here:\n\n${docUrl}`);
-          const waText = encodeURIComponent(`Document: ${sharingDoc.name} (v${sharingDoc.version})\n${docUrl}`);
-          return (
-            <div className="space-y-5">
-              <div className="px-4 py-3 bg-muted/50 rounded-lg text-sm">
-                <p className="font-semibold truncate">{sharingDoc.name}</p>
-                <p className="text-muted-foreground text-xs">v{sharingDoc.version} · <button onClick={() => window.open(docUrl, '_blank', 'noopener,noreferrer')} className="text-primary hover:underline">Open document</button></p>
-              </div>
-
-              {withEmail.length > 0 && (
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm font-semibold">Email all members</p>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        const allEmails = withEmail.map((m: any) => m.email).join(",");
-                        window.open(`mailto:${allEmails}?subject=${emailSubject}&body=${emailBody}`);
-                        if (sharingDoc) logShare({ entityType: "document", entityId: sharingDoc.id, entityName: sharingDoc.name, method: "email", recipientInfo: `All team (${withEmail.length})` });
-                      }}
-                    >
-                      <Mail className="w-3.5 h-3.5 mr-1.5" /> Email all ({withEmail.length})
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <p className="text-sm font-semibold mb-2">Send to individual members</p>
-                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                  {allMembers.length === 0 && (
-                    <p className="text-sm text-muted-foreground text-center py-4">No team members on this project yet.</p>
-                  )}
-                  {allMembers.map((m: any) => (
-                    <div key={m.id} className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg border bg-card">
-                      <div className="min-w-0">
-                        <p className="font-semibold text-sm truncate">{m.name}</p>
-                        <p className="text-xs text-muted-foreground truncate">{m.email ?? m.phone ?? "No contact details"}</p>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {m.email && (
-                          <button
-                            onClick={() => { window.open(`mailto:${m.email}?subject=${emailSubject}&body=${emailBody}`); if (sharingDoc) logShare({ entityType: "document", entityId: sharingDoc.id, entityName: sharingDoc.name, method: "email", recipientInfo: m.name }); }}
-                            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-primary transition-colors"
-                            title={`Email ${m.name}`}
-                          >
-                            <Mail className="w-4 h-4" />
-                          </button>
-                        )}
-                        {m.phone && (
-                          <button
-                            onClick={() => { window.open(`https://wa.me/${m.phone.replace(/\D/g, "")}?text=${waText}`, "_blank"); if (sharingDoc) logShare({ entityType: "document", entityId: sharingDoc.id, entityName: sharingDoc.name, method: "whatsapp", recipientInfo: m.name }); }}
-                            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-green-600 transition-colors"
-                            title={`WhatsApp ${m.name}`}
-                          >
-                            <MessageCircle className="w-4 h-4" />
-                          </button>
-                        )}
-                        {!m.email && !m.phone && (
-                          <span className="text-xs text-muted-foreground italic">No contact</span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setSharingDoc(null)}>Done</Button>
-              </DialogFooter>
-            </div>
-          );
-        })()}
-      </Dialog>
+      <ShareModal
+        open={!!sharingDoc}
+        onClose={() => setSharingDoc(null)}
+        entityType={sharingDoc?.type ?? "document"}
+        entityId={sharingDoc?.id ?? ""}
+        entityName={sharingDoc?.name ?? ""}
+        fileUrl={sharingDoc?.fileUrl}
+        projectId={projectId}
+        version={sharingDoc?.version ?? null}
+      />
 
       <Dialog open={!!scheduleTarget} onOpenChange={v => { if (!v) { setScheduleTarget(null); setScheduleError(null); } }}>
         <DialogHeader>
@@ -3600,54 +3344,6 @@ tr:last-child td{border-bottom:none}
         </DialogFooter>
       </Dialog>
 
-      {/* Per-item Share History Dialog */}
-      {shareHistoryItem && (
-        <Dialog open onOpenChange={() => { setShareHistoryItem(null); setShareHistoryLog([]); }}>
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <History className="w-4 h-4 text-primary" />
-              <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-sm">Share History</h3>
-                <p className="text-xs text-muted-foreground truncate">{shareHistoryItem.entityName}</p>
-              </div>
-            </div>
-            {shareHistoryLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-              </div>
-            ) : shareHistoryLog.length === 0 ? (
-              <div className="border-2 border-dashed rounded-xl p-6 text-center">
-                <History className="w-7 h-7 mx-auto text-muted-foreground/30 mb-2" />
-                <p className="text-sm text-muted-foreground">No shares recorded for this item yet.</p>
-              </div>
-            ) : (
-              <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1">
-                {shareHistoryLog.map(entry => (
-                  <div key={entry.id} className="flex items-start gap-3 px-3 py-2.5 rounded-lg border bg-card text-sm">
-                    <div className={`mt-0.5 shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs ${entry.method === "email" ? "bg-blue-100 text-blue-600" : entry.method === "whatsapp" ? "bg-green-100 text-green-600" : "bg-primary/10 text-primary"}`}>
-                      {entry.method === "email" ? <Mail className="w-3 h-3" /> : entry.method === "whatsapp" ? <MessageCircle className="w-3 h-3" /> : <Users className="w-3 h-3" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-muted-foreground">
-                        {entry.method === "email" ? "Emailed" : entry.method === "whatsapp" ? "WhatsApp" : "Shared with team"}
-                        {entry.recipientInfo ? ` → ${entry.recipientInfo}` : ""}
-                        {" · "}{entry.sentByName}
-                      </p>
-                    </div>
-                    <p className="shrink-0 text-[10px] text-muted-foreground whitespace-nowrap">
-                      {new Date(entry.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}{" "}
-                      {new Date(entry.createdAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-            <DialogFooter>
-              <Button variant="outline" onClick={() => { setShareHistoryItem(null); setShareHistoryLog([]); }}>Close</Button>
-            </DialogFooter>
-          </div>
-        </Dialog>
-      )}
     </SidebarLayout>
   );
 }

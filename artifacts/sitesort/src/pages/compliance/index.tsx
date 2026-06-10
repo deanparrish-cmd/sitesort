@@ -5,13 +5,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { ShareModal } from "@/components/share-modal";
 import {
   ShieldAlert, ShieldX, FileSignature, Search,
   CheckCircle2, Upload, FileText, AlertTriangle, Loader2, Calendar,
-  ExternalLink, Share2, Mail, MessageCircle, Archive, ChevronDown, ChevronUp,
+  ExternalLink, Share2, Archive, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCapabilities } from "@/hooks/use-capabilities";
@@ -93,6 +91,9 @@ export default function CompliancePage() {
   const [assignSuccess, setAssignSuccess] = useState(false);
   const [rowHoverId, setRowHoverId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  type ShareItem = { entityType: string; entityId: string; entityName: string; fileUrl?: string | null; projectId?: string | null };
+  const [shareItem, setShareItem] = useState<ShareItem | null>(null);
 
   const loadCompliance = useCallback(() => {
     const token = localStorage.getItem("sitesort_token");
@@ -399,40 +400,15 @@ export default function CompliancePage() {
                                   className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
                                   title="Open certificate"
                                 >
-                                  <ExternalLink className="w-3 h-3" />
-                                  Open
+                                  <ExternalLink className="w-3 h-3" /> Open
                                 </button>
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <button className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors" title="Share certificate">
-                                      <Share2 className="w-3 h-3" />
-                                      Share
-                                    </button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end" className="w-44">
-                                    <DropdownMenuItem
-                                      className="gap-2 cursor-pointer"
-                                      onClick={() => {
-                                        const norm = ins.certificateUrl!.replace(/^\/uploads\//, "/api/uploads/"); const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
-                                        const subject = encodeURIComponent(`Insurance Certificate – ${ins.subcontractorName}`);
-                                        const body = encodeURIComponent(`Hi,\n\nPlease find the ${ins.insuranceType.replace(/_/g, " ")} insurance certificate for ${ins.subcontractorName} here:\n\n${url}\n\nExpiry: ${fmtDate(ins.expiryDate)}`);
-                                        window.open(`mailto:?subject=${subject}&body=${body}`);
-                                      }}
-                                    >
-                                      <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      className="gap-2 cursor-pointer"
-                                      onClick={() => {
-                                        const norm = ins.certificateUrl!.replace(/^\/uploads\//, "/api/uploads/"); const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
-                                        const text = encodeURIComponent(`Insurance certificate – ${ins.subcontractorName}\nType: ${ins.insuranceType.replace(/_/g, " ")}\nExpiry: ${fmtDate(ins.expiryDate)}\n${url}`);
-                                        window.open(`https://wa.me/?text=${text}`, "_blank");
-                                      }}
-                                    >
-                                      <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
+                                <button
+                                  onClick={() => setShareItem({ entityType: "insurance", entityId: ins.subcontractorId, entityName: `${ins.subcontractorName} – ${ins.insuranceType.replace(/_/g, " ")}`, fileUrl: ins.certificateUrl })}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
+                                  title="Share certificate"
+                                >
+                                  <Share2 className="w-3 h-3" /> Share
+                                </button>
                               </>
                             )}
                           </>
@@ -473,29 +449,12 @@ export default function CompliancePage() {
                           >
                             <ExternalLink className="w-3 h-3" /> Open
                           </button>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors">
-                                <Share2 className="w-3 h-3" /> Share
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-44">
-                              <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
-                                const norm = ins.certificateUrl!.replace(/^\/uploads\//, "/api/uploads/");
-                                const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
-                                window.open(`mailto:?subject=${encodeURIComponent(`Insurance Certificate – ${ins.subcontractorName}`)}&body=${encodeURIComponent(`Superseded certificate:\n${url}\nExpiry: ${fmtDate(ins.expiryDate)}`)}`);
-                              }}>
-                                <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
-                                const norm = ins.certificateUrl!.replace(/^\/uploads\//, "/api/uploads/");
-                                const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
-                                window.open(`https://wa.me/?text=${encodeURIComponent(`Superseded insurance certificate – ${ins.subcontractorName}\n${url}`)}`, "_blank");
-                              }}>
-                                <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          <button
+                            onClick={() => setShareItem({ entityType: "insurance", entityId: ins.id, entityName: `${ins.subcontractorName} – ${ins.insuranceType.replace(/_/g, " ")}`, fileUrl: ins.certificateUrl })}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
+                          >
+                            <Share2 className="w-3 h-3" /> Share
+                          </button>
                         </div>
                       )}
                     </div>
@@ -546,35 +505,13 @@ export default function CompliancePage() {
                             </button>
                           );
                         })()}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors" title="Share permit">
-                              <Share2 className="w-3 h-3" />
-                              Share
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-44">
-                            <DropdownMenuItem
-                              className="gap-2 cursor-pointer"
-                              onClick={() => {
-                                const subject = encodeURIComponent(`Permit Expiry – ${p.permitType}`);
-                                const body = encodeURIComponent(`Hi,\n\nPlease note the following permit is expiring soon:\n\nType: ${p.permitType}\nProject: ${p.projectName}\nExpiry: ${fmtDate(p.expiryDate)}\n\nPlease take action in SiteSort.`);
-                                window.open(`mailto:?subject=${subject}&body=${body}`);
-                              }}
-                            >
-                              <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="gap-2 cursor-pointer"
-                              onClick={() => {
-                                const text = encodeURIComponent(`Permit expiry alert:\nType: ${p.permitType}\nProject: ${p.projectName}\nExpiry: ${fmtDate(p.expiryDate)}\nPlease action in SiteSort.`);
-                                window.open(`https://wa.me/?text=${text}`, "_blank");
-                              }}
-                            >
-                              <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        <button
+                          onClick={() => setShareItem({ entityType: "permit", entityId: p.permitId, entityName: `${p.permitType} – ${p.projectName}`, fileUrl: p.documentUrl, projectId: p.projectId })}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
+                          title="Share permit"
+                        >
+                          <Share2 className="w-3 h-3" /> Share
+                        </button>
                       </div>
                     </div>
                   );
@@ -611,29 +548,12 @@ export default function CompliancePage() {
                           >
                             <ExternalLink className="w-3 h-3" /> Open
                           </button>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors">
-                                <Share2 className="w-3 h-3" /> Share
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-44">
-                              <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
-                                const norm = p.documentUrl!.replace(/^\/uploads\//, "/api/uploads/");
-                                const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
-                                window.open(`mailto:?subject=${encodeURIComponent(`Superseded Permit – ${p.permitType}`)}&body=${encodeURIComponent(`Superseded permit document:\n${url}\nProject: ${p.projectName}\nExpiry: ${fmtDate(p.expiryDate)}`)}`);
-                              }}>
-                                <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
-                                const norm = p.documentUrl!.replace(/^\/uploads\//, "/api/uploads/");
-                                const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
-                                window.open(`https://wa.me/?text=${encodeURIComponent(`Superseded permit – ${p.permitType} (${p.projectName})\n${url}`)}`, "_blank");
-                              }}>
-                                <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          <button
+                            onClick={() => setShareItem({ entityType: "permit", entityId: p.id, entityName: `${p.permitType} – ${p.projectName}`, fileUrl: p.documentUrl, projectId: p.projectId })}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
+                          >
+                            <Share2 className="w-3 h-3" /> Share
+                          </button>
                         </div>
                       )}
                     </div>
@@ -675,39 +595,13 @@ export default function CompliancePage() {
                           Open
                         </button>
                       )}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors" title="Share document">
-                            <Share2 className="w-3 h-3" />
-                            Share
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-44">
-                          <DropdownMenuItem
-                            className="gap-2 cursor-pointer"
-                            onClick={() => {
-                              const norm = a.fileUrl?.replace(/^\/uploads\//, "/api/uploads/") ?? "";
-                              const url = norm ? (norm.startsWith("http") ? norm : `${window.location.origin}${norm}`) : "";
-                              const subject = encodeURIComponent(`Sign-off Required – ${a.documentName}`);
-                              const body = encodeURIComponent(`Hi,\n\nThe document "${a.documentName}" on project "${a.projectName}" requires sign-off from ${a.pendingCount} team member${a.pendingCount !== 1 ? "s" : ""}.\n\n${url ? `Document: ${url}\n\n` : ""}Please sign off in SiteSort.`);
-                              window.open(`mailto:?subject=${subject}&body=${body}`);
-                            }}
-                          >
-                            <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="gap-2 cursor-pointer"
-                            onClick={() => {
-                              const norm = a.fileUrl?.replace(/^\/uploads\//, "/api/uploads/") ?? "";
-                              const url = norm ? (norm.startsWith("http") ? norm : `${window.location.origin}${norm}`) : "";
-                              const text = encodeURIComponent(`Sign-off needed: "${a.documentName}" on "${a.projectName}" – ${a.pendingCount} pending.${url ? `\n${url}` : ""}`);
-                              window.open(`https://wa.me/?text=${text}`, "_blank");
-                            }}
-                          >
-                            <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <button
+                        onClick={() => setShareItem({ entityType: "document", entityId: a.documentId, entityName: a.documentName, fileUrl: a.fileUrl, projectId: a.projectId })}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
+                        title="Share document"
+                      >
+                        <Share2 className="w-3 h-3" /> Share
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -742,29 +636,12 @@ export default function CompliancePage() {
                         >
                           <ExternalLink className="w-3 h-3" /> Open
                         </button>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors">
-                              <Share2 className="w-3 h-3" /> Share
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-44">
-                            <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
-                              const norm = doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/");
-                              const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
-                              window.open(`mailto:?subject=${encodeURIComponent(`Superseded Document – ${doc.name}`)}&body=${encodeURIComponent(`Superseded document (v${doc.version}):\n${url}\nProject: ${doc.projectName}`)}`);
-                            }}>
-                              <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
-                              const norm = doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/");
-                              const url = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
-                              window.open(`https://wa.me/?text=${encodeURIComponent(`Superseded document – ${doc.name} (v${doc.version})\n${doc.projectName}\n${url}`)}`, "_blank");
-                            }}>
-                              <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        <button
+                          onClick={() => setShareItem({ entityType: "document", entityId: doc.id, entityName: doc.name, fileUrl: doc.fileUrl, projectId: doc.projectId })}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
+                        >
+                          <Share2 className="w-3 h-3" /> Share
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -902,6 +779,16 @@ export default function CompliancePage() {
           </DialogFooter>
         )}
       </Dialog>
+
+      <ShareModal
+        open={!!shareItem}
+        onClose={() => setShareItem(null)}
+        entityType={shareItem?.entityType ?? ""}
+        entityId={shareItem?.entityId ?? ""}
+        entityName={shareItem?.entityName ?? ""}
+        fileUrl={shareItem?.fileUrl}
+        projectId={shareItem?.projectId}
+      />
     </SidebarLayout>
   );
 }

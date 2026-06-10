@@ -348,9 +348,9 @@ router.post("/messages", authenticate, async (req, res) => {
 // POST /api/messages/broadcast — send same message to multiple recipients
 router.post("/messages/broadcast", authenticate, async (req, res) => {
   try {
-    const { recipientIds, content } = req.body;
-    if (!Array.isArray(recipientIds) || recipientIds.length === 0 || !content?.trim()) {
-      res.status(400).json({ error: "validation_error", message: "recipientIds and content are required" });
+    const { recipientIds, content, attachmentType, attachmentId } = req.body;
+    if (!Array.isArray(recipientIds) || recipientIds.length === 0 || (!content?.trim() && !attachmentId)) {
+      res.status(400).json({ error: "validation_error", message: "recipientIds and content or attachmentId are required" });
       return;
     }
 
@@ -361,7 +361,8 @@ router.post("/messages/broadcast", authenticate, async (req, res) => {
 
     const senderRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
     const senderName = senderRows[0]?.name ?? "Someone";
-    const preview = content.trim().length > 80 ? content.trim().slice(0, 77) + "…" : content.trim();
+    const msgContent = content?.trim() ?? "";
+    const preview = msgContent.length > 80 ? msgContent.slice(0, 77) + "…" : (msgContent || "Shared a file");
 
     let sent = 0;
     for (const recipient of recipients) {
@@ -371,7 +372,8 @@ router.post("/messages/broadcast", authenticate, async (req, res) => {
         companyId: req.user!.companyId,
         senderId: req.user!.id,
         recipientId: recipient.id,
-        content: content.trim(),
+        content: msgContent,
+        ...(attachmentType && attachmentId ? { attachmentType, attachmentId } : {}),
       });
       await db.insert(notificationsTable).values({
         id: generateId(),

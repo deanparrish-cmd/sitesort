@@ -5,13 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { ShareModal } from "@/components/share-modal";
 import {
   Plus, Search, ArrowDownCircle, ArrowUpCircle, CheckCircle2, Clock,
   AlertTriangle, Receipt, Paperclip, Upload, Loader2, X,
-  Share2, Mail, MessageCircle, Eye, ExternalLink, FileText, Image, Download,
+  Share2, Eye, ExternalLink, FileText, Image, Download,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { useListProjects } from "@workspace/api-client-react";
@@ -27,22 +25,6 @@ function fullUrl(attachmentUrl: string) {
   return normalised.startsWith("http") ? normalised : `${window.location.origin}${normalised}`;
 }
 
-function shareEmail(inv: Invoice) {
-  const url = fullUrl(inv.attachmentUrl!);
-  const subject = encodeURIComponent(`Invoice – ${inv.counterpartyName}`);
-  const body = encodeURIComponent(
-    `Hi,\n\nPlease find the invoice document attached below:\n\n${url}\n\nRef: ${inv.reference ?? "N/A"} | Amount: ${inv.currency} ${Number(inv.amount).toFixed(2)}\n\nRegards`
-  );
-  window.open(`mailto:?subject=${subject}&body=${body}`);
-}
-
-function shareWhatsApp(inv: Invoice) {
-  const url = fullUrl(inv.attachmentUrl!);
-  const text = encodeURIComponent(
-    `Invoice document – ${inv.counterpartyName}\nRef: ${inv.reference ?? "N/A"} | ${inv.currency} ${Number(inv.amount).toFixed(2)}\n${url}`
-  );
-  window.open(`https://wa.me/?text=${text}`, "_blank");
-}
 
 type Invoice = {
   id: string;
@@ -124,6 +106,7 @@ export default function InvoicesPage() {
   const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
   const [moveToInvoice, setMoveToInvoice] = useState<Invoice | null>(null);
   const [movingProject, setMovingProject] = useState(false);
+  const [shareItem, setShareItem] = useState<{ id: string; name: string; fileUrl: string; projectId?: string | null } | null>(null);
 
   // drag-and-drop state
   const [isDragOver, setIsDragOver] = useState(false);
@@ -487,24 +470,12 @@ export default function InvoicesPage() {
                         </button>
                       )}
                       {inv.attachmentUrl && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button
-                              onClick={e => e.stopPropagation()}
-                              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary font-medium"
-                            >
-                              <Share2 className="w-3 h-3" />Share
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-40">
-                            <DropdownMenuItem onClick={e => { e.stopPropagation(); shareEmail(inv); }} className="gap-2 cursor-pointer">
-                              <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={e => { e.stopPropagation(); shareWhatsApp(inv); }} className="gap-2 cursor-pointer">
-                              <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        <button
+                          onClick={e => { e.stopPropagation(); setShareItem({ id: inv.id, name: `Invoice – ${inv.counterpartyName}`, fileUrl: inv.attachmentUrl!, projectId: inv.projectId }); }}
+                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary font-medium"
+                        >
+                          <Share2 className="w-3 h-3" />Share
+                        </button>
                       )}
                     </div>
                   </div>
@@ -590,28 +561,13 @@ export default function InvoicesPage() {
                               <Paperclip className="w-3.5 h-3.5" />
                               Open
                             </button>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <button
-                                  title="Share"
-                                  className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs"
-                                  onClick={e => e.stopPropagation()}
-                                >
-                                  <Share2 className="w-3.5 h-3.5" />
-                                  Share
-                                </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-40">
-                                <DropdownMenuItem onClick={() => shareEmail(inv)} className="gap-2 cursor-pointer">
-                                  <Mail className="w-4 h-4 text-muted-foreground" />
-                                  Send via Email
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => shareWhatsApp(inv)} className="gap-2 cursor-pointer">
-                                  <MessageCircle className="w-4 h-4 text-green-600" />
-                                  Send via WhatsApp
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                            <button
+                              title="Share"
+                              className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs"
+                              onClick={e => { e.stopPropagation(); setShareItem({ id: inv.id, name: `Invoice – ${inv.counterpartyName}`, fileUrl: inv.attachmentUrl!, projectId: inv.projectId }); }}
+                            >
+                              <Share2 className="w-3.5 h-3.5" /> Share
+                            </button>
                             {caps.canManageInvoices && (
                               <button
                                 title="Remove attachment"
@@ -706,21 +662,12 @@ export default function InvoicesPage() {
                   </button>
                 )}
                 {viewingInvoice.attachmentUrl && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border bg-background hover:bg-muted transition-colors">
-                        <Share2 className="w-3.5 h-3.5" /> Share
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-44">
-                      <DropdownMenuItem onClick={() => shareEmail(viewingInvoice)} className="gap-2 cursor-pointer">
-                        <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => shareWhatsApp(viewingInvoice)} className="gap-2 cursor-pointer">
-                        <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <button
+                    onClick={() => setShareItem({ id: viewingInvoice.id, name: `Invoice – ${viewingInvoice.counterpartyName}`, fileUrl: viewingInvoice.attachmentUrl!, projectId: viewingInvoice.projectId })}
+                    className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border bg-background hover:bg-muted transition-colors"
+                  >
+                    <Share2 className="w-3.5 h-3.5" /> Share
+                  </button>
                 )}
                 {viewingInvoice.status !== "paid" && (
                   <button
@@ -1000,6 +947,16 @@ export default function InvoicesPage() {
           </Button>
         </DialogFooter>
       </Dialog>
+
+      <ShareModal
+        open={!!shareItem}
+        onClose={() => setShareItem(null)}
+        entityType="invoice"
+        entityId={shareItem?.id ?? ""}
+        entityName={shareItem?.name ?? ""}
+        fileUrl={shareItem?.fileUrl}
+        projectId={shareItem?.projectId}
+      />
     </SidebarLayout>
   );
 }
