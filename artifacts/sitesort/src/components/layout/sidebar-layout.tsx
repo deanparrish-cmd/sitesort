@@ -142,11 +142,11 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
   const navItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, badge: 0 },
     { name: "Projects", href: "/projects", icon: Building2, badge: 0 },
-    { name: "Subcontractors", href: "/subcontractors", icon: Users, badge: 0 },
+    { name: "Contacts", href: "/subcontractors", icon: Users, badge: 0 },
     { name: "Compliance Center", href: "/compliance", icon: ShieldCheck, badge: 0 },
     { name: "Invoices", href: "/invoices", icon: Receipt, badge: 0 },
     { name: "QR Codes", href: "/qr", icon: QrCode, badge: 0 },
-    { name: "Team", href: "/team", icon: Users, badge: 0 },
+    { name: "In House Team", href: "/team", icon: Users, badge: 0 },
     { name: "Messages", href: "/messages", icon: MessageSquare, badge: unreadMsgCount },
     ...(user?.role === "admin"
       ? [{ name: "Admin", href: "/admin", icon: ShieldAlert, badge: 0 }]

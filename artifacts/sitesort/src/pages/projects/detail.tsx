@@ -845,7 +845,7 @@ tr:last-child td{border-bottom:none}
   </div>
 </div>
 <section>
-  <h2>Team<span class="count">${allMembersArr.length}</span></h2>
+  <h2>In House Team<span class="count">${allMembersArr.length}</span></h2>
   ${allMembersArr.length ? `<table><thead><tr><th>Name</th><th>Role</th><th>Email</th><th>Phone</th></tr></thead><tbody>${teamRows}</tbody></table>` : `<p class="empty">No team members added yet.</p>`}
 </section>
 <section>
@@ -935,7 +935,7 @@ tr:last-child td{border-bottom:none}
             { value: "overview", label: "Overview" },
             { value: "progress", label: "Progress" },
             { value: "documents", label: "Documents" },
-            { value: "team", label: "Team" },
+            { value: "team", label: "In House Team" },
             { value: "photos", label: "Photos" },
             ...(caps.isInternal ? [{ value: "reports", label: "Daily Reports" }] : []),
             { value: "checkins", label: `Check-ins${checkins.length > 0 ? ` (${checkins.length})` : ""}` },
@@ -1471,7 +1471,7 @@ tr:last-child td{border-bottom:none}
           {caps.canManageTeam && (
             <div className="flex justify-end mb-4">
               <Button variant="outline" size="sm" onClick={openFromDirectory}>
-                <UserPlus className="w-4 h-4 mr-2" /> Add from Subcontractor Directory
+                <UserPlus className="w-4 h-4 mr-2" /> Add from Contacts Directory
               </Button>
             </div>
           )}
@@ -1479,7 +1479,7 @@ tr:last-child td{border-bottom:none}
             <div className="bg-card p-12 rounded-xl border text-center border-dashed border-2">
               <Users className="w-12 h-12 mx-auto text-muted-foreground mb-4 opacity-50" />
               <h3 className="text-lg font-bold">No team members yet</h3>
-              <p className="text-muted-foreground">Add subcontractors from your directory using the button above.</p>
+              <p className="text-muted-foreground">Add contacts from your directory using the button above.</p>
             </div>
           ) : (() => {
             const allMembers = members as any[];
@@ -2779,7 +2779,7 @@ tr:last-child td{border-bottom:none}
 
               {d.subcontractorsOnSite.length > 0 && (
                 <div>
-                  <h4 className="flex items-center gap-2 font-semibold text-sm mb-2"><Users className="w-4 h-4 text-primary" />Subcontractors on site ({d.subcontractorsOnSite.length})</h4>
+                  <h4 className="flex items-center gap-2 font-semibold text-sm mb-2"><Users className="w-4 h-4 text-primary" />Contacts on site ({d.subcontractorsOnSite.length})</h4>
                   <div className="space-y-1.5">
                     {d.subcontractorsOnSite.map(c => (
                       <div key={c.id} className="flex items-center justify-between text-sm border rounded-lg px-3 py-2">
@@ -3121,7 +3121,7 @@ tr:last-child td{border-bottom:none}
 
       <Dialog open={fromDirOpen} onOpenChange={v => { if (!v) setFromDirOpen(false); }}>
         <DialogHeader>
-          <DialogTitle>Add from Subcontractor Directory</DialogTitle>
+          <DialogTitle>Add from Contacts Directory</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="relative">

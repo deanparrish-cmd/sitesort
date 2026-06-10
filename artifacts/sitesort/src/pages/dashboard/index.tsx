@@ -333,9 +333,9 @@ export default function Dashboard() {
       {onboarding && !onboardingDismissed && caps.canManageProjects && (() => {
         const steps = [
           { key: "hasProject",       done: onboarding.hasProject,       title: "Create your first project",         desc: "Set up a project with a name, address, and start date.",  href: "/projects?new=1",       cta: "Create project" },
-          { key: "hasTeamMember",    done: onboarding.hasTeamMember,    title: "Invite a team member",              desc: "Add a colleague to one of your projects.",                 href: "/subcontractors?new=1", cta: "Add to directory" },
+          { key: "hasTeamMember",    done: onboarding.hasTeamMember,    title: "Invite an in house team member",    desc: "Add a colleague to one of your projects.",                 href: "/subcontractors?new=1", cta: "Add to directory" },
           { key: "hasDocument",      done: onboarding.hasDocument,      title: "Upload your first document",        desc: "Share a drawing, method statement, or compliance doc.",    href: "/projects",             cta: "Go to projects" },
-          { key: "hasSubcontractor", done: onboarding.hasSubcontractor, title: "Add a subcontractor",              desc: "Build your directory of subs with contact and trade info.", href: "/subcontractors",       cta: "Add subcontractor" },
+          { key: "hasSubcontractor", done: onboarding.hasSubcontractor, title: "Add a contact",                    desc: "Build your directory of contacts with trade info.",         href: "/subcontractors",       cta: "Add contact" },
           { key: "hasMilestone",     done: onboarding.hasMilestone,     title: "Set milestones on a project",      desc: "Track progress with key dates and completion markers.",     href: "/projects",             cta: "Go to projects" },
         ];
         const doneCount = steps.filter(s => s.done).length;
@@ -412,7 +412,7 @@ export default function Dashboard() {
           icon={<MessageSquare className={cn("w-5 h-5", unreadMessages > 0 ? "text-blue-500" : "text-muted-foreground")} />}
           label="Unread Messages"
           value={unreadMessages}
-          sub="from team members"
+          sub="from in house team"
           href="/messages"
           color={unreadMessages > 0 ? "border-blue-200 bg-blue-50/50" : undefined}
         />
@@ -579,7 +579,7 @@ export default function Dashboard() {
                   />
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Total team</span>
+                  <span className="text-muted-foreground">Total in house team</span>
                   <span className="font-bold">{activeProjects.reduce((a, p) => a + p.memberCount, 0)} members</span>
                 </div>
                 <div className="flex justify-between text-sm">

@@ -362,7 +362,7 @@ export default function ProjectsList() {
                 <th className="px-6 py-4 font-semibold">Project Name & Address</th>
                 <th className="px-6 py-4 font-semibold">Status</th>
                 <th className="px-6 py-4 font-semibold">Start Date</th>
-                <th className="px-6 py-4 font-semibold">Team</th>
+                <th className="px-6 py-4 font-semibold">In House Team</th>
                 <th className="px-6 py-4 font-semibold">Progress</th>
                 <th className="px-6 py-4 font-semibold text-right">Action</th>
               </tr>

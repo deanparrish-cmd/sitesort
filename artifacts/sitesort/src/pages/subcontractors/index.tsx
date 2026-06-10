@@ -417,12 +417,12 @@ export default function SubcontractorsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-bold">Subcontractors</h1>
-          <p className="text-muted-foreground">Directory of all your subcontractors, grouped by trade.</p>
+          <h1 className="text-3xl font-bold">Contacts</h1>
+          <p className="text-muted-foreground">Directory of all your contacts, grouped by trade.</p>
         </div>
         {caps.canManageSubcontractors && (
           <Button variant="accent" onClick={() => { setAddOpen(true); setAddError(null); reset(); setSelectedTradesAdd([]); }}>
-            <Plus className="w-4 h-4 mr-2" /> Add Subcontractor
+            <Plus className="w-4 h-4 mr-2" /> Add Contact
           </Button>
         )}
       </div>
@@ -462,9 +462,9 @@ export default function SubcontractorsPage() {
       ) : grouped.orderedKeys.length === 0 ? (
         <Card className="p-12 text-center border-dashed border-2">
           <HardHat className="w-12 h-12 mx-auto text-muted-foreground/30 mb-4" />
-          <h3 className="font-bold text-lg mb-1">{search ? "No results" : "No subcontractors yet"}</h3>
-          <p className="text-muted-foreground text-sm mb-6">{search ? "Try a different search." : "Add your first subcontractor to get started."}</p>
-          {!search && caps.canManageSubcontractors && <Button variant="accent" onClick={() => setAddOpen(true)}><Plus className="w-4 h-4 mr-2" />Add Subcontractor</Button>}
+          <h3 className="font-bold text-lg mb-1">{search ? "No results" : "No contacts yet"}</h3>
+          <p className="text-muted-foreground text-sm mb-6">{search ? "Try a different search." : "Add your first contact to get started."}</p>
+          {!search && caps.canManageSubcontractors && <Button variant="accent" onClick={() => setAddOpen(true)}><Plus className="w-4 h-4 mr-2" />Add Contact</Button>}
         </Card>
       ) : (
         <div className="space-y-3">
@@ -642,7 +642,7 @@ export default function SubcontractorsPage() {
       {/* Add modal */}
       <Dialog open={addOpen} onOpenChange={open => { setAddOpen(open); if (!open) { reset(); setSelectedTradesAdd([]); setAddError(null); } }}>
         <DialogHeader>
-          <DialogTitle>Add Subcontractor</DialogTitle>
+          <DialogTitle>Add Contact</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit(onAdd)} className="space-y-4 pt-2">
           <div className="grid grid-cols-2 gap-3">
@@ -700,7 +700,7 @@ export default function SubcontractorsPage() {
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
-            <Button type="submit" variant="accent" disabled={submitting}>{submitting ? "Saving…" : "Add Subcontractor"}</Button>
+            <Button type="submit" variant="accent" disabled={submitting}>{submitting ? "Saving…" : "Add Contact"}</Button>
           </DialogFooter>
         </form>
       </Dialog>

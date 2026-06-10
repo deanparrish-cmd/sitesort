@@ -577,7 +577,7 @@ export default function CompliancePage() {
             )}
 
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Subcontractor</label>
+              <label className="text-sm font-medium mb-1.5 block">Contact</label>
               <select
                 value={assignSubId}
                 onChange={e => setAssignSubId(e.target.value)}

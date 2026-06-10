@@ -70,7 +70,7 @@ export default function TeamPage() {
     <SidebarLayout>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-bold">Team</h1>
+          <h1 className="text-3xl font-bold">In House Team</h1>
           <p className="text-muted-foreground">All staff and users in your company account.</p>
         </div>
         <div className="flex items-center gap-2">
