@@ -40,6 +40,11 @@ const CONTACT_TYPE_GROUP_LABELS: Record<string, string> = {
   other: "Other Contacts",
 };
 
+// Reverse: group label → contact type key
+const GROUP_LABEL_TO_TYPE: Record<string, ContactType> = Object.fromEntries(
+  Object.entries(CONTACT_TYPE_GROUP_LABELS).map(([k, v]) => [v, k as ContactType])
+);
+
 type InsuranceRecord = {
   id: string;
   type: string;
@@ -519,8 +524,31 @@ export default function SubcontractorsPage() {
                   className="w-full flex items-center gap-3 px-5 py-4 hover:bg-muted/30 transition-colors text-left"
                 >
                   {open ? <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
-                  <FolderOpen className="w-5 h-5 text-orange-500 shrink-0" />
+                  {(() => {
+                    const ct = GROUP_LABEL_TO_TYPE[trade];
+                    return <FolderOpen className={cn("w-5 h-5 shrink-0",
+                      ct === "merchant"     ? "text-blue-500"   :
+                      ct === "supplier"     ? "text-purple-500" :
+                      ct === "professional" ? "text-teal-500"   :
+                      ct === "other"        ? "text-muted-foreground" :
+                      "text-orange-500"
+                    )} />;
+                  })()}
                   <span className="font-bold flex-1">{trade}</span>
+                  {(() => {
+                    const ct = GROUP_LABEL_TO_TYPE[trade];
+                    if (!ct) return (
+                      <Badge className="text-[10px] bg-orange-100 text-orange-700 border-orange-200 shrink-0">Subcontractor</Badge>
+                    );
+                    return (
+                      <Badge className={cn("text-[10px] shrink-0",
+                        ct === "merchant"     && "bg-blue-100 text-blue-700 border-blue-200",
+                        ct === "supplier"     && "bg-purple-100 text-purple-700 border-purple-200",
+                        ct === "professional" && "bg-teal-100 text-teal-700 border-teal-200",
+                        ct === "other"        && "bg-muted text-muted-foreground",
+                      )}>{CONTACT_TYPE_LABELS[ct]}</Badge>
+                    );
+                  })()}
                   <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full mr-1">
                     {members.length} {members.length === 1 ? "company" : "companies"}
                   </span>
