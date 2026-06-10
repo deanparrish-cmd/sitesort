@@ -35,6 +35,7 @@ router.get("/subcontractors", authenticate, async (req, res) => {
         contactName: s.contactName,
         contactEmail: s.contactEmail,
         contactPhone: s.contactPhone ?? null,
+        contactType: s.contactType ?? "subcontractor",
         trades: s.trades ?? [],
         reliabilityRating: s.reliabilityRating ? Number(s.reliabilityRating) : null,
         paymentHold: s.paymentHold,
@@ -52,7 +53,7 @@ router.get("/subcontractors", authenticate, async (req, res) => {
 
 router.post("/subcontractors", authenticate, async (req, res) => {
   try {
-    const { companyName, contactName, contactEmail, contactPhone, trades, notes } = req.body;
+    const { companyName, contactName, contactEmail, contactPhone, contactType, trades, notes } = req.body;
     if (!companyName || !contactName || !contactEmail) {
       res.status(400).json({ error: "validation_error", message: "companyName, contactName, contactEmail required" });
       return;
@@ -66,12 +67,13 @@ router.post("/subcontractors", authenticate, async (req, res) => {
       contactName,
       contactEmail,
       contactPhone: contactPhone ?? null,
+      contactType: contactType ?? "subcontractor",
       trades: trades ?? [],
       notes: notes ?? null,
       paymentHold: false,
     });
 
-    res.status(201).json({ id, companyId: req.user!.companyId, companyName, contactName, contactEmail, contactPhone: contactPhone ?? null, trades: trades ?? [], reliabilityRating: null, paymentHold: false, notes: notes ?? null, insuranceStatus: "none", createdAt: new Date().toISOString() });
+    res.status(201).json({ id, companyId: req.user!.companyId, companyName, contactName, contactEmail, contactPhone: contactPhone ?? null, contactType: contactType ?? "subcontractor", trades: trades ?? [], reliabilityRating: null, paymentHold: false, notes: notes ?? null, insuranceStatus: "none", createdAt: new Date().toISOString() });
   } catch (err) {
     req.log.error({ err }, "Create subcontractor error");
     res.status(500).json({ error: "server_error", message: "Failed to create subcontractor" });
@@ -104,6 +106,7 @@ router.get("/subcontractors/:subcontractorId", authenticate, async (req, res) =>
       contactName: s.contactName,
       contactEmail: s.contactEmail,
       contactPhone: s.contactPhone ?? null,
+      contactType: s.contactType ?? "subcontractor",
       trades: s.trades ?? [],
       reliabilityRating: s.reliabilityRating ? Number(s.reliabilityRating) : null,
       paymentHold: s.paymentHold,
@@ -121,12 +124,13 @@ router.get("/subcontractors/:subcontractorId", authenticate, async (req, res) =>
 
 router.patch("/subcontractors/:subcontractorId", authenticate, async (req, res) => {
   try {
-    const { companyName, contactName, contactEmail, contactPhone, trades, reliabilityRating, paymentHold, notes } = req.body;
+    const { companyName, contactName, contactEmail, contactPhone, contactType, trades, reliabilityRating, paymentHold, notes } = req.body;
     const updates: Record<string, unknown> = {};
     if (companyName !== undefined) updates.companyName = companyName;
     if (contactName !== undefined) updates.contactName = contactName;
     if (contactEmail !== undefined) updates.contactEmail = contactEmail;
     if (contactPhone !== undefined) updates.contactPhone = contactPhone;
+    if (contactType !== undefined) updates.contactType = contactType;
     if (trades !== undefined) updates.trades = trades;
     if (reliabilityRating !== undefined) updates.reliabilityRating = reliabilityRating;
     if (paymentHold !== undefined) updates.paymentHold = paymentHold;
@@ -145,7 +149,7 @@ router.patch("/subcontractors/:subcontractorId", authenticate, async (req, res) 
     const s = subs[0];
     const insurance = await db.select().from(insuranceRecordsTable).where(eq(insuranceRecordsTable.subcontractorId, s.id));
 
-    res.json({ id: s.id, companyId: s.companyId, companyName: s.companyName, contactName: s.contactName, contactEmail: s.contactEmail, contactPhone: s.contactPhone ?? null, trades: s.trades ?? [], reliabilityRating: s.reliabilityRating ? Number(s.reliabilityRating) : null, paymentHold: s.paymentHold, notes: s.notes ?? null, insuranceStatus: computeInsuranceStatus(insurance), createdAt: s.createdAt.toISOString() });
+    res.json({ id: s.id, companyId: s.companyId, companyName: s.companyName, contactName: s.contactName, contactEmail: s.contactEmail, contactPhone: s.contactPhone ?? null, contactType: s.contactType ?? "subcontractor", trades: s.trades ?? [], reliabilityRating: s.reliabilityRating ? Number(s.reliabilityRating) : null, paymentHold: s.paymentHold, notes: s.notes ?? null, insuranceStatus: computeInsuranceStatus(insurance), createdAt: s.createdAt.toISOString() });
   } catch (err) {
     req.log.error({ err }, "Update subcontractor error");
     res.status(500).json({ error: "server_error", message: "Failed to update subcontractor" });

@@ -23,12 +23,30 @@ import { useToast } from "@/hooks/use-toast";
 
 type InsuranceStatus = "valid" | "expiring_soon" | "expired" | "none";
 
+type ContactType = "subcontractor" | "merchant" | "supplier" | "professional" | "other";
+
+const CONTACT_TYPE_LABELS: Record<ContactType, string> = {
+  subcontractor: "Subcontractor",
+  merchant: "Merchant",
+  supplier: "Supplier",
+  professional: "Professional Services",
+  other: "Other",
+};
+
+const CONTACT_TYPE_GROUP_LABELS: Record<string, string> = {
+  merchant: "Merchants",
+  supplier: "Suppliers",
+  professional: "Professional Services",
+  other: "Other Contacts",
+};
+
 type Sub = {
   id: string;
   companyName: string;
   contactName: string;
   contactEmail: string;
   contactPhone: string | null;
+  contactType: ContactType;
   trades: string[];
   reliabilityRating: number | null;
   paymentHold: boolean;
@@ -158,6 +176,7 @@ type AddFormData = {
   contactName: string;
   contactEmail: string;
   contactPhone: string;
+  contactType: ContactType;
   trades: string[];
   notes: string;
 };
@@ -233,8 +252,10 @@ export default function SubcontractorsPage() {
     }
   }
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<AddFormData>();
-  const { register: editReg, handleSubmit: editSubmit, reset: editReset } = useForm<EditFormData>();
+  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<AddFormData>({ defaultValues: { contactType: "subcontractor" } });
+  const { register: editReg, handleSubmit: editSubmit, reset: editReset, watch: editWatch } = useForm<EditFormData>({ defaultValues: { contactType: "subcontractor" } });
+  const addContactType = watch("contactType") as ContactType;
+  const editContactType = editWatch("contactType") as ContactType;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -264,7 +285,7 @@ export default function SubcontractorsPage() {
     }
   }, [isCancelled, reset]);
 
-  // Group subs by trade — a sub can appear in multiple trade groups
+  // Group contacts: subcontractors by trade, others by their contact type
   const grouped = useMemo(() => {
     const q = search.toLowerCase();
     const filtered = subs.filter(s =>
@@ -275,16 +296,21 @@ export default function SubcontractorsPage() {
 
     const map: Record<string, Sub[]> = {};
     for (const s of filtered) {
-      const trades = s.trades.length ? s.trades : ["Other"];
-      for (const trade of trades) {
-        (map[trade] ??= []).push(s);
+      if (!s.contactType || s.contactType === "subcontractor") {
+        const trades = s.trades.length ? s.trades : ["Other"];
+        for (const trade of trades) {
+          (map[trade] ??= []).push(s);
+        }
+      } else {
+        const groupKey = CONTACT_TYPE_GROUP_LABELS[s.contactType] ?? "Other Contacts";
+        (map[groupKey] ??= []).push(s);
       }
     }
 
-    // Sort trade keys: known categories first in order, then unknowns alphabetically
-    const known = TRADE_CATEGORIES.filter(t => map[t]);
-    const unknown = Object.keys(map).filter(t => !TRADE_CATEGORIES.includes(t)).sort();
-    return { map, orderedKeys: [...known, ...unknown] };
+    const tradeKeys = TRADE_CATEGORIES.filter(t => map[t]);
+    const unknownTradeKeys = Object.keys(map).filter(t => !TRADE_CATEGORIES.includes(t) && !Object.values(CONTACT_TYPE_GROUP_LABELS).includes(t)).sort();
+    const typeGroupKeys = Object.values(CONTACT_TYPE_GROUP_LABELS).filter(g => map[g]);
+    return { map, orderedKeys: [...tradeKeys, ...unknownTradeKeys, ...typeGroupKeys] };
   }, [subs, search]);
 
   const toggleTrade = (trade: string) =>
@@ -351,9 +377,10 @@ export default function SubcontractorsPage() {
   async function onAdd(data: AddFormData) {
     if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
     setSubmitting(true); setAddError(null);
+    const trades = data.contactType === "subcontractor" ? selectedTradesAdd : [];
     const res = await apiFetch("/api/subcontractors", {
       method: "POST",
-      body: JSON.stringify({ ...data, trades: selectedTradesAdd }),
+      body: JSON.stringify({ ...data, trades }),
     });
     if (res.ok) {
       const created = await res.json();
@@ -361,7 +388,7 @@ export default function SubcontractorsPage() {
       setAddOpen(false); reset(); setSelectedTradesAdd([]);
     } else {
       const e = await res.json().catch(() => ({}));
-      setAddError(e.message ?? "Failed to add subcontractor.");
+      setAddError(e.message ?? "Failed to add contact.");
     }
     setSubmitting(false);
   }
@@ -375,6 +402,7 @@ export default function SubcontractorsPage() {
       contactName: sub.contactName,
       contactEmail: sub.contactEmail,
       contactPhone: sub.contactPhone ?? "",
+      contactType: sub.contactType ?? "subcontractor",
       reliabilityRating: sub.reliabilityRating != null ? String(sub.reliabilityRating) : "",
       paymentHold: sub.paymentHold,
       notes: sub.notes ?? "",
@@ -388,7 +416,7 @@ export default function SubcontractorsPage() {
       method: "PATCH",
       body: JSON.stringify({
         ...data,
-        trades: selectedTradesEdit,
+        trades: data.contactType === "subcontractor" ? selectedTradesEdit : [],
         reliabilityRating: data.reliabilityRating ? Number(data.reliabilityRating) : null,
         paymentHold: data.paymentHold,
       }),
@@ -418,7 +446,7 @@ export default function SubcontractorsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-bold">Contacts</h1>
-          <p className="text-muted-foreground">Directory of all your contacts, grouped by trade.</p>
+          <p className="text-muted-foreground">Directory of all your contacts — subcontractors, merchants, suppliers and more.</p>
         </div>
         {caps.canManageSubcontractors && (
           <Button variant="accent" onClick={() => { setAddOpen(true); setAddError(null); reset(); setSelectedTradesAdd([]); }}>
@@ -645,6 +673,15 @@ export default function SubcontractorsPage() {
           <DialogTitle>Add Contact</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit(onAdd)} className="space-y-4 pt-2">
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">Contact Type</label>
+            <select {...register("contactType")} className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+              {(Object.entries(CONTACT_TYPE_LABELS) as [ContactType, string][]).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
               <label className="text-sm font-medium mb-1.5 block">Company Name</label>
@@ -667,29 +704,31 @@ export default function SubcontractorsPage() {
             </div>
           </div>
 
-          <div>
-            <label className="text-sm font-medium mb-2 block">Trade Types</label>
-            <div className="flex flex-wrap gap-2">
-              {TRADE_CATEGORIES.map(trade => (
-                <button
-                  key={trade}
-                  type="button"
-                  onClick={() => toggleTradeSelection(trade, selectedTradesAdd, setSelectedTradesAdd)}
-                  className={cn(
-                    "px-2.5 py-1 rounded-lg text-xs font-semibold border-2 transition-colors",
-                    selectedTradesAdd.includes(trade)
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-background text-muted-foreground border-input hover:border-primary/50"
-                  )}
-                >{trade}</button>
-              ))}
+          {addContactType === "subcontractor" && (
+            <div>
+              <label className="text-sm font-medium mb-2 block">Trade Types</label>
+              <div className="flex flex-wrap gap-2">
+                {TRADE_CATEGORIES.map(trade => (
+                  <button
+                    key={trade}
+                    type="button"
+                    onClick={() => toggleTradeSelection(trade, selectedTradesAdd, setSelectedTradesAdd)}
+                    className={cn(
+                      "px-2.5 py-1 rounded-lg text-xs font-semibold border-2 transition-colors",
+                      selectedTradesAdd.includes(trade)
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-background text-muted-foreground border-input hover:border-primary/50"
+                    )}
+                  >{trade}</button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           <div>
             <label className="text-sm font-medium mb-1.5 block">Notes</label>
             <textarea
-              placeholder="Any additional notes about this subcontractor…"
+              placeholder="Any additional notes…"
               rows={3}
               {...register("notes")}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
@@ -792,6 +831,15 @@ export default function SubcontractorsPage() {
           <DialogTitle>Edit — {editTarget?.companyName}</DialogTitle>
         </DialogHeader>
         <form onSubmit={editSubmit(onEdit)} className="space-y-4 pt-2">
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">Contact Type</label>
+            <select {...editReg("contactType")} className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+              {(Object.entries(CONTACT_TYPE_LABELS) as [ContactType, string][]).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
               <label className="text-sm font-medium mb-1.5 block">Company Name</label>
@@ -811,24 +859,26 @@ export default function SubcontractorsPage() {
             </div>
           </div>
 
-          <div>
-            <label className="text-sm font-medium mb-2 block">Trade Types</label>
-            <div className="flex flex-wrap gap-2">
-              {TRADE_CATEGORIES.map(trade => (
-                <button
-                  key={trade}
-                  type="button"
-                  onClick={() => toggleTradeSelection(trade, selectedTradesEdit, setSelectedTradesEdit)}
-                  className={cn(
-                    "px-2.5 py-1 rounded-lg text-xs font-semibold border-2 transition-colors",
-                    selectedTradesEdit.includes(trade)
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-background text-muted-foreground border-input hover:border-primary/50"
-                  )}
-                >{trade}</button>
-              ))}
+          {editContactType === "subcontractor" && (
+            <div>
+              <label className="text-sm font-medium mb-2 block">Trade Types</label>
+              <div className="flex flex-wrap gap-2">
+                {TRADE_CATEGORIES.map(trade => (
+                  <button
+                    key={trade}
+                    type="button"
+                    onClick={() => toggleTradeSelection(trade, selectedTradesEdit, setSelectedTradesEdit)}
+                    className={cn(
+                      "px-2.5 py-1 rounded-lg text-xs font-semibold border-2 transition-colors",
+                      selectedTradesEdit.includes(trade)
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-background text-muted-foreground border-input hover:border-primary/50"
+                    )}
+                  >{trade}</button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -849,7 +899,7 @@ export default function SubcontractorsPage() {
           <div>
             <label className="text-sm font-medium mb-1.5 block">Notes</label>
             <textarea
-              placeholder="Any additional notes about this subcontractor…"
+              placeholder="Any additional notes…"
               rows={3}
               {...editReg("notes")}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
