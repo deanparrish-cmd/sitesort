@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { QRCodeCanvas } from "qrcode.react";
 import {
   Share2, Mail, MessageCircle, Users, Send, ExternalLink,
-  Download, Clock, Loader2, CheckCircle2, Pin, PinOff,
+  Download, Clock, Loader2, CheckCircle2, Pin, PinOff, QrCode,
 } from "lucide-react";
 
 type ShareLog = {
@@ -50,6 +50,7 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [isPinned, setIsPinned] = useState(false);
   const [pinLoading, setPinLoading] = useState(false);
+  const [siteBoardUrl, setSiteBoardUrl] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const token = () => localStorage.getItem("sitesort_token");
@@ -60,7 +61,7 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
   const canPin = hasAttachment && !!projectId;
 
   useEffect(() => {
-    if (!open) { setTab("share"); setSentTo(null); setSelectedUserId(""); setIsPinned(false); }
+    if (!open) { setTab("share"); setSentTo(null); setSelectedUserId(""); setIsPinned(false); setSiteBoardUrl(null); }
   }, [open]);
 
   useEffect(() => {
@@ -72,16 +73,24 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
   }, [open, projectId]);
 
   useEffect(() => {
-    if (tab !== "qr" || !open || !canPin) return;
-    fetch(`/api/projects/${projectId}/qr-pins`, {
-      headers: token() ? { Authorization: `Bearer ${token()}` } : {},
-    })
+    if (tab !== "qr" || !open || !projectId) return;
+    const h: Record<string, string> = token() ? { Authorization: `Bearer ${token()}` } : {};
+    // Fetch site board URL
+    fetch(`/api/projects/${projectId}/qr-codes`, { headers: h })
+      .then(r => r.ok ? r.json() : [])
+      .then((codes: { siteUrl: string }[]) => {
+        setSiteBoardUrl(codes[0]?.siteUrl ?? null);
+      })
+      .catch(() => {});
+    // Fetch pin status
+    if (!canPin) return;
+    fetch(`/api/projects/${projectId}/qr-pins`, { headers: h })
       .then(r => r.ok ? r.json() : [])
       .then((pins: { itemType: string; itemId: string }[]) => {
         setIsPinned(pins.some(p => p.itemType === entityType && p.itemId === entityId));
       })
       .catch(() => {});
-  }, [tab, open, canPin, projectId, entityType, entityId]);
+  }, [tab, open, projectId, canPin, entityType, entityId]);
 
   useEffect(() => {
     if (tab !== "history" || !open) return;
@@ -302,31 +311,45 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
                   </button>
                 </div>
 
-                {canPin && (
-                  <div className="w-full border-t pt-4">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 text-center">Site Board</p>
-                    <button
-                      onClick={togglePin}
-                      disabled={pinLoading}
-                      className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg border text-sm font-medium transition-colors disabled:opacity-40 ${
-                        isPinned
-                          ? "bg-primary/10 border-primary/30 text-primary hover:bg-primary/20"
-                          : "border-border bg-background hover:bg-muted text-foreground"
-                      }`}
-                    >
-                      {pinLoading ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : isPinned ? (
-                        <><PinOff className="w-4 h-4" /> Remove from Site Board</>
-                      ) : (
-                        <><Pin className="w-4 h-4" /> Add to Site Board</>
-                      )}
-                    </button>
-                    <p className="text-xs text-muted-foreground text-center mt-2">
-                      {isPinned
-                        ? "Visible to anyone who scans the site QR code"
-                        : "Pin so workers can access it by scanning the site QR code"}
-                    </p>
+                {(siteBoardUrl || canPin) && (
+                  <div className="w-full border-t pt-4 space-y-2">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider text-center">Site Board</p>
+                    {siteBoardUrl && (
+                      <a
+                        href={siteBoardUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-border bg-background hover:bg-muted transition-colors text-sm font-medium"
+                      >
+                        <QrCode className="w-4 h-4 text-primary" /> View Site Board
+                      </a>
+                    )}
+                    {canPin && (
+                      <>
+                        <button
+                          onClick={togglePin}
+                          disabled={pinLoading}
+                          className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors disabled:opacity-40 ${
+                            isPinned
+                              ? "bg-primary/10 border-primary/30 text-primary hover:bg-primary/20"
+                              : "border-border bg-background hover:bg-muted text-foreground"
+                          }`}
+                        >
+                          {pinLoading ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : isPinned ? (
+                            <><PinOff className="w-4 h-4" /> Remove from Site Board</>
+                          ) : (
+                            <><Pin className="w-4 h-4" /> Pin to Site Board</>
+                          )}
+                        </button>
+                        <p className="text-xs text-muted-foreground text-center">
+                          {isPinned
+                            ? "Visible to anyone who scans the site QR code"
+                            : "Pin so workers can access it by scanning the site QR code"}
+                        </p>
+                      </>
+                    )}
                   </div>
                 )}
               </>
