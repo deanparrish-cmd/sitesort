@@ -273,7 +273,7 @@ function CheckInCard({
 
         {errorMsg && <p className="text-red-500 text-sm">{errorMsg}</p>}
 
-        <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFileChange} />
+        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFileChange} />
 
         {status !== "capturing" ? (
           <button
