@@ -302,3 +302,44 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 - **GitHub push command**: `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts` (must run from `/home/runner/workspace`)
 - **API server rebuild**: `pnpm --filter @workspace/api-server run build` after any backend change
 - All commits are on `main`
+
+---
+
+## End-of-session notes — 2026-06-11 (tablet fixes + overflow audit + eye icon)
+
+### Tasks completed today
+
+1. **Site board check-in fix for tablets** (`artifacts/sitesort/src/pages/site-board.tsx`):
+   - Removed `capture="environment"` from the check-in photo file input
+   - On iPads and Android tablets, this attribute silently prevents the file picker from opening; removing it lets the OS standard picker appear (which still offers camera as an option)
+
+2. **Text overflow / horizontal scroll audit and fixes** (6 files):
+   - `projects/detail.tsx` — address in project header now uses `flex-wrap` + `truncate` + `shrink-0` on date; very long addresses no longer cause horizontal scroll
+   - `compliance/index.tsx` — added `truncate` to permit type, project names, sign-off document names, and all superseded row detail lines (insurance, permits, documents)
+   - `invoices/index.tsx` — counterparty name and reference in desktop table now have `max-w-[160px] truncate`
+   - `team/index.tsx` — member name and phone in cards now truncate properly
+   - `issues/index.tsx` — project name and zone use `truncate max-w-*`; date/uploader uses `whitespace-nowrap`
+   - `settings/index.tsx` — profile display name capped with `truncate max-w-[200px]`
+
+3. **Password eye icon on login page** (`artifacts/sitesort/src/pages/auth/login.tsx`):
+   - Added `showPassword` state and Eye/EyeOff toggle button via existing `Input` `rightAction` prop
+   - Register page already had this on all 3 password fields (main form + invite flow)
+   - Added `p-1` padding to all 4 eye buttons across login + register for larger mobile tap targets (~24px vs bare 16px icon)
+
+### Key files modified
+- `artifacts/sitesort/src/pages/site-board.tsx` — removed `capture="environment"`
+- `artifacts/sitesort/src/pages/projects/detail.tsx` — address truncation in header
+- `artifacts/sitesort/src/pages/compliance/index.tsx` — truncate on permit/doc/sign-off rows
+- `artifacts/sitesort/src/pages/invoices/index.tsx` — counterparty name max-w + truncate
+- `artifacts/sitesort/src/pages/team/index.tsx` — member name + phone truncate
+- `artifacts/sitesort/src/pages/issues/index.tsx` — project name, zone, uploader truncation
+- `artifacts/sitesort/src/pages/settings/index.tsx` — profile name truncate
+- `artifacts/sitesort/src/pages/auth/login.tsx` — eye icon added
+- `artifacts/sitesort/src/pages/auth/register.tsx` — p-1 padding on existing eye buttons
+
+### Notes for next session
+- **Overflow audit**: Dashboard, Messages, Projects list table, and Subcontractors cards were all already clean — no changes needed
+- **Photo status backfill**: still pending if desired — `UPDATE photos SET status='open' WHERE category IN ('snag','safety_concern') AND status IS NULL`
+- **GitHub push command**: `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts` (must run from `/home/runner/workspace`)
+- **API server rebuild**: `pnpm --filter @workspace/api-server run build` after any backend change
+- All commits are on `main`
