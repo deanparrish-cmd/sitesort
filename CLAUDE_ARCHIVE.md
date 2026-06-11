@@ -292,3 +292,71 @@
 - `artifacts/sitesort/src/pages/auth/register.tsx`, `artifacts/sitesort/src/components/ui/input.tsx`
 - `artifacts/sitesort/src/components/ui/dialog.tsx`, `artifacts/sitesort/src/components/ui/file-drop-zone.tsx`
 - `artifacts/sitesort/src/components/ui/insurance-cert-zone.tsx`, `artifacts/api-server/src/routes/upload.ts`
+
+---
+
+## End-of-session notes — 2026-06-10 (rename + contacts overhaul)
+
+### Tasks completed
+1. Global rename — Subcontractors → Contacts, Team → In House Team (sidebar, headings, tabs, buttons, dialogs, onboarding, PDF report across 7 files; Stripe "Team" plan name left unchanged)
+2. Sidebar reorganised into two groups (Dashboard/Projects/Contacts/In House Team/Messages top; Compliance Centre/Invoices/QR Codes/Admin/Settings bottom)
+3. `contactType` column on `subcontractors` table (subcontractor/merchant/supplier/professional/other); Add/Edit form shows selector; Trade Types section hidden for non-subcontractor types; directory groups by type
+4. Insurance certificates surfaced on contact cards via `insuranceRecords[]` in list API; coloured pills with type, expiry, open-cert link
+
+### Key files
+- `sidebar-layout.tsx`, `subcontractors/index.tsx`, `team/index.tsx`, `projects/detail.tsx`, `projects/index.tsx`, `dashboard/index.tsx`, `compliance/index.tsx`
+- `lib/db/src/schema/subcontractors.ts` — `contactType` column
+- `api-server/src/routes/subcontractors.ts` — `contactType` + `insuranceRecords` in all endpoints
+
+---
+
+## End-of-session notes — 2026-06-10 (file document dialog + contact type UX)
+
+### Tasks completed
+1. "File this document" dialog redesigned — Document Type selector (Insurance Cert, Method Statement, Risk Assessment, Permit to Work, Compliance Cert, Drawing, Safety Doc, Other); insurance path → contact + sub-type + expiry → POST /api/subcontractors/:id/insurance; other types → project selector → POST /api/projects/:id/documents
+2. Contact type badges on group headers and individual cards
+3. Insurance cert pills on contact cards
+
+### Key files
+- `compliance/index.tsx`, `subcontractors/index.tsx`, `api-server/src/routes/subcontractors.ts`
+
+---
+
+## End-of-session notes — 2026-06-10 (contacts filter + UK English)
+
+### Tasks completed
+1. Contact type filter chips (All/Subcontractor/Merchant/Supplier/Professional Services/Other) on Contacts page
+2. "Compliance Center" → "Compliance Centre" in sidebar
+
+### Key files
+- `sidebar-layout.tsx`, `subcontractors/index.tsx`
+
+---
+
+## End-of-session notes — 2026-06-10 (Compliance Centre superseded archiving)
+
+### Tasks completed
+1. Compliance Centre UI polish — removed Upload icon from insurance rows; Open/Share pills restyled to solid bg-gray-800
+2. `archivedAt` column on `insurance_records` and `permits`; new cert/permit upload auto-archives existing same-type record; compliance API returns separate archived arrays; collapsible Superseded sections in Compliance Centre
+3. Superseded Documents section in Compliance Centre (uses existing status="superseded")
+4. Project Permits tab: live vs superseded split; Finances/QR board exclude archived permits; Contacts API filters to archivedAt IS NULL
+
+### Key files
+- `lib/db/src/schema/insurance_records.ts`, `lib/db/src/schema/permits.ts`
+- `api-server/src/routes/compliance.ts`, `subcontractors.ts`, `permits.ts`
+- `compliance/index.tsx`, `projects/detail.tsx`
+
+---
+
+## End-of-session notes — 2026-06-10 (invoice tablet fix + site issues log)
+
+### Tasks completed
+1. Invoice page tablet fix — breakpoint lg→md; description column md→lg; viewer header buttons responsive
+2. Site Issues log (#48) — `status`/`resolvedAt` on photos table; GET/PATCH /api/photos/:id; GET /api/issues; new /issues page with filters, thumbnail list, detail modal; "Site Issues" in sidebar
+3. Photo detail modal on project Photos tab — clicking card opens overlay instead of raw image; status badges on snag/safety cards
+4. Dashboard safety_concern activity deep-links to ?tab=photos&photo=<id>
+
+### Key files
+- `lib/db/src/schema/photos.ts`, `api-server/src/routes/photos.ts`
+- `invoices/index.tsx`, `issues/index.tsx` (new), `projects/detail.tsx`, `dashboard/index.tsx`
+- `sidebar-layout.tsx`, `App.tsx`
