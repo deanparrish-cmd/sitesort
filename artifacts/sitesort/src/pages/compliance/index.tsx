@@ -439,7 +439,7 @@ export default function CompliancePage() {
                     <div key={ins.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 px-4 py-3 rounded-xl border bg-muted/40 border-border opacity-80">
                       <div className="min-w-0 flex-1">
                         <p className="font-semibold text-sm truncate">{ins.subcontractorName}</p>
-                        <p className="text-xs text-muted-foreground capitalize">{ins.insuranceType.replace(/_/g, " ")} · expired {fmtDate(ins.expiryDate)} · archived {new Date(ins.archivedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
+                        <p className="text-xs text-muted-foreground capitalize truncate">{ins.insuranceType.replace(/_/g, " ")} · expired {fmtDate(ins.expiryDate)} · archived {new Date(ins.archivedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
                       </div>
                       {ins.certificateUrl && (
                         <div className="flex items-center gap-2">
@@ -486,8 +486,8 @@ export default function CompliancePage() {
                         days < 0 ? "bg-red-50 border-red-200" : days <= 7 ? "bg-orange-50 border-orange-200" : "bg-yellow-50 border-yellow-200"
                       )}>
                       <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-sm">{p.permitType}</p>
-                        <p className="text-xs text-muted-foreground">{p.projectName}</p>
+                        <p className="font-semibold text-sm truncate">{p.permitType}</p>
+                        <p className="text-xs text-muted-foreground truncate">{p.projectName}</p>
                       </div>
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-xs text-muted-foreground">{fmtDate(p.expiryDate)}</p>
@@ -538,7 +538,7 @@ export default function CompliancePage() {
                     <div key={p.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 px-4 py-3 rounded-xl border bg-muted/40 border-border opacity-80">
                       <div className="min-w-0 flex-1">
                         <p className="font-semibold text-sm truncate">{p.permitType}</p>
-                        <p className="text-xs text-muted-foreground">{p.projectName} · expired {fmtDate(p.expiryDate)} · archived {new Date(p.archivedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
+                        <p className="text-xs text-muted-foreground truncate">{p.projectName} · expired {fmtDate(p.expiryDate)} · archived {new Date(p.archivedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
                       </div>
                       {p.documentUrl && (
                         <div className="flex items-center gap-2">
@@ -580,8 +580,8 @@ export default function CompliancePage() {
                 {filteredAcks.map(a => (
                   <div key={a.documentId} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 px-4 py-3 rounded-xl border bg-blue-50 border-blue-200">
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-sm">{a.documentName}</p>
-                      <p className="text-xs text-muted-foreground">{a.projectName}</p>
+                      <p className="font-semibold text-sm truncate">{a.documentName}</p>
+                      <p className="text-xs text-muted-foreground truncate">{a.projectName}</p>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <Badge className="text-[10px] bg-blue-100 text-blue-700 border-blue-200">{a.pendingCount} pending</Badge>
@@ -627,7 +627,7 @@ export default function CompliancePage() {
                     <div key={doc.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 px-4 py-3 rounded-xl border bg-muted/40 border-border opacity-80">
                       <div className="min-w-0 flex-1">
                         <p className="font-semibold text-sm truncate">{doc.name}</p>
-                        <p className="text-xs text-muted-foreground capitalize">{doc.type.replace(/_/g, " ")} · v{doc.version} · {doc.projectName}</p>
+                        <p className="text-xs text-muted-foreground capitalize truncate">{doc.type.replace(/_/g, " ")} · v{doc.version} · {doc.projectName}</p>
                       </div>
                       <div className="flex items-center gap-2">
                         <button

@@ -206,10 +206,10 @@ export default function IssuesPage() {
                       <span className="text-[10px] font-mono text-muted-foreground">{issue.referenceNumber}</span>
                     </div>
                     {issue.description && <p className="text-sm font-medium truncate">{issue.description}</p>}
-                    <div className="flex items-center gap-3 mt-1 flex-wrap">
-                      {issue.projectName && <span className="text-xs text-muted-foreground">{issue.projectName}</span>}
-                      {issue.zone && <span className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="w-3 h-3" />{issue.zone}</span>}
-                      <span className="text-xs text-muted-foreground">{formatDate(issue.takenAt)} · {issue.uploaderName}</span>
+                    <div className="flex items-center gap-3 mt-1 flex-wrap min-w-0">
+                      {issue.projectName && <span className="text-xs text-muted-foreground truncate max-w-[120px]">{issue.projectName}</span>}
+                      {issue.zone && <span className="text-xs text-muted-foreground flex items-center gap-1 truncate max-w-[100px]"><MapPin className="w-3 h-3 shrink-0" />{issue.zone}</span>}
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(issue.takenAt)} · {issue.uploaderName}</span>
                     </div>
                   </div>
 

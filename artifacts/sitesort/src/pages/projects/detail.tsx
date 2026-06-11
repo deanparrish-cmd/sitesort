@@ -915,9 +915,9 @@ tr:last-child td{border-bottom:none}
                   {project.status.toUpperCase()}
                 </Badge>
               </div>
-              <div className="flex items-center gap-4 text-muted-foreground">
-                <span className="flex items-center gap-1"><MapPin className="w-4 h-4"/> {project.address}</span>
-                <span className="flex items-center gap-1"><Calendar className="w-4 h-4"/> Started {formatDate(project.startDate)}</span>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground min-w-0">
+                <span className="flex items-center gap-1 min-w-0"><MapPin className="w-4 h-4 shrink-0"/><span className="truncate">{project.address}</span></span>
+                <span className="flex items-center gap-1 whitespace-nowrap shrink-0"><Calendar className="w-4 h-4"/> Started {formatDate(project.startDate)}</span>
               </div>
             </div>
             <div className="flex items-center gap-2">

@@ -154,14 +154,14 @@ export default function TeamPage() {
                           </DropdownMenu>
                         </div>
                       </div>
-                      <p className="font-bold text-sm mb-0.5">{m.name}</p>
+                      <p className="font-bold text-sm mb-0.5 truncate">{m.name}</p>
                       <div className="space-y-1 mt-2">
                         <a href={`mailto:${m.email}`} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors">
                           <Mail className="w-3 h-3 shrink-0" /><span className="truncate">{m.email}</span>
                         </a>
                         {m.phone && (
                           <a href={`tel:${m.phone}`} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors">
-                            <Phone className="w-3 h-3 shrink-0" />{m.phone}
+                            <Phone className="w-3 h-3 shrink-0" /><span className="truncate">{m.phone}</span>
                           </a>
                         )}
                       </div>

@@ -539,9 +539,9 @@ export default function InvoicesPage() {
                           : <span className="flex items-center gap-1.5 text-rose-600 font-medium"><ArrowUpCircle className="w-4 h-4" />Out</span>
                         }
                       </td>
-                      <td className="px-5 py-3.5">
-                        <p className="font-medium text-foreground">{inv.counterpartyName}</p>
-                        {inv.reference && <p className="text-xs text-muted-foreground">{inv.reference}</p>}
+                      <td className="px-5 py-3.5 max-w-[160px]">
+                        <p className="font-medium text-foreground truncate">{inv.counterpartyName}</p>
+                        {inv.reference && <p className="text-xs text-muted-foreground truncate">{inv.reference}</p>}
                       </td>
                       <td className="px-5 py-3.5 text-muted-foreground hidden lg:table-cell max-w-xs truncate">{inv.description}</td>
                       <td className="px-5 py-3.5 font-semibold tabular-nums">{fmtAmount(inv.currency, inv.amount)}</td>
