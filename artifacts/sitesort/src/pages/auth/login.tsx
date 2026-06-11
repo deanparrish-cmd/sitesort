@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Mail, Lock, Building2 } from "lucide-react";
+import { Mail, Lock, Building2, Eye, EyeOff } from "lucide-react";
 import { useLogin } from "@workspace/api-client-react";
 
 const loginSchema = z.object({
@@ -18,6 +18,7 @@ type LoginForm = z.infer<typeof loginSchema>;
 export default function Login() {
   const [, setLocation] = useLocation();
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
   const [resendState, setResendState] = useState<"idle" | "sending" | "sent">("idle");
   const loginMutation = useLogin();
@@ -137,9 +138,19 @@ export default function Login() {
           <div>
             <Input
               {...register("password")}
-              type="password"
+              type={showPassword ? "text" : "password"}
               placeholder="Password"
               icon={<Lock className="w-5 h-5" />}
+              rightAction={
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(p => !p)}
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              }
             />
             {errors.password && <p className="text-destructive text-sm mt-1 ml-1">{errors.password.message}</p>}
           </div>
