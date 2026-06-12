@@ -113,6 +113,8 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 49. Password visibility toggle — Eye/EyeOff icon button in all password fields on login and register pages; `showPassword` state toggles `type="text"/"password"`; uses existing `Input` `rightAction` prop; `p-1` padding for adequate mobile tap target; covers login (1 field), register main form (Create + Confirm), and register invite flow (1 field)
 50. Mobile/tablet UX hardening — site board check-in `capture="environment"` removed so file picker opens correctly on all tablets/iPads; text overflow and horizontal scroll fixed across 6 pages (project header address, compliance permit/doc/sign-off rows, invoices table counterparty, team member name/phone, issues project name/zone, settings profile name)
 51. Site Check-Ins page (`/checkins`) — company-wide aggregated log of all QR site board check-ins; photo grid with search (worker/company/project) and project-filter dropdown; 3-stat header (total/today/this week); click-to-expand detail modal with GPS map link, open photo, and share actions; `GET /api/checkins` (auth, tenant-scoped); sidebar "Site Check-Ins" nav item under admin nav
+52. In House Team enhancements — contact action buttons (call/SMS/WhatsApp/email) on each team member card matching subcontractor directory style; Notes & Reminders dialog (StickyNote button) per member backed by `user_notes` table and `GET/POST /api/users/:userId/notes`; "Add Team Member" button (admin/PM only) opens invite dialog with name/email/role/phone fields and optional project checklist; creates user account, sends invitation email with generated credentials, and links to selected projects in one step; fixed note text overflow with `break-words`
+53. Site Issues moved to each project — "Site Issues" tab added to project detail (stats, search, status filter, quick resolve, opens photo detail modal); removed from global sidebar nav; share via Email/WhatsApp now includes full issue details block (type, ref, description, zone, project, status, logged-by, date, GPS) via new `additionalInfo` prop on ShareModal; Dialog z-index bumped to `z-[60]` so share modal always renders above `z-50` detail overlays; subcontractor notes scoping fixed — contacts directory shows only general notes, project-specific notes stay in project Team tab only
 
 ## Uploads / File Serving
 
@@ -205,6 +207,51 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 
 ### Notes for next session
 - **Photo status backfill**: still pending — `UPDATE photos SET status='open' WHERE category IN ('snag','safety_concern') AND status IS NULL`
+- **GitHub push command**: `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts`
+- **API server rebuild**: `pnpm --filter @workspace/api-server run build` after any backend change
+- All commits are on `main`
+
+---
+
+## End-of-session notes — 2026-06-12 (team enhancements, site issues refactor, share fix)
+
+### Tasks completed today (continued from earlier session)
+
+1. **In House Team — Add Team Member button** (`artifacts/sitesort/src/pages/team/index.tsx`):
+   - "Add Team Member" button in header, gated by `canManageTeam` (admin/PM)
+   - Dialog: name, email, role (admin/PM/site worker), phone (optional), project checklist
+   - Projects fetched on dialog open; checkboxes link new user to selected projects via `POST /api/projects/:id/members` after account creation
+   - API sends invitation email with generated credentials; inline error on duplicate email
+
+2. **Site Issues moved to each project**:
+   - "Site Issues" tab added to project detail — stats (open/in-progress/resolved), search, status filter, quick-resolve, thumbnail list; clicking opens existing photo detail modal with full info and status management
+   - Tab label shows open count badge (e.g. "Site Issues (3)") when issues exist
+   - Removed "Site Issues" from global sidebar nav
+   - New state: `issueSearch`, `issueStatusFilter` in project detail
+
+3. **Share content includes full issue details**:
+   - New `additionalInfo?: string` prop on `ShareModal`; appended to email body and WhatsApp text when present
+   - Issues page and project photo detail modal both build and pass a details block (type, ref, description, zone, project, status, logged-by, date, GPS)
+
+4. **Dialog z-index fix** (`artifacts/sitesort/src/components/ui/dialog.tsx`):
+   - Bumped from `z-50` to `z-[60]` — share modal (and all dialogs) now render above `z-50` full-screen overlays (issues detail, photo detail) without needing Portals
+
+5. **Subcontractor notes scoping fix** (`artifacts/api-server/src/routes/subcontractors.ts`):
+   - `GET /api/subcontractors/:id/notes` with no `?projectId` now returns only general notes; project-specific notes no longer leak into the contacts directory
+   - `break-words min-w-0` added to note body text in both notes dialogs
+
+### Key files modified
+- `artifacts/sitesort/src/pages/team/index.tsx` — Add Team Member dialog + project assignment
+- `lib/db/src/schema/user_notes.ts` — new table (created)
+- `artifacts/api-server/src/routes/users.ts` — user notes + invite endpoints
+- `artifacts/sitesort/src/pages/projects/detail.tsx` — Site Issues tab, share details
+- `artifacts/sitesort/src/components/layout/sidebar-layout.tsx` — removed Site Issues nav
+- `artifacts/sitesort/src/components/share-modal.tsx` — `additionalInfo` prop
+- `artifacts/sitesort/src/components/ui/dialog.tsx` — z-index bump
+- `artifacts/api-server/src/routes/subcontractors.ts` — notes scoping fix
+
+### Notes for next session
+- **Photo status backfill**: `UPDATE photos SET status='open' WHERE category IN ('snag','safety_concern') AND status IS NULL`
 - **GitHub push command**: `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts`
 - **API server rebuild**: `pnpm --filter @workspace/api-server run build` after any backend change
 - All commits are on `main`
