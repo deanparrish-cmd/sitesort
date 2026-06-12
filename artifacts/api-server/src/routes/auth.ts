@@ -415,7 +415,7 @@ router.get("/companies/mine", authenticate, async (req, res) => {
       return;
     }
     const c = rows[0];
-    res.json({ id: c.id, name: c.name, size: c.size, subscriptionTier: c.subscriptionTier, subscriptionStatus: c.subscriptionStatus, betaAccess: c.betaAccess, createdAt: c.createdAt.toISOString() });
+    res.json({ id: c.id, name: c.name, size: c.size, subscriptionTier: c.subscriptionTier, subscriptionStatus: c.subscriptionStatus, betaAccess: c.betaAccess, cancelAtPeriodEnd: c.cancelAtPeriodEnd, currentPeriodEnd: c.currentPeriodEnd?.toISOString() ?? null, createdAt: c.createdAt.toISOString() });
   } catch (err) {
     req.log.error({ err }, "Get company error");
     res.status(500).json({ error: "server_error", message: "Failed to get company" });

@@ -9,6 +9,8 @@ export const companiesTable = pgTable("companies", {
   subscriptionTier: text("subscription_tier").notNull().default("free"),
   subscriptionStatus: text("subscription_status").notNull().default("active"),
   stripeCustomerId: text("stripe_customer_id"),
+  cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+  currentPeriodEnd: timestamp("current_period_end"),
   betaAccess: boolean("beta_access").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

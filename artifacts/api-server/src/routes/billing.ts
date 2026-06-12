@@ -112,12 +112,18 @@ async function handleSubscriptionUpsert(
   const plan = (subscription.metadata?.plan ?? "pro") as PlanId;
   if (!companyId) return;
 
+  const periodEnd = subscription.current_period_end
+    ? new Date(subscription.current_period_end * 1000)
+    : null;
+
   await db
     .update(companiesTable)
     .set({
       subscriptionTier: plan,
       subscriptionStatus: mapSubscriptionStatus(subscription.status),
       stripeCustomerId: subscription.customer as string,
+      cancelAtPeriodEnd: subscription.cancel_at_period_end,
+      currentPeriodEnd: periodEnd,
     })
     .where(eq(companiesTable.id, companyId));
 }
@@ -130,7 +136,7 @@ async function handleSubscriptionDeleted(
 
   await db
     .update(companiesTable)
-    .set({ subscriptionTier: "free", subscriptionStatus: "cancelled" })
+    .set({ subscriptionTier: "free", subscriptionStatus: "cancelled", cancelAtPeriodEnd: false, currentPeriodEnd: null })
     .where(eq(companiesTable.id, companyId));
 }
 
@@ -307,6 +313,78 @@ router.post("/billing/portal", authenticate, async (req, res) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("Stripe portal error:", message);
+    res.status(500).json({ error: message });
+  }
+});
+
+async function getActiveSubscription(stripe: Stripe, customerId: string): Promise<Stripe.Subscription | null> {
+  const subs = await stripe.subscriptions.list({ customer: customerId, limit: 1 });
+  return subs.data[0] ?? null;
+}
+
+router.post("/billing/cancel", authenticate, async (req, res) => {
+  const apiKey = process.env.STRIPE_SECRET_KEY;
+  if (!apiKey) { res.status(500).json({ error: "STRIPE_SECRET_KEY is not set" }); return; }
+
+  const stripe = new Stripe(apiKey);
+  const user = req.user!;
+
+  const companyRows = await db
+    .select({ stripeCustomerId: companiesTable.stripeCustomerId })
+    .from(companiesTable)
+    .where(eq(companiesTable.id, user.companyId))
+    .limit(1);
+
+  const customerId = companyRows[0]?.stripeCustomerId;
+  if (!customerId) { res.status(404).json({ error: "no_subscription", message: "No active subscription found." }); return; }
+
+  try {
+    const sub = await getActiveSubscription(stripe, customerId);
+    if (!sub) { res.status(404).json({ error: "no_subscription", message: "No active subscription found." }); return; }
+
+    const updated = await stripe.subscriptions.update(sub.id, { cancel_at_period_end: true });
+    const periodEnd = updated.current_period_end ? new Date(updated.current_period_end * 1000) : null;
+
+    await db.update(companiesTable)
+      .set({ cancelAtPeriodEnd: true, currentPeriodEnd: periodEnd })
+      .where(eq(companiesTable.id, user.companyId));
+
+    res.json({ cancelAtPeriodEnd: true, currentPeriodEnd: periodEnd?.toISOString() ?? null });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    res.status(500).json({ error: message });
+  }
+});
+
+router.post("/billing/resume", authenticate, async (req, res) => {
+  const apiKey = process.env.STRIPE_SECRET_KEY;
+  if (!apiKey) { res.status(500).json({ error: "STRIPE_SECRET_KEY is not set" }); return; }
+
+  const stripe = new Stripe(apiKey);
+  const user = req.user!;
+
+  const companyRows = await db
+    .select({ stripeCustomerId: companiesTable.stripeCustomerId })
+    .from(companiesTable)
+    .where(eq(companiesTable.id, user.companyId))
+    .limit(1);
+
+  const customerId = companyRows[0]?.stripeCustomerId;
+  if (!customerId) { res.status(404).json({ error: "no_subscription", message: "No subscription found." }); return; }
+
+  try {
+    const sub = await getActiveSubscription(stripe, customerId);
+    if (!sub) { res.status(404).json({ error: "no_subscription", message: "No subscription found." }); return; }
+
+    await stripe.subscriptions.update(sub.id, { cancel_at_period_end: false });
+
+    await db.update(companiesTable)
+      .set({ cancelAtPeriodEnd: false })
+      .where(eq(companiesTable.id, user.companyId));
+
+    res.json({ cancelAtPeriodEnd: false });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
     res.status(500).json({ error: message });
   }
 });

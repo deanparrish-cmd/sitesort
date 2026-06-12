@@ -621,17 +621,22 @@ function ManageSubscriptionButton() {
   );
 }
 
-type CompanyBilling = { subscriptionTier: string; subscriptionStatus: string };
+type CompanyBilling = { subscriptionTier: string; subscriptionStatus: string; cancelAtPeriodEnd: boolean; currentPeriodEnd: string | null };
 
 function BillingTab() {
   const [loadingPlan, setLoadingPlan] = useState<PlanId | null>(null);
   const [status, setStatus] = useState<StatusMsg | null>(null);
   const [company, setCompany] = useState<CompanyBilling | null>(null);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelConfirm, setCancelConfirm] = useState(false);
 
-  useEffect(() => {
+  const refreshCompany = () =>
     fetch("/api/companies/mine", { headers: authHeaders() })
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data) setCompany(data); });
+
+  useEffect(() => {
+    refreshCompany();
 
     const params = new URLSearchParams(window.location.search);
     const result = params.get("checkout");
@@ -643,6 +648,38 @@ function BillingTab() {
       window.history.replaceState({}, "", window.location.pathname);
     }
   }, []);
+
+  const cancelSub = async () => {
+    setCancelLoading(true);
+    setStatus(null);
+    try {
+      const res = await fetch("/api/billing/cancel", { method: "POST", headers: authHeaders() });
+      const data = await res.json();
+      if (!res.ok) { setStatus({ type: "error", text: data.message ?? "Failed to cancel subscription." }); return; }
+      setCancelConfirm(false);
+      await refreshCompany();
+      setStatus({ type: "success", text: "Cancellation scheduled. You'll keep full access until the end of your current billing period." });
+    } catch {
+      setStatus({ type: "error", text: "Network error. Please try again." });
+    } finally {
+      setCancelLoading(false);
+    }
+  };
+
+  const resumeSub = async () => {
+    setCancelLoading(true);
+    setStatus(null);
+    try {
+      const res = await fetch("/api/billing/resume", { method: "POST", headers: authHeaders() });
+      if (!res.ok) { const d = await res.json(); setStatus({ type: "error", text: d.message ?? "Failed to resume subscription." }); return; }
+      await refreshCompany();
+      setStatus({ type: "success", text: "Subscription resumed. Your plan will continue as normal." });
+    } catch {
+      setStatus({ type: "error", text: "Network error. Please try again." });
+    } finally {
+      setCancelLoading(false);
+    }
+  };
 
   const hasActiveSub = company && ["active", "trialing"].includes(company.subscriptionStatus);
 
@@ -790,6 +827,50 @@ function BillingTab() {
           );
         })}
       </div>
+
+      {/* Cancellation scheduled notice */}
+      {hasActiveSub && company.cancelAtPeriodEnd && (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-xl border border-amber-200 bg-amber-50">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-amber-800">Cancellation scheduled</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              Your subscription will end on{" "}
+              {company.currentPeriodEnd
+                ? new Date(company.currentPeriodEnd).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
+                : "the end of your billing period"}
+              . You have full access until then.
+            </p>
+          </div>
+          <Button size="sm" variant="outline" onClick={resumeSub} disabled={cancelLoading} className="shrink-0 border-amber-300 text-amber-800 hover:bg-amber-100">
+            {cancelLoading ? "Working…" : "Resume subscription"}
+          </Button>
+        </div>
+      )}
+
+      {/* Cancel subscription section */}
+      {hasActiveSub && !company.cancelAtPeriodEnd && (
+        <div className="border-t pt-6">
+          <h3 className="text-sm font-semibold text-foreground mb-1">Cancel subscription</h3>
+          <p className="text-xs text-muted-foreground mb-3">
+            Your subscription will remain active until the end of your current billing period. You won't be charged again after that.
+          </p>
+          {cancelConfirm ? (
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-4 rounded-xl border border-destructive/30 bg-red-50">
+              <p className="text-sm text-red-700 flex-1">Are you sure? You'll lose access to all features when your period ends.</p>
+              <div className="flex gap-2 shrink-0">
+                <Button size="sm" variant="outline" onClick={() => setCancelConfirm(false)} disabled={cancelLoading}>Keep plan</Button>
+                <Button size="sm" variant="destructive" onClick={cancelSub} disabled={cancelLoading}>
+                  {cancelLoading ? "Cancelling…" : "Yes, cancel"}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button size="sm" variant="outline" className="text-destructive border-destructive/30 hover:bg-destructive/5" onClick={() => setCancelConfirm(true)}>
+              Cancel subscription
+            </Button>
+          )}
+        </div>
+      )}
 
       <p className="text-[11px] text-muted-foreground">
         Card details required at sign-up. Your subscription auto-renews after the 14-day trial unless cancelled. Secure checkout powered by Stripe.

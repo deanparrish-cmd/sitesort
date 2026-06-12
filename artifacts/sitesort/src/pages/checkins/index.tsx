@@ -26,7 +26,7 @@ function normaliseUrl(url: string) {
   return url.startsWith("/uploads/") ? url.replace("/uploads/", "/api/uploads/") : url;
 }
 
-function authHeaders() {
+function authHeaders(): Record<string, string> {
   const t = localStorage.getItem("sitesort_token");
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
