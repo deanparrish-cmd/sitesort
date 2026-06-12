@@ -10,9 +10,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   Users, Search, Mail, Phone, ShieldCheck, Share2, MessageCircle,
-  MessageSquare, StickyNote, Send, Loader2, Clock,
+  MessageSquare, StickyNote, Send, Loader2, Clock, UserPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useCapabilities } from "@/hooks/use-capabilities";
 
 type TeamMember = {
   id: string;
@@ -75,9 +76,19 @@ function WhatsAppIcon({ className }: { className?: string }) {
 }
 
 export default function TeamPage() {
+  const caps = useCapabilities();
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+
+  // Add member dialog state
+  const [addOpen, setAddOpen] = useState(false);
+  const [addName, setAddName] = useState("");
+  const [addEmail, setAddEmail] = useState("");
+  const [addRole, setAddRole] = useState("site_worker");
+  const [addPhone, setAddPhone] = useState("");
+  const [addSubmitting, setAddSubmitting] = useState(false);
+  const [addError, setAddError] = useState("");
 
   // Notes dialog state
   const [notesTarget, setNotesTarget] = useState<TeamMember | null>(null);
@@ -125,6 +136,31 @@ export default function TeamPage() {
     setNoteDraft("");
   }
 
+  function openAdd() {
+    setAddName(""); setAddEmail(""); setAddRole("site_worker"); setAddPhone(""); setAddError("");
+    setAddOpen(true);
+  }
+
+  async function addMember() {
+    if (!addName.trim() || !addEmail.trim()) { setAddError("Name and email are required."); return; }
+    setAddSubmitting(true);
+    setAddError("");
+    const res = await fetch("/api/users", {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ name: addName.trim(), email: addEmail.trim(), role: addRole, phone: addPhone.trim() || null }),
+    });
+    if (res.ok) {
+      const created = await res.json();
+      setMembers(prev => [...prev, created]);
+      setAddOpen(false);
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setAddError(data.message ?? "Failed to add team member.");
+    }
+    setAddSubmitting(false);
+  }
+
   const q = search.toLowerCase();
   const filtered = members.filter(m =>
     !q || m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q) || m.role.toLowerCase().includes(q)
@@ -145,6 +181,11 @@ export default function TeamPage() {
           <span className="text-sm font-semibold text-muted-foreground bg-muted px-3 py-1.5 rounded-full border">
             {members.length} {members.length === 1 ? "member" : "members"}
           </span>
+          {caps.canManageTeam && (
+            <Button variant="accent" onClick={openAdd}>
+              <UserPlus className="w-4 h-4 mr-2" /> Add Team Member
+            </Button>
+          )}
         </div>
       </div>
 
@@ -300,6 +341,51 @@ export default function TeamPage() {
           })}
         </div>
       )}
+
+      {/* Add Team Member dialog */}
+      <Dialog open={addOpen} onOpenChange={open => { if (!open) setAddOpen(false); }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserPlus className="w-4 h-4 text-primary" /> Add Team Member
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <p className="text-xs text-muted-foreground">An invitation email with login credentials will be sent automatically.</p>
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Full name <span className="text-destructive">*</span></label>
+              <Input value={addName} onChange={e => setAddName(e.target.value)} placeholder="e.g. Jane Smith" />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Email <span className="text-destructive">*</span></label>
+              <Input type="email" value={addEmail} onChange={e => setAddEmail(e.target.value)} placeholder="jane@example.com" />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Role</label>
+              <select
+                value={addRole}
+                onChange={e => setAddRole(e.target.value)}
+                className="w-full h-11 rounded-lg border-2 border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:border-primary"
+              >
+                <option value="admin">Admin</option>
+                <option value="project_manager">Project Manager</option>
+                <option value="site_worker">Site Worker</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Phone <span className="text-muted-foreground text-xs">(optional)</span></label>
+              <Input type="tel" value={addPhone} onChange={e => setAddPhone(e.target.value)} placeholder="+44 7700 900000" />
+            </div>
+          </div>
+          {addError && <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{addError}</p>}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+          <Button variant="accent" onClick={addMember} disabled={addSubmitting || !addName.trim() || !addEmail.trim()}>
+            {addSubmitting ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Sending invite…</> : <><UserPlus className="w-3.5 h-3.5 mr-1.5" />Add & Invite</>}
+          </Button>
+        </DialogFooter>
+      </Dialog>
 
       {/* Notes dialog */}
       <Dialog open={!!notesTarget} onOpenChange={open => { if (!open) closeNotes(); }}>
