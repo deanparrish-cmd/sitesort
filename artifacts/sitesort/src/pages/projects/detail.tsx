@@ -113,6 +113,8 @@ export default function ProjectDetail() {
   const [todayNotes, setTodayNotes] = useState<DailyNote[]>([]);
   const [noteBody, setNoteBody] = useState("");
   const [noteSubmitting, setNoteSubmitting] = useState(false);
+  const [openingNote, setOpeningNote] = useState<DailyNote | null>(null);
+  const [sharingNote, setSharingNote] = useState<DailyNote | null>(null);
   const [ovPhotoOpen, setOvPhotoOpen] = useState(false);
   const [ovPhotoUrl, setOvPhotoUrl] = useState<string | null>(null);
   const [ovPhotoNote, setOvPhotoNote] = useState("");
@@ -1056,7 +1058,25 @@ tr:last-child td{border-bottom:none}
                       {todayNotes.map(n => (
                         <div key={n.id} className="rounded-lg border bg-muted/30 p-3">
                           <p className="text-sm text-foreground whitespace-pre-wrap">{n.body}</p>
-                          <p className="text-[10px] text-muted-foreground mt-1">{n.authorName} · {formatDate(n.createdAt)}</p>
+                          <div className="flex items-center justify-between mt-2">
+                            <p className="text-[10px] text-muted-foreground">{n.authorName} · {formatDate(n.createdAt)}</p>
+                            <div className="flex items-center gap-1">
+                              <button
+                                title="Open"
+                                onClick={() => setOpeningNote(n)}
+                                className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-background transition-colors"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                title="Share"
+                                onClick={() => setSharingNote(n)}
+                                className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-background transition-colors"
+                              >
+                                <Share2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -3230,6 +3250,58 @@ tr:last-child td{border-bottom:none}
         projectId={projectId}
         version={sharingDoc?.version ?? null}
         additionalInfo={sharingDoc?.additionalInfo}
+      />
+
+      {/* Note detail dialog */}
+      <Dialog open={!!openingNote} onOpenChange={v => { if (!v) setOpeningNote(null); }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FileText className="w-4 h-4" /> Site Update
+          </DialogTitle>
+          {openingNote && (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {openingNote.authorName} · {formatDate(openingNote.createdAt)}
+            </p>
+          )}
+        </DialogHeader>
+        {openingNote && (
+          <div className="rounded-lg border bg-muted/30 p-4">
+            <p className="text-sm text-foreground whitespace-pre-wrap">{openingNote.body}</p>
+          </div>
+        )}
+        <DialogFooter className="flex items-center justify-between gap-2 sm:justify-between">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (openingNote) navigator.clipboard.writeText(openingNote.body).catch(() => {});
+            }}
+          >
+            Copy text
+          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { setSharingNote(openingNote); setOpeningNote(null); }}
+            >
+              <Share2 className="w-3.5 h-3.5 mr-1.5" /> Share
+            </Button>
+            <Button size="sm" onClick={() => setOpeningNote(null)}>Done</Button>
+          </div>
+        </DialogFooter>
+      </Dialog>
+
+      {/* Note share modal */}
+      <ShareModal
+        open={!!sharingNote}
+        onClose={() => setSharingNote(null)}
+        entityType="daily_note"
+        entityId={sharingNote?.id ?? ""}
+        entityName={`Site update — ${sharingNote?.authorName ?? ""}`}
+        fileUrl={null}
+        projectId={projectId}
+        shareText={sharingNote?.body ?? null}
       />
 
       <Dialog open={!!scheduleTarget} onOpenChange={v => { if (!v) { setScheduleTarget(null); setScheduleError(null); } }}>

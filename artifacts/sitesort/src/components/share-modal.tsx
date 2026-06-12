@@ -25,6 +25,8 @@ export interface ShareModalProps {
   projectId?: string | null;
   version?: number | null;
   additionalInfo?: string | null;
+  /** Plain text to share when there is no fileUrl (e.g. a daily note). */
+  shareText?: string | null;
 }
 
 function normaliseUrl(url: string) {
@@ -42,7 +44,7 @@ function methodLabel(method: string) {
   return map[method] ?? method;
 }
 
-export function ShareModal({ open, onClose, entityType, entityId, entityName, fileUrl, projectId, version, additionalInfo }: ShareModalProps) {
+export function ShareModal({ open, onClose, entityType, entityId, entityName, fileUrl, projectId, version, additionalInfo, shareText }: ShareModalProps) {
   const [tab, setTab] = useState<"share" | "qr" | "history">("share");
   const [history, setHistory] = useState<ShareLog[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -67,6 +69,7 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
   const fullUrl = fileUrl ? normaliseUrl(fileUrl) : null;
   const hasAttachment = MSG_ATTACHMENT_TYPES.has(entityType);
   const canPin = hasAttachment && !!projectId;
+  const hasContent = !!(fullUrl || shareText);
 
   useEffect(() => {
     if (!open) {
@@ -131,18 +134,22 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
   const versionSuffix = version ? ` (v${version})` : "";
 
   const shareEmail = () => {
-    if (!fullUrl) return;
+    if (!hasContent) return;
     const subject = encodeURIComponent(`${entityName}${versionSuffix}`);
     const details = additionalInfo ? `\n\n${additionalInfo}` : "";
-    const body = encodeURIComponent(`Hi,\n\nPlease find "${entityName}"${versionSuffix} here:\n\n${fullUrl}${details}`);
+    const body = shareText && !fullUrl
+      ? encodeURIComponent(`${shareText}${details}`)
+      : encodeURIComponent(`Hi,\n\nPlease find "${entityName}"${versionSuffix} here:\n\n${fullUrl}${details}`);
     window.open(`mailto:?subject=${subject}&body=${body}`);
     logShare("email");
   };
 
   const shareWhatsApp = () => {
-    if (!fullUrl) return;
+    if (!hasContent) return;
     const details = additionalInfo ? `\n\n${additionalInfo}` : "";
-    const text = encodeURIComponent(`${entityName}${versionSuffix}\n${fullUrl}${details}`);
+    const text = shareText && !fullUrl
+      ? encodeURIComponent(`${shareText}${details}`)
+      : encodeURIComponent(`${entityName}${versionSuffix}\n${fullUrl}${details}`);
     window.open(`https://wa.me/?text=${text}`, "_blank");
     logShare("whatsapp");
   };
@@ -152,7 +159,7 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
     setSending(true);
     setSentTo(null);
     const userIds = members.map(m => m.userId).filter(Boolean);
-    const content = `${entityName}${versionSuffix}${fullUrl ? `\n${fullUrl}` : ""}`;
+    const content = shareText ?? `${entityName}${versionSuffix}${fullUrl ? `\n${fullUrl}` : ""}`;
     await fetch("/api/messages/broadcast", {
       method: "POST",
       headers: authH(),
@@ -173,7 +180,7 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
     if (!member) return;
     setSending(true);
     setSentTo(null);
-    const content = hasAttachment ? (entityName + versionSuffix) : `${entityName}${versionSuffix}${fullUrl ? `\n${fullUrl}` : ""}`;
+    const content = shareText ?? (hasAttachment ? (entityName + versionSuffix) : `${entityName}${versionSuffix}${fullUrl ? `\n${fullUrl}` : ""}`);
     await fetch("/api/messages", {
       method: "POST",
       headers: authH(),
@@ -251,14 +258,14 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">External</p>
               <div className="grid grid-cols-2 gap-2">
                 <button
-                  disabled={!fullUrl}
+                  disabled={!hasContent}
                   onClick={shareEmail}
                   className="flex items-center justify-center gap-2 px-4 py-3 rounded-lg border border-border bg-background hover:bg-muted transition-colors text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Mail className="w-4 h-4 text-blue-500" /> Email
                 </button>
                 <button
-                  disabled={!fullUrl}
+                  disabled={!hasContent}
                   onClick={shareWhatsApp}
                   className="flex items-center justify-center gap-2 px-4 py-3 rounded-lg border border-border bg-background hover:bg-muted transition-colors text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed"
                 >
