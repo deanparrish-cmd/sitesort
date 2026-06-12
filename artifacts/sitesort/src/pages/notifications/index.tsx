@@ -219,7 +219,7 @@ export default function NotificationsPage() {
       </div>
 
       {/* Filter tabs */}
-      <div className="flex gap-1 mb-4 border-b">
+      <div className="flex overflow-x-auto gap-1 mb-4 border-b">
         {FILTERS.map(({ key, label }) => {
           const count = key === "unread"
             ? unreadCount
@@ -231,7 +231,7 @@ export default function NotificationsPage() {
               key={key}
               onClick={() => setFilter(key)}
               className={cn(
-                "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
+                "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap flex-shrink-0",
                 filter === key
                   ? "border-primary text-primary"
                   : "border-transparent text-muted-foreground hover:text-foreground"

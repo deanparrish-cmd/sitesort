@@ -408,7 +408,7 @@ export default function ProjectsList() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <Button variant="outline" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button variant="outline" size="sm" className="opacity-100 xl:opacity-0 xl:group-hover:opacity-100 transition-opacity">
                         View Site
                       </Button>
                     </td>

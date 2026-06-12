@@ -907,14 +907,14 @@ export default function SettingsPage() {
 
       <div className="flex flex-col md:flex-row gap-6">
         {/* Tab nav */}
-        <div className="md:w-52 shrink-0">
-          <nav className="flex md:flex-col gap-1">
+        <div className="md:w-52 shrink-0 overflow-x-auto md:overflow-visible">
+          <nav className="flex md:flex-col gap-1 md:flex-nowrap">
             {visibleTabs.map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all text-left w-full",
+                  "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all text-left whitespace-nowrap md:w-full",
                   activeTab === tab.id
                     ? "bg-primary text-primary-foreground shadow-md shadow-primary/10"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
