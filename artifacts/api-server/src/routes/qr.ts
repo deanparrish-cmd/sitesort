@@ -395,6 +395,33 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
   }
 });
 
+// Authenticated — list all check-ins across all company projects
+router.get("/checkins", authenticate, async (req: Request, res: Response) => {
+  try {
+    const rows = await db
+      .select({
+        id: siteCheckinsTable.id,
+        projectId: siteCheckinsTable.projectId,
+        projectName: projectsTable.name,
+        workerName: siteCheckinsTable.workerName,
+        companyName: siteCheckinsTable.companyName,
+        photoUrl: siteCheckinsTable.photoUrl,
+        checkedInAt: siteCheckinsTable.checkedInAt,
+        lat: siteCheckinsTable.lat,
+        lng: siteCheckinsTable.lng,
+      })
+      .from(siteCheckinsTable)
+      .innerJoin(projectsTable, eq(projectsTable.id, siteCheckinsTable.projectId))
+      .where(eq(projectsTable.companyId, req.user!.companyId))
+      .orderBy(desc(siteCheckinsTable.checkedInAt));
+
+    res.json(rows.map(c => ({ ...c, checkedInAt: c.checkedInAt.toISOString() })));
+  } catch (err) {
+    req.log.error({ err }, "List all checkins error");
+    res.status(500).json({ error: "server_error", message: "Failed to load check-ins" });
+  }
+});
+
 // Authenticated — list all check-ins for a project
 router.get("/projects/:projectId/checkins", authenticate, async (req: Request, res: Response) => {
   try {
