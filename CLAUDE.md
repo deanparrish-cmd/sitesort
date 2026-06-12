@@ -115,6 +115,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 51. Site Check-Ins page (`/checkins`) — company-wide aggregated log of all QR site board check-ins; photo grid with search (worker/company/project) and project-filter dropdown; 3-stat header (total/today/this week); click-to-expand detail modal with GPS map link, open photo, and share actions; `GET /api/checkins` (auth, tenant-scoped); sidebar "Site Check-Ins" nav item under admin nav
 52. In House Team enhancements — contact action buttons (call/SMS/WhatsApp/email) on each team member card matching subcontractor directory style; Notes & Reminders dialog (StickyNote button) per member backed by `user_notes` table and `GET/POST /api/users/:userId/notes`; "Add Team Member" button (admin/PM only) opens invite dialog with name/email/role/phone fields and optional project checklist; creates user account, sends invitation email with generated credentials, and links to selected projects in one step; fixed note text overflow with `break-words`
 53. Site Issues moved to each project — "Site Issues" tab added to project detail (stats, search, status filter, quick resolve, opens photo detail modal); removed from global sidebar nav; share via Email/WhatsApp now includes full issue details block (type, ref, description, zone, project, status, logged-by, date, GPS) via new `additionalInfo` prop on ShareModal; Dialog z-index bumped to `z-[60]` so share modal always renders above `z-50` detail overlays; subcontractor notes scoping fixed — contacts directory shows only general notes, project-specific notes stay in project Team tab only
+54. Overview tab daily note Open/Share — each "Posted today" note card has ExternalLink (Open) and Share2 (Share) icon buttons; Open shows a detail dialog with full text, author/date, Copy text button, and a chain-to-Share button; Share opens ShareModal with Email / WhatsApp / Project Team / Individual — note body sent as message content; ShareModal extended with `shareText?: string | null` prop so text-only items (no fileUrl) can use all share methods via `hasContent = !!(fullUrl || shareText)`; Site Issues tab reordered within Group 1 to sit between Team and Site Board
 
 ## Uploads / File Serving
 
@@ -253,5 +254,39 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 ### Notes for next session
 - **Photo status backfill**: `UPDATE photos SET status='open' WHERE category IN ('snag','safety_concern') AND status IS NULL`
 - **GitHub push command**: `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts`
+- **API server rebuild**: `pnpm --filter @workspace/api-server run build` after any backend change
+- All commits are on `main`
+
+---
+
+## End-of-session notes — 2026-06-12 (overview note open/share, tab reorder, auto-push hook)
+
+### Tasks completed today
+
+1. **Overview tab daily notes — Open and Share** (`artifacts/sitesort/src/pages/projects/detail.tsx`, `artifacts/sitesort/src/components/share-modal.tsx`):
+   - Each "Posted today" note card now has two icon buttons (bottom-right): ExternalLink (Open) and Share2 (Share)
+   - **Open**: opens a detail dialog showing full note body, author/date, Copy text button, and a "Share" button that chains directly into the share modal
+   - **Share**: opens ShareModal with Email / WhatsApp / Project Team / Individual — note body used as message content
+   - `ShareModal` extended with optional `shareText?: string | null` prop; `hasContent = !!(fullUrl || shareText)` enables Email/WhatsApp even with no file; in-app team/individual sends `shareText` as message content
+   - New state: `openingNote: DailyNote | null`, `sharingNote: DailyNote | null` in project detail
+   - entityType `"daily_note"` used for share logging
+
+2. **Site Issues tab reordered** (`artifacts/sitesort/src/pages/projects/detail.tsx`):
+   - Moved from Group 2 (Site activity) into Group 1 (Project management)
+   - New tab order: Overview → Progress → Team → **Site Issues** → Site Board → Documents → Compliance
+
+3. **Auto-push to GitHub hook** (`.claude/settings.local.json`):
+   - `PostToolUse` hook on `Bash` matcher; checks `git commit` in command, then runs `github-push.ts`
+   - 120s timeout; status message "Pushing to GitHub…" shown while running
+   - GitHub push now happens automatically after every `git commit` — no manual push needed
+
+### Key files modified
+- `artifacts/sitesort/src/components/share-modal.tsx` — `shareText` prop + `hasContent` logic
+- `artifacts/sitesort/src/pages/projects/detail.tsx` — note Open/Share buttons + dialogs + tab reorder
+- `.claude/settings.local.json` — PostToolUse auto-push hook added
+
+### Notes for next session
+- **GitHub push is now automatic** — fires after every `git commit` via hook in `.claude/settings.local.json`
+- **Photo status backfill**: still pending — `UPDATE photos SET status='open' WHERE category IN ('snag','safety_concern') AND status IS NULL`
 - **API server rebuild**: `pnpm --filter @workspace/api-server run build` after any backend change
 - All commits are on `main`
