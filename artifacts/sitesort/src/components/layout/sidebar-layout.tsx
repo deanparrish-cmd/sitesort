@@ -151,7 +151,6 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
 
   const adminNavItems = [
     { name: "Compliance Centre", href: "/compliance", icon: ShieldCheck, badge: 0 },
-    { name: "Site Issues", href: "/issues", icon: AlertTriangle, badge: 0 },
     { name: "Site Check-Ins", href: "/checkins", icon: ClipboardCheck, badge: 0 },
     { name: "Invoices", href: "/invoices", icon: Receipt, badge: 0 },
     { name: "QR Codes", href: "/qr", icon: QrCode, badge: 0 },

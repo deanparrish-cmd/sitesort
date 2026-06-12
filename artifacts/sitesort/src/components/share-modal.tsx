@@ -24,6 +24,7 @@ export interface ShareModalProps {
   fileUrl?: string | null;
   projectId?: string | null;
   version?: number | null;
+  additionalInfo?: string | null;
 }
 
 function normaliseUrl(url: string) {
@@ -41,7 +42,7 @@ function methodLabel(method: string) {
   return map[method] ?? method;
 }
 
-export function ShareModal({ open, onClose, entityType, entityId, entityName, fileUrl, projectId, version }: ShareModalProps) {
+export function ShareModal({ open, onClose, entityType, entityId, entityName, fileUrl, projectId, version, additionalInfo }: ShareModalProps) {
   const [tab, setTab] = useState<"share" | "qr" | "history">("share");
   const [history, setHistory] = useState<ShareLog[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -132,14 +133,16 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
   const shareEmail = () => {
     if (!fullUrl) return;
     const subject = encodeURIComponent(`${entityName}${versionSuffix}`);
-    const body = encodeURIComponent(`Hi,\n\nPlease find "${entityName}"${versionSuffix} here:\n\n${fullUrl}`);
+    const details = additionalInfo ? `\n\n${additionalInfo}` : "";
+    const body = encodeURIComponent(`Hi,\n\nPlease find "${entityName}"${versionSuffix} here:\n\n${fullUrl}${details}`);
     window.open(`mailto:?subject=${subject}&body=${body}`);
     logShare("email");
   };
 
   const shareWhatsApp = () => {
     if (!fullUrl) return;
-    const text = encodeURIComponent(`${entityName}${versionSuffix}\n${fullUrl}`);
+    const details = additionalInfo ? `\n\n${additionalInfo}` : "";
+    const text = encodeURIComponent(`${entityName}${versionSuffix}\n${fullUrl}${details}`);
     window.open(`https://wa.me/?text=${text}`, "_blank");
     logShare("whatsapp");
   };

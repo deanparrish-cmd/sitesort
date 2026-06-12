@@ -108,6 +108,8 @@ export default function ProjectDetail() {
   const [photoSubmitting, setPhotoSubmitting] = useState(false);
   const [photoFormKey, setPhotoFormKey] = useState(0);
   const [viewingPhoto, setViewingPhoto] = useState<PhotoItem | null>(null);
+  const [issueSearch, setIssueSearch] = useState("");
+  const [issueStatusFilter, setIssueStatusFilter] = useState<"all" | "open" | "in_progress" | "resolved">("all");
   const [todayNotes, setTodayNotes] = useState<DailyNote[]>([]);
   const [noteBody, setNoteBody] = useState("");
   const [noteSubmitting, setNoteSubmitting] = useState(false);
@@ -609,7 +611,7 @@ export default function ProjectDetail() {
     }
     setLinkingSubId(null);
   };
-  type SharingDoc = { type: string; id: string; name: string; version: number | null; fileUrl: string };
+  type SharingDoc = { type: string; id: string; name: string; version: number | null; fileUrl: string; additionalInfo?: string };
   const [sharingDoc, setSharingDoc] = useState<SharingDoc | null>(null);
 
   // Sub notes dialog (project Team tab)
@@ -960,6 +962,7 @@ tr:last-child td{border-bottom:none}
             { value: "documents", label: "Documents" },
             { value: "team", label: "Team" },
             { value: "photos", label: "Photos" },
+            (() => { const open = photos.filter(p => (p.category === "snag" || p.category === "safety_concern") && (!p.status || p.status === "open")).length; return { value: "issues", label: open > 0 ? `Site Issues (${open})` : "Site Issues" }; })(),
             ...(caps.isInternal ? [{ value: "reports", label: "Daily Reports" }] : []),
             { value: "checkins", label: `Check-ins${checkins.length > 0 ? ` (${checkins.length})` : ""}` },
             { value: "permits", label: "Compliance" },
@@ -1944,6 +1947,125 @@ tr:last-child td{border-bottom:none}
                     ))}
                   </div>
                 )}
+              </div>
+            );
+          })()}
+        </TabsContent>
+
+        <TabsContent value="issues">
+          {(() => {
+            const ISSUE_CATEGORY_LABEL: Record<string, string> = { snag: "Snag", safety_concern: "Safety Concern" };
+            const ISSUE_CATEGORY_COLOUR: Record<string, string> = {
+              snag: "bg-orange-50 border-orange-200 text-orange-700",
+              safety_concern: "bg-red-50 border-red-200 text-red-700",
+            };
+            const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
+              open:        { label: "Open",        cls: "bg-amber-50 border-amber-200 text-amber-700" },
+              in_progress: { label: "In Progress", cls: "bg-blue-50 border-blue-200 text-blue-700" },
+              resolved:    { label: "Resolved",    cls: "bg-emerald-50 border-emerald-200 text-emerald-700" },
+            };
+            const issuePhotos = photos.filter(p => p.category === "snag" || p.category === "safety_concern");
+            const openCount = issuePhotos.filter(p => !p.status || p.status === "open").length;
+            const inProgressCount = issuePhotos.filter(p => p.status === "in_progress").length;
+            const resolvedCount = issuePhotos.filter(p => p.status === "resolved").length;
+            const filtered = issuePhotos.filter(p => {
+              const matchStatus = issueStatusFilter === "all" || (p.status ?? "open") === issueStatusFilter;
+              const matchSearch = !issueSearch || (p.description ?? "").toLowerCase().includes(issueSearch.toLowerCase()) || (p.zone ?? "").toLowerCase().includes(issueSearch.toLowerCase()) || p.referenceNumber.toLowerCase().includes(issueSearch.toLowerCase());
+              return matchStatus && matchSearch;
+            });
+            return (
+              <div>
+                <div className="flex items-center gap-2 mb-5">
+                  <AlertTriangle className="w-5 h-5 text-amber-500" />
+                  <h3 className="font-bold text-lg">Site Issues</h3>
+                  <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{issuePhotos.length}</span>
+                </div>
+                {/* Stats */}
+                <div className="grid grid-cols-3 gap-3 mb-5">
+                  <Card className="p-3 border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900 text-center">
+                    <p className="text-xl font-extrabold text-amber-700">{openCount}</p>
+                    <p className="text-xs text-amber-700 mt-0.5">Open</p>
+                  </Card>
+                  <Card className="p-3 border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-900 text-center">
+                    <p className="text-xl font-extrabold text-blue-700">{inProgressCount}</p>
+                    <p className="text-xs text-blue-700 mt-0.5">In Progress</p>
+                  </Card>
+                  <Card className="p-3 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-900 text-center">
+                    <p className="text-xl font-extrabold text-emerald-700">{resolvedCount}</p>
+                    <p className="text-xs text-emerald-700 mt-0.5">Resolved</p>
+                  </Card>
+                </div>
+                {/* Filters */}
+                <div className="flex flex-col sm:flex-row gap-3 mb-5">
+                  <div className="relative flex-1 max-w-xs">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                    <Input placeholder="Search issues…" className="pl-9" value={issueSearch} onChange={e => setIssueSearch(e.target.value)} />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {(["all", "open", "in_progress", "resolved"] as const).map(f => (
+                      <button key={f} onClick={() => setIssueStatusFilter(f)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${issueStatusFilter === f ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border hover:border-primary/40"}`}>
+                        {f === "all" ? "All" : f === "in_progress" ? "In Progress" : f.charAt(0).toUpperCase() + f.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* List */}
+                <Card className="overflow-hidden">
+                  {issuePhotos.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+                      <AlertTriangle className="w-10 h-10 text-muted-foreground/30 mb-3" />
+                      <p className="font-semibold text-muted-foreground">No site issues logged</p>
+                      <p className="text-sm text-muted-foreground/70 mt-1">Snags and safety concerns logged from the Photos tab appear here.</p>
+                    </div>
+                  ) : filtered.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+                      <p className="font-semibold text-muted-foreground">No issues match your filters.</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y">
+                      {filtered.map(issue => {
+                        const photoUrl = issue.photoUrl?.replace(/^\/uploads\//, "/api/uploads/") ?? null;
+                        const statusInfo = STATUS_BADGE[issue.status ?? "open"] ?? STATUS_BADGE.open;
+                        return (
+                          <div key={issue.id} onClick={() => setViewingPhoto(issue)} className="flex gap-4 p-4 hover:bg-muted/20 transition-colors cursor-pointer">
+                            <div className="w-20 h-16 rounded-lg overflow-hidden bg-muted shrink-0">
+                              {photoUrl ? (
+                                <img src={photoUrl} alt={issue.description ?? issue.category} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center"><Camera className="w-5 h-5 text-muted-foreground/40" /></div>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${ISSUE_CATEGORY_COLOUR[issue.category] ?? ""}`}>{ISSUE_CATEGORY_LABEL[issue.category] ?? issue.category}</span>
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${statusInfo.cls}`}>{statusInfo.label}</span>
+                                <span className="text-[10px] font-mono text-muted-foreground">{issue.referenceNumber}</span>
+                              </div>
+                              {issue.description && <p className="text-sm font-medium truncate">{issue.description}</p>}
+                              <div className="flex items-center gap-3 mt-1 flex-wrap">
+                                {issue.zone && <span className="text-xs text-muted-foreground flex items-center gap-1 truncate max-w-[120px]"><MapPin className="w-3 h-3 shrink-0" />{issue.zone}</span>}
+                                <span className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(issue.takenAt)} · {issue.uploaderName}</span>
+                              </div>
+                            </div>
+                            {caps.canManageProjects && (
+                              <div className="shrink-0 flex items-center" onClick={e => e.stopPropagation()}>
+                                {issue.status !== "resolved" ? (
+                                  <button onClick={() => updatePhotoStatus(issue.id, "resolved")} title="Mark resolved" className="p-1.5 rounded-lg text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50 transition-colors">
+                                    <CheckCircle2 className="w-4 h-4" />
+                                  </button>
+                                ) : (
+                                  <button onClick={() => updatePhotoStatus(issue.id, "open")} title="Re-open" className="p-1.5 rounded-lg text-emerald-600 hover:text-muted-foreground hover:bg-muted transition-colors">
+                                    <CheckCircle2 className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </Card>
               </div>
             );
           })()}
@@ -3198,6 +3320,7 @@ tr:last-child td{border-bottom:none}
         fileUrl={sharingDoc?.fileUrl}
         projectId={projectId}
         version={sharingDoc?.version ?? null}
+        additionalInfo={sharingDoc?.additionalInfo}
       />
 
       <Dialog open={!!scheduleTarget} onOpenChange={v => { if (!v) { setScheduleTarget(null); setScheduleError(null); } }}>
@@ -3456,7 +3579,21 @@ tr:last-child td{border-bottom:none}
                   )}
                   {photoUrl && (
                     <button
-                      onClick={() => setSharingDoc({ type: "photo", id: viewingPhoto.id, name: `Photo ${viewingPhoto.referenceNumber}`, version: null, fileUrl: viewingPhoto.photoUrl! })}
+                      onClick={() => {
+                        const isIssuePhoto = viewingPhoto.category === "snag" || viewingPhoto.category === "safety_concern";
+                        const STATUS_LABEL: Record<string, string> = { open: "Open", in_progress: "In Progress", resolved: "Resolved" };
+                        const info = isIssuePhoto ? [
+                          `Type: ${viewingPhoto.category === "snag" ? "Snag" : "Safety Concern"}`,
+                          `Ref: ${viewingPhoto.referenceNumber}`,
+                          viewingPhoto.description ? `Description: ${viewingPhoto.description}` : null,
+                          viewingPhoto.zone ? `Zone: ${viewingPhoto.zone}` : null,
+                          `Project: ${project.name}`,
+                          `Status: ${STATUS_LABEL[viewingPhoto.status ?? "open"] ?? "Open"}`,
+                          `Logged: ${formatDate(viewingPhoto.takenAt)} by ${viewingPhoto.uploaderName}`,
+                          (viewingPhoto.latitude && viewingPhoto.longitude) ? `GPS: ${Number(viewingPhoto.latitude).toFixed(5)}, ${Number(viewingPhoto.longitude).toFixed(5)}` : null,
+                        ].filter(Boolean).join("\n") : undefined;
+                        setSharingDoc({ type: "photo", id: viewingPhoto.id, name: `Photo ${viewingPhoto.referenceNumber}`, version: null, fileUrl: viewingPhoto.photoUrl!, additionalInfo: info });
+                      }}
                       className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border bg-background hover:bg-muted transition-colors"
                     >
                       <Share2 className="w-3.5 h-3.5" /><span className="hidden sm:inline">Share</span>

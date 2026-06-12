@@ -60,7 +60,22 @@ export default function IssuesPage() {
   const [catFilter, setCatFilter] = useState<"all" | "snag" | "safety_concern">("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "open" | "in_progress" | "resolved">("all");
   const [viewingIssue, setViewingIssue] = useState<Issue | null>(null);
-  const [shareItem, setShareItem] = useState<{ id: string; name: string; fileUrl: string; projectId?: string | null } | null>(null);
+  const [shareItem, setShareItem] = useState<{ id: string; name: string; fileUrl: string; projectId?: string | null; additionalInfo?: string } | null>(null);
+
+  function issueDetails(i: Issue) {
+    const STATUS_LABEL: Record<string, string> = { open: "Open", in_progress: "In Progress", resolved: "Resolved" };
+    const lines = [
+      `Type: ${CATEGORY_LABEL[i.category] ?? i.category}`,
+      `Ref: ${i.referenceNumber}`,
+      i.description ? `Description: ${i.description}` : null,
+      i.zone ? `Zone: ${i.zone}` : null,
+      i.projectName ? `Project: ${i.projectName}` : null,
+      `Status: ${STATUS_LABEL[i.status ?? "open"] ?? i.status ?? "Open"}`,
+      `Logged: ${new Date(i.takenAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} by ${i.uploaderName}`,
+      i.latitude && i.longitude ? `GPS: ${Number(i.latitude).toFixed(5)}, ${Number(i.longitude).toFixed(5)}` : null,
+    ].filter(Boolean);
+    return lines.join("\n");
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -286,7 +301,7 @@ export default function IssuesPage() {
                   )}
                   {photoUrl && (
                     <button
-                      onClick={() => setShareItem({ id: viewingIssue.id, name: `${CATEGORY_LABEL[viewingIssue.category]} ${viewingIssue.referenceNumber}`, fileUrl: viewingIssue.photoUrl!, projectId: viewingIssue.projectId })}
+                      onClick={() => setShareItem({ id: viewingIssue.id, name: `${CATEGORY_LABEL[viewingIssue.category]} ${viewingIssue.referenceNumber}`, fileUrl: viewingIssue.photoUrl!, projectId: viewingIssue.projectId, additionalInfo: issueDetails(viewingIssue) })}
                       className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border bg-background hover:bg-muted transition-colors"
                     >
                       <Share2 className="w-3.5 h-3.5" /><span className="hidden sm:inline">Share</span>
@@ -393,6 +408,7 @@ export default function IssuesPage() {
         entityName={shareItem?.name ?? ""}
         fileUrl={shareItem?.fileUrl}
         projectId={shareItem?.projectId}
+        additionalInfo={shareItem?.additionalInfo}
       />
     </SidebarLayout>
   );
