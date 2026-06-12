@@ -13,7 +13,7 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
+      className="fixed inset-0 z-[60] flex items-center justify-center"
       onClick={(e) => { if (e.target === e.currentTarget) onOpenChange?.(false); }}
     >
       {/* Backdrop — pointer-events-none so it never intercepts drag/drop events */}
