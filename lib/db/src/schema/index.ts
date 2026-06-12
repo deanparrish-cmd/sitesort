@@ -24,3 +24,4 @@ export * from "./daily_reports";
 export * from "./daily_notes";
 export * from "./qr_board_pins";
 export * from "./share_logs";
+export * from "./user_notes";

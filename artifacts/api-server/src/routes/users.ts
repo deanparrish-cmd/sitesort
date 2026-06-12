@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { companiesTable, usersTable } from "@workspace/db/schema";
-import { eq, and } from "drizzle-orm";
+import { companiesTable, usersTable, userNotesTable } from "@workspace/db/schema";
+import { eq, and, desc } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
@@ -98,6 +98,58 @@ router.patch("/users/:userId", authenticate, async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Update user error");
     res.status(500).json({ error: "server_error", message: "Failed to update user" });
+  }
+});
+
+// List notes for a team member (most recent first)
+router.get("/users/:userId/notes", authenticate, async (req, res) => {
+  try {
+    const target = await db.select({ id: usersTable.id }).from(usersTable)
+      .where(and(eq(usersTable.id, req.params.userId), eq(usersTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!target[0]) { res.status(404).json({ error: "not_found", message: "User not found" }); return; }
+
+    const notes = await db
+      .select({
+        id: userNotesTable.id,
+        body: userNotesTable.body,
+        createdAt: userNotesTable.createdAt,
+        authorName: usersTable.name,
+      })
+      .from(userNotesTable)
+      .leftJoin(usersTable, eq(usersTable.id, userNotesTable.authorId))
+      .where(eq(userNotesTable.userId, req.params.userId))
+      .orderBy(desc(userNotesTable.createdAt));
+
+    res.json(notes.map(n => ({ id: n.id, body: n.body, authorName: n.authorName ?? "Unknown", createdAt: n.createdAt.toISOString() })));
+  } catch (err) {
+    req.log.error({ err }, "List user notes error");
+    res.status(500).json({ error: "server_error", message: "Failed to list notes" });
+  }
+});
+
+// Add a note to a team member
+router.post("/users/:userId/notes", authenticate, async (req, res) => {
+  try {
+    const target = await db.select({ id: usersTable.id }).from(usersTable)
+      .where(and(eq(usersTable.id, req.params.userId), eq(usersTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!target[0]) { res.status(404).json({ error: "not_found", message: "User not found" }); return; }
+
+    const { body } = req.body;
+    if (!body?.trim()) { res.status(400).json({ error: "validation_error", message: "body required" }); return; }
+
+    const id = generateId();
+    const [inserted] = await db.insert(userNotesTable).values({
+      id, userId: req.params.userId, authorId: req.user!.id, body: body.trim(),
+    }).returning({ createdAt: userNotesTable.createdAt });
+
+    const author = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
+
+    res.status(201).json({ id, body: body.trim(), authorName: author[0]?.name ?? "Unknown", createdAt: inserted.createdAt.toISOString() });
+  } catch (err) {
+    req.log.error({ err }, "Add user note error");
+    res.status(500).json({ error: "server_error", message: "Failed to add note" });
   }
 });
 
