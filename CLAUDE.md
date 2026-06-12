@@ -167,3 +167,44 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 - **GitHub push command**: `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts` (must run from `/home/runner/workspace`)
 - **API server rebuild**: `pnpm --filter @workspace/api-server run build` after any backend change
 - All commits are on `main`
+
+---
+
+## End-of-session notes — 2026-06-12 (check-ins page, notes fixes, team enhancements)
+
+### Tasks completed today
+
+1. **Site Check-Ins page (`/checkins`)** — committed leftover work from previous session:
+   - `GET /api/checkins` — company-wide check-in log, tenant-scoped, ordered by date
+   - New `/checkins` frontend page: photo grid, search (worker/company/project), project-filter dropdown, 3-stat header (total/today/this week), click-to-expand detail modal with GPS map link, open and share actions
+   - Sidebar "Site Check-Ins" nav item (ClipboardCheck icon) under admin nav
+
+2. **Subcontractor notes fixes** (2 files):
+   - **Text overflow**: added `break-words min-w-0` to note body `<p>` in both the contacts directory dialog and the project Team tab dialog — long text now wraps instead of overflowing
+   - **Wrong notes in contacts**: changed `GET /api/subcontractors/:id/notes` so that with no `?projectId` it returns only general notes (`projectId IS NULL`); project-specific notes no longer leak into the contacts directory view. Project Team tab already passes `?projectId` so it still shows general + project notes.
+
+3. **In House Team — contact actions + notes** (`artifacts/sitesort/src/pages/team/index.tsx`):
+   - Added Call (tel:), SMS (sms:), WhatsApp (wa.me/), Email (mailto:) action buttons per card, matching the subcontractor directory style
+   - Added Share dropdown (email / WhatsApp) — was already present, kept and restyled into the new action row
+   - Added Notes & Reminders dialog (StickyNote button): text area, Add Note (Ctrl+Enter), timestamped history
+   - New `user_notes` DB table (`lib/db/src/schema/user_notes.ts`): id, userId FK (cascade-delete), authorId FK, body, createdAt
+   - New API endpoints: `GET /api/users/:userId/notes` and `POST /api/users/:userId/notes` (tenant-scoped IDOR-safe)
+
+### Key files modified
+- `artifacts/api-server/src/routes/qr.ts` — `GET /api/checkins` endpoint
+- `artifacts/sitesort/src/pages/checkins/index.tsx` — new check-ins page (created)
+- `artifacts/sitesort/src/App.tsx` — `/checkins` route
+- `artifacts/sitesort/src/components/layout/sidebar-layout.tsx` — Site Check-Ins nav item
+- `artifacts/api-server/src/routes/subcontractors.ts` — notes scope fix (general-only when no projectId)
+- `artifacts/sitesort/src/pages/subcontractors/index.tsx` — break-words on note body
+- `artifacts/sitesort/src/pages/projects/detail.tsx` — break-words on note body
+- `lib/db/src/schema/user_notes.ts` — new table (created)
+- `lib/db/src/schema/index.ts` — export user_notes
+- `artifacts/api-server/src/routes/users.ts` — user notes endpoints
+- `artifacts/sitesort/src/pages/team/index.tsx` — contact actions + notes dialog
+
+### Notes for next session
+- **Photo status backfill**: still pending — `UPDATE photos SET status='open' WHERE category IN ('snag','safety_concern') AND status IS NULL`
+- **GitHub push command**: `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts`
+- **API server rebuild**: `pnpm --filter @workspace/api-server run build` after any backend change
+- All commits are on `main`
