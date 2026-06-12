@@ -178,7 +178,7 @@ export default function ProjectDetail() {
           const match = list.find(p => p.id === photoParam);
           if (match) {
             setViewingPhoto(match);
-            window.history.replaceState({}, "", window.location.pathname + "?tab=photos");
+            window.history.replaceState({}, "", window.location.pathname + "?tab=issues");
           }
         }
       });
@@ -956,24 +956,29 @@ tr:last-child td{border-bottom:none}
 
       <Tabs defaultValue={defaultTab}>
         <TabsList className="mb-6 w-full h-auto flex flex-wrap justify-start gap-1.5 bg-muted p-1.5 rounded-xl">
+          {/* Group 1: Project management */}
           {[
             { value: "overview", label: "Overview" },
             { value: "progress", label: "Progress" },
-            { value: "documents", label: "Documents" },
             { value: "team", label: "Team" },
-            { value: "photos", label: "Photos" },
-            (() => { const open = photos.filter(p => (p.category === "snag" || p.category === "safety_concern") && (!p.status || p.status === "open")).length; return { value: "issues", label: open > 0 ? `Site Issues (${open})` : "Site Issues" }; })(),
-            ...(caps.isInternal ? [{ value: "reports", label: "Daily Reports" }] : []),
-            { value: "checkins", label: `Check-ins${checkins.length > 0 ? ` (${checkins.length})` : ""}` },
+            { value: "qr", label: "Site Board" },
+            { value: "documents", label: "Documents" },
             { value: "permits", label: "Compliance" },
-            { value: "finances", label: "Finances & Expiry" },
-            { value: "qr", label: "Site Board QR" },
           ].map(tab => (
-            <TabsTrigger
-              key={tab.value}
-              value={tab.value}
-              className="flex-1 sm:flex-none justify-center rounded-lg py-2 px-3 sm:px-4 text-sm whitespace-nowrap"
-            >
+            <TabsTrigger key={tab.value} value={tab.value} className="flex-1 sm:flex-none justify-center rounded-lg py-2 px-3 sm:px-4 text-sm whitespace-nowrap">
+              {tab.label}
+            </TabsTrigger>
+          ))}
+          {/* Divider */}
+          <div className="w-px self-stretch bg-border/60 mx-0.5 my-0.5" />
+          {/* Group 2: Site activity */}
+          {[
+            { value: "finances", label: "Finances & Expiry" },
+            { value: "checkins", label: `Check-ins${checkins.length > 0 ? ` (${checkins.length})` : ""}` },
+            ...(caps.isInternal ? [{ value: "reports", label: "Daily Reports" }] : []),
+            (() => { const open = photos.filter(p => (p.category === "snag" || p.category === "safety_concern") && (!p.status || p.status === "open")).length; return { value: "issues", label: open > 0 ? `Site Issues (${open})` : "Site Issues" }; })(),
+          ].map(tab => (
+            <TabsTrigger key={tab.value} value={tab.value} className="flex-1 sm:flex-none justify-center rounded-lg py-2 px-3 sm:px-4 text-sm whitespace-nowrap">
               {tab.label}
             </TabsTrigger>
           ))}
@@ -1792,165 +1797,7 @@ tr:last-child td{border-bottom:none}
           })()}
         </TabsContent>
 
-        <TabsContent value="photos">
-          {(() => {
-            const CATEGORY_LABELS: Record<string, string> = {
-              general: "General", progress: "Progress", snag: "Snag", safety_concern: "Safety Concern",
-              mistake: "Mistake", work_completed: "Work completed",
-            };
-            const CATEGORY_COLOURS: Record<string, string> = {
-              general: "bg-blue-50 border-blue-200 text-blue-700",
-              progress: "bg-emerald-50 border-emerald-200 text-emerald-700",
-              snag: "bg-orange-50 border-orange-200 text-orange-700",
-              safety_concern: "bg-red-50 border-red-200 text-red-700",
-              mistake: "bg-rose-50 border-rose-200 text-rose-700",
-              work_completed: "bg-teal-50 border-teal-200 text-teal-700",
-            };
-            const TAG_OPTIONS = [
-              { value: "snag", label: "Snag" },
-              { value: "mistake", label: "Mistake" },
-              { value: "work_completed", label: "Work completed" },
-            ];
-            return (
-              <div>
-                <div className="flex items-center gap-2 mb-6">
-                  <Camera className="w-5 h-5 text-primary" />
-                  <h3 className="font-bold text-lg">Photo Log</h3>
-                  <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{photos.length}</span>
-                </div>
-                {caps.canLogPhoto && (
-                  <Card className="mb-6">
-                    <CardContent className="pt-6 space-y-4">
-                      <div>
-                        <h4 className="font-semibold text-sm mb-1">Log a site photo</h4>
-                        <p className="text-xs text-muted-foreground">Tag it so it shows up in today's daily site report.</p>
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Tag</label>
-                        <div className="flex flex-wrap gap-2">
-                          {TAG_OPTIONS.map(opt => (
-                            <button
-                              key={opt.value}
-                              type="button"
-                              onClick={() => setPhotoTag(opt.value)}
-                              className={cn(
-                                "text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors",
-                                photoTag === opt.value
-                                  ? (CATEGORY_COLOURS[opt.value] ?? "bg-primary/10 border-primary text-primary")
-                                  : "bg-background border-border text-muted-foreground hover:border-primary/40"
-                              )}
-                            >
-                              {opt.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <FileDropZone
-                        key={photoFormKey}
-                        accept=".jpg,.jpeg,.png,.webp"
-                        onUploaded={f => setPhotoUploadUrl(f.url)}
-                        onCleared={() => setPhotoUploadUrl(null)}
-                      />
-                      <div className="grid sm:grid-cols-2 gap-3">
-                        <div>
-                          <div className="flex items-center justify-between mb-1.5">
-                            <label className="text-xs font-medium text-muted-foreground block">Note (optional)</label>
-                          </div>
-                          <Textarea value={photoNote} onChange={e => setPhotoNote(e.target.value)} placeholder="What does this photo show?" rows={2} />
-                        </div>
-                        <div>
-                          <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Zone / location (optional)</label>
-                          <Input value={photoZone} onChange={e => setPhotoZone(e.target.value)} placeholder="e.g. Level 2, East wing" />
-                        </div>
-                      </div>
-                      <div className="flex justify-end">
-                        <Button onClick={submitSnagPhoto} disabled={!photoUploadUrl || photoSubmitting}>
-                          {photoSubmitting ? "Logging…" : "Log photo"}
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-                {caps.canLogPhoto && (
-                  <Card className="mb-6">
-                    <CardContent className="pt-6 space-y-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <h4 className="font-semibold text-sm mb-1">Daily report</h4>
-                          <p className="text-xs text-muted-foreground">Type an overall summary of the day. It's added to today's site report.</p>
-                        </div>
-                      </div>
-                      <Textarea
-                        value={noteBody}
-                        onChange={e => setNoteBody(e.target.value)}
-                        placeholder="Type your daily report here…"
-                        rows={3}
-                      />
-                      <div className="flex justify-end">
-                        <Button onClick={() => submitDailyNote(noteBody)} disabled={!noteBody.trim() || noteSubmitting}>
-                          {noteSubmitting ? "Saving…" : "Save to today's report"}
-                        </Button>
-                      </div>
-                      {todayNotes.length > 0 && (
-                        <div className="border-t pt-3 space-y-2">
-                          <p className="text-xs font-semibold text-muted-foreground">Logged today</p>
-                          {todayNotes.map(n => (
-                            <div key={n.id} className="rounded-lg border bg-muted/30 p-3">
-                              <p className="text-sm text-foreground whitespace-pre-wrap">{n.body}</p>
-                              <p className="text-[10px] text-muted-foreground mt-1">
-                                {n.authorName} · {formatDate(n.createdAt)}{n.source === "voice" ? " · spoken" : ""}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
-                {photos.length === 0 ? (
-                  <Card><CardContent className="py-12 text-center text-muted-foreground text-sm">
-                    No photos logged yet. Use the sidebar to log a photo.
-                  </CardContent></Card>
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                    {[...photos].sort((a, b) => b.takenAt.localeCompare(a.takenAt)).map(photo => (
-                      <div
-                        key={photo.id}
-                        className="rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-                        onClick={() => setViewingPhoto(photo)}
-                      >
-                        {photo.photoUrl ? (
-                          <img src={photo.photoUrl.replace(/^\/uploads\//, "/api/uploads/")} alt={photo.description ?? photo.category} className="w-full h-36 object-cover" />
-                        ) : (
-                          <div className="w-full h-36 bg-muted flex items-center justify-center">
-                            <Camera className="w-8 h-8 text-muted-foreground" />
-                          </div>
-                        )}
-                        <div className="p-3 space-y-1.5">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${CATEGORY_COLOURS[photo.category] ?? "bg-muted border-border text-muted-foreground"}`}>
-                              {CATEGORY_LABELS[photo.category] ?? photo.category}
-                            </span>
-                            <span className="text-[10px] font-mono text-muted-foreground">{photo.referenceNumber}</span>
-                            {photo.status === "resolved" && (
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border bg-emerald-50 border-emerald-200 text-emerald-700">Resolved</span>
-                            )}
-                            {photo.status === "open" && (
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border bg-amber-50 border-amber-200 text-amber-700">Open</span>
-                            )}
-                          </div>
-                          {photo.description && <p className="text-xs text-foreground line-clamp-2">{photo.description}</p>}
-                          {photo.zone && <p className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="w-3 h-3" />{photo.zone}</p>}
-                          <p className="text-[10px] text-muted-foreground">{formatDate(photo.takenAt)} · {photo.uploaderName}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-        </TabsContent>
+
 
         <TabsContent value="issues">
           {(() => {
@@ -1973,6 +1820,16 @@ tr:last-child td{border-bottom:none}
               const matchSearch = !issueSearch || (p.description ?? "").toLowerCase().includes(issueSearch.toLowerCase()) || (p.zone ?? "").toLowerCase().includes(issueSearch.toLowerCase()) || p.referenceNumber.toLowerCase().includes(issueSearch.toLowerCase());
               return matchStatus && matchSearch;
             });
+            const ISSUE_TAG_OPTIONS = [
+              { value: "snag", label: "Snag" },
+              { value: "safety_concern", label: "Safety Concern" },
+              { value: "work_completed", label: "Work Completed" },
+            ];
+            const ISSUE_TAG_COLOURS: Record<string, string> = {
+              snag: "bg-orange-50 border-orange-200 text-orange-700",
+              safety_concern: "bg-red-50 border-red-200 text-red-700",
+              work_completed: "bg-teal-50 border-teal-200 text-teal-700",
+            };
             return (
               <div>
                 <div className="flex items-center gap-2 mb-5">
@@ -1980,6 +1837,58 @@ tr:last-child td{border-bottom:none}
                   <h3 className="font-bold text-lg">Site Issues</h3>
                   <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{issuePhotos.length}</span>
                 </div>
+                {/* Log new issue */}
+                {caps.canLogPhoto && (
+                  <Card className="mb-5">
+                    <CardContent className="pt-6 space-y-4">
+                      <div>
+                        <h4 className="font-semibold text-sm mb-1">Log a site issue</h4>
+                        <p className="text-xs text-muted-foreground">Tag the issue type, attach a photo, and add a description.</p>
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Type</label>
+                        <div className="flex flex-wrap gap-2">
+                          {ISSUE_TAG_OPTIONS.map(opt => (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => setPhotoTag(opt.value)}
+                              className={cn(
+                                "text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors",
+                                photoTag === opt.value
+                                  ? (ISSUE_TAG_COLOURS[opt.value] ?? "bg-primary/10 border-primary text-primary")
+                                  : "bg-background border-border text-muted-foreground hover:border-primary/40"
+                              )}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <FileDropZone
+                        key={photoFormKey}
+                        accept=".jpg,.jpeg,.png,.webp"
+                        onUploaded={f => setPhotoUploadUrl(f.url)}
+                        onCleared={() => setPhotoUploadUrl(null)}
+                      />
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Description (optional)</label>
+                          <Textarea value={photoNote} onChange={e => setPhotoNote(e.target.value)} placeholder="What does this photo show?" rows={2} />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Zone / location (optional)</label>
+                          <Input value={photoZone} onChange={e => setPhotoZone(e.target.value)} placeholder="e.g. Level 2, East wing" />
+                        </div>
+                      </div>
+                      <div className="flex justify-end">
+                        <Button onClick={submitSnagPhoto} disabled={!photoUploadUrl || photoSubmitting}>
+                          {photoSubmitting ? "Logging…" : "Log issue"}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
                 {/* Stats */}
                 <div className="grid grid-cols-3 gap-3 mb-5">
                   <Card className="p-3 border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900 text-center">
@@ -2015,7 +1924,7 @@ tr:last-child td{border-bottom:none}
                     <div className="flex flex-col items-center justify-center py-12 text-center px-4">
                       <AlertTriangle className="w-10 h-10 text-muted-foreground/30 mb-3" />
                       <p className="font-semibold text-muted-foreground">No site issues logged</p>
-                      <p className="text-sm text-muted-foreground/70 mt-1">Snags and safety concerns logged from the Photos tab appear here.</p>
+                      <p className="text-sm text-muted-foreground/70 mt-1">Use the form above to log snags, safety concerns, and completed work.</p>
                     </div>
                   ) : filtered.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-12 text-center px-4">

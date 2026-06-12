@@ -67,7 +67,7 @@ function formatNoteTime(iso: string) {
   return new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-function authHeaders() {
+function authHeaders(): Record<string, string> {
   const t = localStorage.getItem("sitesort_token");
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
