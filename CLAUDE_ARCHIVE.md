@@ -360,3 +360,26 @@
 - `lib/db/src/schema/photos.ts`, `api-server/src/routes/photos.ts`
 - `invoices/index.tsx`, `issues/index.tsx` (new), `projects/detail.tsx`, `dashboard/index.tsx`
 - `sidebar-layout.tsx`, `App.tsx`
+
+---
+
+## End-of-session notes — 2026-06-12 (team enhancements, site issues refactor, share fix)
+
+### Tasks completed today (continued from earlier session)
+
+1. **In House Team — Add Team Member button** (`artifacts/sitesort/src/pages/team/index.tsx`):
+   - "Add Team Member" button in header, gated by `canManageTeam` (admin/PM)
+   - Dialog: name, email, role (admin/PM/site worker), phone (optional), project checklist
+   - Projects fetched on dialog open; checkboxes link new user to selected projects via `POST /api/projects/:id/members` after account creation
+   - API sends invitation email with generated credentials; inline error on duplicate email
+
+2. **Site Issues moved to each project**: "Site Issues" tab added to project detail — stats, search, status filter, quick-resolve, thumbnail list, photo detail modal. Removed from global sidebar. Tab label shows open count badge.
+
+3. **Share content includes full issue details**: new `additionalInfo?: string` prop on ShareModal; issues build and pass a details block (type, ref, description, zone, project, status, logged-by, date, GPS).
+
+4. **Dialog z-index fix** (`artifacts/sitesort/src/components/ui/dialog.tsx`): bumped from `z-50` to `z-[60]`.
+
+5. **Subcontractor notes scoping fix**: `GET /api/subcontractors/:id/notes` with no `?projectId` returns only general notes; project-specific notes no longer leak into contacts directory.
+
+### Key files modified
+- `artifacts/sitesort/src/pages/team/index.tsx`, `artifacts/sitesort/src/pages/projects/detail.tsx`, `artifacts/sitesort/src/components/ui/dialog.tsx`, `artifacts/sitesort/src/components/share-modal.tsx`, `artifacts/api-server/src/routes/subcontractors.ts`
