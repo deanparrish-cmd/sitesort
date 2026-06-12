@@ -1178,7 +1178,7 @@ export default function SubcontractorsPage() {
                   {notesList.map(n => (
                     <div key={n.id} className="rounded-lg border bg-muted/30 p-3">
                       <div className="flex items-start justify-between gap-2 mb-1">
-                        <p className="text-[13px] text-foreground whitespace-pre-wrap flex-1">{n.body}</p>
+                        <p className="text-[13px] text-foreground whitespace-pre-wrap break-words flex-1 min-w-0">{n.body}</p>
                         {n.projectId ? (
                           <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-primary/10 text-primary">{n.projectName ?? "Project"}</span>
                         ) : (

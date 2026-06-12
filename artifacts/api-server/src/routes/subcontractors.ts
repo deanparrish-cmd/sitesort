@@ -206,7 +206,7 @@ router.post("/subcontractors/:subcontractorId/insurance", authenticate, async (r
 
 // List timestamped notes for a subcontractor (most recent first)
 // ?projectId=<id> → returns general notes + notes scoped to that project
-// no projectId   → returns all notes (directory overview)
+// no projectId   → returns general notes only (contacts directory view)
 router.get("/subcontractors/:subcontractorId/notes", authenticate, async (req, res) => {
   try {
     const sub = await db.select({ id: subcontractorsTable.id }).from(subcontractorsTable)
@@ -221,7 +221,7 @@ router.get("/subcontractors/:subcontractorId/notes", authenticate, async (req, r
 
     const scopeFilter = projectId
       ? or(isNull(subcontractorNotesTable.projectId), eq(subcontractorNotesTable.projectId, projectId))
-      : undefined;
+      : isNull(subcontractorNotesTable.projectId);
 
     const notes = await db
       .select({
