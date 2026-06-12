@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   Users, Search, Mail, Phone, ShieldCheck, Share2, MessageCircle,
-  MessageSquare, StickyNote, Send, Loader2, Clock, UserPlus,
+  MessageSquare, StickyNote, Send, Loader2, Clock, UserPlus, FolderOpen, Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCapabilities } from "@/hooks/use-capabilities";
@@ -30,6 +30,11 @@ type UserNote = {
   body: string;
   authorName: string;
   createdAt: string;
+};
+
+type Project = {
+  id: string;
+  name: string;
 };
 
 const ROLE_STYLES: Record<string, string> = {
@@ -89,6 +94,8 @@ export default function TeamPage() {
   const [addPhone, setAddPhone] = useState("");
   const [addSubmitting, setAddSubmitting] = useState(false);
   const [addError, setAddError] = useState("");
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedProjects, setSelectedProjects] = useState<Set<string>>(new Set());
 
   // Notes dialog state
   const [notesTarget, setNotesTarget] = useState<TeamMember | null>(null);
@@ -136,9 +143,23 @@ export default function TeamPage() {
     setNoteDraft("");
   }
 
-  function openAdd() {
+  async function openAdd() {
     setAddName(""); setAddEmail(""); setAddRole("site_worker"); setAddPhone(""); setAddError("");
+    setSelectedProjects(new Set());
     setAddOpen(true);
+    const res = await fetch("/api/projects", { headers: authHeaders() });
+    if (res.ok) {
+      const data = await res.json();
+      setProjects((data.projects ?? data).map((p: { id: string; name: string }) => ({ id: p.id, name: p.name })));
+    }
+  }
+
+  function toggleProject(id: string) {
+    setSelectedProjects(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
   }
 
   async function addMember() {
@@ -150,14 +171,25 @@ export default function TeamPage() {
       headers: { ...authHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({ name: addName.trim(), email: addEmail.trim(), role: addRole, phone: addPhone.trim() || null }),
     });
-    if (res.ok) {
-      const created = await res.json();
-      setMembers(prev => [...prev, created]);
-      setAddOpen(false);
-    } else {
+    if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       setAddError(data.message ?? "Failed to add team member.");
+      setAddSubmitting(false);
+      return;
     }
+    const created = await res.json();
+    setMembers(prev => [...prev, created]);
+    // Link to selected projects (fire-and-forget, best effort)
+    await Promise.allSettled(
+      Array.from(selectedProjects).map(projectId =>
+        fetch(`/api/projects/${projectId}/members`, {
+          method: "POST",
+          headers: { ...authHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: created.id, role: addRole }),
+        })
+      )
+    );
+    setAddOpen(false);
     setAddSubmitting(false);
   }
 
@@ -376,6 +408,34 @@ export default function TeamPage() {
               <label className="text-sm font-medium mb-1.5 block">Phone <span className="text-muted-foreground text-xs">(optional)</span></label>
               <Input type="tel" value={addPhone} onChange={e => setAddPhone(e.target.value)} placeholder="+44 7700 900000" />
             </div>
+            {projects.length > 0 && (
+              <div>
+                <label className="text-sm font-medium mb-1.5 block flex items-center gap-1.5">
+                  <FolderOpen className="w-3.5 h-3.5 text-muted-foreground" /> Add to projects <span className="text-muted-foreground text-xs">(optional)</span>
+                </label>
+                <div className="rounded-lg border bg-muted/30 divide-y max-h-44 overflow-y-auto">
+                  {projects.map(p => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => toggleProject(p.id)}
+                      className="w-full flex items-center gap-3 px-3 py-2 hover:bg-muted/60 transition-colors text-left"
+                    >
+                      <div className={cn(
+                        "w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
+                        selectedProjects.has(p.id) ? "bg-primary border-primary" : "border-input bg-background"
+                      )}>
+                        {selectedProjects.has(p.id) && <Check className="w-2.5 h-2.5 text-primary-foreground" />}
+                      </div>
+                      <span className="text-sm truncate">{p.name}</span>
+                    </button>
+                  ))}
+                </div>
+                {selectedProjects.size > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1.5">{selectedProjects.size} project{selectedProjects.size !== 1 ? "s" : ""} selected</p>
+                )}
+              </div>
+            )}
           </div>
           {addError && <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{addError}</p>}
         </div>
