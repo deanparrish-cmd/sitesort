@@ -325,7 +325,7 @@ export default function InvoicesPage() {
       )}
 
       {/* Header */}
-      <div className="flex flex-row items-center justify-between gap-4 mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-bold">Invoices</h1>
           <p className="text-muted-foreground">Track payments in and out.</p>
@@ -338,7 +338,7 @@ export default function InvoicesPage() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <Card className="p-5 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-900">
           <div className="flex items-center gap-3 mb-1">
             <ArrowDownCircle className="w-5 h-5 text-emerald-600" />
@@ -370,7 +370,7 @@ export default function InvoicesPage() {
       </div>
 
       {/* Filters & search */}
-      <div className="flex flex-row gap-3 mb-4">
+      <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
           <Input
@@ -424,7 +424,7 @@ export default function InvoicesPage() {
         ) : (
           <>
             {/* Mobile card list — phone only */}
-            <div className="hidden divide-y">
+            <div className="block md:hidden divide-y">
               {filtered.map(inv => {
                 const isRowDragTarget = dragRowId === inv.id;
                 const isUploading = uploadingId === inv.id;
@@ -483,14 +483,14 @@ export default function InvoicesPage() {
               })}
             </div>
             {/* Tablet + desktop table */}
-            <div className="block overflow-x-auto">
+            <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/30">
                   <th className="px-5 py-3 w-12" />
                   <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Type</th>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Counterparty</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Description</th>
+                  <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden lg:table-cell">Description</th>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Amount</th>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Due</th>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
@@ -543,7 +543,7 @@ export default function InvoicesPage() {
                         <p className="font-medium text-foreground truncate">{inv.counterpartyName}</p>
                         {inv.reference && <p className="text-xs text-muted-foreground truncate">{inv.reference}</p>}
                       </td>
-                      <td className="px-5 py-3.5 text-muted-foreground max-w-xs truncate">{inv.description}</td>
+                      <td className="px-5 py-3.5 text-muted-foreground hidden lg:table-cell max-w-xs truncate">{inv.description}</td>
                       <td className="px-5 py-3.5 font-semibold tabular-nums">{fmtAmount(inv.currency, inv.amount)}</td>
                       <td className="px-5 py-3.5 text-muted-foreground whitespace-nowrap">{fmtDate(inv.dueDate)}</td>
                       <td className="px-5 py-3.5"><StatusBadge invoice={inv} /></td>
@@ -656,33 +656,33 @@ export default function InvoicesPage() {
                 {viewingInvoice.attachmentUrl && (
                   <button
                     onClick={() => window.open(fullUrl(viewingInvoice.attachmentUrl!), '_blank', 'noopener,noreferrer')}
-                    className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border bg-background hover:bg-muted transition-colors"
+                    className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border bg-background hover:bg-muted transition-colors"
                   >
-                    <ExternalLink className="w-3.5 h-3.5" />Open in new tab
+                    <ExternalLink className="w-3.5 h-3.5" /><span className="hidden sm:inline">Open in new tab</span>
                   </button>
                 )}
                 {viewingInvoice.attachmentUrl && (
                   <button
                     onClick={() => setShareItem({ id: viewingInvoice.id, name: `Invoice – ${viewingInvoice.counterpartyName}`, fileUrl: viewingInvoice.attachmentUrl!, projectId: viewingInvoice.projectId })}
-                    className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border bg-background hover:bg-muted transition-colors"
+                    className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border bg-background hover:bg-muted transition-colors"
                   >
-                    <Share2 className="w-3.5 h-3.5" />Share
+                    <Share2 className="w-3.5 h-3.5" /><span className="hidden sm:inline">Share</span>
                   </button>
                 )}
                 {viewingInvoice.status !== "paid" && (
                   <button
                     onClick={() => { markPaid(viewingInvoice.id); setViewingInvoice(prev => prev ? { ...prev, status: "paid" } : null); }}
-                    className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                    className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
                   >
-                    <CheckCircle2 className="w-3.5 h-3.5" />Mark paid
+                    <CheckCircle2 className="w-3.5 h-3.5" /><span className="hidden sm:inline">Mark paid</span>
                   </button>
                 )}
                 {viewingInvoice.status === "paid" && (
                   <button
                     onClick={() => { markUnpaid(viewingInvoice.id); setViewingInvoice(prev => prev ? { ...prev, status: "pending" } : null); }}
-                    className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-border bg-muted text-muted-foreground hover:bg-muted/70 transition-colors"
+                    className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border border-border bg-muted text-muted-foreground hover:bg-muted/70 transition-colors"
                   >
-                    <Clock className="w-3.5 h-3.5" />Mark unpaid
+                    <Clock className="w-3.5 h-3.5" /><span className="hidden sm:inline">Mark unpaid</span>
                   </button>
                 )}
                 <button
@@ -695,9 +695,9 @@ export default function InvoicesPage() {
             </div>
 
             {/* Viewer body */}
-            <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
+            <div className="flex flex-col sm:flex-row flex-1 min-h-0 overflow-hidden">
               {/* Details sidebar */}
-              <div className="w-64 flex-shrink-0 border-r p-5 overflow-y-auto space-y-4">
+              <div className="sm:w-64 flex-shrink-0 border-b sm:border-b-0 sm:border-r p-5 overflow-y-auto space-y-4">
                 <div>
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Type</p>
                   {viewingInvoice.direction === "inbound"

@@ -481,7 +481,7 @@ export default function SubcontractorsPage() {
   return (
     <SidebarLayout>
       {/* Header */}
-      <div className="flex flex-row items-center justify-between gap-4 mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-bold">Contacts</h1>
           <p className="text-muted-foreground">Directory of all your contacts — subcontractors, merchants, suppliers and more.</p>
@@ -510,7 +510,7 @@ export default function SubcontractorsPage() {
       </div>
 
       {/* Search + type filter */}
-      <div className="flex flex-row gap-3 mb-6">
+      <div className="flex flex-col sm:flex-row gap-3 mb-6">
         <div className="relative max-w-sm w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
           <Input
@@ -670,7 +670,7 @@ export default function SubcontractorsPage() {
                           </div>
 
                           {/* Desktop-only: status + all action icons */}
-                          <div className="flex items-center gap-1 shrink-0">
+                          <div className="hidden md:flex items-center gap-1 shrink-0">
                             <div className="flex flex-col items-end gap-1.5 mr-1">
                               {insuranceBadge(sub.insuranceStatus)}
                               <RatingStars rating={sub.reliabilityRating} />
@@ -718,7 +718,7 @@ export default function SubcontractorsPage() {
                         </div>
 
                         {/* Mobile-only bottom bar: insurance badge left, action icons right */}
-                        <div className="hidden items-center justify-between mt-2 pt-2 border-t border-border/40">
+                        <div className="flex md:hidden items-center justify-between mt-2 pt-2 border-t border-border/40">
                           <div className="flex items-center gap-2">
                             {insuranceBadge(sub.insuranceStatus)}
                             <RatingStars rating={sub.reliabilityRating} />

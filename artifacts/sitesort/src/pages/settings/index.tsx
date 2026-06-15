@@ -147,7 +147,7 @@ function ProfileTab({ user, onSaved, isCancelled }: { user: { id: string; name: 
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={avatarUploading}
-            className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-wait"
+            className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-30 sm:opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-wait"
             title="Change photo"
           >
             <Camera className="w-5 h-5 text-white" />
@@ -747,7 +747,7 @@ function BillingTab() {
         </div>
       )}
 
-      <div className="grid gap-4 grid-cols-3 max-w-5xl">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 max-w-5xl">
         {PLANS.map(plan => {
           const isCurrentPlan = hasActiveSub && company?.subscriptionTier === plan.id;
           return (
@@ -830,7 +830,7 @@ function BillingTab() {
 
       {/* Cancellation scheduled notice */}
       {hasActiveSub && company.cancelAtPeriodEnd && (
-        <div className="flex flex-row items-center gap-3 p-4 rounded-xl border border-amber-200 bg-amber-50">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-xl border border-amber-200 bg-amber-50">
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-amber-800">Cancellation scheduled</p>
             <p className="text-xs text-amber-700 mt-0.5">
@@ -855,7 +855,7 @@ function BillingTab() {
             Your subscription will remain active until the end of your current billing period. You won't be charged again after that.
           </p>
           {cancelConfirm ? (
-            <div className="flex flex-row items-center gap-3 p-4 rounded-xl border border-destructive/30 bg-red-50">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-4 rounded-xl border border-destructive/30 bg-red-50">
               <p className="text-sm text-red-700 flex-1">Are you sure? You'll lose access to all features when your period ends.</p>
               <div className="flex gap-2 shrink-0">
                 <Button size="sm" variant="outline" onClick={() => setCancelConfirm(false)} disabled={cancelLoading}>Keep plan</Button>
@@ -905,16 +905,16 @@ export default function SettingsPage() {
         <p className="text-muted-foreground text-sm mt-1">Manage your account and company preferences.</p>
       </div>
 
-      <div className="flex flex-row gap-6">
+      <div className="flex flex-col md:flex-row gap-6">
         {/* Tab nav */}
-        <div className="w-52 shrink-0">
-          <nav className="flex flex-col gap-1">
+        <div className="md:w-52 shrink-0 overflow-x-auto md:overflow-visible">
+          <nav className="flex md:flex-col gap-1 md:flex-nowrap">
             {visibleTabs.map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all text-left w-full",
+                  "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all text-left whitespace-nowrap md:w-full",
                   activeTab === tab.id
                     ? "bg-primary text-primary-foreground shadow-md shadow-primary/10"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"

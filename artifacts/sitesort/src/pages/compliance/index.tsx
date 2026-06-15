@@ -291,7 +291,7 @@ export default function CompliancePage() {
         </div>
       )}
 
-      <div className="flex flex-row items-center justify-between gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-3xl font-bold">Compliance Centre</h1>
           <p className="text-muted-foreground">Expiring insurance, permits and pending sign-offs across all projects.</p>
@@ -373,7 +373,7 @@ export default function CompliancePage() {
                       onDragEnter={() => setRowHoverId(rowId)}
                       onDragLeave={() => setRowHoverId(null)}
                       className={cn(
-                        "flex flex-row items-center justify-between gap-4 px-4 py-3 rounded-xl border transition-all",
+                        "flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 px-4 py-3 rounded-xl border transition-all",
                         isHovered
                           ? "border-primary bg-primary/5 scale-[1.01] shadow-md"
                           : days < 0 ? "bg-red-50 border-red-200"
@@ -436,7 +436,7 @@ export default function CompliancePage() {
               {showArchivedIns && (
                 <div className="space-y-2">
                   {[...archivedInsurance].sort((a, b) => b.archivedAt.localeCompare(a.archivedAt)).map(ins => (
-                    <div key={ins.id} className="flex flex-row items-center justify-between gap-4 px-4 py-3 rounded-xl border bg-muted/40 border-border opacity-80">
+                    <div key={ins.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 px-4 py-3 rounded-xl border bg-muted/40 border-border opacity-80">
                       <div className="min-w-0 flex-1">
                         <p className="font-semibold text-sm truncate">{ins.subcontractorName}</p>
                         <p className="text-xs text-muted-foreground capitalize truncate">{ins.insuranceType.replace(/_/g, " ")} · expired {fmtDate(ins.expiryDate)} · archived {new Date(ins.archivedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
@@ -482,7 +482,7 @@ export default function CompliancePage() {
                   const days = daysLeft(p.expiryDate);
                   return (
                     <div key={p.permitId}
-                      className={cn("flex flex-row items-center justify-between gap-4 px-4 py-3 rounded-xl border",
+                      className={cn("flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 px-4 py-3 rounded-xl border",
                         days < 0 ? "bg-red-50 border-red-200" : days <= 7 ? "bg-orange-50 border-orange-200" : "bg-yellow-50 border-yellow-200"
                       )}>
                       <div className="min-w-0 flex-1">
@@ -535,7 +535,7 @@ export default function CompliancePage() {
               {showArchivedPermits && (
                 <div className="space-y-2">
                   {[...archivedPermits].sort((a, b) => b.archivedAt.localeCompare(a.archivedAt)).map(p => (
-                    <div key={p.id} className="flex flex-row items-center justify-between gap-4 px-4 py-3 rounded-xl border bg-muted/40 border-border opacity-80">
+                    <div key={p.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 px-4 py-3 rounded-xl border bg-muted/40 border-border opacity-80">
                       <div className="min-w-0 flex-1">
                         <p className="font-semibold text-sm truncate">{p.permitType}</p>
                         <p className="text-xs text-muted-foreground truncate">{p.projectName} · expired {fmtDate(p.expiryDate)} · archived {new Date(p.archivedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
@@ -578,7 +578,7 @@ export default function CompliancePage() {
             ) : (
               <div className="space-y-2">
                 {filteredAcks.map(a => (
-                  <div key={a.documentId} className="flex flex-row items-center justify-between gap-4 px-4 py-3 rounded-xl border bg-blue-50 border-blue-200">
+                  <div key={a.documentId} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 px-4 py-3 rounded-xl border bg-blue-50 border-blue-200">
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-sm truncate">{a.documentName}</p>
                       <p className="text-xs text-muted-foreground truncate">{a.projectName}</p>
@@ -624,7 +624,7 @@ export default function CompliancePage() {
               {showArchivedDocs && (
                 <div className="space-y-2">
                   {[...archivedDocs].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(doc => (
-                    <div key={doc.id} className="flex flex-row items-center justify-between gap-4 px-4 py-3 rounded-xl border bg-muted/40 border-border opacity-80">
+                    <div key={doc.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 px-4 py-3 rounded-xl border bg-muted/40 border-border opacity-80">
                       <div className="min-w-0 flex-1">
                         <p className="font-semibold text-sm truncate">{doc.name}</p>
                         <p className="text-xs text-muted-foreground capitalize truncate">{doc.type.replace(/_/g, " ")} · v{doc.version} · {doc.projectName}</p>

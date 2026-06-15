@@ -363,7 +363,7 @@ export default function SiteBoard() {
         <div className="bg-gradient-to-r from-orange-700 to-orange-500 text-white px-4 py-8">
           <div className="max-w-2xl mx-auto">
             <p className="text-orange-200 text-sm font-medium uppercase tracking-wider mb-1">SiteSort — Site Board</p>
-            <h1 className="text-3xl font-extrabold leading-tight">{project.name}</h1>
+            <h1 className="text-2xl sm:text-3xl font-extrabold leading-tight">{project.name}</h1>
             <div className="flex items-center gap-2 mt-2 text-orange-100">
               <MapPin className="w-4 h-4 shrink-0" />
               <span className="text-sm">{project.address}</span>
@@ -403,7 +403,7 @@ export default function SiteBoard() {
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
               <p className="text-orange-200 text-sm font-medium uppercase tracking-wider mb-1">SiteSort — Site Board</p>
-              <h1 className="text-3xl font-extrabold leading-tight">{project.name}</h1>
+              <h1 className="text-2xl sm:text-3xl font-extrabold leading-tight">{project.name}</h1>
               <div className="flex items-center gap-2 mt-2 text-orange-100">
                 <MapPin className="w-4 h-4 shrink-0" />
                 <span className="text-sm">{project.address}</span>
@@ -422,7 +422,7 @@ export default function SiteBoard() {
         </div>
 
         {/* Key info strip */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <div className="bg-white rounded-xl shadow-sm border p-4">
             <div className="flex items-center gap-2 text-gray-500 text-xs mb-1">
               <Calendar className="w-3.5 h-3.5" /> Start Date

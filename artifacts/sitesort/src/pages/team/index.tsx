@@ -204,7 +204,7 @@ export default function TeamPage() {
 
   return (
     <SidebarLayout>
-      <div className="flex flex-row items-center justify-between gap-4 mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-bold">In House Team</h1>
           <p className="text-muted-foreground">All staff and users in your company account.</p>
@@ -232,7 +232,7 @@ export default function TeamPage() {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[...Array(6)].map((_, i) => <div key={i} className="h-36 bg-muted rounded-xl animate-pulse" />)}
         </div>
       ) : filtered.length === 0 ? (
@@ -252,7 +252,7 @@ export default function TeamPage() {
                   <h2 className="font-bold text-sm uppercase tracking-wide text-muted-foreground capitalize">{role.replace(/_/g, " ")}s</h2>
                   <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{group.length}</span>
                 </div>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {group.map(m => {
                     const cleanPhone = m.phone?.replace(/\D/g, "") ?? null;
                     return (

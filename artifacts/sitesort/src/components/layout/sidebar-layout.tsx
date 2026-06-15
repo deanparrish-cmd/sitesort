@@ -7,6 +7,8 @@ import {
   ShieldCheck,
   Settings,
   Receipt,
+  Menu,
+  X,
   LogOut,
   Bell,
   QrCode,
@@ -47,6 +49,7 @@ function authHeaders(): Record<string, string> {
 
 export function SidebarLayout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
   const { data: user, isLoading, error } = useGetMe();
   const logoutMutation = useLogout();
   const { toast } = useToast();
@@ -161,10 +164,36 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-row">
+    <div className="min-h-screen bg-background flex flex-col md:flex-row">
+      {/* Mobile Header */}
+      <div className="md:hidden flex items-center justify-between p-4 border-b bg-card">
+        <div className="flex items-center gap-2">
+          <Link href="/dashboard">
+            <img src={`${import.meta.env.BASE_URL}images/logo.png?v=5`} alt="SiteSort" className="w-auto shrink-0 object-contain" style={{ height: '72px' }} />
+          </Link>
+        </div>
+        <div className="flex items-center gap-3">
+          <Link href="/notifications" className="relative p-2 text-muted-foreground hover:text-foreground">
+            <Bell className="w-6 h-6" />
+            {unreadNotifCount > 0 && (
+              <span className="absolute top-1 right-1 min-w-[1rem] h-4 px-0.5 bg-destructive text-white rounded-full text-[9px] font-bold flex items-center justify-center border border-card">
+                {unreadNotifCount > 9 ? "9+" : unreadNotifCount}
+              </span>
+            )}
+          </Link>
+          <Avatar src={(user as any)?.avatarUrl} name={user?.name} size="sm" />
+          <button onClick={() => setIsMobileOpen(!isMobileOpen)} className="p-2 text-primary">
+            {isMobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
+        </div>
+      </div>
+
       {/* Sidebar */}
-      <div className="w-72 bg-card border-r flex flex-col shrink-0">
-        <div className="p-6 flex items-center gap-3">
+      <div className={cn(
+        "fixed inset-y-0 left-0 z-40 w-72 bg-card border-r flex flex-col transition-transform duration-300 ease-in-out md:translate-x-0 md:static md:w-64 lg:w-72",
+        isMobileOpen ? "translate-x-0" : "-translate-x-full"
+      )}>
+        <div className="p-6 hidden md:flex items-center gap-3">
           <Link href="/dashboard">
             <img src={`${import.meta.env.BASE_URL}images/logo.png?v=5`} alt="SiteSort" className="h-[6.25rem] w-auto" />
           </Link>
@@ -184,6 +213,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                       ? "bg-primary text-primary-foreground shadow-md shadow-primary/10"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   )}
+                  onClick={() => setIsMobileOpen(false)}
                 >
                   <item.icon className={cn("w-5 h-5", isActive ? "text-primary-foreground" : "text-muted-foreground")} />
                   <span className="flex-1">{item.name}</span>
@@ -213,6 +243,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                       ? "bg-primary text-primary-foreground shadow-md shadow-primary/10"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   )}
+                  onClick={() => setIsMobileOpen(false)}
                 >
                   <item.icon className={cn("w-5 h-5", isActive ? "text-primary-foreground" : "text-muted-foreground")} />
                   <span className="flex-1">{item.name}</span>
@@ -248,7 +279,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 max-h-screen overflow-y-auto">
-        <header className="flex h-16 items-center justify-end gap-2 px-8 border-b bg-card/50 backdrop-blur-md sticky top-0 z-30">
+        <header className="hidden md:flex h-16 items-center justify-end gap-2 px-8 border-b bg-card/50 backdrop-blur-md sticky top-0 z-30">
           <Link href="/notifications" className="relative p-2 text-muted-foreground hover:text-primary transition-colors">
             <Bell className="w-5 h-5" />
             {unreadNotifCount > 0 && (
@@ -301,12 +332,20 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
             </button>
           </div>
         )}
-        <main className="flex-1 p-8">
+        <main className="flex-1 p-4 md:p-8">
           <div className="max-w-7xl mx-auto slide-up">
             {children}
           </div>
         </main>
       </div>
+
+      {/* Mobile backdrop */}
+      {isMobileOpen && (
+        <div
+          className="fixed inset-0 bg-primary/20 backdrop-blur-sm z-30 md:hidden"
+          onClick={() => setIsMobileOpen(false)}
+        />
+      )}
 
     </div>
   );
