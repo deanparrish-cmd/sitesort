@@ -275,3 +275,27 @@ See CLAUDE_ARCHIVE.md for full detail.
 - **GitHub push is automatic** via PostToolUse hook
 - **Photo status backfill**: `UPDATE photos SET status='open' WHERE category IN ('snag','safety_concern') AND status IS NULL`
 - **API server rebuild**: `pnpm --filter @workspace/api-server run build` after any backend change
+
+---
+
+## End-of-session notes — 2026-06-15 (photo backfill, mobile feature parity)
+
+### Tasks completed today
+
+1. **Photo status backfill** — ran `UPDATE photos SET status='open' WHERE category IN ('snag','safety_concern') AND status IS NULL`; returned `UPDATE 0` (all existing photos already had status set from upload-time code, nothing needed backfilling).
+
+2. **Mobile/tablet feature parity audit** (`artifacts/sitesort/src/pages/admin/index.tsx`, `artifacts/sitesort/src/pages/invoices/index.tsx`):
+   - **Admin page — hidden table columns**: removed `hidden sm/md/lg:table-cell` from all admin table columns (Activity sub-detail, Feature usage bar, Users email + last-active, Companies plan/status/user-count/created). Tables already had `overflow-x-auto` wrappers so data is now accessible by horizontal scroll on mobile/tablet.
+   - **Admin page — hidden header items**: removed `hidden sm:block` from "SiteSort" label, separator, last-updated timestamp, and "← App" button — all now visible on all screen sizes.
+   - **Admin progress bars**: removed `hidden md:block` from sub-detail text in `ProgressBar` component.
+   - **Invoices — Description column**: removed `hidden lg:table-cell` from the Description column header and cell — now visible on tablet too.
+   - All other responsive layout (hamburger sidebar, mobile card views, stacked grids, two-panel overlays) was confirmed already feature-complete and left unchanged. Subcontractors mobile bar already had all action buttons (FolderPlus, UserPlus, edit, share, contact actions).
+
+### Key files modified
+- `artifacts/sitesort/src/pages/admin/index.tsx` — all hidden table columns and header nav items now always visible
+- `artifacts/sitesort/src/pages/invoices/index.tsx` — Description column always visible
+
+### Notes for next session
+- **GitHub push is automatic** via PostToolUse hook
+- **API server rebuild**: `pnpm --filter @workspace/api-server run build` after any backend change
+- Photo backfill is complete — no longer pending
