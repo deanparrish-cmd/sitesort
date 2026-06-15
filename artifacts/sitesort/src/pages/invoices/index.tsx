@@ -490,7 +490,7 @@ export default function InvoicesPage() {
                   <th className="px-5 py-3 w-12" />
                   <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Type</th>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Counterparty</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden lg:table-cell">Description</th>
+                  <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Description</th>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Amount</th>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Due</th>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
@@ -543,7 +543,7 @@ export default function InvoicesPage() {
                         <p className="font-medium text-foreground truncate">{inv.counterpartyName}</p>
                         {inv.reference && <p className="text-xs text-muted-foreground truncate">{inv.reference}</p>}
                       </td>
-                      <td className="px-5 py-3.5 text-muted-foreground hidden lg:table-cell max-w-xs truncate">{inv.description}</td>
+                      <td className="px-5 py-3.5 text-muted-foreground max-w-xs truncate">{inv.description}</td>
                       <td className="px-5 py-3.5 font-semibold tabular-nums">{fmtAmount(inv.currency, inv.amount)}</td>
                       <td className="px-5 py-3.5 text-muted-foreground whitespace-nowrap">{fmtDate(inv.dueDate)}</td>
                       <td className="px-5 py-3.5"><StatusBadge invoice={inv} /></td>
