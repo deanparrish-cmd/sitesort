@@ -117,7 +117,7 @@ export default function IssuesPage() {
   return (
     <SidebarLayout>
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+      <div className="flex flex-row items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3">
             <AlertTriangle className="w-7 h-7 text-amber-500" /> Site Issues
@@ -143,7 +143,7 @@ export default function IssuesPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+      <div className="flex flex-row gap-3 mb-6">
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
           <Input placeholder="Search issues…" className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
@@ -278,33 +278,33 @@ export default function IssuesPage() {
                   {caps.canManageProjects && viewingIssue.status !== "resolved" && (
                     <button
                       onClick={() => updateStatus(viewingIssue.id, "resolved")}
-                      className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                      className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
                     >
-                      <CheckCircle2 className="w-3.5 h-3.5" /><span className="hidden sm:inline">Mark resolved</span>
+                      <CheckCircle2 className="w-3.5 h-3.5" />Mark resolved
                     </button>
                   )}
                   {caps.canManageProjects && viewingIssue.status === "resolved" && (
                     <button
                       onClick={() => updateStatus(viewingIssue.id, "open")}
-                      className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border border-border bg-muted text-muted-foreground hover:bg-muted/70 transition-colors"
+                      className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-border bg-muted text-muted-foreground hover:bg-muted/70 transition-colors"
                     >
-                      <Clock className="w-3.5 h-3.5" /><span className="hidden sm:inline">Re-open</span>
+                      <Clock className="w-3.5 h-3.5" />Re-open
                     </button>
                   )}
                   {photoUrl && (
                     <button
                       onClick={() => window.open(photoUrl, "_blank", "noopener,noreferrer")}
-                      className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border bg-background hover:bg-muted transition-colors"
+                      className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border bg-background hover:bg-muted transition-colors"
                     >
-                      <ExternalLink className="w-3.5 h-3.5" /><span className="hidden sm:inline">Open</span>
+                      <ExternalLink className="w-3.5 h-3.5" />Open
                     </button>
                   )}
                   {photoUrl && (
                     <button
                       onClick={() => setShareItem({ id: viewingIssue.id, name: `${CATEGORY_LABEL[viewingIssue.category]} ${viewingIssue.referenceNumber}`, fileUrl: viewingIssue.photoUrl!, projectId: viewingIssue.projectId, additionalInfo: issueDetails(viewingIssue) })}
-                      className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border bg-background hover:bg-muted transition-colors"
+                      className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border bg-background hover:bg-muted transition-colors"
                     >
-                      <Share2 className="w-3.5 h-3.5" /><span className="hidden sm:inline">Share</span>
+                      <Share2 className="w-3.5 h-3.5" />Share
                     </button>
                   )}
                   <button onClick={() => setViewingIssue(null)} className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground">
@@ -314,9 +314,9 @@ export default function IssuesPage() {
               </div>
 
               {/* Body */}
-              <div className="flex flex-col sm:flex-row flex-1 min-h-0 overflow-hidden">
+              <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
                 {/* Details */}
-                <div className="sm:w-64 flex-shrink-0 border-b sm:border-b-0 sm:border-r p-5 overflow-y-auto space-y-4">
+                <div className="w-64 flex-shrink-0 border-r p-5 overflow-y-auto space-y-4">
                   {viewingIssue.description && (
                     <div>
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Description</p>

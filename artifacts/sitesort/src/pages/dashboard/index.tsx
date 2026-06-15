@@ -341,14 +341,14 @@ export default function Dashboard() {
   return (
     <SidebarLayout>
       {/* Header */}
-      <div className="mb-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+      <div className="mb-6 flex flex-row items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">
             {greeting}{userName ? `, ${userName}` : ""}!
           </h1>
           <p className="text-muted-foreground mt-1">{dateLabel}</p>
         </div>
-        <div className="flex flex-wrap gap-2 sm:flex-nowrap">
+        <div className="flex gap-2">
           {caps.canManageProjects && (
             <Button variant="accent" size="sm" onClick={() => navigate("/projects?new=1")}>
               <Plus className="w-4 h-4 mr-1.5" /> New Project
@@ -400,7 +400,7 @@ export default function Dashboard() {
             <div className="w-full bg-muted rounded-full h-1.5 mb-4 overflow-hidden">
               <div className="h-1.5 rounded-full bg-primary transition-all duration-500" style={{ width: `${(doneCount / steps.length) * 100}%` }} />
             </div>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               {steps.map(step => (
                 <div key={step.key} className={cn("flex gap-3 rounded-lg p-3 border transition-colors", step.done ? "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800" : "bg-card border-border")}>
                   <div className="shrink-0 mt-0.5">
@@ -425,7 +425,7 @@ export default function Dashboard() {
       })()}
 
       {/* Stats row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-4 gap-4 mb-6">
         <StatCard
           icon={<Building2 className="w-5 h-5 text-primary" />}
           label="Active Projects"
@@ -465,7 +465,7 @@ export default function Dashboard() {
           <h2 className="flex items-center gap-2 text-sm font-semibold text-orange-800 mb-3">
             <Zap className="w-4 h-4" /> Needs Attention
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             {attentionItems.map((item, i) => (
               <Link key={i} href={item.href}>
                 <div className={cn(
@@ -485,9 +485,9 @@ export default function Dashboard() {
       )}
 
       {/* Main: Projects + Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+      <div className="grid grid-cols-3 gap-6 mb-6">
         {/* Active projects */}
-        <div className="lg:col-span-2 space-y-4">
+        <div className="col-span-2 space-y-4">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-xl font-bold">Active Projects</h2>
             <div className="relative flex-1 max-w-xs">

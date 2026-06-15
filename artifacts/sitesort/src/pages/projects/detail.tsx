@@ -908,13 +908,13 @@ tr:last-child td{border-bottom:none}
   return (
     <SidebarLayout>
       {/* Project Header */}
-      <div className="bg-card border rounded-2xl p-6 md:p-8 shadow-sm mb-8 relative overflow-hidden">
+      <div className="bg-card border rounded-2xl p-8 shadow-sm mb-8 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3"></div>
         <div className="relative z-10">
           <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <h1 className="text-3xl md:text-4xl font-display font-extrabold text-primary">{project.name}</h1>
+                <h1 className="text-4xl font-display font-extrabold text-primary">{project.name}</h1>
                 <Badge variant={project.status === 'active' ? 'success' : 'secondary'} className="text-sm">
                   {project.status.toUpperCase()}
                 </Badge>
@@ -934,7 +934,7 @@ tr:last-child td{border-bottom:none}
             </div>
           </div>
           
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8 pt-6 border-t border-border/50">
+          <div className="grid grid-cols-4 gap-4 mt-8 pt-6 border-t border-border/50">
             <div>
               <p className="text-sm text-muted-foreground font-medium mb-1">Progress</p>
               <div className="flex items-center gap-2">
@@ -971,7 +971,7 @@ tr:last-child td{border-bottom:none}
               { value: "permits", label: "Compliance" },
             ];
           })().map(tab => (
-            <TabsTrigger key={tab.value} value={tab.value} className="flex-1 sm:flex-none justify-center rounded-lg py-2 px-3 sm:px-4 text-sm whitespace-nowrap">
+            <TabsTrigger key={tab.value} value={tab.value} className="flex-none justify-center rounded-lg py-2 px-4 text-sm whitespace-nowrap">
               {tab.label}
             </TabsTrigger>
           ))}
@@ -983,7 +983,7 @@ tr:last-child td{border-bottom:none}
             { value: "checkins", label: `Check-ins${checkins.length > 0 ? ` (${checkins.length})` : ""}` },
             ...(caps.isInternal ? [{ value: "reports", label: "Daily Reports" }] : []),
           ].map(tab => (
-            <TabsTrigger key={tab.value} value={tab.value} className="flex-1 sm:flex-none justify-center rounded-lg py-2 px-3 sm:px-4 text-sm whitespace-nowrap">
+            <TabsTrigger key={tab.value} value={tab.value} className="flex-none justify-center rounded-lg py-2 px-4 text-sm whitespace-nowrap">
               {tab.label}
             </TabsTrigger>
           ))}
@@ -1087,7 +1087,7 @@ tr:last-child td{border-bottom:none}
                 </CardContent>
               </Card>
             )}
-            <div className="grid md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-2 gap-6">
               <Card>
                 <CardContent className="pt-6">
                   <h3 className="font-bold text-lg mb-4">Recent Activity</h3>
@@ -1354,7 +1354,7 @@ tr:last-child td{border-bottom:none}
 
           <div className="bg-card border rounded-xl shadow-sm overflow-hidden">
             {/* Mobile card list */}
-            <div className="block lg:hidden divide-y">
+            <div className="hidden divide-y">
               {(documents ?? []).filter(d =>
                 (selectedDocType === 'all' || d.type === selectedDocType) &&
                 (selectedStatus === 'all' || d.status === selectedStatus) &&
@@ -1433,7 +1433,7 @@ tr:last-child td{border-bottom:none}
               )}
             </div>
             {/* Desktop table */}
-            <div className="hidden lg:block">
+            <div className="block">
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-muted-foreground uppercase bg-muted/50 border-b">
                 <tr>
@@ -1598,7 +1598,7 @@ tr:last-child td{border-bottom:none}
                         <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{tradeMembers.length} {tradeMembers.length === 1 ? "person" : "people"}</span>
                       </button>
                       {open && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 pt-0 border-t">
+                        <div className="grid grid-cols-2 gap-4 p-4 pt-0 border-t">
                           {tradeMembers.map((member: any) => {
                 const isSubcontractor = !!member.subcontractorId;
                 const complianceBadge = member.complianceStatus === "ok"
@@ -1894,7 +1894,7 @@ tr:last-child td{border-bottom:none}
                         onUploaded={f => setPhotoUploadUrl(f.url)}
                         onCleared={() => setPhotoUploadUrl(null)}
                       />
-                      <div className="grid sm:grid-cols-2 gap-3">
+                      <div className="grid grid-cols-2 gap-3">
                         <div>
                           <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Description (optional)</label>
                           <Textarea value={photoNote} onChange={e => setPhotoNote(e.target.value)} placeholder="What does this photo show?" rows={2} />
@@ -1928,7 +1928,7 @@ tr:last-child td{border-bottom:none}
                   </Card>
                 </div>
                 {/* Filters */}
-                <div className="flex flex-col sm:flex-row gap-3 mb-5">
+                <div className="flex flex-row gap-3 mb-5">
                   <div className="relative flex-1 max-w-xs">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                     <Input placeholder="Search issues…" className="pl-9" value={issueSearch} onChange={e => setIssueSearch(e.target.value)} />
@@ -2055,7 +2055,7 @@ tr:last-child td{border-bottom:none}
               const days = daysLeft(p.expiryDate);
               const statusLabel = days < 0 ? "Expired" : days === 0 ? "Expires today" : days <= 7 ? `${days}d left` : days <= 30 ? `${days}d left` : "Active";
               return (
-                <div key={p.id} className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-4 py-3 rounded-xl border ${accent}`}>
+                <div key={p.id} className={`flex flex-row items-center gap-3 px-4 py-3 rounded-xl border ${accent}`}>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-semibold text-sm">{p.type}</p>
@@ -2214,7 +2214,7 @@ tr:last-child td{border-bottom:none}
                             const docUrl = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
                             const isSuperseded = doc.status === "superseded";
                             return (
-                              <div key={doc.id} className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-4 py-3 rounded-xl border ${isSuperseded ? "opacity-60 bg-muted/20" : "bg-card"}`}>
+                              <div key={doc.id} className={`flex flex-row items-center gap-3 px-4 py-3 rounded-xl border ${isSuperseded ? "opacity-60 bg-muted/20" : "bg-card"}`}>
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <FileText className="w-4 h-4 text-primary shrink-0" />
@@ -2781,7 +2781,7 @@ tr:last-child td{border-bottom:none}
               <p className="text-muted-foreground text-sm mt-1">Workers can check in by scanning the site board QR code.</p>
             </Card>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-4 gap-4">
               {checkins.map(ci => {
                 const photoSrc = ci.photoUrl.startsWith("/uploads/") ? ci.photoUrl.replace("/uploads/", "/api/uploads/") : ci.photoUrl;
                 const dt = new Date(ci.checkedInAt);
@@ -2888,7 +2888,7 @@ tr:last-child td{border-bottom:none}
               {d.sitePhotos.length > 0 && (
                 <div>
                   <h4 className="flex items-center gap-2 font-semibold text-sm mb-2"><Camera className="w-4 h-4 text-primary" />Site photos ({d.sitePhotos.length})</h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-3 gap-3">
                     {d.sitePhotos.map(p => (
                       <div key={p.id} className="rounded-lg border overflow-hidden">
                         {p.photoUrl ? (
@@ -3272,7 +3272,7 @@ tr:last-child td{border-bottom:none}
             <p className="text-sm text-foreground whitespace-pre-wrap">{openingNote.body}</p>
           </div>
         )}
-        <DialogFooter className="flex items-center justify-between gap-2 sm:justify-between">
+        <DialogFooter className="flex items-center justify-between gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -3540,25 +3540,25 @@ tr:last-child td{border-bottom:none}
                   {isIssue && caps.canManageProjects && viewingPhoto.status !== "resolved" && (
                     <button
                       onClick={() => updatePhotoStatus(viewingPhoto.id, "resolved")}
-                      className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                      className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
                     >
-                      <CheckCircle2 className="w-3.5 h-3.5" /><span className="hidden sm:inline">Mark resolved</span>
+                      <CheckCircle2 className="w-3.5 h-3.5" />Mark resolved
                     </button>
                   )}
                   {isIssue && caps.canManageProjects && viewingPhoto.status === "resolved" && (
                     <button
                       onClick={() => updatePhotoStatus(viewingPhoto.id, "open")}
-                      className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border border-border bg-muted text-muted-foreground hover:bg-muted/70 transition-colors"
+                      className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-border bg-muted text-muted-foreground hover:bg-muted/70 transition-colors"
                     >
-                      <Clock className="w-3.5 h-3.5" /><span className="hidden sm:inline">Re-open</span>
+                      <Clock className="w-3.5 h-3.5" />Re-open
                     </button>
                   )}
                   {photoUrl && (
                     <button
                       onClick={() => window.open(photoUrl, "_blank", "noopener,noreferrer")}
-                      className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border bg-background hover:bg-muted transition-colors"
+                      className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border bg-background hover:bg-muted transition-colors"
                     >
-                      <ExternalLink className="w-3.5 h-3.5" /><span className="hidden sm:inline">Open</span>
+                      <ExternalLink className="w-3.5 h-3.5" />Open
                     </button>
                   )}
                   {photoUrl && (
@@ -3578,9 +3578,9 @@ tr:last-child td{border-bottom:none}
                         ].filter(Boolean).join("\n") : undefined;
                         setSharingDoc({ type: "photo", id: viewingPhoto.id, name: `Photo ${viewingPhoto.referenceNumber}`, version: null, fileUrl: viewingPhoto.photoUrl!, additionalInfo: info });
                       }}
-                      className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border bg-background hover:bg-muted transition-colors"
+                      className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border bg-background hover:bg-muted transition-colors"
                     >
-                      <Share2 className="w-3.5 h-3.5" /><span className="hidden sm:inline">Share</span>
+                      <Share2 className="w-3.5 h-3.5" />Share
                     </button>
                   )}
                   <button onClick={() => setViewingPhoto(null)} className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground">
@@ -3590,9 +3590,9 @@ tr:last-child td{border-bottom:none}
               </div>
 
               {/* Body */}
-              <div className="flex flex-col sm:flex-row flex-1 min-h-0 overflow-hidden">
+              <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
                 {/* Details sidebar */}
-                <div className="sm:w-64 flex-shrink-0 border-b sm:border-b-0 sm:border-r p-5 overflow-y-auto space-y-4">
+                <div className="w-64 flex-shrink-0 border-r p-5 overflow-y-auto space-y-4">
                   {viewingPhoto.description && (
                     <div>
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Description</p>

@@ -239,7 +239,7 @@ function FunnelStep({ label, count, total, sub }: { label: string; count: number
         </div>
       </div>
       <div className="w-14 text-gray-400 text-xs flex-shrink-0">{pct}%</div>
-      {sub && <div className="text-gray-600 text-xs flex-shrink-0 hidden md:block">{sub}</div>}
+      {sub && <div className="text-gray-600 text-xs flex-shrink-0">{sub}</div>}
     </div>
   );
 }
@@ -356,19 +356,19 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-gray-950 text-gray-100">
       {/* ── Header ── */}
       <header className="border-b border-gray-800 bg-gray-900/80 backdrop-blur sticky top-0 z-40">
-        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+        <div className="max-w-screen-2xl mx-auto px-6 h-14 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <button onClick={() => setLocation("/dashboard")} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
               <div className="w-7 h-7 bg-gradient-to-br from-orange-700 to-orange-500 rounded-lg flex items-center justify-center">
                 <Building2 className="w-4 h-4 text-white" />
               </div>
-              <span className="text-white font-bold text-sm hidden sm:block">SiteSort</span>
+              <span className="text-white font-bold text-sm block">SiteSort</span>
             </button>
-            <span className="text-gray-600 text-sm hidden sm:block">/</span>
+            <span className="text-gray-600 text-sm block">/</span>
             <span className="text-orange-400 font-semibold text-sm">Admin</span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-gray-500 text-xs hidden sm:block">
+            <span className="text-gray-500 text-xs block">
               {dataUpdatedAt ? `Updated ${timeAgo(new Date(dataUpdatedAt).toISOString())}` : "Loading…"}
             </span>
             <button
@@ -379,14 +379,14 @@ export default function AdminDashboard() {
               <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
               {isRefreshing ? "Refreshing…" : "Refresh"}
             </button>
-            <button onClick={() => setLocation("/dashboard")} className="text-gray-500 hover:text-white text-xs transition-colors hidden sm:block">
+            <button onClick={() => setLocation("/dashboard")} className="text-gray-500 hover:text-white text-xs transition-colors block">
               ← App
             </button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-8 space-y-10">
+      <main className="max-w-screen-2xl mx-auto px-6 py-8 space-y-10">
 
         {/* ── Alerts ── */}
         <div className="flex flex-wrap gap-2">
@@ -405,7 +405,7 @@ export default function AdminDashboard() {
         {/* ── User Metrics ── */}
         <section>
           <SectionTitle icon={Users} title="User Metrics" sub="Platform-wide user activity" />
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-4 gap-4">
             <BigStat label="Total Users" value={s?.userMetrics?.totalUsers ?? 0} sub={`across ${fmt(s?.userMetrics?.totalCompanies ?? 0)} companies`} loading={loading} accent />
             <BigStat label="New This Week" value={s?.userMetrics?.newThisWeek ?? 0} trend={s?.userMetrics?.newThisWeekPct} sub={`${fmt(s?.userMetrics?.newLastWeek ?? 0)} last week`} loading={loading} />
             <BigStat label="Active This Week" value={s?.userMetrics?.activeThisWeek ?? 0} sub="Logged in ≥1×" loading={loading} />
@@ -418,7 +418,7 @@ export default function AdminDashboard() {
           <SectionTitle icon={Activity} title="Primary Actions" sub="Core platform activity across all features" />
 
           {/* Total summary */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-4 gap-4 mb-6">
             <BigStat label="Total Actions (All Time)" value={s?.primaryActions?.total?.allTime ?? 0} loading={loading} accent />
             <BigStat label="Actions This Week" value={s?.primaryActions?.total?.thisWeek ?? 0} trend={s?.primaryActions?.total?.pctChange} sub={`${fmt(s?.primaryActions?.total?.lastWeek ?? 0)} last week`} loading={loading} />
             <BigStat label="Actions Today" value={s?.primaryActions?.total?.today ?? 0} loading={loading} />
@@ -426,7 +426,7 @@ export default function AdminDashboard() {
           </div>
 
           {/* Per-feature breakdown */}
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+          <div className="grid grid-cols-6 gap-3">
             {([
               ["Documents Uploaded", "documents"],
               ["Sign-offs", "signOffs"],
@@ -469,7 +469,7 @@ export default function AdminDashboard() {
                     <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-4 py-3">Type</th>
                     <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-4 py-3">User</th>
                     <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-4 py-3">Detail</th>
-                    <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-4 py-3 hidden md:table-cell">Sub-detail</th>
+                    <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-4 py-3 table-cell">Sub-detail</th>
                     <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-4 py-3">When</th>
                   </tr>
                 </thead>
@@ -480,7 +480,7 @@ export default function AdminDashboard() {
                           <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
                           <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
                           <td className="px-4 py-3"><Skeleton className="h-4 w-32" /></td>
-                          <td className="px-4 py-3 hidden md:table-cell"><Skeleton className="h-4 w-20" /></td>
+                          <td className="px-4 py-3 table-cell"><Skeleton className="h-4 w-20" /></td>
                           <td className="px-4 py-3"><Skeleton className="h-4 w-16" /></td>
                         </tr>
                       ))
@@ -492,7 +492,7 @@ export default function AdminDashboard() {
                           <td className="px-4 py-3"><ActivityBadge type={a.type} /></td>
                           <td className="px-4 py-3 text-gray-300 font-medium">{a.userName}</td>
                           <td className="px-4 py-3 text-gray-400 max-w-[180px] truncate">{a.detail}</td>
-                          <td className="px-4 py-3 text-gray-600 text-xs hidden md:table-cell max-w-[140px] truncate">{a.subDetail}</td>
+                          <td className="px-4 py-3 text-gray-600 text-xs table-cell max-w-[140px] truncate">{a.subDetail}</td>
                           <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{timeAgo(a.ts)}</td>
                         </tr>
                       ))
@@ -506,7 +506,7 @@ export default function AdminDashboard() {
         {/* ── Secondary Actions ── */}
         <section>
           <SectionTitle icon={Bell} title="Secondary Actions" sub="Supporting platform activity" />
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             {([
               ["Notifications Sent", "notifications"],
               ["Projects Created", "projects"],
@@ -537,7 +537,7 @@ export default function AdminDashboard() {
         {/* ── Revenue / Subscription ── */}
         <section>
           <SectionTitle icon={TrendingUp} title="Revenue & Subscriptions" sub="No payment processor connected — subscription tier data shown" />
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+          <div className="grid grid-cols-4 gap-4 mb-4">
             <BigStat label="Total Companies" value={s?.revenue?.totalCompanies ?? 0} loading={loading} />
             <BigStat label="Paid Plans" value={s?.revenue?.paidTiers ?? 0} sub="Pro / Enterprise" loading={loading} accent />
             <BigStat label="Free Tier" value={(s?.revenue?.byTier?.free ?? 0)} sub="companies" loading={loading} />
@@ -560,7 +560,7 @@ export default function AdminDashboard() {
         {/* ── Retention ── */}
         <section>
           <SectionTitle icon={UserCheck} title="Retention & Engagement" sub="How well users stick around" />
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div className="grid grid-cols-3 gap-4 mb-4">
             <Card>
               <p className="text-gray-400 text-xs font-medium uppercase tracking-wide mb-2">Day 1 Retention</p>
               {loading ? <Skeleton className="h-14 w-24" /> : (
@@ -669,7 +669,7 @@ export default function AdminDashboard() {
                 <tr className="border-b border-gray-800 bg-gray-900/60">
                   <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3">Feature</th>
                   <th className="text-right text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3">Total Uses</th>
-                  <th className="px-5 py-3 hidden sm:table-cell">
+                  <th className="px-5 py-3 table-cell">
                     <span className="text-gray-500 text-xs font-medium uppercase tracking-wide">Usage bar</span>
                   </th>
                 </tr>
@@ -677,7 +677,7 @@ export default function AdminDashboard() {
               <tbody className="divide-y divide-gray-800/60">
                 {loading
                   ? Array.from({ length: 6 }).map((_, i) => (
-                      <tr key={i}><td className="px-5 py-3"><Skeleton className="h-4 w-32" /></td><td className="px-5 py-3 text-right"><Skeleton className="h-4 w-10 ml-auto" /></td><td className="px-5 py-3 hidden sm:table-cell"><Skeleton className="h-3 w-full" /></td></tr>
+                      <tr key={i}><td className="px-5 py-3"><Skeleton className="h-4 w-32" /></td><td className="px-5 py-3 text-right"><Skeleton className="h-4 w-10 ml-auto" /></td><td className="px-5 py-3 table-cell"><Skeleton className="h-3 w-full" /></td></tr>
                     ))
                   : (() => {
                       const maxCount = Math.max(1, ...((s?.featureUsage ?? []) as any[]).map((f: any) => f.count));
@@ -685,7 +685,7 @@ export default function AdminDashboard() {
                         <tr key={f.name} className="hover:bg-gray-800/30 transition-colors">
                           <td className="px-5 py-3 text-gray-200 font-medium">{f.name}</td>
                           <td className="px-5 py-3 text-right text-white font-semibold">{fmt(f.count)}</td>
-                          <td className="px-5 py-3 hidden sm:table-cell">
+                          <td className="px-5 py-3 table-cell">
                             <div className="bg-gray-800 rounded-full h-2 overflow-hidden">
                               <div className="h-full bg-gradient-to-r from-orange-700 to-orange-500 rounded-full" style={{ width: `${Math.round((f.count / maxCount) * 100)}%` }} />
                             </div>
@@ -704,11 +704,11 @@ export default function AdminDashboard() {
         <section>
           <SectionTitle icon={Zap} title="Feature Adoption Speed" sub="Average days from signup to first use of each feature" />
           {adoptionLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-4 gap-4">
               {[...Array(8)].map((_, i) => <Skeleton key={i} className="h-28 w-full" />)}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-4 gap-4">
               {(featureAdoption ?? []).map((f: { feature: string; description: string; usersWhoUsed: number; avgDays: number | null }) => (
                 <Card key={f.feature}>
                   <p className="text-gray-400 text-xs font-medium uppercase tracking-wide mb-1 truncate">{f.feature}</p>
@@ -745,16 +745,16 @@ export default function AdminDashboard() {
                 <tr className="border-b border-gray-800 bg-gray-900/60">
                   <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3">#</th>
                   <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3">Name</th>
-                  <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 hidden sm:table-cell">Email</th>
+                  <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 table-cell">Email</th>
                   <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3">Joined</th>
                   <th className="text-right text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3">Actions</th>
-                  <th className="text-right text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 hidden md:table-cell">Last Active</th>
+                  <th className="text-right text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 table-cell">Last Active</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-800/60">
                 {loading
                   ? Array.from({ length: 5 }).map((_, i) => (
-                      <tr key={i}><td className="px-5 py-3"><Skeleton className="h-4 w-4" /></td><td className="px-5 py-3"><Skeleton className="h-4 w-28" /></td><td className="px-5 py-3 hidden sm:table-cell"><Skeleton className="h-4 w-36" /></td><td className="px-5 py-3"><Skeleton className="h-4 w-20" /></td><td className="px-5 py-3 text-right"><Skeleton className="h-4 w-8 ml-auto" /></td><td className="px-5 py-3 hidden md:table-cell"><Skeleton className="h-4 w-16 ml-auto" /></td></tr>
+                      <tr key={i}><td className="px-5 py-3"><Skeleton className="h-4 w-4" /></td><td className="px-5 py-3"><Skeleton className="h-4 w-28" /></td><td className="px-5 py-3 table-cell"><Skeleton className="h-4 w-36" /></td><td className="px-5 py-3"><Skeleton className="h-4 w-20" /></td><td className="px-5 py-3 text-right"><Skeleton className="h-4 w-8 ml-auto" /></td><td className="px-5 py-3 table-cell"><Skeleton className="h-4 w-16 ml-auto" /></td></tr>
                     ))
                   : (s?.topUsers ?? []).length === 0
                     ? <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-500">No user activity data yet</td></tr>
@@ -762,10 +762,10 @@ export default function AdminDashboard() {
                         <tr key={u.id} className="hover:bg-gray-800/30 transition-colors">
                           <td className="px-5 py-3 text-gray-500 font-mono text-xs">{i + 1}</td>
                           <td className="px-5 py-3 text-gray-200 font-medium">{u.name}</td>
-                          <td className="px-5 py-3 text-gray-500 text-xs hidden sm:table-cell">{u.email}</td>
+                          <td className="px-5 py-3 text-gray-500 text-xs table-cell">{u.email}</td>
                           <td className="px-5 py-3 text-gray-500 text-xs">{fmtDate(u.signupDate)}</td>
                           <td className="px-5 py-3 text-right text-orange-400 font-bold">{fmt(u.totalActions)}</td>
-                          <td className="px-5 py-3 text-right text-gray-500 text-xs hidden md:table-cell">{timeAgo(u.lastActive)}</td>
+                          <td className="px-5 py-3 text-right text-gray-500 text-xs table-cell">{timeAgo(u.lastActive)}</td>
                         </tr>
                       ))
                 }
@@ -778,7 +778,7 @@ export default function AdminDashboard() {
         {/* ── Charts ── */}
         <section>
           <SectionTitle icon={BarChart2} title="Charts & Trends" sub="Last 30 days and activity patterns" />
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <div className="grid grid-cols-2 gap-6">
 
             {/* Users over time */}
             <Card>
@@ -998,7 +998,7 @@ export default function AdminDashboard() {
         {/* ── Not-tracked sections ── */}
         <section>
           <SectionTitle icon={AlertCircle} title="Not Yet Tracked" sub="These sections require additional instrumentation" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-4 gap-4">
             {[
               { icon: "🌍", label: "Geography", note: "IP-based geolocation not tracked" },
               { icon: "📱", label: "Devices & Browsers", note: "User-agent logging not enabled" },
@@ -1023,10 +1023,10 @@ export default function AdminDashboard() {
               <thead>
                 <tr className="border-b border-gray-800 bg-gray-900/60">
                   <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3">Company</th>
-                  <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 hidden sm:table-cell">Plan</th>
-                  <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 hidden md:table-cell">Status</th>
-                  <th className="text-right text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 hidden md:table-cell">Users</th>
-                  <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 hidden lg:table-cell">Created</th>
+                  <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 table-cell">Plan</th>
+                  <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 table-cell">Status</th>
+                  <th className="text-right text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 table-cell">Users</th>
+                  <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 table-cell">Created</th>
                   <th className="text-center text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3">Beta</th>
                   <th className="text-center text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3">Delete</th>
                 </tr>
@@ -1036,10 +1036,10 @@ export default function AdminDashboard() {
                   Array.from({ length: 3 }).map((_, i) => (
                     <tr key={i}>
                       <td className="px-5 py-3"><Skeleton className="h-4 w-32" /></td>
-                      <td className="px-5 py-3 hidden sm:table-cell"><Skeleton className="h-4 w-16" /></td>
-                      <td className="px-5 py-3 hidden md:table-cell"><Skeleton className="h-4 w-16" /></td>
-                      <td className="px-5 py-3 hidden md:table-cell"><Skeleton className="h-4 w-8 ml-auto" /></td>
-                      <td className="px-5 py-3 hidden lg:table-cell"><Skeleton className="h-4 w-24" /></td>
+                      <td className="px-5 py-3 table-cell"><Skeleton className="h-4 w-16" /></td>
+                      <td className="px-5 py-3 table-cell"><Skeleton className="h-4 w-16" /></td>
+                      <td className="px-5 py-3 table-cell"><Skeleton className="h-4 w-8 ml-auto" /></td>
+                      <td className="px-5 py-3 table-cell"><Skeleton className="h-4 w-24" /></td>
                       <td className="px-5 py-3"><Skeleton className="h-6 w-12 mx-auto rounded-full" /></td>
                       <td className="px-5 py-3"><Skeleton className="h-6 w-8 mx-auto rounded" /></td>
                     </tr>
@@ -1050,7 +1050,7 @@ export default function AdminDashboard() {
                   (companies as Array<{ id: string; name: string; subscriptionTier: string; subscriptionStatus: string; betaAccess: boolean; userCount: number; createdAt: string }>).map(c => (
                     <tr key={c.id} className="hover:bg-gray-900/40 transition-colors">
                       <td className="px-5 py-3 font-medium text-gray-200">{c.name}</td>
-                      <td className="px-5 py-3 hidden sm:table-cell">
+                      <td className="px-5 py-3 table-cell">
                         <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${
                           c.subscriptionTier === "pro" ? "bg-purple-900/50 text-purple-300" :
                           c.subscriptionTier === "team" ? "bg-blue-900/50 text-blue-300" :
@@ -1058,7 +1058,7 @@ export default function AdminDashboard() {
                           "bg-gray-800 text-gray-400"
                         }`}>{c.subscriptionTier}</span>
                       </td>
-                      <td className="px-5 py-3 hidden md:table-cell">
+                      <td className="px-5 py-3 table-cell">
                         <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${
                           c.subscriptionStatus === "active" ? "bg-emerald-900/40 text-emerald-400" :
                           c.subscriptionStatus === "trialing" ? "bg-amber-900/40 text-amber-400" :
@@ -1066,8 +1066,8 @@ export default function AdminDashboard() {
                           "bg-gray-800 text-gray-400"
                         }`}>{c.subscriptionStatus}</span>
                       </td>
-                      <td className="px-5 py-3 text-right text-gray-400 text-xs hidden md:table-cell">{c.userCount}</td>
-                      <td className="px-5 py-3 text-gray-500 text-xs hidden lg:table-cell">{fmtDate(c.createdAt)}</td>
+                      <td className="px-5 py-3 text-right text-gray-400 text-xs table-cell">{c.userCount}</td>
+                      <td className="px-5 py-3 text-gray-500 text-xs table-cell">{fmtDate(c.createdAt)}</td>
                       <td className="px-5 py-3 text-center">
                         <button
                           onClick={() => toggleBeta(c.id, c.betaAccess)}

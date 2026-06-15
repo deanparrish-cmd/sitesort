@@ -283,7 +283,7 @@ export default function ProjectsList() {
 
   return (
     <SidebarLayout>
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+      <div className="flex flex-row justify-between items-center gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-bold">Projects</h1>
           <p className="text-muted-foreground">Manage all your construction sites.</p>
@@ -313,7 +313,7 @@ export default function ProjectsList() {
         </div>
 
         {/* Mobile card list */}
-        <div className="block lg:hidden divide-y">
+        <div className="hidden divide-y">
           {isLoading ? (
             <div className="px-4 py-8 text-center text-muted-foreground">Loading projects...</div>
           ) : filteredProjects?.length === 0 ? (
@@ -355,7 +355,7 @@ export default function ProjectsList() {
         </div>
 
         {/* Desktop table */}
-        <div className="hidden lg:block overflow-x-auto">
+        <div className="block overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="text-xs text-muted-foreground uppercase bg-muted/50 border-b">
               <tr>
@@ -408,7 +408,7 @@ export default function ProjectsList() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <Button variant="outline" size="sm" className="opacity-100 xl:opacity-0 xl:group-hover:opacity-100 transition-opacity">
+                      <Button variant="outline" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity">
                         View Site
                       </Button>
                     </td>

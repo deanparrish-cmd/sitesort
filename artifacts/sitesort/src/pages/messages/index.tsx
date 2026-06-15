@@ -692,7 +692,7 @@ export default function MessagesPage() {
           {/* Conversation list */}
           <div className={cn(
             "flex flex-col border rounded-2xl overflow-hidden bg-card",
-            (activeConv || activeChannel) ? "hidden sm:flex w-72 shrink-0" : "flex-1 sm:w-72 sm:flex-none sm:shrink-0"
+            "w-72 shrink-0"
           )}>
             <div className="p-3 border-b bg-muted/30 space-y-2">
               <div className="flex items-center justify-between">
@@ -1028,7 +1028,7 @@ export default function MessagesPage() {
             <div className="flex flex-col flex-1 border rounded-2xl overflow-hidden bg-card min-w-0">
               {/* Thread header */}
               <div className="px-4 py-3 border-b bg-muted/30 flex items-center gap-3">
-                <button className="sm:hidden mr-1 text-muted-foreground" onClick={() => setActiveConv(null)}>
+                <button className="hidden mr-1 text-muted-foreground" onClick={() => setActiveConv(null)}>
                   <ArrowLeft className="w-4 h-4" />
                 </button>
                 <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center text-[11px] font-bold text-primary shrink-0">
@@ -1291,7 +1291,7 @@ export default function MessagesPage() {
                               : <Check className="w-3.5 h-3.5 text-muted-foreground/40" />
                           )}
                           {!viewAll && editingId !== msg.id && confirmDeleteId !== msg.id && (
-                            <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex gap-0.5">
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">
                               <button
                                 onClick={() => { setReplyingTo({ id: msg.id, senderName: msg.senderName, content: msg.content, attachmentType: msg.attachmentType }); setEmojiPickerId(null); }}
                                 className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
@@ -1581,7 +1581,7 @@ export default function MessagesPage() {
             <div className="flex flex-col flex-1 border rounded-2xl overflow-hidden bg-card min-w-0">
               {/* Channel header */}
               <div className="px-4 py-3 border-b bg-muted/30 flex items-center gap-3">
-                <button className="sm:hidden mr-1 text-muted-foreground" onClick={() => setActiveChannel(null)}>
+                <button className="hidden mr-1 text-muted-foreground" onClick={() => setActiveChannel(null)}>
                   <ArrowLeft className="w-4 h-4" />
                 </button>
                 <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center shrink-0">
@@ -1752,7 +1752,7 @@ export default function MessagesPage() {
                         <div className={cn("flex items-center gap-1 px-1", msg.mine ? "flex-row-reverse" : "flex-row")}>
                           <span className="text-[10px] text-muted-foreground">{timeLabel(msg.createdAt)}</span>
                           {editingId !== msg.id && confirmDeleteId !== msg.id && (
-                            <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex gap-0.5">
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">
                               <button
                                 onClick={() => { setReplyingTo({ id: msg.id, senderName: msg.senderName, content: msg.content, attachmentType: msg.attachmentType }); setEmojiPickerId(null); }}
                                 className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
@@ -1904,7 +1904,7 @@ export default function MessagesPage() {
               </div>
             </div>
           ) : (
-            <div className="hidden sm:flex flex-1 items-center justify-center border rounded-2xl bg-card/50 border-dashed">
+            <div className="flex flex-1 items-center justify-center border rounded-2xl bg-card/50 border-dashed">
               <div className="text-center text-muted-foreground">
                 <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-20" />
                 <p className="font-semibold">Select a conversation</p>

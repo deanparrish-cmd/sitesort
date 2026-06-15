@@ -118,7 +118,7 @@ export default function CheckinsPage() {
 
       {/* Grid */}
       {loading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-4 gap-4">
           {[...Array(8)].map((_, i) => (
             <div key={i} className="rounded-xl border bg-muted animate-pulse aspect-square" />
           ))}
@@ -130,7 +130,7 @@ export default function CheckinsPage() {
           <p className="text-muted-foreground text-sm mt-1">Workers check in by scanning a QR site board.</p>
         </Card>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-4 gap-4">
           {filtered.map(ci => {
             const src = normaliseUrl(ci.photoUrl);
             const dt = new Date(ci.checkedInAt);
