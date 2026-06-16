@@ -134,85 +134,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 
 ---
 
-## End-of-session notes — 2026-06-11 (tablet fixes + overflow audit + eye icon)
-
-### Tasks completed today
-
-1. **Site board check-in fix for tablets** (`artifacts/sitesort/src/pages/site-board.tsx`):
-   - Removed `capture="environment"` from the check-in photo file input
-   - On iPads and Android tablets, this attribute silently prevents the file picker from opening; removing it lets the OS standard picker appear (which still offers camera as an option)
-
-2. **Text overflow / horizontal scroll audit and fixes** (6 files):
-   - `projects/detail.tsx` — address in project header now uses `flex-wrap` + `truncate` + `shrink-0` on date; very long addresses no longer cause horizontal scroll
-   - `compliance/index.tsx` — added `truncate` to permit type, project names, sign-off document names, and all superseded row detail lines (insurance, permits, documents)
-   - `invoices/index.tsx` — counterparty name and reference in desktop table now have `max-w-[160px] truncate`
-   - `team/index.tsx` — member name and phone in cards now truncate properly
-   - `issues/index.tsx` — project name and zone use `truncate max-w-*`; date/uploader uses `whitespace-nowrap`
-   - `settings/index.tsx` — profile display name capped with `truncate max-w-[200px]`
-
-3. **Password eye icon on login page** (`artifacts/sitesort/src/pages/auth/login.tsx`):
-   - Added `showPassword` state and Eye/EyeOff toggle button via existing `Input` `rightAction` prop
-   - Register page already had this on all 3 password fields (main form + invite flow)
-   - Added `p-1` padding to all 4 eye buttons across login + register for larger mobile tap targets (~24px vs bare 16px icon)
-
-### Key files modified
-- `artifacts/sitesort/src/pages/site-board.tsx` — removed `capture="environment"`
-- `artifacts/sitesort/src/pages/projects/detail.tsx` — address truncation in header
-- `artifacts/sitesort/src/pages/compliance/index.tsx` — truncate on permit/doc/sign-off rows
-- `artifacts/sitesort/src/pages/invoices/index.tsx` — counterparty name max-w + truncate
-- `artifacts/sitesort/src/pages/team/index.tsx` — member name + phone truncate
-- `artifacts/sitesort/src/pages/issues/index.tsx` — project name, zone, uploader truncation
-- `artifacts/sitesort/src/pages/settings/index.tsx` — profile name truncate
-- `artifacts/sitesort/src/pages/auth/login.tsx` — eye icon added
-- `artifacts/sitesort/src/pages/auth/register.tsx` — p-1 padding on existing eye buttons
-
-### Notes for next session
-- **Overflow audit**: Dashboard, Messages, Projects list table, and Subcontractors cards were all already clean — no changes needed
-- **Photo status backfill**: still pending if desired — `UPDATE photos SET status='open' WHERE category IN ('snag','safety_concern') AND status IS NULL`
-- **GitHub push command**: `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts` (must run from `/home/runner/workspace`)
-- **API server rebuild**: `pnpm --filter @workspace/api-server run build` after any backend change
-- All commits are on `main`
-
----
-
-## End-of-session notes — 2026-06-12 (check-ins page, notes fixes, team enhancements)
-
-### Tasks completed today
-
-1. **Site Check-Ins page (`/checkins`)** — committed leftover work from previous session:
-   - `GET /api/checkins` — company-wide check-in log, tenant-scoped, ordered by date
-   - New `/checkins` frontend page: photo grid, search (worker/company/project), project-filter dropdown, 3-stat header (total/today/this week), click-to-expand detail modal with GPS map link, open and share actions
-   - Sidebar "Site Check-Ins" nav item (ClipboardCheck icon) under admin nav
-
-2. **Subcontractor notes fixes** (2 files):
-   - **Text overflow**: added `break-words min-w-0` to note body `<p>` in both the contacts directory dialog and the project Team tab dialog — long text now wraps instead of overflowing
-   - **Wrong notes in contacts**: changed `GET /api/subcontractors/:id/notes` so that with no `?projectId` it returns only general notes (`projectId IS NULL`); project-specific notes no longer leak into the contacts directory view. Project Team tab already passes `?projectId` so it still shows general + project notes.
-
-3. **In House Team — contact actions + notes** (`artifacts/sitesort/src/pages/team/index.tsx`):
-   - Added Call (tel:), SMS (sms:), WhatsApp (wa.me/), Email (mailto:) action buttons per card, matching the subcontractor directory style
-   - Added Share dropdown (email / WhatsApp) — was already present, kept and restyled into the new action row
-   - Added Notes & Reminders dialog (StickyNote button): text area, Add Note (Ctrl+Enter), timestamped history
-   - New `user_notes` DB table (`lib/db/src/schema/user_notes.ts`): id, userId FK (cascade-delete), authorId FK, body, createdAt
-   - New API endpoints: `GET /api/users/:userId/notes` and `POST /api/users/:userId/notes` (tenant-scoped IDOR-safe)
-
-### Key files modified
-- `artifacts/api-server/src/routes/qr.ts` — `GET /api/checkins` endpoint
-- `artifacts/sitesort/src/pages/checkins/index.tsx` — new check-ins page (created)
-- `artifacts/sitesort/src/App.tsx` — `/checkins` route
-- `artifacts/sitesort/src/components/layout/sidebar-layout.tsx` — Site Check-Ins nav item
-- `artifacts/api-server/src/routes/subcontractors.ts` — notes scope fix (general-only when no projectId)
-- `artifacts/sitesort/src/pages/subcontractors/index.tsx` — break-words on note body
-- `artifacts/sitesort/src/pages/projects/detail.tsx` — break-words on note body
-- `lib/db/src/schema/user_notes.ts` — new table (created)
-- `lib/db/src/schema/index.ts` — export user_notes
-- `artifacts/api-server/src/routes/users.ts` — user notes endpoints
-- `artifacts/sitesort/src/pages/team/index.tsx` — contact actions + notes dialog
-
-### Notes for next session
-- **Photo status backfill**: still pending — `UPDATE photos SET status='open' WHERE category IN ('snag','safety_concern') AND status IS NULL`
-- **GitHub push command**: `/home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts`
-- **API server rebuild**: `pnpm --filter @workspace/api-server run build` after any backend change
-- All commits are on `main`
+## End-of-session notes — 2026-06-11 & 2026-06-12 (tablet fixes, eye icon, check-ins page, notes fixes, team enhancements) — see CLAUDE_ARCHIVE.md for full detail
 
 ---
 
@@ -299,3 +221,40 @@ See CLAUDE_ARCHIVE.md for full detail.
 - **GitHub push is automatic** via PostToolUse hook
 - **API server rebuild**: `pnpm --filter @workspace/api-server run build` after any backend change
 - Photo backfill is complete — no longer pending
+
+---
+
+## End-of-session notes — 2026-06-16 (full monorepo typecheck repair)
+
+### Context
+`pnpm run typecheck` had been silently broken — the app builds via esbuild/Vite (which strip types without checking), so **185 pre-existing type errors** had accumulated unnoticed. The root `typecheck` script chains `typecheck:libs && <recursive>`, so the first failure (in libs) hid everything downstream. Repaired the whole chain to a clean **exit code 0**.
+
+### Tasks completed today
+
+1. **CLAUDE.md trim** — was 30.9k chars; moved the 2026-06-11 and 2026-06-12 (check-ins) session logs into `CLAUDE_ARCHIVE.md`, leaving a one-line pointer. Now ~25k.
+
+2. **Genuine code bugs fixed**:
+   - `lib/api-zod/src/index.ts` — two `export *` lines both emitted `ListDocumentsParams`/`ListPhotosParams` (zod schema value vs. generated TS type), ambiguous under declaration emit. Added explicit named re-exports of the zod values to resolve it (types still derivable via `z.infer`).
+   - `scripts/src/github-push.ts` — typed `opts` as `ProxyOptions` (from `@replit/connectors-sdk`) instead of `RequestInit`; the connector's `headers` is the narrower `Record<string,string>`.
+   - `dashboard/index.tsx` — "completed" stat compared `status === "completed"` but the real `ProjectStatus` value is `"complete"` (values: active/on_hold/complete). The stat had always read 0. **Real bug.**
+   - `site-board.tsx` — inverted ternary: `status !== "capturing"` narrowed the else-branch to `"capturing"`, making the `status === "uploading"` spinner unreachable and showing the wrong button mid-upload. Changed to `status !== "capturing" && status !== "uploading"`. **Real UX bug.**
+   - `billing.ts` — Stripe SDK v22 moved `current_period_end` off `Subscription` onto each subscription item; now reads `subscription.items.data[0]?.current_period_end` (2 sites).
+   - `ai.ts` — `Buffer` not assignable to `BlobPart` under `@types/node` 25; wrapped audio in `new Uint8Array(audioBuffer)` before `new File([...])`.
+   - Deleted 4 dead shadcn UI files (`alert-dialog.tsx`, `calendar.tsx`, `command.tsx`, `pagination.tsx`) — zero imports, referenced `buttonVariants`/`DialogContent` that the custom `button`/`dialog` never export.
+   - `projects/detail.tsx` — generated orval hooks type `query` as a full `UseQueryOptions` (react-query v5 requires `queryKey`). Passed orval's `getGet*QueryKey(...)` helpers alongside `{ enabled }` at the 4 call sites.
+
+3. **Dependency version-drift pins** (the bulk — ~164 errors) in `pnpm-workspace.yaml`:
+   - `overrides: '@types/express-serve-static-core': 5.1.0` — 5.1.1 widened `ParamsDictionary` to `{ [key]: string | string[] }`, breaking every `eq(col, req.params.x)`. Pinned to 5.1.0 (params stay `string`).
+   - `packageExtensions: '@hookform/resolvers' → dependencies.zod: 3.25.76` — the resolver declares no zod dep, so `import { z } from 'zod'` resolved the hoisted zod 4.3.6 (pulled by openai/orval) instead of the app's 3.25.76, making `zodResolver` reject our v3 schemas. Pinned so both resolve the same zod instance.
+
+### Key files modified
+- `lib/api-zod/src/index.ts`, `scripts/src/github-push.ts`
+- `artifacts/api-server/src/routes/ai.ts`, `artifacts/api-server/src/routes/billing.ts`
+- `artifacts/sitesort/src/pages/dashboard/index.tsx`, `.../site-board.tsx`, `.../projects/detail.tsx`
+- deleted: `artifacts/sitesort/src/components/ui/{alert-dialog,calendar,command,pagination}.tsx`
+- `pnpm-workspace.yaml` (override + packageExtensions), `pnpm-lock.yaml`
+
+### Notes for next session
+- **`pnpm run typecheck` is now green (exit 0)** — keep it that way; esbuild/Vite won't catch type regressions, so run it before shipping.
+- The two `pnpm-workspace.yaml` pins are version-drift guards; if `@types/express` or zod/openai/orval get bumped, re-check these.
+- **GitHub push is automatic** via PostToolUse hook; **API server rebuild**: `pnpm --filter @workspace/api-server run build` after backend changes.

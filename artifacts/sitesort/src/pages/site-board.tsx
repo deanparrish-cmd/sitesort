@@ -275,7 +275,7 @@ function CheckInCard({
 
         <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFileChange} />
 
-        {status !== "capturing" ? (
+        {status !== "capturing" && status !== "uploading" ? (
           <button
             onClick={() => {
               if (!name.trim()) { setErrorMsg("Please enter your name."); return; }

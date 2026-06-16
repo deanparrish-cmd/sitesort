@@ -430,7 +430,7 @@ export default function Dashboard() {
           icon={<Building2 className="w-5 h-5 text-primary" />}
           label="Active Projects"
           value={activeProjects.length}
-          sub={`${(projects?.filter(p => p.status === "completed") ?? []).length} completed`}
+          sub={`${(projects?.filter(p => p.status === "complete") ?? []).length} completed`}
           href="/projects"
         />
         <StatCard

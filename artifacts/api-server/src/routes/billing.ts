@@ -112,9 +112,9 @@ async function handleSubscriptionUpsert(
   const plan = (subscription.metadata?.plan ?? "pro") as PlanId;
   if (!companyId) return;
 
-  const periodEnd = subscription.current_period_end
-    ? new Date(subscription.current_period_end * 1000)
-    : null;
+  // Stripe API 2025-03-31 moved current_period_end off the subscription onto each item.
+  const itemPeriodEnd = subscription.items.data[0]?.current_period_end;
+  const periodEnd = itemPeriodEnd ? new Date(itemPeriodEnd * 1000) : null;
 
   await db
     .update(companiesTable)
@@ -343,7 +343,8 @@ router.post("/billing/cancel", authenticate, async (req, res) => {
     if (!sub) { res.status(404).json({ error: "no_subscription", message: "No active subscription found." }); return; }
 
     const updated = await stripe.subscriptions.update(sub.id, { cancel_at_period_end: true });
-    const periodEnd = updated.current_period_end ? new Date(updated.current_period_end * 1000) : null;
+    const itemPeriodEnd = updated.items.data[0]?.current_period_end;
+    const periodEnd = itemPeriodEnd ? new Date(itemPeriodEnd * 1000) : null;
 
     await db.update(companiesTable)
       .set({ cancelAtPeriodEnd: true, currentPeriodEnd: periodEnd })

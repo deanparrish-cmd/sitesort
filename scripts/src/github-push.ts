@@ -2,7 +2,7 @@
  * Pushes workspace files to GitHub repository via the GitHub Contents API.
  * Uses Replit GitHub connector (OAuth) — no personal token needed.
  */
-import { ReplitConnectors } from "@replit/connectors-sdk";
+import { ReplitConnectors, type ProxyOptions } from "@replit/connectors-sdk";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -58,7 +58,7 @@ function collectFiles(dir: string, base: string, files: Array<{path: string, con
 }
 
 async function apiCall(endpoint: string, method: string, body?: object) {
-  const opts: RequestInit = { method, headers: { "Content-Type": "application/json" } };
+  const opts: ProxyOptions = { method, headers: { "Content-Type": "application/json" } };
   if (body) opts.body = JSON.stringify(body);
   const resp = await connectors.proxy("github", endpoint, opts);
   return resp.json();

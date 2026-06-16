@@ -6,6 +6,15 @@ packages:
 
 autoInstallPeers: false
 
+# @hookform/resolvers@3.10 declares no zod dependency, so its `import { z } from 'zod'`
+# resolves to the hoisted zod 4.3.6 (pulled in by openai/orval) instead of the app's
+# zod 3.25.76 — making zodResolver's expected type a v4 ZodType that rejects our v3
+# schemas. Pin the resolver's zod to the app's version so the instances match.
+packageExtensions:
+  '@hookform/resolvers':
+    dependencies:
+      zod: 3.25.76
+
 catalog:
   '@replit/vite-plugin-cartographer': ^0.5.1
   '@replit/vite-plugin-dev-banner': ^0.1.1
@@ -42,6 +51,9 @@ onlyBuiltDependencies:
   - unrs-resolver
 
 overrides:
+  # 5.1.1 widened ParamsDictionary's index signature to `string | string[]`, which
+  # breaks every `eq(col, req.params.x)` call site. Pin to 5.1.0 (params stay `string`).
+  '@types/express-serve-static-core': 5.1.0
   '@esbuild-kit/esm-loader': npm:tsx@^4.21.0
   '@expo/ngrok-bin>@expo/ngrok-bin-darwin-arm64': '-'
   '@expo/ngrok-bin>@expo/ngrok-bin-darwin-x64': '-'

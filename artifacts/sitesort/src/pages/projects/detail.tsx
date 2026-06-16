@@ -19,12 +19,16 @@ import { InsuranceCertZone } from "@/components/ui/insurance-cert-zone";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetProject,
+  getGetProjectQueryKey,
   useListDocuments,
+  getListDocumentsQueryKey,
   useListProjectMembers,
+  getListProjectMembersQueryKey,
   useUploadDocument,
   useUpdateProject,
   useGetMe,
   useGetDocumentAuditLog,
+  getGetDocumentAuditLogQueryKey,
   DocumentType,
   UploadDocumentRequestType,
   UpdateProjectRequestStatus,
@@ -40,9 +44,9 @@ export default function ProjectDetail() {
   const projectId = params?.id || "";
   const defaultTab = new URLSearchParams(window.location.search).get("tab") || "documents";
 
-  const { data: project, isLoading: projectLoading } = useGetProject(projectId, { query: { enabled: !!projectId } });
-  const { data: documents, refetch: refetchDocs } = useListDocuments(projectId, undefined, { query: { enabled: !!projectId } });
-  const { data: members } = useListProjectMembers(projectId, { query: { enabled: !!projectId } });
+  const { data: project, isLoading: projectLoading } = useGetProject(projectId, { query: { enabled: !!projectId, queryKey: getGetProjectQueryKey(projectId) } });
+  const { data: documents, refetch: refetchDocs } = useListDocuments(projectId, undefined, { query: { enabled: !!projectId, queryKey: getListDocumentsQueryKey(projectId, undefined) } });
+  const { data: members } = useListProjectMembers(projectId, { query: { enabled: !!projectId, queryKey: getListProjectMembersQueryKey(projectId) } });
 
   type PermitItem = { id: string; type: string; description: string; startDate: string; expiryDate: string; status: string; responsibleName?: string; documentUrl?: string | null; archivedAt?: string | null };
   type InvoiceItem = { id: string; direction: string; counterpartyName: string; description: string; amount: string; currency: string; dueDate: string; status: string; reference?: string | null; attachmentUrl?: string | null };
@@ -340,7 +344,7 @@ export default function ProjectDetail() {
   const [auditDoc, setAuditDoc] = useState<{ id: string; name: string } | null>(null);
   const { data: auditEntries, isLoading: auditLoading } = useGetDocumentAuditLog(
     auditDoc?.id ?? "",
-    { query: { enabled: !!auditDoc && canViewAudit } },
+    { query: { enabled: !!auditDoc && canViewAudit, queryKey: getGetDocumentAuditLogQueryKey(auditDoc?.id ?? "") } },
   );
 
   const openSignOff = (doc: SignOffDoc) => {

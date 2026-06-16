@@ -60,7 +60,7 @@ router.post(
       const audioBuffer = req.file.buffer;
       const transcription = await openai.audio.transcriptions.create({
         model: TRANSCRIBE_MODEL,
-        file: new File([audioBuffer], audioFilename(req.file.mimetype), { type: req.file.mimetype || "audio/webm" }),
+        file: new File([new Uint8Array(audioBuffer)], audioFilename(req.file.mimetype), { type: req.file.mimetype || "audio/webm" }),
         language: "en",
       });
 

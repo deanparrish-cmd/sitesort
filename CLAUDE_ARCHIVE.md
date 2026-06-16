@@ -383,3 +383,72 @@
 
 ### Key files modified
 - `artifacts/sitesort/src/pages/team/index.tsx`, `artifacts/sitesort/src/pages/projects/detail.tsx`, `artifacts/sitesort/src/components/ui/dialog.tsx`, `artifacts/sitesort/src/components/share-modal.tsx`, `artifacts/api-server/src/routes/subcontractors.ts`
+
+---
+
+## End-of-session notes — 2026-06-11 (tablet fixes + overflow audit + eye icon)
+
+### Tasks completed today
+
+1. **Site board check-in fix for tablets** (`artifacts/sitesort/src/pages/site-board.tsx`):
+   - Removed `capture="environment"` from the check-in photo file input
+   - On iPads and Android tablets, this attribute silently prevents the file picker from opening; removing it lets the OS standard picker appear (which still offers camera as an option)
+
+2. **Text overflow / horizontal scroll audit and fixes** (6 files):
+   - `projects/detail.tsx` — address in project header now uses `flex-wrap` + `truncate` + `shrink-0` on date; very long addresses no longer cause horizontal scroll
+   - `compliance/index.tsx` — added `truncate` to permit type, project names, sign-off document names, and all superseded row detail lines (insurance, permits, documents)
+   - `invoices/index.tsx` — counterparty name and reference in desktop table now have `max-w-[160px] truncate`
+   - `team/index.tsx` — member name and phone in cards now truncate properly
+   - `issues/index.tsx` — project name and zone use `truncate max-w-*`; date/uploader uses `whitespace-nowrap`
+   - `settings/index.tsx` — profile display name capped with `truncate max-w-[200px]`
+
+3. **Password eye icon on login page** (`artifacts/sitesort/src/pages/auth/login.tsx`):
+   - Added `showPassword` state and Eye/EyeOff toggle button via existing `Input` `rightAction` prop
+   - Register page already had this on all 3 password fields (main form + invite flow)
+   - Added `p-1` padding to all 4 eye buttons across login + register for larger mobile tap targets (~24px vs bare 16px icon)
+
+### Key files modified
+- `artifacts/sitesort/src/pages/site-board.tsx` — removed `capture="environment"`
+- `artifacts/sitesort/src/pages/projects/detail.tsx` — address truncation in header
+- `artifacts/sitesort/src/pages/compliance/index.tsx` — truncate on permit/doc/sign-off rows
+- `artifacts/sitesort/src/pages/invoices/index.tsx` — counterparty name max-w + truncate
+- `artifacts/sitesort/src/pages/team/index.tsx` — member name + phone truncate
+- `artifacts/sitesort/src/pages/issues/index.tsx` — project name, zone, uploader truncation
+- `artifacts/sitesort/src/pages/settings/index.tsx` — profile name truncate
+- `artifacts/sitesort/src/pages/auth/login.tsx` — eye icon added
+- `artifacts/sitesort/src/pages/auth/register.tsx` — p-1 padding on existing eye buttons
+
+---
+
+## End-of-session notes — 2026-06-12 (check-ins page, notes fixes, team enhancements)
+
+### Tasks completed today
+
+1. **Site Check-Ins page (`/checkins`)** — committed leftover work from previous session:
+   - `GET /api/checkins` — company-wide check-in log, tenant-scoped, ordered by date
+   - New `/checkins` frontend page: photo grid, search (worker/company/project), project-filter dropdown, 3-stat header (total/today/this week), click-to-expand detail modal with GPS map link, open and share actions
+   - Sidebar "Site Check-Ins" nav item (ClipboardCheck icon) under admin nav
+
+2. **Subcontractor notes fixes** (2 files):
+   - **Text overflow**: added `break-words min-w-0` to note body `<p>` in both the contacts directory dialog and the project Team tab dialog — long text now wraps instead of overflowing
+   - **Wrong notes in contacts**: changed `GET /api/subcontractors/:id/notes` so that with no `?projectId` it returns only general notes (`projectId IS NULL`); project-specific notes no longer leak into the contacts directory view. Project Team tab already passes `?projectId` so it still shows general + project notes.
+
+3. **In House Team — contact actions + notes** (`artifacts/sitesort/src/pages/team/index.tsx`):
+   - Added Call (tel:), SMS (sms:), WhatsApp (wa.me/), Email (mailto:) action buttons per card, matching the subcontractor directory style
+   - Added Share dropdown (email / WhatsApp) — was already present, kept and restyled into the new action row
+   - Added Notes & Reminders dialog (StickyNote button): text area, Add Note (Ctrl+Enter), timestamped history
+   - New `user_notes` DB table (`lib/db/src/schema/user_notes.ts`): id, userId FK (cascade-delete), authorId FK, body, createdAt
+   - New API endpoints: `GET /api/users/:userId/notes` and `POST /api/users/:userId/notes` (tenant-scoped IDOR-safe)
+
+### Key files modified
+- `artifacts/api-server/src/routes/qr.ts` — `GET /api/checkins` endpoint
+- `artifacts/sitesort/src/pages/checkins/index.tsx` — new check-ins page (created)
+- `artifacts/sitesort/src/App.tsx` — `/checkins` route
+- `artifacts/sitesort/src/components/layout/sidebar-layout.tsx` — Site Check-Ins nav item
+- `artifacts/api-server/src/routes/subcontractors.ts` — notes scope fix (general-only when no projectId)
+- `artifacts/sitesort/src/pages/subcontractors/index.tsx` — break-words on note body
+- `artifacts/sitesort/src/pages/projects/detail.tsx` — break-words on note body
+- `lib/db/src/schema/user_notes.ts` — new table (created)
+- `lib/db/src/schema/index.ts` — export user_notes
+- `artifacts/api-server/src/routes/users.ts` — user notes endpoints
+- `artifacts/sitesort/src/pages/team/index.tsx` — contact actions + notes dialog
