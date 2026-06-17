@@ -169,9 +169,18 @@ function SiteCalendar({ events, alerts }: { events: CalEvent[]; alerts: ExpiryAl
                   hasEvents ? "cursor-pointer hover:bg-muted" : "hover:bg-muted/50",
                 )}
               >
-                <span className={`text-xs w-7 h-7 flex items-center justify-center rounded-full font-medium transition-colors
-                  ${isToday ? "bg-primary text-primary-foreground font-bold" : "text-foreground"}`}>
-                  {day}
+                <span className="relative">
+                  <span className={`text-xs w-7 h-7 flex items-center justify-center rounded-full font-medium transition-colors
+                    ${isToday ? "bg-primary text-primary-foreground font-bold" : "text-foreground"}`}>
+                    {day}
+                  </span>
+                  {hasEvents && (
+                    <span
+                      aria-hidden="true"
+                      title={`${dayEvents.length} event${dayEvents.length > 1 ? "s" : ""}`}
+                      className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-destructive border border-card"
+                    />
+                  )}
                 </span>
                 <div className="flex gap-0.5 flex-wrap justify-center items-center min-h-[6px]">
                   {dayEvents.slice(0, 3).map((e, j) => (
