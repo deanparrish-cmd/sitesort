@@ -5,17 +5,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   Building2, AlertTriangle, ChevronLeft, ChevronRight, ArrowRight,
   ShieldAlert, FileSignature, Users, Bell, Search,
   MessageSquare, Camera, FilePlus, Plus, AlertCircle, CreditCard,
   FileText, CheckCircle2, Clock, TrendingUp, Zap, X, Circle, ClipboardCheck,
+  Lock, Sparkles,
 } from "lucide-react";
 import { useListProjects, useGetComplianceOverview } from "@workspace/api-client-react";
 import type { ExpiringInsuranceItem, ExpiringPermitItem } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
 import { useCapabilities } from "@/hooks/use-capabilities";
+import { useSubscription } from "@/contexts/subscription";
 
 type CalEvent = { date: string; label: string; type: "project-start" | "project-end" | "permit" | "insurance" | "invoice-out" | "invoice-in" };
 type ExpiryAlert = { label: string; expiryDate: string; kind: "permit" | "insurance"; daysLeft: number };
@@ -270,11 +272,24 @@ function StatCard({ icon, label, value, sub, href, color }: {
   return href ? <Link href={href}>{inner}</Link> : inner;
 }
 
+const DASH_PLAN_LIMITS: Record<string, number> = { free: 1, solo: 1, team: 5, pro: Infinity };
+const DASH_NEXT_PLAN: Record<string, { name: string; projects: string; price: string }> = {
+  free:  { name: "Team", projects: "5 projects",        price: "£79/mo" },
+  solo:  { name: "Team", projects: "5 projects",        price: "£79/mo" },
+  team:  { name: "Pro",  projects: "Unlimited projects", price: "£149/mo" },
+};
+
 export default function Dashboard() {
   const [, navigate] = useLocation();
   const { data: projects, isLoading: projectsLoading } = useListProjects();
   const { data: compliance } = useGetComplianceOverview();
   const caps = useCapabilities();
+  const { isCancelled, tier, betaAccess } = useSubscription();
+
+  const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
+  const planLimit = DASH_PLAN_LIMITS[tier] ?? 1;
+  const nextPlan = DASH_NEXT_PLAN[tier];
+  const atLimit = !isCancelled && !betaAccess && planLimit !== Infinity && (projects?.length ?? 0) >= planLimit;
 
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -424,7 +439,11 @@ export default function Dashboard() {
         </div>
         <div className="flex flex-wrap gap-2 sm:flex-nowrap">
           {caps.canManageProjects && (
-            <Button variant="accent" size="sm" onClick={() => navigate("/projects?new=1")}>
+            <Button variant="accent" size="sm" onClick={() => {
+              if (isCancelled) { navigate("/settings?tab=billing"); return; }
+              if (atLimit && !projectsLoading) { setShowUpgradeDialog(true); return; }
+              navigate("/projects?new=1");
+            }}>
               <Plus className="w-4 h-4 mr-1.5" /> New Project
             </Button>
           )}
@@ -715,6 +734,34 @@ export default function Dashboard() {
 
       {/* Calendar */}
       <SiteCalendar events={calendarEvents} alerts={expiryAlerts} />
+
+      <Dialog open={showUpgradeDialog} onOpenChange={setShowUpgradeDialog}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Lock className="w-4 h-4 text-destructive" /> Project limit reached
+          </DialogTitle>
+        </DialogHeader>
+        <div className="my-3 space-y-3">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="capitalize inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground">{tier || "Free"} plan</span>
+            <span className="text-muted-foreground">
+              {projects?.length ?? 0} of {planLimit} project{planLimit !== 1 ? "s" : ""} used
+            </span>
+          </div>
+          {nextPlan && (
+            <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm">
+              <p className="font-semibold text-primary">{nextPlan.name} plan — {nextPlan.projects}</p>
+              <p className="text-muted-foreground mt-0.5">{nextPlan.price} · More projects, team collaboration, advanced compliance &amp; more.</p>
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setShowUpgradeDialog(false)}>Maybe later</Button>
+          <Button variant="accent" onClick={() => { setShowUpgradeDialog(false); navigate("/settings?tab=billing"); }} className="gap-2">
+            <Sparkles className="w-4 h-4" /> Upgrade plan
+          </Button>
+        </DialogFooter>
+      </Dialog>
     </SidebarLayout>
   );
 }
