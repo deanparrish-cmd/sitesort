@@ -452,3 +452,48 @@
 - `lib/db/src/schema/index.ts` — export user_notes
 - `artifacts/api-server/src/routes/users.ts` — user notes endpoints
 - `artifacts/sitesort/src/pages/team/index.tsx` — contact actions + notes dialog
+
+---
+
+## End-of-session notes — 2026-06-12 (overview note open/share, tab reorder, auto-push hook)
+
+### Tasks completed today
+
+1. **Overview tab daily notes — Open and Share** (`artifacts/sitesort/src/pages/projects/detail.tsx`, `artifacts/sitesort/src/components/share-modal.tsx`):
+   - Each "Posted today" note card now has two icon buttons (bottom-right): ExternalLink (Open) and Share2 (Share)
+   - **Open**: opens a detail dialog showing full note body, author/date, Copy text button, and a "Share" button that chains directly into the share modal
+   - **Share**: opens ShareModal with Email / WhatsApp / Project Team / Individual — note body used as message content
+   - `ShareModal` extended with optional `shareText?: string | null` prop; `hasContent = !!(fullUrl || shareText)` enables Email/WhatsApp even with no file; in-app team/individual sends `shareText` as message content
+   - New state: `openingNote: DailyNote | null`, `sharingNote: DailyNote | null` in project detail
+   - entityType `"daily_note"` used for share logging
+
+2. **Site Issues tab reordered** (`artifacts/sitesort/src/pages/projects/detail.tsx`):
+   - Moved from Group 2 (Site activity) into Group 1 (Project management)
+   - New tab order: Overview → Progress → Team → **Site Issues** → Site Board → Documents → Compliance
+
+3. **Auto-push to GitHub hook** (`.claude/settings.local.json`):
+   - `PostToolUse` hook on `Bash` matcher; checks `git commit` in command, then runs `github-push.ts`
+   - 120s timeout; status message "Pushing to GitHub…" shown while running
+   - GitHub push now happens automatically after every `git commit` — no manual push needed
+
+### Key files modified
+- `artifacts/sitesort/src/components/share-modal.tsx` — `shareText` prop + `hasContent` logic
+- `artifacts/sitesort/src/pages/projects/detail.tsx` — note Open/Share buttons + dialogs + tab reorder
+- `.claude/settings.local.json` — PostToolUse auto-push hook added
+
+---
+
+## End-of-session notes — 2026-06-12 (mobile/tablet responsive audit)
+
+### Tasks completed today
+
+1. **Mobile/tablet responsive audit** — code-level audit of all pages against desktop layout; identified 3 broken issues and fixed them:
+   - `notifications/index.tsx`: filter tabs container got `overflow-x-auto`; each tab button got `whitespace-nowrap flex-shrink-0` — 5 tabs no longer overflow on 375px mobile
+   - `settings/index.tsx`: tab nav wrapper got `overflow-x-auto md:overflow-visible`; buttons got `whitespace-nowrap md:w-full` — nav scrolls horizontally on mobile
+   - `projects/index.tsx`: desktop table "View Site" button changed from `opacity-0 group-hover:opacity-100` to `opacity-100 xl:opacity-0 xl:group-hover:opacity-100` — visible on touch tablets at lg, hover-only on xl+ desktops
+   - Confirmed OK (no changes needed): messages compose/actions, compliance rows, subcontractors, project detail tabs, invoices, dashboard, QR/reports tabs, team page, sidebar
+
+### Key files modified
+- `artifacts/sitesort/src/pages/notifications/index.tsx` — filter tab overflow fix
+- `artifacts/sitesort/src/pages/settings/index.tsx` — nav overflow fix
+- `artifacts/sitesort/src/pages/projects/index.tsx` — View Site button touch visibility fix

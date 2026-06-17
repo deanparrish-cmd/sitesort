@@ -144,59 +144,11 @@ See CLAUDE_ARCHIVE.md for full detail.
 
 ---
 
-## End-of-session notes — 2026-06-12 (overview note open/share, tab reorder, auto-push hook)
-
-### Tasks completed today
-
-1. **Overview tab daily notes — Open and Share** (`artifacts/sitesort/src/pages/projects/detail.tsx`, `artifacts/sitesort/src/components/share-modal.tsx`):
-   - Each "Posted today" note card now has two icon buttons (bottom-right): ExternalLink (Open) and Share2 (Share)
-   - **Open**: opens a detail dialog showing full note body, author/date, Copy text button, and a "Share" button that chains directly into the share modal
-   - **Share**: opens ShareModal with Email / WhatsApp / Project Team / Individual — note body used as message content
-   - `ShareModal` extended with optional `shareText?: string | null` prop; `hasContent = !!(fullUrl || shareText)` enables Email/WhatsApp even with no file; in-app team/individual sends `shareText` as message content
-   - New state: `openingNote: DailyNote | null`, `sharingNote: DailyNote | null` in project detail
-   - entityType `"daily_note"` used for share logging
-
-2. **Site Issues tab reordered** (`artifacts/sitesort/src/pages/projects/detail.tsx`):
-   - Moved from Group 2 (Site activity) into Group 1 (Project management)
-   - New tab order: Overview → Progress → Team → **Site Issues** → Site Board → Documents → Compliance
-
-3. **Auto-push to GitHub hook** (`.claude/settings.local.json`):
-   - `PostToolUse` hook on `Bash` matcher; checks `git commit` in command, then runs `github-push.ts`
-   - 120s timeout; status message "Pushing to GitHub…" shown while running
-   - GitHub push now happens automatically after every `git commit` — no manual push needed
-
-### Key files modified
-- `artifacts/sitesort/src/components/share-modal.tsx` — `shareText` prop + `hasContent` logic
-- `artifacts/sitesort/src/pages/projects/detail.tsx` — note Open/Share buttons + dialogs + tab reorder
-- `.claude/settings.local.json` — PostToolUse auto-push hook added
-
-### Notes for next session
-- **GitHub push is now automatic** — fires after every `git commit` via hook in `.claude/settings.local.json`
-- **Photo status backfill**: still pending — `UPDATE photos SET status='open' WHERE category IN ('snag','safety_concern') AND status IS NULL`
-- **API server rebuild**: `pnpm --filter @workspace/api-server run build` after any backend change
-- All commits are on `main`
+## End-of-session notes — 2026-06-12 (overview note open/share, tab reorder, auto-push hook) — see CLAUDE_ARCHIVE.md for full detail
 
 ---
 
-## End-of-session notes — 2026-06-12 (mobile/tablet responsive audit)
-
-### Tasks completed today
-
-1. **Mobile/tablet responsive audit** — code-level audit of all pages against desktop layout; identified 3 broken issues and fixed them:
-   - `notifications/index.tsx`: filter tabs container got `overflow-x-auto`; each tab button got `whitespace-nowrap flex-shrink-0` — 5 tabs no longer overflow on 375px mobile
-   - `settings/index.tsx`: tab nav wrapper got `overflow-x-auto md:overflow-visible`; buttons got `whitespace-nowrap md:w-full` — nav scrolls horizontally on mobile
-   - `projects/index.tsx`: desktop table "View Site" button changed from `opacity-0 group-hover:opacity-100` to `opacity-100 xl:opacity-0 xl:group-hover:opacity-100` — visible on touch tablets at lg, hover-only on xl+ desktops
-   - Confirmed OK (no changes needed): messages compose/actions, compliance rows, subcontractors, project detail tabs, invoices, dashboard, QR/reports tabs, team page, sidebar
-
-### Key files modified
-- `artifacts/sitesort/src/pages/notifications/index.tsx` — filter tab overflow fix
-- `artifacts/sitesort/src/pages/settings/index.tsx` — nav overflow fix
-- `artifacts/sitesort/src/pages/projects/index.tsx` — View Site button touch visibility fix
-
-### Notes for next session
-- **GitHub push is automatic** via PostToolUse hook
-- **Photo status backfill**: `UPDATE photos SET status='open' WHERE category IN ('snag','safety_concern') AND status IS NULL`
-- **API server rebuild**: `pnpm --filter @workspace/api-server run build` after any backend change
+## End-of-session notes — 2026-06-12 (mobile/tablet responsive audit) — see CLAUDE_ARCHIVE.md for full detail
 
 ---
 
@@ -258,3 +210,35 @@ See CLAUDE_ARCHIVE.md for full detail.
 - **`pnpm run typecheck` is now green (exit 0)** — keep it that way; esbuild/Vite won't catch type regressions, so run it before shipping.
 - The two `pnpm-workspace.yaml` pins are version-drift guards; if `@types/express` or zod/openai/orval get bumped, re-check these.
 - **GitHub push is automatic** via PostToolUse hook; **API server rebuild**: `pnpm --filter @workspace/api-server run build` after backend changes.
+
+---
+
+## End-of-session notes — 2026-06-17 (mobile/tablet feature-parity audit + fixes, tablet stat density)
+
+### Context
+Full audit of every page for desktop features missing or unreachable on tablet/mobile. Ran 4 parallel page-group audits, then **verified each flagged item by hand** (the audits over-flagged: many "bugs" were intended designs — detail tabs *wrap* by design #46, projects "View Site" button is visible ≤lg by design, messages has a back button, admin tables are intentionally all-visible w/ horizontal scroll per 2026-06-15). Drove the real app in headless Chromium across mobile/tablet/desktop to confirm.
+
+### Tasks completed today
+
+1. **Feature-parity fixes** (commit `03870e6`):
+   - **Invoices** (`pages/invoices/index.tsx`): added a **Delete** button to the invoice viewer modal (mobile cards open this modal on tap) — Delete was previously desktop-table-only, so invoices couldn't be deleted on mobile/tablet. Gated on `caps.canManageInvoices`; imported `Trash2`.
+   - **Project detail** (`pages/projects/detail.tsx`): team member **phone-edit pencil** was `opacity-0 group-hover/phone` → genuinely **unreachable on touch** (no other edit trigger). Changed to `opacity-100 lg:opacity-0 lg:group-hover/phone:opacity-100`. Same touch fix for the avatar **camera overlay** (+ lighter `bg-black/40` so the avatar stays visible).
+   - **Settings** (`pages/settings/index.tsx`): avatar camera affordance showed on phones but `sm:opacity-0` hid it on tablets → changed `sm:` to `lg:`.
+
+2. **Tablet stat-strip density** (commit `d0f0f6c`):
+   - Dashboard + admin `BigStat` strips used `grid-cols-2 lg:grid-cols-4`, so tablets (768–1023px) showed a sparse 2×2. Shifted to `md:grid-cols-4` (dashboard:428; admin User Metrics / Primary Actions / Revenue strips + the `sm:grid-cols-2 lg:grid-cols-4` feature-usage rows — all via `lg:grid-cols-4`→`md:grid-cols-4`). Verified 4-across at 768/1023px.
+   - **Deliberately left** the other audit-flagged cosmetic items: `grid-cols-3` strips are compact stat chips (fine 3-across on tablet); `sm:grid-cols-2 lg:grid-cols-3` grids hold pricing/member cards that need the width; dashboard main 2+1 grid stacks fine on tablet; site-board is phone-first. Changing them = churn risk, no tablet gain.
+
+### Browser-test method (reusable)
+The browser-check skill attaches to the running app on **:18299**, but Vite doesn't proxy `/api` locally (404). To drive **authenticated** pages: log in via the API on **:8080** directly to get a JWT, inject it with `context.addInitScript(t => localStorage.setItem('sitesort_token', t))`, and `context.route('**/api/**', …)` to re-`fetch` each call against :8080 and `fulfill`. Then set `viewport` per width (mobile 390 / tablet 768–820 / desktop 1280). The app on :18299 serves **live source via HMR**, so uncommitted edits show up. Result: all pages HTTP 200, zero console/page errors; invoice delete confirmed end-to-end (204, then cleaned up the test row).
+
+### Key files modified
+- `artifacts/sitesort/src/pages/invoices/index.tsx` — modal Delete button + `Trash2` import
+- `artifacts/sitesort/src/pages/projects/detail.tsx` — phone pencil + avatar camera touch affordances
+- `artifacts/sitesort/src/pages/settings/index.tsx` — avatar camera on tablet
+- `artifacts/sitesort/src/pages/dashboard/index.tsx`, `.../admin/index.tsx` — stat strips `md:grid-cols-4`
+
+### Notes for next session
+- **`pnpm run typecheck` is green (exit 0)** — kept green this session.
+- **GitHub push is automatic** via PostToolUse hook; **API server rebuild**: `pnpm --filter @workspace/api-server run build` after backend changes.
+- Pre-existing uncommitted change still present: `.claude/skills/browser-check/package.json` (+`package-lock.json`) added `playwright-core` for the browser-check skill — not committed yet; commit if you want it tracked.
