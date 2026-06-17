@@ -229,16 +229,23 @@ Full audit of every page for desktop features missing or unreachable on tablet/m
    - Dashboard + admin `BigStat` strips used `grid-cols-2 lg:grid-cols-4`, so tablets (768–1023px) showed a sparse 2×2. Shifted to `md:grid-cols-4` (dashboard:428; admin User Metrics / Primary Actions / Revenue strips + the `sm:grid-cols-2 lg:grid-cols-4` feature-usage rows — all via `lg:grid-cols-4`→`md:grid-cols-4`). Verified 4-across at 768/1023px.
    - **Deliberately left** the other audit-flagged cosmetic items: `grid-cols-3` strips are compact stat chips (fine 3-across on tablet); `sm:grid-cols-2 lg:grid-cols-3` grids hold pricing/member cards that need the width; dashboard main 2+1 grid stacks fine on tablet; site-board is phone-first. Changing them = churn risk, no tablet gain.
 
+3. **Dashboard Site Calendar — clickable dates with day detail dialog** (commit `5eef9f4`, `pages/dashboard/index.tsx`):
+   - Each calendar day is now a `<button>`; clicking opens a responsive `Dialog` listing **all** events on that day (no longer capped at the 3 visible dots). Each row shows the colored type dot, type label (Project Start/End, Permit/Insurance Expiry, Payment Due, Invoice Due In), the untruncated event text, and a "View →" link to the relevant section via new `EVENT_LINK` map (projects/compliance/invoices).
+   - Calendar days with >3 events now show a `+N` hint; empty days show a friendly empty state. `SiteCalendar` return wrapped in a fragment to host the Dialog; new state `selectedDate`.
+   - **Only one calendar/dashboard exists** in the repo — the single responsive component covers mobile/tablet/desktop (Dialog already handles narrow viewports). Verified by clicking an event day at 390/820/1280px: dialog opens with full info, zero page errors.
+
 ### Browser-test method (reusable)
-The browser-check skill attaches to the running app on **:18299**, but Vite doesn't proxy `/api` locally (404). To drive **authenticated** pages: log in via the API on **:8080** directly to get a JWT, inject it with `context.addInitScript(t => localStorage.setItem('sitesort_token', t))`, and `context.route('**/api/**', …)` to re-`fetch` each call against :8080 and `fulfill`. Then set `viewport` per width (mobile 390 / tablet 768–820 / desktop 1280). The app on :18299 serves **live source via HMR**, so uncommitted edits show up. Result: all pages HTTP 200, zero console/page errors; invoice delete confirmed end-to-end (204, then cleaned up the test row).
+App runs on **:18299** (serves live source via HMR) but Vite doesn't proxy `/api` locally (404). To drive **authenticated** pages in Playwright: log in via the API on **:8080** for a JWT, inject it with `context.addInitScript(t => localStorage.setItem('sitesort_token', t))`, and `context.route('**/api/**', …)` to re-`fetch`+`fulfill` each call against :8080. Set `viewport` per width (390 / 820 / 1280). Used this all session — all pages 200, zero errors.
 
 ### Key files modified
 - `artifacts/sitesort/src/pages/invoices/index.tsx` — modal Delete button + `Trash2` import
 - `artifacts/sitesort/src/pages/projects/detail.tsx` — phone pencil + avatar camera touch affordances
 - `artifacts/sitesort/src/pages/settings/index.tsx` — avatar camera on tablet
-- `artifacts/sitesort/src/pages/dashboard/index.tsx`, `.../admin/index.tsx` — stat strips `md:grid-cols-4`
+- `.../admin/index.tsx` — stat strips `md:grid-cols-4`
+- `artifacts/sitesort/src/pages/dashboard/index.tsx` — stat strip `md:grid-cols-4` **+** clickable calendar dates with day detail Dialog (`EVENT_LINK` map, `selectedDate` state)
+- `.claude/skills/browser-check/{package.json,package-lock.json}` — committed `playwright-core` dep (commit `a837e6b`)
 
 ### Notes for next session
-- **`pnpm run typecheck` is green (exit 0)** — kept green this session.
+- **`pnpm run typecheck` is green (exit 0)** — kept green this session; working tree clean, all work pushed to `main`.
 - **GitHub push is automatic** via PostToolUse hook; **API server rebuild**: `pnpm --filter @workspace/api-server run build` after backend changes.
-- Pre-existing uncommitted change still present: `.claude/skills/browser-check/package.json` (+`package-lock.json`) added `playwright-core` for the browser-check skill — not committed yet; commit if you want it tracked.
+- Local browser testing of authenticated pages needs the `/api`→:8080 reroute trick (see Browser-test method above) — Vite doesn't proxy `/api` locally.
