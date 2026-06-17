@@ -425,7 +425,7 @@ export default function Dashboard() {
       })()}
 
       {/* Stats row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <StatCard
           icon={<Building2 className="w-5 h-5 text-primary" />}
           label="Active Projects"

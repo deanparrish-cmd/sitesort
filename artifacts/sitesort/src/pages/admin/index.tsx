@@ -405,7 +405,7 @@ export default function AdminDashboard() {
         {/* ── User Metrics ── */}
         <section>
           <SectionTitle icon={Users} title="User Metrics" sub="Platform-wide user activity" />
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <BigStat label="Total Users" value={s?.userMetrics?.totalUsers ?? 0} sub={`across ${fmt(s?.userMetrics?.totalCompanies ?? 0)} companies`} loading={loading} accent />
             <BigStat label="New This Week" value={s?.userMetrics?.newThisWeek ?? 0} trend={s?.userMetrics?.newThisWeekPct} sub={`${fmt(s?.userMetrics?.newLastWeek ?? 0)} last week`} loading={loading} />
             <BigStat label="Active This Week" value={s?.userMetrics?.activeThisWeek ?? 0} sub="Logged in ≥1×" loading={loading} />
@@ -418,7 +418,7 @@ export default function AdminDashboard() {
           <SectionTitle icon={Activity} title="Primary Actions" sub="Core platform activity across all features" />
 
           {/* Total summary */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <BigStat label="Total Actions (All Time)" value={s?.primaryActions?.total?.allTime ?? 0} loading={loading} accent />
             <BigStat label="Actions This Week" value={s?.primaryActions?.total?.thisWeek ?? 0} trend={s?.primaryActions?.total?.pctChange} sub={`${fmt(s?.primaryActions?.total?.lastWeek ?? 0)} last week`} loading={loading} />
             <BigStat label="Actions Today" value={s?.primaryActions?.total?.today ?? 0} loading={loading} />
@@ -537,7 +537,7 @@ export default function AdminDashboard() {
         {/* ── Revenue / Subscription ── */}
         <section>
           <SectionTitle icon={TrendingUp} title="Revenue & Subscriptions" sub="No payment processor connected — subscription tier data shown" />
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
             <BigStat label="Total Companies" value={s?.revenue?.totalCompanies ?? 0} loading={loading} />
             <BigStat label="Paid Plans" value={s?.revenue?.paidTiers ?? 0} sub="Pro / Enterprise" loading={loading} accent />
             <BigStat label="Free Tier" value={(s?.revenue?.byTier?.free ?? 0)} sub="companies" loading={loading} />
@@ -704,11 +704,11 @@ export default function AdminDashboard() {
         <section>
           <SectionTitle icon={Zap} title="Feature Adoption Speed" sub="Average days from signup to first use of each feature" />
           {adoptionLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
               {[...Array(8)].map((_, i) => <Skeleton key={i} className="h-28 w-full" />)}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
               {(featureAdoption ?? []).map((f: { feature: string; description: string; usersWhoUsed: number; avgDays: number | null }) => (
                 <Card key={f.feature}>
                   <p className="text-gray-400 text-xs font-medium uppercase tracking-wide mb-1 truncate">{f.feature}</p>
@@ -998,7 +998,7 @@ export default function AdminDashboard() {
         {/* ── Not-tracked sections ── */}
         <section>
           <SectionTitle icon={AlertCircle} title="Not Yet Tracked" sub="These sections require additional instrumentation" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
             {[
               { icon: "🌍", label: "Geography", note: "IP-based geolocation not tracked" },
               { icon: "📱", label: "Devices & Browsers", note: "User-agent logging not enabled" },
