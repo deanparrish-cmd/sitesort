@@ -147,7 +147,7 @@ function ProfileTab({ user, onSaved, isCancelled }: { user: { id: string; name: 
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={avatarUploading}
-            className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-30 sm:opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-wait"
+            className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-30 lg:opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-wait"
             title="Change photo"
           >
             <Camera className="w-5 h-5 text-white" />

@@ -9,7 +9,7 @@ import { ShareModal } from "@/components/share-modal";
 import {
   Plus, Search, ArrowDownCircle, ArrowUpCircle, CheckCircle2, Clock,
   AlertTriangle, Receipt, Paperclip, Upload, Loader2, X,
-  Share2, Eye, ExternalLink, FileText, Image, Download,
+  Share2, Eye, ExternalLink, FileText, Image, Download, Trash2,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { useListProjects } from "@workspace/api-client-react";
@@ -683,6 +683,14 @@ export default function InvoicesPage() {
                     className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border border-border bg-muted text-muted-foreground hover:bg-muted/70 transition-colors"
                   >
                     <Clock className="w-3.5 h-3.5" /><span className="hidden sm:inline">Mark unpaid</span>
+                  </button>
+                )}
+                {caps.canManageInvoices && (
+                  <button
+                    onClick={() => { const id = viewingInvoice.id; setViewingInvoice(null); deleteInvoice(id); }}
+                    className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border border-destructive/30 bg-destructive/5 text-destructive hover:bg-destructive/10 transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /><span className="hidden sm:inline">Delete</span>
                   </button>
                 )}
                 <button

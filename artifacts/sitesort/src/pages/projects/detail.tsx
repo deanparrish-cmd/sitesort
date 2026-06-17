@@ -1640,7 +1640,7 @@ tr:last-child td{border-bottom:none}
                             )}
                           </div>
                           {caps.canManageTeam && (
-                            <div className="absolute inset-0 rounded-xl bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <div className="absolute inset-0 rounded-xl bg-black/40 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity flex items-center justify-center">
                               <Camera className="w-4 h-4 text-white" />
                             </div>
                           )}
@@ -1739,7 +1739,7 @@ tr:last-child td{border-bottom:none}
                             {caps.canManageTeam && (
                               <button
                                 onClick={() => { setEditingPhoneId(member.id); setPhoneInput(member.phone ?? ""); }}
-                                className="ml-1 opacity-0 group-hover/phone:opacity-100 transition-opacity text-muted-foreground hover:text-primary shrink-0"
+                                className="ml-1 opacity-100 lg:opacity-0 lg:group-hover/phone:opacity-100 transition-opacity text-muted-foreground hover:text-primary shrink-0"
                               ><Pencil className="w-3 h-3" /></button>
                             )}
                           </div>
