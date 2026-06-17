@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Building2, AlertTriangle, ChevronLeft, ChevronRight, ArrowRight,
   ShieldAlert, FileSignature, Users, Bell, Search,
@@ -28,6 +29,16 @@ const EVENT_STYLES: Record<CalEvent["type"], { dot: string; badge: string; label
   "insurance":     { dot: "bg-blue-500",     badge: "bg-blue-500/10 text-blue-700 border-blue-500/20",            label: "Insurance Expiry" },
   "invoice-out":   { dot: "bg-rose-500",     badge: "bg-rose-500/10 text-rose-700 border-rose-500/20",            label: "Payment Due"      },
   "invoice-in":    { dot: "bg-emerald-500",  badge: "bg-emerald-500/10 text-emerald-700 border-emerald-500/20",   label: "Invoice Due In"   },
+};
+
+// Where each event type's full record lives, for the "View" link in the day dialog.
+const EVENT_LINK: Record<CalEvent["type"], { href: string; label: string }> = {
+  "project-start": { href: "/projects",   label: "View projects"        },
+  "project-end":   { href: "/projects",   label: "View projects"        },
+  "permit":        { href: "/compliance", label: "View in Compliance"   },
+  "insurance":     { href: "/compliance", label: "View in Compliance"   },
+  "invoice-out":   { href: "/invoices",   label: "View invoices"        },
+  "invoice-in":    { href: "/invoices",   label: "View invoices"        },
 };
 
 function notifIcon(type: string) {
@@ -62,12 +73,18 @@ function SiteCalendar({ events, alerts }: { events: CalEvent[]; alerts: ExpiryAl
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   const byDate = useMemo(() => {
     const map: Record<string, CalEvent[]> = {};
     for (const e of events) (map[e.date] ??= []).push(e);
     return map;
   }, [events]);
+
+  const selectedEvents = selectedDate ? (byDate[selectedDate] ?? []) : [];
+  const selectedLabel = selectedDate
+    ? new Date(selectedDate + "T12:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+    : "";
 
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -89,6 +106,7 @@ function SiteCalendar({ events, alerts }: { events: CalEvent[]; alerts: ExpiryAl
   function nextMonth() { if (month === 11) { setMonth(0); setYear(y => y + 1); } else setMonth(m => m + 1); }
 
   return (
+    <>
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
@@ -139,18 +157,31 @@ function SiteCalendar({ events, alerts }: { events: CalEvent[]; alerts: ExpiryAl
             const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
             const dayEvents = byDate[key] ?? [];
             const isToday = key === todayKey;
+            const hasEvents = dayEvents.length > 0;
             return (
-              <div key={key} className="flex flex-col items-center py-1 gap-0.5">
+              <button
+                key={key}
+                type="button"
+                onClick={() => setSelectedDate(key)}
+                aria-label={`${day}${hasEvents ? ` — ${dayEvents.length} event${dayEvents.length > 1 ? "s" : ""}` : ""}`}
+                className={cn(
+                  "flex flex-col items-center py-1 gap-0.5 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                  hasEvents ? "cursor-pointer hover:bg-muted" : "hover:bg-muted/50",
+                )}
+              >
                 <span className={`text-xs w-7 h-7 flex items-center justify-center rounded-full font-medium transition-colors
-                  ${isToday ? "bg-primary text-primary-foreground font-bold" : "text-foreground hover:bg-muted"}`}>
+                  ${isToday ? "bg-primary text-primary-foreground font-bold" : "text-foreground"}`}>
                   {day}
                 </span>
-                <div className="flex gap-0.5 flex-wrap justify-center">
+                <div className="flex gap-0.5 flex-wrap justify-center items-center min-h-[6px]">
                   {dayEvents.slice(0, 3).map((e, j) => (
                     <span key={j} title={e.label} className={`w-1.5 h-1.5 rounded-full ${EVENT_STYLES[e.type].dot}`} />
                   ))}
+                  {dayEvents.length > 3 && (
+                    <span className="text-[8px] leading-none font-semibold text-muted-foreground">+{dayEvents.length - 3}</span>
+                  )}
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -174,6 +205,40 @@ function SiteCalendar({ events, alerts }: { events: CalEvent[]; alerts: ExpiryAl
         )}
       </CardContent>
     </Card>
+
+    <Dialog open={!!selectedDate} onOpenChange={(o) => { if (!o) setSelectedDate(null); }}>
+      <DialogHeader>
+        <DialogTitle className="text-lg sm:text-xl">{selectedLabel}</DialogTitle>
+      </DialogHeader>
+      {selectedEvents.length > 0 ? (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+            {selectedEvents.length} {selectedEvents.length === 1 ? "event" : "events"} on this day
+          </p>
+          {selectedEvents.map((e, i) => (
+            <div key={i} className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border ${EVENT_STYLES[e.type].badge}`}>
+              <span className={`mt-1.5 w-2.5 h-2.5 rounded-full flex-shrink-0 ${EVENT_STYLES[e.type].dot}`} />
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-semibold uppercase tracking-wide opacity-70">{EVENT_STYLES[e.type].label}</p>
+                <p className="text-sm font-medium break-words">{e.label}</p>
+                <Link
+                  href={EVENT_LINK[e.type].href}
+                  onClick={() => setSelectedDate(null)}
+                  className="inline-flex items-center gap-1 mt-1 text-xs font-medium underline-offset-2 hover:underline"
+                >
+                  {EVENT_LINK[e.type].label} <ArrowRight className="w-3 h-3" />
+                </Link>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="py-6 text-center">
+          <p className="text-sm text-muted-foreground">No events scheduled for this day.</p>
+        </div>
+      )}
+    </Dialog>
+    </>
   );
 }
 
