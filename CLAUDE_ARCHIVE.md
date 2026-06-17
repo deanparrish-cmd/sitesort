@@ -497,3 +497,46 @@
 - `artifacts/sitesort/src/pages/notifications/index.tsx` — filter tab overflow fix
 - `artifacts/sitesort/src/pages/settings/index.tsx` — nav overflow fix
 - `artifacts/sitesort/src/pages/projects/index.tsx` — View Site button touch visibility fix
+
+---
+
+## End-of-session notes — 2026-06-15 (photo backfill, mobile feature parity)
+
+### Tasks completed today
+
+1. **Photo status backfill** — ran `UPDATE photos SET status='open' WHERE category IN ('snag','safety_concern') AND status IS NULL`; returned `UPDATE 0` (all existing photos already had status set from upload-time code, nothing needed backfilling).
+
+2. **Mobile/tablet feature parity audit** (`artifacts/sitesort/src/pages/admin/index.tsx`, `artifacts/sitesort/src/pages/invoices/index.tsx`):
+   - **Admin page — hidden table columns**: removed `hidden sm/md/lg:table-cell` from all admin table columns (Activity sub-detail, Feature usage bar, Users email + last-active, Companies plan/status/user-count/created). Tables already had `overflow-x-auto` wrappers so data is now accessible by horizontal scroll on mobile/tablet.
+   - **Admin page — hidden header items**: removed `hidden sm:block` from "SiteSort" label, separator, last-updated timestamp, and "← App" button — all now visible on all screen sizes.
+   - **Admin progress bars**: removed `hidden md:block` from sub-detail text in `ProgressBar` component.
+   - **Invoices — Description column**: removed `hidden lg:table-cell` from the Description column header and cell — now visible on tablet too.
+
+### Key files modified
+- `artifacts/sitesort/src/pages/admin/index.tsx` — all hidden table columns/header items now always visible
+- `artifacts/sitesort/src/pages/invoices/index.tsx` — Description column always visible
+
+---
+
+## End-of-session notes — 2026-06-16 (full monorepo typecheck repair)
+
+### Context
+`pnpm run typecheck` had been silently broken — 185 pre-existing type errors accumulated unnoticed (esbuild/Vite strip types without checking). Repaired the whole chain to exit 0.
+
+### Tasks completed today
+
+1. **CLAUDE.md trim** — was 30.9k chars; moved 06-11/06-12 session logs to `CLAUDE_ARCHIVE.md`.
+
+2. **Genuine code bugs fixed**:
+   - `lib/api-zod/src/index.ts` — ambiguous `export *` for `ListDocumentsParams`/`ListPhotosParams`; added explicit named re-exports.
+   - `scripts/src/github-push.ts` — typed `opts` as `ProxyOptions` instead of `RequestInit`.
+   - `dashboard/index.tsx` — `status === "completed"` should be `"complete"` (stat always read 0). Real bug.
+   - `site-board.tsx` — inverted ternary made `status === "uploading"` spinner unreachable. Real UX bug.
+   - `billing.ts` — Stripe SDK v22 moved `current_period_end` onto subscription items.
+   - `ai.ts` — `Buffer` not assignable to `BlobPart`; wrapped in `new Uint8Array(audioBuffer)`.
+   - Deleted 4 dead shadcn UI files (`alert-dialog`, `calendar`, `command`, `pagination`).
+   - `projects/detail.tsx` — orval hooks need `queryKey` passed via `getGet*QueryKey(...)` helpers.
+
+3. **Dependency version-drift pins** in `pnpm-workspace.yaml`:
+   - `@types/express-serve-static-core` pinned to 5.1.0 (5.1.1 broke `req.params.x` types).
+   - `@hookform/resolvers` packageExtension pins zod to 3.25.76 so zodResolver uses the app's zod v3 not the hoisted v4.

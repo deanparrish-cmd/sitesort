@@ -152,64 +152,11 @@ See CLAUDE_ARCHIVE.md for full detail.
 
 ---
 
-## End-of-session notes — 2026-06-15 (photo backfill, mobile feature parity)
-
-### Tasks completed today
-
-1. **Photo status backfill** — ran `UPDATE photos SET status='open' WHERE category IN ('snag','safety_concern') AND status IS NULL`; returned `UPDATE 0` (all existing photos already had status set from upload-time code, nothing needed backfilling).
-
-2. **Mobile/tablet feature parity audit** (`artifacts/sitesort/src/pages/admin/index.tsx`, `artifacts/sitesort/src/pages/invoices/index.tsx`):
-   - **Admin page — hidden table columns**: removed `hidden sm/md/lg:table-cell` from all admin table columns (Activity sub-detail, Feature usage bar, Users email + last-active, Companies plan/status/user-count/created). Tables already had `overflow-x-auto` wrappers so data is now accessible by horizontal scroll on mobile/tablet.
-   - **Admin page — hidden header items**: removed `hidden sm:block` from "SiteSort" label, separator, last-updated timestamp, and "← App" button — all now visible on all screen sizes.
-   - **Admin progress bars**: removed `hidden md:block` from sub-detail text in `ProgressBar` component.
-   - **Invoices — Description column**: removed `hidden lg:table-cell` from the Description column header and cell — now visible on tablet too.
-   - All other responsive layout (hamburger sidebar, mobile card views, stacked grids, two-panel overlays) was confirmed already feature-complete and left unchanged. Subcontractors mobile bar already had all action buttons (FolderPlus, UserPlus, edit, share, contact actions).
-
-### Key files modified
-- `artifacts/sitesort/src/pages/admin/index.tsx` — all hidden table columns and header nav items now always visible
-- `artifacts/sitesort/src/pages/invoices/index.tsx` — Description column always visible
-
-### Notes for next session
-- **GitHub push is automatic** via PostToolUse hook
-- **API server rebuild**: `pnpm --filter @workspace/api-server run build` after any backend change
-- Photo backfill is complete — no longer pending
+## End-of-session notes — 2026-06-15 (photo backfill, mobile feature parity) — see CLAUDE_ARCHIVE.md for full detail
 
 ---
 
-## End-of-session notes — 2026-06-16 (full monorepo typecheck repair)
-
-### Context
-`pnpm run typecheck` had been silently broken — the app builds via esbuild/Vite (which strip types without checking), so **185 pre-existing type errors** had accumulated unnoticed. The root `typecheck` script chains `typecheck:libs && <recursive>`, so the first failure (in libs) hid everything downstream. Repaired the whole chain to a clean **exit code 0**.
-
-### Tasks completed today
-
-1. **CLAUDE.md trim** — was 30.9k chars; moved the 2026-06-11 and 2026-06-12 (check-ins) session logs into `CLAUDE_ARCHIVE.md`, leaving a one-line pointer. Now ~25k.
-
-2. **Genuine code bugs fixed**:
-   - `lib/api-zod/src/index.ts` — two `export *` lines both emitted `ListDocumentsParams`/`ListPhotosParams` (zod schema value vs. generated TS type), ambiguous under declaration emit. Added explicit named re-exports of the zod values to resolve it (types still derivable via `z.infer`).
-   - `scripts/src/github-push.ts` — typed `opts` as `ProxyOptions` (from `@replit/connectors-sdk`) instead of `RequestInit`; the connector's `headers` is the narrower `Record<string,string>`.
-   - `dashboard/index.tsx` — "completed" stat compared `status === "completed"` but the real `ProjectStatus` value is `"complete"` (values: active/on_hold/complete). The stat had always read 0. **Real bug.**
-   - `site-board.tsx` — inverted ternary: `status !== "capturing"` narrowed the else-branch to `"capturing"`, making the `status === "uploading"` spinner unreachable and showing the wrong button mid-upload. Changed to `status !== "capturing" && status !== "uploading"`. **Real UX bug.**
-   - `billing.ts` — Stripe SDK v22 moved `current_period_end` off `Subscription` onto each subscription item; now reads `subscription.items.data[0]?.current_period_end` (2 sites).
-   - `ai.ts` — `Buffer` not assignable to `BlobPart` under `@types/node` 25; wrapped audio in `new Uint8Array(audioBuffer)` before `new File([...])`.
-   - Deleted 4 dead shadcn UI files (`alert-dialog.tsx`, `calendar.tsx`, `command.tsx`, `pagination.tsx`) — zero imports, referenced `buttonVariants`/`DialogContent` that the custom `button`/`dialog` never export.
-   - `projects/detail.tsx` — generated orval hooks type `query` as a full `UseQueryOptions` (react-query v5 requires `queryKey`). Passed orval's `getGet*QueryKey(...)` helpers alongside `{ enabled }` at the 4 call sites.
-
-3. **Dependency version-drift pins** (the bulk — ~164 errors) in `pnpm-workspace.yaml`:
-   - `overrides: '@types/express-serve-static-core': 5.1.0` — 5.1.1 widened `ParamsDictionary` to `{ [key]: string | string[] }`, breaking every `eq(col, req.params.x)`. Pinned to 5.1.0 (params stay `string`).
-   - `packageExtensions: '@hookform/resolvers' → dependencies.zod: 3.25.76` — the resolver declares no zod dep, so `import { z } from 'zod'` resolved the hoisted zod 4.3.6 (pulled by openai/orval) instead of the app's 3.25.76, making `zodResolver` reject our v3 schemas. Pinned so both resolve the same zod instance.
-
-### Key files modified
-- `lib/api-zod/src/index.ts`, `scripts/src/github-push.ts`
-- `artifacts/api-server/src/routes/ai.ts`, `artifacts/api-server/src/routes/billing.ts`
-- `artifacts/sitesort/src/pages/dashboard/index.tsx`, `.../site-board.tsx`, `.../projects/detail.tsx`
-- deleted: `artifacts/sitesort/src/components/ui/{alert-dialog,calendar,command,pagination}.tsx`
-- `pnpm-workspace.yaml` (override + packageExtensions), `pnpm-lock.yaml`
-
-### Notes for next session
-- **`pnpm run typecheck` is now green (exit 0)** — keep it that way; esbuild/Vite won't catch type regressions, so run it before shipping.
-- The two `pnpm-workspace.yaml` pins are version-drift guards; if `@types/express` or zod/openai/orval get bumped, re-check these.
-- **GitHub push is automatic** via PostToolUse hook; **API server rebuild**: `pnpm --filter @workspace/api-server run build` after backend changes.
+## End-of-session notes — 2026-06-16 (full monorepo typecheck repair) — see CLAUDE_ARCHIVE.md for full detail
 
 ---
 
@@ -249,3 +196,29 @@ App runs on **:18299** (serves live source via HMR) but Vite doesn't proxy `/api
 - **`pnpm run typecheck` is green (exit 0)** — kept green this session; working tree clean, all work pushed to `main`.
 - **GitHub push is automatic** via PostToolUse hook; **API server rebuild**: `pnpm --filter @workspace/api-server run build` after backend changes.
 - Local browser testing of authenticated pages needs the `/api`→:8080 reroute trick (see Browser-test method above) — Vite doesn't proxy `/api` locally.
+
+---
+
+## End-of-session notes — 2026-06-17 session 2 (site calendar dot indicator, plan limit upgrade dialog)
+
+### Tasks completed today
+
+1. **Site Calendar red-dot event indicator** (commit `ffe5026`, `pages/dashboard/index.tsx`):
+   - Small red badge now overlays the day number for any day that has events, giving at-a-glance signal before reading the coloured dots inside the cell.
+   - Also committed `tmux` to nix packages (`.replit`) and tracked `cal-dot-check.mjs` Playwright test script.
+
+2. **Plan limit upgrade dialog — proactive check + improved UI** (commit `a9e8db8`):
+   - **Previously**: dialog only fired after an API `403 plan_limit` response (user had to fill the form first).
+   - **Now**: check is proactive — uses client-side project count + plan tier from `useSubscription()`. Button click or `?new=1` auto-open shows the dialog immediately if the user is at their limit.
+   - **Dialog improved**: shows current plan badge + usage count ("3 of 1 project used"), next-tier callout with project count and price ("Team plan — 5 projects · £79/mo"), "Maybe later" / "Upgrade plan →" buttons.
+   - Applied to both `/projects` page and `/dashboard` "New Project" button.
+   - Plan limits (matching server): `free`/`solo` = 1, `team` = 5, `pro` = Infinity. Beta-access companies bypass the check.
+   - **Browser-tested**: Playwright confirmed dialog fires immediately on both pages, all elements present, "Upgrade plan" routes to `/settings?tab=billing`. Zero console errors.
+
+### Key files modified
+- `artifacts/sitesort/src/pages/projects/index.tsx` — `PLAN_LIMITS`/`NEXT_PLAN` constants, `atLimit` computed value, proactive button + auto-open check, improved Dialog JSX
+- `artifacts/sitesort/src/pages/dashboard/index.tsx` — `useSubscription` import, `atLimit` check on "New Project" button, upgrade Dialog
+
+### Notes for next session
+- **`pnpm run typecheck` is green** — kept clean this session.
+- **GitHub push is automatic** via PostToolUse hook; **API server rebuild**: `pnpm --filter @workspace/api-server run build` after backend changes.
