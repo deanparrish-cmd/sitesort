@@ -50,12 +50,16 @@ router.get("/messages/conversations", authenticate, async (req, res) => {
 
     // Get all unique user ids involved
     const userIds = Array.from(new Set(rows.flatMap(r => [r.senderId, r.recipientId])));
+    // Role shown is the person's role in THIS (active) company — the membership
+    // role — not their home-company role. leftJoin so a missing membership just
+    // yields a blank role rather than dropping the row.
     const userRows = userIds.length
-      ? await db.select({ id: usersTable.id, name: usersTable.name, role: usersTable.role })
+      ? await db.select({ id: usersTable.id, name: usersTable.name, role: companyMembersTable.role })
           .from(usersTable)
+          .leftJoin(companyMembersTable, and(eq(companyMembersTable.userId, usersTable.id), eq(companyMembersTable.companyId, companyId)))
           .where(inArray(usersTable.id, userIds))
       : [];
-    const userMap = Object.fromEntries(userRows.map(u => [u.id, u]));
+    const userMap = Object.fromEntries(userRows.map(u => [u.id, { id: u.id, name: u.name, role: u.role ?? "" }]));
 
     // Group into conversations
     const convMap = new Map<string, {

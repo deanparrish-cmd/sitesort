@@ -5,6 +5,7 @@ import {
   channelMessageReactionsTable,
   usersTable, projectsTable, projectMembersTable,
   notificationsTable, documentsTable, photosTable, permitsTable,
+  companyMembersTable,
 } from "@workspace/db/schema";
 import { eq, and, gt, lt, sql, desc, inArray, ne } from "drizzle-orm";
 import { generateId } from "../lib/id";
@@ -222,13 +223,15 @@ router.get("/channels/:projectId/messages", authenticate, async (req, res) => {
       rows = fetched.slice(0, PAGE_SIZE).reverse();
     }
 
-    // Sender names
+    // Sender names + their role in THIS company (membership role, not home role).
     const senderIds = Array.from(new Set(rows.map(r => r.senderId)));
     const userRows = senderIds.length
-      ? await db.select({ id: usersTable.id, name: usersTable.name, role: usersTable.role })
-          .from(usersTable).where(inArray(usersTable.id, senderIds))
+      ? await db.select({ id: usersTable.id, name: usersTable.name, role: companyMembersTable.role })
+          .from(usersTable)
+          .leftJoin(companyMembersTable, and(eq(companyMembersTable.userId, usersTable.id), eq(companyMembersTable.companyId, companyId)))
+          .where(inArray(usersTable.id, senderIds))
       : [];
-    const userMap = Object.fromEntries(userRows.map(u => [u.id, u]));
+    const userMap = Object.fromEntries(userRows.map(u => [u.id, { id: u.id, name: u.name, role: u.role ?? "" }]));
 
     // Attachment data
     const docIds = rows.filter(r => r.attachmentType === "document" && r.attachmentId).map(r => r.attachmentId as string);

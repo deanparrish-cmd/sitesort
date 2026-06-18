@@ -192,6 +192,8 @@ See CLAUDE_ARCHIVE.md for full detail.
 
 **✅ DEPLOYED LIVE + verified 2026-06-18.** Published; live bundle `index-DmqLDOUV.js` has the switcher. Confirmed on `www.sitesort.co.uk`: boot migration created+backfilled `company_members` on the prod DB (proof: `POST /auth/switch-company` returns 200 — that path queries the table directly), and login/`/users`/`/messages/users` all 200. User added `dean.parrish@me.com` (linked) + `annabelleparrish@icloud.com` (new) to their real company (Amy/`amy-parrish@hotmail.co.uk` admin) via live In-House Team UI — **both show in the team list**, confirming the link-existing-user path works in production. Agent CANNOT verify a user's private live company (no prod creds; only demo `paul@acme.com`) — user self-confirmed in-app.
 
+**Follow-up polish:** DM **conversation list** + **channel sender chips** now show the person's **per-company (membership) role**, not their home role — `messages.ts` conversations `userMap` and `channels.ts` sender `userMap` now `leftJoin company_members` on the active `companyId` (was `usersTable.role`). Verified: Dean shows "Project Manager" in Test SiteSort (his membership role) instead of "Admin" (his home role). **Needs a publish to reach live.**
+
 ---
 
 ## End-of-session notes — 2026-06-18 session 4 (messaging `=ANY()`→`inArray` 500-fix + invoice Open/list previews/timestamps/save-to-notes; DEPLOYED LIVE) — see CLAUDE_ARCHIVE.md
