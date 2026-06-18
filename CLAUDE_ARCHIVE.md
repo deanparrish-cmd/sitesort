@@ -697,3 +697,21 @@ Custom calendar events now flow to the **public QR site board**, scoped per-even
 
 ### ⚠️ Server run-model gotcha
 The :8080 process during these sessions is a manually-started `node dist/index.mjs` kept alive via the Bash tool's `run_in_background: true`. `nohup`/`setsid` from a tool shell did NOT survive. The user's Run/republish cleanly replaces it.
+
+---
+
+## End-of-session notes — 2026-06-18 session 3 (signup card-upfront: fail-CLOSED on checkout failure)
+
+**Report:** "a new user just registered and it didn't ask for card." **Finding: the feature already exists** — `Collect card details at registration` (commit `f029d02`, 2026-06-09 09:35) wired signup → `/api/billing/checkout` → Stripe. Stripe is fully configured (live `sk_live…` key + 3 price IDs + webhook secret); checkout works. Card-upfront flow in `routes/billing.ts /billing/checkout`: `mode:subscription`, `trial_period_days:14`, `payment_method_collection:"always"`, `missing_payment_method:"cancel"`. Register UI shows Solo/Team/Pro selector then redirects to Stripe.
+
+**Root cause of card-less accounts:** `register.tsx onSubmit` failed **OPEN** — if `/billing/checkout` returned non-OK (or a stale published bundle), it silently `setLocation("/dashboard")`, handing out a `free`/`active` card-less account. (NormCo, created 10h after the feature, status `active`, no `stripe_customer_id`, is the proof.)
+
+**Fix:** fail **CLOSED** — on checkout failure show an error banner + stay on /register to retry (reuses existing token); only a genuine "Stripe not set/not configured" error falls through to /dashboard (dev). Verified with deterministic playwright (mocked register=201 + checkout=500): banner shown, URL stays /register, no /dashboard leak.
+
+**Abandonment hole — CLOSED.** `contexts/subscription.tsx` only blocked on `status === "cancelled"`, so an abandoned signup (`active`) was usable free. Fix:
+- **Backend** (`auth.ts` register): new companies start `subscriptionStatus: "incomplete"` (was `active`). Webhook `handleSubscriptionUpsert` already flips `incomplete → trialing` on `checkout.session.completed`.
+- **Frontend**: `subscription.tsx` exposes `needsCheckout = !betaAccess && status === "incomplete"`. New `components/checkout-gate.tsx` = full-screen hard gate (plan buttons → checkout; Log-out escape; polls `/companies/mine` on `?checkout=success` to handle the webhook race). `sidebar-layout.tsx` early-returns `<CheckoutGate/>` when `needsCheckout`.
+- **Scope:** only NEW registrations get `incomplete`; existing `active` companies unaffected. Beta bypasses via `effectiveStatus`.
+- **Verified** via playwright (mocked `/auth/me` + `/companies/mine`): `incomplete` → gate, `trialing` → app. Gotcha: Playwright matches routes **most-recently-added first** — register the catch-all `**/api/**` mock BEFORE specific ones.
+
+**⚠️ Deploy:** both fixes reach users only after **Run/Publish** (live bundle is separate from workspace).

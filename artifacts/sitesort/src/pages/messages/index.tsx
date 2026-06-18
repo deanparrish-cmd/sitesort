@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
+import { useLocation } from "wouter";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Send, Users, Eye, ArrowLeft, Check, CheckCheck, Pencil, Trash2, User, Building2, Receipt, X, ExternalLink, FileText, Image, FileCheck, Paperclip, Hash, CornerUpLeft, Search, Zap, ChevronUp, Loader2 } from "lucide-react";
+import { MessageSquare, Send, Users, Eye, ArrowLeft, Check, CheckCheck, Pencil, Trash2, User, Building2, Receipt, X, ExternalLink, FileText, Image, FileCheck, Paperclip, Hash, CornerUpLeft, Search, Zap, ChevronUp, Loader2, StickyNote } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSubscription } from "@/contexts/subscription";
 import { useToast } from "@/hooks/use-toast";
@@ -123,6 +124,24 @@ function timeLabel(iso: string) {
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
+// Full, unambiguous date + time for the message tooltip / audit trail.
+function fullTimestamp(iso: string) {
+  return new Date(iso).toLocaleString("en-GB", {
+    weekday: "short", day: "numeric", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+}
+
+// Plain-text preview of a message for saving into a contact's notes.
+function messageText(m: { content?: string | null; invoice?: unknown; attachmentType?: string | null }): string {
+  if (m.content && m.content.trim()) return m.content.trim();
+  if (m.invoice) return "[Invoice]";
+  if (m.attachmentType === "document") return "[Document]";
+  if (m.attachmentType === "photo") return "[Photo]";
+  if (m.attachmentType === "permit") return "[Permit]";
+  return "";
+}
+
 function getCurrentUser(): { id: string; role: string; name: string } | null {
   try {
     const token = localStorage.getItem("sitesort_token");
@@ -135,6 +154,7 @@ function getCurrentUser(): { id: string; role: string; name: string } | null {
 export default function MessagesPage() {
   const { isCancelled } = useSubscription();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const me = getCurrentUser();
   const isManager = me?.role === "admin" || me?.role === "project_manager";
 
@@ -532,6 +552,29 @@ export default function MessagesPage() {
       setThread(prev => prev.filter(m => m.id !== id));
       setConfirmDeleteId(null);
       fetchConversations();
+    }
+  }
+
+  // Save a DM into the conversation partner's Notes & Reminders log (In-House Team).
+  async function saveToNotes(msg: Message) {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
+    if (!activeConv || viewAll) return;
+    const text = messageText(msg);
+    if (!text) { toast({ title: "Nothing to save", description: "This message has no text to copy into notes.", variant: "destructive" }); return; }
+    const body = `${msg.senderName} · ${fullTimestamp(msg.createdAt)}\n${text}`;
+    try {
+      const r = await fetch(`/api/users/${activeConv.otherId}/notes`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ body }),
+      });
+      if (r.ok) {
+        toast({ title: "Saved to notes", description: `Added to ${activeConv.otherName}'s Notes & Reminders.` });
+      } else {
+        toast({ title: "Couldn't save to notes", description: "Please try again.", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Couldn't save to notes", description: "Please try again.", variant: "destructive" });
     }
   }
 
@@ -1141,16 +1184,22 @@ export default function MessagesPage() {
                                   {msg.invoice.reference && <p className="text-muted-foreground">Ref: {msg.invoice.reference}</p>}
                                   <p className="text-muted-foreground">Due: {new Date(msg.invoice.dueDate + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
                                 </div>
-                                {msg.invoice.attachmentUrl && (
-                                  <div className="px-3 pb-2">
+                                <div className="px-3 pb-2 flex items-center gap-3">
+                                  <button
+                                    onClick={() => { if (msg.invoice) navigate(`/invoices?invoice=${msg.invoice.id}`); }}
+                                    className="inline-flex items-center gap-1 text-primary hover:underline text-[11px] font-medium"
+                                  >
+                                    <Eye className="w-3 h-3" /> Open invoice
+                                  </button>
+                                  {msg.invoice.attachmentUrl && (
                                     <button
                                       onClick={() => { const u = msg.invoice?.attachmentUrl?.replace(/^\/uploads\//, "/api/uploads/"); if (u) window.open(u, '_blank', 'noopener,noreferrer'); }}
                                       className="inline-flex items-center gap-1 text-primary hover:underline text-[11px] font-medium"
                                     >
                                       <ExternalLink className="w-3 h-3" /> View document
                                     </button>
-                                  </div>
-                                )}
+                                  )}
+                                </div>
                               </div>
                             )}
                             {/* Document attachment card */}
@@ -1284,7 +1333,7 @@ export default function MessagesPage() {
                           </div>
                         )}
                         <div className={cn("flex items-center gap-1 px-1", msg.mine && !viewAll ? "flex-row-reverse" : "flex-row")}>
-                          <span className="text-[10px] text-muted-foreground">{timeLabel(msg.createdAt)}</span>
+                          <span className="text-[10px] text-muted-foreground cursor-default" title={fullTimestamp(msg.createdAt)}>{timeLabel(msg.createdAt)}</span>
                           {msg.mine && !viewAll && (
                             msg.readAt
                               ? <CheckCheck className="w-3.5 h-3.5 text-primary" />
@@ -1302,6 +1351,11 @@ export default function MessagesPage() {
                                 className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground text-sm"
                                 title="React"
                               >😊</button>
+                              <button
+                                onClick={() => saveToNotes(msg)}
+                                className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                                title={`Save to ${activeConv?.otherName ?? "contact"}'s notes`}
+                              ><StickyNote className="w-3 h-3" /></button>
                               {msg.mine && (
                                 <>
                                   <button
@@ -1750,7 +1804,7 @@ export default function MessagesPage() {
                           </div>
                         )}
                         <div className={cn("flex items-center gap-1 px-1", msg.mine ? "flex-row-reverse" : "flex-row")}>
-                          <span className="text-[10px] text-muted-foreground">{timeLabel(msg.createdAt)}</span>
+                          <span className="text-[10px] text-muted-foreground cursor-default" title={fullTimestamp(msg.createdAt)}>{timeLabel(msg.createdAt)}</span>
                           {editingId !== msg.id && confirmDeleteId !== msg.id && (
                             <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex gap-0.5">
                               <button

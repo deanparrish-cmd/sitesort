@@ -172,6 +172,28 @@ See CLAUDE_ARCHIVE.md for full detail.
 
 ---
 
+## End-of-session notes — 2026-06-18 session 4 (BUGFIX: messaging was 500-ing on all real data — `= ANY()` → `inArray()`)
+
+**Report:** "get the internal message feature up and running." Two distinct problems:
+1. **Every company has exactly 1 user** → nobody to message, so the feature *looks* dead. `/messages/users` returns company peers (always empty). Not a bug — needs ≥2 users.
+2. **Real bug — `/messages/conversations`, `/messages/thread/:id`, `/channels`, search etc. all returned HTTP 500 the moment ANY message row existed.** Root cause: the `sql\`${col} = ANY(${jsArray})\`` pattern (used **24×** across `routes/messages.ts` + `routes/channels.ts`). Drizzle expands a JS array there into a **tuple** `ANY(($1,$2))`, and Postgres throws `op ANY/ALL (array) requires array on right side` (code 42809). The feature was built but never exercised with data (0 message rows in DB), so this never surfaced.
+
+**Fix:** replaced all 24 with drizzle's `inArray(col, arr)` (added `inArray` import to both files; `ne` too for the one compound `… AND senderId != userId` case at channels.ts ~L67). Pure mechanical swap; the existing `arr.length ? … : []` guards stay so empty arrays never hit `inArray`.
+
+**Verified** (rebuilt bundle on a throwaway `PORT=8090` instance — the Replit :8080 process holds the OLD bundle in memory): created a 2nd Acme user (Sarah) + a teammate (Tom) in the user's test company; full round-trips work — `conversations`/`thread`/`channels`/`search`/`send`/reply all 200, unread counts + read-receipts (✓✓) correct. **UI tested across desktop/tablet/mobile** (browser, all green, zero console errors). Screenshots confirm the two-pane chat, project channels, DM badges.
+
+**Test data left in DB (demo helpers — offer to remove):** `sarah@acme.com` (Acme PM) + `tom@testsitesort.co.uk` (Test SiteSort site worker), both password `password123` (copied Paul's bcrypt hash), + a couple of demo DMs. They give the otherwise-1-user companies someone to message.
+
+**⚠️ Deploy:** fix only reaches live after **Run/Publish** (rebuilds from source, which now has it). The 1-user-per-company situation means real users still need to invite teammates via In-House Team / invite links before messaging is useful.
+
+**Dev/prod DB split (discovered):** the **live site has its OWN production database** — proven: workspace-created user Tom gets 401 on `www.sitesort.co.uk` while seed user Paul gets 200. Workspace test data does NOT appear on live; the user develops against the **workspace preview**. After source edits the **workspace :8080 holds the OLD bundle in memory** until restarted: `pnpm --filter @workspace/api-server run build` (also builds frontend → `dist/public`), `pkill -f dist/index.mjs`, then `PORT=8080 node dist/index.mjs` via `run_in_background`.
+
+**Follow-up polish (same session):** (1) **invoice message card** now always shows an **"Open invoice"** button (deep-links `/invoices?invoice=<id>` → viewer auto-opens then `replaceState`s the param away) — previously only a "View document" link appeared, and only when the invoice had a file, so file-less shared invoices had no way to open. (2) **conversation/channel list previews** no longer render blank for attachment-only messages — backend `messages.ts`/`channels.ts` now return a typed label (`🧾 Invoice` / `📄 Document` / `📷 Photo` / `📋 Permit`) via `messagePreview()`/`channelPreview()` when `content` is empty. Both verified in-browser; typecheck green.
+
+**Messaging enhancements (same day):** (1) **full date+time tooltip** on every message timestamp — `fullTimestamp()` ("Thu, 18 Jun 2026, 16:08") in the `title` attr; the visible label stays relative ("9m ago"). (2) **"Save to notes"** StickyNote action on each DM message → `POST /api/users/:otherId/notes` with body `"{sender} · {fullTimestamp}\n{text}"`, landing in that contact's In-House Team **Notes & Reminders** log (`messageText()` labels attachment-only msgs). DM-only (channels have no single contact); `isCancelled`-guarded. Verified across **desktop/tablet/mobile** (all 3 "versions") + functional note-creation; zero console errors. Messaging confirmed working on all 3 viewports.
+
+---
+
 ## End-of-session notes — 2026-06-18 (custom user-created calendar events, Feature #56) — see CLAUDE_ARCHIVE.md
 
 ---
@@ -188,21 +210,7 @@ See CLAUDE_ARCHIVE.md for full detail.
 
 ---
 
-## End-of-session notes — 2026-06-18 session 3 (signup card-upfront: fail-CLOSED on checkout failure)
-
-**Report:** "a new user just registered and it didn't ask for card." **Finding: the feature already exists** — `Collect card details at registration` (commit `f029d02`, 2026-06-09 09:35) wired signup → `/api/billing/checkout` → Stripe. Stripe is fully configured here (live `sk_live…` key + all 3 price IDs + webhook secret); the checkout endpoint works (probe returned a real `checkout.stripe.com` URL). Card-upfront flow already in `routes/billing.ts /billing/checkout`: `mode:subscription`, `trial_period_days:14`, `payment_method_collection:"always"`, `missing_payment_method:"cancel"`. The register UI (`pages/auth/register.tsx`) shows a Solo/Team/Pro selector then redirects to Stripe.
-
-**Root cause of card-less accounts:** `register.tsx onSubmit` failed **OPEN** — if `/billing/checkout` returned non-OK (or a stale published bundle), it silently did `setLocation("/dashboard")`, handing out a `free`/`active` card-less account with no error. (NormCo, created 2026-06-09 19:48 — 10h after the feature — is the proof: status `active`, no `stripe_customer_id`.) Older companies just predate `f029d02`.
-
-**Fix (this session):** made it fail **CLOSED**. On checkout failure it now shows an error banner ("We couldn't start the secure payment step — your account was created, but no card was added. Please click 'Start free trial' again…") and **stays on /register to retry** (retry reuses the existing token via the localStorage check), instead of entering the app. Kept a genuine escape: only when the server says Stripe is "not set/not configured" (local/dev) does it fall through to /dashboard. **Verified:** typecheck green; register renders clean on local + live; deterministic playwright test (mocked register=201 + checkout=500) → error banner shown, URL stays `/register`, no leak to `/dashboard`, zero page errors.
-
-**Abandonment hole — CLOSED this session.** Previously `contexts/subscription.tsx` only blocked on `status === "cancelled"`, so an abandoned signup (company `active`) was fully usable without paying. Fix:
-- **Backend** (`auth.ts` register): new companies now start `subscriptionStatus: "incomplete"` (was the `active` default). The billing webhook's `handleSubscriptionUpsert` already flips `incomplete → trialing` on `checkout.session.completed` (no webhook change needed).
-- **Frontend**: `subscription.tsx` exposes `needsCheckout = !betaAccess && status === "incomplete"`. New `components/checkout-gate.tsx` is a **full-screen hard gate** (plan buttons → `/billing/checkout` → Stripe; Log-out escape; handles the post-payment race by polling `/companies/mine` when the URL has `?checkout=success` and reloading once status leaves `incomplete`). `sidebar-layout.tsx` early-returns `<CheckoutGate/>` when `needsCheckout`, so an `incomplete` company can't reach any authenticated page.
-- **Scope/safety:** only NEW registrations get `incomplete`; all EXISTING companies are `active` and unaffected (deliberately not retroactively gating live users like NormCo). Beta companies bypass via `effectiveStatus`.
-- **Verified:** typecheck green; deterministic playwright test (mocked `/auth/me` + `/companies/mine`) → `incomplete` shows the gate (no dashboard), `trialing` renders the app normally; zero page errors. Gotcha: Playwright matches routes **most-recently-added first**, so register the catch-all `**/api/**` mock BEFORE the specific ones.
-
-**⚠️ Deploy:** both fixes (fail-closed + abandonment gate) only reach real users after a **Run/Publish** — the live `www.sitesort.co.uk` bundle is separate from the workspace.
+## End-of-session notes — 2026-06-18 session 3 (signup card-upfront: fail-CLOSED + abandonment gate) — see CLAUDE_ARCHIVE.md
 
 ---
 
