@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
+import { useLocation } from "wouter";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -135,6 +136,7 @@ function getCurrentUser(): { id: string; role: string; name: string } | null {
 export default function MessagesPage() {
   const { isCancelled } = useSubscription();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const me = getCurrentUser();
   const isManager = me?.role === "admin" || me?.role === "project_manager";
 
@@ -1141,16 +1143,22 @@ export default function MessagesPage() {
                                   {msg.invoice.reference && <p className="text-muted-foreground">Ref: {msg.invoice.reference}</p>}
                                   <p className="text-muted-foreground">Due: {new Date(msg.invoice.dueDate + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
                                 </div>
-                                {msg.invoice.attachmentUrl && (
-                                  <div className="px-3 pb-2">
+                                <div className="px-3 pb-2 flex items-center gap-3">
+                                  <button
+                                    onClick={() => { if (msg.invoice) navigate(`/invoices?invoice=${msg.invoice.id}`); }}
+                                    className="inline-flex items-center gap-1 text-primary hover:underline text-[11px] font-medium"
+                                  >
+                                    <Eye className="w-3 h-3" /> Open invoice
+                                  </button>
+                                  {msg.invoice.attachmentUrl && (
                                     <button
                                       onClick={() => { const u = msg.invoice?.attachmentUrl?.replace(/^\/uploads\//, "/api/uploads/"); if (u) window.open(u, '_blank', 'noopener,noreferrer'); }}
                                       className="inline-flex items-center gap-1 text-primary hover:underline text-[11px] font-medium"
                                     >
                                       <ExternalLink className="w-3 h-3" /> View document
                                     </button>
-                                  </div>
-                                )}
+                                  )}
+                                </div>
                               </div>
                             )}
                             {/* Document attachment card */}

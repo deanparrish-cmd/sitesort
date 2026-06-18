@@ -186,6 +186,10 @@ See CLAUDE_ARCHIVE.md for full detail.
 
 **⚠️ Deploy:** fix only reaches live after **Run/Publish** (rebuilds from source, which now has it). The 1-user-per-company situation means real users still need to invite teammates via In-House Team / invite links before messaging is useful.
 
+**Dev/prod DB split (discovered):** the **live site has its OWN production database** — proven: workspace-created user Tom gets 401 on `www.sitesort.co.uk` while seed user Paul gets 200. Workspace test data does NOT appear on live; the user develops against the **workspace preview**. After source edits the **workspace :8080 holds the OLD bundle in memory** until restarted: `pnpm --filter @workspace/api-server run build` (also builds frontend → `dist/public`), `pkill -f dist/index.mjs`, then `PORT=8080 node dist/index.mjs` via `run_in_background`.
+
+**Follow-up polish (same session):** (1) **invoice message card** now always shows an **"Open invoice"** button (deep-links `/invoices?invoice=<id>` → viewer auto-opens then `replaceState`s the param away) — previously only a "View document" link appeared, and only when the invoice had a file, so file-less shared invoices had no way to open. (2) **conversation/channel list previews** no longer render blank for attachment-only messages — backend `messages.ts`/`channels.ts` now return a typed label (`🧾 Invoice` / `📄 Document` / `📷 Photo` / `📋 Permit`) via `messagePreview()`/`channelPreview()` when `content` is empty. Both verified in-browser; typecheck green.
+
 ---
 
 ## End-of-session notes — 2026-06-18 (custom user-created calendar events, Feature #56) — see CLAUDE_ARCHIVE.md

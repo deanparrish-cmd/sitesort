@@ -8,6 +8,17 @@ import { sendNewMessageEmail } from "../lib/email";
 
 const router: IRouter = Router();
 
+// Conversation-list preview for a message: its text, or a typed label when the
+// message is attachment/invoice-only (otherwise the list row would render blank).
+function messagePreview(m: { content: string | null; invoiceId?: string | null; attachmentType?: string | null }): string {
+  if (m.content && m.content.trim()) return m.content;
+  if (m.invoiceId) return "🧾 Invoice";
+  if (m.attachmentType === "document") return "📄 Document";
+  if (m.attachmentType === "photo") return "📷 Photo";
+  if (m.attachmentType === "permit") return "📋 Permit";
+  return m.content ?? "";
+}
+
 // GET /api/messages/conversations — list conversations for current user (or all if admin/pm)
 router.get("/messages/conversations", authenticate, async (req, res) => {
   try {
@@ -71,7 +82,7 @@ router.get("/messages/conversations", authenticate, async (req, res) => {
             ? `${sender?.name ?? "Unknown"} → ${recipient?.name ?? "Unknown"}`
             : userMap[otherId as string]?.name ?? "Unknown",
           otherRole: viewAll ? "" : userMap[otherId as string]?.role ?? "",
-          lastMessage: msg.content,
+          lastMessage: messagePreview(msg),
           lastAt: msg.createdAt.toISOString(),
           unread: (!viewAll && msg.recipientId === userId && !msg.readAt) ? 1 : 0,
         });

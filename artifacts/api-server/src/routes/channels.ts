@@ -13,6 +13,15 @@ import { sendNewMessageEmail } from "../lib/email";
 
 const router: IRouter = Router();
 
+// Channel-list preview: message text, or a typed label for attachment-only posts.
+function channelPreview(m: { content: string | null; attachmentType?: string | null }): string {
+  if (m.content && m.content.trim()) return m.content;
+  if (m.attachmentType === "document") return "📄 Document";
+  if (m.attachmentType === "photo") return "📷 Photo";
+  if (m.attachmentType === "permit") return "📋 Permit";
+  return m.content ?? "";
+}
+
 // GET /api/channels — list project channels accessible to the current user, with unread count + last message
 router.get("/channels", authenticate, async (req, res) => {
   try {
@@ -90,7 +99,7 @@ router.get("/channels", authenticate, async (req, res) => {
       return {
         projectId: p.id,
         projectName: p.name,
-        lastMessage: last?.content ?? "",
+        lastMessage: last ? channelPreview(last) : "",
         lastAt: last?.createdAt.toISOString() ?? null,
         unread: unreadMap.get(p.id) ?? 0,
       };
