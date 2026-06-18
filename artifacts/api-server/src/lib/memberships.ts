@@ -1,22 +1,40 @@
 import { db } from "@workspace/db";
-import { companyMembersTable, companiesTable } from "@workspace/db/schema";
+import { companyMembersTable, companiesTable, usersTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { generateId } from "./id";
 
 export type Membership = { companyId: string; companyName: string; role: string };
 
+// The user's home company as a single-membership fallback — used if the
+// company_members table is somehow unavailable, so login never breaks.
+async function homeMembership(userId: string): Promise<Membership[]> {
+  const rows = await db
+    .select({ companyId: usersTable.companyId, role: usersTable.role, companyName: companiesTable.name })
+    .from(usersTable)
+    .leftJoin(companiesTable, eq(companiesTable.id, usersTable.companyId))
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+  if (!rows[0]) return [];
+  return [{ companyId: rows[0].companyId, companyName: rows[0].companyName ?? "", role: rows[0].role }];
+}
+
 // All companies a user belongs to, with their role in each.
 export async function getMemberships(userId: string): Promise<Membership[]> {
-  return db
-    .select({
-      companyId: companyMembersTable.companyId,
-      companyName: companiesTable.name,
-      role: companyMembersTable.role,
-    })
-    .from(companyMembersTable)
-    .innerJoin(companiesTable, eq(companiesTable.id, companyMembersTable.companyId))
-    .where(eq(companyMembersTable.userId, userId))
-    .orderBy(companiesTable.name);
+  try {
+    const rows = await db
+      .select({
+        companyId: companyMembersTable.companyId,
+        companyName: companiesTable.name,
+        role: companyMembersTable.role,
+      })
+      .from(companyMembersTable)
+      .innerJoin(companiesTable, eq(companiesTable.id, companyMembersTable.companyId))
+      .where(eq(companyMembersTable.userId, userId))
+      .orderBy(companiesTable.name);
+    return rows.length > 0 ? rows : await homeMembership(userId);
+  } catch {
+    return homeMembership(userId);
+  }
 }
 
 // Role for a user in a specific company, or null if they are not a member.
