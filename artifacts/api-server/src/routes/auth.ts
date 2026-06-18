@@ -7,6 +7,7 @@ import { companiesTable, usersTable, subcontractorsTable } from "@workspace/db/s
 import { eq, and } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { generateToken, authenticate } from "../middlewares/auth";
+import { getMemberships, membershipRole, addMembership, resolveActiveCompany } from "../lib/memberships";
 import { blockToken } from "../lib/token-blocklist";
 import { isLockedOut, recordFailedAttempt, clearAttempts } from "../lib/login-attempts";
 import {
@@ -57,6 +58,9 @@ router.post("/auth/register", async (req, res) => {
       role: "admin",
       emailVerified: true,
     });
+
+    // Membership in their own (home) company — admin role.
+    await addMembership(userId, companyId, "admin");
 
     // Send a welcome email — no verification step needed since all
     // sign-ups go through Stripe checkout which confirms email ownership.
@@ -116,14 +120,50 @@ router.post("/auth/login", async (req, res) => {
     await clearAttempts(email);
     await db.update(usersTable).set({ lastActiveAt: new Date() }).where(eq(usersTable.id, user.id));
 
-    const token = generateToken({ id: user.id, companyId: user.companyId, role: user.role, email: user.email });
+    // A user can belong to several companies. Land them in their home company
+    // (or first membership) and let them switch in-app. companyId/role in the
+    // token always reflect the ACTIVE company.
+    const memberships = await getMemberships(user.id);
+    const active = resolveActiveCompany(user.companyId, memberships);
+    const activeCompanyId = active?.companyId ?? user.companyId;
+    const activeRole = active?.role ?? user.role;
+
+    const token = generateToken({ id: user.id, companyId: activeCompanyId, role: activeRole, email: user.email });
     res.json({
-      user: { id: user.id, companyId: user.companyId, email: user.email, name: user.name, role: user.role, phone: user.phone ?? null, createdAt: user.createdAt.toISOString(), lastActiveAt: user.lastActiveAt?.toISOString() ?? null },
+      user: { id: user.id, companyId: activeCompanyId, email: user.email, name: user.name, role: activeRole, phone: user.phone ?? null, createdAt: user.createdAt.toISOString(), lastActiveAt: user.lastActiveAt?.toISOString() ?? null },
+      memberships,
       token,
     });
   } catch (err) {
     req.log.error({ err }, "Login error");
     res.status(500).json({ error: "server_error", message: "Login failed" });
+  }
+});
+
+// POST /api/auth/switch-company — re-issue a token scoped to another company the
+// user belongs to. The old token should be discarded client-side.
+router.post("/auth/switch-company", authenticate, async (req, res) => {
+  try {
+    const { companyId } = req.body;
+    if (!companyId) { res.status(400).json({ error: "validation_error", message: "companyId required" }); return; }
+
+    const role = await membershipRole(req.user!.id, companyId);
+    if (role === null) { res.status(403).json({ error: "forbidden", message: "You are not a member of that company." }); return; }
+
+    const users = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
+    const user = users[0];
+    if (!user) { res.status(404).json({ error: "not_found", message: "User not found" }); return; }
+
+    const memberships = await getMemberships(user.id);
+    const token = generateToken({ id: user.id, companyId, role, email: user.email });
+    res.json({
+      user: { id: user.id, companyId, email: user.email, name: user.name, role, phone: user.phone ?? null, createdAt: user.createdAt.toISOString(), lastActiveAt: user.lastActiveAt?.toISOString() ?? null },
+      memberships,
+      token,
+    });
+  } catch (err) {
+    req.log.error({ err }, "Switch company error");
+    res.status(500).json({ error: "server_error", message: "Failed to switch company" });
   }
 });
 
@@ -147,7 +187,10 @@ router.get("/auth/me", authenticate, async (req, res) => {
       return;
     }
     const user = users[0];
-    res.json({ id: user.id, companyId: user.companyId, email: user.email, name: user.name, role: user.role, phone: user.phone ?? null, avatarUrl: user.avatarUrl ?? null, hasPin: !!user.pinHash, emailNotifications: user.emailNotifications, createdAt: user.createdAt.toISOString(), lastActiveAt: user.lastActiveAt?.toISOString() ?? null });
+    // companyId/role reflect the ACTIVE company (from the token), not the home
+    // company row — so a switched user sees the right context.
+    const memberships = await getMemberships(user.id);
+    res.json({ id: user.id, companyId: req.user!.companyId, email: user.email, name: user.name, role: req.user!.role, phone: user.phone ?? null, avatarUrl: user.avatarUrl ?? null, hasPin: !!user.pinHash, emailNotifications: user.emailNotifications, memberships, createdAt: user.createdAt.toISOString(), lastActiveAt: user.lastActiveAt?.toISOString() ?? null });
   } catch (err) {
     req.log.error({ err }, "Get me error");
     res.status(500).json({ error: "server_error", message: "Failed to get user" });
@@ -513,6 +556,7 @@ router.post("/auth/invite/:token/accept", async (req, res) => {
       role: "subcontractor",
       emailVerified: true,
     });
+    await addMembership(userId, companyId, "subcontractor");
 
     await db.update(subcontractorsTable).set({ inviteUsedAt: new Date() }).where(eq(subcontractorsTable.id, rows[0].id));
 

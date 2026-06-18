@@ -715,3 +715,27 @@ The :8080 process during these sessions is a manually-started `node dist/index.m
 - **Verified** via playwright (mocked `/auth/me` + `/companies/mine`): `incomplete` → gate, `trialing` → app. Gotcha: Playwright matches routes **most-recently-added first** — register the catch-all `**/api/**` mock BEFORE specific ones.
 
 **⚠️ Deploy:** both fixes reach users only after **Run/Publish** (live bundle is separate from workspace).
+
+---
+
+## End-of-session notes — 2026-06-18 session 4 (BUGFIX: messaging was 500-ing on all real data — `= ANY()` → `inArray()`)
+
+**Report:** "get the internal message feature up and running." Two distinct problems:
+1. **Every company has exactly 1 user** → nobody to message, so the feature *looks* dead. `/messages/users` returns company peers (always empty). Not a bug — needs ≥2 users.
+2. **Real bug — `/messages/conversations`, `/messages/thread/:id`, `/channels`, search etc. all returned HTTP 500 the moment ANY message row existed.** Root cause: the `sql\`${col} = ANY(${jsArray})\`` pattern (used **24×** across `routes/messages.ts` + `routes/channels.ts`). Drizzle expands a JS array there into a **tuple** `ANY(($1,$2))`, and Postgres throws `op ANY/ALL (array) requires array on right side` (code 42809). The feature was built but never exercised with data (0 message rows in DB), so this never surfaced.
+
+**Fix:** replaced all 24 with drizzle's `inArray(col, arr)` (added `inArray` import to both files; `ne` too for the one compound `… AND senderId != userId` case at channels.ts ~L67). Pure mechanical swap; the existing `arr.length ? … : []` guards stay so empty arrays never hit `inArray`.
+
+**Verified** (rebuilt bundle on a throwaway `PORT=8090` instance — the Replit :8080 process holds the OLD bundle in memory): created a 2nd Acme user (Sarah) + a teammate (Tom) in the user's test company; full round-trips work — `conversations`/`thread`/`channels`/`search`/`send`/reply all 200, unread counts + read-receipts (✓✓) correct. **UI tested across desktop/tablet/mobile** (browser, all green, zero console errors). Screenshots confirm the two-pane chat, project channels, DM badges.
+
+**Test data left in DB (demo helpers — offer to remove):** `sarah@acme.com` (Acme PM) + `tom@testsitesort.co.uk` (Test SiteSort site worker), both password `password123` (copied Paul's bcrypt hash), + a couple of demo DMs. They give the otherwise-1-user companies someone to message.
+
+**✅ DEPLOYED LIVE** — 2026-06-18 16:53 (`427ed2b "Published your App"`). Verified on `www.sitesort.co.uk`: deployed JS contains new strings (`Add payment to start your trial`, `Save to`, `Open invoice`); live `/api/health` + `/messages/conversations` + `/channels` all 200. So ALL this session's work (messaging `=ANY()`→`inArray` 500-fix, invoice Open button + list previews, timestamp tooltips + Save-to-notes, signup card-upfront fail-closed + abandonment checkout gate) is now on live. Replit `replit` CLI has NO deploy command (only `identity`/`ai`) — publishing is a UI button the **user** clicks; the agent cannot trigger it. 1-user-per-company means real users still need to invite teammates (In-House Team / invite links) before messaging is useful; live prod DB is separate so workspace test users Sarah/Tom are NOT on live.
+
+**Dev/prod DB split (discovered):** the **live site has its OWN production database** — proven: workspace-created user Tom gets 401 on `www.sitesort.co.uk` while seed user Paul gets 200. Workspace test data does NOT appear on live; the user develops against the **workspace preview**. After source edits the **workspace :8080 holds the OLD bundle in memory** until restarted: `pnpm --filter @workspace/api-server run build` (also builds frontend → `dist/public`), `pkill -f dist/index.mjs`, then `PORT=8080 node dist/index.mjs` via `run_in_background`.
+
+**Follow-up polish (same session):** (1) **invoice message card** now always shows an **"Open invoice"** button (deep-links `/invoices?invoice=<id>` → viewer auto-opens then `replaceState`s the param away) — previously only a "View document" link appeared, and only when the invoice had a file, so file-less shared invoices had no way to open. (2) **conversation/channel list previews** no longer render blank for attachment-only messages — backend `messages.ts`/`channels.ts` now return a typed label (`🧾 Invoice` / `📄 Document` / `📷 Photo` / `📋 Permit`) via `messagePreview()`/`channelPreview()` when `content` is empty. Both verified in-browser; typecheck green.
+
+**Messaging enhancements (same day):** (1) **full date+time tooltip** on every message timestamp — `fullTimestamp()` ("Thu, 18 Jun 2026, 16:08") in the `title` attr; the visible label stays relative ("9m ago"). (2) **"Save to notes"** StickyNote action on each DM message → `POST /api/users/:otherId/notes` with body `"{sender} · {fullTimestamp}\n{text}"`, landing in that contact's In-House Team **Notes & Reminders** log (`messageText()` labels attachment-only msgs). DM-only (channels have no single contact); `isCancelled`-guarded. Verified across **desktop/tablet/mobile** (all 3 "versions") + functional note-creation; zero console errors. Messaging confirmed working on all 3 viewports.
+
+---

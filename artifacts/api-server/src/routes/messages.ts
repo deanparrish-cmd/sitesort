@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { messagesTable, usersTable, notificationsTable, invoicesTable, documentsTable, photosTable, permitsTable, messageReactionsTable } from "@workspace/db/schema";
+import { messagesTable, usersTable, notificationsTable, invoicesTable, documentsTable, photosTable, permitsTable, messageReactionsTable, companyMembersTable } from "@workspace/db/schema";
 import { eq, and, or, desc, lt, gt, sql, inArray } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
@@ -306,10 +306,11 @@ router.post("/messages", authenticate, async (req, res) => {
       return;
     }
 
-    // Verify recipient is in same company and fetch email prefs
+    // Verify recipient is a member of the active company and fetch email prefs
     const recipient = await db.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, emailNotifications: usersTable.emailNotifications })
-      .from(usersTable)
-      .where(and(eq(usersTable.id, recipientId), eq(usersTable.companyId, req.user!.companyId)))
+      .from(companyMembersTable)
+      .innerJoin(usersTable, eq(usersTable.id, companyMembersTable.userId))
+      .where(and(eq(companyMembersTable.userId, recipientId), eq(companyMembersTable.companyId, req.user!.companyId)))
       .limit(1);
     if (!recipient[0]) {
       res.status(404).json({ error: "not_found", message: "Recipient not found" });
@@ -367,8 +368,9 @@ router.post("/messages/broadcast", authenticate, async (req, res) => {
 
     const recipients = await db
       .select({ id: usersTable.id, name: usersTable.name })
-      .from(usersTable)
-      .where(and(inArray(usersTable.id, recipientIds), eq(usersTable.companyId, req.user!.companyId)));
+      .from(companyMembersTable)
+      .innerJoin(usersTable, eq(usersTable.id, companyMembersTable.userId))
+      .where(and(inArray(companyMembersTable.userId, recipientIds), eq(companyMembersTable.companyId, req.user!.companyId)));
 
     const senderRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
     const senderName = senderRows[0]?.name ?? "Someone";
@@ -538,10 +540,12 @@ router.get("/messages/search", authenticate, async (req, res) => {
 // GET /api/messages/users — list company users to start new conversations with
 router.get("/messages/users", authenticate, async (req, res) => {
   try {
+    // Everyone who is a member of the active company (role = membership role here).
     const users = await db
-      .select({ id: usersTable.id, name: usersTable.name, role: usersTable.role, email: usersTable.email })
-      .from(usersTable)
-      .where(eq(usersTable.companyId, req.user!.companyId));
+      .select({ id: usersTable.id, name: usersTable.name, role: companyMembersTable.role, email: usersTable.email })
+      .from(companyMembersTable)
+      .innerJoin(usersTable, eq(usersTable.id, companyMembersTable.userId))
+      .where(eq(companyMembersTable.companyId, req.user!.companyId));
 
     res.json(users.filter(u => u.id !== req.user!.id));
   } catch (err) {
