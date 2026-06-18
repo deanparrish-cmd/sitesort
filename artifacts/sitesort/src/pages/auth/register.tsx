@@ -139,16 +139,23 @@ export default function Register() {
         body: JSON.stringify({ plan: selectedPlan }),
       });
 
-      if (checkoutRes.ok) {
-        const json = await checkoutRes.json();
-        if (json.url) {
-          window.location.href = json.url;
-          return;
-        }
+      const checkoutJson = await checkoutRes.json().catch(() => ({} as { url?: string; error?: string }));
+      if (checkoutRes.ok && checkoutJson.url) {
+        window.location.href = checkoutJson.url;
+        return;
       }
 
-      // Stripe not configured — go straight to dashboard
-      setLocation("/dashboard");
+      // Checkout couldn't start. Only let the user through if Stripe is genuinely
+      // not configured (local/dev or self-host with no keys); in every other case
+      // fail CLOSED so nobody reaches the app without entering card details at
+      // signup — a transient error must not hand out a card-less account.
+      const stripeDisabled = /not set|not configured|price id is not configured/i.test(checkoutJson.error ?? "");
+      if (stripeDisabled) {
+        setLocation("/dashboard");
+        return;
+      }
+      setRedirecting(false);
+      setError("We couldn't start the secure payment step — your account was created, but no card was added. Please click \"Start free trial\" again to enter your card details.");
     } catch (err: any) {
       setRedirecting(false);
       setError(err.message || "Registration failed. Please try again.");

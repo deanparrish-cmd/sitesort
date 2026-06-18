@@ -22,6 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useGetMe, useLogout } from "@workspace/api-client-react";
 import { useSubscription } from "@/contexts/subscription";
+import { CheckoutGate } from "@/components/checkout-gate";
 import { useToast } from "@/hooks/use-toast";
 import {
   DropdownMenu,
@@ -53,7 +54,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
   const { data: user, isLoading, error } = useGetMe();
   const logoutMutation = useLogout();
   const { toast } = useToast();
-  const { isCancelled } = useSubscription();
+  const { isCancelled, needsCheckout } = useSubscription();
   const [unreadMsgCount, setUnreadMsgCount] = useState(0);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const prevUnreadRef = useRef(0);
@@ -161,6 +162,12 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
 
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center bg-background"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
+  }
+
+  // Registered but never completed Stripe Checkout → hard-block the app until
+  // they add a payment method. Closes the "abandon Stripe, use the app free" hole.
+  if (needsCheckout) {
+    return <CheckoutGate />;
   }
 
   return (
