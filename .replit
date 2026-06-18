@@ -1,0 +1,41 @@
+modules = ["nodejs-24", "python-3.11", "postgresql-16"]
+
+[[artifacts]]
+id = "artifacts/api-server"
+
+[[artifacts]]
+id = "artifacts/mockup-sandbox"
+
+[deployment]
+router = "application"
+deploymentTarget = "autoscale"
+
+[deployment.postBuild]
+args = ["pnpm", "store", "prune"]
+env = { "CI" = "true" }
+
+[workflows]
+runButton = "Project"
+
+[agent]
+stack = "PNPM_WORKSPACE"
+expertMode = true
+integrations = ["github:1.0.0"]
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 20000
+
+[nix]
+channel = "stable-25_05"
+packages = ["haskellPackages.hinit", "tmux"]
+
+[userenv]
+
+[userenv.shared]
+APP_URL = "https://www.sitesort.co.uk"
+STRIPE_PRICE_SOLO = "price_1Tfc8aGXwfamd574a6p7IjLh"
+STRIPE_PRICE_TEAM = "price_1TfcFBGXwfamd574pzQ3RGOQ"
+STRIPE_PRICE_PRO = "price_1TfcFnGXwfamd574Cm0epykd"
+[env]
+PATH = "/home/runner/.local/bin:/home/runner/workspace/.local/bin:$PATH"

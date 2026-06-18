@@ -1,0 +1,42 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if jq -r '.tool_input.command // \"\"' | grep -q 'git commit'; then cd /home/runner/workspace && /home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts 2>&1; fi",
+            "timeout": 120,
+            "statusMessage": "Pushing to GitHub…"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(PORT=8080 node --enable-source-maps ./dist/index.mjs)",
+      "Bash(curl -s http://localhost:8080/api/projects -H \"Authorization: Bearer bad\")",
+      "Bash(pnpm run *)",
+      "Bash(pnpm *)",
+      "Bash(printenv JWT_SECRET)",
+      "Bash(node ./build.mjs)",
+      "Read(//run/**)",
+      "Read(//run/secrets/**)",
+      "Bash(curl -s -X POST http://localhost:8080/api/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"dean.parrish@me.com\",\"password\":\"AdminPass123!\"}')",
+      "Bash(python3 -m json.tool)",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>console.log\\(JSON.stringify\\(JSON.parse\\(d\\),null,2\\)\\)\\)\")",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>{const a=JSON.parse\\(d\\);console.log\\('Total items:',a.length\\);console.log\\(JSON.stringify\\(a[0],null,2\\)\\)}\\)\")",
+      "Bash(curl -s -X POST http://localhost:8080/api/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"paul@acme.com\",\"password\":\"password123\"}')",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(npx tsx *)",
+      "Bash(git stash *)",
+      "Bash(git pull *)",
+      "Bash(node --loader ts-node/esm scripts/src/github-push.ts)",
+      "Bash(node -e \"require\\('child_process'\\).execSync\\('npx --yes tsx scripts/src/github-push.ts', {stdio:'inherit'}\\)\")",
+      "Bash(/home/runner/workspace/scripts/node_modules/.bin/tsx *)"
+    ]
+  }
+}

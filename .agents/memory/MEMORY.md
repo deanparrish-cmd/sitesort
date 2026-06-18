@@ -1,0 +1,9 @@
+- [Stale project-reference dist](stale-project-reference-dist.md) — after editing lib/db schema or running api codegen, rebuild the lib's .d.ts or tsc reports phantom "property does not exist"; runtime is unaffected.
+- [api-server standalone testing](api-server-standalone-testing.md) — sandbox has no JWT_SECRET & can't import deps; bundle lib fns with esbuild (pino plugin + outdir, not outfile) to run against the real DB.
+- [Reused-endpoint access control](reused-endpoint-access-control.md) — surfacing an existing write endpoint in new UI? audit its tenant-scoping + role gating first; found an IDOR on POST photos this way.
+- [Pre-existing typecheck noise](pre-existing-typecheck-noise.md) — api-server drizzle TS2769 on .update/.insert and api-zod TS2308 dup-export are pre-existing & runtime-safe; filter tsc to lines you touched.
+- [SiteSort typecheck baseline](sitesort-typecheck-baseline.md) — ~10 pre-existing tsc errors in artifacts/sitesort (buttonVariants/DialogContent exports, enum comparisons, orval queryKey); Vite runs fine — only chase NEW errors naming your files.
+- [Email template verification](email-template-verification.md) — render api-server emails offline by mocking fetch; Resend serializes replyTo→reply_to; bundle with esbuild into the package dir (no tsx).
+- [Auth email normalization](email-normalization-auth.md) — trim+lowercase on every users.email write (incl invite-accept) in lockstep with lookups; auth inputs need autoCapitalize=none; @me.com≠@icloud.com is a data issue, not code.
+- [SiteSort invoice-project ownership](sitesort-invoice-project-ownership.md) — projectId is the single source of truth for where an invoice shows; move sets it, mark-unpaid clears it; gate share on attachment, mutations on capability.
+- [Subcontractor notes](subcontractor-notes-history.md) — two concepts: static blurb vs append-only timestamped reminders log; tenant-scope log APIs.
