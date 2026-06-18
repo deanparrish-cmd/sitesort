@@ -6,8 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if jq -r '.tool_input.command // \"\"' | grep -q 'git commit'; then cd /home/runner/workspace && /home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/github-push.ts 2>&1; fi",
-            "timeout": 120,
+            "command": "if jq -r '.tool_input.command // \"\"' | grep -q 'git commit'; then cd /home/runner/workspace && /home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/push-robust.ts 2>&1; fi",
+            "timeout": 240,
             "statusMessage": "Pushing to GitHub…"
           }
         ]
