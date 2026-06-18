@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { useGetMe, useLogout } from "@workspace/api-client-react";
 import { useSubscription } from "@/contexts/subscription";
 import { CheckoutGate } from "@/components/checkout-gate";
+import { CompanySwitcher } from "@/components/company-switcher";
 import { useToast } from "@/hooks/use-toast";
 import {
   DropdownMenu,
@@ -204,6 +205,11 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
           <Link href="/dashboard">
             <img src={`${import.meta.env.BASE_URL}images/logo.png?v=5`} alt="SiteSort" className="h-[6.25rem] w-auto" />
           </Link>
+        </div>
+
+        {/* Multi-company users: switch the active company (renders nothing for single-company users) */}
+        <div className="pt-4 md:pt-0">
+          <CompanySwitcher />
         </div>
 
         <nav className="flex-1 px-4 py-6 overflow-y-auto">

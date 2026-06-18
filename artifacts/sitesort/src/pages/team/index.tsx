@@ -94,6 +94,7 @@ export default function TeamPage() {
   const [addPhone, setAddPhone] = useState("");
   const [addSubmitting, setAddSubmitting] = useState(false);
   const [addError, setAddError] = useState("");
+  const [addSuccess, setAddSuccess] = useState("");
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjects, setSelectedProjects] = useState<Set<string>>(new Set());
 
@@ -144,7 +145,7 @@ export default function TeamPage() {
   }
 
   async function openAdd() {
-    setAddName(""); setAddEmail(""); setAddRole("site_worker"); setAddPhone(""); setAddError("");
+    setAddName(""); setAddEmail(""); setAddRole("site_worker"); setAddPhone(""); setAddError(""); setAddSuccess("");
     setSelectedProjects(new Set());
     setAddOpen(true);
     const res = await fetch("/api/projects", { headers: authHeaders() });
@@ -178,7 +179,7 @@ export default function TeamPage() {
       return;
     }
     const created = await res.json();
-    setMembers(prev => [...prev, created]);
+    setMembers(prev => prev.some(m => m.id === created.id) ? prev : [...prev, created]);
     // Link to selected projects (fire-and-forget, best effort)
     await Promise.allSettled(
       Array.from(selectedProjects).map(projectId =>
@@ -189,8 +190,12 @@ export default function TeamPage() {
         })
       )
     );
-    setAddOpen(false);
     setAddSubmitting(false);
+    // Existing SiteSort users are LINKED (no invite email); new people are invited.
+    setAddSuccess(created.linked
+      ? `${created.name} was added to your team — they can switch to this company from their account.`
+      : `Invitation sent to ${created.email}.`);
+    setTimeout(() => { setAddOpen(false); setAddSuccess(""); }, 2000);
   }
 
   const q = search.toLowerCase();
@@ -438,6 +443,7 @@ export default function TeamPage() {
             )}
           </div>
           {addError && <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{addError}</p>}
+          {addSuccess && <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">{addSuccess}</p>}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>

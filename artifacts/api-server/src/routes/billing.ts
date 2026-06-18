@@ -3,7 +3,7 @@ import Stripe from "stripe";
 import { eq, and } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
 import { db } from "@workspace/db";
-import { companiesTable, usersTable, notificationsTable } from "@workspace/db/schema";
+import { companiesTable, usersTable, notificationsTable, companyMembersTable } from "@workspace/db/schema";
 import { generateId } from "../lib/id";
 
 const router = Router();
@@ -146,8 +146,9 @@ async function handleTrialWillEnd(subscription: Stripe.Subscription): Promise<vo
 
   const admins = await db
     .select({ id: usersTable.id })
-    .from(usersTable)
-    .where(and(eq(usersTable.companyId, companyId), eq(usersTable.role, "admin")));
+    .from(companyMembersTable)
+    .innerJoin(usersTable, eq(usersTable.id, companyMembersTable.userId))
+    .where(and(eq(companyMembersTable.companyId, companyId), eq(companyMembersTable.role, "admin")));
 
   if (admins.length === 0) return;
 
@@ -182,8 +183,9 @@ async function handlePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
 
   const admins = await db
     .select({ id: usersTable.id })
-    .from(usersTable)
-    .where(and(eq(usersTable.companyId, companyId), eq(usersTable.role, "admin")));
+    .from(companyMembersTable)
+    .innerJoin(usersTable, eq(usersTable.id, companyMembersTable.userId))
+    .where(and(eq(companyMembersTable.companyId, companyId), eq(companyMembersTable.role, "admin")));
 
   if (admins.length === 0) return;
 
