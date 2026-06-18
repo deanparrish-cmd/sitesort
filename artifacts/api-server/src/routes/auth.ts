@@ -40,6 +40,12 @@ router.post("/auth/register", async (req, res) => {
       id: companyId,
       name: companyName,
       size: companySize || "1-10",
+      // Start "incomplete": the account is created but has no payment method
+      // yet. The signup flow immediately sends them to Stripe Checkout; the
+      // billing webhook flips this to "trialing" once card details are taken.
+      // Until then the app shows a blocking checkout gate, so abandoning the
+      // Stripe page never yields a usable card-less account.
+      subscriptionStatus: "incomplete",
     });
 
     await db.insert(usersTable).values({

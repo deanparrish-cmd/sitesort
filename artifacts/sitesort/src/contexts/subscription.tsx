@@ -4,6 +4,9 @@ type SubscriptionCtx = {
   tier: string;
   status: string;
   isCancelled: boolean;
+  // Account created but no payment method taken yet (registered, then abandoned
+  // Stripe Checkout). The app shell shows a blocking gate until they complete it.
+  needsCheckout: boolean;
   cancelAtPeriodEnd: boolean;
   currentPeriodEnd: string | null;
   betaAccess: boolean;
@@ -14,6 +17,7 @@ const SubscriptionContext = createContext<SubscriptionCtx>({
   tier: "free",
   status: "active",
   isCancelled: false,
+  needsCheckout: false,
   cancelAtPeriodEnd: false,
   currentPeriodEnd: null,
   betaAccess: false,
@@ -57,7 +61,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const effectiveStatus = betaAccess ? "active" : status;
 
   return (
-    <SubscriptionContext.Provider value={{ tier, status: effectiveStatus, isCancelled: !betaAccess && status === "cancelled", cancelAtPeriodEnd: !betaAccess && cancelAtPeriodEnd, currentPeriodEnd, betaAccess, isLoading }}>
+    <SubscriptionContext.Provider value={{ tier, status: effectiveStatus, isCancelled: !betaAccess && status === "cancelled", needsCheckout: !betaAccess && status === "incomplete", cancelAtPeriodEnd: !betaAccess && cancelAtPeriodEnd, currentPeriodEnd, betaAccess, isLoading }}>
       {children}
     </SubscriptionContext.Provider>
   );

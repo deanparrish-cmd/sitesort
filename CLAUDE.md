@@ -176,25 +176,7 @@ See CLAUDE_ARCHIVE.md for full detail.
 
 ---
 
-## End-of-session notes — 2026-06-18 (custom events → QR site board) — extends Feature #56
-
-### What was added
-Custom calendar events now flow to the **public QR site board**, scoped per-event (decided with the user: "let PM choose per event" + "upcoming only").
-
-- **DB**: added nullable `projectId` (FK→projects, `onDelete: cascade`) to `calendar_events` (`lib/db/src/schema/calendar_events.ts`). `null` = company-wide (every board); set = that project's board only. Pushed via `pnpm --filter @workspace/db run push`.
-- **API — create** (`routes/calendar-events.ts`): `POST` now accepts optional `projectId`, **IDOR-checked** (must belong to `req.user.companyId`, else 400). `GET` returns it (select-all).
-- **API — public board** (`routes/qr.ts` `GET /site/:token`, ~line 242): new query returns `upcomingEvents` = `calendar_events` where `companyId = project.companyId AND (projectId IS NULL OR projectId = qr.projectId) AND eventDate >= today`, `orderBy(asc(eventDate))`. Added `or`/`asc` + `calendarEventsTable` to imports. `eventDate` is a `date` column so the `gte(..., todayStr)` string compare works.
-- **Frontend — dashboard** (`pages/dashboard/index.tsx`): Add-event dialog gained a **"Show on site board for"** `<select>` (Whole company / each project, from a new `projects` prop passed to `SiteCalendar`). `CustomEvent` + `CalEvent` + `createCalendarEvent` carry `projectId`. Day-dialog custom events show a **violet scope badge** (project name or "Company-wide").
-- **Frontend — public board** (`pages/site-board.tsx`): destructures `upcomingEvents = []`; new **"Upcoming Events"** card (violet date-chip + title + weekday + note) inserted after Site Manager, before Active Permits. Uses the already-imported `Calendar` icon. (`data` is untyped `any`, so no shared type to update — just read the field.)
-
-### Verification
-- `pnpm run typecheck` **green**; DB pushed; server bundle rebuilt + restarted on :8080 (health 200).
-- **Backend scoping proven end-to-end** (curl, real QR tokens): created company-wide + Project-A-scoped + a PAST event. Project A board → both future events (asc-ordered), PAST excluded. Project B board → only the company-wide one. Exactly right.
-- **Browser-tested** (reroute `/api`→:8080 = new bundle): Add dialog selector lists "Whole company" + all 3 projects; created a Project-A-scoped event → "Event added" toast → day dialog shows the violet **"Riverside Apartments Block A"** scope badge + Delete → delete works. Public `/site/:token` loads clean (check-in gate). **Zero console errors.** Note: the Upcoming Events *card itself* is behind the check-in gate (needs a registered worker + valid insurance + photo), so it's verified at the **data/API layer + code review**, not a post-check-in screenshot.
-- **2026-06-18 follow-up — Upcoming Events card now verified post-check-in (full browser screenshot).** Drove the real check-in gate headless against the **:8080 full bundle** (serves frontend + `/api`; Vite :18299 does NOT proxy `/api`). Flow: navigate `/site/<Riverside token>` → fill name `Paul Smith` (in-house admin on the project) + company → `setInputFiles` on the hidden `input[type=file]` (bypasses native camera) → click **Confirm Check-In** → board renders. Card shows **both** a company-wide and a Riverside-scoped event, ascending, with violet date chips + weekday + note, positioned after Site Manager. Zero console/page errors. Driver: a one-off playwright-core script (import `.default.chromium` — it's CJS); test photo via `magick`. **All test data cleaned up** (2 `BROWSERTEST` calendar_events + the Paul Smith site_checkins row + uploaded photo); pre-existing demo "Dean Parrish" check-in left intact.
-
-### ⚠️ Same server run-model gotcha as the prior note
-The running :8080 process this session is a **manually-started** `node dist/index.mjs` (via the Bash tool's background mechanism with `PORT=8080`). `nohup … &`/`setsid` from a Bash tool call did NOT survive (the foreground tool shell tears them down); the **`run_in_background: true`** Bash option is what kept it alive across turns. The user's Run/republish will cleanly replace it.
+## End-of-session notes — 2026-06-18 (custom events → QR site board) — extends Feature #56 — see CLAUDE_ARCHIVE.md
 
 ---
 
@@ -206,13 +188,22 @@ The running :8080 process this session is a **manually-started** `node dist/inde
 
 ---
 
-## End-of-session notes — 2026-06-18 session 2 (browser-verified Upcoming Events card post-check-in, pushed)
+## End-of-session notes — 2026-06-18 session 3 (signup card-upfront: fail-CLOSED on checkout failure)
 
-New session opened with the startup checklist (CLAUDE.md was 28.2KB, under 30k; `git pull` is a no-op here — pushes go via the GitHub connector/API, so `origin/main` has different SHAs + 0-byte large PNGs and must **not** be merged; local `main` is authoritative).
+**Report:** "a new user just registered and it didn't ask for card." **Finding: the feature already exists** — `Collect card details at registration` (commit `f029d02`, 2026-06-09 09:35) wired signup → `/api/billing/checkout` → Stripe. Stripe is fully configured here (live `sk_live…` key + all 3 price IDs + webhook secret); the checkout endpoint works (probe returned a real `checkout.stripe.com` URL). Card-upfront flow already in `routes/billing.ts /billing/checkout`: `mode:subscription`, `trial_period_days:14`, `payment_method_collection:"always"`, `missing_payment_method:"cancel"`. The register UI (`pages/auth/register.tsx`) shows a Solo/Team/Pro selector then redirects to Stripe.
 
-**Task: verify the "Upcoming Events" card in the browser** (the prior session's one open gap — it was verified at the API/code-review layer but never with a post-check-in screenshot, because the card sits behind the check-in gate).
+**Root cause of card-less accounts:** `register.tsx onSubmit` failed **OPEN** — if `/billing/checkout` returned non-OK (or a stale published bundle), it silently did `setLocation("/dashboard")`, handing out a `free`/`active` card-less account with no error. (NormCo, created 2026-06-09 19:48 — 10h after the feature — is the proof: status `active`, no `stripe_customer_id`.) Older companies just predate `f029d02`.
 
-- **Verified end-to-end in headless Chromium** against the **:8080 full bundle** (serves frontend + `/api`; Vite :18299 does NOT proxy `/api`, so use :8080 for any page that hits the API). Flow: navigate `/site/<Riverside token>` → fill name `Paul Smith` (in-house admin on the project) + company → `setInputFiles` on the hidden `input[type=file]` (bypasses the native camera picker) → click **Confirm Check-In** → board renders. **Card confirmed**: shows BOTH a company-wide ("Site Safety Briefing") and a Riverside-scoped ("Concrete Pour Level 3") event, ascending, violet date chips + weekday + note, positioned after Site Manager. Zero console/page errors.
-- **Driver gotchas** (one-off `/tmp` playwright-core script): playwright-core in the skill dir is **CJS** — import `pw.default.chromium`, not `{ chromium }`. Test photo made with `magick` (PIL absent; `convert`'s `-annotate` needs a font path so omit text). Granted empty geolocation perms so `getCurrentPosition` rejects fast instead of hanging the 5s timeout.
-- **Test data fully cleaned up**: 2 `BROWSERTEST` calendar_events + the Paul Smith site_checkins row (matched on the `checked_in_at` column — NOT `created_at`) + the uploaded photo. Pre-existing demo "Dean Parrish" (2026-06-06) check-in left intact.
-- **Pushed**: `push-robust.ts` → `main → ca74c860` (395 files; same 5 >1MB PNGs skipped as always). `verify-push.ts` → 12/12 signatures present on GitHub `main`. No app code changed this session — only CLAUDE.md/CLAUDE_ARCHIVE.md docs.
+**Fix (this session):** made it fail **CLOSED**. On checkout failure it now shows an error banner ("We couldn't start the secure payment step — your account was created, but no card was added. Please click 'Start free trial' again…") and **stays on /register to retry** (retry reuses the existing token via the localStorage check), instead of entering the app. Kept a genuine escape: only when the server says Stripe is "not set/not configured" (local/dev) does it fall through to /dashboard. **Verified:** typecheck green; register renders clean on local + live; deterministic playwright test (mocked register=201 + checkout=500) → error banner shown, URL stays `/register`, no leak to `/dashboard`, zero page errors.
+
+**Abandonment hole — CLOSED this session.** Previously `contexts/subscription.tsx` only blocked on `status === "cancelled"`, so an abandoned signup (company `active`) was fully usable without paying. Fix:
+- **Backend** (`auth.ts` register): new companies now start `subscriptionStatus: "incomplete"` (was the `active` default). The billing webhook's `handleSubscriptionUpsert` already flips `incomplete → trialing` on `checkout.session.completed` (no webhook change needed).
+- **Frontend**: `subscription.tsx` exposes `needsCheckout = !betaAccess && status === "incomplete"`. New `components/checkout-gate.tsx` is a **full-screen hard gate** (plan buttons → `/billing/checkout` → Stripe; Log-out escape; handles the post-payment race by polling `/companies/mine` when the URL has `?checkout=success` and reloading once status leaves `incomplete`). `sidebar-layout.tsx` early-returns `<CheckoutGate/>` when `needsCheckout`, so an `incomplete` company can't reach any authenticated page.
+- **Scope/safety:** only NEW registrations get `incomplete`; all EXISTING companies are `active` and unaffected (deliberately not retroactively gating live users like NormCo). Beta companies bypass via `effectiveStatus`.
+- **Verified:** typecheck green; deterministic playwright test (mocked `/auth/me` + `/companies/mine`) → `incomplete` shows the gate (no dashboard), `trialing` renders the app normally; zero page errors. Gotcha: Playwright matches routes **most-recently-added first**, so register the catch-all `**/api/**` mock BEFORE the specific ones.
+
+**⚠️ Deploy:** both fixes (fail-closed + abandonment gate) only reach real users after a **Run/Publish** — the live `www.sitesort.co.uk` bundle is separate from the workspace.
+
+---
+
+## End-of-session notes — 2026-06-18 session 2 (browser-verified Upcoming Events card post-check-in, pushed) — see CLAUDE_ARCHIVE.md

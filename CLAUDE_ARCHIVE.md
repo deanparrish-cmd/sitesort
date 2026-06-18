@@ -662,3 +662,38 @@ The **api-server runs a prebuilt bundle** `artifacts/api-server/dist/index.mjs` 
 ## End-of-session notes — 2026-06-18 (check-in photo cropped faces — `object-cover` → `object-contain`)
 
 **Issue:** check-in photo "zooms in too close, can't see the face." Root cause was **CSS only** — `stampPhoto` (`site-board.tsx:5`) stores the FULL frame (canvas = naturalWidth×naturalHeight, no crop); the displays used `object-cover` in fixed-aspect boxes, cropping top/bottom (faces). **Fix:** switched the three **check-in** photo displays to `object-contain`: capture preview (`site-board.tsx`, also `max-h-48`→`max-h-72` + `bg-gray-100`), Site Check-Ins page grid thumbnail (`pages/checkins/index.tsx`), project-detail Check-ins tab grid thumbnail (`pages/projects/detail.tsx`). The check-in **detail modals already used `object-contain`** (untouched). Deliberately left `object-cover` on NON-check-in photos (issues, avatars, pinned site photos `site-board.tsx:621`). Verified in headless tablet (820px) with a 300×720 portrait test image: preview shows full frame (top+face+bottom, letterboxed), `objectFit: contain`, zero console errors.
+
+---
+
+## End-of-session notes — 2026-06-18 session 2 (browser-verified Upcoming Events card post-check-in, pushed)
+
+New session opened with the startup checklist (CLAUDE.md was 28.2KB, under 30k; `git pull` is a no-op here — pushes go via the GitHub connector/API, so `origin/main` has different SHAs + 0-byte large PNGs and must **not** be merged; local `main` is authoritative).
+
+**Task: verify the "Upcoming Events" card in the browser** (the prior session's one open gap — it was verified at the API/code-review layer but never with a post-check-in screenshot, because the card sits behind the check-in gate).
+
+- **Verified end-to-end in headless Chromium** against the **:8080 full bundle** (serves frontend + `/api`; Vite :18299 does NOT proxy `/api`, so use :8080 for any page that hits the API). Flow: navigate `/site/<Riverside token>` → fill name `Paul Smith` (in-house admin on the project) + company → `setInputFiles` on the hidden `input[type=file]` (bypasses the native camera picker) → click **Confirm Check-In** → board renders. **Card confirmed**: shows BOTH a company-wide ("Site Safety Briefing") and a Riverside-scoped ("Concrete Pour Level 3") event, ascending, violet date chips + weekday + note, positioned after Site Manager. Zero console/page errors.
+- **Driver gotchas** (one-off `/tmp` playwright-core script): playwright-core in the skill dir is **CJS** — import `pw.default.chromium`, not `{ chromium }`. Test photo made with `magick` (PIL absent; `convert`'s `-annotate` needs a font path so omit text). Granted empty geolocation perms so `getCurrentPosition` rejects fast instead of hanging the 5s timeout.
+- **Test data fully cleaned up**: 2 `BROWSERTEST` calendar_events + the Paul Smith site_checkins row (matched on the `checked_in_at` column — NOT `created_at`) + the uploaded photo. Pre-existing demo "Dean Parrish" (2026-06-06) check-in left intact.
+- **Pushed**: `push-robust.ts` → `main → ca74c860` (395 files; same 5 >1MB PNGs skipped as always). `verify-push.ts` → 12/12 signatures present on GitHub `main`. No app code changed this session — only CLAUDE.md/CLAUDE_ARCHIVE.md docs.
+
+---
+
+## End-of-session notes — 2026-06-18 (custom events → QR site board) — extends Feature #56
+
+### What was added
+Custom calendar events now flow to the **public QR site board**, scoped per-event (decided with the user: "let PM choose per event" + "upcoming only").
+
+- **DB**: added nullable `projectId` (FK→projects, `onDelete: cascade`) to `calendar_events` (`lib/db/src/schema/calendar_events.ts`). `null` = company-wide (every board); set = that project's board only. Pushed via `pnpm --filter @workspace/db run push`.
+- **API — create** (`routes/calendar-events.ts`): `POST` now accepts optional `projectId`, **IDOR-checked** (must belong to `req.user.companyId`, else 400). `GET` returns it (select-all).
+- **API — public board** (`routes/qr.ts` `GET /site/:token`, ~line 242): new query returns `upcomingEvents` = `calendar_events` where `companyId = project.companyId AND (projectId IS NULL OR projectId = qr.projectId) AND eventDate >= today`, `orderBy(asc(eventDate))`. Added `or`/`asc` + `calendarEventsTable` to imports. `eventDate` is a `date` column so the `gte(..., todayStr)` string compare works.
+- **Frontend — dashboard** (`pages/dashboard/index.tsx`): Add-event dialog gained a **"Show on site board for"** `<select>` (Whole company / each project, from a new `projects` prop passed to `SiteCalendar`). `CustomEvent` + `CalEvent` + `createCalendarEvent` carry `projectId`. Day-dialog custom events show a **violet scope badge** (project name or "Company-wide").
+- **Frontend — public board** (`pages/site-board.tsx`): destructures `upcomingEvents = []`; new **"Upcoming Events"** card (violet date-chip + title + weekday + note) inserted after Site Manager, before Active Permits. Uses the already-imported `Calendar` icon. (`data` is untyped `any`, so no shared type to update — just read the field.)
+
+### Verification
+- `pnpm run typecheck` **green**; DB pushed; server bundle rebuilt + restarted on :8080 (health 200).
+- **Backend scoping proven end-to-end** (curl, real QR tokens): created company-wide + Project-A-scoped + a PAST event. Project A board → both future events (asc-ordered), PAST excluded. Project B board → only the company-wide one. Exactly right.
+- **Browser-tested** (reroute `/api`→:8080 = new bundle): Add dialog selector lists "Whole company" + all 3 projects; created a Project-A-scoped event → "Event added" toast → day dialog shows the violet **"Riverside Apartments Block A"** scope badge + Delete → delete works. Public `/site/:token` loads clean (check-in gate). **Zero console errors.** Note: the Upcoming Events *card itself* is behind the check-in gate, so it was verified at the data/API layer + code review at the time.
+- **2026-06-18 follow-up — Upcoming Events card verified post-check-in (full browser screenshot).** Drove the real check-in gate headless against the :8080 full bundle. Card shows both a company-wide and a project-scoped event, ascending, violet date chips + weekday + note, after Site Manager. Driver: one-off playwright-core script (CJS `.default.chromium`); test photo via `magick`. Test data cleaned up.
+
+### ⚠️ Server run-model gotcha
+The :8080 process during these sessions is a manually-started `node dist/index.mjs` kept alive via the Bash tool's `run_in_background: true`. `nohup`/`setsid` from a tool shell did NOT survive. The user's Run/republish cleanly replaces it.
