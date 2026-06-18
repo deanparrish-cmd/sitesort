@@ -650,3 +650,15 @@ The **api-server runs a prebuilt bundle** `artifacts/api-server/dist/index.mjs` 
 - ~~Surface custom events on the **QR site board** public page~~ — DONE 2026-06-18, see next note.
 - Surface in the **subcontractor portal** (to be built later).
 
+
+---
+
+## End-of-session notes — 2026-06-18 (BUGFIX: site check-in rejected in-house team members)
+
+**Bug:** QR site-board check-in (`POST /api/site/:token/checkin`, `routes/qr.ts`) `innerJoin`ed **only `subcontractorsTable`**, so in-house team members (users on the project) always got `not_registered` ("Access Denied") — reproduced via curl as the project's own manager. Not device-specific (user reported it on tablet). **Fix (decided with user — "team + subs on project", in-house matched by "name alone"):** check the project's **users first** (`projectMembers ⨝ users`, name-only case-insensitive match, no company/insurance needed); only if not an in-house member fall through to the existing subcontractor path (name + company + valid non-archived insurance). Then the Upcoming Events card screenshot was finally captured (drove a real in-house check-in in-browser). **Verified** all 5 paths via curl: in-house→201, unregistered→403 not_registered, sub no-insurance→403 no_valid_insurance, sub wrong-company→403 not_registered, sub+valid-insurance→201. Test data (events, Dave→Riverside link, fake cert, check-ins) cleaned up. Company field still entered on the form but ignored for in-house matching. **Follow-up copy fix (`site-board.tsx`):** softened the now-inaccurate gate copy — requirements list → "You must be registered on this project (team member or subcontractor)" + "Subcontractors must have a valid insurance certificate on record"; `not_registered` Access-Denied message reworded to "couldn't match your details to anyone registered on this project…". NOTE: a pre-existing demo check-in "Dean Parrish" (2026-06-06) on Riverside is real data — leave it.
+
+---
+
+## End-of-session notes — 2026-06-18 (check-in photo cropped faces — `object-cover` → `object-contain`)
+
+**Issue:** check-in photo "zooms in too close, can't see the face." Root cause was **CSS only** — `stampPhoto` (`site-board.tsx:5`) stores the FULL frame (canvas = naturalWidth×naturalHeight, no crop); the displays used `object-cover` in fixed-aspect boxes, cropping top/bottom (faces). **Fix:** switched the three **check-in** photo displays to `object-contain`: capture preview (`site-board.tsx`, also `max-h-48`→`max-h-72` + `bg-gray-100`), Site Check-Ins page grid thumbnail (`pages/checkins/index.tsx`), project-detail Check-ins tab grid thumbnail (`pages/projects/detail.tsx`). The check-in **detail modals already used `object-contain`** (untouched). Deliberately left `object-cover` on NON-check-in photos (issues, avatars, pinned site photos `site-board.tsx:621`). Verified in headless tablet (820px) with a 300×720 portrait test image: preview shows full frame (top+face+bottom, letterboxed), `objectFit: contain`, zero console errors.

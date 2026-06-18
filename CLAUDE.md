@@ -198,12 +198,21 @@ The running :8080 process this session is a **manually-started** `node dist/inde
 
 ---
 
-## End-of-session notes — 2026-06-18 (BUGFIX: site check-in rejected in-house team members)
-
-**Bug:** QR site-board check-in (`POST /api/site/:token/checkin`, `routes/qr.ts`) `innerJoin`ed **only `subcontractorsTable`**, so in-house team members (users on the project) always got `not_registered` ("Access Denied") — reproduced via curl as the project's own manager. Not device-specific (user reported it on tablet). **Fix (decided with user — "team + subs on project", in-house matched by "name alone"):** check the project's **users first** (`projectMembers ⨝ users`, name-only case-insensitive match, no company/insurance needed); only if not an in-house member fall through to the existing subcontractor path (name + company + valid non-archived insurance). Then the Upcoming Events card screenshot was finally captured (drove a real in-house check-in in-browser). **Verified** all 5 paths via curl: in-house→201, unregistered→403 not_registered, sub no-insurance→403 no_valid_insurance, sub wrong-company→403 not_registered, sub+valid-insurance→201. Test data (events, Dave→Riverside link, fake cert, check-ins) cleaned up. Company field still entered on the form but ignored for in-house matching. **Follow-up copy fix (`site-board.tsx`):** softened the now-inaccurate gate copy — requirements list → "You must be registered on this project (team member or subcontractor)" + "Subcontractors must have a valid insurance certificate on record"; `not_registered` Access-Denied message reworded to "couldn't match your details to anyone registered on this project…". NOTE: a pre-existing demo check-in "Dean Parrish" (2026-06-06) on Riverside is real data — leave it.
+## End-of-session notes — 2026-06-18 (BUGFIX: site check-in rejected in-house team members) — see CLAUDE_ARCHIVE.md
 
 ---
 
-## End-of-session notes — 2026-06-18 (check-in photo cropped faces — `object-cover` → `object-contain`)
+## End-of-session notes — 2026-06-18 (check-in photo cropped faces — `object-cover` → `object-contain`) — see CLAUDE_ARCHIVE.md
 
-**Issue:** check-in photo "zooms in too close, can't see the face." Root cause was **CSS only** — `stampPhoto` (`site-board.tsx:5`) stores the FULL frame (canvas = naturalWidth×naturalHeight, no crop); the displays used `object-cover` in fixed-aspect boxes, cropping top/bottom (faces). **Fix:** switched the three **check-in** photo displays to `object-contain`: capture preview (`site-board.tsx`, also `max-h-48`→`max-h-72` + `bg-gray-100`), Site Check-Ins page grid thumbnail (`pages/checkins/index.tsx`), project-detail Check-ins tab grid thumbnail (`pages/projects/detail.tsx`). The check-in **detail modals already used `object-contain`** (untouched). Deliberately left `object-cover` on NON-check-in photos (issues, avatars, pinned site photos `site-board.tsx:621`). Verified in headless tablet (820px) with a 300×720 portrait test image: preview shows full frame (top+face+bottom, letterboxed), `objectFit: contain`, zero console errors.
+---
+
+## End-of-session notes — 2026-06-18 session 2 (browser-verified Upcoming Events card post-check-in, pushed)
+
+New session opened with the startup checklist (CLAUDE.md was 28.2KB, under 30k; `git pull` is a no-op here — pushes go via the GitHub connector/API, so `origin/main` has different SHAs + 0-byte large PNGs and must **not** be merged; local `main` is authoritative).
+
+**Task: verify the "Upcoming Events" card in the browser** (the prior session's one open gap — it was verified at the API/code-review layer but never with a post-check-in screenshot, because the card sits behind the check-in gate).
+
+- **Verified end-to-end in headless Chromium** against the **:8080 full bundle** (serves frontend + `/api`; Vite :18299 does NOT proxy `/api`, so use :8080 for any page that hits the API). Flow: navigate `/site/<Riverside token>` → fill name `Paul Smith` (in-house admin on the project) + company → `setInputFiles` on the hidden `input[type=file]` (bypasses the native camera picker) → click **Confirm Check-In** → board renders. **Card confirmed**: shows BOTH a company-wide ("Site Safety Briefing") and a Riverside-scoped ("Concrete Pour Level 3") event, ascending, violet date chips + weekday + note, positioned after Site Manager. Zero console/page errors.
+- **Driver gotchas** (one-off `/tmp` playwright-core script): playwright-core in the skill dir is **CJS** — import `pw.default.chromium`, not `{ chromium }`. Test photo made with `magick` (PIL absent; `convert`'s `-annotate` needs a font path so omit text). Granted empty geolocation perms so `getCurrentPosition` rejects fast instead of hanging the 5s timeout.
+- **Test data fully cleaned up**: 2 `BROWSERTEST` calendar_events + the Paul Smith site_checkins row (matched on the `checked_in_at` column — NOT `created_at`) + the uploaded photo. Pre-existing demo "Dean Parrish" (2026-06-06) check-in left intact.
+- **Pushed**: `push-robust.ts` → `main → ca74c860` (395 files; same 5 >1MB PNGs skipped as always). `verify-push.ts` → 12/12 signatures present on GitHub `main`. No app code changed this session — only CLAUDE.md/CLAUDE_ARCHIVE.md docs.
