@@ -167,7 +167,7 @@ function CheckInCard({
             <p className="font-bold text-gray-900 text-lg mb-1">Access Denied</p>
             <p className="text-gray-600 text-sm">
               {blockedReason === "not_registered"
-                ? "Your name and company could not be verified against the registered contacts for this project."
+                ? "We couldn't match your details to anyone registered on this project. Check your name is entered as it appears on the project team, or contact the site manager."
                 : "Your insurance certificate has expired or has not been submitted to the site manager."}
             </p>
           </div>
@@ -261,7 +261,7 @@ function CheckInCard({
 
         {preview && (
           <div className="relative rounded-xl overflow-hidden border">
-            <img src={preview} alt="Check-in photo" className="w-full object-cover max-h-48" />
+            <img src={preview} alt="Check-in photo" className="w-full object-contain max-h-72 bg-gray-100" />
             <button
               onClick={() => { setPreview(null); setCapturedFile(null); setStatus("idle"); if (fileRef.current) fileRef.current.value = ""; }}
               className="absolute top-2 right-2 bg-black/50 text-white rounded-full px-2 py-0.5 text-xs"
@@ -301,8 +301,8 @@ function CheckInCard({
 
         <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-500 space-y-1">
           <p className="font-semibold text-gray-600">Check-in requirements:</p>
-          <p>✓ Name and company must match your project registration</p>
-          <p>✓ Valid insurance certificate must be on record</p>
+          <p>✓ You must be registered on this project (team member or subcontractor)</p>
+          <p>✓ Subcontractors must have a valid insurance certificate on record</p>
           <p>✓ Site photo required</p>
         </div>
       </div>
@@ -354,7 +354,7 @@ export default function SiteBoard() {
     );
   }
 
-  const { project, siteManager, teamSize, permits, documents, pinnedItems = [], generatedAt } = data;
+  const { project, siteManager, teamSize, permits, documents, pinnedItems = [], upcomingEvents = [], generatedAt } = data;
 
   // Gate: show check-in form until the worker has successfully checked in
   if (!checkedIn) {
@@ -483,6 +483,33 @@ export default function SiteBoard() {
                 <Phone className="w-4 h-4" /> {siteManager.phone}
               </a>
             )}
+          </div>
+        )}
+
+        {/* Upcoming events */}
+        {upcomingEvents.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm border p-5">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <Calendar className="w-4 h-4" /> Upcoming Events
+            </h2>
+            <div className="space-y-3">
+              {upcomingEvents.map((e: any) => {
+                const d = new Date(e.eventDate + "T12:00:00");
+                return (
+                  <div key={e.id} className="flex items-start gap-3">
+                    <div className="shrink-0 w-12 text-center rounded-lg bg-violet-50 border border-violet-200 py-1">
+                      <p className="text-[10px] font-semibold uppercase text-violet-500 leading-none">{d.toLocaleDateString("en-GB", { month: "short" })}</p>
+                      <p className="text-lg font-extrabold text-violet-700 leading-tight">{d.getDate()}</p>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-gray-900 text-sm break-words">{e.title}</p>
+                      <p className="text-gray-400 text-xs">{d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</p>
+                      {e.note && <p className="text-gray-500 text-xs mt-0.5 break-words whitespace-pre-wrap">{e.note}</p>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 

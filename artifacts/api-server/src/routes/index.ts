@@ -22,6 +22,7 @@ import billingRouter from "./billing";
 import onboardingRouter from "./onboarding";
 import reportsRouter from "./reports";
 import shareLogsRouter from "./share-logs";
+import calendarEventsRouter from "./calendar-events";
 
 const router: IRouter = Router();
 
@@ -48,5 +49,6 @@ router.use(billingRouter);
 router.use(onboardingRouter);
 router.use(reportsRouter);
 router.use(shareLogsRouter);
+router.use(calendarEventsRouter);
 
 export default router;

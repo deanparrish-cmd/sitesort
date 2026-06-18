@@ -41,18 +41,17 @@ pnpm --filter @workspace/db run push           # Push DB schema changes
 
 ## Pushing to GitHub
 
-There is no git remote pointing to GitHub. Pushes are done via the Replit Connectors SDK:
+There is no git remote pointing to GitHub. Pushes go through the Replit GitHub connector (no token needed) to `deanparrish-cmd/sitesort` via the GitHub Git Data API. Run scripts with `pnpm --filter @workspace/scripts exec tsx ./src/<name>.ts` (plain `npx tsx` fails — tsx only lives in `scripts/node_modules`).
 
-```bash
-npx tsx scripts/src/github-push.ts
-```
+**USE `scripts/src/push-robust.ts`** — `pnpm --filter @workspace/scripts exec tsx ./src/push-robust.ts`. The old `github-push.ts` is **BROKEN: it never checks HTTP status, so failures are silent** (it prints "Done!" even when nothing pushed — this left the repo EMPTY for a long time). `push-robust.ts` fixes it: bounded concurrency (6) + retries, status checks at every step, and it skips files whose base64 payload would exceed the proxy's **~1MB body limit** (nginx 413).
 
-This uses the authenticated GitHub connector (no token needed) to push all workspace files to `deanparrish-cmd/sitesort` via the GitHub Contents API.
+Three gotchas push-robust handles (learned 2026-06-18):
+1. **Empty repo** → the Git Data API (blobs/trees) returns 409 "Git Repository is empty". You must seed ONE commit via the **Contents API** first (`scripts/src/bootstrap-repo.ts` — `PUT /contents/README.md`). Only needed once, when the repo has zero commits.
+2. **Proxy ~1MB limit** → files >~650KB raw (auth-bg.png, hero PNGs, attached_assets) get HTTP 413 and are **skipped** (logged). Large binary assets do NOT push — code/text all pushes fine.
+3. **Junk dirs** → `.config/chromium` crash dumps (from the browser-check skill) choke blob creation; push-robust ignores `.config`/`.npm`/`tmp` etc.
+4. Pushes use **`base_tree` (additive)** — files removed locally are NOT deleted from GitHub. After a push, verify with `scripts/src/verify-push.ts` (checks signature strings of changed files on `main`).
 
-To create the repo fresh:
-```bash
-npx tsx scripts/src/github-setup.ts
-```
+To create the repo fresh: `pnpm --filter @workspace/scripts exec tsx ./src/github-setup.ts`
 
 ## Auth
 
@@ -118,6 +117,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 54. Project overview daily notes Open/Share — each "Posted today" note card has ExternalLink (full-body detail dialog with copy + chain-to-share) and Share2 (ShareModal with Email/WhatsApp/Team/Individual) buttons; ShareModal extended with `shareText?: string | null` prop so text-only entities share without a fileUrl; Site Issues tab moved to between Team and Site Board in the project tab group order
 55. Mobile/tablet responsive fixes — notifications filter tabs: overflow-x-auto + whitespace-nowrap so 5 tabs scroll on narrow screens; settings tab nav: overflow-x-auto on mobile so nav scrolls instead of overflowing; projects list "View Site" button: visible at lg breakpoint (touch tablets), hover-only at xl+ (desktop with pointer)
 54. Overview tab daily note Open/Share — each "Posted today" note card has ExternalLink (Open) and Share2 (Share) icon buttons; Open shows a detail dialog with full text, author/date, Copy text button, and a chain-to-Share button; Share opens ShareModal with Email / WhatsApp / Project Team / Individual — note body sent as message content; ShareModal extended with `shareText?: string | null` prop so text-only items (no fileUrl) can use all share methods via `hasContent = !!(fullUrl || shareText)`; Site Issues tab reordered within Group 1 to sit between Team and Site Board
+56. Site Calendar deep-links + custom events — dashboard calendar day-dialog events deep-link to the specific item (project detail / `?tab=permits` Compliance tab / invoice viewer via `?invoice=<id>`); managers (admin/PM) can add custom events (title + date + optional note) via "Add Event" / "Add event on this day", shown as a violet dot and deletable; `calendar_events` table + `GET/POST/DELETE /api/calendar-events` (POST/DELETE manager-gated, tenant-scoped). Each event has an optional `projectId` (null = whole company): the Add dialog has a "Show on site board for" selector (Whole company / a project) and the day dialog shows a violet scope badge. **QR site board** public page (`GET /api/site/:token`) now returns `upcomingEvents` — company-wide + that-project events, dated today-or-later, ascending — rendered as an "Upcoming Events" card on the public site board
 
 ## Uploads / File Serving
 
@@ -160,65 +160,49 @@ See CLAUDE_ARCHIVE.md for full detail.
 
 ---
 
-## End-of-session notes — 2026-06-17 (mobile/tablet feature-parity audit + fixes, tablet stat density)
-
-### Context
-Full audit of every page for desktop features missing or unreachable on tablet/mobile. Ran 4 parallel page-group audits, then **verified each flagged item by hand** (the audits over-flagged: many "bugs" were intended designs — detail tabs *wrap* by design #46, projects "View Site" button is visible ≤lg by design, messages has a back button, admin tables are intentionally all-visible w/ horizontal scroll per 2026-06-15). Drove the real app in headless Chromium across mobile/tablet/desktop to confirm.
-
-### Tasks completed today
-
-1. **Feature-parity fixes** (commit `03870e6`):
-   - **Invoices** (`pages/invoices/index.tsx`): added a **Delete** button to the invoice viewer modal (mobile cards open this modal on tap) — Delete was previously desktop-table-only, so invoices couldn't be deleted on mobile/tablet. Gated on `caps.canManageInvoices`; imported `Trash2`.
-   - **Project detail** (`pages/projects/detail.tsx`): team member **phone-edit pencil** was `opacity-0 group-hover/phone` → genuinely **unreachable on touch** (no other edit trigger). Changed to `opacity-100 lg:opacity-0 lg:group-hover/phone:opacity-100`. Same touch fix for the avatar **camera overlay** (+ lighter `bg-black/40` so the avatar stays visible).
-   - **Settings** (`pages/settings/index.tsx`): avatar camera affordance showed on phones but `sm:opacity-0` hid it on tablets → changed `sm:` to `lg:`.
-
-2. **Tablet stat-strip density** (commit `d0f0f6c`):
-   - Dashboard + admin `BigStat` strips used `grid-cols-2 lg:grid-cols-4`, so tablets (768–1023px) showed a sparse 2×2. Shifted to `md:grid-cols-4` (dashboard:428; admin User Metrics / Primary Actions / Revenue strips + the `sm:grid-cols-2 lg:grid-cols-4` feature-usage rows — all via `lg:grid-cols-4`→`md:grid-cols-4`). Verified 4-across at 768/1023px.
-   - **Deliberately left** the other audit-flagged cosmetic items: `grid-cols-3` strips are compact stat chips (fine 3-across on tablet); `sm:grid-cols-2 lg:grid-cols-3` grids hold pricing/member cards that need the width; dashboard main 2+1 grid stacks fine on tablet; site-board is phone-first. Changing them = churn risk, no tablet gain.
-
-3. **Dashboard Site Calendar — clickable dates with day detail dialog** (commit `5eef9f4`, `pages/dashboard/index.tsx`):
-   - Each calendar day is now a `<button>`; clicking opens a responsive `Dialog` listing **all** events on that day (no longer capped at the 3 visible dots). Each row shows the colored type dot, type label (Project Start/End, Permit/Insurance Expiry, Payment Due, Invoice Due In), the untruncated event text, and a "View →" link to the relevant section via new `EVENT_LINK` map (projects/compliance/invoices).
-   - Calendar days with >3 events now show a `+N` hint; empty days show a friendly empty state. `SiteCalendar` return wrapped in a fragment to host the Dialog; new state `selectedDate`.
-   - **Only one calendar/dashboard exists** in the repo — the single responsive component covers mobile/tablet/desktop (Dialog already handles narrow viewports). Verified by clicking an event day at 390/820/1280px: dialog opens with full info, zero page errors.
-
-### Browser-test method (reusable)
-App runs on **:18299** (serves live source via HMR) but Vite doesn't proxy `/api` locally (404). To drive **authenticated** pages in Playwright: log in via the API on **:8080** for a JWT, inject it with `context.addInitScript(t => localStorage.setItem('sitesort_token', t))`, and `context.route('**/api/**', …)` to re-`fetch`+`fulfill` each call against :8080. Set `viewport` per width (390 / 820 / 1280). Used this all session — all pages 200, zero errors.
-
-### Key files modified
-- `artifacts/sitesort/src/pages/invoices/index.tsx` — modal Delete button + `Trash2` import
-- `artifacts/sitesort/src/pages/projects/detail.tsx` — phone pencil + avatar camera touch affordances
-- `artifacts/sitesort/src/pages/settings/index.tsx` — avatar camera on tablet
-- `.../admin/index.tsx` — stat strips `md:grid-cols-4`
-- `artifacts/sitesort/src/pages/dashboard/index.tsx` — stat strip `md:grid-cols-4` **+** clickable calendar dates with day detail Dialog (`EVENT_LINK` map, `selectedDate` state)
-- `.claude/skills/browser-check/{package.json,package-lock.json}` — committed `playwright-core` dep (commit `a837e6b`)
-
-### Notes for next session
-- **`pnpm run typecheck` is green (exit 0)** — kept green this session; working tree clean, all work pushed to `main`.
-- **GitHub push is automatic** via PostToolUse hook; **API server rebuild**: `pnpm --filter @workspace/api-server run build` after backend changes.
-- Local browser testing of authenticated pages needs the `/api`→:8080 reroute trick (see Browser-test method above) — Vite doesn't proxy `/api` locally.
+## End-of-session notes — 2026-06-17 (mobile/tablet feature-parity audit + fixes, tablet stat density, clickable calendar dates) — see CLAUDE_ARCHIVE.md for full detail
 
 ---
 
-## End-of-session notes — 2026-06-17 session 2 (site calendar dot indicator, plan limit upgrade dialog)
+## End-of-session notes — 2026-06-17 session 2 (site calendar dot indicator, plan limit upgrade dialog) — see CLAUDE_ARCHIVE.md for full detail
 
-### Tasks completed today
+---
 
-1. **Site Calendar red-dot event indicator** (commit `ffe5026`, `pages/dashboard/index.tsx`):
-   - Small red badge now overlays the day number for any day that has events, giving at-a-glance signal before reading the coloured dots inside the cell.
-   - Also committed `tmux` to nix packages (`.replit`) and tracked `cal-dot-check.mjs` Playwright test script.
+## End-of-session notes — 2026-06-18 (Site Calendar event deep-links to the actionable item) — see CLAUDE_ARCHIVE.md
 
-2. **Plan limit upgrade dialog — proactive check + improved UI** (commit `a9e8db8`):
-   - **Previously**: dialog only fired after an API `403 plan_limit` response (user had to fill the form first).
-   - **Now**: check is proactive — uses client-side project count + plan tier from `useSubscription()`. Button click or `?new=1` auto-open shows the dialog immediately if the user is at their limit.
-   - **Dialog improved**: shows current plan badge + usage count ("3 of 1 project used"), next-tier callout with project count and price ("Team plan — 5 projects · £79/mo"), "Maybe later" / "Upgrade plan →" buttons.
-   - Applied to both `/projects` page and `/dashboard` "New Project" button.
-   - Plan limits (matching server): `free`/`solo` = 1, `team` = 5, `pro` = Infinity. Beta-access companies bypass the check.
-   - **Browser-tested**: Playwright confirmed dialog fires immediately on both pages, all elements present, "Upgrade plan" routes to `/settings?tab=billing`. Zero console errors.
+---
 
-### Key files modified
-- `artifacts/sitesort/src/pages/projects/index.tsx` — `PLAN_LIMITS`/`NEXT_PLAN` constants, `atLimit` computed value, proactive button + auto-open check, improved Dialog JSX
-- `artifacts/sitesort/src/pages/dashboard/index.tsx` — `useSubscription` import, `atLimit` check on "New Project" button, upgrade Dialog
+## End-of-session notes — 2026-06-18 (custom user-created calendar events, Feature #56) — see CLAUDE_ARCHIVE.md
 
-### Notes for next session
-- **`pnpm run typecheck` is green** — kept clean this session.
-- **GitHub push is automatic** via PostToolUse hook; **API server rebuild**: `pnpm --filter @workspace/api-server run build` after backend changes.
+---
+
+## End-of-session notes — 2026-06-18 (custom events → QR site board) — extends Feature #56
+
+### What was added
+Custom calendar events now flow to the **public QR site board**, scoped per-event (decided with the user: "let PM choose per event" + "upcoming only").
+
+- **DB**: added nullable `projectId` (FK→projects, `onDelete: cascade`) to `calendar_events` (`lib/db/src/schema/calendar_events.ts`). `null` = company-wide (every board); set = that project's board only. Pushed via `pnpm --filter @workspace/db run push`.
+- **API — create** (`routes/calendar-events.ts`): `POST` now accepts optional `projectId`, **IDOR-checked** (must belong to `req.user.companyId`, else 400). `GET` returns it (select-all).
+- **API — public board** (`routes/qr.ts` `GET /site/:token`, ~line 242): new query returns `upcomingEvents` = `calendar_events` where `companyId = project.companyId AND (projectId IS NULL OR projectId = qr.projectId) AND eventDate >= today`, `orderBy(asc(eventDate))`. Added `or`/`asc` + `calendarEventsTable` to imports. `eventDate` is a `date` column so the `gte(..., todayStr)` string compare works.
+- **Frontend — dashboard** (`pages/dashboard/index.tsx`): Add-event dialog gained a **"Show on site board for"** `<select>` (Whole company / each project, from a new `projects` prop passed to `SiteCalendar`). `CustomEvent` + `CalEvent` + `createCalendarEvent` carry `projectId`. Day-dialog custom events show a **violet scope badge** (project name or "Company-wide").
+- **Frontend — public board** (`pages/site-board.tsx`): destructures `upcomingEvents = []`; new **"Upcoming Events"** card (violet date-chip + title + weekday + note) inserted after Site Manager, before Active Permits. Uses the already-imported `Calendar` icon. (`data` is untyped `any`, so no shared type to update — just read the field.)
+
+### Verification
+- `pnpm run typecheck` **green**; DB pushed; server bundle rebuilt + restarted on :8080 (health 200).
+- **Backend scoping proven end-to-end** (curl, real QR tokens): created company-wide + Project-A-scoped + a PAST event. Project A board → both future events (asc-ordered), PAST excluded. Project B board → only the company-wide one. Exactly right.
+- **Browser-tested** (reroute `/api`→:8080 = new bundle): Add dialog selector lists "Whole company" + all 3 projects; created a Project-A-scoped event → "Event added" toast → day dialog shows the violet **"Riverside Apartments Block A"** scope badge + Delete → delete works. Public `/site/:token` loads clean (check-in gate). **Zero console errors.** Note: the Upcoming Events *card itself* is behind the check-in gate (needs a registered worker + valid insurance + photo), so it's verified at the **data/API layer + code review**, not a post-check-in screenshot.
+
+### ⚠️ Same server run-model gotcha as the prior note
+The running :8080 process this session is a **manually-started** `node dist/index.mjs` (via the Bash tool's background mechanism with `PORT=8080`). `nohup … &`/`setsid` from a Bash tool call did NOT survive (the foreground tool shell tears them down); the **`run_in_background: true`** Bash option is what kept it alive across turns. The user's Run/republish will cleanly replace it.
+
+---
+
+## End-of-session notes — 2026-06-18 (BUGFIX: site check-in rejected in-house team members)
+
+**Bug:** QR site-board check-in (`POST /api/site/:token/checkin`, `routes/qr.ts`) `innerJoin`ed **only `subcontractorsTable`**, so in-house team members (users on the project) always got `not_registered` ("Access Denied") — reproduced via curl as the project's own manager. Not device-specific (user reported it on tablet). **Fix (decided with user — "team + subs on project", in-house matched by "name alone"):** check the project's **users first** (`projectMembers ⨝ users`, name-only case-insensitive match, no company/insurance needed); only if not an in-house member fall through to the existing subcontractor path (name + company + valid non-archived insurance). Then the Upcoming Events card screenshot was finally captured (drove a real in-house check-in in-browser). **Verified** all 5 paths via curl: in-house→201, unregistered→403 not_registered, sub no-insurance→403 no_valid_insurance, sub wrong-company→403 not_registered, sub+valid-insurance→201. Test data (events, Dave→Riverside link, fake cert, check-ins) cleaned up. Company field still entered on the form but ignored for in-house matching. **Follow-up copy fix (`site-board.tsx`):** softened the now-inaccurate gate copy — requirements list → "You must be registered on this project (team member or subcontractor)" + "Subcontractors must have a valid insurance certificate on record"; `not_registered` Access-Denied message reworded to "couldn't match your details to anyone registered on this project…". NOTE: a pre-existing demo check-in "Dean Parrish" (2026-06-06) on Riverside is real data — leave it.
+
+---
+
+## End-of-session notes — 2026-06-18 (check-in photo cropped faces — `object-cover` → `object-contain`)
+
+**Issue:** check-in photo "zooms in too close, can't see the face." Root cause was **CSS only** — `stampPhoto` (`site-board.tsx:5`) stores the FULL frame (canvas = naturalWidth×naturalHeight, no crop); the displays used `object-cover` in fixed-aspect boxes, cropping top/bottom (faces). **Fix:** switched the three **check-in** photo displays to `object-contain`: capture preview (`site-board.tsx`, also `max-h-48`→`max-h-72` + `bg-gray-100`), Site Check-Ins page grid thumbnail (`pages/checkins/index.tsx`), project-detail Check-ins tab grid thumbnail (`pages/projects/detail.tsx`). The check-in **detail modals already used `object-contain`** (untouched). Deliberately left `object-cover` on NON-check-in photos (issues, avatars, pinned site photos `site-board.tsx:621`). Verified in headless tablet (820px) with a 300×720 portrait test image: preview shows full frame (top+face+bottom, letterboxed), `objectFit: contain`, zero console errors.

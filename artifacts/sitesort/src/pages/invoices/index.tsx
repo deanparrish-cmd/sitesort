@@ -140,6 +140,16 @@ export default function InvoicesPage() {
     }
   }, [caps.isLoading, caps.canManageInvoices]);
 
+  // Auto-open the invoice viewer when deep-linked via ?invoice=<id> (e.g. from the dashboard calendar)
+  useEffect(() => {
+    if (loading) return;
+    const id = new URLSearchParams(window.location.search).get("invoice");
+    if (!id) return;
+    window.history.replaceState({}, "", "/invoices");
+    const target = invoices.find(inv => inv.id === id);
+    if (target) setViewingInvoice(target);
+  }, [loading, invoices]);
+
   async function markPaid(id: string) {
     if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
     const res = await apiFetch(`/api/invoices/${id}`, { method: "PATCH", body: JSON.stringify({ status: "paid" }) });

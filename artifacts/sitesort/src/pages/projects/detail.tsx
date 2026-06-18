@@ -2794,7 +2794,7 @@ tr:last-child td{border-bottom:none}
                 return (
                   <div key={ci.id} className="rounded-xl overflow-hidden border bg-card shadow-sm">
                     <div className="aspect-square bg-muted relative cursor-pointer" onClick={() => window.open(photoSrc, '_blank', 'noopener,noreferrer')}>
-                      <img src={photoSrc} alt={ci.workerName} className="w-full h-full object-cover" />
+                      <img src={photoSrc} alt={ci.workerName} className="w-full h-full object-contain" />
                     </div>
                     <div className="p-3">
                       <p className="font-semibold text-sm truncate">{ci.workerName}</p>

@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db } from "@workspace/db";
-import { qrCodesTable, qrBoardPinsTable, documentsTable, projectsTable, projectMembersTable, usersTable, permitsTable, photosTable, invoicesTable, siteCheckinsTable, subcontractorsTable, insuranceRecordsTable } from "@workspace/db/schema";
-import { eq, and, desc, inArray, isNull, gte } from "drizzle-orm";
+import { qrCodesTable, qrBoardPinsTable, documentsTable, projectsTable, projectMembersTable, usersTable, permitsTable, photosTable, invoicesTable, siteCheckinsTable, subcontractorsTable, insuranceRecordsTable, calendarEventsTable } from "@workspace/db/schema";
+import { eq, and, or, desc, asc, inArray, isNull, gte } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { randomBytes } from "crypto";
@@ -239,6 +239,22 @@ router.get("/site/:token", async (req, res) => {
       permitPinIds.length > 0 ? db.select().from(permitsTable).where(inArray(permitsTable.id, permitPinIds)) : Promise.resolve([]),
     ]);
 
+    // Upcoming custom calendar events for this board: company-wide events
+    // (projectId IS NULL) plus events scoped to this project, dated today or later.
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const upcomingEvents = await db.select({
+      id: calendarEventsTable.id,
+      title: calendarEventsTable.title,
+      eventDate: calendarEventsTable.eventDate,
+      note: calendarEventsTable.note,
+    }).from(calendarEventsTable)
+      .where(and(
+        eq(calendarEventsTable.companyId, project.companyId),
+        or(isNull(calendarEventsTable.projectId), eq(calendarEventsTable.projectId, qr.projectId)),
+        gte(calendarEventsTable.eventDate, todayStr),
+      ))
+      .orderBy(asc(calendarEventsTable.eventDate));
+
     const normaliseUrl = (url: string) =>
       url.startsWith("/uploads/") ? url.replace("/uploads/", "/api/uploads/") : url;
 
@@ -296,6 +312,7 @@ router.get("/site/:token", async (req, res) => {
           return { itemType: "permit", id: p.id, type: p.type, description: p.description, expiryDate: p.expiryDate, status };
         }),
       ],
+      upcomingEvents,
       generatedAt: new Date().toISOString(),
     });
   } catch (err) {
@@ -324,45 +341,57 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
       return;
     }
 
-    // Find all subcontractor contacts linked to this project
-    const projectContacts = await db
-      .select({
-        id: subcontractorsTable.id,
-        contactName: subcontractorsTable.contactName,
-        companyName: subcontractorsTable.companyName,
-      })
-      .from(projectMembersTable)
-      .innerJoin(subcontractorsTable, eq(subcontractorsTable.id, projectMembersTable.subcontractorId))
-      .where(eq(projectMembersTable.projectId, qr.projectId));
-
-    // Case-insensitive match on name + company
     const nameLower = workerName.trim().toLowerCase();
     const companyLower = companyName.trim().toLowerCase();
-    const matched = projectContacts.find(c =>
-      c.contactName.toLowerCase() === nameLower &&
-      c.companyName.toLowerCase() === companyLower
-    );
 
-    if (!matched) {
-      res.status(403).json({ error: "check_in_blocked", reason: "not_registered" });
-      return;
-    }
+    // 1) In-house team members (users) assigned to this project — matched on name
+    //    alone (no company / insurance requirement: they're covered by the company).
+    const projectUsers = await db
+      .select({ name: usersTable.name })
+      .from(projectMembersTable)
+      .innerJoin(usersTable, eq(usersTable.id, projectMembersTable.userId))
+      .where(eq(projectMembersTable.projectId, qr.projectId));
 
-    // Check for at least one valid (non-archived, non-expired) insurance certificate
-    const today = new Date().toISOString().split("T")[0];
-    const validInsurance = await db
-      .select({ id: insuranceRecordsTable.id })
-      .from(insuranceRecordsTable)
-      .where(and(
-        eq(insuranceRecordsTable.subcontractorId, matched.id),
-        isNull(insuranceRecordsTable.archivedAt),
-        gte(insuranceRecordsTable.expiryDate, today),
-      ))
-      .limit(1);
+    const isInHouseMember = projectUsers.some(u => u.name.trim().toLowerCase() === nameLower);
 
-    if (validInsurance.length === 0) {
-      res.status(403).json({ error: "check_in_blocked", reason: "no_valid_insurance" });
-      return;
+    if (!isInHouseMember) {
+      // 2) Otherwise must be a subcontractor contact linked to this project (name + company)
+      //    with at least one valid (non-archived, non-expired) insurance certificate.
+      const projectContacts = await db
+        .select({
+          id: subcontractorsTable.id,
+          contactName: subcontractorsTable.contactName,
+          companyName: subcontractorsTable.companyName,
+        })
+        .from(projectMembersTable)
+        .innerJoin(subcontractorsTable, eq(subcontractorsTable.id, projectMembersTable.subcontractorId))
+        .where(eq(projectMembersTable.projectId, qr.projectId));
+
+      const matched = projectContacts.find(c =>
+        c.contactName.toLowerCase() === nameLower &&
+        c.companyName.toLowerCase() === companyLower
+      );
+
+      if (!matched) {
+        res.status(403).json({ error: "check_in_blocked", reason: "not_registered" });
+        return;
+      }
+
+      const today = new Date().toISOString().split("T")[0];
+      const validInsurance = await db
+        .select({ id: insuranceRecordsTable.id })
+        .from(insuranceRecordsTable)
+        .where(and(
+          eq(insuranceRecordsTable.subcontractorId, matched.id),
+          isNull(insuranceRecordsTable.archivedAt),
+          gte(insuranceRecordsTable.expiryDate, today),
+        ))
+        .limit(1);
+
+      if (validInsurance.length === 0) {
+        res.status(403).json({ error: "check_in_blocked", reason: "no_valid_insurance" });
+        return;
+      }
     }
 
     const ext = path.extname(req.file.originalname || ".jpg").toLowerCase() || ".jpg";

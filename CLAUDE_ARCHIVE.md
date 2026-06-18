@@ -540,3 +540,113 @@
 3. **Dependency version-drift pins** in `pnpm-workspace.yaml`:
    - `@types/express-serve-static-core` pinned to 5.1.0 (5.1.1 broke `req.params.x` types).
    - `@hookform/resolvers` packageExtension pins zod to 3.25.76 so zodResolver uses the app's zod v3 not the hoisted v4.
+
+---
+
+## End-of-session notes — 2026-06-17 (mobile/tablet feature-parity audit + fixes, tablet stat density)
+
+### Context
+Full audit of every page for desktop features missing or unreachable on tablet/mobile. Ran 4 parallel page-group audits, then **verified each flagged item by hand** (the audits over-flagged: many "bugs" were intended designs — detail tabs *wrap* by design #46, projects "View Site" button is visible ≤lg by design, messages has a back button, admin tables are intentionally all-visible w/ horizontal scroll per 2026-06-15). Drove the real app in headless Chromium across mobile/tablet/desktop to confirm.
+
+### Tasks completed today
+
+1. **Feature-parity fixes** (commit `03870e6`):
+   - **Invoices** (`pages/invoices/index.tsx`): added a **Delete** button to the invoice viewer modal (mobile cards open this modal on tap) — Delete was previously desktop-table-only, so invoices couldn't be deleted on mobile/tablet. Gated on `caps.canManageInvoices`; imported `Trash2`.
+   - **Project detail** (`pages/projects/detail.tsx`): team member **phone-edit pencil** was `opacity-0 group-hover/phone` → genuinely **unreachable on touch** (no other edit trigger). Changed to `opacity-100 lg:opacity-0 lg:group-hover/phone:opacity-100`. Same touch fix for the avatar **camera overlay** (+ lighter `bg-black/40` so the avatar stays visible).
+   - **Settings** (`pages/settings/index.tsx`): avatar camera affordance showed on phones but `sm:opacity-0` hid it on tablets → changed `sm:` to `lg:`.
+
+2. **Tablet stat-strip density** (commit `d0f0f6c`):
+   - Dashboard + admin `BigStat` strips used `grid-cols-2 lg:grid-cols-4`, so tablets (768–1023px) showed a sparse 2×2. Shifted to `md:grid-cols-4` (dashboard:428; admin User Metrics / Primary Actions / Revenue strips + the `sm:grid-cols-2 lg:grid-cols-4` feature-usage rows — all via `lg:grid-cols-4`→`md:grid-cols-4`). Verified 4-across at 768/1023px.
+   - **Deliberately left** the other audit-flagged cosmetic items: `grid-cols-3` strips are compact stat chips (fine 3-across on tablet); `sm:grid-cols-2 lg:grid-cols-3` grids hold pricing/member cards that need the width; dashboard main 2+1 grid stacks fine on tablet; site-board is phone-first. Changing them = churn risk, no tablet gain.
+
+3. **Dashboard Site Calendar — clickable dates with day detail dialog** (commit `5eef9f4`, `pages/dashboard/index.tsx`):
+   - Each calendar day is now a `<button>`; clicking opens a responsive `Dialog` listing **all** events on that day (no longer capped at the 3 visible dots). Each row shows the colored type dot, type label (Project Start/End, Permit/Insurance Expiry, Payment Due, Invoice Due In), the untruncated event text, and a "View →" link to the relevant section via new `EVENT_LINK` map (projects/compliance/invoices).
+   - Calendar days with >3 events now show a `+N` hint; empty days show a friendly empty state. `SiteCalendar` return wrapped in a fragment to host the Dialog; new state `selectedDate`.
+   - **Only one calendar/dashboard exists** in the repo — the single responsive component covers mobile/tablet/desktop (Dialog already handles narrow viewports). Verified by clicking an event day at 390/820/1280px: dialog opens with full info, zero page errors.
+
+### Browser-test method (reusable)
+App runs on **:18299** (serves live source via HMR) but Vite doesn't proxy `/api` locally (404). To drive **authenticated** pages in Playwright: log in via the API on **:8080** for a JWT, inject it with `context.addInitScript(t => localStorage.setItem('sitesort_token', t))`, and `context.route('**/api/**', …)` to re-`fetch`+`fulfill` each call against :8080. Set `viewport` per width (390 / 820 / 1280). Used this all session — all pages 200, zero errors.
+
+### Key files modified
+- `artifacts/sitesort/src/pages/invoices/index.tsx` — modal Delete button + `Trash2` import
+- `artifacts/sitesort/src/pages/projects/detail.tsx` — phone pencil + avatar camera touch affordances
+- `artifacts/sitesort/src/pages/settings/index.tsx` — avatar camera on tablet
+- `.../admin/index.tsx` — stat strips `md:grid-cols-4`
+- `artifacts/sitesort/src/pages/dashboard/index.tsx` — stat strip `md:grid-cols-4` **+** clickable calendar dates with day detail Dialog (`EVENT_LINK` map, `selectedDate` state)
+- `.claude/skills/browser-check/{package.json,package-lock.json}` — committed `playwright-core` dep (commit `a837e6b`)
+
+### Notes for next session
+- **`pnpm run typecheck` is green (exit 0)** — kept green this session; working tree clean, all work pushed to `main`.
+- **GitHub push is automatic** via PostToolUse hook; **API server rebuild**: `pnpm --filter @workspace/api-server run build` after backend changes.
+- Local browser testing of authenticated pages needs the `/api`→:8080 reroute trick (see Browser-test method above) — Vite doesn't proxy `/api` locally.
+
+---
+
+## End-of-session notes — 2026-06-17 session 2 (site calendar dot indicator, plan limit upgrade dialog)
+
+### Tasks completed today
+
+1. **Site Calendar red-dot event indicator** (commit `ffe5026`, `pages/dashboard/index.tsx`):
+   - Small red badge now overlays the day number for any day that has events, giving at-a-glance signal before reading the coloured dots inside the cell.
+   - Also committed `tmux` to nix packages (`.replit`) and tracked `cal-dot-check.mjs` Playwright test script.
+
+2. **Plan limit upgrade dialog — proactive check + improved UI** (commit `a9e8db8`):
+   - **Previously**: dialog only fired after an API `403 plan_limit` response (user had to fill the form first).
+   - **Now**: check is proactive — uses client-side project count + plan tier from `useSubscription()`. Button click or `?new=1` auto-open shows the dialog immediately if the user is at their limit.
+   - **Dialog improved**: shows current plan badge + usage count ("3 of 1 project used"), next-tier callout with project count and price ("Team plan — 5 projects · £79/mo"), "Maybe later" / "Upgrade plan →" buttons.
+   - Applied to both `/projects` page and `/dashboard` "New Project" button.
+   - Plan limits (matching server): `free`/`solo` = 1, `team` = 5, `pro` = Infinity. Beta-access companies bypass the check.
+   - **Browser-tested**: Playwright confirmed dialog fires immediately on both pages, all elements present, "Upgrade plan" routes to `/settings?tab=billing`. Zero console errors.
+
+### Key files modified
+- `artifacts/sitesort/src/pages/projects/index.tsx` — `PLAN_LIMITS`/`NEXT_PLAN` constants, `atLimit` computed value, proactive button + auto-open check, improved Dialog JSX
+- `artifacts/sitesort/src/pages/dashboard/index.tsx` — `useSubscription` import, `atLimit` check on "New Project" button, upgrade Dialog
+
+### Notes for next session
+- **`pnpm run typecheck` is green** — kept clean this session.
+- **GitHub push is automatic** via PostToolUse hook; **API server rebuild**: `pnpm --filter @workspace/api-server run build` after backend changes.
+
+---
+
+## End-of-session notes — 2026-06-18 (Site Calendar event deep-links to the actionable item)
+
+### Task completed today
+**Calendar day-dialog events now deep-link to the specific item, not the generic section page** (`pages/dashboard/index.tsx` + `pages/invoices/index.tsx`):
+- Added optional `href?: string` to the `CalEvent` type; each event now carries a deep link computed where the id is available in the `calendarEvents` `useMemo`:
+  - **Project start/end** → `/projects/${p.id}` (specific project detail)
+  - **Permit** → `/projects/${permit.projectId}?tab=permits` (the project's **Compliance** tab — note tab nav maps `value:"permits"` → label "Compliance", `detail.tsx:975`; the permit list lives there)
+  - **Invoice (in/out)** → `/invoices?invoice=${inv.id}` (opens the invoice viewer)
+  - **Insurance** → unchanged `/compliance` fallback — the `ExpiringInsuranceItem` API record has only `subcontractorId`, **no `projectId`**, so there's no project to deep-link to.
+- Day dialog link now uses `e.href ?? EVENT_LINK[e.type].href`; `EVENT_LINK` labels made action-oriented ("Open project" / "View permit" / "Open invoice").
+- **Invoices page**: new `useEffect` reads `?invoice=<id>`, opens the viewer for the matching invoice once loaded, and strips the query param via `replaceState` (mirrors the existing `?new=1` pattern).
+
+### "All versions of the app"
+There is **only one** Site Calendar / `calendarEvents` implementation in the whole repo — `artifacts/sitesort/src/pages/dashboard/index.tsx`. It's a single responsive component covering mobile/tablet/desktop. (`artifacts/mockup-sandbox/src/components/ui/calendar.tsx` is an unrelated react-day-picker UI primitive, not the dashboard calendar.) So the change covers every version.
+
+### Verification
+- `pnpm run typecheck` **green**.
+- Browser-tested via the `/api`→:8080 reroute trick (JWT injected, all `/api/**` re-fetched against :8080): clicked a red-dot day → "Open project" navigated to `/projects/<id>` (specific detail page, not the list); `?invoice=<id>` opened the viewer and cleaned the URL; `?tab=permits` landed on the Compliance tab showing the permit list. **Zero console errors** on all paths.
+
+---
+
+## End-of-session notes — 2026-06-18 (custom user-created calendar events) — Feature #56
+
+### What was built
+PMs/admins can **add their own shared events to the dashboard Site Calendar**; every company member sees them. Fields: **title + date + optional note** (company-shared visibility, decided with the user; future: surface on QR site board + subcontractor portal).
+
+- **DB**: new `calendar_events` table (`lib/db/src/schema/calendar_events.ts`, exported from `schema/index.ts`) — `id` (text PK, app-gen uuid), `companyId` (FK→companies, `onDelete: cascade`), `createdBy` (FK→users), `title`, `eventDate` (date), `note` (nullable), `createdAt`. Pushed via `pnpm --filter @workspace/db run push`.
+- **API**: `artifacts/api-server/src/routes/calendar-events.ts` (mounted in `routes/index.ts`): `GET /api/calendar-events` (company-scoped list, any member), `POST` (create — **managers only**, 403 otherwise; manual validation), `DELETE /:id` (managers only, tenant-scoped). Follows the invoices.ts pattern (authenticate, try/catch, `req.user!.companyId`).
+- **Frontend** (`pages/dashboard/index.tsx`): new `CalEvent` type `"custom"` (violet dot + legend entry); `customEvents` fetched in the existing `useEffect` and merged into `calendarEvents`. `SiteCalendar` gained props `canManage` / `onCreate` / `onDelete`. **"Add Event"** button in the calendar header (managers only) + **"Add event on this day"** in the day-detail dialog (prefills that date). Add dialog = title `Input` + date `Input[type=date]` + note `Textarea`. Custom events in the day dialog show the note and a **Delete event** button (managers) instead of a deep-link. Create/delete go through `createCalendarEvent`/`deleteCalendarEvent` with the `isCancelled` read-only guard + toasts; delete is optimistic with rollback. Gated on `caps.canManageProjects` (= admin/project_manager).
+
+### ⚠️ Server run model (important — learned the hard way this session)
+The **api-server runs a prebuilt bundle** `artifacts/api-server/dist/index.mjs` (built by `build.mjs` = esbuild server + `pnpm sitesort build` frontend), started by the Replit workflow as `node --enable-source-maps ./dist/index.mjs` with **`PORT=8080` injected by the supervisor**. It does **NOT** watch source. After a backend change you must rebuild AND restart the process. **Killing the node server does NOT auto-restart** — it tears down the whole api-server workflow (frontend vite on :18299 survives, it's a separate workflow). To restart manually: `cd artifacts/api-server && PORT=8080 NODE_ENV=development node --enable-source-maps ./dist/index.mjs` (DATABASE_URL/JWT_SECRET/Stripe/etc. are already in the shell env; only PORT is missing). The user's **Run button / republish** will replace the manual process cleanly. Frontend (:18299) serves live HMR source, so FE changes don't need this.
+
+### Verification
+- `pnpm run typecheck` **green**; DB pushed; server bundle rebuilt + restarted on :8080 (health 200, `/api/calendar-events` returns JSON not SPA-fallback).
+- Backend CRUD tested end-to-end against the fresh bundle (throwaway instance on :8091): POST 201, GET lists it, missing-title 400, DELETE 204, GET empty.
+- Browser-tested (reroute to :8091 = new bundle): "Add Event" → fill title/date/note → submit shows "Event added" toast → custom event appears in the day dialog with note + Delete button → delete removes it. **Zero console errors.** (The one lingering title match post-delete was the success toast text, not the calendar.)
+
+### Follow-ups not done (user mentioned, deferred)
+- ~~Surface custom events on the **QR site board** public page~~ — DONE 2026-06-18, see next note.
+- Surface in the **subcontractor portal** (to be built later).
+

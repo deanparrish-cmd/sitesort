@@ -11,15 +11,18 @@ import {
   ShieldAlert, FileSignature, Users, Bell, Search,
   MessageSquare, Camera, FilePlus, Plus, AlertCircle, CreditCard,
   FileText, CheckCircle2, Clock, TrendingUp, Zap, X, Circle, ClipboardCheck,
-  Lock, Sparkles,
+  Lock, Sparkles, Trash2,
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
 import { useListProjects, useGetComplianceOverview } from "@workspace/api-client-react";
 import type { ExpiringInsuranceItem, ExpiringPermitItem } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
 import { useCapabilities } from "@/hooks/use-capabilities";
 import { useSubscription } from "@/contexts/subscription";
 
-type CalEvent = { date: string; label: string; type: "project-start" | "project-end" | "permit" | "insurance" | "invoice-out" | "invoice-in" };
+type CalEvent = { date: string; label: string; type: "project-start" | "project-end" | "permit" | "insurance" | "invoice-out" | "invoice-in" | "custom"; href?: string; id?: string; note?: string | null; projectId?: string | null };
+type CustomEvent = { id: string; title: string; eventDate: string; note: string | null; projectId: string | null };
 type ExpiryAlert = { label: string; expiryDate: string; kind: "permit" | "insurance"; daysLeft: number };
 type Notification = { id: string; type: string; title: string; message: string; read: boolean; createdAt: string; relatedEntityId?: string; relatedEntityType?: string };
 type Invoice = { id: string; direction: string; counterpartyName: string; description: string; amount: string; currency: string; dueDate: string; status: string; reference?: string };
@@ -31,16 +34,20 @@ const EVENT_STYLES: Record<CalEvent["type"], { dot: string; badge: string; label
   "insurance":     { dot: "bg-blue-500",     badge: "bg-blue-500/10 text-blue-700 border-blue-500/20",            label: "Insurance Expiry" },
   "invoice-out":   { dot: "bg-rose-500",     badge: "bg-rose-500/10 text-rose-700 border-rose-500/20",            label: "Payment Due"      },
   "invoice-in":    { dot: "bg-emerald-500",  badge: "bg-emerald-500/10 text-emerald-700 border-emerald-500/20",   label: "Invoice Due In"   },
+  "custom":        { dot: "bg-violet-500",   badge: "bg-violet-500/10 text-violet-700 border-violet-500/20",      label: "Custom Event"     },
 };
 
-// Where each event type's full record lives, for the "View" link in the day dialog.
+// Fallback section + action label per event type for the "View" link in the day dialog.
+// Individual events carry a deep `href` (to the specific project / invoice) where an id is
+// available; these are the generic fallbacks used when an event has no deep link.
 const EVENT_LINK: Record<CalEvent["type"], { href: string; label: string }> = {
-  "project-start": { href: "/projects",   label: "View projects"        },
-  "project-end":   { href: "/projects",   label: "View projects"        },
-  "permit":        { href: "/compliance", label: "View in Compliance"   },
-  "insurance":     { href: "/compliance", label: "View in Compliance"   },
-  "invoice-out":   { href: "/invoices",   label: "View invoices"        },
-  "invoice-in":    { href: "/invoices",   label: "View invoices"        },
+  "project-start": { href: "/projects",   label: "Open project"       },
+  "project-end":   { href: "/projects",   label: "Open project"       },
+  "permit":        { href: "/compliance", label: "View permit"        },
+  "insurance":     { href: "/compliance", label: "View in Compliance" },
+  "invoice-out":   { href: "/invoices",   label: "Open invoice"       },
+  "invoice-in":    { href: "/invoices",   label: "Open invoice"       },
+  "custom":        { href: "#",           label: ""                   }, // custom events have no deep link; managers get a delete action instead
 };
 
 function notifIcon(type: string) {
@@ -71,11 +78,42 @@ function authHeaders(): Record<string, string> {
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
-function SiteCalendar({ events, alerts }: { events: CalEvent[]; alerts: ExpiryAlert[] }) {
+function SiteCalendar({ events, alerts, canManage, projects, onCreate, onDelete }: {
+  events: CalEvent[];
+  alerts: ExpiryAlert[];
+  canManage: boolean;
+  projects: { id: string; name: string }[];
+  onCreate: (data: { title: string; eventDate: string; note: string; projectId: string | null }) => Promise<boolean>;
+  onDelete: (id: string) => Promise<void>;
+}) {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+
+  // Add-event dialog state
+  const todayKey0 = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const [addOpen, setAddOpen] = useState(false);
+  const [addDate, setAddDate] = useState(todayKey0);
+  const [addTitle, setAddTitle] = useState("");
+  const [addNote, setAddNote] = useState("");
+  const [addProjectId, setAddProjectId] = useState(""); // "" = whole company
+  const [saving, setSaving] = useState(false);
+
+  function openAdd(date: string) {
+    setAddDate(date);
+    setAddTitle("");
+    setAddNote("");
+    setAddProjectId("");
+    setAddOpen(true);
+  }
+  async function submitAdd() {
+    if (!addTitle.trim() || !addDate || saving) return;
+    setSaving(true);
+    const ok = await onCreate({ title: addTitle.trim(), eventDate: addDate, note: addNote.trim(), projectId: addProjectId || null });
+    setSaving(false);
+    if (ok) setAddOpen(false);
+  }
 
   const byDate = useMemo(() => {
     const map: Record<string, CalEvent[]> = {};
@@ -114,6 +152,11 @@ function SiteCalendar({ events, alerts }: { events: CalEvent[]; alerts: ExpiryAl
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">Site Calendar</CardTitle>
           <div className="flex items-center gap-2">
+            {canManage && (
+              <Button size="sm" variant="outline" className="h-7 px-2 text-xs gap-1" onClick={() => openAdd(todayKey0)}>
+                <Plus className="w-3.5 h-3.5" /> Add Event
+              </Button>
+            )}
             <button onClick={prevMonth} className="p-1 rounded hover:bg-muted transition-colors"><ChevronLeft className="w-4 h-4" /></button>
             <span className="text-sm font-semibold w-36 text-center">{monthLabel}</span>
             <button onClick={nextMonth} className="p-1 rounded hover:bg-muted transition-colors"><ChevronRight className="w-4 h-4" /></button>
@@ -232,13 +275,32 @@ function SiteCalendar({ events, alerts }: { events: CalEvent[]; alerts: ExpiryAl
               <div className="min-w-0 flex-1">
                 <p className="text-[11px] font-semibold uppercase tracking-wide opacity-70">{EVENT_STYLES[e.type].label}</p>
                 <p className="text-sm font-medium break-words">{e.label}</p>
-                <Link
-                  href={EVENT_LINK[e.type].href}
-                  onClick={() => setSelectedDate(null)}
-                  className="inline-flex items-center gap-1 mt-1 text-xs font-medium underline-offset-2 hover:underline"
-                >
-                  {EVENT_LINK[e.type].label} <ArrowRight className="w-3 h-3" />
-                </Link>
+                {e.type === "custom" && (
+                  <span className="inline-block mt-0.5 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-700">
+                    {e.projectId ? (projects.find(p => p.id === e.projectId)?.name ?? "Project") : "Company-wide"}
+                  </span>
+                )}
+                {e.type === "custom" && e.note && (
+                  <p className="text-xs text-muted-foreground break-words mt-0.5 whitespace-pre-wrap">{e.note}</p>
+                )}
+                {e.type === "custom" ? (
+                  canManage && e.id && (
+                    <button
+                      onClick={() => onDelete(e.id!)}
+                      className="inline-flex items-center gap-1 mt-1 text-xs font-medium text-destructive underline-offset-2 hover:underline"
+                    >
+                      <Trash2 className="w-3 h-3" /> Delete event
+                    </button>
+                  )
+                ) : (
+                  <Link
+                    href={e.href ?? EVENT_LINK[e.type].href}
+                    onClick={() => setSelectedDate(null)}
+                    className="inline-flex items-center gap-1 mt-1 text-xs font-medium underline-offset-2 hover:underline"
+                  >
+                    {EVENT_LINK[e.type].label} <ArrowRight className="w-3 h-3" />
+                  </Link>
+                )}
               </div>
             </div>
           ))}
@@ -248,6 +310,66 @@ function SiteCalendar({ events, alerts }: { events: CalEvent[]; alerts: ExpiryAl
           <p className="text-sm text-muted-foreground">No events scheduled for this day.</p>
         </div>
       )}
+      {canManage && selectedDate && (
+        <DialogFooter>
+          <Button variant="outline" className="gap-1.5" onClick={() => { const d = selectedDate; setSelectedDate(null); openAdd(d); }}>
+            <Plus className="w-4 h-4" /> Add event on this day
+          </Button>
+        </DialogFooter>
+      )}
+    </Dialog>
+
+    <Dialog open={addOpen} onOpenChange={(o) => { if (!o) setAddOpen(false); }}>
+      <DialogHeader>
+        <DialogTitle className="text-lg sm:text-xl">Add calendar event</DialogTitle>
+      </DialogHeader>
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Title</label>
+          <Input
+            autoFocus
+            value={addTitle}
+            onChange={(ev) => setAddTitle(ev.target.value)}
+            placeholder="e.g. Site meeting, Concrete delivery, Inspection"
+            maxLength={120}
+            onKeyDown={(ev) => { if (ev.key === "Enter" && (ev.metaKey || ev.ctrlKey)) submitAdd(); }}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Date</label>
+          <Input type="date" value={addDate} onChange={(ev) => setAddDate(ev.target.value)} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Show on site board for</label>
+          <select
+            value={addProjectId}
+            onChange={(ev) => setAddProjectId(ev.target.value)}
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          >
+            <option value="">Whole company (every site board)</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Note <span className="text-muted-foreground font-normal">(optional)</span></label>
+          <Textarea
+            value={addNote}
+            onChange={(ev) => setAddNote(ev.target.value)}
+            placeholder="Add any extra detail the team should see…"
+            rows={3}
+            maxLength={500}
+          />
+        </div>
+        <p className="text-xs text-muted-foreground">Appears on everyone's dashboard calendar. Upcoming events also show on the QR site board{addProjectId ? " for the selected project" : " of every project"}.</p>
+      </div>
+      <DialogFooter>
+        <Button variant="outline" onClick={() => setAddOpen(false)} disabled={saving}>Cancel</Button>
+        <Button onClick={submitAdd} disabled={saving || !addTitle.trim() || !addDate}>
+          {saving ? "Adding…" : "Add event"}
+        </Button>
+      </DialogFooter>
     </Dialog>
     </>
   );
@@ -285,6 +407,7 @@ export default function Dashboard() {
   const { data: compliance } = useGetComplianceOverview();
   const caps = useCapabilities();
   const { isCancelled, tier, betaAccess } = useSubscription();
+  const { toast } = useToast();
 
   const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
   const planLimit = DASH_PLAN_LIMITS[tier] ?? 1;
@@ -292,6 +415,7 @@ export default function Dashboard() {
   const atLimit = !isCancelled && !betaAccess && planLimit !== Infinity && (projects?.length ?? 0) >= planLimit;
 
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [customEvents, setCustomEvents] = useState<CustomEvent[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [userName, setUserName] = useState<string>("");
@@ -303,6 +427,7 @@ export default function Dashboard() {
   useEffect(() => {
     const h = authHeaders();
     fetch("/api/invoices", { headers: h }).then(r => r.ok ? r.json() : []).then(setInvoices).catch(() => {});
+    fetch("/api/calendar-events", { headers: h }).then(r => r.ok ? r.json() : []).then(setCustomEvents).catch(() => {});
     fetch("/api/notifications", { headers: h }).then(r => r.ok ? r.json() : []).then(setNotifications).catch(() => {});
     fetch("/api/messages/unread-count", { headers: h }).then(r => r.ok ? r.json() : { count: 0 }).then(d => setUnreadMessages(d.count ?? 0)).catch(() => {});
     fetch("/api/auth/me", { headers: h }).then(r => r.ok ? r.json() : null).then(u => { if (u?.name) setUserName(u.name.split(" ")[0]); }).catch(() => {});
@@ -316,8 +441,8 @@ export default function Dashboard() {
     const alerts: ExpiryAlert[] = [];
     const todayMs = new Date().setHours(0, 0, 0, 0);
     for (const p of projects ?? []) {
-      if (p.startDate) events.push({ date: p.startDate.slice(0, 10), label: `${p.name} starts`, type: "project-start" });
-      if (p.targetEndDate) events.push({ date: p.targetEndDate.slice(0, 10), label: `${p.name} ends`, type: "project-end" });
+      if (p.startDate) events.push({ date: p.startDate.slice(0, 10), label: `${p.name} starts`, type: "project-start", href: `/projects/${p.id}` });
+      if (p.targetEndDate) events.push({ date: p.targetEndDate.slice(0, 10), label: `${p.name} ends`, type: "project-end", href: `/projects/${p.id}` });
     }
     for (const ins of (compliance?.expiringInsurance ?? []) as ExpiringInsuranceItem[]) {
       const date = ins.expiryDate.slice(0, 10);
@@ -327,7 +452,7 @@ export default function Dashboard() {
     }
     for (const permit of (compliance?.expiringPermits ?? []) as ExpiringPermitItem[]) {
       const date = permit.expiryDate.slice(0, 10);
-      events.push({ date, label: `${permit.projectName} — ${permit.permitType}`, type: "permit" });
+      events.push({ date, label: `${permit.projectName} — ${permit.permitType}`, type: "permit", href: `/projects/${permit.projectId}?tab=permits` });
       const daysLeft = Math.ceil((new Date(date).getTime() - todayMs) / 86400000);
       alerts.push({ label: `${permit.projectName} — ${permit.permitType}`, expiryDate: date, kind: "permit", daysLeft });
     }
@@ -337,13 +462,60 @@ export default function Dashboard() {
       const type: CalEvent["type"] = inv.direction === "outbound" ? "invoice-out" : "invoice-in";
       const prefix = inv.direction === "outbound" ? "Pay" : "Receive";
       const amount = `${inv.currency} ${Number(inv.amount).toLocaleString("en-GB", { minimumFractionDigits: 2 })}`;
-      events.push({ date, label: `${prefix}: ${inv.counterpartyName} — ${amount}`, type });
+      events.push({ date, label: `${prefix}: ${inv.counterpartyName} — ${amount}`, type, href: `/invoices?invoice=${inv.id}` });
+    }
+    for (const ce of customEvents) {
+      events.push({ date: ce.eventDate.slice(0, 10), label: ce.title, type: "custom", id: ce.id, note: ce.note, projectId: ce.projectId });
     }
     alerts.sort((a, b) => a.daysLeft - b.daysLeft);
     return { calendarEvents: events, expiryAlerts: alerts };
-  }, [projects, compliance, invoices]);
+  }, [projects, compliance, invoices, customEvents]);
 
   const todayStr = new Date().toISOString().slice(0, 10);
+
+  async function createCalendarEvent(data: { title: string; eventDate: string; note: string; projectId: string | null }): Promise<boolean> {
+    if (isCancelled) {
+      toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" });
+      return false;
+    }
+    try {
+      const res = await fetch("/api/calendar-events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        toast({ title: "Couldn't add event", description: "Please try again.", variant: "destructive" });
+        return false;
+      }
+      const created: CustomEvent = await res.json();
+      setCustomEvents(prev => [...prev, created]);
+      toast({ title: "Event added", description: `"${data.title}" is now on the team calendar.` });
+      return true;
+    } catch {
+      toast({ title: "Couldn't add event", description: "Please try again.", variant: "destructive" });
+      return false;
+    }
+  }
+
+  async function deleteCalendarEvent(id: string): Promise<void> {
+    if (isCancelled) {
+      toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" });
+      return;
+    }
+    const prev = customEvents;
+    setCustomEvents(cur => cur.filter(e => e.id !== id)); // optimistic
+    try {
+      const res = await fetch(`/api/calendar-events/${id}`, { method: "DELETE", headers: authHeaders() });
+      if (!res.ok && res.status !== 204) {
+        setCustomEvents(prev);
+        toast({ title: "Couldn't delete event", description: "Please try again.", variant: "destructive" });
+      }
+    } catch {
+      setCustomEvents(prev);
+      toast({ title: "Couldn't delete event", description: "Please try again.", variant: "destructive" });
+    }
+  }
 
   const attentionItems = useMemo(() => {
     const items: { icon: React.ReactNode; label: string; href: string; severity: "critical" | "warning" }[] = [];
@@ -733,7 +905,14 @@ export default function Dashboard() {
       </div>
 
       {/* Calendar */}
-      <SiteCalendar events={calendarEvents} alerts={expiryAlerts} />
+      <SiteCalendar
+        events={calendarEvents}
+        alerts={expiryAlerts}
+        canManage={caps.canManageProjects}
+        projects={(projects ?? []).map(p => ({ id: p.id, name: p.name }))}
+        onCreate={createCalendarEvent}
+        onDelete={deleteCalendarEvent}
+      />
 
       <Dialog open={showUpgradeDialog} onOpenChange={setShowUpgradeDialog}>
         <DialogHeader>

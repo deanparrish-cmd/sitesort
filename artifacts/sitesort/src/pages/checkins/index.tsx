@@ -140,7 +140,7 @@ export default function CheckinsPage() {
                   className="aspect-square bg-muted relative cursor-pointer overflow-hidden"
                   onClick={() => setViewing(ci)}
                 >
-                  <img src={src} alt={ci.workerName} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
+                  <img src={src} alt={ci.workerName} className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-200" />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
                 </div>
                 <div className="p-3">
