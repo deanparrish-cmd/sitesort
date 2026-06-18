@@ -6,7 +6,7 @@ import {
   usersTable, projectsTable, projectMembersTable,
   notificationsTable, documentsTable, photosTable, permitsTable,
 } from "@workspace/db/schema";
-import { eq, and, gt, lt, sql, desc } from "drizzle-orm";
+import { eq, and, gt, lt, sql, desc, inArray, ne } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { sendNewMessageEmail } from "../lib/email";
@@ -44,7 +44,7 @@ router.get("/channels", authenticate, async (req, res) => {
     // Last message per project
     const lastMsgs = await db.select()
       .from(channelMessagesTable)
-      .where(sql`${channelMessagesTable.projectId} = ANY(${projectIds})`)
+      .where(inArray(channelMessagesTable.projectId, projectIds))
       .orderBy(desc(channelMessagesTable.createdAt));
 
     const lastMsgMap = new Map<string, typeof lastMsgs[0]>();
@@ -56,7 +56,7 @@ router.get("/channels", authenticate, async (req, res) => {
     const readRows = await db.select()
       .from(channelReadsTable)
       .where(and(
-        sql`${channelReadsTable.projectId} = ANY(${projectIds})`,
+        inArray(channelReadsTable.projectId, projectIds),
         eq(channelReadsTable.userId, userId),
       ));
     const readMap = new Map(readRows.map(r => [r.projectId, r.lastReadAt]));
@@ -64,7 +64,7 @@ router.get("/channels", authenticate, async (req, res) => {
     // Unread counts
     const unreadRows = await db.select({ projectId: channelMessagesTable.projectId, id: channelMessagesTable.id })
       .from(channelMessagesTable)
-      .where(sql`${channelMessagesTable.projectId} = ANY(${projectIds}) AND ${channelMessagesTable.senderId} != ${userId}`);
+      .where(and(inArray(channelMessagesTable.projectId, projectIds), ne(channelMessagesTable.senderId, userId)));
 
     const unreadMap = new Map<string, number>();
     for (const row of unreadRows) {
@@ -129,7 +129,7 @@ router.get("/channels/search", authenticate, async (req, res) => {
       .from(channelMessagesTable)
       .where(
         and(
-          sql`${channelMessagesTable.projectId} = ANY(${accessibleProjectIds})`,
+          inArray(channelMessagesTable.projectId, accessibleProjectIds),
           sql`${channelMessagesTable.content} ILIKE ${"%" + q + "%"}`
         )
       )
@@ -139,14 +139,14 @@ router.get("/channels/search", authenticate, async (req, res) => {
     const senderIds = Array.from(new Set(rows.map(r => r.senderId)));
     const userRows = senderIds.length
       ? await db.select({ id: usersTable.id, name: usersTable.name })
-          .from(usersTable).where(sql`${usersTable.id} = ANY(${senderIds})`)
+          .from(usersTable).where(inArray(usersTable.id, senderIds))
       : [];
     const userMap = Object.fromEntries(userRows.map(u => [u.id, u.name]));
 
     const projectIds = Array.from(new Set(rows.map(r => r.projectId)));
     const projectRows = projectIds.length
       ? await db.select({ id: projectsTable.id, name: projectsTable.name })
-          .from(projectsTable).where(sql`${projectsTable.id} = ANY(${projectIds})`)
+          .from(projectsTable).where(inArray(projectsTable.id, projectIds))
       : [];
     const projectMap = Object.fromEntries(projectRows.map(p => [p.id, p.name]));
 
@@ -217,7 +217,7 @@ router.get("/channels/:projectId/messages", authenticate, async (req, res) => {
     const senderIds = Array.from(new Set(rows.map(r => r.senderId)));
     const userRows = senderIds.length
       ? await db.select({ id: usersTable.id, name: usersTable.name, role: usersTable.role })
-          .from(usersTable).where(sql`${usersTable.id} = ANY(${senderIds})`)
+          .from(usersTable).where(inArray(usersTable.id, senderIds))
       : [];
     const userMap = Object.fromEntries(userRows.map(u => [u.id, u]));
 
@@ -228,15 +228,15 @@ router.get("/channels/:projectId/messages", authenticate, async (req, res) => {
 
     const docRows = docIds.length
       ? await db.select({ id: documentsTable.id, name: documentsTable.name, type: documentsTable.type, fileUrl: documentsTable.fileUrl, status: documentsTable.status, version: documentsTable.version })
-          .from(documentsTable).where(sql`${documentsTable.id} = ANY(${docIds})`)
+          .from(documentsTable).where(inArray(documentsTable.id, docIds))
       : [];
     const photoRows = photoIds.length
       ? await db.select({ id: photosTable.id, photoUrl: photosTable.photoUrl, category: photosTable.category, description: photosTable.description, referenceNumber: photosTable.referenceNumber, zone: photosTable.zone })
-          .from(photosTable).where(sql`${photosTable.id} = ANY(${photoIds})`)
+          .from(photosTable).where(inArray(photosTable.id, photoIds))
       : [];
     const permitRows = permitIds.length
       ? await db.select({ id: permitsTable.id, type: permitsTable.type, description: permitsTable.description, expiryDate: permitsTable.expiryDate, documentUrl: permitsTable.documentUrl })
-          .from(permitsTable).where(sql`${permitsTable.id} = ANY(${permitIds})`)
+          .from(permitsTable).where(inArray(permitsTable.id, permitIds))
       : [];
 
     const docMap = Object.fromEntries(docRows.map(d => [d.id, d]));
@@ -246,7 +246,7 @@ router.get("/channels/:projectId/messages", authenticate, async (req, res) => {
     // Fetch reactions
     const msgIds = rows.map(r => r.id);
     const reactionRows = msgIds.length
-      ? await db.select().from(channelMessageReactionsTable).where(sql`${channelMessageReactionsTable.channelMessageId} = ANY(${msgIds})`)
+      ? await db.select().from(channelMessageReactionsTable).where(inArray(channelMessageReactionsTable.channelMessageId, msgIds))
       : [];
     const reactionMap = new Map<string, Map<string, { count: number; mine: boolean }>>();
     for (const r of reactionRows) {
@@ -262,7 +262,7 @@ router.get("/channels/:projectId/messages", authenticate, async (req, res) => {
     const replyIds = Array.from(new Set(rows.map(r => r.replyToId).filter(Boolean))) as string[];
     const replyRows = replyIds.length
       ? await db.select({ id: channelMessagesTable.id, senderId: channelMessagesTable.senderId, content: channelMessagesTable.content, attachmentType: channelMessagesTable.attachmentType })
-          .from(channelMessagesTable).where(sql`${channelMessagesTable.id} = ANY(${replyIds})`)
+          .from(channelMessagesTable).where(inArray(channelMessagesTable.id, replyIds))
       : [];
     const replyMap = Object.fromEntries(replyRows.map(r => [r.id, r]));
 
@@ -356,7 +356,7 @@ router.post("/channels/:projectId/messages", authenticate, async (req, res) => {
     const memberIds = members.map(m => m.userId).filter(Boolean) as string[];
     const memberUsers = memberIds.length
       ? await db.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, emailNotifications: usersTable.emailNotifications })
-          .from(usersTable).where(sql`${usersTable.id} = ANY(${memberIds})`)
+          .from(usersTable).where(inArray(usersTable.id, memberIds))
       : [];
     const memberMap = new Map(memberUsers.map(u => [u.id, u]));
 

@@ -172,6 +172,22 @@ See CLAUDE_ARCHIVE.md for full detail.
 
 ---
 
+## End-of-session notes — 2026-06-18 session 4 (BUGFIX: messaging was 500-ing on all real data — `= ANY()` → `inArray()`)
+
+**Report:** "get the internal message feature up and running." Two distinct problems:
+1. **Every company has exactly 1 user** → nobody to message, so the feature *looks* dead. `/messages/users` returns company peers (always empty). Not a bug — needs ≥2 users.
+2. **Real bug — `/messages/conversations`, `/messages/thread/:id`, `/channels`, search etc. all returned HTTP 500 the moment ANY message row existed.** Root cause: the `sql\`${col} = ANY(${jsArray})\`` pattern (used **24×** across `routes/messages.ts` + `routes/channels.ts`). Drizzle expands a JS array there into a **tuple** `ANY(($1,$2))`, and Postgres throws `op ANY/ALL (array) requires array on right side` (code 42809). The feature was built but never exercised with data (0 message rows in DB), so this never surfaced.
+
+**Fix:** replaced all 24 with drizzle's `inArray(col, arr)` (added `inArray` import to both files; `ne` too for the one compound `… AND senderId != userId` case at channels.ts ~L67). Pure mechanical swap; the existing `arr.length ? … : []` guards stay so empty arrays never hit `inArray`.
+
+**Verified** (rebuilt bundle on a throwaway `PORT=8090` instance — the Replit :8080 process holds the OLD bundle in memory): created a 2nd Acme user (Sarah) + a teammate (Tom) in the user's test company; full round-trips work — `conversations`/`thread`/`channels`/`search`/`send`/reply all 200, unread counts + read-receipts (✓✓) correct. **UI tested across desktop/tablet/mobile** (browser, all green, zero console errors). Screenshots confirm the two-pane chat, project channels, DM badges.
+
+**Test data left in DB (demo helpers — offer to remove):** `sarah@acme.com` (Acme PM) + `tom@testsitesort.co.uk` (Test SiteSort site worker), both password `password123` (copied Paul's bcrypt hash), + a couple of demo DMs. They give the otherwise-1-user companies someone to message.
+
+**⚠️ Deploy:** fix only reaches live after **Run/Publish** (rebuilds from source, which now has it). The 1-user-per-company situation means real users still need to invite teammates via In-House Team / invite links before messaging is useful.
+
+---
+
 ## End-of-session notes — 2026-06-18 (custom user-created calendar events, Feature #56) — see CLAUDE_ARCHIVE.md
 
 ---

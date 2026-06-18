@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { messagesTable, usersTable, notificationsTable, invoicesTable, documentsTable, photosTable, permitsTable, messageReactionsTable } from "@workspace/db/schema";
-import { eq, and, or, desc, lt, gt, sql } from "drizzle-orm";
+import { eq, and, or, desc, lt, gt, sql, inArray } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { sendNewMessageEmail } from "../lib/email";
@@ -42,7 +42,7 @@ router.get("/messages/conversations", authenticate, async (req, res) => {
     const userRows = userIds.length
       ? await db.select({ id: usersTable.id, name: usersTable.name, role: usersTable.role })
           .from(usersTable)
-          .where(sql`${usersTable.id} = ANY(${userIds})`)
+          .where(inArray(usersTable.id, userIds))
       : [];
     const userMap = Object.fromEntries(userRows.map(u => [u.id, u]));
 
@@ -170,7 +170,7 @@ router.get("/messages/thread/:userId", authenticate, async (req, res) => {
         const unreadIds = rows.filter(r => r.recipientId === me && !r.readAt).map(r => r.id);
         if (unreadIds.length) {
           await db.update(messagesTable).set({ readAt: new Date() })
-            .where(sql`${messagesTable.id} = ANY(${unreadIds})`);
+            .where(inArray(messagesTable.id, unreadIds));
         }
       } else {
         // Initial load: mark all unread in this conversation (including older pages)
@@ -184,7 +184,7 @@ router.get("/messages/thread/:userId", authenticate, async (req, res) => {
     const userRows = userIds.length
       ? await db.select({ id: usersTable.id, name: usersTable.name })
           .from(usersTable)
-          .where(sql`${usersTable.id} = ANY(${userIds})`)
+          .where(inArray(usersTable.id, userIds))
       : [];
     const userMap = Object.fromEntries(userRows.map(u => [u.id, u.name]));
 
@@ -201,7 +201,7 @@ router.get("/messages/thread/:userId", authenticate, async (req, res) => {
           reference: invoicesTable.reference,
           attachmentUrl: invoicesTable.attachmentUrl,
           direction: invoicesTable.direction,
-        }).from(invoicesTable).where(sql`${invoicesTable.id} = ANY(${invoiceIds})`)
+        }).from(invoicesTable).where(inArray(invoicesTable.id, invoiceIds))
       : [];
     const invoiceMap = Object.fromEntries(invoiceRows.map(inv => [inv.id, inv]));
 
@@ -212,15 +212,15 @@ router.get("/messages/thread/:userId", authenticate, async (req, res) => {
 
     const docRows = docIds.length
       ? await db.select({ id: documentsTable.id, name: documentsTable.name, type: documentsTable.type, fileUrl: documentsTable.fileUrl, status: documentsTable.status, version: documentsTable.version })
-          .from(documentsTable).where(sql`${documentsTable.id} = ANY(${docIds})`)
+          .from(documentsTable).where(inArray(documentsTable.id, docIds))
       : [];
     const photoRows = photoIds.length
       ? await db.select({ id: photosTable.id, photoUrl: photosTable.photoUrl, category: photosTable.category, description: photosTable.description, referenceNumber: photosTable.referenceNumber, zone: photosTable.zone })
-          .from(photosTable).where(sql`${photosTable.id} = ANY(${photoIds})`)
+          .from(photosTable).where(inArray(photosTable.id, photoIds))
       : [];
     const permitRows = permitIds.length
       ? await db.select({ id: permitsTable.id, type: permitsTable.type, description: permitsTable.description, expiryDate: permitsTable.expiryDate, documentUrl: permitsTable.documentUrl })
-          .from(permitsTable).where(sql`${permitsTable.id} = ANY(${permitIds})`)
+          .from(permitsTable).where(inArray(permitsTable.id, permitIds))
       : [];
 
     const docMap = Object.fromEntries(docRows.map(d => [d.id, d]));
@@ -230,7 +230,7 @@ router.get("/messages/thread/:userId", authenticate, async (req, res) => {
     // Fetch reactions
     const msgIds = rows.map(r => r.id);
     const reactionRows = msgIds.length
-      ? await db.select().from(messageReactionsTable).where(sql`${messageReactionsTable.messageId} = ANY(${msgIds})`)
+      ? await db.select().from(messageReactionsTable).where(inArray(messageReactionsTable.messageId, msgIds))
       : [];
     const reactionMap = new Map<string, Map<string, { count: number; mine: boolean }>>();
     for (const r of reactionRows) {
@@ -246,7 +246,7 @@ router.get("/messages/thread/:userId", authenticate, async (req, res) => {
     const replyIds = Array.from(new Set(rows.map(r => r.replyToId).filter(Boolean))) as string[];
     const replyRows = replyIds.length
       ? await db.select({ id: messagesTable.id, senderId: messagesTable.senderId, content: messagesTable.content, attachmentType: messagesTable.attachmentType })
-          .from(messagesTable).where(sql`${messagesTable.id} = ANY(${replyIds})`)
+          .from(messagesTable).where(inArray(messagesTable.id, replyIds))
       : [];
     const replyMap = Object.fromEntries(replyRows.map(r => [r.id, r]));
 
@@ -357,7 +357,7 @@ router.post("/messages/broadcast", authenticate, async (req, res) => {
     const recipients = await db
       .select({ id: usersTable.id, name: usersTable.name })
       .from(usersTable)
-      .where(and(sql`${usersTable.id} = ANY(${recipientIds})`, eq(usersTable.companyId, req.user!.companyId)));
+      .where(and(inArray(usersTable.id, recipientIds), eq(usersTable.companyId, req.user!.companyId)));
 
     const senderRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
     const senderName = senderRows[0]?.name ?? "Someone";
@@ -502,7 +502,7 @@ router.get("/messages/search", authenticate, async (req, res) => {
     const userIds = Array.from(new Set(rows.flatMap(r => [r.senderId, r.recipientId])));
     const userRows = userIds.length
       ? await db.select({ id: usersTable.id, name: usersTable.name })
-          .from(usersTable).where(sql`${usersTable.id} = ANY(${userIds})`)
+          .from(usersTable).where(inArray(usersTable.id, userIds))
       : [];
     const userMap = Object.fromEntries(userRows.map(u => [u.id, u.name]));
 
