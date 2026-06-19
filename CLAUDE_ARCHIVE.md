@@ -765,3 +765,19 @@ The :8080 process during these sessions is a manually-started `node dist/index.m
 **Dean role-per-company verification (2026-06-19, workspace DB):** Proved both sides of the chip for `dean.parrish@me.com` (home company = "Test SiteSort 2", home role `admin`). (1) **PM side:** logged in as Annabelle (`annabelleparrish@icloud.com` / `password123`, site_worker in "Test SiteSort") → `/messages/conversations` shows Dean's chip as **`project_manager`** (his membership role there), NOT his home `admin`. (2) **Admin side:** Dean is the *only* member of "Test SiteSort 2", so temporarily added Annabelle as a member (one `company_members` INSERT with `gen_random_uuid()` for `id` — the table has NO id default), switched her into TS2 via `/auth/switch-company`, `/messages/users` showed Dean as **`admin`**, then DELETED the temp row (restored TS2 to just Dean). Same person, two companies, two roles → confirmed via the real API path (the same `company_members` join the chips use). **Live confirmed at deploy level only** (user opted for this — no Dean prod creds): all three membership-join paths return correctly — `/messages/conversations` 200, `/messages/users` 200, `/auth/switch-company` **403** (direct `company_members` query rejecting a non-member = query runs, not a 500). Same code as workspace, so live behaves identically.
 
 ---
+
+## End-of-session notes — 2026-06-19 (mobile/tablet responsiveness audit — overflow + date-input hardening)
+
+Systematic audit (4 parallel agents over all 22 pages) + fixes. Feature parity was already solid (tables all have mobile card counterparts; messages master-detail; grids mostly collapse). Real issues were overflow/sizing, mostly **date/select inputs in grid cells**.
+
+- **Shared components (cascade fix):** `ui/input.tsx` + `ui/textarea.tsx` now carry `min-w-0 max-w-full box-border` — the guard that stops `type="date"` inputs blowing out of flex/grid (iOS Safari intrinsic-width issue). Covers every Input app-wide.
+- **Date/time/select-in-grid:** added `[&>*]:min-w-0` to grid containers (+ `min-w-0 max-w-full` on native `<select>`s) in projects/index (create-project + permit dates), projects/detail (permit dates, schedule times, milestone title), invoices (currency select + due-date), subcontractors (reliability select), checkins (project filter). **Pattern to reuse:** `grid ... [&>*]:min-w-0` makes every cell flex/grid-safe.
+- **Stat grids collapsing:** `grid-cols-3` → `grid-cols-1 sm:grid-cols-3` on subcontractors/issues/checkins summary cards.
+- **Text overflow:** messages channel header got `min-w-0 flex-1` + `truncate`.
+- **Admin tables:** 24 dead `table-cell` no-op classes → `hidden md:table-cell`; verified consistent across header/skeleton/body.
+- **Verified in-browser at 375/768/1280** against rebuilt bundle on `:8080`: 10 pages × 3 breakpoints = zero horizontal page overflow, zero console errors. New Invoice dialog (date + currency select in grid) and Add Permit dialog (Start/Expiry date range) both fit cleanly at 375px.
+- **Auth + landing final pass:** Audited all 6 auth/landing pages at 320/375/768/1280 — confirmed clean, NO changes needed.
+- **Create-project date dialog verified** via temporarily setting Acme `beta_access=true` (reversible trick to bypass plan cap on demo account); restored to `false` after.
+- **✅ DEPLOYED LIVE + verified 2026-06-19.** Pushed to GitHub mirror (`main → ae38da0a`, signatures verified). Live bundle `index-DmGZWGzO.js`. Re-ran live check on `www.sitesort.co.uk` at 375/768/1280: zero horizontal overflow, zero console errors across all pages.
+
+---

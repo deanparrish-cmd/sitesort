@@ -790,7 +790,7 @@ export default function SubcontractorsPage() {
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
             <div className="col-span-2">
               <label className="text-sm font-medium mb-1.5 block">Company Name</label>
               <Input placeholder="e.g. Smith Electrical Ltd" {...register("companyName", { required: true })} />
@@ -948,7 +948,7 @@ export default function SubcontractorsPage() {
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
             <div className="col-span-2">
               <label className="text-sm font-medium mb-1.5 block">Company Name</label>
               <Input {...editReg("companyName", { required: true })} />
