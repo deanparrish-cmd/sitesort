@@ -1357,8 +1357,8 @@ tr:last-child td{border-bottom:none}
           </div>
 
           <div className="bg-card border rounded-xl shadow-sm overflow-hidden">
-            {/* Mobile card list */}
-            <div className="block lg:hidden divide-y">
+            {/* Mobile + tablet card list (below 1280px) */}
+            <div className="block xl:hidden divide-y">
               {(documents ?? []).filter(d =>
                 (selectedDocType === 'all' || d.type === selectedDocType) &&
                 (selectedStatus === 'all' || d.status === selectedStatus) &&
@@ -1436,8 +1436,8 @@ tr:last-child td{border-bottom:none}
                 </div>
               )}
             </div>
-            {/* Desktop table */}
-            <div className="hidden lg:block overflow-x-auto">
+            {/* Desktop table (1280px+) */}
+            <div className="hidden xl:block overflow-x-auto">
             <table className="w-full text-sm text-left min-w-[800px]">
               <thead className="text-xs text-muted-foreground uppercase bg-muted/50 border-b">
                 <tr>
