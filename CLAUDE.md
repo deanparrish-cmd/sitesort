@@ -128,93 +128,25 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 - All frontend file links rewrite legacy `/uploads/…` to `/api/uploads/…` before use
 - Vite proxy for `/uploads` was also added (`artifacts/sitesort/vite.config.ts`) as a belt-and-braces measure, but the `/api/uploads` path is the reliable one
 
+## Key Architecture Notes
+
+**⚠️ Schema changes → `ensure-schema.ts` (CRITICAL):** Prod DB is separate from workspace. `drizzle push` does NOT migrate prod. All new tables/columns MUST be added to **`lib/ensure-schema.ts`** (idempotent boot migration run from `index.ts` before `app.listen`) or prod will query a non-existent table and break login. **Pattern for ALL future schema changes.**
+
+**`company_members` model (Feature #57):** `company_members` table (`id, userId, companyId, role`, unique(userId,companyId), cascade) is the source of truth for "who's in company X" and role in X". `users.companyId`/`role` = home company only. JWT `{id, companyId, role, email}` = ACTIVE company (shape unchanged). Switch via `POST /auth/switch-company` (403 if not a member). `POST /users` links an existing email instead of erroring. Helpers in `lib/memberships.ts`. `company_members` INSERTs need explicit `id` (`gen_random_uuid()`) — table has NO id default.
+
+**Mobile responsive patterns:** `grid ... [&>*]:min-w-0` makes every grid cell flex/grid-safe (prevents iOS date input overflow). `hidden md:table-cell` for responsive table columns (not `table-cell` which is a no-op). `ui/input.tsx` + `ui/textarea.tsx` carry `min-w-0 max-w-full box-border` globally.
+
+**Test accounts:** `paul@acme.com` / `password123` (demo, Acme Construction, Free Plan — project-capped). `annabelleparrish@icloud.com` / `password123` (site_worker in "Test SiteSort"). Tip: set `beta_access=true` on demo company to bypass plan cap for testing gated UI.
+
 ## Session Log
 
-### 2026-06-19 (mobile/tablet responsiveness audit pass — overflow + date-input hardening)
-
-Systematic audit (4 parallel agents over all 22 pages) + fixes. Feature parity was already solid (tables all have mobile card counterparts; messages master-detail; grids mostly collapse). Real issues were overflow/sizing, mostly **date/select inputs in grid cells**.
-- **Shared components (cascade fix):** `ui/input.tsx` + `ui/textarea.tsx` now carry `min-w-0 max-w-full box-border` — the guard that stops `type="date"` inputs blowing out of flex/grid (iOS Safari intrinsic-width issue). This covers every Input app-wide.
-- **Date/time/select-in-grid:** added `[&>*]:min-w-0` to grid containers (+ `min-w-0 max-w-full` on native `<select>`s) in projects/index (create-project + permit dates), projects/detail (permit dates, schedule times, milestone title), invoices (currency select + due-date), subcontractors (reliability select), checkins (project filter). Pattern to reuse: `grid ... [&>*]:min-w-0` makes every cell flex/grid-safe.
-- **Stat grids collapsing:** `grid-cols-3` → `grid-cols-1 sm:grid-cols-3` on subcontractors/issues/checkins summary cards.
-- **Text overflow:** messages channel header got `min-w-0 flex-1` + `truncate`.
-- **Admin tables:** 24 dead `table-cell` no-op classes (intended responsive hiding that did nothing) → `hidden md:table-cell`; verified consistent across header/skeleton/body so columns stay aligned.
-- **Verified in-browser at 375/768/1280** against the rebuilt bundle on `:8080` (full app + API): 10 pages × 3 breakpoints = zero horizontal page overflow, zero console errors; New Invoice dialog (date + currency select in grid) and Add Permit dialog (Start/Expiry date range) both fit cleanly at 375px (screenshots). Root typecheck + build green. Note: `paul@acme.com` demo is Free-Plan project-limited, so "New Project" opens the upgrade dialog — test the create-project date grid via a non-limited account.
-
-### 2026-05-22 through 2026-06-10 (all sessions up to and including site issues log) — see CLAUDE_ARCHIVE.md for full detail
-
----
-
-## End-of-session notes — 2026-06-11 & 2026-06-12 (tablet fixes, eye icon, check-ins page, notes fixes, team enhancements) — see CLAUDE_ARCHIVE.md for full detail
-
----
-
-## End-of-session notes — 2026-06-12 (team enhancements, site issues refactor, share fix)
-
-See CLAUDE_ARCHIVE.md for full detail.
-
----
-
-## End-of-session notes — 2026-06-12 (overview note open/share, tab reorder, auto-push hook) — see CLAUDE_ARCHIVE.md for full detail
-
----
-
-## End-of-session notes — 2026-06-12 (mobile/tablet responsive audit) — see CLAUDE_ARCHIVE.md for full detail
-
----
-
-## End-of-session notes — 2026-06-15 (photo backfill, mobile feature parity) — see CLAUDE_ARCHIVE.md for full detail
-
----
-
-## End-of-session notes — 2026-06-16 (full monorepo typecheck repair) — see CLAUDE_ARCHIVE.md for full detail
-
----
-
-## End-of-session notes — 2026-06-17 (mobile/tablet feature-parity audit + fixes, tablet stat density, clickable calendar dates) — see CLAUDE_ARCHIVE.md for full detail
-
----
-
-## End-of-session notes — 2026-06-17 session 2 (site calendar dot indicator, plan limit upgrade dialog) — see CLAUDE_ARCHIVE.md for full detail
-
----
-
-## End-of-session notes — 2026-06-18 (Site Calendar event deep-links to the actionable item) — see CLAUDE_ARCHIVE.md
-
----
-
-## End-of-session notes — 2026-06-18 session 5 (Feature #57: multi-company membership + company switcher) — see CLAUDE_ARCHIVE.md for full detail
-
-**Key facts to carry forward** (full write-up + Dean verification in CLAUDE_ARCHIVE.md):
-- **Model:** `company_members` table (`id, userId, companyId, role`, unique(userId,companyId), cascade) is the source of truth for "who's in company X" and "role in X". `users.companyId`/`role` = the user's **home** company. **JWT shape unchanged** (`{id, companyId, role, email}` = ACTIVE company). Helpers in `lib/memberships.ts`; switch via **`POST /auth/switch-company`** (403 if not a member). `POST /users` **links** an existing email instead of erroring.
-- **Per-company role chips:** `messages.ts` conversations `userMap` + `channels.ts` sender `userMap` `leftJoin company_members` on the active `companyId` so chips show the person's role *in the active company*, not their home role. **✅ DEPLOYED LIVE 2026-06-19.**
-- **⚠️ DEPLOY SAFETY (prod DB is SEPARATE):** `drizzle push` is NOT part of the deploy. New tables/columns MUST be added to **`lib/ensure-schema.ts`** (idempotent boot migration run from `index.ts` before `app.listen`) or prod will query a non-existent table and break login. `getMemberships` also falls back to the home company if the table query throws. **Pattern for ALL future schema changes: add them to `ensureSchema` — pushing to the workspace DB does NOT migrate prod.**
-- **Dean role-per-company verified 2026-06-19:** `dean.parrish@me.com` shows `project_manager` in "Test SiteSort" but `admin` in his home "Test SiteSort 2" — both sides proven via the real API path (workspace DB); live confirmed at deploy level (membership-join endpoints return 200/200/403). DB note: `company_members` INSERTs need an explicit `id` (`gen_random_uuid()`) — the table has NO id default.
-- **Test data:** Test SiteSort members = Amy (admin), Dean (PM), Tom + Annabelle (site_worker). Annabelle (`annabelleparrish@icloud.com` / `password123`) is a usable workspace login.
-
----
-
-## End-of-session notes — 2026-06-18 session 4 (messaging `=ANY()`→`inArray` 500-fix + invoice Open/list previews/timestamps/save-to-notes; DEPLOYED LIVE) — see CLAUDE_ARCHIVE.md
-
----
-
-## End-of-session notes — 2026-06-18 (custom user-created calendar events, Feature #56) — see CLAUDE_ARCHIVE.md
-
----
-
-## End-of-session notes — 2026-06-18 (custom events → QR site board) — extends Feature #56 — see CLAUDE_ARCHIVE.md
-
----
-
-## End-of-session notes — 2026-06-18 (BUGFIX: site check-in rejected in-house team members) — see CLAUDE_ARCHIVE.md
-
----
-
-## End-of-session notes — 2026-06-18 (check-in photo cropped faces — `object-cover` → `object-contain`) — see CLAUDE_ARCHIVE.md
-
----
-
-## End-of-session notes — 2026-06-18 session 3 (signup card-upfront: fail-CLOSED + abandonment gate) — see CLAUDE_ARCHIVE.md
-
----
-
-## End-of-session notes — 2026-06-18 session 2 (browser-verified Upcoming Events card post-check-in, pushed) — see CLAUDE_ARCHIVE.md
+All prior session detail in CLAUDE_ARCHIVE.md. Recent sessions (newest first):
+- **2026-06-19:** Mobile/tablet responsiveness audit — overflow + date-input hardening, `min-w-0` cascade on shared Input/Textarea, admin tables `hidden md:table-cell`. ✅ DEPLOYED.
+- **2026-06-19:** Per-company role chips on DM conversations + channel sender chips. ✅ DEPLOYED.
+- **2026-06-18 (session 5):** Feature #57 multi-company membership + company switcher. ✅ DEPLOYED.
+- **2026-06-18 (session 4):** Messaging 500-fix (`=ANY()`→`inArray`), invoice Open/previews/timestamps/save-to-notes. ✅ DEPLOYED.
+- **2026-06-18:** Feature #56 custom calendar events + QR site board upcoming events. ✅ DEPLOYED.
+- **2026-06-18:** Signup fail-CLOSED on Stripe checkout failure + abandonment gate. ✅ DEPLOYED.
+- **2026-06-18:** Site check-in bugfixes (in-house team members rejected; photo `object-contain`). ✅ DEPLOYED.
+- **2026-06-17:** Mobile/tablet feature-parity audit, tablet stat density, clickable calendar dates, calendar dot indicator, plan limit upgrade dialog. ✅ DEPLOYED.
+- **2026-06-15 and earlier:** See CLAUDE_ARCHIVE.md.

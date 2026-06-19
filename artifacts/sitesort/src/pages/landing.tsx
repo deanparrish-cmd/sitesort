@@ -270,7 +270,7 @@ export default function LandingPage() {
             <p className="text-muted-foreground max-w-xl mx-auto text-lg">Pick the plan that fits your workload. Upgrade or cancel any time.</p>
           </div>
 
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 max-w-5xl mx-auto mt-12">
+          <div className="grid gap-6 max-w-[480px] mx-auto lg:max-w-5xl lg:grid-cols-3 mt-12">
             {[
               {
                 name: "Solo",

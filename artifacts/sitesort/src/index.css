@@ -101,17 +101,29 @@
 }
 
 @layer base {
-  * {
+  *, *::before, *::after {
+    box-sizing: border-box;
     @apply border-border;
   }
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
   }
-  
+
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
     @apply font-bold tracking-tight text-primary;
+  }
+
+  /* Prevent date/time/select inputs from blowing out flex/grid containers on iOS Safari */
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"],
+  select {
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+    box-sizing: border-box;
   }
 }
 
