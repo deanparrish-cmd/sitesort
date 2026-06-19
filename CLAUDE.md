@@ -130,6 +130,16 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 
 ## Session Log
 
+### 2026-06-19 (mobile/tablet responsiveness audit pass — overflow + date-input hardening)
+
+Systematic audit (4 parallel agents over all 22 pages) + fixes. Feature parity was already solid (tables all have mobile card counterparts; messages master-detail; grids mostly collapse). Real issues were overflow/sizing, mostly **date/select inputs in grid cells**.
+- **Shared components (cascade fix):** `ui/input.tsx` + `ui/textarea.tsx` now carry `min-w-0 max-w-full box-border` — the guard that stops `type="date"` inputs blowing out of flex/grid (iOS Safari intrinsic-width issue). This covers every Input app-wide.
+- **Date/time/select-in-grid:** added `[&>*]:min-w-0` to grid containers (+ `min-w-0 max-w-full` on native `<select>`s) in projects/index (create-project + permit dates), projects/detail (permit dates, schedule times, milestone title), invoices (currency select + due-date), subcontractors (reliability select), checkins (project filter). Pattern to reuse: `grid ... [&>*]:min-w-0` makes every cell flex/grid-safe.
+- **Stat grids collapsing:** `grid-cols-3` → `grid-cols-1 sm:grid-cols-3` on subcontractors/issues/checkins summary cards.
+- **Text overflow:** messages channel header got `min-w-0 flex-1` + `truncate`.
+- **Admin tables:** 24 dead `table-cell` no-op classes (intended responsive hiding that did nothing) → `hidden md:table-cell`; verified consistent across header/skeleton/body so columns stay aligned.
+- **Verified in-browser at 375/768/1280** against the rebuilt bundle on `:8080` (full app + API): 10 pages × 3 breakpoints = zero horizontal page overflow, zero console errors; New Invoice dialog (date + currency select in grid) and Add Permit dialog (Start/Expiry date range) both fit cleanly at 375px (screenshots). Root typecheck + build green. Note: `paul@acme.com` demo is Free-Plan project-limited, so "New Project" opens the upgrade dialog — test the create-project date grid via a non-limited account.
+
 ### 2026-05-22 through 2026-06-10 (all sessions up to and including site issues log) — see CLAUDE_ARCHIVE.md for full detail
 
 ---

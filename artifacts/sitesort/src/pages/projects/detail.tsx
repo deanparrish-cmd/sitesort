@@ -1204,7 +1204,7 @@ tr:last-child td{border-bottom:none}
                           placeholder="Milestone title"
                           value={milestoneTitle}
                           onChange={e => setMilestoneTitle(e.target.value)}
-                          className="flex-1"
+                          className="flex-1 min-w-0"
                           onKeyDown={e => e.key === "Enter" && !milestoneAdding && document.getElementById("ms-add-btn")?.click()}
                         />
                         <Input
@@ -3341,7 +3341,7 @@ tr:last-child td{border-bottom:none}
               })}
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4 [&>*]:min-w-0">
             <div>
               <label className="text-sm font-semibold mb-1 block">Start Time</label>
               <Input type="time" {...schedRegister("siteStartTime")} icon={<Clock className="w-4 h-4" />} />
@@ -3475,7 +3475,7 @@ tr:last-child td{border-bottom:none}
               ))}
             </select>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4 [&>*]:min-w-0">
             <div>
               <label className="text-sm font-semibold mb-1.5 block">Start Date</label>
               <Input type="date" value={newPermitStart} onChange={e => setNewPermitStart(e.target.value)} />

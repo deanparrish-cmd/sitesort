@@ -469,7 +469,7 @@ export default function AdminDashboard() {
                     <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-4 py-3">Type</th>
                     <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-4 py-3">User</th>
                     <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-4 py-3">Detail</th>
-                    <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-4 py-3 table-cell">Sub-detail</th>
+                    <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-4 py-3 hidden md:table-cell">Sub-detail</th>
                     <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-4 py-3">When</th>
                   </tr>
                 </thead>
@@ -480,7 +480,7 @@ export default function AdminDashboard() {
                           <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
                           <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
                           <td className="px-4 py-3"><Skeleton className="h-4 w-32" /></td>
-                          <td className="px-4 py-3 table-cell"><Skeleton className="h-4 w-20" /></td>
+                          <td className="px-4 py-3 hidden md:table-cell"><Skeleton className="h-4 w-20" /></td>
                           <td className="px-4 py-3"><Skeleton className="h-4 w-16" /></td>
                         </tr>
                       ))
@@ -492,7 +492,7 @@ export default function AdminDashboard() {
                           <td className="px-4 py-3"><ActivityBadge type={a.type} /></td>
                           <td className="px-4 py-3 text-gray-300 font-medium">{a.userName}</td>
                           <td className="px-4 py-3 text-gray-400 max-w-[180px] truncate">{a.detail}</td>
-                          <td className="px-4 py-3 text-gray-600 text-xs table-cell max-w-[140px] truncate">{a.subDetail}</td>
+                          <td className="px-4 py-3 text-gray-600 text-xs hidden md:table-cell max-w-[140px] truncate">{a.subDetail}</td>
                           <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{timeAgo(a.ts)}</td>
                         </tr>
                       ))
@@ -669,7 +669,7 @@ export default function AdminDashboard() {
                 <tr className="border-b border-gray-800 bg-gray-900/60">
                   <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3">Feature</th>
                   <th className="text-right text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3">Total Uses</th>
-                  <th className="px-5 py-3 table-cell">
+                  <th className="px-5 py-3 hidden md:table-cell">
                     <span className="text-gray-500 text-xs font-medium uppercase tracking-wide">Usage bar</span>
                   </th>
                 </tr>
@@ -677,7 +677,7 @@ export default function AdminDashboard() {
               <tbody className="divide-y divide-gray-800/60">
                 {loading
                   ? Array.from({ length: 6 }).map((_, i) => (
-                      <tr key={i}><td className="px-5 py-3"><Skeleton className="h-4 w-32" /></td><td className="px-5 py-3 text-right"><Skeleton className="h-4 w-10 ml-auto" /></td><td className="px-5 py-3 table-cell"><Skeleton className="h-3 w-full" /></td></tr>
+                      <tr key={i}><td className="px-5 py-3"><Skeleton className="h-4 w-32" /></td><td className="px-5 py-3 text-right"><Skeleton className="h-4 w-10 ml-auto" /></td><td className="px-5 py-3 hidden md:table-cell"><Skeleton className="h-3 w-full" /></td></tr>
                     ))
                   : (() => {
                       const maxCount = Math.max(1, ...((s?.featureUsage ?? []) as any[]).map((f: any) => f.count));
@@ -685,7 +685,7 @@ export default function AdminDashboard() {
                         <tr key={f.name} className="hover:bg-gray-800/30 transition-colors">
                           <td className="px-5 py-3 text-gray-200 font-medium">{f.name}</td>
                           <td className="px-5 py-3 text-right text-white font-semibold">{fmt(f.count)}</td>
-                          <td className="px-5 py-3 table-cell">
+                          <td className="px-5 py-3 hidden md:table-cell">
                             <div className="bg-gray-800 rounded-full h-2 overflow-hidden">
                               <div className="h-full bg-gradient-to-r from-orange-700 to-orange-500 rounded-full" style={{ width: `${Math.round((f.count / maxCount) * 100)}%` }} />
                             </div>
@@ -745,16 +745,16 @@ export default function AdminDashboard() {
                 <tr className="border-b border-gray-800 bg-gray-900/60">
                   <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3">#</th>
                   <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3">Name</th>
-                  <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 table-cell">Email</th>
+                  <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 hidden md:table-cell">Email</th>
                   <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3">Joined</th>
                   <th className="text-right text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3">Actions</th>
-                  <th className="text-right text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 table-cell">Last Active</th>
+                  <th className="text-right text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 hidden md:table-cell">Last Active</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-800/60">
                 {loading
                   ? Array.from({ length: 5 }).map((_, i) => (
-                      <tr key={i}><td className="px-5 py-3"><Skeleton className="h-4 w-4" /></td><td className="px-5 py-3"><Skeleton className="h-4 w-28" /></td><td className="px-5 py-3 table-cell"><Skeleton className="h-4 w-36" /></td><td className="px-5 py-3"><Skeleton className="h-4 w-20" /></td><td className="px-5 py-3 text-right"><Skeleton className="h-4 w-8 ml-auto" /></td><td className="px-5 py-3 table-cell"><Skeleton className="h-4 w-16 ml-auto" /></td></tr>
+                      <tr key={i}><td className="px-5 py-3"><Skeleton className="h-4 w-4" /></td><td className="px-5 py-3"><Skeleton className="h-4 w-28" /></td><td className="px-5 py-3 hidden md:table-cell"><Skeleton className="h-4 w-36" /></td><td className="px-5 py-3"><Skeleton className="h-4 w-20" /></td><td className="px-5 py-3 text-right"><Skeleton className="h-4 w-8 ml-auto" /></td><td className="px-5 py-3 hidden md:table-cell"><Skeleton className="h-4 w-16 ml-auto" /></td></tr>
                     ))
                   : (s?.topUsers ?? []).length === 0
                     ? <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-500">No user activity data yet</td></tr>
@@ -762,10 +762,10 @@ export default function AdminDashboard() {
                         <tr key={u.id} className="hover:bg-gray-800/30 transition-colors">
                           <td className="px-5 py-3 text-gray-500 font-mono text-xs">{i + 1}</td>
                           <td className="px-5 py-3 text-gray-200 font-medium">{u.name}</td>
-                          <td className="px-5 py-3 text-gray-500 text-xs table-cell">{u.email}</td>
+                          <td className="px-5 py-3 text-gray-500 text-xs hidden md:table-cell">{u.email}</td>
                           <td className="px-5 py-3 text-gray-500 text-xs">{fmtDate(u.signupDate)}</td>
                           <td className="px-5 py-3 text-right text-orange-400 font-bold">{fmt(u.totalActions)}</td>
-                          <td className="px-5 py-3 text-right text-gray-500 text-xs table-cell">{timeAgo(u.lastActive)}</td>
+                          <td className="px-5 py-3 text-right text-gray-500 text-xs hidden md:table-cell">{timeAgo(u.lastActive)}</td>
                         </tr>
                       ))
                 }
@@ -1023,10 +1023,10 @@ export default function AdminDashboard() {
               <thead>
                 <tr className="border-b border-gray-800 bg-gray-900/60">
                   <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3">Company</th>
-                  <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 table-cell">Plan</th>
-                  <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 table-cell">Status</th>
-                  <th className="text-right text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 table-cell">Users</th>
-                  <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 table-cell">Created</th>
+                  <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 hidden md:table-cell">Plan</th>
+                  <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 hidden md:table-cell">Status</th>
+                  <th className="text-right text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 hidden md:table-cell">Users</th>
+                  <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 hidden md:table-cell">Created</th>
                   <th className="text-center text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3">Beta</th>
                   <th className="text-center text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3">Delete</th>
                 </tr>
@@ -1036,10 +1036,10 @@ export default function AdminDashboard() {
                   Array.from({ length: 3 }).map((_, i) => (
                     <tr key={i}>
                       <td className="px-5 py-3"><Skeleton className="h-4 w-32" /></td>
-                      <td className="px-5 py-3 table-cell"><Skeleton className="h-4 w-16" /></td>
-                      <td className="px-5 py-3 table-cell"><Skeleton className="h-4 w-16" /></td>
-                      <td className="px-5 py-3 table-cell"><Skeleton className="h-4 w-8 ml-auto" /></td>
-                      <td className="px-5 py-3 table-cell"><Skeleton className="h-4 w-24" /></td>
+                      <td className="px-5 py-3 hidden md:table-cell"><Skeleton className="h-4 w-16" /></td>
+                      <td className="px-5 py-3 hidden md:table-cell"><Skeleton className="h-4 w-16" /></td>
+                      <td className="px-5 py-3 hidden md:table-cell"><Skeleton className="h-4 w-8 ml-auto" /></td>
+                      <td className="px-5 py-3 hidden md:table-cell"><Skeleton className="h-4 w-24" /></td>
                       <td className="px-5 py-3"><Skeleton className="h-6 w-12 mx-auto rounded-full" /></td>
                       <td className="px-5 py-3"><Skeleton className="h-6 w-8 mx-auto rounded" /></td>
                     </tr>
@@ -1050,7 +1050,7 @@ export default function AdminDashboard() {
                   (companies as Array<{ id: string; name: string; subscriptionTier: string; subscriptionStatus: string; betaAccess: boolean; userCount: number; createdAt: string }>).map(c => (
                     <tr key={c.id} className="hover:bg-gray-900/40 transition-colors">
                       <td className="px-5 py-3 font-medium text-gray-200">{c.name}</td>
-                      <td className="px-5 py-3 table-cell">
+                      <td className="px-5 py-3 hidden md:table-cell">
                         <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${
                           c.subscriptionTier === "pro" ? "bg-purple-900/50 text-purple-300" :
                           c.subscriptionTier === "team" ? "bg-blue-900/50 text-blue-300" :
@@ -1058,7 +1058,7 @@ export default function AdminDashboard() {
                           "bg-gray-800 text-gray-400"
                         }`}>{c.subscriptionTier}</span>
                       </td>
-                      <td className="px-5 py-3 table-cell">
+                      <td className="px-5 py-3 hidden md:table-cell">
                         <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${
                           c.subscriptionStatus === "active" ? "bg-emerald-900/40 text-emerald-400" :
                           c.subscriptionStatus === "trialing" ? "bg-amber-900/40 text-amber-400" :
@@ -1066,8 +1066,8 @@ export default function AdminDashboard() {
                           "bg-gray-800 text-gray-400"
                         }`}>{c.subscriptionStatus}</span>
                       </td>
-                      <td className="px-5 py-3 text-right text-gray-400 text-xs table-cell">{c.userCount}</td>
-                      <td className="px-5 py-3 text-gray-500 text-xs table-cell">{fmtDate(c.createdAt)}</td>
+                      <td className="px-5 py-3 text-right text-gray-400 text-xs hidden md:table-cell">{c.userCount}</td>
+                      <td className="px-5 py-3 text-gray-500 text-xs hidden md:table-cell">{fmtDate(c.createdAt)}</td>
                       <td className="px-5 py-3 text-center">
                         <button
                           onClick={() => toggleBeta(c.id, c.betaAccess)}

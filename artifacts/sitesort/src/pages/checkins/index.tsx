@@ -79,7 +79,7 @@ export default function CheckinsPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
         <Card className="p-4 text-center">
           <p className="text-2xl font-bold text-primary">{checkins.length}</p>
           <p className="text-xs text-muted-foreground mt-1">Total</p>
@@ -107,7 +107,7 @@ export default function CheckinsPage() {
         <select
           value={projectFilter}
           onChange={e => setProjectFilter(e.target.value)}
-          className="h-11 rounded-lg border-2 border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:border-primary"
+          className="h-11 min-w-0 max-w-full box-border rounded-lg border-2 border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:border-primary"
         >
           <option value="all">All Projects</option>
           {projects.map(([id, name]) => (

@@ -127,7 +127,7 @@ export default function IssuesPage() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <Card className="p-4 border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900">
           <p className="text-xs font-medium text-amber-700 mb-1">Open</p>
           <p className="text-2xl font-extrabold text-amber-700">{openCount}</p>
