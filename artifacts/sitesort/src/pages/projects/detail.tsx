@@ -1067,20 +1067,22 @@ tr:last-child td{border-bottom:none}
                           <p className="text-sm text-foreground whitespace-pre-wrap">{n.body}</p>
                           <div className="flex items-center justify-between mt-2">
                             <p className="text-[10px] text-muted-foreground">{n.authorName} · {formatDate(n.createdAt)}</p>
-                            <div className="flex items-center gap-1">
+                            <div className="flex flex-wrap items-center gap-1.5">
                               <button
+                                type="button"
                                 title="Open"
                                 onClick={() => setOpeningNote(n)}
-                                className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-background transition-colors"
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-background transition-colors"
                               >
-                                <ExternalLink className="w-3.5 h-3.5" />
+                                <ExternalLink className="w-3.5 h-3.5" />Open
                               </button>
                               <button
+                                type="button"
                                 title="Share"
                                 onClick={() => setSharingNote(n)}
-                                className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-background transition-colors"
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-background transition-colors"
                               >
-                                <Share2 className="w-3.5 h-3.5" />
+                                <Share2 className="w-3.5 h-3.5" />Share
                               </button>
                             </div>
                           </div>
@@ -1492,7 +1494,7 @@ tr:last-child td{border-bottom:none}
                         {formatDate(doc.createdAt)}
                       </td>
                       <td className="px-3 py-4">
-                        <div className="flex items-center gap-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
                           {!isSuperseded && (doc.myDistributionStatus === "pending" || doc.myDistributionStatus === "viewed") && (
                             <button
                               onClick={() => openSignOff({ id: doc.id, name: doc.name, type: doc.type })}
@@ -1509,36 +1511,40 @@ tr:last-child td{border-bottom:none}
                             </span>
                           )}
                           <button
+                            type="button"
                             onClick={() => window.open(doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/"), '_blank', 'noopener,noreferrer')}
-                            className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-primary/25 bg-primary/5 text-primary hover:bg-primary/15 transition-colors"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-primary/25 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/15 transition-colors"
                             title="Open document"
                           >
-                            <ExternalLink className="w-4 h-4" />
+                            <ExternalLink className="w-3.5 h-3.5" />Open
                           </button>
                           {canViewAudit && (
                             <button
+                              type="button"
                               onClick={() => setAuditDoc({ id: doc.id, name: doc.name })}
-                              className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors"
                               title="View sign-off audit history"
                             >
-                              <Clock className="w-4 h-4" />
+                              <Clock className="w-3.5 h-3.5" />History
                             </button>
                           )}
                           {caps.canUploadDocument && (
                             <button
+                              type="button"
                               onClick={() => openDocEdit(doc)}
-                              className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors"
                               title="Edit status / version"
                             >
-                              <Pencil className="w-4 h-4" />
+                              <Pencil className="w-3.5 h-3.5" />Edit
                             </button>
                           )}
                           <button
+                            type="button"
                             onClick={() => setSharingDoc({ type: "document", id: doc.id, name: doc.name, version: doc.version, fileUrl: doc.fileUrl })}
-                            className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors"
                             title="Share"
                           >
-                            <Share2 className="w-4 h-4" />
+                            <Share2 className="w-3.5 h-3.5" />Share
                           </button>
                         </div>
                       </td>
@@ -1650,21 +1656,22 @@ tr:last-child td{border-bottom:none}
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-1 shrink-0">
-                        <div className="flex items-center gap-1">
+                        <div className="flex flex-wrap items-center justify-end gap-1.5">
                           <Badge variant="secondary" className="text-[10px] capitalize">{member.role.replace('_', ' ')}</Badge>
                           {isSubcontractor && (
                             <button
+                              type="button"
                               onClick={() => openSubNotes(member.subcontractorId, member.name)}
-                              className="p-1 rounded-md text-muted-foreground hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-xs font-medium text-muted-foreground hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
                               title="Notes & reminders"
                             >
-                              <StickyNote className="w-3.5 h-3.5" />
+                              <StickyNote className="w-3.5 h-3.5" />Notes
                             </button>
                           )}
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <button className="p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Share contact">
-                                <Share2 className="w-3.5 h-3.5" />
+                              <button type="button" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-xs font-medium text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Share contact">
+                                <Share2 className="w-3.5 h-3.5" />Share
                               </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-44">
@@ -2387,24 +2394,24 @@ tr:last-child td{border-bottom:none}
                               <p className="font-semibold text-sm truncate">{p.type}</p>
                               <p className="text-xs opacity-70 truncate">{p.description}{p.responsibleName ? ` · ${p.responsibleName}` : ""}</p>
                             </div>
-                            <div className="flex items-center gap-2 shrink-0">
+                            <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
                               <div className="text-right">
                                 <p className="text-xs font-semibold">{statusLabel(days)}</p>
                                 <p className="text-xs opacity-70">{fmtDate(p.expiryDate)}</p>
                               </div>
                               {p.documentUrl && (
                                 <button
+                                  type="button"
                                   onClick={() => window.open(p.documentUrl!.replace(/^\/uploads\//, "/api/uploads/"), "_blank", "noopener,noreferrer")}
-                                  title="Open certificate"
-                                  className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-white/50 transition-colors"
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-xs font-medium text-foreground hover:bg-muted transition-colors"
                                 >
-                                  <ExternalLink className="w-3.5 h-3.5" />
+                                  <ExternalLink className="w-3.5 h-3.5" />Open
                                 </button>
                               )}
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <button className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-white/50 transition-colors" title="Share permit">
-                                    <Share2 className="w-3.5 h-3.5" />
+                                  <button type="button" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-xs font-medium text-foreground hover:bg-muted transition-colors" title="Share permit">
+                                    <Share2 className="w-3.5 h-3.5" />Share
                                   </button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-44">
@@ -2459,7 +2466,7 @@ tr:last-child td{border-bottom:none}
                                 <p className="text-xs text-muted-foreground capitalize">{doc.type.replace("_", " ")} · v{doc.version}</p>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2 shrink-0">
+                            <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
                               <div className="text-right">
                                 {isSuperseded
                                   ? <Badge variant="secondary" className="text-[10px]">Superseded</Badge>
@@ -2470,18 +2477,18 @@ tr:last-child td{border-bottom:none}
                                 <p className="text-xs text-muted-foreground mt-0.5">{formatDate(doc.createdAt)}</p>
                               </div>
                               <button
+                                type="button"
                                 onClick={() => window.open(doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/"), "_blank", "noopener,noreferrer")}
-                                title="Open document"
-                                className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-white/50 transition-colors"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-xs font-medium text-foreground hover:bg-muted transition-colors"
                               >
-                                <ExternalLink className="w-3.5 h-3.5" />
+                                <ExternalLink className="w-3.5 h-3.5" />Open
                               </button>
                               <button
+                                type="button"
                                 onClick={() => setSharingDoc({ type: "document", id: doc.id, name: doc.name, version: doc.version, fileUrl: doc.fileUrl })}
-                                title="Share document"
-                                className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-white/50 transition-colors"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-xs font-medium text-foreground hover:bg-muted transition-colors"
                               >
-                                <Share2 className="w-3.5 h-3.5" />
+                                <Share2 className="w-3.5 h-3.5" />Share
                               </button>
                             </div>
                           </div>
@@ -2804,11 +2811,12 @@ tr:last-child td{border-bottom:none}
                       <div className="flex items-center justify-between gap-2 mt-0.5">
                         <p className="text-muted-foreground text-xs">{timeStr}</p>
                         <button
+                          type="button"
                           onClick={() => setSharingDoc({ type: "photo", id: ci.id, name: `Check-in: ${ci.workerName}`, version: null, fileUrl: photoSrc })}
-                          className="p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-colors shrink-0"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-xs font-medium text-muted-foreground hover:text-primary hover:bg-muted transition-colors shrink-0"
                           title="Share check-in"
                         >
-                          <Share2 className="w-3.5 h-3.5" />
+                          <Share2 className="w-3.5 h-3.5" />Share
                         </button>
                       </div>
                     </div>
