@@ -1490,7 +1490,7 @@ tr:last-child td{border-bottom:none}
                       <td className="px-6 py-4 text-muted-foreground">
                         {formatDate(doc.createdAt)}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-3 py-4">
                         <div className="flex items-center gap-1">
                           {!isSuperseded && (doc.myDistributionStatus === "pending" || doc.myDistributionStatus === "viewed") && (
                             <button
@@ -1505,43 +1505,39 @@ tr:last-child td{border-bottom:none}
                           {doc.myDistributionStatus === "acknowledged" && (
                             <span className="flex items-center gap-1 text-xs text-success font-semibold" title="You signed this off">
                               <CheckCircle2 className="w-3.5 h-3.5" />
-                              Signed off
                             </span>
                           )}
                           <button
                             onClick={() => window.open(doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/"), '_blank', 'noopener,noreferrer')}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-primary/25 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/15 transition-colors"
+                            className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-primary/25 bg-primary/5 text-primary hover:bg-primary/15 transition-colors"
                             title="Open document"
                           >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                            Open
+                            <ExternalLink className="w-4 h-4" />
                           </button>
                           {canViewAudit && (
                             <button
                               onClick={() => setAuditDoc({ id: doc.id, name: doc.name })}
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors"
+                              className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                               title="View sign-off audit history"
                             >
-                              <Clock className="w-3.5 h-3.5" />
-                              History
+                              <Clock className="w-4 h-4" />
                             </button>
                           )}
                           {caps.canUploadDocument && (
                             <button
                               onClick={() => openDocEdit(doc)}
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors"
+                              className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                               title="Edit status / version"
                             >
-                              <Pencil className="w-3.5 h-3.5" />
-                              Edit
+                              <Pencil className="w-4 h-4" />
                             </button>
                           )}
                           <button
                             onClick={() => setSharingDoc({ type: "document", id: doc.id, name: doc.name, version: doc.version, fileUrl: doc.fileUrl })}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors"
+                            className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                             title="Share"
                           >
-                            <Share2 className="w-3.5 h-3.5" /> Share
+                            <Share2 className="w-4 h-4" />
                           </button>
                         </div>
                       </td>
