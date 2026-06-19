@@ -2522,59 +2522,64 @@ tr:last-child td{border-bottom:none}
                         const days = daysLeft(inv.dueDate);
                         const paid = inv.status === "paid";
                         return (
-                          <div key={inv.id} className={`flex items-center justify-between gap-4 px-4 py-3 rounded-xl border ${statusStyle(days, paid)}`}>
-                            <div className="flex items-center gap-3 min-w-0">
-                              {inv.direction === "inbound"
-                                ? <ArrowDownCircle className="w-4 h-4 shrink-0 text-emerald-600" />
-                                : <ArrowUpCircle className="w-4 h-4 shrink-0 text-rose-600" />
-                              }
-                              <div className="min-w-0">
-                                <p className="font-semibold text-sm truncate">{inv.counterpartyName}</p>
-                                <p className="text-xs opacity-70 truncate">{inv.description}{inv.reference ? ` · ${inv.reference}` : ""}</p>
+                          <div key={inv.id} className={`flex flex-col gap-3 px-4 py-3 rounded-xl border ${statusStyle(days, paid)}`}>
+                            {/* Invoice info row */}
+                            <div className="flex items-center justify-between gap-4">
+                              <div className="flex items-center gap-3 min-w-0">
+                                {inv.direction === "inbound"
+                                  ? <ArrowDownCircle className="w-4 h-4 shrink-0 text-emerald-600" />
+                                  : <ArrowUpCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                                }
+                                <div className="min-w-0">
+                                  <p className="font-semibold text-sm truncate">{inv.counterpartyName}</p>
+                                  <p className="text-xs opacity-70 truncate">{inv.description}{inv.reference ? ` · ${inv.reference}` : ""}</p>
+                                </div>
                               </div>
-                            </div>
-                            <div className="flex items-center gap-3 shrink-0">
-                              <div className="text-right">
+                              <div className="text-right shrink-0">
                                 <p className="font-bold text-sm">{fmtAmt(inv.currency, inv.amount)}</p>
                                 <p className="text-xs opacity-70">{paid ? "Paid" : statusLabel(days)} · {fmtDate(inv.dueDate)}</p>
                               </div>
-                              <div className="flex items-center gap-1">
-                                {inv.attachmentUrl && (
-                                  <>
+                            </div>
+                            {/* Pill action buttons */}
+                            <div className="flex flex-wrap gap-2">
+                              {inv.attachmentUrl && (
+                                <button
+                                  type="button"
+                                  onClick={() => window.open(invoiceFullUrl(inv.attachmentUrl!), "_blank", "noopener,noreferrer")}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-sm font-medium text-foreground hover:bg-muted transition-colors"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />Open
+                                </button>
+                              )}
+                              {inv.attachmentUrl && (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
                                     <button
-                                      onClick={() => window.open(invoiceFullUrl(inv.attachmentUrl!), "_blank", "noopener,noreferrer")}
-                                      title="View invoice"
-                                      className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
+                                      type="button"
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-sm font-medium text-foreground hover:bg-muted transition-colors"
                                     >
-                                      <Eye className="w-4 h-4" />
+                                      <Share2 className="w-3.5 h-3.5" />Share
                                     </button>
-                                    <DropdownMenu>
-                                      <DropdownMenuTrigger asChild>
-                                        <button title="Share invoice" className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-colors">
-                                          <Share2 className="w-4 h-4" />
-                                        </button>
-                                      </DropdownMenuTrigger>
-                                      <DropdownMenuContent align="end" className="w-44">
-                                        <DropdownMenuItem onClick={() => shareInvoiceEmail(inv)} className="gap-2 cursor-pointer">
-                                          <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => shareInvoiceWhatsApp(inv)} className="gap-2 cursor-pointer">
-                                          <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
-                                        </DropdownMenuItem>
-                                      </DropdownMenuContent>
-                                    </DropdownMenu>
-                                  </>
-                                )}
-                                {paid && caps.canManageInvoices && (
-                                  <button
-                                    onClick={() => markInvoiceUnpaid(inv.id)}
-                                    title="Mark unpaid and move back to Invoices"
-                                    className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
-                                  >
-                                    <Clock className="w-4 h-4" />
-                                  </button>
-                                )}
-                              </div>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="start" className="w-44">
+                                    <DropdownMenuItem onClick={() => shareInvoiceEmail(inv)} className="gap-2 cursor-pointer">
+                                      <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => shareInvoiceWhatsApp(inv)} className="gap-2 cursor-pointer">
+                                      <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              )}
+                              {paid && caps.canManageInvoices && (
+                                <button
+                                  type="button"
+                                  onClick={() => markInvoiceUnpaid(inv.id)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-sm font-medium text-muted-foreground hover:bg-muted transition-colors"
+                                >
+                                  <Clock className="w-3.5 h-3.5" />Mark Unpaid
+                                </button>
+                              )}
                             </div>
                           </div>
                         );
