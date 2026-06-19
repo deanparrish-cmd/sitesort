@@ -433,21 +433,20 @@ export default function InvoicesPage() {
           </div>
         ) : (
           <>
-            {/* Mobile card list — phone only */}
-            <div className="block md:hidden divide-y">
+            {/* Mobile + tablet card list (below xl / 1280px) */}
+            <div className="block xl:hidden divide-y">
               {filtered.map(inv => {
-                const isRowDragTarget = dragRowId === inv.id;
                 const isUploading = uploadingId === inv.id;
                 return (
                   <div
                     key={inv.id}
-                    onClick={() => setViewingInvoice(inv)}
                     onDragOver={e => { e.preventDefault(); setDragRowId(inv.id); lastDragRowRef.current = inv.id; }}
                     className={cn(
-                      "px-4 py-3.5 cursor-pointer transition-colors",
-                      isRowDragTarget ? "bg-primary/10 outline outline-2 outline-primary/40" : "hover:bg-muted/20"
+                      "px-4 py-4 transition-colors",
+                      dragRowId === inv.id ? "bg-primary/10 outline outline-2 outline-primary/40" : ""
                     )}
                   >
+                    {/* Row 1: avatar + name + amount */}
                     <div className="flex items-center justify-between gap-2 mb-1.5">
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className={cn(
@@ -463,7 +462,8 @@ export default function InvoicesPage() {
                       </div>
                       <span className="font-bold tabular-nums text-sm shrink-0">{fmtAmount(inv.currency, inv.amount)}</span>
                     </div>
-                    <div className="flex items-center gap-2 flex-wrap">
+                    {/* Row 2: direction + status + date */}
+                    <div className="flex items-center gap-2 flex-wrap mb-3">
                       {inv.direction === "inbound"
                         ? <span className="flex items-center gap-1 text-xs text-emerald-600 font-medium"><ArrowDownCircle className="w-3.5 h-3.5" />In</span>
                         : <span className="flex items-center gap-1 text-xs text-rose-600 font-medium"><ArrowUpCircle className="w-3.5 h-3.5" />Out</span>
@@ -471,20 +471,41 @@ export default function InvoicesPage() {
                       <StatusBadge invoice={inv} />
                       <span className="text-xs text-muted-foreground">Due {fmtDate(inv.dueDate)}</span>
                       {isUploading && <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />}
-                      {inv.attachmentUrl && !isUploading && (
-                        <button
-                          onClick={e => { e.stopPropagation(); window.open(fullUrl(inv.attachmentUrl!), '_blank', 'noopener,noreferrer'); }}
-                          className="flex items-center gap-1 text-xs text-primary hover:underline font-medium"
-                        >
-                          <Paperclip className="w-3 h-3" />File
-                        </button>
-                      )}
+                    </div>
+                    {/* Row 3: pill action buttons */}
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setViewingInvoice(inv)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-sm font-medium text-foreground hover:bg-muted transition-colors"
+                      >
+                        <Eye className="w-3.5 h-3.5" />Open
+                      </button>
                       {inv.attachmentUrl && (
                         <button
-                          onClick={e => { e.stopPropagation(); setShareItem({ id: inv.id, name: `Invoice – ${inv.counterpartyName}`, fileUrl: inv.attachmentUrl!, projectId: inv.projectId }); }}
-                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary font-medium"
+                          type="button"
+                          onClick={() => setShareItem({ id: inv.id, name: `Invoice – ${inv.counterpartyName}`, fileUrl: inv.attachmentUrl!, projectId: inv.projectId })}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-sm font-medium text-foreground hover:bg-muted transition-colors"
                         >
-                          <Share2 className="w-3 h-3" />Share
+                          <Share2 className="w-3.5 h-3.5" />Share
+                        </button>
+                      )}
+                      {inv.status !== "paid" && caps.canManageInvoices && (
+                        <button
+                          type="button"
+                          onClick={() => markPaid(inv.id)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-emerald-200 bg-emerald-50 text-sm font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />Mark Paid
+                        </button>
+                      )}
+                      {inv.status === "paid" && caps.canManageInvoices && (
+                        <button
+                          type="button"
+                          onClick={() => markUnpaid(inv.id)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-sm font-medium text-muted-foreground hover:bg-muted transition-colors"
+                        >
+                          <Clock className="w-3.5 h-3.5" />Mark Unpaid
                         </button>
                       )}
                     </div>
@@ -492,8 +513,8 @@ export default function InvoicesPage() {
                 );
               })}
             </div>
-            {/* Tablet + desktop table */}
-            <div className="hidden md:block overflow-x-auto">
+            {/* Desktop table (xl / 1280px+) */}
+            <div className="hidden xl:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/30">
@@ -607,28 +628,40 @@ export default function InvoicesPage() {
                         ) : null}
                       </td>
 
-                      <td className="px-5 py-3.5" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center gap-2 justify-end">
+                      <td className="px-3 py-3.5" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center gap-2 justify-end flex-wrap">
                           <button
+                            type="button"
                             onClick={e => { e.stopPropagation(); setViewingInvoice(inv); }}
-                            title="View invoice"
-                            className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-sm font-medium text-foreground hover:bg-muted transition-colors"
                           >
-                            <Eye className="w-4 h-4" />
+                            <Eye className="w-3.5 h-3.5" />Open
                           </button>
+                          {inv.attachmentUrl && (
+                            <button
+                              type="button"
+                              onClick={e => { e.stopPropagation(); setShareItem({ id: inv.id, name: `Invoice – ${inv.counterpartyName}`, fileUrl: inv.attachmentUrl!, projectId: inv.projectId }); }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-sm font-medium text-foreground hover:bg-muted transition-colors"
+                            >
+                              <Share2 className="w-3.5 h-3.5" />Share
+                            </button>
+                          )}
                           {inv.status !== "paid" && caps.canManageInvoices && (
-                            <button onClick={e => { e.stopPropagation(); markPaid(inv.id); }} className="text-xs text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap">
-                              Mark paid
+                            <button
+                              type="button"
+                              onClick={e => { e.stopPropagation(); markPaid(inv.id); }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-emerald-200 bg-emerald-50 text-sm font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />Mark Paid
                             </button>
                           )}
                           {inv.status === "paid" && caps.canManageInvoices && (
-                            <button onClick={e => { e.stopPropagation(); markUnpaid(inv.id); }} className="text-xs text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap">
-                              Mark unpaid
-                            </button>
-                          )}
-                          {caps.canManageInvoices && (
-                            <button onClick={e => { e.stopPropagation(); deleteInvoice(inv.id); }} className="text-xs text-muted-foreground hover:text-destructive transition-colors">
-                              Delete
+                            <button
+                              type="button"
+                              onClick={e => { e.stopPropagation(); markUnpaid(inv.id); }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-sm font-medium text-muted-foreground hover:bg-muted transition-colors"
+                            >
+                              <Clock className="w-3.5 h-3.5" />Mark Unpaid
                             </button>
                           )}
                         </div>
