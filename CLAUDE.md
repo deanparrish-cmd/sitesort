@@ -139,6 +139,7 @@ Systematic audit (4 parallel agents over all 22 pages) + fixes. Feature parity w
 - **Text overflow:** messages channel header got `min-w-0 flex-1` + `truncate`.
 - **Admin tables:** 24 dead `table-cell` no-op classes (intended responsive hiding that did nothing) → `hidden md:table-cell`; verified consistent across header/skeleton/body so columns stay aligned.
 - **Verified in-browser at 375/768/1280** against the rebuilt bundle on `:8080` (full app + API): 10 pages × 3 breakpoints = zero horizontal page overflow, zero console errors; New Invoice dialog (date + currency select in grid) and Add Permit dialog (Start/Expiry date range) both fit cleanly at 375px (screenshots). Root typecheck + build green. Note: `paul@acme.com` demo is Free-Plan project-limited, so "New Project" opens the upgrade dialog — test the create-project date grid via a non-limited account.
+- **✅ DEPLOYED LIVE + verified 2026-06-19.** Pushed to GitHub mirror (`main → ae38da0a`, signatures verified). Published; live bundle `index-DmGZWGzO.js` (matches the locally-built+verified bundle). Re-ran the live check on `www.sitesort.co.uk` at 375/768/1280: 10 pages × 3 breakpoints = **zero horizontal overflow, zero console errors**; New Invoice dialog @375px `scroll=343 client=343` no overflowing fields (date input + currency select fit). All four task categories confirmed in production.
 
 ### 2026-05-22 through 2026-06-10 (all sessions up to and including site issues log) — see CLAUDE_ARCHIVE.md for full detail
 
