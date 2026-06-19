@@ -1327,10 +1327,11 @@ tr:last-child td{border-bottom:none}
                 </Button>
               )}
             </div>
-            <div className="flex gap-2 flex-wrap items-center">
+            <div className="flex gap-2 flex-nowrap overflow-x-auto items-center [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pb-1">
               <Button
                 variant={selectedDocType === 'all' ? 'default' : 'secondary'}
                 size="sm" onClick={() => setSelectedDocType('all')}
+                className="shrink-0"
               >All Types</Button>
               {Object.values(DocumentType).map(type => (
                 <Button
@@ -1338,19 +1339,19 @@ tr:last-child td{border-bottom:none}
                   variant={selectedDocType === type ? 'default' : 'secondary'}
                   size="sm"
                   onClick={() => setSelectedDocType(type)}
-                  className="capitalize"
+                  className="shrink-0 capitalize"
                 >
-                  {type.replace('_', ' ')}s
+                  {({ drawing: 'Drawings', method_statement: 'Method Statements', permit: 'Permits', safety: 'Safety', general: 'General' } as Record<string,string>)[type] ?? type.replace('_', ' ')}
                 </Button>
               ))}
-              <div className="w-px h-6 bg-border mx-1" />
+              <div className="shrink-0 w-px h-6 bg-border mx-1" />
               {(['all', 'current', 'superseded'] as const).map(s => (
                 <Button
                   key={s}
                   variant={selectedStatus === s ? 'default' : 'secondary'}
                   size="sm"
                   onClick={() => setSelectedStatus(s)}
-                  className="capitalize"
+                  className="shrink-0 capitalize"
                 >{s === 'all' ? 'All Statuses' : s}</Button>
               ))}
             </div>
