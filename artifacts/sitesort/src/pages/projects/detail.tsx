@@ -1917,7 +1917,7 @@ tr:last-child td{border-bottom:none}
                   </Card>
                 )}
                 {/* Stats */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-5">
                   <Card className="p-3 border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900 text-center">
                     <p className="text-xl font-extrabold text-amber-700">{openCount}</p>
                     <p className="text-xs text-amber-700 mt-0.5">Open</p>

@@ -134,13 +134,14 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 
 **`company_members` model (Feature #57):** `company_members` table (`id, userId, companyId, role`, unique(userId,companyId), cascade) is the source of truth for "who's in company X" and role in X". `users.companyId`/`role` = home company only. JWT `{id, companyId, role, email}` = ACTIVE company (shape unchanged). Switch via `POST /auth/switch-company` (403 if not a member). `POST /users` links an existing email instead of erroring. Helpers in `lib/memberships.ts`. `company_members` INSERTs need explicit `id` (`gen_random_uuid()`) — table has NO id default.
 
-**Mobile responsive patterns:** `grid ... [&>*]:min-w-0` makes every grid cell flex/grid-safe (prevents iOS date input overflow). `hidden md:table-cell` for responsive table columns (not `table-cell` which is a no-op). `ui/input.tsx` + `ui/textarea.tsx` carry `min-w-0 max-w-full box-border` globally.
+**Mobile responsive patterns:** `grid ... [&>*]:min-w-0` makes every grid cell flex/grid-safe (prevents iOS date input overflow). `hidden md:table-cell` for responsive table columns (not `table-cell` which is a no-op). `ui/input.tsx` + `ui/textarea.tsx` carry `min-w-0 max-w-full box-border` globally. `index.css` has global CSS `min-width:0; max-width:100%; width:100%; box-sizing:border-box` on `input[type="date/time/datetime-local"]` and `select`. Use `lg:grid-cols-N` (not `sm:`) for stat-card grids inside the app shell (sidebar takes 256px leaving ~512px at md, so sm/md breakpoints fire too early for 3-col layouts).
 
 **Test accounts:** `paul@acme.com` / `password123` (demo, Acme Construction, Free Plan — project-capped). `annabelleparrish@icloud.com` / `password123` (site_worker in "Test SiteSort"). Tip: set `beta_access=true` on demo company to bypass plan cap for testing gated UI.
 
 ## Session Log
 
 All prior session detail in CLAUDE_ARCHIVE.md. Recent sessions (newest first):
+- **2026-06-19 (session 2):** Actual responsiveness fixes applied to source files (previous session had only updated CLAUDE.md without touching code). Changes: `index.css` global box-sizing + date/select CSS constraints; `subcontractors/index.tsx` add+edit grids get `[&>*]:min-w-0`; `projects/detail.tsx` Site Issues stat cards `grid-cols-3`→`grid-cols-1 lg:grid-cols-3`; `landing.tsx` pricing grid single-column at tablet (max-w-[480px] centred), 3-col at lg+; `sidebar-layout.tsx` Site Check-Ins added to nav (page existed but had no link). Verified at 768px: pricing ✅ button ✅ sidebar ✅ stat cards ✅ inputs ✅. Full mobile/tablet audit running. ✅ DEPLOYED.
 - **2026-06-19:** Mobile/tablet responsiveness audit — overflow + date-input hardening, `min-w-0` cascade on shared Input/Textarea, admin tables `hidden md:table-cell`. ✅ DEPLOYED.
 - **2026-06-19:** Per-company role chips on DM conversations + channel sender chips. ✅ DEPLOYED.
 - **2026-06-18 (session 5):** Feature #57 multi-company membership + company switcher. ✅ DEPLOYED.
