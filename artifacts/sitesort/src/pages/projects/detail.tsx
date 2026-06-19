@@ -1437,8 +1437,8 @@ tr:last-child td{border-bottom:none}
               )}
             </div>
             {/* Desktop table */}
-            <div className="hidden lg:block">
-            <table className="w-full text-sm text-left">
+            <div className="hidden lg:block overflow-x-auto">
+            <table className="w-full text-sm text-left min-w-[800px]">
               <thead className="text-xs text-muted-foreground uppercase bg-muted/50 border-b">
                 <tr>
                   <th className="px-6 py-4 font-semibold">Document</th>
