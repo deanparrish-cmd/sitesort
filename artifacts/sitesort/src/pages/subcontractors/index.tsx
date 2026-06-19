@@ -494,7 +494,7 @@ export default function SubcontractorsPage() {
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <Card className="p-4">
           <div className="flex items-center gap-2 mb-1"><Users className="w-4 h-4 text-primary" /><p className="text-xs font-medium text-muted-foreground">Total</p></div>
           <p className="text-2xl font-extrabold">{totalSubs}</p>
@@ -988,10 +988,10 @@ export default function SubcontractorsPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
             <div>
               <label className="text-sm font-medium mb-1.5 block">Reliability Rating</label>
-              <select {...editReg("reliabilityRating")} className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+              <select {...editReg("reliabilityRating")} className="w-full min-w-0 max-w-full box-border h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
                 <option value="">Not rated</option>
                 {[1,2,3,4,5].map(n => <option key={n} value={n}>{n} star{n !== 1 ? "s" : ""}</option>)}
               </select>

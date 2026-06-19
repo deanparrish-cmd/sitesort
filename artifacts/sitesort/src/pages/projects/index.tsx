@@ -483,7 +483,7 @@ export default function ProjectsList() {
             <label className="text-sm font-semibold mb-1 block">Site Address</label>
             <Input {...register("address", { required: true })} placeholder="123 River Road, London" icon={<MapPin className="w-4 h-4"/>} />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4 [&>*]:min-w-0">
             <div>
               <label className="text-sm font-semibold mb-1 block">Start Date</label>
               <Input type="date" {...register("startDate", { required: true })} icon={<Calendar className="w-4 h-4"/>} />
@@ -661,7 +661,7 @@ export default function ProjectsList() {
               </select>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Start Date</label>
                 <Input type="date" value={permitStart} onChange={e => setPermitStart(e.target.value)} />

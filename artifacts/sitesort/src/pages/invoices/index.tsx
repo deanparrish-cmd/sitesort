@@ -883,10 +883,10 @@ export default function InvoicesPage() {
               {errors.description && <p className="text-xs text-destructive mt-1">Required</p>}
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-3 [&>*]:min-w-0">
               <div className="col-span-1">
                 <label className="text-sm font-medium mb-1.5 block">Currency</label>
-                <select {...register("currency")} className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                <select {...register("currency")} className="w-full min-w-0 max-w-full box-border h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
                   <option>GBP</option>
                   <option>EUR</option>
                   <option>USD</option>
@@ -899,7 +899,7 @@ export default function InvoicesPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Due Date</label>
                 <Input type="date" {...register("dueDate", { required: true })} />

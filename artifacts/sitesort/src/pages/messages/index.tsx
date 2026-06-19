@@ -1641,9 +1641,9 @@ export default function MessagesPage() {
                 <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center shrink-0">
                   <Hash className="w-4 h-4 text-blue-500" />
                 </div>
-                <div>
-                  <p className="font-bold text-sm">{activeChannel.projectName}</p>
-                  <p className="text-[10px] text-muted-foreground">Project channel · all members</p>
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold text-sm truncate">{activeChannel.projectName}</p>
+                  <p className="text-[10px] text-muted-foreground truncate">Project channel · all members</p>
                 </div>
               </div>
 

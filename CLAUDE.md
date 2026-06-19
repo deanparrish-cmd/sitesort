@@ -130,6 +130,16 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 
 ## Session Log
 
+### 2026-06-19 (mobile/tablet responsiveness audit pass — overflow + date-input hardening)
+
+Systematic audit (4 parallel agents over all 22 pages) + fixes. Feature parity was already solid (tables all have mobile card counterparts; messages master-detail; grids mostly collapse). Real issues were overflow/sizing, mostly **date/select inputs in grid cells**.
+- **Shared components (cascade fix):** `ui/input.tsx` + `ui/textarea.tsx` now carry `min-w-0 max-w-full box-border` — the guard that stops `type="date"` inputs blowing out of flex/grid (iOS Safari intrinsic-width issue). This covers every Input app-wide.
+- **Date/time/select-in-grid:** added `[&>*]:min-w-0` to grid containers (+ `min-w-0 max-w-full` on native `<select>`s) in projects/index (create-project + permit dates), projects/detail (permit dates, schedule times, milestone title), invoices (currency select + due-date), subcontractors (reliability select), checkins (project filter). Pattern to reuse: `grid ... [&>*]:min-w-0` makes every cell flex/grid-safe.
+- **Stat grids collapsing:** `grid-cols-3` → `grid-cols-1 sm:grid-cols-3` on subcontractors/issues/checkins summary cards.
+- **Text overflow:** messages channel header got `min-w-0 flex-1` + `truncate`.
+- **Admin tables:** 24 dead `table-cell` no-op classes (intended responsive hiding that did nothing) → `hidden md:table-cell`; verified consistent across header/skeleton/body so columns stay aligned.
+- **Verified in-browser at 375/768/1280** against the rebuilt bundle on `:8080` (full app + API): 10 pages × 3 breakpoints = zero horizontal page overflow, zero console errors; New Invoice dialog (date + currency select in grid) and Add Permit dialog (Start/Expiry date range) both fit cleanly at 375px (screenshots). Root typecheck + build green. Note: `paul@acme.com` demo is Free-Plan project-limited, so "New Project" opens the upgrade dialog — test the create-project date grid via a non-limited account.
+
 ### 2026-05-22 through 2026-06-10 (all sessions up to and including site issues log) — see CLAUDE_ARCHIVE.md for full detail
 
 ---
@@ -172,27 +182,14 @@ See CLAUDE_ARCHIVE.md for full detail.
 
 ---
 
-## End-of-session notes — 2026-06-18 session 5 (Feature #57: multi-company membership + company switcher)
+## End-of-session notes — 2026-06-18 session 5 (Feature #57: multi-company membership + company switcher) — see CLAUDE_ARCHIVE.md for full detail
 
-**Why:** "Add Team Member" rejected an email already registered to ANOTHER company ("Email already registered"). Root cause: `users.email` is globally UNIQUE and each user has ONE `company_id` + role (baked into the JWT, used by 178 `companyId` refs across 21 files). User chose (AskUserQuestion): full membership model + one-login in-app switcher + **role per company**.
-
-**Model:** new **`company_members`** table (`id, userId, companyId, role`, unique(userId,companyId), cascade). `users.companyId`/`role` kept as the user's **home** company; `company_members` is the source of truth for "who's in company X" and "role in X". Backfilled one membership per existing user. **JWT shape unchanged** (`{id, companyId, role, email}` = ACTIVE company) so all 178 refs keep working — only the value's provenance changed.
-
-**Backend** (`artifacts/api-server/src`):
-- `lib/memberships.ts` — `getMemberships`, `membershipRole`, `addMembership`, `resolveActiveCompany`.
-- `routes/auth.ts` — login resolves active company (home if still a member, else first) + returns `memberships`; **`POST /auth/switch-company`** re-issues a token for another membership (403 if not a member); `/auth/me` returns `companyId/role` from the token (active) + `memberships`; register & sub-invite create a home membership.
-- `routes/users.ts` — **`POST /users` LINKS an existing email** via `addMembership` (+ in-app notification) instead of erroring; new emails create user+membership+invite. `GET /users`, PATCH (role→membership; name/phone→home-company only), notes IDOR → membership-aware.
-- `routes/messages.ts` (recipient/broadcast/messageable) + `routes/billing.ts` (company admins) → membership joins, not `usersTable.companyId`.
-
-**Frontend** (`artifacts/sitesort/src`): `components/company-switcher.tsx` (sidebar dropdown, hidden for single-company users, `/auth/switch-company` → save token → full reload) wired into `sidebar-layout.tsx` (desktop + mobile menu); team page add-member shows a green linked/invited success message + `already_member` handling.
-
-**Verified** (rebuilt :8080): link existing→201 `linked:true`; re-add→400 `already_member`; switch-company→new token, 403 for non-member; messageable/team lists correctly change per active company; **Dean shows `project_manager` in Test SiteSort but `admin` in his home co → role-per-company proven**. Browser: switcher renders + switches on **desktop/tablet/mobile**, zero console errors. **Test data:** linked Tom→Acme (multi-co test acct); seeded **Dean (linked, PM) + Annabelle (new user, pw `password123`) into Amy's Test SiteSort** so the user can test 4-way messaging.
-
-**⚠️ DEPLOY SAFETY (critical — prod DB is SEPARATE):** proved again that **live has its own DB** (workspace-created Annabelle/Tom → 401 on live). `drizzle push` is NOT part of the deploy, so the new code would query a non-existent `company_members` on prod and **break live login**. Mitigations added so publishing is safe: (1) **`lib/ensure-schema.ts`** — idempotent boot migration (`CREATE TABLE IF NOT EXISTS company_members` + backfill `INSERT … SELECT FROM users ON CONFLICT DO NOTHING`) run from `index.ts` via `ensureSchema().finally(() => app.listen(...))` (uses exported `pool.query`; verified in boot log: "company_members table ready + backfilled"). (2) **`getMemberships` falls back** to the user's home company if the table query throws, so login never breaks even if the migration fails. **Pattern for future schema changes: add them to `ensureSchema` (or another boot migration) so prod gets them on deploy — pushing to the workspace DB does NOT migrate prod.**
-
-**✅ DEPLOYED LIVE + verified 2026-06-18.** Published; live bundle `index-DmqLDOUV.js` has the switcher. Confirmed on `www.sitesort.co.uk`: boot migration created+backfilled `company_members` on the prod DB (proof: `POST /auth/switch-company` returns 200 — that path queries the table directly), and login/`/users`/`/messages/users` all 200. User added `dean.parrish@me.com` (linked) + `annabelleparrish@icloud.com` (new) to their real company (Amy/`amy-parrish@hotmail.co.uk` admin) via live In-House Team UI — **both show in the team list**, confirming the link-existing-user path works in production. Agent CANNOT verify a user's private live company (no prod creds; only demo `paul@acme.com`) — user self-confirmed in-app.
-
-**Follow-up polish:** DM **conversation list** + **channel sender chips** now show the person's **per-company (membership) role**, not their home role — `messages.ts` conversations `userMap` and `channels.ts` sender `userMap` now `leftJoin company_members` on the active `companyId` (was `usersTable.role`). Verified: Dean shows "Project Manager" in Test SiteSort (his membership role) instead of "Admin" (his home role). **Needs a publish to reach live.**
+**Key facts to carry forward** (full write-up + Dean verification in CLAUDE_ARCHIVE.md):
+- **Model:** `company_members` table (`id, userId, companyId, role`, unique(userId,companyId), cascade) is the source of truth for "who's in company X" and "role in X". `users.companyId`/`role` = the user's **home** company. **JWT shape unchanged** (`{id, companyId, role, email}` = ACTIVE company). Helpers in `lib/memberships.ts`; switch via **`POST /auth/switch-company`** (403 if not a member). `POST /users` **links** an existing email instead of erroring.
+- **Per-company role chips:** `messages.ts` conversations `userMap` + `channels.ts` sender `userMap` `leftJoin company_members` on the active `companyId` so chips show the person's role *in the active company*, not their home role. **✅ DEPLOYED LIVE 2026-06-19.**
+- **⚠️ DEPLOY SAFETY (prod DB is SEPARATE):** `drizzle push` is NOT part of the deploy. New tables/columns MUST be added to **`lib/ensure-schema.ts`** (idempotent boot migration run from `index.ts` before `app.listen`) or prod will query a non-existent table and break login. `getMemberships` also falls back to the home company if the table query throws. **Pattern for ALL future schema changes: add them to `ensureSchema` — pushing to the workspace DB does NOT migrate prod.**
+- **Dean role-per-company verified 2026-06-19:** `dean.parrish@me.com` shows `project_manager` in "Test SiteSort" but `admin` in his home "Test SiteSort 2" — both sides proven via the real API path (workspace DB); live confirmed at deploy level (membership-join endpoints return 200/200/403). DB note: `company_members` INSERTs need an explicit `id` (`gen_random_uuid()`) — the table has NO id default.
+- **Test data:** Test SiteSort members = Amy (admin), Dean (PM), Tom + Annabelle (site_worker). Annabelle (`annabelleparrish@icloud.com` / `password123`) is a usable workspace login.
 
 ---
 
