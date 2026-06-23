@@ -792,3 +792,10 @@ Systematic audit (4 parallel agents over all 22 pages) + fixes. Feature parity w
 
 - **2026-06-18 (session 5):** Feature #57 multi-company membership + company switcher. ✅ DEPLOYED.
 - **2026-06-18 (session 4):** Messaging 500-fix (`=ANY()`→`inArray`), invoice Open/previews/timestamps/save-to-notes. ✅ DEPLOYED.
+
+## More migrated from CLAUDE.md (2026-06-23 session 3 wrap)
+
+- **2026-06-19 (session 3):** Bare-icon → labeled-pill UI consistency pass on `projects/detail.tsx` (Open/History/Edit/Share/Notes pills across Documents, Finances, Overview notes, Check-ins, Team). ✅ DEPLOYED.
+- **2026-06-19 (session 2):** Responsiveness fixes in source: `index.css` box-sizing + date/select constraints; `subcontractors` grids `[&>*]:min-w-0`; Site Issues stat cards `grid-cols-1 lg:grid-cols-3`; `landing` pricing single-col at tablet; Site Check-Ins added to sidebar nav. ✅ DEPLOYED.
+- **2026-06-19:** Mobile/tablet responsiveness audit — overflow + date-input hardening, `min-w-0` cascade on shared Input/Textarea, admin tables `hidden md:table-cell`. ✅ DEPLOYED.
+- **2026-06-19:** Per-company role chips on DM conversations + channel sender chips. ✅ DEPLOYED.
