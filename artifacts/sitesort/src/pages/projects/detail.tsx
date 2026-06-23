@@ -2835,7 +2835,18 @@ tr:last-child td{border-bottom:none}
         {reportLoading && !openReport ? (
           <div className="py-10 flex justify-center"><RefreshCw className="w-6 h-6 text-muted-foreground animate-spin" /></div>
         ) : openReport ? (() => {
-          const d = openReport.data;
+          const raw = openReport.data;
+          const d: DailyReportData = {
+            subcontractorsOnSite: raw?.subcontractorsOnSite ?? [],
+            documentActivity: {
+              uploaded: raw?.documentActivity?.uploaded ?? [],
+              amended: raw?.documentActivity?.amended ?? [],
+              viewed: raw?.documentActivity?.viewed ?? [],
+              signedOff: raw?.documentActivity?.signedOff ?? [],
+            },
+            sitePhotos: raw?.sitePhotos ?? [],
+            siteManagerNotes: raw?.siteManagerNotes ?? [],
+          };
           const REPORT_CATEGORY_LABELS: Record<string, string> = {
             general: "General", progress: "Progress", snag: "Snag", safety_concern: "Safety Concern",
             mistake: "Mistake", work_completed: "Work completed",
