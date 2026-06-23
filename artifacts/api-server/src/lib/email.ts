@@ -354,27 +354,41 @@ export async function sendPermitExpiryEmail(
   const project = projectName?.trim() || "your project";
   const type = permitType?.trim() || "Permit";
   const desc = description?.trim() || "No description provided.";
-  const dayLabel = `${daysLeft} day${daysLeft !== 1 ? "s" : ""}`;
-  const urgency = daysLeft <= 3 ? "🚨 Urgent:" : "⚠️";
+  const expired = daysLeft <= 0;
+  const dayLabel = `${Math.abs(daysLeft)} day${Math.abs(daysLeft) !== 1 ? "s" : ""}`;
+  const urgent = expired || daysLeft <= 7;
+  const subject = expired
+    ? `🚨 Permit expired — ${project}`
+    : `${daysLeft <= 7 ? "🚨 Urgent:" : "⚠️"} Permit expiring in ${dayLabel} — ${project}`;
+  const lead = expired
+    ? (daysLeft === 0
+        ? `A permit you are responsible for on <strong>${project}</strong> expires <strong>today</strong>.`
+        : `A permit you are responsible for on <strong>${project}</strong> expired <strong>${dayLabel} ago</strong>.`)
+    : `A permit you are responsible for on <strong>${project}</strong> expires in <strong>${dayLabel}</strong>.`;
+  const leadText = expired
+    ? (daysLeft === 0
+        ? `A permit you are responsible for on ${project} expires today.`
+        : `A permit you are responsible for on ${project} expired ${dayLabel} ago.`)
+    : `A permit you are responsible for on ${project} expires in ${dayLabel}.`;
   return send({
     to,
-    subject: `${urgency} Permit expiring in ${dayLabel} — ${project}`,
+    subject,
     html: layout(`
-      ${h(`Permit expiring soon — ${project}`)}
+      ${h(`Permit ${expired ? "expired" : "expiring soon"} — ${project}`)}
       ${p(`Hi ${greeting},`)}
-      ${p(`A permit you are responsible for on <strong>${project}</strong> expires in <strong>${dayLabel}</strong>.`)}
+      ${p(lead + " Please renew it to keep this project compliant.")}
       ${box(`
         <div style="font-size:15px;font-weight:600;color:#111827;margin-bottom:4px;text-transform:capitalize;">${type}</div>
         <div style="font-size:13px;color:#6b7280;">${desc}</div>
-      `, daysLeft <= 3 ? "#fef2f2" : "#fff7ed", daysLeft <= 3 ? "#fecaca" : "#fed7aa")}
+      `, urgent ? "#fef2f2" : "#fff7ed", urgent ? "#fecaca" : "#fed7aa")}
       ${btn(link, "View Compliance")}
       ${muted("You can manage email notifications in your SiteSort account settings.")}
     `),
-    text: textLayout(`Permit expiring soon — ${project}
+    text: textLayout(`Permit ${expired ? "expired" : "expiring soon"} — ${project}
 
 Hi ${greeting},
 
-A permit you are responsible for on ${project} expires in ${dayLabel}.
+${leadText} Please renew it to keep this project compliant.
 
 ${type}
 ${desc}
