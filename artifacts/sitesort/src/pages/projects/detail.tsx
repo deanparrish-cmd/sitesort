@@ -10,7 +10,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronUp, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, StickyNote, Send, Loader2, History, Archive } from "lucide-react";
+import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronUp, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, StickyNote, Send, Loader2, History, Archive, Paperclip } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { ShareModal } from "@/components/share-modal";
 import { FileDropZone } from "@/components/ui/file-drop-zone";
@@ -66,7 +66,7 @@ export default function ProjectDetail() {
     siteManagerNotes: { id: string; authorName: string; body: string; source: string; at: string }[];
   };
   type ReportDetail = ReportSummary & { projectId: string; projectName: string; data: DailyReportData };
-  type DailyNote = { id: string; body: string; source: string; noteDate: string; authorName: string; createdAt: string };
+  type DailyNote = { id: string; body: string; source: string; noteDate: string; photoUrl: string | null; authorName: string; createdAt: string };
 
   const PERMIT_TYPES = ["CSCS Check", "IPAF Certificate", "Hot Works", "Working at Heights", "Scaffolding Inspection", "Confined Space Entry", "Excavation", "Electrical Isolation", "Demolition", "Asbestos", "Method Statement", "Other"];
 
@@ -208,11 +208,19 @@ export default function ProjectDetail() {
       const res = await fetch(`/api/projects/${projectId}/daily-notes`, {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify({ body: text, source: "text" }),
+        body: JSON.stringify({ body: text, source: "text", photoUrl: ovPhotoUrl }),
       });
       if (!res.ok) throw new Error("Failed to save note");
-      toast({ title: "Daily report saved", description: "Added to today's site report." });
+      toast({
+        title: "Daily report saved",
+        description: ovPhotoUrl ? "Update and photo added to today's site report." : "Added to today's site report.",
+      });
       setNoteBody("");
+      // Reset the attached-photo state so it isn't re-submitted with the next update.
+      setOvPhotoUrl(null);
+      setOvPhotoNote("");
+      setOvPhotoOpen(false);
+      setOvPhotoKey(k => k + 1);
       fetchTodayNotes();
     } catch {
       toast({ title: "Could not save", description: "Please try again.", variant: "destructive" });
@@ -1013,11 +1021,17 @@ tr:last-child td{border-bottom:none}
                         onUploaded={f => setOvPhotoUrl(f.url)}
                         onCleared={() => setOvPhotoUrl(null)}
                       />
-                      <Input
-                        value={ovPhotoNote}
-                        onChange={e => setOvPhotoNote(e.target.value)}
-                        placeholder="Caption (optional)"
-                      />
+                      {ovPhotoUrl && noteBody.trim() ? (
+                        <p className="text-xs text-primary flex items-center gap-1.5">
+                          <Paperclip className="w-3.5 h-3.5" /> Photo will be attached to this update.
+                        </p>
+                      ) : (
+                        <Input
+                          value={ovPhotoNote}
+                          onChange={e => setOvPhotoNote(e.target.value)}
+                          placeholder="Caption (optional)"
+                        />
+                      )}
                     </div>
                   )}
                   <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -1047,7 +1061,7 @@ tr:last-child td{border-bottom:none}
                       )}
                     </div>
                     <div className="flex items-center gap-2">
-                      {ovPhotoOpen && ovPhotoUrl && (
+                      {ovPhotoOpen && ovPhotoUrl && !noteBody.trim() && (
                         <Button size="sm" variant="outline" onClick={submitOverviewPhoto} isLoading={ovPhotoSubmitting}>
                           Log photo
                         </Button>
@@ -1065,6 +1079,14 @@ tr:last-child td{border-bottom:none}
                       {todayNotes.map(n => (
                         <div key={n.id} className="rounded-lg border bg-muted/30 p-3">
                           <p className="text-sm text-foreground whitespace-pre-wrap">{n.body}</p>
+                          {n.photoUrl && (
+                            <img
+                              src={n.photoUrl.replace(/^\/uploads\//, "/api/uploads/")}
+                              alt="Update attachment"
+                              className="mt-2 rounded-md border max-h-44 object-cover cursor-pointer"
+                              onClick={() => setOpeningNote(n)}
+                            />
+                          )}
                           <div className="flex items-center justify-between mt-2">
                             <p className="text-[10px] text-muted-foreground">{n.authorName} · {formatDate(n.createdAt)}</p>
                             <div className="flex flex-wrap items-center gap-1.5">
@@ -3293,8 +3315,15 @@ tr:last-child td{border-bottom:none}
           )}
         </DialogHeader>
         {openingNote && (
-          <div className="rounded-lg border bg-muted/30 p-4">
+          <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
             <p className="text-sm text-foreground whitespace-pre-wrap">{openingNote.body}</p>
+            {openingNote.photoUrl && (
+              <img
+                src={openingNote.photoUrl.replace(/^\/uploads\//, "/api/uploads/")}
+                alt="Update attachment"
+                className="rounded-md border max-h-80 w-full object-contain bg-background"
+              />
+            )}
           </div>
         )}
         <DialogFooter className="flex items-center justify-between gap-2 sm:justify-between">

@@ -142,6 +142,7 @@ router.get("/projects/:projectId/daily-notes", authenticate, async (req, res) =>
         body: dailyNotesTable.body,
         source: dailyNotesTable.source,
         noteDate: dailyNotesTable.noteDate,
+        photoUrl: dailyNotesTable.photoUrl,
         createdAt: dailyNotesTable.createdAt,
         authorName: usersTable.name,
       })
@@ -156,6 +157,7 @@ router.get("/projects/:projectId/daily-notes", authenticate, async (req, res) =>
         body: n.body,
         source: n.source,
         noteDate: n.noteDate,
+        photoUrl: n.photoUrl,
         authorName: n.authorName ?? "Unknown",
         createdAt: n.createdAt.toISOString(),
       })),
@@ -191,6 +193,10 @@ router.post("/projects/:projectId/daily-notes", authenticate, async (req, res) =
     }
 
     const source = req.body?.source === "text" ? "text" : "voice";
+    // Optional photo attachment — accept only our own upload URLs, never an
+    // arbitrary external link.
+    const rawPhoto = typeof req.body?.photoUrl === "string" ? req.body.photoUrl.trim() : "";
+    const photoUrl = /^\/(api\/)?uploads\//.test(rawPhoto) ? rawPhoto : null;
     const id = generateId();
     await db.insert(dailyNotesTable).values({
       id,
@@ -199,9 +205,10 @@ router.post("/projects/:projectId/daily-notes", authenticate, async (req, res) =
       noteDate: londonToday(),
       body,
       source,
+      photoUrl,
     });
 
-    res.status(201).json({ id });
+    res.status(201).json({ id, photoUrl });
   } catch (err) {
     req.log.error({ err }, "Create daily note error");
     res.status(500).json({ error: "server_error", message: "Failed to save note" });

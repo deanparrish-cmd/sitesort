@@ -36,7 +36,10 @@ export async function ensureSchema(): Promise<void> {
         CONSTRAINT expiry_reminder_logs_entity_milestone_uq UNIQUE (entity_type, entity_id, milestone)
       )
     `);
-    logger.info("ensureSchema: company_members + expiry_reminder_logs tables ready");
+    // Optional photo attached to a daily-note "site update" (B1 fix). New column →
+    // must exist in prod before the daily-notes insert references it.
+    await pool.query(`ALTER TABLE daily_notes ADD COLUMN IF NOT EXISTS photo_url text`);
+    logger.info("ensureSchema: company_members + expiry_reminder_logs + daily_notes.photo_url ready");
   } catch (err) {
     // Don't crash the server — membership lookups fall back to the home company.
     logger.error({ err }, "ensureSchema failed (continuing with home-company fallback)");
