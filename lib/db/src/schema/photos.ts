@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, numeric } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, numeric, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { projectsTable } from "./projects";
@@ -18,6 +18,10 @@ export const photosTable = pgTable("photos", {
   takenAt: timestamp("taken_at").notNull().defaultNow(),
   status: text("status"),
   resolvedAt: timestamp("resolved_at"),
+  // Assignment & accountability (F1) — who is responsible for actioning this
+  // issue and by when. Nullable; "overdue" is derived (dueDate < today && not resolved).
+  assignedToUserId: text("assigned_to_user_id").references(() => usersTable.id),
+  dueDate: date("due_date"),
 });
 
 export const insertPhotoSchema = createInsertSchema(photosTable).omit({ takenAt: true });
