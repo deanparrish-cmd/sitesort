@@ -1,5 +1,11 @@
 # SiteSort – Session Log Archive
 
+## Archived session one-liners (moved from CLAUDE.md)
+- **2026-06-18:** Feature #56 custom calendar events + QR site board upcoming events. ✅ DEPLOYED.
+- **2026-06-18:** Signup fail-CLOSED on Stripe checkout failure + abandonment gate. ✅ DEPLOYED.
+- **2026-06-18:** Site check-in bugfixes (in-house team members rejected; photo `object-contain`). ✅ DEPLOYED.
+- **2026-06-17:** Mobile/tablet feature-parity audit, tablet stat density, clickable calendar dates, calendar dot indicator, plan limit upgrade dialog. ✅ DEPLOYED.
+
 ## End-of-session notes — 2026-06-06 (session 2)
 
 ### Tasks completed

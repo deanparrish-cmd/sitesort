@@ -23,7 +23,20 @@ export async function ensureSchema(): Promise<void> {
       SELECT gen_random_uuid()::text, id, company_id, role FROM users
       ON CONFLICT (user_id, company_id) DO NOTHING
     `);
-    logger.info("ensureSchema: company_members table ready + backfilled");
+    // Tracks which expiry-reminder emails (30/21/14/7/1 days + expired daily) have
+    // been sent, so the daily job fires each milestone exactly once. New table →
+    // must exist in prod before the reminder job runs, hence created here too.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS expiry_reminder_logs (
+        id text PRIMARY KEY,
+        entity_type text NOT NULL,
+        entity_id text NOT NULL,
+        milestone text NOT NULL,
+        sent_at timestamp NOT NULL DEFAULT now(),
+        CONSTRAINT expiry_reminder_logs_entity_milestone_uq UNIQUE (entity_type, entity_id, milestone)
+      )
+    `);
+    logger.info("ensureSchema: company_members + expiry_reminder_logs tables ready");
   } catch (err) {
     // Don't crash the server — membership lookups fall back to the home company.
     logger.error({ err }, "ensureSchema failed (continuing with home-company fallback)");
