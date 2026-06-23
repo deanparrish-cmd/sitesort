@@ -14,6 +14,7 @@ import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, Shield
 import { QRCodeSVG } from "qrcode.react";
 import { ShareModal } from "@/components/share-modal";
 import { FileDropZone } from "@/components/ui/file-drop-zone";
+import { OverdueBadge } from "@/components/ui/overdue-badge";
 import { Textarea } from "@/components/ui/textarea";
 import { InsuranceCertZone } from "@/components/ui/insurance-cert-zone";
 import { useQueryClient } from "@tanstack/react-query";
@@ -50,7 +51,7 @@ export default function ProjectDetail() {
 
   type PermitItem = { id: string; type: string; description: string; startDate: string; expiryDate: string; status: string; responsibleName?: string; documentUrl?: string | null; archivedAt?: string | null };
   type InvoiceItem = { id: string; direction: string; counterpartyName: string; description: string; amount: string; currency: string; dueDate: string; status: string; reference?: string | null; attachmentUrl?: string | null };
-  type PhotoItem = { id: string; uploadedBy: string; uploaderName: string; photoUrl: string | null; category: string; description: string | null; zone: string | null; referenceNumber: string; takenAt: string; status: string | null; resolvedAt: string | null; latitude?: number | null; longitude?: number | null };
+  type PhotoItem = { id: string; uploadedBy: string; uploaderName: string; photoUrl: string | null; category: string; description: string | null; zone: string | null; referenceNumber: string; takenAt: string; status: string | null; resolvedAt: string | null; latitude?: number | null; longitude?: number | null; assignedToUserId?: string | null; assignedToName?: string | null; dueDate?: string | null; overdue?: boolean };
   type MilestoneItem = { id: string; title: string; dueDate: string; completedAt: string | null; order: number };
   type CheckinItem = { id: string; workerName: string; photoUrl: string; checkedInAt: string; lat: number | null; lng: number | null };
   type ReportSummary = { id: string; reportDate: string; generatedAt: string; checkinCount: number; documentEventCount: number; photoCount: number };
@@ -109,11 +110,13 @@ export default function ProjectDetail() {
   const [photoTag, setPhotoTag] = useState<string>("snag");
   const [photoNote, setPhotoNote] = useState("");
   const [photoZone, setPhotoZone] = useState("");
+  const [photoAssignee, setPhotoAssignee] = useState<string>("");
+  const [photoDue, setPhotoDue] = useState<string>("");
   const [photoSubmitting, setPhotoSubmitting] = useState(false);
   const [photoFormKey, setPhotoFormKey] = useState(0);
   const [viewingPhoto, setViewingPhoto] = useState<PhotoItem | null>(null);
   const [issueSearch, setIssueSearch] = useState("");
-  const [issueStatusFilter, setIssueStatusFilter] = useState<"all" | "open" | "in_progress" | "resolved">("all");
+  const [issueStatusFilter, setIssueStatusFilter] = useState<"all" | "open" | "in_progress" | "resolved" | "overdue">("all");
   const [todayNotes, setTodayNotes] = useState<DailyNote[]>([]);
   const [noteBody, setNoteBody] = useState("");
   const [noteSubmitting, setNoteSubmitting] = useState(false);
@@ -149,17 +152,21 @@ export default function ProjectDetail() {
     );
     window.open(`https://wa.me/?text=${text}`, "_blank");
   };
-  const updatePhotoStatus = async (photoId: string, status: string) => {
+  // PATCH a site issue (status and/or assignment). Shared by the status pickers
+  // and the assign-to / due-by controls so all updates refresh state the same way.
+  const patchPhoto = async (photoId: string, patch: { status?: string; assignedToUserId?: string | null; dueDate?: string | null }, errTitle = "Couldn't update issue") => {
     const res = await fetch(`/api/photos/${photoId}`, {
       method: "PATCH",
       headers: authHeaders(),
-      body: JSON.stringify({ status }),
+      body: JSON.stringify(patch),
     });
-    if (!res.ok) { toast({ title: "Couldn't update status", variant: "destructive" }); return; }
+    if (!res.ok) { toast({ title: errTitle, variant: "destructive" }); return; }
     const updated: PhotoItem = await res.json();
     setPhotos(prev => prev.map(p => p.id === photoId ? updated : p));
     setViewingPhoto(prev => prev?.id === photoId ? updated : prev);
   };
+
+  const updatePhotoStatus = (photoId: string, status: string) => patchPhoto(photoId, { status }, "Couldn't update status");
 
   const markInvoiceUnpaid = async (id: string) => {
     if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
@@ -246,7 +253,7 @@ export default function ProjectDetail() {
       const res = await fetch(`/api/projects/${projectId}/photos`, {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify({ photoUrl: photoUploadUrl, category: photoTag, description: photoNote.trim() || null, zone: photoZone.trim() || null }),
+        body: JSON.stringify({ photoUrl: photoUploadUrl, category: photoTag, description: photoNote.trim() || null, zone: photoZone.trim() || null, assignedToUserId: photoAssignee || null, dueDate: photoDue || null }),
       });
       if (!res.ok) throw new Error("Failed to log photo");
       toast({ title: "Photo logged", description: "Added to today's site activity." });
@@ -254,6 +261,8 @@ export default function ProjectDetail() {
       setPhotoNote("");
       setPhotoZone("");
       setPhotoTag("snag");
+      setPhotoAssignee("");
+      setPhotoDue("");
       setPhotoFormKey(k => k + 1);
       fetchPhotos();
     } catch {
@@ -1928,8 +1937,13 @@ tr:last-child td{border-bottom:none}
             const openCount = issuePhotos.filter(p => !p.status || p.status === "open").length;
             const inProgressCount = issuePhotos.filter(p => p.status === "in_progress").length;
             const resolvedCount = issuePhotos.filter(p => p.status === "resolved").length;
+            const overdueCount = issuePhotos.filter(p => p.overdue).length;
             const filtered = issuePhotos.filter(p => {
-              const matchStatus = issueStatusFilter === "all" || (p.status ?? "open") === issueStatusFilter;
+              const matchStatus = issueStatusFilter === "all"
+                ? true
+                : issueStatusFilter === "overdue"
+                  ? !!p.overdue
+                  : (p.status ?? "open") === issueStatusFilter;
               const matchSearch = !issueSearch || (p.description ?? "").toLowerCase().includes(issueSearch.toLowerCase()) || (p.zone ?? "").toLowerCase().includes(issueSearch.toLowerCase()) || p.referenceNumber.toLowerCase().includes(issueSearch.toLowerCase());
               return matchStatus && matchSearch;
             });
@@ -1993,6 +2007,23 @@ tr:last-child td{border-bottom:none}
                           <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Zone / location (optional)</label>
                           <Input value={photoZone} onChange={e => setPhotoZone(e.target.value)} placeholder="e.g. Level 2, East wing" />
                         </div>
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Assign to (optional)</label>
+                          <select
+                            value={photoAssignee}
+                            onChange={e => setPhotoAssignee(e.target.value)}
+                            className="flex h-11 w-full rounded-lg border-2 border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:border-primary [&>*]:min-w-0"
+                          >
+                            <option value="">— Unassigned —</option>
+                            {((members as any[]) ?? []).filter(m => m.userId).map((m: any) => (
+                              <option key={m.userId} value={m.userId}>{m.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Due by (optional)</label>
+                          <Input type="date" value={photoDue} onChange={e => setPhotoDue(e.target.value)} icon={<Calendar className="w-4 h-4" />} />
+                        </div>
                       </div>
                       <div className="flex justify-end">
                         <Button onClick={submitSnagPhoto} disabled={!photoUploadUrl || photoSubmitting}>
@@ -2003,7 +2034,7 @@ tr:last-child td{border-bottom:none}
                   </Card>
                 )}
                 {/* Stats */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-5">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
                   <Card className="p-3 border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900 text-center">
                     <p className="text-xl font-extrabold text-amber-700">{openCount}</p>
                     <p className="text-xs text-amber-700 mt-0.5">Open</p>
@@ -2011,6 +2042,10 @@ tr:last-child td{border-bottom:none}
                   <Card className="p-3 border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-900 text-center">
                     <p className="text-xl font-extrabold text-blue-700">{inProgressCount}</p>
                     <p className="text-xs text-blue-700 mt-0.5">In Progress</p>
+                  </Card>
+                  <Card className="p-3 border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-900 text-center">
+                    <p className="text-xl font-extrabold text-red-700">{overdueCount}</p>
+                    <p className="text-xs text-red-700 mt-0.5">Overdue</p>
                   </Card>
                   <Card className="p-3 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-900 text-center">
                     <p className="text-xl font-extrabold text-emerald-700">{resolvedCount}</p>
@@ -2024,7 +2059,7 @@ tr:last-child td{border-bottom:none}
                     <Input placeholder="Search issues…" className="pl-9" value={issueSearch} onChange={e => setIssueSearch(e.target.value)} />
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {(["all", "open", "in_progress", "resolved"] as const).map(f => (
+                    {(["all", "open", "in_progress", "overdue", "resolved"] as const).map(f => (
                       <button key={f} onClick={() => setIssueStatusFilter(f)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${issueStatusFilter === f ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border hover:border-primary/40"}`}>
                         {f === "all" ? "All" : f === "in_progress" ? "In Progress" : f.charAt(0).toUpperCase() + f.slice(1)}
                       </button>
@@ -2061,11 +2096,14 @@ tr:last-child td{border-bottom:none}
                               <div className="flex items-center gap-1.5 flex-wrap mb-1">
                                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${ISSUE_CATEGORY_COLOUR[issue.category] ?? ""}`}>{ISSUE_CATEGORY_LABEL[issue.category] ?? issue.category}</span>
                                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${statusInfo.cls}`}>{statusInfo.label}</span>
+                                {issue.overdue && <OverdueBadge />}
                                 <span className="text-[10px] font-mono text-muted-foreground">{issue.referenceNumber}</span>
                               </div>
                               {issue.description && <p className="text-sm font-medium truncate">{issue.description}</p>}
                               <div className="flex items-center gap-3 mt-1 flex-wrap">
                                 {issue.zone && <span className="text-xs text-muted-foreground flex items-center gap-1 truncate max-w-[120px]"><MapPin className="w-3 h-3 shrink-0" />{issue.zone}</span>}
+                                {issue.assignedToName && <span className="text-xs text-muted-foreground flex items-center gap-1 truncate max-w-[140px]"><UserCheck className="w-3 h-3 shrink-0" />{issue.assignedToName}</span>}
+                                {issue.dueDate && <span className={`text-xs flex items-center gap-1 whitespace-nowrap ${issue.overdue ? "text-red-600 font-semibold" : "text-muted-foreground"}`}><Calendar className="w-3 h-3 shrink-0" />Due {formatDate(issue.dueDate)}</span>}
                                 <span className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(issue.takenAt)} · {issue.uploaderName}</span>
                               </div>
                             </div>
@@ -3763,6 +3801,38 @@ tr:last-child td{border-bottom:none}
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Project</p>
                     <p className="text-sm font-medium">{project.name}</p>
                   </div>
+                  {isIssue && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 flex items-center gap-2">Assignment {viewingPhoto.overdue && <OverdueBadge />}</p>
+                      {caps.canManageProjects ? (
+                        <div className="space-y-2">
+                          <select
+                            value={viewingPhoto.assignedToUserId ?? ""}
+                            onChange={e => patchPhoto(viewingPhoto.id, { assignedToUserId: e.target.value || null }, "Couldn't update assignee")}
+                            className="flex h-10 w-full rounded-lg border-2 border-input bg-background px-3 py-1.5 text-sm focus-visible:outline-none focus-visible:border-primary"
+                          >
+                            <option value="">— Unassigned —</option>
+                            {((members as any[]) ?? []).filter(m => m.userId).map((m: any) => (
+                              <option key={m.userId} value={m.userId}>{m.name}</option>
+                            ))}
+                          </select>
+                          <Input
+                            type="date"
+                            value={viewingPhoto.dueDate ?? ""}
+                            onChange={e => patchPhoto(viewingPhoto.id, { dueDate: e.target.value || null }, "Couldn't update due date")}
+                            icon={<Calendar className="w-4 h-4" />}
+                          />
+                        </div>
+                      ) : (
+                        <div className="text-sm space-y-1">
+                          <p className="flex items-center gap-1.5"><UserCheck className="w-3.5 h-3.5 text-muted-foreground" />{viewingPhoto.assignedToName ?? "Unassigned"}</p>
+                          {viewingPhoto.dueDate && (
+                            <p className={cn("flex items-center gap-1.5", viewingPhoto.overdue && "text-red-600 font-semibold")}><Calendar className="w-3.5 h-3.5" />Due {formatDate(viewingPhoto.dueDate)}</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {viewingPhoto.latitude != null && viewingPhoto.longitude != null && (
                     <div>
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">GPS</p>

@@ -5,11 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertTriangle, Search, Camera, MapPin, CheckCircle2, Clock,
-  ExternalLink, Share2, X, AlertCircle,
+  ExternalLink, Share2, X, AlertCircle, UserCheck, Calendar,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/utils";
 import { ShareModal } from "@/components/share-modal";
+import { OverdueBadge } from "@/components/ui/overdue-badge";
 import { useCapabilities } from "@/hooks/use-capabilities";
 import { useToast } from "@/hooks/use-toast";
 
@@ -28,6 +29,10 @@ type Issue = {
   resolvedAt: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  assignedToUserId?: string | null;
+  assignedToName?: string | null;
+  dueDate?: string | null;
+  overdue?: boolean;
 };
 
 function authHeaders(): Record<string, string> {
@@ -218,12 +223,15 @@ export default function IssuesPage() {
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${statusInfo.cls}`}>
                         {statusInfo.label}
                       </span>
+                      {issue.overdue && <OverdueBadge />}
                       <span className="text-[10px] font-mono text-muted-foreground">{issue.referenceNumber}</span>
                     </div>
                     {issue.description && <p className="text-sm font-medium truncate">{issue.description}</p>}
                     <div className="flex items-center gap-3 mt-1 flex-wrap min-w-0">
                       {issue.projectName && <span className="text-xs text-muted-foreground truncate max-w-[120px]">{issue.projectName}</span>}
                       {issue.zone && <span className="text-xs text-muted-foreground flex items-center gap-1 truncate max-w-[100px]"><MapPin className="w-3 h-3 shrink-0" />{issue.zone}</span>}
+                      {issue.assignedToName && <span className="text-xs text-muted-foreground flex items-center gap-1 truncate max-w-[120px]"><UserCheck className="w-3 h-3 shrink-0" />{issue.assignedToName}</span>}
+                      {issue.dueDate && <span className={`text-xs flex items-center gap-1 whitespace-nowrap ${issue.overdue ? "text-red-600 font-semibold" : "text-muted-foreground"}`}><Calendar className="w-3 h-3 shrink-0" />Due {formatDate(issue.dueDate)}</span>}
                       <span className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(issue.takenAt)} · {issue.uploaderName}</span>
                     </div>
                   </div>
@@ -326,6 +334,13 @@ export default function IssuesPage() {
                   <div>
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Project</p>
                     <p className="text-sm font-medium">{viewingIssue.projectName ?? "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 flex items-center gap-2">Assignment {viewingIssue.overdue && <OverdueBadge />}</p>
+                    <p className="text-sm flex items-center gap-1.5"><UserCheck className="w-3.5 h-3.5 text-muted-foreground" />{viewingIssue.assignedToName ?? "Unassigned"}</p>
+                    {viewingIssue.dueDate && (
+                      <p className={cn("text-sm flex items-center gap-1.5 mt-0.5", viewingIssue.overdue && "text-red-600 font-semibold")}><Calendar className="w-3.5 h-3.5" />Due {formatDate(viewingIssue.dueDate)}</p>
+                    )}
                   </div>
                   {viewingIssue.zone && (
                     <div>

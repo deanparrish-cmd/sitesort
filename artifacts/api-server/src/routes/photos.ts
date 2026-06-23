@@ -5,10 +5,18 @@ import { eq, and, count, inArray } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { sendSafetyAlertEmail } from "../lib/email";
+import { isOverdue } from "../lib/accountability";
 
 const router: IRouter = Router();
 
-function formatPhoto(p: typeof photosTable.$inferSelect, uploaderName: string, projectName?: string) {
+// Resolve a user's display name, or null when unassigned.
+async function nameForUser(userId: string | null | undefined): Promise<string | null> {
+  if (!userId) return null;
+  const rows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+  return rows[0]?.name ?? null;
+}
+
+function formatPhoto(p: typeof photosTable.$inferSelect, uploaderName: string, projectName?: string, assignedToName?: string | null) {
   return {
     id: p.id,
     projectId: p.projectId,
@@ -25,6 +33,12 @@ function formatPhoto(p: typeof photosTable.$inferSelect, uploaderName: string, p
     takenAt: p.takenAt.toISOString(),
     status: p.status ?? null,
     resolvedAt: p.resolvedAt ? p.resolvedAt.toISOString() : null,
+    // Assignment & accountability (F1). overdue is derived: a due date in the
+    // past on an issue that isn't resolved.
+    assignedToUserId: p.assignedToUserId ?? null,
+    assignedToName: assignedToName ?? null,
+    dueDate: p.dueDate ?? null,
+    overdue: isOverdue(p.dueDate, p.status === "resolved"),
   };
 }
 
@@ -45,7 +59,7 @@ router.get("/projects/:projectId/photos", authenticate, async (req, res) => {
     const photos = await db.select().from(photosTable).where(and(...conditions)).orderBy(photosTable.takenAt);
     const result = await Promise.all(photos.map(async (p) => {
       const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, p.uploadedBy)).limit(1);
-      return formatPhoto(p, userRows[0]?.name ?? "Unknown", project[0].name);
+      return formatPhoto(p, userRows[0]?.name ?? "Unknown", project[0].name, await nameForUser(p.assignedToUserId));
     }));
     res.json(result);
   } catch (err) {
@@ -65,7 +79,7 @@ router.get("/photos/:photoId", authenticate, async (req, res) => {
       .limit(1);
     if (!project[0]) { res.status(404).json({ error: "not_found", message: "Photo not found" }); return; }
     const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, photo.uploadedBy)).limit(1);
-    res.json(formatPhoto(photo, userRows[0]?.name ?? "Unknown", project[0].name));
+    res.json(formatPhoto(photo, userRows[0]?.name ?? "Unknown", project[0].name, await nameForUser(photo.assignedToUserId)));
   } catch (err) {
     req.log.error({ err }, "Get photo error");
     res.status(500).json({ error: "server_error", message: "Failed to get photo" });
@@ -83,17 +97,20 @@ router.patch("/photos/:photoId", authenticate, async (req, res) => {
       .limit(1);
     if (!project[0]) { res.status(403).json({ error: "forbidden" }); return; }
 
-    const { status } = req.body as { status?: string };
+    const { status, assignedToUserId, dueDate } = req.body as { status?: string; assignedToUserId?: string | null; dueDate?: string | null };
     const updates: Partial<typeof photosTable.$inferInsert> = {};
     if (status !== undefined) {
       updates.status = status;
       if (status === "resolved") updates.resolvedAt = new Date();
       else updates.resolvedAt = null;
     }
+    // null clears the assignment / due date; a value sets it. undefined leaves as-is.
+    if (assignedToUserId !== undefined) updates.assignedToUserId = assignedToUserId || null;
+    if (dueDate !== undefined) updates.dueDate = dueDate || null;
     await db.update(photosTable).set(updates).where(eq(photosTable.id, req.params.photoId));
     const updated = await db.select().from(photosTable).where(eq(photosTable.id, req.params.photoId)).limit(1);
     const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, photo.uploadedBy)).limit(1);
-    res.json(formatPhoto(updated[0], userRows[0]?.name ?? "Unknown", project[0].name));
+    res.json(formatPhoto(updated[0], userRows[0]?.name ?? "Unknown", project[0].name, await nameForUser(updated[0].assignedToUserId)));
   } catch (err) {
     req.log.error({ err }, "Update photo error");
     res.status(500).json({ error: "server_error", message: "Failed to update photo" });
@@ -122,7 +139,7 @@ router.get("/issues", authenticate, async (req, res) => {
 
     const result = await Promise.all(photos.map(async (p) => {
       const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, p.uploadedBy)).limit(1);
-      return formatPhoto(p, userRows[0]?.name ?? "Unknown", projectNameMap[p.projectId]);
+      return formatPhoto(p, userRows[0]?.name ?? "Unknown", projectNameMap[p.projectId], await nameForUser(p.assignedToUserId));
     }));
 
     res.json(result);
@@ -141,7 +158,7 @@ router.post("/projects/:projectId/photos", authenticate, async (req, res) => {
       return;
     }
 
-    const { photoUrl, category, description, zone, latitude, longitude } = req.body;
+    const { photoUrl, category, description, zone, latitude, longitude, assignedToUserId, dueDate } = req.body;
     if (!category) {
       res.status(400).json({ error: "validation_error", message: "category required" });
       return;
@@ -171,6 +188,8 @@ router.post("/projects/:projectId/photos", authenticate, async (req, res) => {
       latitude: latitude ?? null,
       longitude: longitude ?? null,
       status: isIssue ? "open" : null,
+      assignedToUserId: assignedToUserId || null,
+      dueDate: dueDate || null,
     });
 
     if (isIssue) {
@@ -203,9 +222,10 @@ router.post("/projects/:projectId/photos", authenticate, async (req, res) => {
 
     const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
     res.status(201).json(formatPhoto(
-      { id, projectId: req.params.projectId, uploadedBy: req.user!.id, photoUrl: photoUrl ?? null, category, description: description ?? null, zone: zone ?? null, referenceNumber: refNum, latitude: latitude ?? null, longitude: longitude ?? null, takenAt: new Date(), status: isIssue ? "open" : null, resolvedAt: null },
+      { id, projectId: req.params.projectId, uploadedBy: req.user!.id, photoUrl: photoUrl ?? null, category, description: description ?? null, zone: zone ?? null, referenceNumber: refNum, latitude: latitude ?? null, longitude: longitude ?? null, takenAt: new Date(), status: isIssue ? "open" : null, resolvedAt: null, assignedToUserId: assignedToUserId || null, dueDate: dueDate || null },
       userRows[0]?.name ?? "Unknown",
       project[0].name,
+      await nameForUser(assignedToUserId),
     ));
   } catch (err) {
     req.log.error({ err }, "Log photo error");

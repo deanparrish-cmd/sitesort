@@ -39,7 +39,10 @@ export async function ensureSchema(): Promise<void> {
     // Optional photo attached to a daily-note "site update" (B1 fix). New column →
     // must exist in prod before the daily-notes insert references it.
     await pool.query(`ALTER TABLE daily_notes ADD COLUMN IF NOT EXISTS photo_url text`);
-    logger.info("ensureSchema: company_members + expiry_reminder_logs + daily_notes.photo_url ready");
+    // Assignment & accountability (F1) — assignee + due date on site issues (photos).
+    await pool.query(`ALTER TABLE photos ADD COLUMN IF NOT EXISTS assigned_to_user_id text`);
+    await pool.query(`ALTER TABLE photos ADD COLUMN IF NOT EXISTS due_date date`);
+    logger.info("ensureSchema: company_members + expiry_reminder_logs + daily_notes.photo_url + photos assignment cols ready");
   } catch (err) {
     // Don't crash the server — membership lookups fall back to the home company.
     logger.error({ err }, "ensureSchema failed (continuing with home-company fallback)");
