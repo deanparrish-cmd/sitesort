@@ -209,12 +209,15 @@ export async function sendDocumentNotificationEmail(
   version: number,
   projectName: string,
   requiresAck: boolean,
+  // Per-recipient tracked open link — clicking it records the view and redirects
+  // to the file. Falls back to the dashboard when not provided.
+  openUrl?: string,
 ) {
   // Acknowledgment-required documents use a dedicated, stronger template.
   if (requiresAck) {
-    return sendAcknowledgmentRequestEmail(to, name, documentName, version, projectName);
+    return sendAcknowledgmentRequestEmail(to, name, documentName, version, projectName, openUrl);
   }
-  const link = `${APP_URL}/dashboard`;
+  const link = openUrl ?? `${APP_URL}/dashboard`;
   const greeting = firstName(name);
   const project = projectName?.trim() || "your project";
   const docName = documentName?.trim() || "A document";
@@ -255,8 +258,9 @@ export async function sendAcknowledgmentRequestEmail(
   documentName: string,
   version: number,
   projectName: string,
+  openUrl?: string,
 ) {
-  const link = `${APP_URL}/dashboard`;
+  const link = openUrl ?? `${APP_URL}/dashboard`;
   const greeting = firstName(name);
   const project = projectName?.trim() || "your project";
   const docName = documentName?.trim() || "A document";
