@@ -58,8 +58,13 @@ function scanWindow(now: Date): { fromStr: string; toStr: string } {
   return { fromStr, toStr };
 }
 
+// Per-run tally of what happened to each scanned item, so a run that sends
+// nothing still explains itself in the logs instead of going dark.
+type ReminderStats = { scanned: number; noMilestone: number; notifyOff: number; deduped: number; sent: number };
+
 // Permits expiring soon / expired → email the responsible user (one per milestone).
-async function runPermitReminders(now: Date) {
+async function runPermitReminders(now: Date): Promise<ReminderStats> {
+  const stats: ReminderStats = { scanned: 0, noMilestone: 0, notifyOff: 0, deduped: 0, sent: 0 };
   const { fromStr, toStr } = scanWindow(now);
 
   const permits = await db
@@ -78,19 +83,20 @@ async function runPermitReminders(now: Date) {
       isNull(permitsTable.archivedAt),
     ));
 
+  stats.scanned = permits.length;
   for (const permit of permits) {
     const daysLeft = daysUntil(permit.expiryDate, now);
     const milestone = milestoneFor(daysLeft);
-    if (!milestone) continue;
+    if (!milestone) { stats.noMilestone++; continue; }
 
     const [user] = await db
       .select({ name: usersTable.name, email: usersTable.email, emailNotifications: usersTable.emailNotifications })
       .from(usersTable)
       .where(eq(usersTable.id, permit.responsibleUserId))
       .limit(1);
-    if (!user?.emailNotifications) continue;
+    if (!user?.emailNotifications) { stats.notifyOff++; continue; }
 
-    if (!(await claimMilestone("permit", permit.id, milestone))) continue;
+    if (!(await claimMilestone("permit", permit.id, milestone))) { stats.deduped++; continue; }
 
     const [project] = await db
       .select({ name: projectsTable.name })
@@ -98,6 +104,8 @@ async function runPermitReminders(now: Date) {
       .where(eq(projectsTable.id, permit.projectId))
       .limit(1);
 
+    stats.sent++;
+    logger.info({ permitId: permit.id, milestone, daysLeft, to: user.email }, "Sending permit expiry email");
     sendPermitExpiryEmail(
       user.email,
       user.name,
@@ -105,13 +113,15 @@ async function runPermitReminders(now: Date) {
       permit.description,
       project?.name ?? "Unknown project",
       daysLeft,
-    ).catch(err => logger.warn({ err }, "Failed to send permit expiry email"));
+    ).catch(err => logger.warn({ err, permitId: permit.id }, "Failed to send permit expiry email"));
   }
+  return stats;
 }
 
 // Subcontractor insurance expiring soon / expired. Insurance has no single
 // responsible user, so alerts go to the company's admins (who manage compliance).
-async function runInsuranceReminders(now: Date) {
+async function runInsuranceReminders(now: Date): Promise<ReminderStats> {
+  const stats: ReminderStats = { scanned: 0, noMilestone: 0, notifyOff: 0, deduped: 0, sent: 0 };
   const { fromStr, toStr } = scanWindow(now);
 
   // Cache company admins to avoid re-querying per record.
@@ -143,17 +153,20 @@ async function runInsuranceReminders(now: Date) {
       isNull(insuranceRecordsTable.archivedAt),
     ));
 
+  stats.scanned = records.length;
   for (const record of records) {
     const daysLeft = daysUntil(record.expiryDate, now);
     const milestone = milestoneFor(daysLeft);
-    if (!milestone) continue;
+    if (!milestone) { stats.noMilestone++; continue; }
 
     const admins = await adminsFor(record.companyId);
-    if (admins.length === 0) continue;
+    if (admins.length === 0) { stats.notifyOff++; continue; }
 
     // One claim per record+milestone — admins are notified together as a batch.
-    if (!(await claimMilestone("insurance", record.id, milestone))) continue;
+    if (!(await claimMilestone("insurance", record.id, milestone))) { stats.deduped++; continue; }
 
+    stats.sent++;
+    logger.info({ recordId: record.id, milestone, daysLeft, recipients: admins.length }, "Sending insurance expiry email");
     for (const admin of admins) {
       sendInsuranceExpiryEmail(
         admin.email,
@@ -161,18 +174,23 @@ async function runInsuranceReminders(now: Date) {
         record.type,
         record.subcontractorName,
         daysLeft,
-      ).catch(err => logger.warn({ err }, "Failed to send insurance expiry email"));
+      ).catch(err => logger.warn({ err, recordId: record.id }, "Failed to send insurance expiry email"));
     }
   }
+  return stats;
 }
 
 // Called once at startup and then every 24 h.
 async function runComplianceReminders() {
   try {
-    if (!process.env.RESEND_API_KEY) return;
+    if (!process.env.RESEND_API_KEY) {
+      logger.warn("Compliance reminders skipped: RESEND_API_KEY is not set");
+      return;
+    }
     const now = new Date();
-    await runPermitReminders(now);
-    await runInsuranceReminders(now);
+    const permits = await runPermitReminders(now);
+    const insurance = await runInsuranceReminders(now);
+    logger.info({ permits, insurance }, "Compliance reminders run complete");
   } catch (err) {
     logger.error({ err }, "Compliance reminders error");
   }
