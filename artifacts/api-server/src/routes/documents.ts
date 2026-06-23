@@ -11,6 +11,15 @@ import { isPinLockedOut, recordFailedPinAttempt, clearPinAttempts } from "../lib
 // Document types that require a PIN to sign off (critical compliance documents).
 const PIN_REQUIRED_TYPES = ["drawing", "method_statement", "safety"];
 
+const APP_URL = process.env.APP_URL ?? `https://${process.env.REPLIT_DEV_DOMAIN ?? "www.sitesort.co.uk"}`;
+
+// A per-distribution tracked open link. When the recipient clicks it from their
+// email it hits GET /documents/:id/open, which records the open (pending→viewed)
+// and 302-redirects to the file — so the eye-icon view count moves on a real open.
+function trackedOpenUrl(documentId: string, distributionId: string): string {
+  return `${APP_URL}/api/documents/${documentId}/open?d=${distributionId}`;
+}
+
 const router: IRouter = Router();
 
 function getDistSummary(dists: Array<{ status: string }>) {
@@ -20,6 +29,42 @@ function getDistSummary(dists: Array<{ status: string }>) {
   const acknowledged = dists.filter(d => d.status === "acknowledged").length;
   return { total, pending, viewed, acknowledged };
 }
+
+// Public tracked-open endpoint for emailed distribution links. Records the open
+// against the recipient's distribution (pending→viewed) then redirects to the
+// file. Unauthenticated by design — the distribution id in `?d=` is the
+// unguessable capability token tying the open to that recipient. The file itself
+// is already statically served, so this adds tracking without new exposure.
+router.get("/documents/:documentId/open", async (req, res) => {
+  try {
+    const docs = await db.select().from(documentsTable).where(eq(documentsTable.id, req.params.documentId)).limit(1);
+    if (docs.length === 0) {
+      res.status(404).send("Document not found");
+      return;
+    }
+    const d = docs[0];
+
+    const distId = typeof req.query.d === "string" ? req.query.d : null;
+    if (distId) {
+      const distRows = await db.select().from(documentDistributionsTable)
+        .where(and(eq(documentDistributionsTable.id, distId), eq(documentDistributionsTable.documentId, d.id)))
+        .limit(1);
+      // Only the first open flips pending→viewed; an already-viewed/acknowledged
+      // record is left as-is so re-opens don't churn the timestamp.
+      if (distRows.length > 0 && distRows[0].status === "pending") {
+        await db.update(documentDistributionsTable)
+          .set({ status: "viewed", viewedAt: new Date() })
+          .where(eq(documentDistributionsTable.id, distId));
+      }
+    }
+
+    const target = d.fileUrl.replace(/^\/uploads\//, "/api/uploads/");
+    res.redirect(302, target);
+  } catch (err) {
+    req.log.error({ err }, "Tracked document open error");
+    res.status(500).send("Could not open document");
+  }
+});
 
 router.get("/projects/:projectId/documents", authenticate, async (req, res) => {
   try {
@@ -135,8 +180,9 @@ router.post("/projects/:projectId/documents", authenticate, async (req, res) => 
 
     if (distributeToUserIds && Array.isArray(distributeToUserIds)) {
       for (const userId of distributeToUserIds) {
+        const distId = generateId();
         await db.insert(documentDistributionsTable).values({
-          id: generateId(),
+          id: distId,
           documentId: docId,
           userId,
           status: "pending",
@@ -153,11 +199,12 @@ router.post("/projects/:projectId/documents", authenticate, async (req, res) => 
           read: false,
         });
 
-        // Send email notification (fire-and-forget)
+        // Send email notification (fire-and-forget) with a tracked open link so
+        // the recipient's view is recorded when they open it from the email.
         const recipientRows = await db.select({ email: usersTable.email, name: usersTable.name }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
         if (recipientRows[0]) {
           const { email: recipientEmail, name: recipientName } = recipientRows[0];
-          sendDocumentNotificationEmail(recipientEmail, recipientName, name, newVersion, projectName, requiresAcknowledgment ?? false).catch(err =>
+          sendDocumentNotificationEmail(recipientEmail, recipientName, name, newVersion, projectName, requiresAcknowledgment ?? false, trackedOpenUrl(docId, distId)).catch(err =>
             req.log.error({ err }, "Failed to send document notification email"),
           );
         }
@@ -390,8 +437,9 @@ router.post("/documents/:documentId/distribute", authenticate, async (req, res) 
         .limit(1);
 
       if (existing.length === 0) {
+        const distId = generateId();
         await db.insert(documentDistributionsTable).values({
-          id: generateId(),
+          id: distId,
           documentId: req.params.documentId,
           userId,
           status: "pending",
@@ -407,6 +455,20 @@ router.post("/documents/:documentId/distribute", authenticate, async (req, res) 
           relatedEntityType: "document",
           read: false,
         });
+
+        // Email the recipient a tracked open link so their view is recorded.
+        const recipientRows = await db.select({ email: usersTable.email, name: usersTable.name }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+        if (recipientRows[0]) {
+          sendDocumentNotificationEmail(
+            recipientRows[0].email,
+            recipientRows[0].name,
+            docs[0].name,
+            docs[0].version,
+            project[0].name,
+            docs[0].requiresAcknowledgment,
+            trackedOpenUrl(req.params.documentId, distId),
+          ).catch(err => req.log.error({ err }, "Failed to send distribution email"));
+        }
       }
     }
 

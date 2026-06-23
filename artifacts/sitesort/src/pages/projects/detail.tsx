@@ -323,6 +323,9 @@ export default function ProjectDetail() {
   const updateMutation = useUpdateProject();
   const queryClient = useQueryClient();
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [allocateDoc, setAllocateDoc] = useState<{ id: string; name: string } | null>(null);
+  const [allocateSelected, setAllocateSelected] = useState<Set<string>>(new Set());
+  const [allocateSubmitting, setAllocateSubmitting] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   type EditDocModal = { id: string; name: string; status: string; version: number };
   const [editDocModal, setEditDocModal] = useState<EditDocModal | null>(null);
@@ -728,6 +731,47 @@ export default function ProjectDetail() {
     setEditDocStatus(doc.status);
     setEditDocVersion(doc.version);
     setEditDocModal(doc);
+  };
+
+  const openAllocate = (doc: { id: string; name: string }) => {
+    setAllocateSelected(new Set());
+    setAllocateDoc(doc);
+  };
+
+  const toggleAllocate = (userId: string) => {
+    setAllocateSelected(prev => {
+      const next = new Set(prev);
+      next.has(userId) ? next.delete(userId) : next.add(userId);
+      return next;
+    });
+  };
+
+  // Allocate (distribute) a document to selected team members. Creates a tracked
+  // distribution record per recipient + emails them a tracked open link, so the
+  // allocation registers and the view count moves when they open it.
+  const submitAllocate = async () => {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
+    if (!allocateDoc) return;
+    const userIds = Array.from(allocateSelected);
+    if (userIds.length === 0) return;
+    setAllocateSubmitting(true);
+    try {
+      const token = localStorage.getItem("sitesort_token");
+      const res = await fetch(`/api/documents/${allocateDoc.id}/distribute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ userIds }),
+      });
+      if (!res.ok) throw new Error("Failed to allocate");
+      toast({ title: "Document allocated", description: `Sent to ${userIds.length} recipient${userIds.length === 1 ? "" : "s"}.` });
+      setAllocateDoc(null);
+      setAllocateSelected(new Set());
+      refetchDocs();
+    } catch {
+      toast({ title: "Couldn't allocate", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setAllocateSubmitting(false);
+    }
   };
 
   const saveDocEdit = async () => {
@@ -1433,6 +1477,12 @@ tr:last-child td{border-bottom:none}
                       >
                         <ExternalLink className="w-3 h-3" />Open
                       </button>
+                      {!isSuperseded && caps.canUploadDocument && (
+                        <button onClick={() => openAllocate({ id: doc.id, name: doc.name })}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors">
+                          <Send className="w-3 h-3" />Allocate
+                        </button>
+                      )}
                       {canViewAudit && (
                         <button onClick={() => setAuditDoc({ id: doc.id, name: doc.name })}
                           className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors">
@@ -1540,6 +1590,16 @@ tr:last-child td{border-bottom:none}
                           >
                             <ExternalLink className="w-3.5 h-3.5" />Open
                           </button>
+                          {!isSuperseded && caps.canUploadDocument && (
+                            <button
+                              type="button"
+                              onClick={() => openAllocate({ id: doc.id, name: doc.name })}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors"
+                              title="Allocate to team members"
+                            >
+                              <Send className="w-3.5 h-3.5" />Allocate
+                            </button>
+                          )}
                           {canViewAudit && (
                             <button
                               type="button"
@@ -3185,6 +3245,41 @@ tr:last-child td{border-bottom:none}
             <Button type="submit" variant="accent" isLoading={uploadMutation.isPending}>Upload</Button>
           </DialogFooter>
         </form>
+      </Dialog>
+
+      <Dialog open={!!allocateDoc} onOpenChange={v => { if (!v) setAllocateDoc(null); }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><Send className="w-4 h-4" /> Allocate document</DialogTitle>
+          {allocateDoc && <p className="text-sm text-muted-foreground truncate mt-0.5">{allocateDoc.name}</p>}
+        </DialogHeader>
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">Select team members to allocate this document to. They'll get an email with a tracked link, and their view registers when they open it.</p>
+          {(() => {
+            const allocatable = ((members as any[]) ?? []).filter(m => m.userId);
+            if (allocatable.length === 0) {
+              return <p className="text-sm text-muted-foreground py-4 text-center">No team members with accounts to allocate to. Add people to the project team first.</p>;
+            }
+            return (
+              <div className="max-h-72 overflow-y-auto space-y-1.5 border rounded-lg p-2">
+                {allocatable.map((m: any) => (
+                  <label key={m.userId} className="flex items-center gap-3 p-2 rounded-md hover:bg-muted/50 cursor-pointer">
+                    <input type="checkbox" checked={allocateSelected.has(m.userId)} onChange={() => toggleAllocate(m.userId)} className="w-4 h-4 rounded border-input shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{m.name}</p>
+                      <p className="text-xs text-muted-foreground truncate capitalize">{(m.role ?? "").replace("_", " ")}{m.email ? ` · ${m.email}` : ""}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={() => setAllocateDoc(null)}>Cancel</Button>
+          <Button type="button" onClick={submitAllocate} disabled={allocateSelected.size === 0} isLoading={allocateSubmitting}>
+            Allocate{allocateSelected.size > 0 ? ` (${allocateSelected.size})` : ""}
+          </Button>
+        </DialogFooter>
       </Dialog>
 
       <Dialog open={isEditOpen} onOpenChange={v => { setIsEditOpen(v); if (!v) setEditError(null); }}>
