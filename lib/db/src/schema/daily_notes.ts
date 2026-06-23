@@ -11,6 +11,9 @@ export const dailyNotesTable = pgTable("daily_notes", {
   noteDate: text("note_date").notNull(),
   body: text("body").notNull(),
   source: text("source").notNull().default("voice"),
+  // Optional photo attached to the update (uploaded via /api/upload). Nullable —
+  // most updates are text-only.
+  photoUrl: text("photo_url"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
