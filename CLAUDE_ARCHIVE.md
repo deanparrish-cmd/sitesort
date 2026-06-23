@@ -787,3 +787,8 @@ Systematic audit (4 parallel agents over all 22 pages) + fixes. Feature parity w
 - **✅ DEPLOYED LIVE + verified 2026-06-19.** Pushed to GitHub mirror (`main → ae38da0a`, signatures verified). Live bundle `index-DmGZWGzO.js`. Re-ran live check on `www.sitesort.co.uk` at 375/768/1280: zero horizontal overflow, zero console errors across all pages.
 
 ---
+
+## Migrated from CLAUDE.md (2026-06-23 session 3)
+
+- **2026-06-18 (session 5):** Feature #57 multi-company membership + company switcher. ✅ DEPLOYED.
+- **2026-06-18 (session 4):** Messaging 500-fix (`=ANY()`→`inArray`), invoice Open/previews/timestamps/save-to-notes. ✅ DEPLOYED.

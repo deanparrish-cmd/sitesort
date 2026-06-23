@@ -151,6 +151,4 @@ All prior session detail in CLAUDE_ARCHIVE.md. Recent sessions (newest first):
 - **2026-06-19 (session 2):** Actual responsiveness fixes applied to source files (previous session had only updated CLAUDE.md without touching code). Changes: `index.css` global box-sizing + date/select CSS constraints; `subcontractors/index.tsx` add+edit grids get `[&>*]:min-w-0`; `projects/detail.tsx` Site Issues stat cards `grid-cols-3`→`grid-cols-1 lg:grid-cols-3`; `landing.tsx` pricing grid single-column at tablet (max-w-[480px] centred), 3-col at lg+; `sidebar-layout.tsx` Site Check-Ins added to nav (page existed but had no link). Verified at 768px: pricing ✅ button ✅ sidebar ✅ stat cards ✅ inputs ✅. Full mobile/tablet audit running. ✅ DEPLOYED.
 - **2026-06-19:** Mobile/tablet responsiveness audit — overflow + date-input hardening, `min-w-0` cascade on shared Input/Textarea, admin tables `hidden md:table-cell`. ✅ DEPLOYED.
 - **2026-06-19:** Per-company role chips on DM conversations + channel sender chips. ✅ DEPLOYED.
-- **2026-06-18 (session 5):** Feature #57 multi-company membership + company switcher. ✅ DEPLOYED.
-- **2026-06-18 (session 4):** Messaging 500-fix (`=ANY()`→`inArray`), invoice Open/previews/timestamps/save-to-notes. ✅ DEPLOYED.
-- **2026-06-17 and earlier:** See CLAUDE_ARCHIVE.md.
+- **2026-06-18 and earlier:** See CLAUDE_ARCHIVE.md.
