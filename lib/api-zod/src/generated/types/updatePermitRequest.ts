@@ -10,5 +10,6 @@ export interface UpdatePermitRequest {
   description?: string;
   responsibleUserId?: string;
   expiryDate?: Date;
+  dueDate?: Date | null;
   documentUrl?: string;
 }

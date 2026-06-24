@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { insuranceRecordsTable, subcontractorsTable, permitsTable, projectsTable, documentDistributionsTable, documentsTable } from "@workspace/db/schema";
 import { eq, and, inArray, isNull, isNotNull } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
+import { expiryStatus } from "../lib/expiry";
 
 const router: IRouter = Router();
 
@@ -117,12 +118,7 @@ router.get("/compliance", authenticate, async (req, res) => {
       for (const permit of allPermits) {
         const expiry = new Date(permit.expiryDate);
         const proj = myProjects.find(p => p.id === permit.projectId);
-        let status: string;
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const expiryDay = new Date(expiry.getFullYear(), expiry.getMonth(), expiry.getDate());
-        if (expiryDay < today) status = "expired";
-        else if (expiryDay <= new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)) status = "expiring_today";
-        else status = "active";
+        const status = expiryStatus(permit.expiryDate, now);
 
         if (expiry <= in30Days) {
           expiringPermits.push({

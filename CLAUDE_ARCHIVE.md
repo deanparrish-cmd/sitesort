@@ -1,6 +1,9 @@
 # SiteSort – Session Log Archive
 
 ## Archived session one-liners (moved from CLAUDE.md)
+- **Expiry reminders — fully verified live (closed):** Made the daily job observable (`permit-reminders.ts` — warns on missing `RESEND_API_KEY`, per-run `ReminderStats` `scanned/noMilestone/notifyOff/deduped/sent`, per-send breadcrumb; `9e589b4`). Confirmed real send on prod: `POST /api/test-email` `{"template":"permit"}` → `200`, received; AND the *scheduled* job — a 7-day test permit (Responsible = Amy) emailed on next boot run and was received. Job runs 30s after boot + every 24h. `POST /api/test-email` is the fastest live-send check. Test permit deleted.
+- **2026-06-23 (session 2):** Feature #59 — expanded expiry email reminders: 30/21/14/7/1 days then daily for 7 days once expired; `expiry_reminder_logs` table + ensure-schema de-dup; `permit-reminders.ts` `milestoneFor` bucketing + `claimMilestone`. ✅ DEPLOYED + live.
+- **2026-06-23:** Feature #58 dashboard outstanding-invoices widget (`pages/dashboard/index.tsx`) — top-5 unpaid/overdue, Open/Share/Mark Paid pills + move-to-project Dialog + ShareModal. ✅ DEPLOYED + live-verified.
 - **2026-06-18:** Feature #56 custom calendar events + QR site board upcoming events. ✅ DEPLOYED.
 - **2026-06-18:** Signup fail-CLOSED on Stripe checkout failure + abandonment gate. ✅ DEPLOYED.
 - **2026-06-18:** Site check-in bugfixes (in-house team members rejected; photo `object-contain`). ✅ DEPLOYED.

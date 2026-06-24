@@ -6,6 +6,7 @@ import {
 } from "@workspace/db/schema";
 import { and, eq, gte, lte, isNull } from "drizzle-orm";
 import { sendPermitExpiryEmail, sendInsuranceExpiryEmail } from "./email";
+import { daysUntilExpiry } from "./expiry";
 import { logger } from "./logger";
 
 // Pre-expiry reminder thresholds (days before expiry). One email is sent the
@@ -16,11 +17,10 @@ const PRE_EXPIRY_THRESHOLDS = [30, 21, 14, 7, 1];
 const EXPIRED_GRACE_DAYS = 6;
 
 // Whole-day difference between an expiry date (YYYY-MM-DD) and today.
+// Delegates to the shared expiry helper so the reminder job and the UI status
+// bands stay in lock-step. Re-exported under the original name for callers/tests.
 export function daysUntil(expiryStr: string, now: Date): number {
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const [y, m, d] = expiryStr.slice(0, 10).split("-").map(Number);
-  const exp = new Date(y, m - 1, d);
-  return Math.round((exp.getTime() - today.getTime()) / 86_400_000);
+  return daysUntilExpiry(expiryStr, now);
 }
 
 // Maps days-remaining to the milestone key we'd send today, or null if no

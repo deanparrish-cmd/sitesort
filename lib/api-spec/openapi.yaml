@@ -1415,16 +1415,22 @@ components:
         expiryDate:
           type: string
           format: date
+        dueDate:
+          type: string
+          format: date
+          nullable: true
         status:
           type: string
-          enum: [active, expiring_today, expired]
+          enum: [active, expiring_soon, expired]
+        overdue:
+          type: boolean
         documentUrl:
           type: string
           nullable: true
         createdAt:
           type: string
           format: date-time
-      required: [id, projectId, type, description, responsibleUserId, responsibleUserName, startDate, expiryDate, status, createdAt]
+      required: [id, projectId, type, description, responsibleUserId, responsibleUserName, startDate, expiryDate, status, overdue, createdAt]
 
     CreatePermitRequest:
       type: object
@@ -1442,6 +1448,10 @@ components:
         expiryDate:
           type: string
           format: date
+        dueDate:
+          type: string
+          format: date
+          nullable: true
         documentUrl:
           type: string
       required: [type, description, responsibleUserId, startDate, expiryDate]
@@ -1456,6 +1466,10 @@ components:
         expiryDate:
           type: string
           format: date
+        dueDate:
+          type: string
+          format: date
+          nullable: true
         documentUrl:
           type: string
 
@@ -1562,7 +1576,7 @@ components:
           format: date
         status:
           type: string
-          enum: [active, expiring_today, expired]
+          enum: [active, expiring_soon, expired]
       required: [permitId, projectId, projectName, permitType, expiryDate, status]
 
     PendingAcknowledgmentItem:

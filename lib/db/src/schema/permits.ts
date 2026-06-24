@@ -12,6 +12,10 @@ export const permitsTable = pgTable("permits", {
   responsibleUserId: text("responsible_user_id").notNull().references(() => usersTable.id),
   startDate: date("start_date").notNull(),
   expiryDate: date("expiry_date").notNull(),
+  // Assignment & accountability (F1) — the responsible user above doubles as the
+  // assignee; dueDate is the (optional) action deadline, distinct from the legal
+  // expiryDate. "Overdue" is derived (dueDate < today && not yet archived/renewed).
+  dueDate: date("due_date"),
   documentUrl: text("document_url"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   archivedAt: timestamp("archived_at"),

@@ -13,5 +13,6 @@ export interface CreatePermitRequest {
   responsibleUserId: string;
   startDate: Date;
   expiryDate: Date;
+  dueDate?: Date | null;
   documentUrl?: string;
 }
