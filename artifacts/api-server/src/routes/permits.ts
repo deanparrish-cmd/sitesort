@@ -4,31 +4,27 @@ import { permitsTable, usersTable, projectsTable } from "@workspace/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
+import { expiryStatus } from "../lib/expiry";
+import { isOverdue } from "../lib/accountability";
 
 const router: IRouter = Router();
 
-function computePermitStatus(expiryDate: string): "active" | "expiring_today" | "expired" {
-  const expiry = new Date(expiryDate);
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const expiryDay = new Date(expiry.getFullYear(), expiry.getMonth(), expiry.getDate());
-  if (expiryDay < today) return "expired";
-  if (expiryDay.getTime() === today.getTime()) return "expiring_today";
-  return "active";
-}
-
-async function formatPermit(p: { id: string; projectId: string; type: string; description: string; responsibleUserId: string; startDate: string; expiryDate: string; documentUrl: string | null; createdAt: Date; archivedAt?: Date | null }) {
+async function formatPermit(p: { id: string; projectId: string; type: string; description: string; responsibleUserId: string; startDate: string; expiryDate: string; dueDate?: string | null; documentUrl: string | null; createdAt: Date; archivedAt?: Date | null }) {
   const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, p.responsibleUserId)).limit(1);
   return {
     id: p.id,
     projectId: p.projectId,
     type: p.type,
     description: p.description,
+    // The responsible user doubles as the accountable assignee (F1).
     responsibleUserId: p.responsibleUserId,
     responsibleUserName: userRows[0]?.name ?? "Unknown",
     startDate: p.startDate,
     expiryDate: p.expiryDate,
-    status: computePermitStatus(p.expiryDate),
+    dueDate: p.dueDate ?? null,
+    status: expiryStatus(p.expiryDate),
+    // A permit is "done" (no longer overdue) once it's been archived/renewed.
+    overdue: isOverdue(p.dueDate, !!p.archivedAt),
     documentUrl: p.documentUrl ?? null,
     createdAt: p.createdAt.toISOString(),
     archivedAt: p.archivedAt?.toISOString() ?? null,
@@ -64,7 +60,7 @@ router.post("/projects/:projectId/permits", authenticate, async (req, res) => {
       return;
     }
 
-    const { type, description, responsibleUserId, startDate, expiryDate, documentUrl } = req.body;
+    const { type, description, responsibleUserId, startDate, expiryDate, dueDate, documentUrl } = req.body;
     if (!type || !description || !responsibleUserId || !startDate || !expiryDate) {
       res.status(400).json({ error: "validation_error", message: "type, description, responsibleUserId, startDate, expiryDate required" });
       return;
@@ -88,10 +84,11 @@ router.post("/projects/:projectId/permits", authenticate, async (req, res) => {
       responsibleUserId,
       startDate,
       expiryDate,
+      dueDate: dueDate || null,
       documentUrl: documentUrl ?? null,
     });
 
-    const p = { id, projectId: req.params.projectId, type, description, responsibleUserId, startDate, expiryDate, documentUrl: documentUrl ?? null, createdAt: new Date(), archivedAt: null };
+    const p = { id, projectId: req.params.projectId, type, description, responsibleUserId, startDate, expiryDate, dueDate: dueDate || null, documentUrl: documentUrl ?? null, createdAt: new Date(), archivedAt: null };
     res.status(201).json(await formatPermit(p));
   } catch (err) {
     req.log.error({ err }, "Create permit error");
@@ -115,11 +112,13 @@ router.patch("/permits/:permitId", authenticate, async (req, res) => {
       return;
     }
 
-    const { description, responsibleUserId, expiryDate, documentUrl } = req.body;
+    const { description, responsibleUserId, expiryDate, dueDate, documentUrl } = req.body;
     const updates: Record<string, unknown> = {};
     if (description !== undefined) updates.description = description;
     if (responsibleUserId !== undefined) updates.responsibleUserId = responsibleUserId;
     if (expiryDate !== undefined) updates.expiryDate = expiryDate;
+    // null/"" clears the due date; a value sets it; undefined leaves as-is.
+    if (dueDate !== undefined) updates.dueDate = dueDate || null;
     if (documentUrl !== undefined) updates.documentUrl = documentUrl;
 
     await db.update(permitsTable).set(updates).where(eq(permitsTable.id, req.params.permitId));

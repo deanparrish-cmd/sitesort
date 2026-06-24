@@ -11,6 +11,6 @@ export type ExpiringPermitItemStatus =
 
 export const ExpiringPermitItemStatus = {
   active: "active",
-  expiring_today: "expiring_today",
+  expiring_soon: "expiring_soon",
   expired: "expired",
 } as const;

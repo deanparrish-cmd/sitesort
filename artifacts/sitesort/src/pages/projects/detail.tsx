@@ -35,6 +35,7 @@ import {
   UpdateProjectRequestStatus,
 } from "@workspace/api-client-react";
 import { formatDate, formatBytes, cn } from "@/lib/utils";
+import { daysUntilExpiry } from "@/lib/expiry";
 import { useCapabilities } from "@/hooks/use-capabilities";
 import { useSubscription } from "@/contexts/subscription";
 import { useToast } from "@/hooks/use-toast";
@@ -49,7 +50,7 @@ export default function ProjectDetail() {
   const { data: documents, refetch: refetchDocs } = useListDocuments(projectId, undefined, { query: { enabled: !!projectId, queryKey: getListDocumentsQueryKey(projectId, undefined) } });
   const { data: members } = useListProjectMembers(projectId, { query: { enabled: !!projectId, queryKey: getListProjectMembersQueryKey(projectId) } });
 
-  type PermitItem = { id: string; type: string; description: string; startDate: string; expiryDate: string; status: string; responsibleName?: string; documentUrl?: string | null; archivedAt?: string | null };
+  type PermitItem = { id: string; type: string; description: string; startDate: string; expiryDate: string; dueDate?: string | null; status: string; responsibleUserId?: string; responsibleName?: string; overdue?: boolean; documentUrl?: string | null; archivedAt?: string | null };
   type InvoiceItem = { id: string; direction: string; counterpartyName: string; description: string; amount: string; currency: string; dueDate: string; status: string; reference?: string | null; attachmentUrl?: string | null };
   type PhotoItem = { id: string; uploadedBy: string; uploaderName: string; photoUrl: string | null; category: string; description: string | null; zone: string | null; referenceNumber: string; takenAt: string; status: string | null; resolvedAt: string | null; latitude?: number | null; longitude?: number | null; assignedToUserId?: string | null; assignedToName?: string | null; dueDate?: string | null; overdue?: boolean };
   type MilestoneItem = { id: string; title: string; dueDate: string; completedAt: string | null; order: number };
@@ -79,9 +80,27 @@ export default function ProjectDetail() {
   const [newPermitResponsibleId, setNewPermitResponsibleId] = useState("");
   const [newPermitStart, setNewPermitStart] = useState("");
   const [newPermitExpiry, setNewPermitExpiry] = useState("");
+  const [newPermitDue, setNewPermitDue] = useState("");
   const [newPermitCertUrl, setNewPermitCertUrl] = useState<string | null>(null);
   const [newPermitSubmitting, setNewPermitSubmitting] = useState(false);
   const [newPermitError, setNewPermitError] = useState<string | null>(null);
+  // Edit / reassign an existing permit (F1 Phase 2). Wires the previously-unused
+  // PATCH /api/permits/:id route — reassign the responsible person, set the
+  // action due date, or correct the expiry/description.
+  const [editingPermit, setEditingPermit] = useState<PermitItem | null>(null);
+  const [editPermitSubmitting, setEditPermitSubmitting] = useState(false);
+  const [editPermitError, setEditPermitError] = useState<string | null>(null);
+  // Map a raw API permit onto PermitItem. The API exposes the assignee as
+  // `responsibleUserName`; the UI displays it as `responsibleName`. Centralising
+  // this keeps the initial load and the create/edit responses in one shape
+  // (a prior bug left `responsibleName` blank on first load).
+  const normalizePermit = (x: any): PermitItem => ({
+    id: x.id, type: x.type, description: x.description,
+    startDate: x.startDate, expiryDate: x.expiryDate, dueDate: x.dueDate ?? null,
+    status: x.status, responsibleUserId: x.responsibleUserId,
+    responsibleName: x.responsibleUserName ?? x.responsibleName,
+    overdue: x.overdue, documentUrl: x.documentUrl ?? null, archivedAt: x.archivedAt ?? null,
+  });
 
   type ShareLog = { id: string; entityType: string; entityId: string; entityName: string; method: string; recipientInfo: string | null; sentByName: string; createdAt: string };
   const [projectShareLog, setProjectShareLog] = useState<ShareLog[]>([]);
@@ -310,7 +329,7 @@ export default function ProjectDetail() {
       fetch(`/api/projects/${projectId}/qr-pins`, { headers }).then(r => r.ok ? r.json() : []),
       fetch(`/api/projects/${projectId}/qr-codes`, { headers }).then(r => r.ok ? r.json() : []),
     ]).then(([p, inv, ph, ms, ci, rep, notes, pins, qrCodes]) => {
-      setPermits(p); setProjectInvoices(inv); setPhotos(ph); setMilestones(ms); setCheckins(ci); setReports(rep); setTodayNotes(notes);
+      setPermits((Array.isArray(p) ? p : []).map(normalizePermit)); setProjectInvoices(inv); setPhotos(ph); setMilestones(ms); setCheckins(ci); setReports(rep); setTodayNotes(notes);
       if (Array.isArray(pins)) setQrPins(pins);
       if (Array.isArray(qrCodes) && qrCodes.length > 0) {
         const qr = qrCodes.find((q: any) => q.category === "site_board") ?? qrCodes[0];
@@ -498,16 +517,47 @@ export default function ProjectDetail() {
       const res = await fetch(`/api/projects/${projectId}/permits`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ type: newPermitType, description: newPermitDesc.trim(), responsibleUserId: newPermitResponsibleId, startDate: newPermitStart, expiryDate: newPermitExpiry, documentUrl: newPermitCertUrl ?? undefined }),
+        body: JSON.stringify({ type: newPermitType, description: newPermitDesc.trim(), responsibleUserId: newPermitResponsibleId, startDate: newPermitStart, expiryDate: newPermitExpiry, dueDate: newPermitDue || undefined, documentUrl: newPermitCertUrl ?? undefined }),
       });
       if (!res.ok) throw new Error("Failed to create permit");
       const newP = await res.json();
-      setPermits(prev => [...prev, { id: newP.id, type: newP.type, description: newP.description, startDate: newP.startDate, expiryDate: newP.expiryDate, status: newP.status, responsibleName: newP.responsibleUserName, documentUrl: newP.documentUrl ?? null }]);
-      setPermitAddOpen(false); setNewPermitType("Hot Works"); setNewPermitDesc(""); setNewPermitResponsibleId(""); setNewPermitStart(""); setNewPermitExpiry(""); setNewPermitCertUrl(null); setNewPermitError(null);
+      setPermits(prev => [...prev, normalizePermit(newP)]);
+      setPermitAddOpen(false); setNewPermitType("Hot Works"); setNewPermitDesc(""); setNewPermitResponsibleId(""); setNewPermitStart(""); setNewPermitExpiry(""); setNewPermitDue(""); setNewPermitCertUrl(null); setNewPermitError(null);
     } catch {
       setNewPermitError("Failed to save permit. Please try again.");
     } finally {
       setNewPermitSubmitting(false);
+    }
+  };
+
+  // Persist an edit/reassignment of an existing permit via PATCH /api/permits/:id.
+  const submitEditPermit = async () => {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
+    if (!editingPermit) return;
+    if (!editingPermit.description?.trim() || !editingPermit.responsibleUserId || !editingPermit.expiryDate) {
+      setEditPermitError("Please fill in all required fields."); return;
+    }
+    setEditPermitSubmitting(true); setEditPermitError(null);
+    try {
+      const token = localStorage.getItem("sitesort_token");
+      const res = await fetch(`/api/permits/${editingPermit.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({
+          description: editingPermit.description.trim(),
+          responsibleUserId: editingPermit.responsibleUserId,
+          expiryDate: editingPermit.expiryDate,
+          dueDate: editingPermit.dueDate || null,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to update permit");
+      const updated = normalizePermit(await res.json());
+      setPermits(prev => prev.map(p => p.id === updated.id ? updated : p));
+      setEditingPermit(null); setEditPermitError(null);
+    } catch {
+      setEditPermitError("Failed to save changes. Please try again.");
+    } finally {
+      setEditPermitSubmitting(false);
     }
   };
 
@@ -2169,8 +2219,7 @@ tr:last-child td{border-bottom:none}
 
         <TabsContent value="permits">
           {(() => {
-            const today = new Date(); today.setHours(0, 0, 0, 0);
-            const daysLeft = (dateStr: string) => Math.ceil((new Date(dateStr + "T00:00:00").getTime() - today.getTime()) / 86400000);
+            const daysLeft = (dateStr: string) => daysUntilExpiry(dateStr);
             const fmtDate = (s: string) => new Date(s + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
             const livePermits = [...permits].filter(p => !p.archivedAt);
@@ -2178,21 +2227,37 @@ tr:last-child td{border-bottom:none}
             const active = livePermits.filter(p => { const d = daysLeft(p.expiryDate); return d > 30; }).sort((a, b) => a.expiryDate.localeCompare(b.expiryDate));
             const expiring = livePermits.filter(p => { const d = daysLeft(p.expiryDate); return d >= 0 && d <= 30; }).sort((a, b) => a.expiryDate.localeCompare(b.expiryDate));
             const expired = livePermits.filter(p => daysLeft(p.expiryDate) < 0).sort((a, b) => b.expiryDate.localeCompare(a.expiryDate));
+            const overdueCount = livePermits.filter(p => p.overdue).length;
 
             const permitRow = (p: PermitItem, accent: string) => {
               const days = daysLeft(p.expiryDate);
-              const statusLabel = days < 0 ? "Expired" : days === 0 ? "Expires today" : days <= 7 ? `${days}d left` : days <= 30 ? `${days}d left` : "Active";
+              const statusLabel = days < 0 ? "Expired" : days === 0 ? "Expires today" : days <= 30 ? `${days}d left` : "Active";
               return (
                 <div key={p.id} className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-4 py-3 rounded-xl border ${accent}`}>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-semibold text-sm">{p.type}</p>
                       <Badge className={`text-[10px] border ${days < 0 ? "bg-red-100 text-red-700 border-red-200" : days <= 7 ? "bg-orange-100 text-orange-700 border-orange-200" : days <= 30 ? "bg-yellow-100 text-yellow-700 border-yellow-200" : "bg-emerald-100 text-emerald-700 border-emerald-200"}`}>{statusLabel}</Badge>
+                      {p.overdue && <OverdueBadge />}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5 truncate">{p.description}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{fmtDate(p.startDate)} – {fmtDate(p.expiryDate)}{p.responsibleName ? ` · ${p.responsibleName}` : ""}</p>
+                    {p.dueDate && (
+                      <p className={`text-xs mt-0.5 flex items-center gap-1 ${p.overdue ? "text-red-600 font-semibold" : "text-muted-foreground"}`}>
+                        <Calendar className="w-3 h-3 shrink-0" />Action due {fmtDate(p.dueDate)}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
+                    {caps.canManageTeam && (
+                      <button
+                        onClick={() => { setEditingPermit(p); setEditPermitError(null); }}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors"
+                        title="Edit / reassign permit"
+                      >
+                        <Pencil className="w-3.5 h-3.5" /> Edit
+                      </button>
+                    )}
                     {p.documentUrl && (() => {
                       const norm = p.documentUrl.replace(/^\/uploads\//, "/api/uploads/");
                       const certUrl = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
@@ -2232,7 +2297,14 @@ tr:last-child td{border-bottom:none}
                 {/* Header */}
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <h2 className="text-xl font-bold">Project Compliance</h2>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-xl font-bold">Project Compliance</h2>
+                      {overdueCount > 0 && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs font-bold">
+                          <AlertTriangle className="w-3 h-3" />{overdueCount} overdue
+                        </span>
+                      )}
+                    </div>
                     <p className="text-sm text-muted-foreground mt-0.5">Permits, certifications and insurance for this project.</p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -2488,6 +2560,9 @@ tr:last-child td{border-bottom:none}
               if (days <= 30) return `${days}d`;
               return `${days}d`;
             };
+            // Permits use expiry wording, not the invoice "Overdue" label.
+            const permitLabel = (days: number) =>
+              days < 0 ? "Expired" : days === 0 ? "Expires today" : days <= 30 ? `${days}d left` : "Active";
 
             const unpaidInbound = projectInvoices.filter(i => i.direction === "inbound" && i.status !== "paid").reduce((s, i) => s + Number(i.amount), 0);
             const unpaidOutbound = projectInvoices.filter(i => i.direction === "outbound" && i.status !== "paid").reduce((s, i) => s + Number(i.amount), 0);
@@ -2516,7 +2591,7 @@ tr:last-child td{border-bottom:none}
                             </div>
                             <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
                               <div className="text-right">
-                                <p className="text-xs font-semibold">{statusLabel(days)}</p>
+                                <p className="text-xs font-semibold">{permitLabel(days)}</p>
                                 <p className="text-xs opacity-70">{fmtDate(p.expiryDate)}</p>
                               </div>
                               {p.documentUrl && (
@@ -2542,13 +2617,13 @@ tr:last-child td{border-bottom:none}
                                   )}
                                   <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
                                     const subject = encodeURIComponent(`Permit – ${p.type}`);
-                                    const body = encodeURIComponent(`Permit details:\n\nType: ${p.type}\nDescription: ${p.description}\nExpiry: ${fmtDate(p.expiryDate)} (${statusLabel(days)})${p.responsibleName ? `\nResponsible: ${p.responsibleName}` : ""}${p.documentUrl ? `\nCertificate: ${p.documentUrl.replace(/^\/uploads\//, "/api/uploads/")}` : ""}\nProject: ${project?.name ?? ""}`);
+                                    const body = encodeURIComponent(`Permit details:\n\nType: ${p.type}\nDescription: ${p.description}\nExpiry: ${fmtDate(p.expiryDate)} (${permitLabel(days)})${p.responsibleName ? `\nResponsible: ${p.responsibleName}` : ""}${p.documentUrl ? `\nCertificate: ${p.documentUrl.replace(/^\/uploads\//, "/api/uploads/")}` : ""}\nProject: ${project?.name ?? ""}`);
                                     window.open(`mailto:?subject=${subject}&body=${body}`);
                                   }}>
                                     <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
                                   </DropdownMenuItem>
                                   <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
-                                    const text = encodeURIComponent(`Permit – ${p.type}\nExpiry: ${fmtDate(p.expiryDate)} (${statusLabel(days)})\n${p.description}${p.responsibleName ? `\nResponsible: ${p.responsibleName}` : ""}${p.documentUrl ? `\nCertificate: ${p.documentUrl.replace(/^\/uploads\//, "/api/uploads/")}` : ""}`);
+                                    const text = encodeURIComponent(`Permit – ${p.type}\nExpiry: ${fmtDate(p.expiryDate)} (${permitLabel(days)})\n${p.description}${p.responsibleName ? `\nResponsible: ${p.responsibleName}` : ""}${p.documentUrl ? `\nCertificate: ${p.documentUrl.replace(/^\/uploads\//, "/api/uploads/")}` : ""}`);
                                     window.open(`https://wa.me/?text=${text}`, "_blank");
                                   }}>
                                     <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
@@ -3669,6 +3744,11 @@ tr:last-child td{border-bottom:none}
             </div>
           </div>
           <div>
+            <label className="text-sm font-semibold mb-1.5 block">Action due by <span className="text-muted-foreground font-normal">(optional)</span></label>
+            <Input type="date" value={newPermitDue} onChange={e => setNewPermitDue(e.target.value)} icon={<Calendar className="w-4 h-4" />} />
+            <p className="text-xs text-muted-foreground mt-1">When the responsible person must renew or action this — separate from the legal expiry date.</p>
+          </div>
+          <div>
             <label className="text-sm font-semibold mb-1.5 block">Certificate / Document <span className="text-muted-foreground font-normal">(optional)</span></label>
             <FileDropZone
               onUploaded={f => setNewPermitCertUrl(f.url)}
@@ -3688,6 +3768,56 @@ tr:last-child td{border-bottom:none}
           <Button variant="outline" onClick={() => setPermitAddOpen(false)}>Cancel</Button>
           <Button variant="accent" onClick={submitNewPermit} disabled={newPermitSubmitting}>
             {newPermitSubmitting ? "Saving…" : "Save Permit"}
+          </Button>
+        </DialogFooter>
+      </Dialog>
+
+      {/* Edit / reassign permit (F1 Phase 2) — wires PATCH /api/permits/:id */}
+      <Dialog open={!!editingPermit} onOpenChange={v => { if (!v) { setEditingPermit(null); setEditPermitError(null); } }}>
+        <DialogHeader>
+          <DialogTitle>Edit Permit / Certification</DialogTitle>
+        </DialogHeader>
+        {editingPermit && (
+          <div className="space-y-4 pt-2">
+            <div>
+              <label className="text-sm font-semibold mb-1.5 block">Description / Reference</label>
+              <Input
+                value={editingPermit.description}
+                onChange={e => setEditingPermit(prev => prev && { ...prev, description: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-semibold mb-1.5 block">Responsible Person</label>
+              <select
+                value={editingPermit.responsibleUserId ?? ""}
+                onChange={e => setEditingPermit(prev => prev && { ...prev, responsibleUserId: e.target.value })}
+                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">Select person…</option>
+                {(members as any[] ?? []).filter((m: any) => !!m.userId).map((m: any) => (
+                  <option key={m.id} value={m.userId}>{m.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-4 [&>*]:min-w-0">
+              <div>
+                <label className="text-sm font-semibold mb-1.5 block">Expiry Date</label>
+                <Input type="date" value={editingPermit.expiryDate?.slice(0, 10) ?? ""} onChange={e => setEditingPermit(prev => prev && { ...prev, expiryDate: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-sm font-semibold mb-1.5 block">Action due by</label>
+                <Input type="date" value={editingPermit.dueDate?.slice(0, 10) ?? ""} onChange={e => setEditingPermit(prev => prev && { ...prev, dueDate: e.target.value })} icon={<Calendar className="w-4 h-4" />} />
+              </div>
+            </div>
+            {editPermitError && (
+              <p className="flex items-center gap-1.5 text-sm text-destructive"><AlertTriangle className="w-4 h-4 shrink-0" />{editPermitError}</p>
+            )}
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setEditingPermit(null)}>Cancel</Button>
+          <Button variant="accent" onClick={submitEditPermit} disabled={editPermitSubmitting}>
+            {editPermitSubmitting ? "Saving…" : "Save Changes"}
           </Button>
         </DialogFooter>
       </Dialog>

@@ -437,7 +437,7 @@ export type PermitStatus = (typeof PermitStatus)[keyof typeof PermitStatus];
 
 export const PermitStatus = {
   active: "active",
-  expiring_today: "expiring_today",
+  expiring_soon: "expiring_soon",
   expired: "expired",
 } as const;
 
@@ -450,7 +450,9 @@ export interface Permit {
   responsibleUserName: string;
   startDate: string;
   expiryDate: string;
+  dueDate?: string | null;
   status: PermitStatus;
+  overdue: boolean;
   documentUrl?: string | null;
   createdAt: string;
 }
@@ -472,6 +474,7 @@ export interface CreatePermitRequest {
   responsibleUserId: string;
   startDate: string;
   expiryDate: string;
+  dueDate?: string | null;
   documentUrl?: string;
 }
 
@@ -479,6 +482,7 @@ export interface UpdatePermitRequest {
   description?: string;
   responsibleUserId?: string;
   expiryDate?: string;
+  dueDate?: string | null;
   documentUrl?: string;
 }
 
@@ -547,7 +551,7 @@ export type ExpiringPermitItemStatus =
 
 export const ExpiringPermitItemStatus = {
   active: "active",
-  expiring_today: "expiring_today",
+  expiring_soon: "expiring_soon",
   expired: "expired",
 } as const;
 

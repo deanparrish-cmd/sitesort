@@ -17,7 +17,9 @@ export interface Permit {
   responsibleUserName: string;
   startDate: Date;
   expiryDate: Date;
+  dueDate?: Date | null;
   status: PermitStatus;
+  overdue: boolean;
   documentUrl?: string | null;
   createdAt: Date;
 }

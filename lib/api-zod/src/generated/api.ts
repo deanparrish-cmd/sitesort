@@ -563,7 +563,9 @@ export const ListPermitsResponseItem = zod.object({
   responsibleUserName: zod.string(),
   startDate: zod.date(),
   expiryDate: zod.date(),
-  status: zod.enum(["active", "expiring_today", "expired"]),
+  dueDate: zod.date().nullish(),
+  status: zod.enum(["active", "expiring_soon", "expired"]),
+  overdue: zod.boolean(),
   documentUrl: zod.string().nullish(),
   createdAt: zod.date(),
 });
@@ -588,6 +590,7 @@ export const CreatePermitBody = zod.object({
   responsibleUserId: zod.string(),
   startDate: zod.date(),
   expiryDate: zod.date(),
+  dueDate: zod.date().nullish(),
   documentUrl: zod.string().optional(),
 });
 
@@ -602,6 +605,7 @@ export const UpdatePermitBody = zod.object({
   description: zod.string().optional(),
   responsibleUserId: zod.string().optional(),
   expiryDate: zod.date().optional(),
+  dueDate: zod.date().nullish(),
   documentUrl: zod.string().optional(),
 });
 
@@ -620,7 +624,9 @@ export const UpdatePermitResponse = zod.object({
   responsibleUserName: zod.string(),
   startDate: zod.date(),
   expiryDate: zod.date(),
-  status: zod.enum(["active", "expiring_today", "expired"]),
+  dueDate: zod.date().nullish(),
+  status: zod.enum(["active", "expiring_soon", "expired"]),
+  overdue: zod.boolean(),
   documentUrl: zod.string().nullish(),
   createdAt: zod.date(),
 });
@@ -688,7 +694,7 @@ export const GetComplianceOverviewResponse = zod.object({
       projectName: zod.string(),
       permitType: zod.string(),
       expiryDate: zod.date(),
-      status: zod.enum(["active", "expiring_today", "expired"]),
+      status: zod.enum(["active", "expiring_soon", "expired"]),
     }),
   ),
   pendingAcknowledgments: zod.array(

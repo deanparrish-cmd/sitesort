@@ -4,6 +4,7 @@ import { qrCodesTable, qrBoardPinsTable, documentsTable, projectsTable, projectM
 import { eq, and, or, desc, asc, inArray, isNull, gte } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
+import { expiryStatus } from "../lib/expiry";
 import { randomBytes } from "crypto";
 import multer from "multer";
 import path from "path";
@@ -304,13 +305,9 @@ router.get("/site/:token", async (req, res) => {
           description: p.description,
           photoUrl: p.photoUrl ? normaliseUrl(p.photoUrl) : null,
         })),
-        ...pinnedPermitRows.map(p => {
-          const now = new Date();
-          const expiry = new Date(p.expiryDate);
-          const daysUntil = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-          const status = daysUntil < 0 ? "expired" : daysUntil <= 30 ? "expiring_soon" : "active";
-          return { itemType: "permit", id: p.id, type: p.type, description: p.description, expiryDate: p.expiryDate, status };
-        }),
+        ...pinnedPermitRows.map(p => ({
+          itemType: "permit", id: p.id, type: p.type, description: p.description, expiryDate: p.expiryDate, status: expiryStatus(p.expiryDate),
+        })),
       ],
       upcomingEvents,
       generatedAt: new Date().toISOString(),
