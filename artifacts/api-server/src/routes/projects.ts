@@ -69,12 +69,13 @@ router.post("/projects", authenticate, async (req, res) => {
     }
 
     const companyRows = await db
-      .select({ subscriptionTier: companiesTable.subscriptionTier, subscriptionStatus: companiesTable.subscriptionStatus })
+      .select({ subscriptionTier: companiesTable.subscriptionTier, subscriptionStatus: companiesTable.subscriptionStatus, betaAccess: companiesTable.betaAccess })
       .from(companiesTable)
       .where(eq(companiesTable.id, req.user!.companyId))
       .limit(1);
-    const { subscriptionTier, subscriptionStatus } = companyRows[0] ?? { subscriptionTier: "free", subscriptionStatus: "active" };
-    const limit = planProjectLimit(subscriptionTier, subscriptionStatus);
+    const { subscriptionTier, subscriptionStatus, betaAccess } = companyRows[0] ?? { subscriptionTier: "free", subscriptionStatus: "active", betaAccess: false };
+    // Beta companies are off-billing with full access — no plan cap applies.
+    const limit = betaAccess ? Infinity : planProjectLimit(subscriptionTier, subscriptionStatus);
 
     if (limit !== Infinity) {
       const [{ total }] = await db.select({ total: count() }).from(projectsTable)

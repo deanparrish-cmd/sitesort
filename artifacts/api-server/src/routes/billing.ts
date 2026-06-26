@@ -63,9 +63,11 @@ router.post("/billing/checkout", authenticate, async (req, res) => {
   // Beta companies never touch Stripe — they get full access for free, so no
   // customer, subscription, or trial is ever created and they can't be charged.
   if (company?.betaAccess) {
+    // Off-billing, full access (plan caps honour betaAccess directly), so just
+    // clear the "incomplete" gate — no Stripe, no tier change.
     await db
       .update(companiesTable)
-      .set({ subscriptionStatus: "active", subscriptionTier: "pro" })
+      .set({ subscriptionStatus: "active" })
       .where(eq(companiesTable.id, user.companyId));
     res.json({ beta: true });
     return;
