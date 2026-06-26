@@ -758,10 +758,10 @@ router.patch("/admin/companies/:id/beta-access", authenticate, requireAdmin, asy
     if (betaAccess) {
       // GRANT beta: full app access, off-billing. Set the flag FIRST so the
       // webhook fired by the cancellation below sees betaAccess=true and skips
-      // (otherwise it would downgrade the company straight back). tier="pro" lifts
-      // the tier-based project/sub/doc limits so beta = genuinely unlimited.
+      // (otherwise it would downgrade the company straight back). Plan caps honour
+      // betaAccess directly (projects.ts), so we leave the company's tier untouched.
       await db.update(companiesTable)
-        .set({ betaAccess: true, subscriptionStatus: "active", subscriptionTier: "pro", cancelAtPeriodEnd: false, currentPeriodEnd: null })
+        .set({ betaAccess: true, subscriptionStatus: "active", cancelAtPeriodEnd: false, currentPeriodEnd: null })
         .where(eq(companiesTable.id, companyId));
 
       // Then cancel any live Stripe subscription so they can never be charged.
