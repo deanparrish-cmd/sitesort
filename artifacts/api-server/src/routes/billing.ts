@@ -3,7 +3,7 @@ import Stripe from "stripe";
 import { eq, and } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
 import { db } from "@workspace/db";
-import { companiesTable, usersTable, notificationsTable, companyMembersTable } from "@workspace/db/schema";
+import { companiesTable, usersTable, notificationsTable, companyMembersTable, stripeWebhookEventsTable } from "@workspace/db/schema";
 import { generateId } from "../lib/id";
 
 const router = Router();
@@ -52,10 +52,56 @@ router.post("/billing/checkout", authenticate, async (req, res) => {
   const user = req.user!;
   const stripe = new Stripe(apiKey);
 
+  // Load company billing state — beta flag + any Stripe customer we've already seen.
+  const companyRows = await db
+    .select({ betaAccess: companiesTable.betaAccess, stripeCustomerId: companiesTable.stripeCustomerId })
+    .from(companiesTable)
+    .where(eq(companiesTable.id, user.companyId))
+    .limit(1);
+  const company = companyRows[0];
+
+  // Beta companies never touch Stripe — they get full access for free, so no
+  // customer, subscription, or trial is ever created and they can't be charged.
+  if (company?.betaAccess) {
+    await db
+      .update(companiesTable)
+      .set({ subscriptionStatus: "active", subscriptionTier: planId })
+      .where(eq(companiesTable.id, user.companyId));
+    res.json({ beta: true });
+    return;
+  }
+
   try {
+    // Reuse an existing Stripe customer for this company/email so retries and
+    // back-button navigation don't spawn duplicate customers + subscriptions.
+    let customerId = company?.stripeCustomerId ?? null;
+    if (!customerId) {
+      const existing = await stripe.customers.list({ email: user.email, limit: 1 });
+      customerId = existing.data[0]?.id ?? null;
+    }
+
+    if (customerId) {
+      // Persist so future checkouts skip the email lookup entirely.
+      if (customerId !== company?.stripeCustomerId) {
+        await db
+          .update(companiesTable)
+          .set({ stripeCustomerId: customerId })
+          .where(eq(companiesTable.id, user.companyId));
+      }
+      // Already paying/trialing? Don't create a second subscription.
+      const subs = await stripe.subscriptions.list({ customer: customerId, status: "all", limit: 10 });
+      const live = subs.data.find(s => s.status === "active" || s.status === "trialing");
+      if (live) {
+        res.json({ alreadySubscribed: true });
+        return;
+      }
+    }
+
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
-      customer_email: user.email,
+      // Bind to the resolved customer when we have one; otherwise let Stripe create
+      // it from the email. Never both (Stripe rejects customer + customer_email).
+      ...(customerId ? { customer: customerId } : { customer_email: user.email }),
       line_items: [
         {
           price: plan.priceId,
@@ -226,6 +272,45 @@ router.post("/billing/webhook", async (req, res) => {
     return;
   }
 
+  // Signature is verified — acknowledge immediately so Stripe's ~10s delivery
+  // window never times out, then do the slow DB work after responding. Handlers
+  // are idempotent, so a redelivery (if one still arrives) is harmless.
+  res.json({ received: true });
+  void processWebhookEvent(stripe, event);
+});
+
+// Atomically record this event id. Returns true only if THIS call inserted it
+// (i.e. first time we've seen it); a unique-PK conflict → already handled, so a
+// concurrent duplicate or a Stripe redelivery returns false and is skipped.
+async function claimEvent(event: Stripe.Event): Promise<boolean> {
+  const inserted = await db
+    .insert(stripeWebhookEventsTable)
+    .values({ id: event.id, type: event.type })
+    .onConflictDoNothing({ target: stripeWebhookEventsTable.id })
+    .returning({ id: stripeWebhookEventsTable.id });
+  return inserted.length > 0;
+}
+
+// Release a claim so a future Stripe redelivery can re-process the event. Used
+// only when handling threw — otherwise the failed event would be swallowed (we
+// already returned 200, so Stripe won't retry unless the ledger row is gone).
+async function releaseEvent(eventId: string): Promise<void> {
+  await db.delete(stripeWebhookEventsTable).where(eq(stripeWebhookEventsTable.id, eventId));
+}
+
+async function processWebhookEvent(stripe: Stripe, event: Stripe.Event): Promise<void> {
+  // Idempotency gate: skip events we've already handled (Stripe retries/replays).
+  try {
+    if (!(await claimEvent(event))) {
+      console.log(`Stripe webhook: duplicate ${event.type} (${event.id}) — skipping`);
+      return;
+    }
+  } catch (err) {
+    // Ledger unavailable — process anyway rather than drop the event; the
+    // handlers are upsert-idempotent, so reprocessing is the safe direction.
+    console.error("Stripe webhook: claimEvent failed, processing without dedup:", err);
+  }
+
   try {
     switch (event.type) {
       case "checkout.session.completed": {
@@ -271,12 +356,10 @@ router.post("/billing/webhook", async (req, res) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("Stripe webhook handler error:", message);
-    res.status(500).json({ error: message });
-    return;
+    // Handling failed — drop the claim so a Stripe redelivery can re-process.
+    await releaseEvent(event.id).catch(() => {});
   }
-
-  res.json({ received: true });
-});
+}
 
 router.post("/billing/portal", authenticate, async (req, res) => {
   const apiKey = process.env.STRIPE_SECRET_KEY;
