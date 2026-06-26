@@ -36,6 +36,17 @@ export async function ensureSchema(): Promise<void> {
         CONSTRAINT expiry_reminder_logs_entity_milestone_uq UNIQUE (entity_type, entity_id, milestone)
       )
     `);
+    // Dedup ledger for Stripe webhook deliveries — the webhook claims each event
+    // id here (ON CONFLICT DO NOTHING) and skips duplicates/retries so a redelivered
+    // event can't create duplicate subscriptions/charges. New table → must exist in
+    // prod before the webhook runs, hence created here too.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS stripe_webhook_events (
+        id text PRIMARY KEY,
+        type text NOT NULL,
+        received_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
     // Optional photo attached to a daily-note "site update" (B1 fix). New column →
     // must exist in prod before the daily-notes insert references it.
     await pool.query(`ALTER TABLE daily_notes ADD COLUMN IF NOT EXISTS photo_url text`);
@@ -45,7 +56,7 @@ export async function ensureSchema(): Promise<void> {
     // F1 Phase 2 — permits reuse responsible_user_id as the assignee; add the
     // (optional) action deadline. Overdue is derived (due_date < today && not archived).
     await pool.query(`ALTER TABLE permits ADD COLUMN IF NOT EXISTS due_date date`);
-    logger.info("ensureSchema: company_members + expiry_reminder_logs + daily_notes.photo_url + photos/permits assignment cols ready");
+    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + daily_notes.photo_url + photos/permits assignment cols ready");
   } catch (err) {
     // Don't crash the server — membership lookups fall back to the home company.
     logger.error({ err }, "ensureSchema failed (continuing with home-company fallback)");

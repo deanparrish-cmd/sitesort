@@ -139,9 +139,15 @@ export default function Register() {
         body: JSON.stringify({ plan: selectedPlan }),
       });
 
-      const checkoutJson = await checkoutRes.json().catch(() => ({} as { url?: string; error?: string }));
+      const checkoutJson = await checkoutRes.json().catch(() => ({} as { url?: string; error?: string; beta?: boolean; alreadySubscribed?: boolean }));
       if (checkoutRes.ok && checkoutJson.url) {
         window.location.href = checkoutJson.url;
+        return;
+      }
+      // Beta companies and accounts that already have a live subscription skip
+      // Stripe entirely — there's no checkout URL, so send them into the app.
+      if (checkoutRes.ok && (checkoutJson.beta || checkoutJson.alreadySubscribed)) {
+        setLocation("/dashboard");
         return;
       }
 
