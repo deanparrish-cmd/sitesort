@@ -65,7 +65,7 @@ router.post("/billing/checkout", authenticate, async (req, res) => {
   if (company?.betaAccess) {
     await db
       .update(companiesTable)
-      .set({ subscriptionStatus: "active", subscriptionTier: planId })
+      .set({ subscriptionStatus: "active", subscriptionTier: "pro" })
       .where(eq(companiesTable.id, user.companyId));
     res.json({ beta: true });
     return;
@@ -166,12 +166,22 @@ function mapSubscriptionStatus(status: Stripe.Subscription.Status): string {
   }
 }
 
+async function isCompanyBeta(companyId: string): Promise<boolean> {
+  const rows = await db
+    .select({ betaAccess: companiesTable.betaAccess })
+    .from(companiesTable)
+    .where(eq(companiesTable.id, companyId))
+    .limit(1);
+  return rows[0]?.betaAccess === true;
+}
+
 async function handleSubscriptionUpsert(
   subscription: Stripe.Subscription,
 ): Promise<void> {
   const companyId = subscription.metadata?.companyId;
   const plan = (subscription.metadata?.plan ?? "pro") as PlanId;
   if (!companyId) return;
+  if (await isCompanyBeta(companyId)) return; // beta companies are off-billing — never sync from Stripe
 
   // Stripe API 2025-03-31 moved current_period_end off the subscription onto each item.
   const itemPeriodEnd = subscription.items.data[0]?.current_period_end;
@@ -194,6 +204,7 @@ async function handleSubscriptionDeleted(
 ): Promise<void> {
   const companyId = subscription.metadata?.companyId;
   if (!companyId) return;
+  if (await isCompanyBeta(companyId)) return; // don't downgrade a beta company (incl. our own beta-grant cancellation)
 
   await db
     .update(companiesTable)

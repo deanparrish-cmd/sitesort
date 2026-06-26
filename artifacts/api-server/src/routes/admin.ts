@@ -1,4 +1,5 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
+import Stripe from "stripe";
 import { db } from "@workspace/db";
 import {
   usersTable,
@@ -747,14 +748,48 @@ router.patch("/admin/companies/:id/beta-access", authenticate, requireAdmin, asy
       return;
     }
     const companyId = req.params.id as string;
-    const rows = await db.select({ id: companiesTable.id })
+    const rows = await db.select({ id: companiesTable.id, stripeCustomerId: companiesTable.stripeCustomerId })
       .from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
     if (!rows[0]) {
       res.status(404).json({ error: "not_found", message: "Company not found" });
       return;
     }
-    await db.update(companiesTable).set({ betaAccess }).where(eq(companiesTable.id, companyId));
-    res.json({ id: req.params.id, betaAccess });
+
+    if (betaAccess) {
+      // GRANT beta: full app access, off-billing. Set the flag FIRST so the
+      // webhook fired by the cancellation below sees betaAccess=true and skips
+      // (otherwise it would downgrade the company straight back). tier="pro" lifts
+      // the tier-based project/sub/doc limits so beta = genuinely unlimited.
+      await db.update(companiesTable)
+        .set({ betaAccess: true, subscriptionStatus: "active", subscriptionTier: "pro", cancelAtPeriodEnd: false, currentPeriodEnd: null })
+        .where(eq(companiesTable.id, companyId));
+
+      // Then cancel any live Stripe subscription so they can never be charged.
+      let warning: string | undefined;
+      const apiKey = process.env.STRIPE_SECRET_KEY;
+      const customerId = rows[0].stripeCustomerId;
+      if (apiKey && customerId) {
+        try {
+          const stripe = new Stripe(apiKey);
+          const subs = await stripe.subscriptions.list({ customer: customerId, status: "all", limit: 100 });
+          const live = subs.data.filter(s => s.status === "active" || s.status === "trialing");
+          for (const s of live) await stripe.subscriptions.cancel(s.id);
+          req.log.info({ companyId, cancelled: live.length }, "Beta granted — cancelled Stripe subscription(s)");
+        } catch (err) {
+          req.log.error({ err, companyId }, "Beta grant: failed to cancel Stripe subscription");
+          warning = "Beta access was set, but cancelling the existing Stripe subscription failed — cancel it manually in Stripe so they aren't billed.";
+        }
+      }
+      res.json({ id: req.params.id, betaAccess: true, ...(warning ? { warning } : {}) });
+      return;
+    }
+
+    // REVOKE beta: drop to "incomplete" so the app's CheckoutGate sends them
+    // through normal checkout to (re)subscribe before they regain access.
+    await db.update(companiesTable)
+      .set({ betaAccess: false, subscriptionStatus: "incomplete", subscriptionTier: "free" })
+      .where(eq(companiesTable.id, companyId));
+    res.json({ id: req.params.id, betaAccess: false });
   } catch (err) {
     req.log.error({ err }, "Admin toggle beta access error");
     res.status(500).json({ error: "server_error", message: "Failed to update beta access" });
