@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Mail, Lock, Building2, User, CreditCard, Eye, EyeOff } from "lucide-react";
 import { useRegister, RegisterRequestCompanySize } from "@workspace/api-client-react";
 import { captureAttribution } from "@/lib/attribution";
+import { useToast } from "@/hooks/use-toast";
 
 const PLANS = {
   solo: {
@@ -63,6 +64,11 @@ export default function Register() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showInvitePassword, setShowInvitePassword] = useState(false);
   const registerMutation = useRegister();
+  const { toast } = useToast();
+  // Synchronous re-entrancy guard: a rapid double-click can fire onSubmit twice
+  // before React re-renders the disabled button, and both closures would see the
+  // stale (false) isSubmitting. A ref flips immediately, so the 2nd call bails.
+  const submittingRef = useRef(false);
 
   // Invite flow
   const [inviteToken, setInviteToken] = useState<string | null>(null);
@@ -106,6 +112,8 @@ export default function Register() {
 
   const onSubmit = async (data: RegisterForm) => {
     if (!selectedPlan) return;
+    if (submittingRef.current) return; // ignore double-submits while one is in flight
+    submittingRef.current = true;
     setError(null);
 
     // If user already registered this session (e.g. went back from Stripe to change plan),
@@ -144,9 +152,15 @@ export default function Register() {
         window.location.href = checkoutJson.url;
         return;
       }
-      // Beta companies and accounts that already have a live subscription skip
-      // Stripe entirely — there's no checkout URL, so send them into the app.
-      if (checkoutRes.ok && (checkoutJson.beta || checkoutJson.alreadySubscribed)) {
+      // Already have a live subscription → don't start a second checkout; point
+      // them at billing to manage the existing one.
+      if (checkoutRes.ok && checkoutJson.alreadySubscribed) {
+        toast({ title: "You already have a subscription", description: "Manage it in Settings → Billing." });
+        setLocation("/settings?tab=billing");
+        return;
+      }
+      // Beta companies skip Stripe entirely — no checkout URL, so send them in.
+      if (checkoutRes.ok && checkoutJson.beta) {
         setLocation("/dashboard");
         return;
       }
@@ -160,9 +174,11 @@ export default function Register() {
         setLocation("/dashboard");
         return;
       }
+      submittingRef.current = false; // allow a retry
       setRedirecting(false);
       setError("We couldn't start the secure payment step — your account was created, but no card was added. Please click \"Start free trial\" again to enter your card details.");
     } catch (err: any) {
+      submittingRef.current = false; // allow a retry
       setRedirecting(false);
       setError(err.message || "Registration failed. Please try again.");
     }
