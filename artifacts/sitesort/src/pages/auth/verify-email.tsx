@@ -61,9 +61,9 @@ export default function VerifyEmail() {
           <div className="flex flex-col items-center gap-4 py-4">
             <CheckCircle className="w-12 h-12 text-green-500" />
             <h2 className="text-xl font-semibold">Email verified!</h2>
-            <p className="text-muted-foreground text-sm">Your email address has been confirmed. You can now access all SiteSort features.</p>
-            <Button className="mt-2 w-full" onClick={() => setLocation("/dashboard")}>
-              Go to Dashboard
+            <p className="text-muted-foreground text-sm">Your email address has been confirmed. Log in to start your free trial.</p>
+            <Button className="mt-2 w-full" onClick={() => setLocation("/login")}>
+              Log in
             </Button>
           </div>
         )}
@@ -73,8 +73,8 @@ export default function VerifyEmail() {
             <XCircle className="w-12 h-12 text-destructive" />
             <h2 className="text-xl font-semibold">Verification failed</h2>
             <p className="text-muted-foreground text-sm">{message}</p>
-            <Button variant="outline" className="mt-2 w-full" onClick={() => setLocation("/dashboard")}>
-              Go to Dashboard
+            <Button variant="outline" className="mt-2 w-full" onClick={() => setLocation("/login")}>
+              Back to Log in
             </Button>
           </div>
         )}
