@@ -80,41 +80,58 @@ router.post("/billing/checkout", authenticate, async (req, res) => {
       customerId = existing.data[0]?.id ?? null;
     }
 
-    if (customerId) {
-      // Persist so future checkouts skip the email lookup entirely.
-      if (customerId !== company?.stripeCustomerId) {
-        await db
-          .update(companiesTable)
-          .set({ stripeCustomerId: customerId })
-          .where(eq(companiesTable.id, user.companyId));
-      }
-      // Already paying/trialing? Don't create a second subscription.
-      const subs = await stripe.subscriptions.list({ customer: customerId, status: "all", limit: 10 });
-      const live = subs.data.find(s => s.status === "active" || s.status === "trialing");
-      if (live) {
-        res.json({ alreadySubscribed: true });
-        return;
-      }
+    // Still none → create one explicitly with an idempotency key, so a double-click
+    // or retry can't mint a second customer (the key collapses concurrent/repeated
+    // calls to the same customer for ~24h). We create it ourselves rather than let
+    // Checkout do it implicitly precisely so we CAN attach the key.
+    if (!customerId) {
+      const created = await stripe.customers.create(
+        { email: user.email, metadata: { companyId: user.companyId, userId: user.id } },
+        { idempotencyKey: `cust:${user.companyId}` },
+      );
+      customerId = created.id;
     }
 
-    const session = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      // Bind to the resolved customer when we have one; otherwise let Stripe create
-      // it from the email. Never both (Stripe rejects customer + customer_email).
-      ...(customerId ? { customer: customerId } : { customer_email: user.email }),
-      line_items: [
-        {
-          price: plan.priceId,
-          quantity: 1,
-        },
-      ],
-      success_url: `${APP_URL}/dashboard?checkout=success`,
-      cancel_url: `${APP_URL}/register`,
-      payment_method_collection: "always",
-      subscription_data: {
-        trial_period_days: 14,
-        trial_settings: {
-          end_behavior: { missing_payment_method: "cancel" },
+    // Persist so future checkouts skip the lookup entirely.
+    if (customerId !== company?.stripeCustomerId) {
+      await db
+        .update(companiesTable)
+        .set({ stripeCustomerId: customerId })
+        .where(eq(companiesTable.id, user.companyId));
+    }
+
+    // Already paying/trialing? Don't create a second subscription — send them to
+    // manage the existing one instead.
+    const subs = await stripe.subscriptions.list({ customer: customerId, status: "all", limit: 10 });
+    const live = subs.data.find(s => s.status === "active" || s.status === "trialing");
+    if (live) {
+      res.json({ alreadySubscribed: true });
+      return;
+    }
+
+    const session = await stripe.checkout.sessions.create(
+      {
+        mode: "subscription",
+        customer: customerId,
+        line_items: [
+          {
+            price: plan.priceId,
+            quantity: 1,
+          },
+        ],
+        success_url: `${APP_URL}/dashboard?checkout=success`,
+        cancel_url: `${APP_URL}/register`,
+        payment_method_collection: "always",
+        subscription_data: {
+          trial_period_days: 14,
+          trial_settings: {
+            end_behavior: { missing_payment_method: "cancel" },
+          },
+          metadata: {
+            userId: user.id,
+            companyId: user.companyId,
+            plan: planId,
+          },
         },
         metadata: {
           userId: user.id,
@@ -122,12 +139,10 @@ router.post("/billing/checkout", authenticate, async (req, res) => {
           plan: planId,
         },
       },
-      metadata: {
-        userId: user.id,
-        companyId: user.companyId,
-        plan: planId,
-      },
-    });
+      // Same intent (one user + plan) → same session for ~24h, so a double-click or
+      // a retried request reuses one Checkout Session → one subscription.
+      { idempotencyKey: `checkout:${user.id}:${planId}` },
+    );
 
     res.json({ url: session.url });
   } catch (err) {
