@@ -64,6 +64,7 @@ export * from "./qrCode";
 export * from "./qrContent";
 export * from "./registerRequest";
 export * from "./registerRequestCompanySize";
+export * from "./registerResponse";
 export * from "./subcontractor";
 export * from "./subcontractorDetail";
 export * from "./subcontractorDetailAssignedProjectsItem";

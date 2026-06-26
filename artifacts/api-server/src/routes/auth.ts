@@ -49,6 +49,13 @@ router.post("/auth/register", async (req, res) => {
       subscriptionStatus: "incomplete",
     });
 
+    // Real email verification: the account starts unverified and stays that way
+    // until the user clicks the link we email below. The login gate
+    // (`email_not_verified`) blocks sign-in until then, and no JWT is issued here,
+    // so registration never hands out a usable session before the email is proven.
+    const verificationToken = randomBytes(32).toString("hex");
+    const verificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
     await db.insert(usersTable).values({
       id: userId,
       companyId,
@@ -56,23 +63,23 @@ router.post("/auth/register", async (req, res) => {
       passwordHash,
       name: adminName,
       role: "admin",
-      emailVerified: true,
+      emailVerified: false,
+      emailVerificationToken: verificationToken,
+      emailVerificationExpiry: verificationExpiry,
     });
 
     // Membership in their own (home) company — admin role.
     await addMembership(userId, companyId, "admin");
 
-    // Send a welcome email — no verification step needed since all
-    // sign-ups go through Stripe checkout which confirms email ownership.
-    sendWelcomeEmail(email, adminName).catch(err =>
-      req.log.error({ err }, "Failed to send welcome email"),
+    // Send the verification email. The welcome email is deliberately NOT sent
+    // here — it goes out only once the address is confirmed (see /auth/verify-email).
+    sendVerificationEmail(email, adminName, verificationToken).catch(err =>
+      req.log.error({ err }, "Failed to send verification email"),
     );
 
-    const token = generateToken({ id: userId, companyId, role: "admin", email });
-    res.status(201).json({
-      user: { id: userId, companyId, email, name: adminName, role: "admin", phone: null, createdAt: new Date().toISOString(), lastActiveAt: null },
-      token,
-    });
+    // No JWT — the user must verify, then log in (which then routes them through
+    // the Stripe checkout gate). Return enough for the UI to show "check your email".
+    res.status(201).json({ requiresVerification: true, email });
   } catch (err) {
     req.log.error({ err }, "Register error");
     res.status(500).json({ error: "server_error", message: "Registration failed" });

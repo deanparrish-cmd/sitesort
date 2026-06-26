@@ -56,7 +56,15 @@ export async function ensureSchema(): Promise<void> {
     // F1 Phase 2 — permits reuse responsible_user_id as the assignee; add the
     // (optional) action deadline. Overdue is derived (due_date < today && not archived).
     await pool.query(`ALTER TABLE permits ADD COLUMN IF NOT EXISTS due_date date`);
-    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + daily_notes.photo_url + photos/permits assignment cols ready");
+    // Email verification — registration now sends a verification link and only
+    // marks the account verified once it's clicked, so the register handler writes
+    // these columns. email_verified already exists in prod (the login gate reads
+    // it, so the ALTER no-ops and existing verified users are untouched); the
+    // token/expiry columns may not, hence add them here before register uses them.
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified boolean NOT NULL DEFAULT false`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_token text`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_expiry timestamp`);
+    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + daily_notes.photo_url + photos/permits assignment cols + users email-verification cols ready");
   } catch (err) {
     // Don't crash the server — membership lookups fall back to the home company.
     logger.error({ err }, "ensureSchema failed (continuing with home-company fallback)");

@@ -48,6 +48,7 @@ import type {
   QrCode,
   QrContent,
   RegisterRequest,
+  RegisterResponse,
   Subcontractor,
   SubcontractorDetail,
   SuccessResponse,
@@ -153,8 +154,8 @@ export const getRegisterUrl = () => {
 export const register = async (
   registerRequest: RegisterRequest,
   options?: RequestInit,
-): Promise<AuthResponse> => {
-  return customFetch<AuthResponse>(getRegisterUrl(), {
+): Promise<RegisterResponse> => {
+  return customFetch<RegisterResponse>(getRegisterUrl(), {
     ...options,
     method: "POST",
     headers: { "Content-Type": "application/json", ...options?.headers },

@@ -5,10 +5,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Mail, Lock, Building2, User, CreditCard, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock, Building2, User, Eye, EyeOff, MailCheck } from "lucide-react";
 import { useRegister, RegisterRequestCompanySize } from "@workspace/api-client-react";
 import { captureAttribution } from "@/lib/attribution";
-import { useToast } from "@/hooks/use-toast";
 
 const PLANS = {
   solo: {
@@ -59,12 +58,12 @@ export default function Register() {
   const [, setLocation] = useLocation();
   const [error, setError] = useState<string | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<PlanId | null>(null);
-  const [redirecting, setRedirecting] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState<string | null>(null);
+  const [resent, setResent] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showInvitePassword, setShowInvitePassword] = useState(false);
   const registerMutation = useRegister();
-  const { toast } = useToast();
   // Synchronous re-entrancy guard: a rapid double-click can fire onSubmit twice
   // before React re-renders the disabled button, and both closures would see the
   // stale (false) isSubmitting. A ref flips immediately, so the 2nd call bails.
@@ -116,72 +115,32 @@ export default function Register() {
     submittingRef.current = true;
     setError(null);
 
-    // If user already registered this session (e.g. went back from Stripe to change plan),
-    // reuse their existing token instead of trying to register again.
-    let token: string | null = null;
-    const existingToken = localStorage.getItem("sitesort_token");
-    if (existingToken) {
-      try {
-        const payload = JSON.parse(atob(existingToken.split(".")[1]));
-        if (payload.email === data.email) token = existingToken;
-      } catch {
-        // token unreadable — fall through to register
-      }
-    }
-
     try {
-      if (!token) {
-        const { confirmPassword: _ignored, ...registerData } = data;
-        const response = await registerMutation.mutateAsync({ data: registerData });
-        token = response.token;
-        localStorage.setItem("sitesort_token", token);
-      }
-
-      setRedirecting(true);
-      const checkoutRes = await fetch("/api/billing/checkout", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify({ plan: selectedPlan }),
-      });
-
-      const checkoutJson = await checkoutRes.json().catch(() => ({} as { url?: string; error?: string; beta?: boolean; alreadySubscribed?: boolean }));
-      if (checkoutRes.ok && checkoutJson.url) {
-        window.location.href = checkoutJson.url;
-        return;
-      }
-      // Already have a live subscription → don't start a second checkout; point
-      // them at billing to manage the existing one.
-      if (checkoutRes.ok && checkoutJson.alreadySubscribed) {
-        toast({ title: "You already have a subscription", description: "Manage it in Settings → Billing." });
-        setLocation("/settings?tab=billing");
-        return;
-      }
-      // Beta companies skip Stripe entirely — no checkout URL, so send them in.
-      if (checkoutRes.ok && checkoutJson.beta) {
-        setLocation("/dashboard");
-        return;
-      }
-
-      // Checkout couldn't start. Only let the user through if Stripe is genuinely
-      // not configured (local/dev or self-host with no keys); in every other case
-      // fail CLOSED so nobody reaches the app without entering card details at
-      // signup — a transient error must not hand out a card-less account.
-      const stripeDisabled = /not set|not configured|price id is not configured/i.test(checkoutJson.error ?? "");
-      if (stripeDisabled) {
-        setLocation("/dashboard");
-        return;
-      }
-      submittingRef.current = false; // allow a retry
-      setRedirecting(false);
-      setError("We couldn't start the secure payment step — your account was created, but no card was added. Please click \"Start free trial\" again to enter your card details.");
+      // Registration no longer hands out a session or jumps to Stripe. It creates
+      // the (unverified) account and emails a verification link; the user must
+      // click it, then log in — at which point the checkout gate takes the card.
+      const { confirmPassword: _ignored, ...registerData } = data;
+      const response = await registerMutation.mutateAsync({ data: registerData });
+      setRegisteredEmail(response.email);
     } catch (err: any) {
-      submittingRef.current = false; // allow a retry
-      setRedirecting(false);
       setError(err.message || "Registration failed. Please try again.");
+    } finally {
+      submittingRef.current = false; // allow a retry on failure
     }
+  };
+
+  const resendVerification = async () => {
+    if (!registeredEmail) return;
+    try {
+      await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: registeredEmail }),
+      });
+    } catch {
+      /* resend always reports success to avoid email enumeration; ignore errors */
+    }
+    setResent(true);
   };
 
   const onInviteSubmit = async (data: InviteForm) => {
@@ -206,7 +165,56 @@ export default function Register() {
   };
 
   const plan = selectedPlan ? PLANS[selectedPlan] : null;
-  const isSubmitting = registerMutation.isPending || redirecting;
+  const isSubmitting = registerMutation.isPending;
+
+  // Post-registration: account created, verification email sent. We don't log the
+  // user in — they must click the link, then sign in.
+  if (registeredEmail) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-muted/30 relative py-12">
+        <div className="absolute inset-0 z-0 opacity-20">
+          <img
+            src={`${import.meta.env.BASE_URL}images/auth-bg.png`}
+            alt="Background"
+            className="w-full h-full object-cover"
+          />
+        </div>
+        <div className="w-full max-w-md p-8 bg-card rounded-2xl shadow-2xl border border-border/50 relative z-10 text-center slide-up">
+          <div className="flex flex-col items-center mb-6">
+            <div className="w-12 h-12 bg-accent rounded-xl flex items-center justify-center mb-4 shadow-lg shadow-accent/20">
+              <MailCheck className="w-6 h-6 text-white" />
+            </div>
+            <h1 className="text-2xl font-display font-bold text-primary">Check your email</h1>
+          </div>
+          <p className="text-muted-foreground text-sm">
+            We've sent a verification link to{" "}
+            <span className="font-semibold text-foreground break-words">{registeredEmail}</span>.
+            Click it to confirm your email, then log in to start your free trial.
+          </p>
+          <p className="text-muted-foreground text-xs mt-3">
+            Can't find it? Check your spam folder — it can take a minute to arrive.
+          </p>
+
+          {resent ? (
+            <p className="mt-6 text-sm text-emerald-600 font-medium">
+              Verification email sent again.
+            </p>
+          ) : (
+            <Button variant="outline" className="w-full mt-6" onClick={resendVerification}>
+              Resend verification email
+            </Button>
+          )}
+
+          <div className="mt-6 text-center text-sm text-muted-foreground">
+            Already verified?{" "}
+            <Link href="/login" className="text-primary font-semibold hover:underline">
+              Log in
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted/30 relative py-12">
@@ -438,11 +446,11 @@ export default function Register() {
               </div>
 
               <Button type="submit" variant="accent" className="w-full mt-6" size="lg" isLoading={isSubmitting}>
-                <CreditCard className="w-4 h-4 mr-2" />
-                {redirecting ? "Redirecting to payment…" : "Start free trial"}
+                <Mail className="w-4 h-4 mr-2" />
+                Create account
               </Button>
               <p className="text-center text-xs text-muted-foreground -mt-1">
-                No charge for 14 days. Then {plan!.price}/month. Cancel any time.
+                We'll email a link to verify your address. No charge for 14 days — then {plan!.price}/month. Cancel any time.
               </p>
             </form>
           </>

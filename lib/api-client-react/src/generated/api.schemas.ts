@@ -69,6 +69,11 @@ export interface AuthResponse {
   token: string;
 }
 
+export interface RegisterResponse {
+  requiresVerification: boolean;
+  email: string;
+}
+
 export type InviteUserRequestRole =
   (typeof InviteUserRequestRole)[keyof typeof InviteUserRequestRole];
 

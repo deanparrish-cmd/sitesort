@@ -64,11 +64,11 @@ paths:
               $ref: "#/components/schemas/RegisterRequest"
       responses:
         "201":
-          description: Registered successfully
+          description: Registered — verification email sent, no session issued yet
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuthResponse"
+                $ref: "#/components/schemas/RegisterResponse"
         "400":
           description: Validation error
           content:
@@ -904,6 +904,16 @@ components:
         token:
           type: string
       required: [user, token]
+
+    RegisterResponse:
+      type: object
+      properties:
+        requiresVerification:
+          type: boolean
+        email:
+          type: string
+          format: email
+      required: [requiresVerification, email]
 
     User:
       type: object
