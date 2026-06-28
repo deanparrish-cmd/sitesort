@@ -1224,7 +1224,7 @@ tr:last-child td{border-bottom:none}
               { value: "issues", label: openIssues > 0 ? `Site Issues (${openIssues})` : "Site Issues" },
               { value: "qr", label: "Site Board" },
               { value: "documents", label: "Documents" },
-              { value: "permits", label: "Compliance" },
+              { value: "permits", label: "H&S" },
               ...(caps.canManageProjects ? [{ value: "closeout", label: "Close-out" }] : []),
             ];
           })().map(tab => (
@@ -2456,14 +2456,14 @@ tr:last-child td{border-bottom:none}
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h2 className="text-xl font-bold">Project Compliance</h2>
+                      <h2 className="text-xl font-bold">Health &amp; Safety</h2>
                       {overdueCount > 0 && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs font-bold">
                           <AlertTriangle className="w-3 h-3" />{overdueCount} overdue
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-muted-foreground mt-0.5">Permits, certifications and insurance for this project.</p>
+                    <p className="text-sm text-muted-foreground mt-0.5">Permits, method statements, safety documents and insurance for this project.</p>
                   </div>
                   <div className="flex items-center gap-2">
                     {caps.canUploadDocument && (
@@ -2538,82 +2538,71 @@ tr:last-child td{border-bottom:none}
                   </div>
                 )}
 
-                {/* Compliance Documents */}
+                {/* H&S documents — grouped by type (Method Statements / Permits / Safety) */}
                 {(() => {
-                  const complianceDocs = (documents ?? []).filter(d => ["permit", "safety", "method_statement"].includes(d.type));
-                  return (
-                    <section>
-                      <div className="flex items-center justify-between gap-4 mb-3">
-                        <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-primary" />
-                          <h3 className="font-bold text-sm uppercase tracking-wide text-muted-foreground">Compliance Documents</h3>
-                          <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{complianceDocs.length}</span>
+                  const renderDocRow = (doc: NonNullable<typeof documents>[number]) => {
+                    const norm = doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/");
+                    const docUrl = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
+                    const isSuperseded = doc.status === "superseded";
+                    return (
+                      <div key={doc.id} className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-4 py-3 rounded-xl border ${isSuperseded ? "opacity-60 bg-muted/20" : "bg-card"}`}>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <FileText className="w-4 h-4 text-primary shrink-0" />
+                            <p className={`font-semibold text-sm truncate ${isSuperseded ? "line-through text-muted-foreground" : ""}`}>{doc.name}</p>
+                            <span className="font-mono text-[10px] bg-muted px-1.5 py-0.5 rounded">{docRev(doc)}</span>
+                            {isSuperseded && <span className="text-[10px] font-semibold text-destructive bg-red-100 px-1.5 py-0.5 rounded">Superseded</span>}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5 ml-6">{formatDate(doc.createdAt)} · {doc.uploaderName}</p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => window.open(docUrl, "_blank", "noopener,noreferrer")}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-primary/25 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/15 transition-colors"
+                            title="Open document"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" /> Open
+                          </button>
+                          <button
+                            onClick={() => setSharingDoc({ type: "document", id: doc.id, name: doc.name, version: doc.version, fileUrl: doc.fileUrl })}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors"
+                            title="Share"
+                          >
+                            <Share2 className="w-3.5 h-3.5" /> Share
+                          </button>
                         </div>
                       </div>
-                      {complianceDocs.length === 0 ? (
-                        <div
-                          className="border-2 border-dashed rounded-xl p-8 text-center hover:border-primary/40 hover:bg-primary/5 transition-colors"
-                          onClick={() => caps.canUploadDocument && (setValue("type", "permit"), setIsUploadOpen(true))}
-                          style={{ cursor: caps.canUploadDocument ? "pointer" : "default" }}
-                        >
-                          <Upload className="w-8 h-8 mx-auto text-muted-foreground/30 mb-2" />
-                          <p className="font-semibold text-muted-foreground">No compliance documents yet.</p>
-                          <p className="text-sm text-muted-foreground mt-1">Upload permits, method statements, and safety documents here.</p>
+                    );
+                  };
+                  const docGroups: { key: string; label: string }[] = [
+                    { key: "method_statement", label: "Method Statements (RAMS)" },
+                    { key: "permit", label: "Permit Documents" },
+                    { key: "safety", label: "Safety Documents" },
+                  ];
+                  return docGroups.map(g => {
+                    const docs = (documents ?? []).filter(d => d.type === g.key);
+                    return (
+                      <section key={g.key}>
+                        <div className="flex items-center justify-between gap-4 mb-3">
+                          <div className="flex items-center gap-2">
+                            <FileText className="w-4 h-4 text-primary" />
+                            <h3 className="font-bold text-sm uppercase tracking-wide text-muted-foreground">{g.label}</h3>
+                            <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{docs.length}</span>
+                          </div>
                           {caps.canUploadDocument && (
-                            <Button variant="outline" size="sm" className="mt-4" onClick={e => { e.stopPropagation(); setValue("type", "permit"); setIsUploadOpen(true); }}>
-                              <Upload className="w-3.5 h-3.5 mr-1.5" /> Upload Document
+                            <Button variant="ghost" size="sm" onClick={() => { setValue("type", g.key); setIsUploadOpen(true); }}>
+                              <Upload className="w-3.5 h-3.5 mr-1.5" /> Upload
                             </Button>
                           )}
                         </div>
-                      ) : (
-                        <div className="space-y-2">
-                          {complianceDocs.map(doc => {
-                            const norm = doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/");
-                            const docUrl = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
-                            const isSuperseded = doc.status === "superseded";
-                            return (
-                              <div key={doc.id} className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-4 py-3 rounded-xl border ${isSuperseded ? "opacity-60 bg-muted/20" : "bg-card"}`}>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <FileText className="w-4 h-4 text-primary shrink-0" />
-                                    <p className={`font-semibold text-sm truncate ${isSuperseded ? "line-through text-muted-foreground" : ""}`}>{doc.name}</p>
-                                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground capitalize">{doc.type.replace(/_/g, " ")}</span>
-                                    <span className="font-mono text-[10px] bg-muted px-1.5 py-0.5 rounded">{docRev(doc)}</span>
-                                    {isSuperseded && <span className="text-[10px] font-semibold text-destructive bg-red-100 px-1.5 py-0.5 rounded">Superseded</span>}
-                                  </div>
-                                  <p className="text-xs text-muted-foreground mt-0.5 ml-6">{formatDate(doc.createdAt)} · {doc.uploaderName}</p>
-                                </div>
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <button
-                                    onClick={() => window.open(docUrl, "_blank", "noopener,noreferrer")}
-                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-primary/25 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/15 transition-colors"
-                                    title="Open document"
-                                  >
-                                    <ExternalLink className="w-3.5 h-3.5" /> Open
-                                  </button>
-                                  <button
-                                    onClick={() => setSharingDoc({ type: "document", id: doc.id, name: doc.name, version: doc.version, fileUrl: doc.fileUrl })}
-                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors"
-                                    title="Share"
-                                  >
-                                    <Share2 className="w-3.5 h-3.5" /> Share
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                          {caps.canUploadDocument && (
-                            <button
-                              onClick={() => { setValue("type", "permit"); setIsUploadOpen(true); }}
-                              className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed rounded-xl text-sm text-muted-foreground hover:border-primary/50 hover:text-primary hover:bg-primary/5 transition-colors"
-                            >
-                              <Upload className="w-4 h-4" /> Upload another document
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </section>
-                  );
+                        {docs.length === 0 ? (
+                          <p className="text-sm text-muted-foreground px-4 py-3 border border-dashed rounded-xl">No {g.label.toLowerCase()} yet.</p>
+                        ) : (
+                          <div className="space-y-2">{docs.map(renderDocRow)}</div>
+                        )}
+                      </section>
+                    );
+                  });
                 })()}
 
                 {/* Team Insurance */}
