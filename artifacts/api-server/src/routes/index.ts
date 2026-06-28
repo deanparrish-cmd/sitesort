@@ -23,6 +23,7 @@ import onboardingRouter from "./onboarding";
 import reportsRouter from "./reports";
 import shareLogsRouter from "./share-logs";
 import calendarEventsRouter from "./calendar-events";
+import closeoutRouter from "./closeout";
 
 const router: IRouter = Router();
 
@@ -50,5 +51,6 @@ router.use(onboardingRouter);
 router.use(reportsRouter);
 router.use(shareLogsRouter);
 router.use(calendarEventsRouter);
+router.use(closeoutRouter);
 
 export default router;

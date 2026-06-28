@@ -60,6 +60,21 @@ export async function ensureSchema(): Promise<void> {
     // deadline (no pre-existing responsible field). Overdue is derived likewise.
     await pool.query(`ALTER TABLE insurance_records ADD COLUMN IF NOT EXISTS assigned_to_user_id text`);
     await pool.query(`ALTER TABLE insurance_records ADD COLUMN IF NOT EXISTS due_date date`);
+    // F2 — project close-out / handover sign-off (append-only audit). New table →
+    // must exist in prod before the close-out endpoints run.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS project_closeouts (
+        id text PRIMARY KEY,
+        project_id text NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        signed_off_by_user_id text NOT NULL REFERENCES users(id),
+        signed_off_by_name text NOT NULL,
+        signed_off_by_role text NOT NULL,
+        note text,
+        ip_address text,
+        user_agent text,
+        created_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
     // Email verification — registration now sends a verification link and only
     // marks the account verified once it's clicked, so the register handler writes
     // these columns. email_verified already exists in prod (the login gate reads
@@ -68,7 +83,7 @@ export async function ensureSchema(): Promise<void> {
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified boolean NOT NULL DEFAULT false`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_token text`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_expiry timestamp`);
-    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols ready");
+    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols ready");
   } catch (err) {
     // Don't crash the server — membership lookups fall back to the home company.
     logger.error({ err }, "ensureSchema failed (continuing with home-company fallback)");
