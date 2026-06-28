@@ -18,6 +18,19 @@ import {
 
 const router: IRouter = Router();
 
+// Silent per-email throttle for verification resends. The frontend enforces its
+// own (longer) countdown for UX; this is the server-side backstop so the endpoint
+// can't be spammed directly. In-memory + per-instance — fine for basic anti-abuse.
+const RESEND_THROTTLE_MS = 30 * 1000;
+const lastResendByEmail = new Map<string, number>();
+function resendThrottled(email: string): boolean {
+  const now = Date.now();
+  const last = lastResendByEmail.get(email);
+  if (last && now - last < RESEND_THROTTLE_MS) return true;
+  lastResendByEmail.set(email, now);
+  return false;
+}
+
 router.post("/auth/register", async (req, res) => {
   try {
     const { companyName, adminName, email: rawEmail, password, companySize } = req.body;
@@ -256,6 +269,13 @@ router.post("/auth/resend-verification", async (req, res) => {
     const users = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
     // Always return success to prevent email enumeration
     if (users.length === 0 || users[0].emailVerified) {
+      res.json({ success: true });
+      return;
+    }
+
+    // Silently skip the actual send if this email asked very recently. Still
+    // returns success so the response shape never reveals account state.
+    if (resendThrottled(email)) {
       res.json({ success: true });
       return;
     }
