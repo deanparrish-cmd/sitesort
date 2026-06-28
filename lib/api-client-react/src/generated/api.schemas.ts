@@ -208,6 +208,7 @@ export interface Document {
   name: string;
   type: DocumentType;
   version: number;
+  revision?: string | null;
   fileUrl: string;
   fileSize: number;
   previousVersionId?: string | null;
@@ -263,6 +264,8 @@ export interface UploadDocumentRequest {
   requiresAcknowledgment?: boolean;
   publicAccess?: boolean;
   distributeToUserIds?: string[];
+  supersededDocumentId?: string | null;
+  revision?: string | null;
 }
 
 export interface AcknowledgeRequest {

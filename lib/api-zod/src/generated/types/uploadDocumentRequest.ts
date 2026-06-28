@@ -15,4 +15,6 @@ export interface UploadDocumentRequest {
   requiresAcknowledgment?: boolean;
   publicAccess?: boolean;
   distributeToUserIds?: string[];
+  supersededDocumentId?: string | null;
+  revision?: string | null;
 }

@@ -1112,6 +1112,9 @@ components:
           enum: [drawing, method_statement, permit, safety, general]
         version:
           type: integer
+        revision:
+          type: string
+          nullable: true
         fileUrl:
           type: string
         fileSize:
@@ -1181,6 +1184,12 @@ components:
           type: array
           items:
             type: string
+        supersededDocumentId:
+          type: string
+          nullable: true
+        revision:
+          type: string
+          nullable: true
       required: [name, type, fileUrl, fileSize]
 
     AcknowledgeRequest:

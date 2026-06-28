@@ -11,6 +11,10 @@ export const documentsTable = pgTable("documents", {
   name: text("name").notNull(),
   type: text("type").notNull(),
   version: integer("version").notNull().default(1),
+  // Alphabetical drawing revision label (F3). Drawings default to A, B, C… by
+  // version but can be overridden to match the title block (C, P01, C02…).
+  // Null for non-drawing documents that don't use revisions.
+  revision: text("revision"),
   fileUrl: text("file_url").notNull(),
   fileSize: integer("file_size").notNull().default(0),
   previousVersionId: text("previous_version_id"),

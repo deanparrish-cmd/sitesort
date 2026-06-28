@@ -18,6 +18,7 @@ export interface Document {
   name: string;
   type: DocumentType;
   version: number;
+  revision?: string | null;
   fileUrl: string;
   fileSize: number;
   previousVersionId?: string | null;
