@@ -60,6 +60,8 @@ export default function Register() {
   const [selectedPlan, setSelectedPlan] = useState<PlanId | null>(null);
   const [registeredEmail, setRegisteredEmail] = useState<string | null>(null);
   const [resent, setResent] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showInvitePassword, setShowInvitePassword] = useState(false);
@@ -129,8 +131,16 @@ export default function Register() {
     }
   };
 
+  // Tick down the resend cooldown once a resend has fired.
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setTimeout(() => setResendCooldown(c => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendCooldown]);
+
   const resendVerification = async () => {
-    if (!registeredEmail) return;
+    if (!registeredEmail || resending || resendCooldown > 0) return;
+    setResending(true);
     try {
       await fetch("/api/auth/resend-verification", {
         method: "POST",
@@ -141,6 +151,18 @@ export default function Register() {
       /* resend always reports success to avoid email enumeration; ignore errors */
     }
     setResent(true);
+    setResending(false);
+    setResendCooldown(45); // rate-limit: one resend per 45s (backend also throttles)
+  };
+
+  // "Wrong email?" — return to the details form so the user can correct a typo.
+  // The form's values persist (the component stays mounted), so the bad address
+  // is still in the field, ready to fix and resubmit.
+  const editEmail = () => {
+    setRegisteredEmail(null);
+    setResent(false);
+    setResendCooldown(0);
+    setError(null);
   };
 
   const onInviteSubmit = async (data: InviteForm) => {
@@ -192,18 +214,37 @@ export default function Register() {
             Click it to confirm your email, then log in to start your free trial.
           </p>
           <p className="text-muted-foreground text-xs mt-3">
-            Can't find it? Check your spam folder — it can take a minute to arrive.
+            Don't see it within a minute or two? Check your spam or junk folder — and
+            mark it "not spam" so future emails reach your inbox.
           </p>
 
-          {resent ? (
-            <p className="mt-6 text-sm text-emerald-600 font-medium">
-              Verification email sent again.
+          {resent && (
+            <p className="mt-5 text-sm text-emerald-600 font-medium">
+              Verification email sent — check your inbox again.
             </p>
-          ) : (
-            <Button variant="outline" className="w-full mt-6" onClick={resendVerification}>
-              Resend verification email
-            </Button>
           )}
+
+          <Button
+            variant="outline"
+            className="w-full mt-5"
+            onClick={resendVerification}
+            isLoading={resending}
+            disabled={resending || resendCooldown > 0}
+          >
+            {resendCooldown > 0
+              ? `Resend available in ${resendCooldown}s`
+              : resent
+                ? "Resend verification email"
+                : "Didn't get it? Resend verification email"}
+          </Button>
+
+          <button
+            type="button"
+            onClick={editEmail}
+            className="mt-4 text-sm text-muted-foreground hover:text-foreground underline underline-offset-2"
+          >
+            Wrong email? Go back and edit
+          </button>
 
           <div className="mt-6 text-center text-sm text-muted-foreground">
             Already verified?{" "}
