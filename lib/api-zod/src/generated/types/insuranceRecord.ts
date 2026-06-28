@@ -15,5 +15,9 @@ export interface InsuranceRecord {
   certificateUrl: string;
   expiryDate: Date;
   status: InsuranceRecordStatus;
+  assignedToUserId?: string | null;
+  assignedToUserName?: string | null;
+  dueDate?: Date | null;
+  overdue: boolean;
   createdAt: Date;
 }

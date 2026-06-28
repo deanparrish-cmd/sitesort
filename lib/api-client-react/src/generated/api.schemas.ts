@@ -387,6 +387,10 @@ export interface InsuranceRecord {
   certificateUrl: string;
   expiryDate: string;
   status: InsuranceRecordStatus;
+  assignedToUserId?: string | null;
+  assignedToUserName?: string | null;
+  dueDate?: string | null;
+  overdue: boolean;
   createdAt: string;
 }
 
@@ -426,6 +430,25 @@ export interface AddInsuranceRequest {
   type: AddInsuranceRequestType;
   certificateUrl: string;
   expiryDate: string;
+  assignedToUserId?: string | null;
+  dueDate?: string | null;
+}
+
+export type UpdateInsuranceRequestType =
+  (typeof UpdateInsuranceRequestType)[keyof typeof UpdateInsuranceRequestType];
+
+export const UpdateInsuranceRequestType = {
+  public_liability: "public_liability",
+  employers: "employers",
+  professional: "professional",
+} as const;
+
+export interface UpdateInsuranceRequest {
+  type?: UpdateInsuranceRequestType;
+  certificateUrl?: string;
+  expiryDate?: string;
+  assignedToUserId?: string | null;
+  dueDate?: string | null;
 }
 
 export type PermitType = (typeof PermitType)[keyof typeof PermitType];

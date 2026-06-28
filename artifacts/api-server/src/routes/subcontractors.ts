@@ -1,9 +1,11 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { subcontractorsTable, insuranceRecordsTable, projectMembersTable, projectsTable, subcontractorNotesTable, usersTable } from "@workspace/db/schema";
-import { eq, and, desc, or, isNull, isNotNull } from "drizzle-orm";
+import { eq, and, desc, or, isNull, isNotNull, inArray } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
+import { expiryStatus } from "../lib/expiry";
+import { isOverdue } from "../lib/accountability";
 
 const router: IRouter = Router();
 
@@ -15,13 +17,40 @@ function computeInsuranceStatus(records: Array<{ expiryDate: string }>): "valid"
   return "valid";
 }
 
+// Insurance uses "valid" where the shared helper says "active"; otherwise the
+// bands (expiring_soon ≤30d, expired) are identical. Reuse the one canonical
+// helper (F1) so certs agree with permits/compliance/QR on the thresholds.
 function computeRecordStatus(expiryDate: string): "valid" | "expiring_soon" | "expired" {
-  const expiry = new Date(expiryDate);
-  const now = new Date();
-  const daysUntilExpiry = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  if (daysUntilExpiry < 0) return "expired";
-  if (daysUntilExpiry <= 30) return "expiring_soon";
-  return "valid";
+  const s = expiryStatus(expiryDate);
+  return s === "active" ? "valid" : s;
+}
+
+type InsuranceRow = typeof insuranceRecordsTable.$inferSelect;
+
+// Serialize insurance records with assignee name + derived overdue flag. Names
+// are resolved in a single batched query to avoid an N+1 over the records.
+async function serializeInsuranceRecords(records: InsuranceRow[]) {
+  const assigneeIds = [...new Set(records.map(r => r.assignedToUserId).filter((x): x is string => !!x))];
+  const nameById = new Map<string, string>();
+  if (assigneeIds.length > 0) {
+    const users = await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable)
+      .where(inArray(usersTable.id, assigneeIds));
+    for (const u of users) nameById.set(u.id, u.name);
+  }
+  return records.map(r => ({
+    id: r.id,
+    subcontractorId: r.subcontractorId,
+    type: r.type,
+    certificateUrl: r.certificateUrl,
+    expiryDate: r.expiryDate,
+    status: computeRecordStatus(r.expiryDate),
+    assignedToUserId: r.assignedToUserId ?? null,
+    assignedToUserName: r.assignedToUserId ? (nameById.get(r.assignedToUserId) ?? "Unknown") : null,
+    dueDate: r.dueDate ?? null,
+    // A cert is "done" (no longer overdue) once archived/renewed.
+    overdue: isOverdue(r.dueDate, !!r.archivedAt),
+    createdAt: r.createdAt.toISOString(),
+  }));
 }
 
 router.get("/subcontractors", authenticate, async (req, res) => {
@@ -43,7 +72,7 @@ router.get("/subcontractors", authenticate, async (req, res) => {
         paymentHold: s.paymentHold,
         notes: s.notes ?? null,
         insuranceStatus: computeInsuranceStatus(insurance),
-        insuranceRecords: insurance.map(r => ({ id: r.id, type: r.type, certificateUrl: r.certificateUrl, expiryDate: r.expiryDate, status: computeRecordStatus(r.expiryDate) })),
+        insuranceRecords: await serializeInsuranceRecords(insurance),
         createdAt: s.createdAt.toISOString(),
       };
     }));
@@ -117,7 +146,7 @@ router.get("/subcontractors/:subcontractorId", authenticate, async (req, res) =>
       notes: s.notes ?? null,
       insuranceStatus: computeInsuranceStatus(insurance),
       createdAt: s.createdAt.toISOString(),
-      insuranceRecords: insurance.map(r => ({ ...r, status: computeRecordStatus(r.expiryDate), expiryDate: r.expiryDate, createdAt: r.createdAt.toISOString() })),
+      insuranceRecords: await serializeInsuranceRecords(insurance),
       assignedProjects: assignedProjects.filter(Boolean),
     });
   } catch (err) {
@@ -154,7 +183,7 @@ router.patch("/subcontractors/:subcontractorId", authenticate, async (req, res) 
     const insurance = await db.select().from(insuranceRecordsTable)
       .where(and(eq(insuranceRecordsTable.subcontractorId, s.id), isNull(insuranceRecordsTable.archivedAt)));
 
-    res.json({ id: s.id, companyId: s.companyId, companyName: s.companyName, contactName: s.contactName, contactEmail: s.contactEmail, contactPhone: s.contactPhone ?? null, contactType: s.contactType ?? "subcontractor", trades: s.trades ?? [], reliabilityRating: s.reliabilityRating ? Number(s.reliabilityRating) : null, paymentHold: s.paymentHold, notes: s.notes ?? null, insuranceStatus: computeInsuranceStatus(insurance), insuranceRecords: insurance.map(r => ({ id: r.id, type: r.type, certificateUrl: r.certificateUrl, expiryDate: r.expiryDate, status: computeRecordStatus(r.expiryDate) })), createdAt: s.createdAt.toISOString() });
+    res.json({ id: s.id, companyId: s.companyId, companyName: s.companyName, contactName: s.contactName, contactEmail: s.contactEmail, contactPhone: s.contactPhone ?? null, contactType: s.contactType ?? "subcontractor", trades: s.trades ?? [], reliabilityRating: s.reliabilityRating ? Number(s.reliabilityRating) : null, paymentHold: s.paymentHold, notes: s.notes ?? null, insuranceStatus: computeInsuranceStatus(insurance), insuranceRecords: await serializeInsuranceRecords(insurance), createdAt: s.createdAt.toISOString() });
   } catch (err) {
     req.log.error({ err }, "Update subcontractor error");
     res.status(500).json({ error: "server_error", message: "Failed to update subcontractor" });
@@ -163,7 +192,7 @@ router.patch("/subcontractors/:subcontractorId", authenticate, async (req, res) 
 
 router.post("/subcontractors/:subcontractorId/insurance", authenticate, async (req, res) => {
   try {
-    const { type, certificateUrl, expiryDate } = req.body;
+    const { type, certificateUrl, expiryDate, assignedToUserId, dueDate } = req.body;
     if (!type || !certificateUrl || !expiryDate) {
       res.status(400).json({ error: "validation_error", message: "type, certificateUrl, expiryDate required" });
       return;
@@ -195,12 +224,53 @@ router.post("/subcontractors/:subcontractorId/insurance", authenticate, async (r
       certificateUrl,
       expiryDate,
       status,
+      assignedToUserId: assignedToUserId || null,
+      dueDate: dueDate || null,
     });
 
-    res.status(201).json({ id, subcontractorId: req.params.subcontractorId, type, certificateUrl, expiryDate, status, createdAt: new Date().toISOString() });
+    const inserted = await db.select().from(insuranceRecordsTable).where(eq(insuranceRecordsTable.id, id)).limit(1);
+    res.status(201).json((await serializeInsuranceRecords(inserted))[0]);
   } catch (err) {
     req.log.error({ err }, "Add insurance error");
     res.status(500).json({ error: "server_error", message: "Failed to add insurance record" });
+  }
+});
+
+// Edit / reassign an insurance record (assignee, due date, expiry, certificate).
+// Tenant-scoped: the record's subcontractor must belong to the caller's company.
+router.patch("/subcontractors/:subcontractorId/insurance/:recordId", authenticate, async (req, res) => {
+  try {
+    const sub = await db.select({ id: subcontractorsTable.id }).from(subcontractorsTable)
+      .where(and(eq(subcontractorsTable.id, req.params.subcontractorId), eq(subcontractorsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!sub[0]) {
+      res.status(404).json({ error: "not_found", message: "Subcontractor not found" });
+      return;
+    }
+
+    const existing = await db.select().from(insuranceRecordsTable)
+      .where(and(eq(insuranceRecordsTable.id, req.params.recordId), eq(insuranceRecordsTable.subcontractorId, req.params.subcontractorId)))
+      .limit(1);
+    if (!existing[0]) {
+      res.status(404).json({ error: "not_found", message: "Insurance record not found" });
+      return;
+    }
+
+    const { type, certificateUrl, expiryDate, assignedToUserId, dueDate } = req.body;
+    const updates: Record<string, unknown> = {};
+    if (type !== undefined) updates.type = type;
+    if (certificateUrl !== undefined) updates.certificateUrl = certificateUrl;
+    if (expiryDate !== undefined) { updates.expiryDate = expiryDate; updates.status = computeRecordStatus(expiryDate); }
+    // null/"" clears the field; a value sets it; undefined leaves as-is.
+    if (assignedToUserId !== undefined) updates.assignedToUserId = assignedToUserId || null;
+    if (dueDate !== undefined) updates.dueDate = dueDate || null;
+
+    await db.update(insuranceRecordsTable).set(updates).where(eq(insuranceRecordsTable.id, req.params.recordId));
+    const updated = await db.select().from(insuranceRecordsTable).where(eq(insuranceRecordsTable.id, req.params.recordId)).limit(1);
+    res.json((await serializeInsuranceRecords(updated))[0]);
+  } catch (err) {
+    req.log.error({ err }, "Update insurance error");
+    res.status(500).json({ error: "server_error", message: "Failed to update insurance record" });
   }
 });
 

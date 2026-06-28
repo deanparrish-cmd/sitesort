@@ -70,6 +70,8 @@ export * from "./subcontractorDetail";
 export * from "./subcontractorDetailAssignedProjectsItem";
 export * from "./subcontractorInsuranceStatus";
 export * from "./successResponse";
+export * from "./updateInsuranceRequest";
+export * from "./updateInsuranceRequestType";
 export * from "./updatePermitRequest";
 export * from "./updateProjectRequest";
 export * from "./updateProjectRequestStatus";

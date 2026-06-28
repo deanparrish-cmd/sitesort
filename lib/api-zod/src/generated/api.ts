@@ -485,6 +485,10 @@ export const GetSubcontractorResponse = zod
           certificateUrl: zod.string(),
           expiryDate: zod.date(),
           status: zod.enum(["valid", "expiring_soon", "expired"]),
+          assignedToUserId: zod.string().nullish(),
+          assignedToUserName: zod.string().nullish(),
+          dueDate: zod.date().nullish(),
+          overdue: zod.boolean(),
           createdAt: zod.date(),
         }),
       ),
@@ -539,6 +543,38 @@ export const AddInsuranceRecordBody = zod.object({
   type: zod.enum(["public_liability", "employers", "professional"]),
   certificateUrl: zod.string(),
   expiryDate: zod.date(),
+  assignedToUserId: zod.string().nullish(),
+  dueDate: zod.date().nullish(),
+});
+
+/**
+ * @summary Update an insurance record (reassign, due date, expiry, certificate)
+ */
+export const UpdateInsuranceRecordParams = zod.object({
+  subcontractorId: zod.coerce.string(),
+  recordId: zod.coerce.string(),
+});
+
+export const UpdateInsuranceRecordBody = zod.object({
+  type: zod.enum(["public_liability", "employers", "professional"]).optional(),
+  certificateUrl: zod.string().optional(),
+  expiryDate: zod.date().optional(),
+  assignedToUserId: zod.string().nullish(),
+  dueDate: zod.date().nullish(),
+});
+
+export const UpdateInsuranceRecordResponse = zod.object({
+  id: zod.string(),
+  subcontractorId: zod.string(),
+  type: zod.enum(["public_liability", "employers", "professional"]),
+  certificateUrl: zod.string(),
+  expiryDate: zod.date(),
+  status: zod.enum(["valid", "expiring_soon", "expired"]),
+  assignedToUserId: zod.string().nullish(),
+  assignedToUserName: zod.string().nullish(),
+  dueDate: zod.date().nullish(),
+  overdue: zod.boolean(),
+  createdAt: zod.date(),
 });
 
 /**

@@ -4,16 +4,15 @@ import { projectMembersTable, usersTable, subcontractorsTable, insuranceRecordsT
 import { eq, and, isNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
+import { expiryStatus } from "../lib/expiry";
 
 const router: IRouter = Router();
 
+// Reuse the canonical expiry helper (F1) — insurance says "valid" where the
+// shared helper says "active"; the expiring_soon/expired bands are identical.
 function computeRecordStatus(expiryDate: string): "valid" | "expiring_soon" | "expired" {
-  const expiry = new Date(expiryDate);
-  const now = new Date();
-  const daysUntilExpiry = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  if (daysUntilExpiry < 0) return "expired";
-  if (daysUntilExpiry <= 30) return "expiring_soon";
-  return "valid";
+  const s = expiryStatus(expiryDate);
+  return s === "active" ? "valid" : s;
 }
 
 function getInsuranceStatus(records: Array<{ expiryDate: string }>): string {
