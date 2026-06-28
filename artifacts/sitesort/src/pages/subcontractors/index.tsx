@@ -13,7 +13,7 @@ import {
   ShieldCheck, ShieldAlert, ShieldX, Shield, Star, AlertTriangle,
   Users, Pencil, X, FolderOpen, MessageSquare,
   FolderPlus, CheckCircle2, Loader2, Building2, UserPlus, Copy, Check,
-  Share2, MessageCircle, StickyNote, Clock, Send, FileText, ExternalLink,
+  Share2, MessageCircle, StickyNote, Clock, Send, FileText, ExternalLink, UserCheck,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { cn } from "@/lib/utils";
@@ -51,7 +51,13 @@ type InsuranceRecord = {
   certificateUrl: string;
   expiryDate: string;
   status: string;
+  assignedToUserId?: string | null;
+  assignedToUserName?: string | null;
+  dueDate?: string | null;
+  overdue?: boolean;
 };
+
+type CompanyUser = { id: string; name: string; role: string };
 
 type Sub = {
   id: string;
@@ -241,6 +247,45 @@ export default function SubcontractorsPage() {
   const [noteScope, setNoteScope] = useState<"general" | "project">("general");
   const [noteProjectId, setNoteProjectId] = useState("");
   const [noteProjects, setNoteProjects] = useState<{ id: string; name: string }[]>([]);
+
+  // Insurance assign/reassign dialog (F1 Phase 3)
+  const [insTarget, setInsTarget] = useState<{ sub: Sub; record: InsuranceRecord } | null>(null);
+  const [insAssignee, setInsAssignee] = useState("");
+  const [insDueDate, setInsDueDate] = useState("");
+  const [insSubmitting, setInsSubmitting] = useState(false);
+  const [insError, setInsError] = useState<string | null>(null);
+  const [companyUsers, setCompanyUsers] = useState<CompanyUser[]>([]);
+
+  // Company users for the assignee dropdown — fetched once.
+  useEffect(() => {
+    apiFetch("/api/users")
+      .then(r => r.ok ? r.json() : [])
+      .then((u: CompanyUser[]) => setCompanyUsers(u))
+      .catch(() => setCompanyUsers([]));
+  }, []);
+
+  const openInsAssign = (sub: Sub, record: InsuranceRecord) => {
+    setInsTarget({ sub, record });
+    setInsAssignee(record.assignedToUserId ?? "");
+    setInsDueDate(record.dueDate ? record.dueDate.slice(0, 10) : "");
+    setInsError(null);
+  };
+
+  const saveInsAssign = async () => {
+    if (!insTarget) return;
+    if (isCancelled) { toast({ variant: "destructive", title: "Subscription inactive", description: "Reactivate to make changes." }); return; }
+    setInsSubmitting(true);
+    setInsError(null);
+    const res = await apiFetch(`/api/subcontractors/${insTarget.sub.id}/insurance/${insTarget.record.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assignedToUserId: insAssignee || null, dueDate: insDueDate || null }),
+    });
+    setInsSubmitting(false);
+    if (!res.ok) { setInsError("Failed to save. Please try again."); return; }
+    setInsTarget(null);
+    await load();
+  };
 
   useEffect(() => {
     if (!shareTarget) return;
@@ -657,10 +702,22 @@ export default function SubcontractorsPage() {
                                       <div className="flex items-center gap-1.5">
                                         <FileText className="w-3 h-3 shrink-0" />
                                         <span className="truncate">{r.type} — {expired ? "expired" : "expires"} {new Date(r.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
+                                        {r.overdue && <span className="shrink-0 text-[9px] font-bold text-red-700 bg-red-100 border border-red-300 rounded px-1 py-px uppercase tracking-wide">Overdue</span>}
                                         <button onClick={() => window.open(normaliseUrl(r.certificateUrl), "_blank")} className="ml-auto shrink-0 hover:opacity-70" title="Open certificate">
                                           <ExternalLink className="w-3 h-3" />
                                         </button>
+                                        {caps.canManageSubcontractors && (
+                                          <button onClick={() => openInsAssign(sub, r)} className="shrink-0 hover:opacity-70" title="Assign owner & due date">
+                                            <Pencil className="w-3 h-3" />
+                                          </button>
+                                        )}
                                       </div>
+                                      {(r.assignedToUserName || r.dueDate) && (
+                                        <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 text-[9px] opacity-90">
+                                          {r.assignedToUserName && <span className="flex items-center gap-1"><UserCheck className="w-2.5 h-2.5" />{r.assignedToUserName}</span>}
+                                          {r.dueDate && <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" />Due {new Date(r.dueDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>}
+                                        </div>
+                                      )}
                                       {expired && <span className="text-[9px] font-bold text-red-700 uppercase tracking-wide">Site access denied — new document required</span>}
                                     </div>
                                   );
@@ -1197,6 +1254,44 @@ export default function SubcontractorsPage() {
         )}
         <DialogFooter>
           <Button variant="outline" onClick={() => { setNotesTarget(null); setNotesList([]); setNoteDraft(""); setNoteScope("general"); setNoteProjectId(""); }}>Close</Button>
+        </DialogFooter>
+      </Dialog>
+
+      {/* Insurance — assign owner & due date (F1 Phase 3) */}
+      <Dialog open={!!insTarget} onOpenChange={open => { if (!open) { setInsTarget(null); setInsError(null); } }}>
+        <DialogHeader>
+          <DialogTitle>Insurance Accountability</DialogTitle>
+        </DialogHeader>
+        {insTarget && (
+          <div className="space-y-4">
+            <div className="text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">{insTarget.sub.companyName}</span>
+              {" — "}{insTarget.record.type} cert, expires {new Date(insTarget.record.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Assign to</label>
+              <select
+                value={insAssignee}
+                onChange={e => setInsAssignee(e.target.value)}
+                className="flex h-11 w-full rounded-lg border-2 border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/10"
+              >
+                <option value="">Unassigned</option>
+                {companyUsers.map(u => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Action due by (optional)</label>
+              <Input type="date" value={insDueDate} onChange={e => setInsDueDate(e.target.value)} />
+              <p className="text-[11px] text-muted-foreground mt-1">The deadline to chase the renewal — distinct from the cert's expiry. Past-due shows an OVERDUE flag.</p>
+            </div>
+            {insError && <p className="text-destructive text-sm">{insError}</p>}
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => { setInsTarget(null); setInsError(null); }}>Cancel</Button>
+          <Button variant="accent" onClick={saveInsAssign} isLoading={insSubmitting}>Save</Button>
         </DialogFooter>
       </Dialog>
     </SidebarLayout>

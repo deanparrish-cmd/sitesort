@@ -562,6 +562,36 @@ paths:
               schema:
                 $ref: "#/components/schemas/InsuranceRecord"
 
+  /subcontractors/{subcontractorId}/insurance/{recordId}:
+    patch:
+      operationId: updateInsuranceRecord
+      tags: [insurance]
+      summary: Update an insurance record (reassign, due date, expiry, certificate)
+      parameters:
+        - name: subcontractorId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: recordId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateInsuranceRequest"
+      responses:
+        "200":
+          description: Updated insurance record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InsuranceRecord"
+
   /projects/{projectId}/permits:
     get:
       operationId: listPermits
@@ -1385,10 +1415,22 @@ components:
         status:
           type: string
           enum: [valid, expiring_soon, expired]
+        assignedToUserId:
+          type: string
+          nullable: true
+        assignedToUserName:
+          type: string
+          nullable: true
+        dueDate:
+          type: string
+          format: date
+          nullable: true
+        overdue:
+          type: boolean
         createdAt:
           type: string
           format: date-time
-      required: [id, subcontractorId, type, certificateUrl, expiryDate, status, createdAt]
+      required: [id, subcontractorId, type, certificateUrl, expiryDate, status, overdue, createdAt]
 
     AddInsuranceRequest:
       type: object
@@ -1401,7 +1443,33 @@ components:
         expiryDate:
           type: string
           format: date
+        assignedToUserId:
+          type: string
+          nullable: true
+        dueDate:
+          type: string
+          format: date
+          nullable: true
       required: [type, certificateUrl, expiryDate]
+
+    UpdateInsuranceRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [public_liability, employers, professional]
+        certificateUrl:
+          type: string
+        expiryDate:
+          type: string
+          format: date
+        assignedToUserId:
+          type: string
+          nullable: true
+        dueDate:
+          type: string
+          format: date
+          nullable: true
 
     Permit:
       type: object

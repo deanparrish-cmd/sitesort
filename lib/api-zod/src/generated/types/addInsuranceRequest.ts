@@ -11,4 +11,6 @@ export interface AddInsuranceRequest {
   type: AddInsuranceRequestType;
   certificateUrl: string;
   expiryDate: Date;
+  assignedToUserId?: string | null;
+  dueDate?: Date | null;
 }

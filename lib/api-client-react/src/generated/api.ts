@@ -52,6 +52,7 @@ import type {
   Subcontractor,
   SubcontractorDetail,
   SuccessResponse,
+  UpdateInsuranceRequest,
   UpdatePermitRequest,
   UpdateProjectRequest,
   UpdateSubcontractorRequest,
@@ -2143,6 +2144,126 @@ export const useAddInsuranceRecord = <
   TContext
 > => {
   return useMutation(getAddInsuranceRecordMutationOptions(options));
+};
+
+/**
+ * @summary Update an insurance record (reassign, due date, expiry, certificate)
+ */
+export const getUpdateInsuranceRecordUrl = (
+  subcontractorId: string,
+  recordId: string,
+) => {
+  return `/api/subcontractors/${subcontractorId}/insurance/${recordId}`;
+};
+
+export const updateInsuranceRecord = async (
+  subcontractorId: string,
+  recordId: string,
+  updateInsuranceRequest: UpdateInsuranceRequest,
+  options?: RequestInit,
+): Promise<InsuranceRecord> => {
+  return customFetch<InsuranceRecord>(
+    getUpdateInsuranceRecordUrl(subcontractorId, recordId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updateInsuranceRequest),
+    },
+  );
+};
+
+export const getUpdateInsuranceRecordMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateInsuranceRecord>>,
+    TError,
+    {
+      subcontractorId: string;
+      recordId: string;
+      data: BodyType<UpdateInsuranceRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateInsuranceRecord>>,
+  TError,
+  {
+    subcontractorId: string;
+    recordId: string;
+    data: BodyType<UpdateInsuranceRequest>;
+  },
+  TContext
+> => {
+  const mutationKey = ["updateInsuranceRecord"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateInsuranceRecord>>,
+    {
+      subcontractorId: string;
+      recordId: string;
+      data: BodyType<UpdateInsuranceRequest>;
+    }
+  > = (props) => {
+    const { subcontractorId, recordId, data } = props ?? {};
+
+    return updateInsuranceRecord(
+      subcontractorId,
+      recordId,
+      data,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateInsuranceRecordMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateInsuranceRecord>>
+>;
+export type UpdateInsuranceRecordMutationBody =
+  BodyType<UpdateInsuranceRequest>;
+export type UpdateInsuranceRecordMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update an insurance record (reassign, due date, expiry, certificate)
+ */
+export const useUpdateInsuranceRecord = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateInsuranceRecord>>,
+    TError,
+    {
+      subcontractorId: string;
+      recordId: string;
+      data: BodyType<UpdateInsuranceRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateInsuranceRecord>>,
+  TError,
+  {
+    subcontractorId: string;
+    recordId: string;
+    data: BodyType<UpdateInsuranceRequest>;
+  },
+  TContext
+> => {
+  return useMutation(getUpdateInsuranceRecordMutationOptions(options));
 };
 
 /**
