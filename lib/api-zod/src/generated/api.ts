@@ -196,6 +196,7 @@ export const ListDocumentsResponseItem = zod.object({
     "general",
   ]),
   version: zod.number(),
+  revision: zod.string().nullish(),
   fileUrl: zod.string(),
   fileSize: zod.number(),
   previousVersionId: zod.string().nullish(),
@@ -236,6 +237,8 @@ export const UploadDocumentBody = zod.object({
   requiresAcknowledgment: zod.boolean().optional(),
   publicAccess: zod.boolean().optional(),
   distributeToUserIds: zod.array(zod.string()).optional(),
+  supersededDocumentId: zod.string().nullish(),
+  revision: zod.string().nullish(),
 });
 
 /**
@@ -260,6 +263,7 @@ export const GetDocumentResponse = zod
       "general",
     ]),
     version: zod.number(),
+    revision: zod.string().nullish(),
     fileUrl: zod.string(),
     fileSize: zod.number(),
     previousVersionId: zod.string().nullish(),
@@ -896,6 +900,7 @@ export const GetQrContentResponse = zod.object({
         "general",
       ]),
       version: zod.number(),
+      revision: zod.string().nullish(),
       fileUrl: zod.string(),
       fileSize: zod.number(),
       previousVersionId: zod.string().nullish(),

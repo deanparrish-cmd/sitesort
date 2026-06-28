@@ -41,6 +41,12 @@ import { useSubscription } from "@/contexts/subscription";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 
+// Drawing revision label (F3): drawings show "Rev A/B/C…" (or the architect's
+// overridden rev); everything else keeps the numeric "v2" version.
+function docRev(doc: { type: string; version: number; revision?: string | null }): string {
+  return doc.type === "drawing" && doc.revision ? `Rev ${doc.revision}` : `v${doc.version}`;
+}
+
 export default function ProjectDetail() {
   const [, params] = useRoute("/projects/:id");
   const projectId = params?.id || "";
@@ -355,11 +361,28 @@ export default function ProjectDetail() {
   const [allocateSelected, setAllocateSelected] = useState<Set<string>>(new Set());
   const [allocateSubmitting, setAllocateSubmitting] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
-  type EditDocModal = { id: string; name: string; status: string; version: number };
+  type EditDocModal = { id: string; name: string; status: string; version: number; type: string; revision?: string | null };
   const [editDocModal, setEditDocModal] = useState<EditDocModal | null>(null);
   const [editDocSaving, setEditDocSaving] = useState(false);
   const [editDocStatus, setEditDocStatus] = useState("current");
   const [editDocVersion, setEditDocVersion] = useState(1);
+  const [editDocRevision, setEditDocRevision] = useState("");
+  // F3 — drawing revision history (the supersede chain)
+  type RevisionItem = { id: string; version: number; revision: string | null; status: string; fileUrl: string; uploaderName: string; createdAt: string };
+  const [revHistoryDoc, setRevHistoryDoc] = useState<{ id: string; name: string } | null>(null);
+  const [revHistory, setRevHistory] = useState<RevisionItem[]>([]);
+  const [revHistoryLoading, setRevHistoryLoading] = useState(false);
+  const openRevHistory = async (doc: { id: string; name: string }) => {
+    setRevHistoryDoc(doc);
+    setRevHistory([]);
+    setRevHistoryLoading(true);
+    try {
+      const res = await fetch(`/api/documents/${doc.id}/revisions`, { headers: authHeaders() });
+      if (res.ok) setRevHistory(await res.json());
+    } finally {
+      setRevHistoryLoading(false);
+    }
+  };
   const [editError, setEditError] = useState<string | null>(null);
 
   const { data: me } = useGetMe();
@@ -887,6 +910,7 @@ export default function ProjectDetail() {
           fileSize: data.fileSize,
           requiresAcknowledgment: data.requiresAcknowledgment,
           ...(data.supersededDocumentId ? { supersededDocumentId: data.supersededDocumentId } : {}),
+          ...(data.type === "drawing" && data.revision?.trim() ? { revision: data.revision.trim() } : {}),
         } as any
       });
       setIsUploadOpen(false);
@@ -897,9 +921,10 @@ export default function ProjectDetail() {
     }
   };
 
-  const openDocEdit = (doc: { id: string; name: string; status: string; version: number }) => {
+  const openDocEdit = (doc: { id: string; name: string; status: string; version: number; type: string; revision?: string | null }) => {
     setEditDocStatus(doc.status);
     setEditDocVersion(doc.version);
+    setEditDocRevision(doc.revision ?? "");
     setEditDocModal(doc);
   };
 
@@ -953,7 +978,12 @@ export default function ProjectDetail() {
       await fetch(`/api/documents/${editDocModal.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ status: editDocStatus, version: editDocVersion }),
+        body: JSON.stringify({
+          status: editDocStatus,
+          version: editDocVersion,
+          // Only drawings carry a revision; send it (empty clears it back to null).
+          ...(editDocModal.type === "drawing" ? { revision: editDocRevision } : {}),
+        }),
       });
       setEditDocModal(null);
       refetchDocs();
@@ -1617,7 +1647,7 @@ tr:last-child td{border-bottom:none}
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-1.5 mb-2.5">
-                      <span className="font-mono bg-muted px-2 py-0.5 rounded text-xs font-bold">v{doc.version}</span>
+                      <span className="font-mono bg-muted px-2 py-0.5 rounded text-xs font-bold">{docRev(doc)}</span>
                       {isSuperseded
                         ? <Badge variant="destructive" className="text-[10px]"><AlertTriangle className="w-3 h-3 mr-1"/>SUPERSEDED</Badge>
                         : <Badge variant="success" className="text-[10px]">CURRENT</Badge>
@@ -1658,6 +1688,12 @@ tr:last-child td{border-bottom:none}
                         <button onClick={() => setAuditDoc({ id: doc.id, name: doc.name })}
                           className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors">
                           <Clock className="w-3 h-3" />History
+                        </button>
+                      )}
+                      {doc.type === "drawing" && (
+                        <button onClick={() => openRevHistory({ id: doc.id, name: doc.name })}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors">
+                          <History className="w-3 h-3" />Revisions
                         </button>
                       )}
                       <button onClick={() => openDocEdit(doc)}
@@ -1718,7 +1754,7 @@ tr:last-child td{border-bottom:none}
                       <td className="px-6 py-4 capitalize">{doc.type.replace('_', ' ')}</td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
-                          <span className="font-mono bg-muted px-2 py-0.5 rounded text-xs font-bold">v{doc.version}</span>
+                          <span className="font-mono bg-muted px-2 py-0.5 rounded text-xs font-bold">{docRev(doc)}</span>
                           {isSuperseded ? (
                             <Badge variant="destructive" className="text-[10px]"><AlertTriangle className="w-3 h-3 mr-1"/> SUPERSEDED</Badge>
                           ) : (
@@ -1779,6 +1815,16 @@ tr:last-child td{border-bottom:none}
                               title="View sign-off audit history"
                             >
                               <Clock className="w-3.5 h-3.5" />History
+                            </button>
+                          )}
+                          {doc.type === "drawing" && (
+                            <button
+                              type="button"
+                              onClick={() => openRevHistory({ id: doc.id, name: doc.name })}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors"
+                              title="Revision history"
+                            >
+                              <History className="w-3.5 h-3.5" />Revisions
                             </button>
                           )}
                           {caps.canUploadDocument && (
@@ -2532,7 +2578,7 @@ tr:last-child td{border-bottom:none}
                                     <FileText className="w-4 h-4 text-primary shrink-0" />
                                     <p className={`font-semibold text-sm truncate ${isSuperseded ? "line-through text-muted-foreground" : ""}`}>{doc.name}</p>
                                     <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground capitalize">{doc.type.replace(/_/g, " ")}</span>
-                                    <span className="font-mono text-[10px] bg-muted px-1.5 py-0.5 rounded">v{doc.version}</span>
+                                    <span className="font-mono text-[10px] bg-muted px-1.5 py-0.5 rounded">{docRev(doc)}</span>
                                     {isSuperseded && <span className="text-[10px] font-semibold text-destructive bg-red-100 px-1.5 py-0.5 rounded">Superseded</span>}
                                   </div>
                                   <p className="text-xs text-muted-foreground mt-0.5 ml-6">{formatDate(doc.createdAt)} · {doc.uploaderName}</p>
@@ -2770,7 +2816,7 @@ tr:last-child td{border-bottom:none}
                               <FileText className="w-4 h-4 shrink-0 text-muted-foreground" />
                               <div className="min-w-0">
                                 <p className={`font-semibold text-sm truncate ${isSuperseded ? "line-through text-muted-foreground" : ""}`}>{doc.name}</p>
-                                <p className="text-xs text-muted-foreground capitalize">{doc.type.replace("_", " ")} · v{doc.version}</p>
+                                <p className="text-xs text-muted-foreground capitalize">{doc.type.replace("_", " ")} · {docRev(doc)}</p>
                               </div>
                             </div>
                             <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
@@ -2991,7 +3037,7 @@ tr:last-child td{border-bottom:none}
                               <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-medium truncate">{doc.name}</p>
-                                <p className="text-xs text-muted-foreground">{doc.type} · v{doc.version}</p>
+                                <p className="text-xs text-muted-foreground">{doc.type} · {docRev(doc)}</p>
                               </div>
                               <button
                                 onClick={() => togglePin("document", doc.id!)}
@@ -3407,9 +3453,59 @@ tr:last-child td{border-bottom:none}
                 className="flex h-11 w-full rounded-lg border-2 border-input bg-background px-3 py-2 text-sm"
               />
             </div>
+            {editDocModal.type === "drawing" && (
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold block">Revision</label>
+                <input
+                  type="text"
+                  value={editDocRevision}
+                  onChange={e => setEditDocRevision(e.target.value)}
+                  placeholder="e.g. A, B, C, P01"
+                  className="flex h-11 w-full rounded-lg border-2 border-input bg-background px-3 py-2 text-sm"
+                />
+                <p className="text-xs text-muted-foreground">Drawing revision shown as “Rev …”. Override to match the title block.</p>
+              </div>
+            )}
             <DialogFooter>
               <Button variant="ghost" onClick={() => setEditDocModal(null)}>Cancel</Button>
               <Button variant="accent" onClick={saveDocEdit} isLoading={editDocSaving}>Save</Button>
+            </DialogFooter>
+          </div>
+        )}
+      </Dialog>
+
+      {/* F3 — drawing revision history */}
+      <Dialog open={!!revHistoryDoc} onOpenChange={v => { if (!v) setRevHistoryDoc(null); }}>
+        <DialogHeader>
+          <DialogTitle>Revision history</DialogTitle>
+        </DialogHeader>
+        {revHistoryDoc && (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground truncate">{revHistoryDoc.name}</p>
+            {revHistoryLoading ? (
+              <p className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />Loading…</p>
+            ) : revHistory.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No revision history.</p>
+            ) : (
+              <div className="space-y-2">
+                {revHistory.map((r, i) => (
+                  <div key={r.id} className={cn("flex items-center gap-3 rounded-lg border p-3", i === 0 && r.status !== "superseded" && "border-primary/40 bg-primary/5")}>
+                    <span className="font-mono text-xs font-bold bg-muted px-2 py-0.5 rounded shrink-0">{r.revision ? `Rev ${r.revision}` : `v${r.version}`}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-muted-foreground truncate">By {r.uploaderName} · {formatDate(r.createdAt)}</p>
+                    </div>
+                    {i === 0 && r.status !== "superseded"
+                      ? <Badge variant="success" className="text-[10px] shrink-0">CURRENT</Badge>
+                      : <Badge variant="secondary" className="text-[10px] shrink-0">Superseded</Badge>}
+                    <button onClick={() => window.open(r.fileUrl.replace(/^\/uploads\//, "/api/uploads/"), "_blank", "noopener,noreferrer")} className="shrink-0 text-muted-foreground hover:text-foreground" title="Open this revision">
+                      <ExternalLink className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setRevHistoryDoc(null)}>Close</Button>
             </DialogFooter>
           </div>
         )}
@@ -3568,10 +3664,17 @@ tr:last-child td{border-bottom:none}
               <select {...register("supersededDocumentId")} className="flex h-11 w-full rounded-lg border-2 border-input bg-background px-3 py-2 text-sm">
                 <option value="">— None —</option>
                 {supersedableDocs.map(d => (
-                  <option key={d.id} value={d.id}>{d.name} (v{d.version})</option>
+                  <option key={d.id} value={d.id}>{d.name} ({docRev(d)})</option>
                 ))}
               </select>
               <p className="text-xs text-muted-foreground mt-1">The selected document will be moved to the Superseded tab.</p>
+            </div>
+          )}
+          {watchedType === "drawing" && (
+            <div>
+              <label className="text-sm font-semibold mb-1 block">Revision <span className="text-muted-foreground font-normal">(optional)</span></label>
+              <Input {...register("revision")} placeholder="Auto: A, B, C… — or set e.g. P01, C02" />
+              <p className="text-xs text-muted-foreground mt-1">Leave blank to auto-assign the next letter; set it to match the drawing's title block.</p>
             </div>
           )}
           <div>

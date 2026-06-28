@@ -30,6 +30,20 @@ function getDistSummary(dists: Array<{ status: string }>) {
   return { total, pending, viewed, acknowledged };
 }
 
+// Alphabetical revision label from a 1-based version (F3): 1→A … 26→Z, 27→AA…
+// (bijective base-26, like spreadsheet columns). Used as the default drawing
+// revision; a user can override it to match the title block (e.g. C, P01).
+function versionToRevision(version: number): string {
+  let n = Math.max(1, Math.floor(version));
+  let s = "";
+  while (n > 0) {
+    const r = (n - 1) % 26;
+    s = String.fromCharCode(65 + r) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s || "A";
+}
+
 // Public tracked-open endpoint for emailed distribution links. Records the open
 // against the recipient's distribution (pending→viewed) then redirects to the
 // file. Unauthenticated by design — the distribution id in `?d=` is the
@@ -95,6 +109,7 @@ router.get("/projects/:projectId/documents", authenticate, async (req, res) => {
         name: d.name,
         type: d.type,
         version: d.version,
+        revision: d.revision ?? null,
         fileUrl: d.fileUrl,
         fileSize: d.fileSize,
         previousVersionId: d.previousVersionId ?? null,
@@ -124,7 +139,7 @@ router.post("/projects/:projectId/documents", authenticate, async (req, res) => 
       return;
     }
 
-    const { name, type, fileUrl, fileSize, requiresAcknowledgment, publicAccess, distributeToUserIds, supersededDocumentId } = req.body;
+    const { name, type, fileUrl, fileSize, requiresAcknowledgment, publicAccess, distributeToUserIds, supersededDocumentId, revision } = req.body;
     if (!name || !type || !fileUrl) {
       res.status(400).json({ error: "validation_error", message: "name, type, fileUrl required" });
       return;
@@ -158,6 +173,12 @@ router.post("/projects/:projectId/documents", authenticate, async (req, res) => 
       }
     }
 
+    // Revision (F3): drawings get an alphabetical label — an explicit value (the
+    // architect's actual rev) wins, otherwise default to the letter for this
+    // version. Non-drawings only carry a revision if one was explicitly supplied.
+    const trimmedRevision = typeof revision === "string" && revision.trim() ? revision.trim() : null;
+    const docRevision = trimmedRevision ?? (type === "drawing" ? versionToRevision(newVersion) : null);
+
     const docId = generateId();
     await db.insert(documentsTable).values({
       id: docId,
@@ -166,6 +187,7 @@ router.post("/projects/:projectId/documents", authenticate, async (req, res) => 
       name,
       type,
       version: newVersion,
+      revision: docRevision,
       fileUrl,
       fileSize: fileSize ?? 0,
       previousVersionId,
@@ -222,6 +244,7 @@ router.post("/projects/:projectId/documents", authenticate, async (req, res) => 
       name,
       type,
       version: newVersion,
+      revision: docRevision,
       fileUrl,
       fileSize: fileSize ?? 0,
       previousVersionId,
@@ -297,6 +320,7 @@ router.get("/documents/:documentId", authenticate, async (req, res) => {
       name: d.name,
       type: d.type,
       version: d.version,
+      revision: d.revision ?? null,
       fileUrl: d.fileUrl,
       fileSize: d.fileSize,
       previousVersionId: d.previousVersionId ?? null,
@@ -578,7 +602,7 @@ router.patch("/documents/:documentId", authenticate, async (req, res) => {
       return;
     }
 
-    const { status, version } = req.body;
+    const { status, version, revision } = req.body;
     const updates: Record<string, unknown> = {};
     if (status !== undefined) {
       if (!["current", "superseded"].includes(status)) {
@@ -595,6 +619,10 @@ router.patch("/documents/:documentId", authenticate, async (req, res) => {
       }
       updates.version = v;
     }
+    // Revision (F3): empty string clears it back to null; a value sets it.
+    if (revision !== undefined) {
+      updates.revision = typeof revision === "string" && revision.trim() ? revision.trim() : null;
+    }
     if (Object.keys(updates).length === 0) {
       res.status(400).json({ error: "validation_error", message: "No fields to update" });
       return;
@@ -608,7 +636,7 @@ router.patch("/documents/:documentId", authenticate, async (req, res) => {
     res.json({
       id: d.id, projectId: d.projectId, uploadedBy: d.uploadedBy,
       uploaderName: uploaderRows[0]?.name ?? "Unknown",
-      name: d.name, type: d.type, version: d.version, fileUrl: d.fileUrl,
+      name: d.name, type: d.type, version: d.version, revision: d.revision ?? null, fileUrl: d.fileUrl,
       fileSize: d.fileSize, previousVersionId: d.previousVersionId ?? null,
       status: d.status, requiresAcknowledgment: d.requiresAcknowledgment,
       publicAccess: d.publicAccess, createdAt: d.createdAt.toISOString(),
@@ -617,6 +645,55 @@ router.patch("/documents/:documentId", authenticate, async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Update document error");
     res.status(500).json({ error: "server_error", message: "Failed to update document" });
+  }
+});
+
+// GET /documents/:documentId/revisions — the revision history for a document,
+// walking the supersede chain (previousVersionId) from the requested doc back
+// through its ancestors. Newest first. Tenant-scoped. (F3)
+router.get("/documents/:documentId/revisions", authenticate, async (req, res) => {
+  try {
+    const start = await db.select().from(documentsTable).where(eq(documentsTable.id, req.params.documentId)).limit(1);
+    if (!start[0]) {
+      res.status(404).json({ error: "not_found", message: "Document not found" });
+      return;
+    }
+    const project = await db.select({ id: projectsTable.id }).from(projectsTable)
+      .where(and(eq(projectsTable.id, start[0].projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!project[0]) {
+      res.status(404).json({ error: "not_found", message: "Document not found" });
+      return;
+    }
+
+    const chain: typeof start = [];
+    let current: typeof start[number] | undefined = start[0];
+    const seen = new Set<string>();
+    // Safety cap guards against a cyclic previousVersionId ever looping forever.
+    while (current && !seen.has(current.id) && chain.length < 100) {
+      seen.add(current.id);
+      chain.push(current);
+      if (!current.previousVersionId) break;
+      const prev = await db.select().from(documentsTable).where(eq(documentsTable.id, current.previousVersionId)).limit(1);
+      current = prev[0];
+    }
+
+    const result = await Promise.all(chain.map(async (d) => {
+      const uploaderRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, d.uploadedBy)).limit(1);
+      return {
+        id: d.id,
+        version: d.version,
+        revision: d.revision ?? null,
+        status: d.status,
+        fileUrl: d.fileUrl,
+        uploaderName: uploaderRows[0]?.name ?? "Unknown",
+        createdAt: d.createdAt.toISOString(),
+      };
+    }));
+    res.json(result);
+  } catch (err) {
+    req.log.error({ err }, "List document revisions error");
+    res.status(500).json({ error: "server_error", message: "Failed to load revision history" });
   }
 });
 

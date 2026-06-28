@@ -60,6 +60,9 @@ export async function ensureSchema(): Promise<void> {
     // deadline (no pre-existing responsible field). Overdue is derived likewise.
     await pool.query(`ALTER TABLE insurance_records ADD COLUMN IF NOT EXISTS assigned_to_user_id text`);
     await pool.query(`ALTER TABLE insurance_records ADD COLUMN IF NOT EXISTS due_date date`);
+    // F3 — alphabetical drawing revision label on documents (drawings default
+    // A/B/C… by version, editable to match the title block).
+    await pool.query(`ALTER TABLE documents ADD COLUMN IF NOT EXISTS revision text`);
     // F2 — project close-out / handover sign-off (append-only audit). New table →
     // must exist in prod before the close-out endpoints run.
     await pool.query(`
@@ -83,7 +86,7 @@ export async function ensureSchema(): Promise<void> {
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified boolean NOT NULL DEFAULT false`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_token text`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_expiry timestamp`);
-    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols ready");
+    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols ready");
   } catch (err) {
     // Don't crash the server — membership lookups fall back to the home company.
     logger.error({ err }, "ensureSchema failed (continuing with home-company fallback)");
