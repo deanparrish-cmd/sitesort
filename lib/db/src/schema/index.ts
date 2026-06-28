@@ -5,6 +5,7 @@ export * from "./subcontractors";
 export * from "./subcontractor_notes";
 export * from "./projects";
 export * from "./project_members";
+export * from "./project_closeouts";
 export * from "./documents";
 export * from "./document_distributions";
 export * from "./acknowledgment_audit";

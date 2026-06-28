@@ -467,6 +467,117 @@ export default function ProjectDetail() {
     }
   };
 
+  // ── F2: project close-out / handover ─────────────────────────────────────
+  type CloseoutChecks = {
+    openIssues: { count: number; ok: boolean };
+    insurance: { subsWithIssues: number; subsTotal: number; ok: boolean };
+    permits: { expiredCount: number; ok: boolean };
+    signOffs: { pendingCount: number; ok: boolean };
+  };
+  type CloseoutRecord = { id: string; signedOffByName: string; signedOffByRole: string; note: string | null; createdAt: string };
+  type CloseoutData = { status: string; isComplete: boolean; ready: boolean; checks: CloseoutChecks; closeout: CloseoutRecord | null };
+  const [closeout, setCloseout] = useState<CloseoutData | null>(null);
+  const [closeoutOpen, setCloseoutOpen] = useState(false);
+  const [closeoutPin, setCloseoutPin] = useState("");
+  const [closeoutNote, setCloseoutNote] = useState("");
+  const [closeoutSetPinMode, setCloseoutSetPinMode] = useState(false);
+  const [closeoutSetPinPassword, setCloseoutSetPinPassword] = useState("");
+  const [closeoutSetPinValue, setCloseoutSetPinValue] = useState("");
+  const [closeoutSubmitting, setCloseoutSubmitting] = useState(false);
+  const [closeoutError, setCloseoutError] = useState<string | null>(null);
+  const [reopenSubmitting, setReopenSubmitting] = useState(false);
+
+  const loadCloseout = async () => {
+    if (!projectId) return;
+    const res = await fetch(`/api/projects/${projectId}/closeout`, { headers: authHeaders() });
+    if (res.ok) setCloseout(await res.json());
+  };
+
+  const openCloseout = () => {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
+    setCloseoutError(null);
+    setCloseoutPin("");
+    setCloseoutNote("");
+    setCloseoutSetPinMode(!hasPin);
+    setCloseoutSetPinPassword("");
+    setCloseoutSetPinValue("");
+    setCloseoutOpen(true);
+  };
+
+  const submitCloseout = async () => {
+    setCloseoutError(null);
+    let pinToUse: string;
+    if (closeoutSetPinMode) {
+      if (!closeoutSetPinPassword) { setCloseoutError("Enter your account password to set a PIN."); return; }
+      if (!/^\d{4}$/.test(closeoutSetPinValue)) { setCloseoutError("PIN must be exactly 4 digits."); return; }
+      pinToUse = closeoutSetPinValue;
+    } else {
+      if (!/^\d{4}$/.test(closeoutPin)) { setCloseoutError("Enter your 4-digit PIN."); return; }
+      pinToUse = closeoutPin;
+    }
+    setCloseoutSubmitting(true);
+    try {
+      if (closeoutSetPinMode) {
+        const pinRes = await fetch("/api/auth/pin", {
+          method: "POST",
+          headers: authHeaders(),
+          body: JSON.stringify({ currentPassword: closeoutSetPinPassword, pin: closeoutSetPinValue }),
+        });
+        const pinData = await pinRes.json().catch(() => ({}));
+        if (!pinRes.ok) { setCloseoutError(pinData.message ?? "Could not set your PIN."); setCloseoutSubmitting(false); return; }
+        await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      }
+      const res = await fetch(`/api/projects/${projectId}/closeout`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ pin: pinToUse, note: closeoutNote || undefined }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        toast({ title: "Project closed out", description: "Signed off and marked Complete." });
+        setCloseoutOpen(false);
+        setCloseoutPin(""); setCloseoutNote(""); setCloseoutSetPinMode(false); setCloseoutSetPinPassword(""); setCloseoutSetPinValue("");
+        await queryClient.invalidateQueries({ queryKey: getGetProjectQueryKey(projectId) });
+        await loadCloseout();
+        return;
+      }
+      if (res.status === 429) {
+        setCloseoutError(data.message ?? "Too many incorrect attempts. Please try again later.");
+      } else if (data.error === "pin_not_set") {
+        setCloseoutSetPinMode(true);
+        setCloseoutError("Set a sign-off PIN to continue.");
+      } else if (typeof data.attemptsRemaining === "number") {
+        setCloseoutError(`Incorrect PIN. ${data.attemptsRemaining} attempt${data.attemptsRemaining === 1 ? "" : "s"} remaining.`);
+        setCloseoutPin("");
+      } else {
+        setCloseoutError(data.message ?? "Could not close out this project.");
+      }
+    } catch {
+      setCloseoutError("Network error. Please try again.");
+    } finally {
+      setCloseoutSubmitting(false);
+    }
+  };
+
+  const reopenProject = async () => {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
+    setReopenSubmitting(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/closeout/reopen`, { method: "POST", headers: authHeaders() });
+      if (res.ok) {
+        toast({ title: "Project re-opened", description: "The project is active again." });
+        await queryClient.invalidateQueries({ queryKey: getGetProjectQueryKey(projectId) });
+        await loadCloseout();
+      } else {
+        toast({ title: "Could not re-open", description: "Please try again.", variant: "destructive" });
+      }
+    } finally {
+      setReopenSubmitting(false);
+    }
+  };
+
+  useEffect(() => { loadCloseout(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [projectId]);
+
   const { register, handleSubmit, reset, watch, setValue } = useForm<Record<string, any>>({ defaultValues: { type: "drawing" } });
   const { register: editRegister, handleSubmit: editHandleSubmit, reset: editReset } = useForm();
   
@@ -1084,6 +1195,7 @@ tr:last-child td{border-bottom:none}
               { value: "qr", label: "Site Board" },
               { value: "documents", label: "Documents" },
               { value: "permits", label: "Compliance" },
+              ...(caps.canManageProjects ? [{ value: "closeout", label: "Close-out" }] : []),
             ];
           })().map(tab => (
             <TabsTrigger key={tab.value} value={tab.value} className="flex-1 sm:flex-none justify-center rounded-lg py-2 px-3 sm:px-4 text-sm whitespace-nowrap">
@@ -3021,7 +3133,127 @@ tr:last-child td{border-bottom:none}
             </div>
           )}
         </TabsContent>
+
+        <TabsContent value="closeout">
+          <div className="max-w-2xl space-y-6">
+            {closeout?.isComplete && closeout.closeout ? (
+              <Card>
+                <CardContent className="p-6 space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                      <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-lg">Project closed out</h3>
+                      <p className="text-sm text-muted-foreground">This project has been signed off and marked Complete.</p>
+                    </div>
+                  </div>
+                  <div className="rounded-lg border bg-muted/30 p-4 text-sm space-y-1.5">
+                    <div><span className="text-muted-foreground">Signed off by:</span>{" "}<span className="font-medium">{closeout.closeout.signedOffByName}</span> <span className="text-xs text-muted-foreground">({closeout.closeout.signedOffByRole.replace(/_/g, " ")})</span></div>
+                    <div><span className="text-muted-foreground">When:</span>{" "}<span className="font-medium">{new Date(closeout.closeout.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span></div>
+                    {closeout.closeout.note && <div className="pt-1 break-words"><span className="text-muted-foreground">Note:</span> {closeout.closeout.note}</div>}
+                  </div>
+                  {caps.canManageProjects && (
+                    <Button variant="outline" onClick={reopenProject} isLoading={reopenSubmitting}>
+                      <RefreshCw className="w-4 h-4 mr-2" />Re-open project
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardContent className="p-6 space-y-5">
+                  <div>
+                    <h3 className="font-semibold text-lg flex items-center gap-2"><ClipboardCheck className="w-5 h-5" />Close-out readiness</h3>
+                    <p className="text-sm text-muted-foreground mt-1">Review these before signing off the handover. You can still close out with outstanding items.</p>
+                  </div>
+                  {closeout ? (
+                    <>
+                      <div className="space-y-2">
+                        {[
+                          { label: "Open snags & safety issues", ok: closeout.checks.openIssues.ok, detail: closeout.checks.openIssues.ok ? "All resolved" : `${closeout.checks.openIssues.count} open` },
+                          { label: "Subcontractor insurance", ok: closeout.checks.insurance.ok, detail: closeout.checks.insurance.subsTotal === 0 ? "No subcontractors" : closeout.checks.insurance.ok ? "All valid" : `${closeout.checks.insurance.subsWithIssues} of ${closeout.checks.insurance.subsTotal} need attention` },
+                          { label: "Permits", ok: closeout.checks.permits.ok, detail: closeout.checks.permits.ok ? "None expired" : `${closeout.checks.permits.expiredCount} expired` },
+                          { label: "Document sign-offs", ok: closeout.checks.signOffs.ok, detail: closeout.checks.signOffs.ok ? "All complete" : `${closeout.checks.signOffs.pendingCount} pending` },
+                        ].map(row => (
+                          <div key={row.label} className="flex items-center gap-3 rounded-lg border p-3">
+                            {row.ok
+                              ? <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                              : <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />}
+                            <span className="text-sm font-medium flex-1 min-w-0 truncate">{row.label}</span>
+                            <span className={cn("text-xs font-medium shrink-0", row.ok ? "text-emerald-600" : "text-amber-600")}>{row.detail}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className={cn("rounded-lg p-3 text-sm font-medium", closeout.ready ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700")}>
+                        {closeout.ready ? "Everything looks ready for close-out." : "Some items are still outstanding — you can proceed, but review them first."}
+                      </div>
+                      {caps.canManageProjects ? (
+                        <Button variant="accent" onClick={openCloseout} disabled={isCancelled}>
+                          <ClipboardCheck className="w-4 h-4 mr-2" />Sign off &amp; mark Complete
+                        </Button>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">Only an admin or project manager can close out a project.</p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Loading readiness…</p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </TabsContent>
       </Tabs>
+
+      {/* F2 — close-out PIN sign-off dialog */}
+      <Dialog open={closeoutOpen} onOpenChange={v => { if (!v) { setCloseoutOpen(false); setCloseoutError(null); } }}>
+        <DialogHeader>
+          <DialogTitle>Sign off &amp; close out project</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            This marks the project <span className="font-medium text-foreground">Complete</span> and records a timestamped handover with your name. Confirm with your sign-off PIN.
+          </p>
+          {closeoutSetPinMode ? (
+            <>
+              <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800">
+                You don't have a sign-off PIN yet. Set one now to confirm close-outs and document sign-offs.
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Account password</label>
+                <Input type="password" value={closeoutSetPinPassword} onChange={e => setCloseoutSetPinPassword(e.target.value)} placeholder="Your account password" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">New 4-digit PIN</label>
+                <Input type="password" inputMode="numeric" value={closeoutSetPinValue} onChange={e => setCloseoutSetPinValue(onlyDigits(e.target.value))} placeholder="••••" />
+              </div>
+            </>
+          ) : (
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Sign-off PIN</label>
+              <Input
+                type="password"
+                inputMode="numeric"
+                autoFocus
+                value={closeoutPin}
+                onChange={e => setCloseoutPin(onlyDigits(e.target.value))}
+                onKeyDown={e => { if (e.key === "Enter") submitCloseout(); }}
+                placeholder="••••"
+              />
+            </div>
+          )}
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Handover note (optional)</label>
+            <Textarea value={closeoutNote} onChange={e => setCloseoutNote(e.target.value)} placeholder="e.g. Snagging complete, keys handed to client." rows={2} />
+          </div>
+          {closeoutError && <p className="text-destructive text-sm">{closeoutError}</p>}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => { setCloseoutOpen(false); setCloseoutError(null); }}>Cancel</Button>
+          <Button variant="accent" onClick={submitCloseout} isLoading={closeoutSubmitting}>Confirm close-out</Button>
+        </DialogFooter>
+      </Dialog>
 
       <Dialog open={!!openReport || reportLoading} onOpenChange={v => { if (!v) setOpenReport(null); }}>
         <DialogHeader>
