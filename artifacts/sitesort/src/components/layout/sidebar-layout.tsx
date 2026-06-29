@@ -79,7 +79,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
           if (localStorage.getItem("sitesort_notif_os") !== "false" && typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
             new Notification(`${diff} new message${diff > 1 ? "s" : ""}`, {
               body: "You have unread messages from your team.",
-              icon: "/images/logo.png",
+              icon: "/images/logo.webp",
             });
           }
         }
@@ -178,7 +178,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       <div className="md:hidden flex items-center justify-between p-4 border-b bg-card">
         <div className="flex items-center gap-2">
           <Link href="/dashboard">
-            <img src={`${import.meta.env.BASE_URL}images/logo.png?v=5`} alt="SiteSort" className="w-auto shrink-0 object-contain" style={{ height: '72px' }} />
+            <img src={`${import.meta.env.BASE_URL}images/logo.webp?v=5`} alt="SiteSort" className="w-auto shrink-0 object-contain" style={{ height: '72px' }} />
           </Link>
         </div>
         <div className="flex items-center gap-3">
@@ -204,7 +204,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       )}>
         <div className="p-6 hidden md:flex items-center gap-3">
           <Link href="/dashboard">
-            <img src={`${import.meta.env.BASE_URL}images/logo.png?v=5`} alt="SiteSort" className="h-[6.25rem] w-auto" />
+            <img src={`${import.meta.env.BASE_URL}images/logo.webp?v=5`} alt="SiteSort" className="h-[6.25rem] w-auto" />
           </Link>
         </div>
 

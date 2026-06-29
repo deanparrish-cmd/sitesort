@@ -16,7 +16,7 @@ import {
   Minus,
 } from "lucide-react";
 import { captureAttribution, withAttribution } from "@/lib/attribution";
-import builtForBeam from "@assets/built_for_beam_nobg.png";
+import builtForBeam from "@assets/built_for_beam_nobg.webp";
 
 const faqs = [
   {
@@ -79,7 +79,7 @@ export default function LandingPage() {
       <nav className="border-b bg-card/80 backdrop-blur-md fixed w-full top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 sm:h-24 flex items-center justify-between">
           <a href="#top" className="flex items-center gap-2">
-            <img src={`${import.meta.env.BASE_URL}images/logo.png?v=5`} alt="SiteSort" className="h-16 sm:h-20 w-auto" />
+            <img src={`${import.meta.env.BASE_URL}images/logo.webp?v=5`} alt="SiteSort" className="h-16 sm:h-20 w-auto" />
           </a>
           <div className="flex items-center gap-2 sm:gap-4">
             <Link href={loginHref}>
@@ -135,9 +135,11 @@ export default function LandingPage() {
           <div className="mt-16 lg:mt-20 relative mx-auto max-w-5xl fade-in" style={{ animationDelay: "0.2s", animationFillMode: "both" }}>
             <div className="absolute -inset-1 bg-gradient-to-r from-accent/30 to-primary/30 rounded-2xl blur-2xl opacity-50"></div>
             <img
-              src={`${import.meta.env.BASE_URL}images/construction-hero.png`}
+              src={`${import.meta.env.BASE_URL}images/construction-hero.webp`}
               alt="A steel-frame construction site at dusk, managed with SiteSort"
               className="relative rounded-2xl shadow-2xl border border-border/50 object-cover w-full aspect-video"
+              fetchPriority="high"
+              decoding="async"
             />
           </div>
         </div>
@@ -382,7 +384,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-8">
             <div className="flex items-center gap-2">
-              <img src={`${import.meta.env.BASE_URL}images/logo.png?v=5`} alt="SiteSort" className="h-12 w-auto" />
+              <img src={`${import.meta.env.BASE_URL}images/logo.webp?v=5`} alt="SiteSort" className="h-12 w-auto" />
             </div>
             <nav className="flex flex-wrap items-center gap-x-8 gap-y-3 text-sm text-muted-foreground">
               <a href="#features" className="hover:text-foreground transition-colors">Features</a>

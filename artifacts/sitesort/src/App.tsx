@@ -1,33 +1,37 @@
+import { lazy, Suspense } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Spinner } from "@/components/ui/spinner";
 import { setupApiInterceptor } from "@/lib/api-setup";
 import { SubscriptionProvider } from "@/contexts/subscription";
 
-// Pages
+// NotFound stays eager (tiny) so 404s render instantly without a Suspense flash.
 import NotFound from "@/pages/not-found";
-import LandingPage from "@/pages/landing";
-import Login from "@/pages/auth/login";
-import Register from "@/pages/auth/register";
-import VerifyEmail from "@/pages/auth/verify-email";
-import ForgotPassword from "@/pages/auth/forgot-password";
-import ResetPassword from "@/pages/auth/reset-password";
-import Dashboard from "@/pages/dashboard";
-import ProjectsList from "@/pages/projects";
-import ProjectDetail from "@/pages/projects/detail";
-import QrPage from "@/pages/qr";
-import SiteBoard from "@/pages/site-board";
-import AdminDashboard from "@/pages/admin";
-import InvoicesPage from "@/pages/invoices";
-import SubcontractorsPage from "@/pages/subcontractors";
-import CompliancePage from "@/pages/compliance";
-import TeamPage from "@/pages/team";
-import MessagesPage from "@/pages/messages";
-import NotificationsPage from "@/pages/notifications";
-import SettingsPage from "@/pages/settings";
-import IssuesPage from "@/pages/issues";
-import CheckinsPage from "@/pages/checkins";
+
+// Pages — lazy-loaded so each route ships as its own chunk (code splitting).
+const LandingPage = lazy(() => import("@/pages/landing"));
+const Login = lazy(() => import("@/pages/auth/login"));
+const Register = lazy(() => import("@/pages/auth/register"));
+const VerifyEmail = lazy(() => import("@/pages/auth/verify-email"));
+const ForgotPassword = lazy(() => import("@/pages/auth/forgot-password"));
+const ResetPassword = lazy(() => import("@/pages/auth/reset-password"));
+const Dashboard = lazy(() => import("@/pages/dashboard"));
+const ProjectsList = lazy(() => import("@/pages/projects"));
+const ProjectDetail = lazy(() => import("@/pages/projects/detail"));
+const QrPage = lazy(() => import("@/pages/qr"));
+const SiteBoard = lazy(() => import("@/pages/site-board"));
+const AdminDashboard = lazy(() => import("@/pages/admin"));
+const InvoicesPage = lazy(() => import("@/pages/invoices"));
+const SubcontractorsPage = lazy(() => import("@/pages/subcontractors"));
+const CompliancePage = lazy(() => import("@/pages/compliance"));
+const TeamPage = lazy(() => import("@/pages/team"));
+const MessagesPage = lazy(() => import("@/pages/messages"));
+const NotificationsPage = lazy(() => import("@/pages/notifications"));
+const SettingsPage = lazy(() => import("@/pages/settings"));
+const IssuesPage = lazy(() => import("@/pages/issues"));
+const CheckinsPage = lazy(() => import("@/pages/checkins"));
 
 // Set up the fetch interceptor for auth
 setupApiInterceptor();
@@ -41,6 +45,16 @@ const queryClient = new QueryClient({
   }
 });
 
+// Full-screen fallback shown while a route chunk loads. Responsive on all
+// viewports — fills the viewport and centers the spinner on mobile/tablet/desktop.
+function PageLoader() {
+  return (
+    <div className="min-h-screen w-full flex items-center justify-center bg-background">
+      <Spinner className="size-8 text-primary" />
+    </div>
+  );
+}
+
 function Router() {
   return (
     <Switch>
@@ -51,12 +65,12 @@ function Router() {
       <Route path="/verify-email" component={VerifyEmail} />
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password" component={ResetPassword} />
-      
+
       {/* Authenticated Routes */}
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/projects" component={ProjectsList} />
       <Route path="/projects/:id" component={ProjectDetail} />
-      
+
       <Route path="/subcontractors" component={SubcontractorsPage} />
       <Route path="/compliance" component={CompliancePage} />
       <Route path="/qr" component={QrPage} />
@@ -85,7 +99,9 @@ function App() {
       <TooltipProvider>
         <SubscriptionProvider>
           <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <Router />
+            <Suspense fallback={<PageLoader />}>
+              <Router />
+            </Suspense>
           </WouterRouter>
           <Toaster />
         </SubscriptionProvider>

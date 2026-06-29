@@ -66,9 +66,10 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-muted/30 relative">
       <div className="absolute inset-0 z-0 opacity-20">
         <img
-          src={`${import.meta.env.BASE_URL}images/auth-bg.png`}
+          src={`${import.meta.env.BASE_URL}images/auth-bg.webp`}
           alt="Background"
           className="w-full h-full object-cover"
+          decoding="async"
         />
       </div>
 

@@ -57,6 +57,28 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        // Only force the core framework libs (needed by every route, and
+        // already in the eager entry graph) into one long-cacheable chunk.
+        // Everything else — recharts, radix, framer-motion — is left to
+        // Rollup's automatic per-route splitting so route-exclusive heavy
+        // libs (e.g. recharts on /admin) stay in their own lazy chunk and are
+        // never fetched on first paint. Forcing them into named vendor chunks
+        // pulls shared helpers into the eager graph and regresses first paint.
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+          if (
+            id.includes("/react-dom/") ||
+            id.includes("/react/") ||
+            id.includes("/scheduler/") ||
+            id.includes("/wouter/") ||
+            id.includes("@tanstack")
+          )
+            return "react-vendor";
+        },
+      },
+    },
   },
   server: {
     port,

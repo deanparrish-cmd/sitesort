@@ -196,9 +196,10 @@ export default function Register() {
       <div className="min-h-screen flex items-center justify-center bg-muted/30 relative py-12">
         <div className="absolute inset-0 z-0 opacity-20">
           <img
-            src={`${import.meta.env.BASE_URL}images/auth-bg.png`}
+            src={`${import.meta.env.BASE_URL}images/auth-bg.webp`}
             alt="Background"
             className="w-full h-full object-cover"
+            decoding="async"
           />
         </div>
         <div className="w-full max-w-md p-8 bg-card rounded-2xl shadow-2xl border border-border/50 relative z-10 text-center slide-up">
@@ -261,9 +262,10 @@ export default function Register() {
     <div className="min-h-screen flex items-center justify-center bg-muted/30 relative py-12">
       <div className="absolute inset-0 z-0 opacity-20">
         <img
-          src={`${import.meta.env.BASE_URL}images/auth-bg.png`}
+          src={`${import.meta.env.BASE_URL}images/auth-bg.webp`}
           alt="Background"
           className="w-full h-full object-cover"
+          decoding="async"
         />
       </div>
 
