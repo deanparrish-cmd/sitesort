@@ -4,7 +4,6 @@ import {
   Building2,
   LayoutDashboard,
   Users,
-  ShieldCheck,
   Settings,
   Receipt,
   Menu,
@@ -17,7 +16,6 @@ import {
   MessageSquare,
   AlertCircle,
   AlertTriangle,
-  ClipboardCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetMe, useLogout } from "@workspace/api-client-react";
@@ -152,10 +150,12 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
   ];
 
   const adminNavItems = [
-    { name: "Compliance Centre", href: "/compliance", icon: ShieldCheck, badge: 0 },
+    // Compliance Centre and Site Check-Ins removed from the nav — both are now
+    // covered per-project (each project has its own Compliance/H&S + Check-Ins
+    // tabs), so the company-wide aggregate pages were redundant. Routes/pages
+    // still exist (deep-linkable) but are no longer surfaced here.
     { name: "Invoices", href: "/invoices", icon: Receipt, badge: 0 },
     { name: "QR Codes", href: "/qr", icon: QrCode, badge: 0 },
-    { name: "Site Check-Ins", href: "/checkins", icon: ClipboardCheck, badge: 0 },
     ...(user?.role === "admin"
       ? [{ name: "Admin", href: "/admin", icon: ShieldAlert, badge: 0 }]
       : []),
