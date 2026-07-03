@@ -10,19 +10,24 @@ async function getFile(p: string): Promise<string> {
 }
 
 // [path, signature string that MUST be present for my change to have landed]
+// Team Portal (Feature #61) — 2026-07-03 push.
 const checks: [string, string][] = [
-  ["artifacts/api-server/src/routes/qr.ts", "const upcomingEvents = await db"],
-  ["artifacts/api-server/src/routes/qr.ts", "const isInHouseMember = projectUsers.some"],
-  ["artifacts/api-server/src/routes/calendar-events.ts", "resolvedProjectId"],
-  ["artifacts/api-server/src/routes/index.ts", "calendarEventsRouter"],
-  ["lib/db/src/schema/calendar_events.ts", "calendarEventsTable"],
-  ["lib/db/src/schema/index.ts", "./calendar_events"],
-  ["artifacts/sitesort/src/pages/site-board.tsx", "Subcontractors must have a valid insurance certificate"],
-  ["artifacts/sitesort/src/pages/site-board.tsx", "object-contain max-h-72"],
-  ["artifacts/sitesort/src/pages/dashboard/index.tsx", "Show on site board for"],
-  ["artifacts/sitesort/src/pages/checkins/index.tsx", "object-contain group-hover:scale-105"],
-  ["artifacts/sitesort/src/pages/projects/detail.tsx", 'alt={ci.workerName} className="w-full h-full object-contain"'],
-  ["artifacts/sitesort/src/pages/invoices/index.tsx", 'get("invoice")'],
+  ["artifacts/api-server/src/routes/portal.ts", '"/portal/login"'],
+  ["artifacts/api-server/src/routes/team-activity.ts", "sendProjectInviteEmail"],
+  ["artifacts/api-server/src/middlewares/portal.ts", "requirePortalMember"],
+  ["artifacts/api-server/src/middlewares/auth.ts", "generatePortalToken"],
+  ["artifacts/api-server/src/lib/activity.ts", "PORTAL_SECTIONS"],
+  ["artifacts/api-server/src/lib/invite-email.ts", "sendProjectInviteEmail"],
+  ["artifacts/api-server/src/routes/auth.ts", '"use_portal"'],
+  ["artifacts/api-server/src/routes/index.ts", "teamActivityRouter"],
+  ["artifacts/api-server/src/lib/ensure-schema.ts", "project_invites"],
+  ["lib/db/src/schema/project_invites.ts", "projectInvitesTable"],
+  ["lib/db/src/schema/activity_log.ts", "activityLogTable"],
+  ["lib/db/src/schema/users.ts", "portal_only"],
+  ["artifacts/sitesort/src/pages/portal/section.tsx", "PortalSectionPage"],
+  ["artifacts/sitesort/src/pages/portal/login.tsx", "sitesort_portal_token"],
+  ["artifacts/sitesort/src/pages/projects/team-activity.tsx", "ProjectTeamActivity"],
+  ["artifacts/sitesort/src/App.tsx", "/portal/:section"],
 ];
 
 let ok = 0, bad: string[] = [];
