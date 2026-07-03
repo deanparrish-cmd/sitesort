@@ -10,8 +10,10 @@ async function getFile(p: string): Promise<string> {
 }
 
 // [path, signature string that MUST be present for my change to have landed]
-// Team Portal (Feature #61) — 2026-07-03 push.
+// Nav cleanup — 2026-07-03: Compliance Centre + Site Check-Ins removed from sidebar.
 const checks: [string, string][] = [
+  ["artifacts/sitesort/src/components/layout/sidebar-layout.tsx", "Compliance Centre and Site Check-Ins removed from the nav"],
+  // Team Portal (Feature #61) — 2026-07-03 push.
   ["artifacts/api-server/src/routes/portal.ts", '"/portal/login"'],
   ["artifacts/api-server/src/routes/team-activity.ts", "sendProjectInviteEmail"],
   ["artifacts/api-server/src/middlewares/portal.ts", "requirePortalMember"],
