@@ -1,4 +1,5 @@
-import { pgTable, text, timestamp, time } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, time, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { projectsTable } from "./projects";
@@ -15,7 +16,14 @@ export const projectMembersTable = pgTable("project_members", {
   siteStartTime: time("site_start_time"),
   siteEndTime: time("site_end_time"),
   addedAt: timestamp("added_at").notNull().defaultNow(),
-});
+}, (t) => ({
+  // Team Portal: a user is a member of a project at most once (the same email
+  // can still be invited to OTHER projects — that's a different row). Partial so
+  // it never conflicts with subcontractor-only rows (user_id NULL).
+  userUq: uniqueIndex("project_members_project_user_uq")
+    .on(t.projectId, t.userId)
+    .where(sql`${t.userId} is not null`),
+}));
 
 export const insertProjectMemberSchema = createInsertSchema(projectMembersTable).omit({ addedAt: true });
 export type InsertProjectMember = z.infer<typeof insertProjectMemberSchema>;

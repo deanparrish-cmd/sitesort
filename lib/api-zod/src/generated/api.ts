@@ -920,3 +920,526 @@ export const GetQrContentResponse = zod.object({
     }),
   ),
 });
+
+/**
+ * @summary Log a portal-only member into their project portal
+ */
+export const PortalLoginBody = zod.object({
+  email: zod.string().email(),
+  password: zod.string(),
+  projectId: zod.string().optional(),
+});
+
+export const PortalLoginResponse = zod.object({
+  requiresProjectChoice: zod.boolean(),
+  token: zod.string().optional(),
+  project: zod
+    .object({
+      id: zod.string(),
+      name: zod.string(),
+    })
+    .optional(),
+  member: zod
+    .object({
+      name: zod.string(),
+      role: zod.string(),
+      email: zod.string(),
+    })
+    .optional(),
+  projects: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        name: zod.string(),
+      }),
+    )
+    .optional(),
+});
+
+/**
+ * @summary Look up a pending invite by its single-use token
+ */
+export const GetPortalInviteParams = zod.object({
+  token: zod.coerce.string(),
+});
+
+export const GetPortalInviteResponse = zod.object({
+  valid: zod.boolean(),
+  name: zod.string(),
+  email: zod.string(),
+  projectName: zod.string(),
+  expiresAt: zod.string().optional(),
+});
+
+/**
+ * @summary Accept an invite, set a password, and enter the portal
+ */
+export const AcceptPortalInviteParams = zod.object({
+  token: zod.coerce.string(),
+});
+
+export const AcceptPortalInviteBody = zod.object({
+  password: zod.string(),
+});
+
+export const AcceptPortalInviteResponse = zod.object({
+  requiresProjectChoice: zod.boolean(),
+  token: zod.string().optional(),
+  project: zod
+    .object({
+      id: zod.string(),
+      name: zod.string(),
+    })
+    .optional(),
+  member: zod
+    .object({
+      name: zod.string(),
+      role: zod.string(),
+      email: zod.string(),
+    })
+    .optional(),
+  projects: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        name: zod.string(),
+      }),
+    )
+    .optional(),
+});
+
+/**
+ * @summary The signed-in member's project + allowed sections
+ */
+export const GetPortalContextResponse = zod.object({
+  project: zod.object({
+    id: zod.string(),
+    name: zod.string(),
+    address: zod.string(),
+    status: zod.string(),
+    startDate: zod.string().optional(),
+    targetEndDate: zod.string().optional(),
+    trades: zod.array(zod.string()).optional(),
+    progressPercent: zod.number(),
+  }),
+  member: zod.object({
+    name: zod.string(),
+    role: zod.string(),
+    email: zod.string(),
+  }),
+  sections: zod.array(zod.string()),
+});
+
+/**
+ * @summary Portal overview (summary stats + recent notes)
+ */
+export const GetPortalOverviewResponse = zod.object({
+  project: zod.object({
+    id: zod.string(),
+    name: zod.string(),
+    address: zod.string(),
+    status: zod.string(),
+    startDate: zod.string().optional(),
+    targetEndDate: zod.string().optional(),
+    trades: zod.array(zod.string()).optional(),
+    progressPercent: zod.number(),
+  }),
+  stats: zod.object({
+    openIssues: zod.number(),
+    upcomingMilestones: zod.number(),
+    activePermits: zod.number(),
+    teamSize: zod.number(),
+  }),
+  recentNotes: zod.array(
+    zod.object({
+      id: zod.string(),
+      body: zod.string(),
+      noteDate: zod.string(),
+      authorName: zod.string(),
+      photoUrl: zod.string().optional(),
+    }),
+  ),
+});
+
+/**
+ * @summary Project progress + milestones
+ */
+export const GetPortalProgressResponse = zod.object({
+  progressPercent: zod.number(),
+  milestones: zod.array(
+    zod.object({
+      id: zod.string(),
+      title: zod.string(),
+      dueDate: zod.string(),
+      completedAt: zod.string().optional(),
+      order: zod.number(),
+    }),
+  ),
+});
+
+/**
+ * @summary Project team members (read-only)
+ */
+export const GetPortalTeamResponseItem = zod.object({
+  name: zod.string(),
+  role: zod.string(),
+  type: zod.string(),
+  phone: zod.string().optional(),
+  avatarUrl: zod.string().optional(),
+  trades: zod.array(zod.string()).optional(),
+});
+export const GetPortalTeamResponse = zod.array(GetPortalTeamResponseItem);
+
+/**
+ * @summary Site issues (snags + safety concerns)
+ */
+export const GetPortalSiteIssuesResponseItem = zod.object({
+  id: zod.string(),
+  category: zod.string(),
+  description: zod.string().optional(),
+  zone: zod.string().optional(),
+  referenceNumber: zod.string(),
+  status: zod.string().optional(),
+  photoUrl: zod.string().optional(),
+  takenAt: zod.string().optional(),
+  latitude: zod.string().optional(),
+  longitude: zod.string().optional(),
+});
+export const GetPortalSiteIssuesResponse = zod.array(
+  GetPortalSiteIssuesResponseItem,
+);
+
+/**
+ * @summary Pinned site-board items + upcoming events
+ */
+export const GetPortalSiteBoardResponse = zod.object({
+  documents: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      type: zod.string(),
+      version: zod.number(),
+      revision: zod.string().optional(),
+      fileUrl: zod.string(),
+      fileSize: zod.number().optional(),
+      status: zod.string(),
+      createdAt: zod.string().optional(),
+    }),
+  ),
+  photos: zod.array(
+    zod.object({
+      id: zod.string(),
+      category: zod.string(),
+      description: zod.string().optional(),
+      zone: zod.string().optional(),
+      referenceNumber: zod.string(),
+      status: zod.string().optional(),
+      photoUrl: zod.string().optional(),
+      takenAt: zod.string().optional(),
+      latitude: zod.string().optional(),
+      longitude: zod.string().optional(),
+    }),
+  ),
+  permits: zod.array(
+    zod.object({
+      id: zod.string(),
+      type: zod.string(),
+      description: zod.string(),
+      startDate: zod.string().optional(),
+      expiryDate: zod.string(),
+      status: zod.string(),
+      documentUrl: zod.string().optional(),
+    }),
+  ),
+  upcomingEvents: zod.array(
+    zod.object({
+      id: zod.string(),
+      title: zod.string(),
+      eventDate: zod.string(),
+      note: zod.string().optional(),
+      scope: zod.string(),
+    }),
+  ),
+});
+
+/**
+ * @summary Health & Safety hub (method statements + safety docs + permits)
+ */
+export const GetPortalHsResponse = zod.object({
+  methodStatements: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      type: zod.string(),
+      version: zod.number(),
+      revision: zod.string().optional(),
+      fileUrl: zod.string(),
+      fileSize: zod.number().optional(),
+      status: zod.string(),
+      createdAt: zod.string().optional(),
+    }),
+  ),
+  safety: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      type: zod.string(),
+      version: zod.number(),
+      revision: zod.string().optional(),
+      fileUrl: zod.string(),
+      fileSize: zod.number().optional(),
+      status: zod.string(),
+      createdAt: zod.string().optional(),
+    }),
+  ),
+  permits: zod.array(
+    zod.object({
+      id: zod.string(),
+      type: zod.string(),
+      description: zod.string(),
+      startDate: zod.string().optional(),
+      expiryDate: zod.string(),
+      status: zod.string(),
+      documentUrl: zod.string().optional(),
+    }),
+  ),
+});
+
+/**
+ * @summary Drawings (current, with revisions)
+ */
+export const GetPortalDrawingsResponseItem = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  type: zod.string(),
+  version: zod.number(),
+  revision: zod.string().optional(),
+  fileUrl: zod.string(),
+  fileSize: zod.number().optional(),
+  status: zod.string(),
+  createdAt: zod.string().optional(),
+});
+export const GetPortalDrawingsResponse = zod.array(
+  GetPortalDrawingsResponseItem,
+);
+
+/**
+ * @summary A single drawing (logs the view)
+ */
+export const GetPortalDrawingParams = zod.object({
+  documentId: zod.coerce.string(),
+});
+
+export const GetPortalDrawingResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  type: zod.string(),
+  version: zod.number(),
+  revision: zod.string().optional(),
+  fileUrl: zod.string(),
+  fileSize: zod.number().optional(),
+  status: zod.string(),
+  createdAt: zod.string().optional(),
+});
+
+/**
+ * @summary Method statements
+ */
+export const GetPortalMethodStatementsResponseItem = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  type: zod.string(),
+  version: zod.number(),
+  revision: zod.string().optional(),
+  fileUrl: zod.string(),
+  fileSize: zod.number().optional(),
+  status: zod.string(),
+  createdAt: zod.string().optional(),
+});
+export const GetPortalMethodStatementsResponse = zod.array(
+  GetPortalMethodStatementsResponseItem,
+);
+
+/**
+ * @summary A single method statement (logs the view)
+ */
+export const GetPortalMethodStatementParams = zod.object({
+  documentId: zod.coerce.string(),
+});
+
+export const GetPortalMethodStatementResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  type: zod.string(),
+  version: zod.number(),
+  revision: zod.string().optional(),
+  fileUrl: zod.string(),
+  fileSize: zod.number().optional(),
+  status: zod.string(),
+  createdAt: zod.string().optional(),
+});
+
+/**
+ * @summary Permits (active, non-archived)
+ */
+export const GetPortalPermitsResponseItem = zod.object({
+  id: zod.string(),
+  type: zod.string(),
+  description: zod.string(),
+  startDate: zod.string().optional(),
+  expiryDate: zod.string(),
+  status: zod.string(),
+  documentUrl: zod.string().optional(),
+});
+export const GetPortalPermitsResponse = zod.array(GetPortalPermitsResponseItem);
+
+/**
+ * @summary Safety documents
+ */
+export const GetPortalSafetyResponseItem = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  type: zod.string(),
+  version: zod.number(),
+  revision: zod.string().optional(),
+  fileUrl: zod.string(),
+  fileSize: zod.number().optional(),
+  status: zod.string(),
+  createdAt: zod.string().optional(),
+});
+export const GetPortalSafetyResponse = zod.array(GetPortalSafetyResponseItem);
+
+/**
+ * @summary General documents + notes
+ */
+export const GetPortalGeneralResponse = zod.object({
+  documents: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      type: zod.string(),
+      version: zod.number(),
+      revision: zod.string().optional(),
+      fileUrl: zod.string(),
+      fileSize: zod.number().optional(),
+      status: zod.string(),
+      createdAt: zod.string().optional(),
+    }),
+  ),
+  notes: zod.array(
+    zod.object({
+      id: zod.string(),
+      body: zod.string(),
+      noteDate: zod.string(),
+      authorName: zod.string(),
+      photoUrl: zod.string().optional(),
+    }),
+  ),
+});
+
+/**
+ * @summary List invites for a project (PM)
+ */
+export const ListProjectInvitesParams = zod.object({
+  projectId: zod.coerce.string(),
+});
+
+export const ListProjectInvitesResponseItem = zod.object({
+  id: zod.string(),
+  projectId: zod.string(),
+  email: zod.string(),
+  name: zod.string(),
+  role: zod.string(),
+  status: zod.string(),
+  expiresAt: zod.string(),
+  acceptedUserId: zod.string().optional(),
+  acceptedAt: zod.string().optional(),
+  revokedAt: zod.string().optional(),
+  createdAt: zod.string(),
+});
+export const ListProjectInvitesResponse = zod.array(
+  ListProjectInvitesResponseItem,
+);
+
+/**
+ * @summary Invite a member to a project (PM)
+ */
+export const CreateProjectInviteParams = zod.object({
+  projectId: zod.coerce.string(),
+});
+
+export const CreateProjectInviteBody = zod.object({
+  name: zod.string(),
+  email: zod.string().email(),
+  role: zod.enum(["worker", "manager", "subcontractor"]).optional(),
+});
+
+/**
+ * @summary Revoke a pending or accepted invite (PM)
+ */
+export const RevokeProjectInviteParams = zod.object({
+  projectId: zod.coerce.string(),
+  inviteId: zod.coerce.string(),
+});
+
+export const RevokeProjectInviteResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * @summary Team activity feed for a project (PM)
+ */
+export const GetProjectActivityParams = zod.object({
+  projectId: zod.coerce.string(),
+});
+
+export const GetProjectActivityQueryParams = zod.object({
+  memberId: zod.coerce.string().optional(),
+  section: zod.coerce.string().optional(),
+  from: zod.coerce.string().optional(),
+  to: zod.coerce.string().optional(),
+  limit: zod.coerce.number().optional(),
+});
+
+export const GetProjectActivityResponse = zod.object({
+  entries: zod.array(
+    zod.object({
+      id: zod.string(),
+      userId: zod.string(),
+      memberName: zod.string(),
+      section: zod.string(),
+      sectionLabel: zod.string(),
+      action: zod.string(),
+      itemType: zod.string().optional(),
+      itemId: zod.string().optional(),
+      createdAt: zod.string(),
+    }),
+  ),
+  total: zod.number(),
+});
+
+/**
+ * @summary Per-member activity summary for a project (PM)
+ */
+export const GetProjectActivitySummaryParams = zod.object({
+  projectId: zod.coerce.string(),
+});
+
+export const GetProjectActivitySummaryResponseItem = zod.object({
+  userId: zod.string(),
+  memberName: zod.string(),
+  role: zod.string(),
+  lastActiveAt: zod.string().optional(),
+  totalViews: zod.number(),
+  topSections: zod.array(
+    zod.object({
+      section: zod.string(),
+      sectionLabel: zod.string(),
+      count: zod.number(),
+    }),
+  ),
+});
+export const GetProjectActivitySummaryResponse = zod.array(
+  GetProjectActivitySummaryResponseItem,
+);

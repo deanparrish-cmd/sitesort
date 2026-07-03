@@ -17,12 +17,15 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AcceptInviteRequest,
   AcknowledgeRequest,
   AddInsuranceRequest,
   AddMemberRequest,
   AuditLogEntry,
   AuthResponse,
   ComplianceOverview,
+  CreateInviteRequest,
+  CreateInviteResponse,
   CreatePermitRequest,
   CreateProjectRequest,
   CreateSubcontractorRequest,
@@ -32,6 +35,7 @@ import type {
   DocumentDetail,
   ErrorResponse,
   GenerateQrRequest,
+  GetProjectActivityParams,
   HealthStatus,
   InsuranceRecord,
   InviteUserRequest,
@@ -39,11 +43,27 @@ import type {
   ListPhotosParams,
   LogPhotoRequest,
   LoginRequest,
+  MemberActivitySummary,
   Notification,
   Permit,
   Photo,
+  PortalContext,
+  PortalDocument,
+  PortalGeneral,
+  PortalHs,
+  PortalInviteInfo,
+  PortalIssue,
+  PortalLoginRequest,
+  PortalLoginResponse,
+  PortalOverview,
+  PortalPermit,
+  PortalProgress,
+  PortalSiteBoard,
+  PortalTeamMember,
   Project,
+  ProjectActivityFeed,
   ProjectDetail,
+  ProjectInvite,
   ProjectMember,
   QrCode,
   QrContent,
@@ -3448,6 +3468,1834 @@ export function useGetQrContent<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetQrContentQueryOptions(token, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Log a portal-only member into their project portal
+ */
+export const getPortalLoginUrl = () => {
+  return `/api/portal/login`;
+};
+
+export const portalLogin = async (
+  portalLoginRequest: PortalLoginRequest,
+  options?: RequestInit,
+): Promise<PortalLoginResponse> => {
+  return customFetch<PortalLoginResponse>(getPortalLoginUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(portalLoginRequest),
+  });
+};
+
+export const getPortalLoginMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof portalLogin>>,
+    TError,
+    { data: BodyType<PortalLoginRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof portalLogin>>,
+  TError,
+  { data: BodyType<PortalLoginRequest> },
+  TContext
+> => {
+  const mutationKey = ["portalLogin"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof portalLogin>>,
+    { data: BodyType<PortalLoginRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return portalLogin(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PortalLoginMutationResult = NonNullable<
+  Awaited<ReturnType<typeof portalLogin>>
+>;
+export type PortalLoginMutationBody = BodyType<PortalLoginRequest>;
+export type PortalLoginMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Log a portal-only member into their project portal
+ */
+export const usePortalLogin = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof portalLogin>>,
+    TError,
+    { data: BodyType<PortalLoginRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof portalLogin>>,
+  TError,
+  { data: BodyType<PortalLoginRequest> },
+  TContext
+> => {
+  return useMutation(getPortalLoginMutationOptions(options));
+};
+
+/**
+ * @summary Look up a pending invite by its single-use token
+ */
+export const getGetPortalInviteUrl = (token: string) => {
+  return `/api/portal/invite/${token}`;
+};
+
+export const getPortalInvite = async (
+  token: string,
+  options?: RequestInit,
+): Promise<PortalInviteInfo> => {
+  return customFetch<PortalInviteInfo>(getGetPortalInviteUrl(token), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPortalInviteQueryKey = (token: string) => {
+  return [`/api/portal/invite/${token}`] as const;
+};
+
+export const getGetPortalInviteQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPortalInvite>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  token: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPortalInvite>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPortalInviteQueryKey(token);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getPortalInvite>>> = ({
+    signal,
+  }) => getPortalInvite(token, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!token,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalInvite>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPortalInviteQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPortalInvite>>
+>;
+export type GetPortalInviteQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Look up a pending invite by its single-use token
+ */
+
+export function useGetPortalInvite<
+  TData = Awaited<ReturnType<typeof getPortalInvite>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  token: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPortalInvite>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPortalInviteQueryOptions(token, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Accept an invite, set a password, and enter the portal
+ */
+export const getAcceptPortalInviteUrl = (token: string) => {
+  return `/api/portal/invite/${token}/accept`;
+};
+
+export const acceptPortalInvite = async (
+  token: string,
+  acceptInviteRequest: AcceptInviteRequest,
+  options?: RequestInit,
+): Promise<PortalLoginResponse> => {
+  return customFetch<PortalLoginResponse>(getAcceptPortalInviteUrl(token), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(acceptInviteRequest),
+  });
+};
+
+export const getAcceptPortalInviteMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof acceptPortalInvite>>,
+    TError,
+    { token: string; data: BodyType<AcceptInviteRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof acceptPortalInvite>>,
+  TError,
+  { token: string; data: BodyType<AcceptInviteRequest> },
+  TContext
+> => {
+  const mutationKey = ["acceptPortalInvite"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof acceptPortalInvite>>,
+    { token: string; data: BodyType<AcceptInviteRequest> }
+  > = (props) => {
+    const { token, data } = props ?? {};
+
+    return acceptPortalInvite(token, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AcceptPortalInviteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof acceptPortalInvite>>
+>;
+export type AcceptPortalInviteMutationBody = BodyType<AcceptInviteRequest>;
+export type AcceptPortalInviteMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Accept an invite, set a password, and enter the portal
+ */
+export const useAcceptPortalInvite = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof acceptPortalInvite>>,
+    TError,
+    { token: string; data: BodyType<AcceptInviteRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof acceptPortalInvite>>,
+  TError,
+  { token: string; data: BodyType<AcceptInviteRequest> },
+  TContext
+> => {
+  return useMutation(getAcceptPortalInviteMutationOptions(options));
+};
+
+/**
+ * @summary The signed-in member's project + allowed sections
+ */
+export const getGetPortalContextUrl = () => {
+  return `/api/portal/me`;
+};
+
+export const getPortalContext = async (
+  options?: RequestInit,
+): Promise<PortalContext> => {
+  return customFetch<PortalContext>(getGetPortalContextUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPortalContextQueryKey = () => {
+  return [`/api/portal/me`] as const;
+};
+
+export const getGetPortalContextQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPortalContext>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalContext>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPortalContextQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPortalContext>>
+  > = ({ signal }) => getPortalContext({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalContext>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPortalContextQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPortalContext>>
+>;
+export type GetPortalContextQueryError = ErrorType<unknown>;
+
+/**
+ * @summary The signed-in member's project + allowed sections
+ */
+
+export function useGetPortalContext<
+  TData = Awaited<ReturnType<typeof getPortalContext>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalContext>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPortalContextQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Portal overview (summary stats + recent notes)
+ */
+export const getGetPortalOverviewUrl = () => {
+  return `/api/portal/overview`;
+};
+
+export const getPortalOverview = async (
+  options?: RequestInit,
+): Promise<PortalOverview> => {
+  return customFetch<PortalOverview>(getGetPortalOverviewUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPortalOverviewQueryKey = () => {
+  return [`/api/portal/overview`] as const;
+};
+
+export const getGetPortalOverviewQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPortalOverview>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalOverview>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPortalOverviewQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPortalOverview>>
+  > = ({ signal }) => getPortalOverview({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalOverview>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPortalOverviewQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPortalOverview>>
+>;
+export type GetPortalOverviewQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Portal overview (summary stats + recent notes)
+ */
+
+export function useGetPortalOverview<
+  TData = Awaited<ReturnType<typeof getPortalOverview>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalOverview>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPortalOverviewQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Project progress + milestones
+ */
+export const getGetPortalProgressUrl = () => {
+  return `/api/portal/progress`;
+};
+
+export const getPortalProgress = async (
+  options?: RequestInit,
+): Promise<PortalProgress> => {
+  return customFetch<PortalProgress>(getGetPortalProgressUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPortalProgressQueryKey = () => {
+  return [`/api/portal/progress`] as const;
+};
+
+export const getGetPortalProgressQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPortalProgress>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalProgress>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPortalProgressQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPortalProgress>>
+  > = ({ signal }) => getPortalProgress({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalProgress>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPortalProgressQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPortalProgress>>
+>;
+export type GetPortalProgressQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Project progress + milestones
+ */
+
+export function useGetPortalProgress<
+  TData = Awaited<ReturnType<typeof getPortalProgress>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalProgress>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPortalProgressQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Project team members (read-only)
+ */
+export const getGetPortalTeamUrl = () => {
+  return `/api/portal/team`;
+};
+
+export const getPortalTeam = async (
+  options?: RequestInit,
+): Promise<PortalTeamMember[]> => {
+  return customFetch<PortalTeamMember[]>(getGetPortalTeamUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPortalTeamQueryKey = () => {
+  return [`/api/portal/team`] as const;
+};
+
+export const getGetPortalTeamQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPortalTeam>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalTeam>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPortalTeamQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getPortalTeam>>> = ({
+    signal,
+  }) => getPortalTeam({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalTeam>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPortalTeamQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPortalTeam>>
+>;
+export type GetPortalTeamQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Project team members (read-only)
+ */
+
+export function useGetPortalTeam<
+  TData = Awaited<ReturnType<typeof getPortalTeam>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalTeam>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPortalTeamQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Site issues (snags + safety concerns)
+ */
+export const getGetPortalSiteIssuesUrl = () => {
+  return `/api/portal/site-issues`;
+};
+
+export const getPortalSiteIssues = async (
+  options?: RequestInit,
+): Promise<PortalIssue[]> => {
+  return customFetch<PortalIssue[]>(getGetPortalSiteIssuesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPortalSiteIssuesQueryKey = () => {
+  return [`/api/portal/site-issues`] as const;
+};
+
+export const getGetPortalSiteIssuesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPortalSiteIssues>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalSiteIssues>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPortalSiteIssuesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPortalSiteIssues>>
+  > = ({ signal }) => getPortalSiteIssues({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalSiteIssues>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPortalSiteIssuesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPortalSiteIssues>>
+>;
+export type GetPortalSiteIssuesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Site issues (snags + safety concerns)
+ */
+
+export function useGetPortalSiteIssues<
+  TData = Awaited<ReturnType<typeof getPortalSiteIssues>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalSiteIssues>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPortalSiteIssuesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Pinned site-board items + upcoming events
+ */
+export const getGetPortalSiteBoardUrl = () => {
+  return `/api/portal/site-board`;
+};
+
+export const getPortalSiteBoard = async (
+  options?: RequestInit,
+): Promise<PortalSiteBoard> => {
+  return customFetch<PortalSiteBoard>(getGetPortalSiteBoardUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPortalSiteBoardQueryKey = () => {
+  return [`/api/portal/site-board`] as const;
+};
+
+export const getGetPortalSiteBoardQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPortalSiteBoard>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalSiteBoard>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPortalSiteBoardQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPortalSiteBoard>>
+  > = ({ signal }) => getPortalSiteBoard({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalSiteBoard>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPortalSiteBoardQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPortalSiteBoard>>
+>;
+export type GetPortalSiteBoardQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Pinned site-board items + upcoming events
+ */
+
+export function useGetPortalSiteBoard<
+  TData = Awaited<ReturnType<typeof getPortalSiteBoard>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalSiteBoard>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPortalSiteBoardQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Health & Safety hub (method statements + safety docs + permits)
+ */
+export const getGetPortalHsUrl = () => {
+  return `/api/portal/hs`;
+};
+
+export const getPortalHs = async (options?: RequestInit): Promise<PortalHs> => {
+  return customFetch<PortalHs>(getGetPortalHsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPortalHsQueryKey = () => {
+  return [`/api/portal/hs`] as const;
+};
+
+export const getGetPortalHsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPortalHs>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalHs>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPortalHsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getPortalHs>>> = ({
+    signal,
+  }) => getPortalHs({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalHs>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPortalHsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPortalHs>>
+>;
+export type GetPortalHsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Health & Safety hub (method statements + safety docs + permits)
+ */
+
+export function useGetPortalHs<
+  TData = Awaited<ReturnType<typeof getPortalHs>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalHs>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPortalHsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Drawings (current, with revisions)
+ */
+export const getGetPortalDrawingsUrl = () => {
+  return `/api/portal/drawings`;
+};
+
+export const getPortalDrawings = async (
+  options?: RequestInit,
+): Promise<PortalDocument[]> => {
+  return customFetch<PortalDocument[]>(getGetPortalDrawingsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPortalDrawingsQueryKey = () => {
+  return [`/api/portal/drawings`] as const;
+};
+
+export const getGetPortalDrawingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPortalDrawings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalDrawings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPortalDrawingsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPortalDrawings>>
+  > = ({ signal }) => getPortalDrawings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalDrawings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPortalDrawingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPortalDrawings>>
+>;
+export type GetPortalDrawingsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Drawings (current, with revisions)
+ */
+
+export function useGetPortalDrawings<
+  TData = Awaited<ReturnType<typeof getPortalDrawings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalDrawings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPortalDrawingsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary A single drawing (logs the view)
+ */
+export const getGetPortalDrawingUrl = (documentId: string) => {
+  return `/api/portal/drawings/${documentId}`;
+};
+
+export const getPortalDrawing = async (
+  documentId: string,
+  options?: RequestInit,
+): Promise<PortalDocument> => {
+  return customFetch<PortalDocument>(getGetPortalDrawingUrl(documentId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPortalDrawingQueryKey = (documentId: string) => {
+  return [`/api/portal/drawings/${documentId}`] as const;
+};
+
+export const getGetPortalDrawingQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPortalDrawing>>,
+  TError = ErrorType<unknown>,
+>(
+  documentId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPortalDrawing>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPortalDrawingQueryKey(documentId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPortalDrawing>>
+  > = ({ signal }) =>
+    getPortalDrawing(documentId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!documentId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalDrawing>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPortalDrawingQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPortalDrawing>>
+>;
+export type GetPortalDrawingQueryError = ErrorType<unknown>;
+
+/**
+ * @summary A single drawing (logs the view)
+ */
+
+export function useGetPortalDrawing<
+  TData = Awaited<ReturnType<typeof getPortalDrawing>>,
+  TError = ErrorType<unknown>,
+>(
+  documentId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPortalDrawing>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPortalDrawingQueryOptions(documentId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Method statements
+ */
+export const getGetPortalMethodStatementsUrl = () => {
+  return `/api/portal/method-statements`;
+};
+
+export const getPortalMethodStatements = async (
+  options?: RequestInit,
+): Promise<PortalDocument[]> => {
+  return customFetch<PortalDocument[]>(getGetPortalMethodStatementsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPortalMethodStatementsQueryKey = () => {
+  return [`/api/portal/method-statements`] as const;
+};
+
+export const getGetPortalMethodStatementsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPortalMethodStatements>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalMethodStatements>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPortalMethodStatementsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPortalMethodStatements>>
+  > = ({ signal }) => getPortalMethodStatements({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalMethodStatements>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPortalMethodStatementsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPortalMethodStatements>>
+>;
+export type GetPortalMethodStatementsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Method statements
+ */
+
+export function useGetPortalMethodStatements<
+  TData = Awaited<ReturnType<typeof getPortalMethodStatements>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalMethodStatements>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPortalMethodStatementsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary A single method statement (logs the view)
+ */
+export const getGetPortalMethodStatementUrl = (documentId: string) => {
+  return `/api/portal/method-statements/${documentId}`;
+};
+
+export const getPortalMethodStatement = async (
+  documentId: string,
+  options?: RequestInit,
+): Promise<PortalDocument> => {
+  return customFetch<PortalDocument>(
+    getGetPortalMethodStatementUrl(documentId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetPortalMethodStatementQueryKey = (documentId: string) => {
+  return [`/api/portal/method-statements/${documentId}`] as const;
+};
+
+export const getGetPortalMethodStatementQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPortalMethodStatement>>,
+  TError = ErrorType<unknown>,
+>(
+  documentId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPortalMethodStatement>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPortalMethodStatementQueryKey(documentId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPortalMethodStatement>>
+  > = ({ signal }) =>
+    getPortalMethodStatement(documentId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!documentId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalMethodStatement>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPortalMethodStatementQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPortalMethodStatement>>
+>;
+export type GetPortalMethodStatementQueryError = ErrorType<unknown>;
+
+/**
+ * @summary A single method statement (logs the view)
+ */
+
+export function useGetPortalMethodStatement<
+  TData = Awaited<ReturnType<typeof getPortalMethodStatement>>,
+  TError = ErrorType<unknown>,
+>(
+  documentId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPortalMethodStatement>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPortalMethodStatementQueryOptions(
+    documentId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Permits (active, non-archived)
+ */
+export const getGetPortalPermitsUrl = () => {
+  return `/api/portal/permits`;
+};
+
+export const getPortalPermits = async (
+  options?: RequestInit,
+): Promise<PortalPermit[]> => {
+  return customFetch<PortalPermit[]>(getGetPortalPermitsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPortalPermitsQueryKey = () => {
+  return [`/api/portal/permits`] as const;
+};
+
+export const getGetPortalPermitsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPortalPermits>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalPermits>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPortalPermitsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPortalPermits>>
+  > = ({ signal }) => getPortalPermits({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalPermits>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPortalPermitsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPortalPermits>>
+>;
+export type GetPortalPermitsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Permits (active, non-archived)
+ */
+
+export function useGetPortalPermits<
+  TData = Awaited<ReturnType<typeof getPortalPermits>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalPermits>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPortalPermitsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Safety documents
+ */
+export const getGetPortalSafetyUrl = () => {
+  return `/api/portal/safety`;
+};
+
+export const getPortalSafety = async (
+  options?: RequestInit,
+): Promise<PortalDocument[]> => {
+  return customFetch<PortalDocument[]>(getGetPortalSafetyUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPortalSafetyQueryKey = () => {
+  return [`/api/portal/safety`] as const;
+};
+
+export const getGetPortalSafetyQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPortalSafety>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalSafety>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPortalSafetyQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getPortalSafety>>> = ({
+    signal,
+  }) => getPortalSafety({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalSafety>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPortalSafetyQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPortalSafety>>
+>;
+export type GetPortalSafetyQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Safety documents
+ */
+
+export function useGetPortalSafety<
+  TData = Awaited<ReturnType<typeof getPortalSafety>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalSafety>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPortalSafetyQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary General documents + notes
+ */
+export const getGetPortalGeneralUrl = () => {
+  return `/api/portal/general`;
+};
+
+export const getPortalGeneral = async (
+  options?: RequestInit,
+): Promise<PortalGeneral> => {
+  return customFetch<PortalGeneral>(getGetPortalGeneralUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPortalGeneralQueryKey = () => {
+  return [`/api/portal/general`] as const;
+};
+
+export const getGetPortalGeneralQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPortalGeneral>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalGeneral>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPortalGeneralQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPortalGeneral>>
+  > = ({ signal }) => getPortalGeneral({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalGeneral>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPortalGeneralQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPortalGeneral>>
+>;
+export type GetPortalGeneralQueryError = ErrorType<unknown>;
+
+/**
+ * @summary General documents + notes
+ */
+
+export function useGetPortalGeneral<
+  TData = Awaited<ReturnType<typeof getPortalGeneral>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalGeneral>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPortalGeneralQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List invites for a project (PM)
+ */
+export const getListProjectInvitesUrl = (projectId: string) => {
+  return `/api/projects/${projectId}/invites`;
+};
+
+export const listProjectInvites = async (
+  projectId: string,
+  options?: RequestInit,
+): Promise<ProjectInvite[]> => {
+  return customFetch<ProjectInvite[]>(getListProjectInvitesUrl(projectId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListProjectInvitesQueryKey = (projectId: string) => {
+  return [`/api/projects/${projectId}/invites`] as const;
+};
+
+export const getListProjectInvitesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listProjectInvites>>,
+  TError = ErrorType<unknown>,
+>(
+  projectId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listProjectInvites>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListProjectInvitesQueryKey(projectId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listProjectInvites>>
+  > = ({ signal }) =>
+    listProjectInvites(projectId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!projectId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listProjectInvites>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListProjectInvitesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listProjectInvites>>
+>;
+export type ListProjectInvitesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List invites for a project (PM)
+ */
+
+export function useListProjectInvites<
+  TData = Awaited<ReturnType<typeof listProjectInvites>>,
+  TError = ErrorType<unknown>,
+>(
+  projectId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listProjectInvites>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListProjectInvitesQueryOptions(projectId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Invite a member to a project (PM)
+ */
+export const getCreateProjectInviteUrl = (projectId: string) => {
+  return `/api/projects/${projectId}/invites`;
+};
+
+export const createProjectInvite = async (
+  projectId: string,
+  createInviteRequest: CreateInviteRequest,
+  options?: RequestInit,
+): Promise<CreateInviteResponse> => {
+  return customFetch<CreateInviteResponse>(
+    getCreateProjectInviteUrl(projectId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(createInviteRequest),
+    },
+  );
+};
+
+export const getCreateProjectInviteMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createProjectInvite>>,
+    TError,
+    { projectId: string; data: BodyType<CreateInviteRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createProjectInvite>>,
+  TError,
+  { projectId: string; data: BodyType<CreateInviteRequest> },
+  TContext
+> => {
+  const mutationKey = ["createProjectInvite"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createProjectInvite>>,
+    { projectId: string; data: BodyType<CreateInviteRequest> }
+  > = (props) => {
+    const { projectId, data } = props ?? {};
+
+    return createProjectInvite(projectId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateProjectInviteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createProjectInvite>>
+>;
+export type CreateProjectInviteMutationBody = BodyType<CreateInviteRequest>;
+export type CreateProjectInviteMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Invite a member to a project (PM)
+ */
+export const useCreateProjectInvite = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createProjectInvite>>,
+    TError,
+    { projectId: string; data: BodyType<CreateInviteRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createProjectInvite>>,
+  TError,
+  { projectId: string; data: BodyType<CreateInviteRequest> },
+  TContext
+> => {
+  return useMutation(getCreateProjectInviteMutationOptions(options));
+};
+
+/**
+ * @summary Revoke a pending or accepted invite (PM)
+ */
+export const getRevokeProjectInviteUrl = (
+  projectId: string,
+  inviteId: string,
+) => {
+  return `/api/projects/${projectId}/invites/${inviteId}/revoke`;
+};
+
+export const revokeProjectInvite = async (
+  projectId: string,
+  inviteId: string,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(
+    getRevokeProjectInviteUrl(projectId, inviteId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getRevokeProjectInviteMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof revokeProjectInvite>>,
+    TError,
+    { projectId: string; inviteId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof revokeProjectInvite>>,
+  TError,
+  { projectId: string; inviteId: string },
+  TContext
+> => {
+  const mutationKey = ["revokeProjectInvite"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof revokeProjectInvite>>,
+    { projectId: string; inviteId: string }
+  > = (props) => {
+    const { projectId, inviteId } = props ?? {};
+
+    return revokeProjectInvite(projectId, inviteId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RevokeProjectInviteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof revokeProjectInvite>>
+>;
+
+export type RevokeProjectInviteMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Revoke a pending or accepted invite (PM)
+ */
+export const useRevokeProjectInvite = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof revokeProjectInvite>>,
+    TError,
+    { projectId: string; inviteId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof revokeProjectInvite>>,
+  TError,
+  { projectId: string; inviteId: string },
+  TContext
+> => {
+  return useMutation(getRevokeProjectInviteMutationOptions(options));
+};
+
+/**
+ * @summary Team activity feed for a project (PM)
+ */
+export const getGetProjectActivityUrl = (
+  projectId: string,
+  params?: GetProjectActivityParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/projects/${projectId}/activity?${stringifiedParams}`
+    : `/api/projects/${projectId}/activity`;
+};
+
+export const getProjectActivity = async (
+  projectId: string,
+  params?: GetProjectActivityParams,
+  options?: RequestInit,
+): Promise<ProjectActivityFeed> => {
+  return customFetch<ProjectActivityFeed>(
+    getGetProjectActivityUrl(projectId, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetProjectActivityQueryKey = (
+  projectId: string,
+  params?: GetProjectActivityParams,
+) => {
+  return [
+    `/api/projects/${projectId}/activity`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetProjectActivityQueryOptions = <
+  TData = Awaited<ReturnType<typeof getProjectActivity>>,
+  TError = ErrorType<unknown>,
+>(
+  projectId: string,
+  params?: GetProjectActivityParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getProjectActivity>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetProjectActivityQueryKey(projectId, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getProjectActivity>>
+  > = ({ signal }) =>
+    getProjectActivity(projectId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!projectId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getProjectActivity>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetProjectActivityQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getProjectActivity>>
+>;
+export type GetProjectActivityQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Team activity feed for a project (PM)
+ */
+
+export function useGetProjectActivity<
+  TData = Awaited<ReturnType<typeof getProjectActivity>>,
+  TError = ErrorType<unknown>,
+>(
+  projectId: string,
+  params?: GetProjectActivityParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getProjectActivity>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetProjectActivityQueryOptions(
+    projectId,
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Per-member activity summary for a project (PM)
+ */
+export const getGetProjectActivitySummaryUrl = (projectId: string) => {
+  return `/api/projects/${projectId}/activity/summary`;
+};
+
+export const getProjectActivitySummary = async (
+  projectId: string,
+  options?: RequestInit,
+): Promise<MemberActivitySummary[]> => {
+  return customFetch<MemberActivitySummary[]>(
+    getGetProjectActivitySummaryUrl(projectId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetProjectActivitySummaryQueryKey = (projectId: string) => {
+  return [`/api/projects/${projectId}/activity/summary`] as const;
+};
+
+export const getGetProjectActivitySummaryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getProjectActivitySummary>>,
+  TError = ErrorType<unknown>,
+>(
+  projectId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getProjectActivitySummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetProjectActivitySummaryQueryKey(projectId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getProjectActivitySummary>>
+  > = ({ signal }) =>
+    getProjectActivitySummary(projectId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!projectId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getProjectActivitySummary>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetProjectActivitySummaryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getProjectActivitySummary>>
+>;
+export type GetProjectActivitySummaryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Per-member activity summary for a project (PM)
+ */
+
+export function useGetProjectActivitySummary<
+  TData = Awaited<ReturnType<typeof getProjectActivitySummary>>,
+  TError = ErrorType<unknown>,
+>(
+  projectId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getProjectActivitySummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetProjectActivitySummaryQueryOptions(
+    projectId,
+    options,
+  );
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

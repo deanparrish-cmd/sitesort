@@ -24,6 +24,8 @@ import reportsRouter from "./reports";
 import shareLogsRouter from "./share-logs";
 import calendarEventsRouter from "./calendar-events";
 import closeoutRouter from "./closeout";
+import portalRouter from "./portal";
+import teamActivityRouter from "./team-activity";
 
 const router: IRouter = Router();
 
@@ -52,5 +54,7 @@ router.use(reportsRouter);
 router.use(shareLogsRouter);
 router.use(calendarEventsRouter);
 router.use(closeoutRouter);
+router.use(portalRouter);
+router.use(teamActivityRouter);
 
 export default router;

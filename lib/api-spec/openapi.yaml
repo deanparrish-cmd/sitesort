@@ -37,6 +37,8 @@ tags:
     description: User management
   - name: qr
     description: QR code generation
+  - name: portal
+    description: Team Portal — member onboarding, sections, and PM activity
 paths:
   /healthz:
     get:
@@ -871,6 +873,429 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/QrContent"
+
+  # ---- Team Portal: member onboarding + login (public) ----
+  /portal/login:
+    post:
+      operationId: portalLogin
+      tags: [portal]
+      summary: Log a portal-only member into their project portal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PortalLoginRequest"
+      responses:
+        "200":
+          description: Logged in, or a project choice is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalLoginResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /portal/invite/{token}:
+    get:
+      operationId: getPortalInvite
+      tags: [portal]
+      summary: Look up a pending invite by its single-use token
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Invite is valid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalInviteInfo"
+        "410":
+          description: Invite expired or already used
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /portal/invite/{token}/accept:
+    post:
+      operationId: acceptPortalInvite
+      tags: [portal]
+      summary: Accept an invite, set a password, and enter the portal
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcceptInviteRequest"
+      responses:
+        "200":
+          description: Account ready, portal token issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalLoginResponse"
+        "409":
+          description: Email already has a full account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ---- Team Portal: member-facing read-only sections (portal token) ----
+  /portal/me:
+    get:
+      operationId: getPortalContext
+      tags: [portal]
+      summary: The signed-in member's project + allowed sections
+      responses:
+        "200":
+          description: Portal context
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalContext"
+
+  /portal/overview:
+    get:
+      operationId: getPortalOverview
+      tags: [portal]
+      summary: Portal overview (summary stats + recent notes)
+      responses:
+        "200":
+          description: Overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalOverview"
+
+  /portal/progress:
+    get:
+      operationId: getPortalProgress
+      tags: [portal]
+      summary: Project progress + milestones
+      responses:
+        "200":
+          description: Progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalProgress"
+
+  /portal/team:
+    get:
+      operationId: getPortalTeam
+      tags: [portal]
+      summary: Project team members (read-only)
+      responses:
+        "200":
+          description: Team members
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PortalTeamMember"
+
+  /portal/site-issues:
+    get:
+      operationId: getPortalSiteIssues
+      tags: [portal]
+      summary: Site issues (snags + safety concerns)
+      responses:
+        "200":
+          description: Issues
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PortalIssue"
+
+  /portal/site-board:
+    get:
+      operationId: getPortalSiteBoard
+      tags: [portal]
+      summary: Pinned site-board items + upcoming events
+      responses:
+        "200":
+          description: Site board
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalSiteBoard"
+
+  /portal/hs:
+    get:
+      operationId: getPortalHs
+      tags: [portal]
+      summary: Health & Safety hub (method statements + safety docs + permits)
+      responses:
+        "200":
+          description: H&S
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalHs"
+
+  /portal/drawings:
+    get:
+      operationId: getPortalDrawings
+      tags: [portal]
+      summary: Drawings (current, with revisions)
+      responses:
+        "200":
+          description: Drawings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PortalDocument"
+
+  /portal/drawings/{documentId}:
+    get:
+      operationId: getPortalDrawing
+      tags: [portal]
+      summary: A single drawing (logs the view)
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Drawing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalDocument"
+
+  /portal/method-statements:
+    get:
+      operationId: getPortalMethodStatements
+      tags: [portal]
+      summary: Method statements
+      responses:
+        "200":
+          description: Method statements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PortalDocument"
+
+  /portal/method-statements/{documentId}:
+    get:
+      operationId: getPortalMethodStatement
+      tags: [portal]
+      summary: A single method statement (logs the view)
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Method statement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalDocument"
+
+  /portal/permits:
+    get:
+      operationId: getPortalPermits
+      tags: [portal]
+      summary: Permits (active, non-archived)
+      responses:
+        "200":
+          description: Permits
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PortalPermit"
+
+  /portal/safety:
+    get:
+      operationId: getPortalSafety
+      tags: [portal]
+      summary: Safety documents
+      responses:
+        "200":
+          description: Safety documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PortalDocument"
+
+  /portal/general:
+    get:
+      operationId: getPortalGeneral
+      tags: [portal]
+      summary: General documents + notes
+      responses:
+        "200":
+          description: General
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalGeneral"
+
+  # ---- Team Portal: PM-side invite management + activity reporting ----
+  /projects/{projectId}/invites:
+    get:
+      operationId: listProjectInvites
+      tags: [portal]
+      summary: List invites for a project (PM)
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Invites
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProjectInvite"
+    post:
+      operationId: createProjectInvite
+      tags: [portal]
+      summary: Invite a member to a project (PM)
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInviteRequest"
+      responses:
+        "201":
+          description: Invite created (returns the copyable link)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateInviteResponse"
+
+  /projects/{projectId}/invites/{inviteId}/revoke:
+    post:
+      operationId: revokeProjectInvite
+      tags: [portal]
+      summary: Revoke a pending or accepted invite (PM)
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: inviteId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /projects/{projectId}/activity:
+    get:
+      operationId: getProjectActivity
+      tags: [portal]
+      summary: Team activity feed for a project (PM)
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: memberId
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: section
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Activity feed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectActivityFeed"
+
+  /projects/{projectId}/activity/summary:
+    get:
+      operationId: getProjectActivitySummary
+      tags: [portal]
+      summary: Per-member activity summary for a project (PM)
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Per-member summary
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MemberActivitySummary"
 
 components:
   schemas:
@@ -1754,3 +2179,443 @@ components:
           items:
             $ref: "#/components/schemas/Document"
       required: [projectName, category, requiresLogin, documents]
+
+    # ---- Team Portal ----
+    PortalProjectRef:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+      required: [id, name]
+
+    PortalMemberRef:
+      type: object
+      properties:
+        name:
+          type: string
+        role:
+          type: string
+        email:
+          type: string
+      required: [name, role, email]
+
+    PortalLoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        projectId:
+          type: string
+      required: [email, password]
+
+    PortalLoginResponse:
+      type: object
+      properties:
+        requiresProjectChoice:
+          type: boolean
+        token:
+          type: string
+        project:
+          $ref: "#/components/schemas/PortalProjectRef"
+        member:
+          $ref: "#/components/schemas/PortalMemberRef"
+        projects:
+          type: array
+          items:
+            $ref: "#/components/schemas/PortalProjectRef"
+      required: [requiresProjectChoice]
+
+    PortalInviteInfo:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        name:
+          type: string
+        email:
+          type: string
+        projectName:
+          type: string
+        expiresAt:
+          type: string
+      required: [valid, name, email, projectName]
+
+    AcceptInviteRequest:
+      type: object
+      properties:
+        password:
+          type: string
+      required: [password]
+
+    PortalProject:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        address:
+          type: string
+        status:
+          type: string
+        startDate:
+          type: string
+        targetEndDate:
+          type: string
+        trades:
+          type: array
+          items:
+            type: string
+        progressPercent:
+          type: integer
+      required: [id, name, address, status, progressPercent]
+
+    PortalContext:
+      type: object
+      properties:
+        project:
+          $ref: "#/components/schemas/PortalProject"
+        member:
+          $ref: "#/components/schemas/PortalMemberRef"
+        sections:
+          type: array
+          items:
+            type: string
+      required: [project, member, sections]
+
+    PortalNote:
+      type: object
+      properties:
+        id:
+          type: string
+        body:
+          type: string
+        noteDate:
+          type: string
+        authorName:
+          type: string
+        photoUrl:
+          type: string
+      required: [id, body, noteDate, authorName]
+
+    PortalOverviewStats:
+      type: object
+      properties:
+        openIssues:
+          type: integer
+        upcomingMilestones:
+          type: integer
+        activePermits:
+          type: integer
+        teamSize:
+          type: integer
+      required: [openIssues, upcomingMilestones, activePermits, teamSize]
+
+    PortalOverview:
+      type: object
+      properties:
+        project:
+          $ref: "#/components/schemas/PortalProject"
+        stats:
+          $ref: "#/components/schemas/PortalOverviewStats"
+        recentNotes:
+          type: array
+          items:
+            $ref: "#/components/schemas/PortalNote"
+      required: [project, stats, recentNotes]
+
+    PortalMilestone:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        dueDate:
+          type: string
+        completedAt:
+          type: string
+        order:
+          type: integer
+      required: [id, title, dueDate, order]
+
+    PortalProgress:
+      type: object
+      properties:
+        progressPercent:
+          type: integer
+        milestones:
+          type: array
+          items:
+            $ref: "#/components/schemas/PortalMilestone"
+      required: [progressPercent, milestones]
+
+    PortalTeamMember:
+      type: object
+      properties:
+        name:
+          type: string
+        role:
+          type: string
+        type:
+          type: string
+        phone:
+          type: string
+        avatarUrl:
+          type: string
+        trades:
+          type: array
+          items:
+            type: string
+      required: [name, role, type]
+
+    PortalIssue:
+      type: object
+      properties:
+        id:
+          type: string
+        category:
+          type: string
+        description:
+          type: string
+        zone:
+          type: string
+        referenceNumber:
+          type: string
+        status:
+          type: string
+        photoUrl:
+          type: string
+        takenAt:
+          type: string
+        latitude:
+          type: string
+        longitude:
+          type: string
+      required: [id, category, referenceNumber]
+
+    PortalDocument:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+        version:
+          type: integer
+        revision:
+          type: string
+        fileUrl:
+          type: string
+        fileSize:
+          type: integer
+        status:
+          type: string
+        createdAt:
+          type: string
+      required: [id, name, type, version, fileUrl, status]
+
+    PortalPermit:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        description:
+          type: string
+        startDate:
+          type: string
+        expiryDate:
+          type: string
+        status:
+          type: string
+        documentUrl:
+          type: string
+      required: [id, type, description, expiryDate, status]
+
+    PortalEvent:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        eventDate:
+          type: string
+        note:
+          type: string
+        scope:
+          type: string
+      required: [id, title, eventDate, scope]
+
+    PortalSiteBoard:
+      type: object
+      properties:
+        documents:
+          type: array
+          items:
+            $ref: "#/components/schemas/PortalDocument"
+        photos:
+          type: array
+          items:
+            $ref: "#/components/schemas/PortalIssue"
+        permits:
+          type: array
+          items:
+            $ref: "#/components/schemas/PortalPermit"
+        upcomingEvents:
+          type: array
+          items:
+            $ref: "#/components/schemas/PortalEvent"
+      required: [documents, photos, permits, upcomingEvents]
+
+    PortalHs:
+      type: object
+      properties:
+        methodStatements:
+          type: array
+          items:
+            $ref: "#/components/schemas/PortalDocument"
+        safety:
+          type: array
+          items:
+            $ref: "#/components/schemas/PortalDocument"
+        permits:
+          type: array
+          items:
+            $ref: "#/components/schemas/PortalPermit"
+      required: [methodStatements, safety, permits]
+
+    PortalGeneral:
+      type: object
+      properties:
+        documents:
+          type: array
+          items:
+            $ref: "#/components/schemas/PortalDocument"
+        notes:
+          type: array
+          items:
+            $ref: "#/components/schemas/PortalNote"
+      required: [documents, notes]
+
+    ProjectInvite:
+      type: object
+      properties:
+        id:
+          type: string
+        projectId:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+        status:
+          type: string
+        expiresAt:
+          type: string
+        acceptedUserId:
+          type: string
+        acceptedAt:
+          type: string
+        revokedAt:
+          type: string
+        createdAt:
+          type: string
+      required: [id, projectId, email, name, role, status, expiresAt, createdAt]
+
+    CreateInviteRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [worker, manager, subcontractor]
+      required: [name, email]
+
+    CreateInviteResponse:
+      type: object
+      properties:
+        invite:
+          $ref: "#/components/schemas/ProjectInvite"
+        inviteUrl:
+          type: string
+      required: [invite, inviteUrl]
+
+    ActivityEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        memberName:
+          type: string
+        section:
+          type: string
+        sectionLabel:
+          type: string
+        action:
+          type: string
+        itemType:
+          type: string
+        itemId:
+          type: string
+        createdAt:
+          type: string
+      required: [id, userId, memberName, section, sectionLabel, action, createdAt]
+
+    ProjectActivityFeed:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityEntry"
+        total:
+          type: integer
+      required: [entries, total]
+
+    SectionCount:
+      type: object
+      properties:
+        section:
+          type: string
+        sectionLabel:
+          type: string
+        count:
+          type: integer
+      required: [section, sectionLabel, count]
+
+    MemberActivitySummary:
+      type: object
+      properties:
+        userId:
+          type: string
+        memberName:
+          type: string
+        role:
+          type: string
+        lastActiveAt:
+          type: string
+        totalViews:
+          type: integer
+        topSections:
+          type: array
+          items:
+            $ref: "#/components/schemas/SectionCount"
+      required: [userId, memberName, role, totalViews, topSections]

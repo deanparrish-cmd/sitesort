@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useRoute } from "wouter";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { ProjectTeamActivity, RecentActivityGlance } from "./team-activity";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -1239,6 +1240,7 @@ tr:last-child td{border-bottom:none}
             { value: "finances", label: "Finances & Expiry" },
             { value: "checkins", label: `Check-ins${checkins.length > 0 ? ` (${checkins.length})` : ""}` },
             ...(caps.isInternal ? [{ value: "reports", label: "Daily Reports" }] : []),
+            ...(caps.canManageProjects ? [{ value: "teamportal", label: "Team Portal" }] : []),
           ].map(tab => (
             <TabsTrigger key={tab.value} value={tab.value} className="flex-1 sm:flex-none justify-center rounded-lg py-2 px-3 sm:px-4 text-sm whitespace-nowrap">
               {tab.label}
@@ -1248,6 +1250,7 @@ tr:last-child td{border-bottom:none}
 
         <TabsContent value="overview">
           <div className="space-y-6">
+            <RecentActivityGlance projectId={projectId} canManage={caps.canManageProjects} />
             {(caps.canLogPhoto || caps.canUploadDocument) && (
               <Card>
                 <CardContent className="pt-5 space-y-3">
@@ -3239,6 +3242,12 @@ tr:last-child td{border-bottom:none}
             )}
           </div>
         </TabsContent>
+
+        {caps.canManageProjects && (
+          <TabsContent value="teamportal">
+            <ProjectTeamActivity projectId={projectId} />
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* F2 — close-out PIN sign-off dialog */}

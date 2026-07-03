@@ -137,6 +137,15 @@ router.post("/auth/login", async (req, res) => {
       return;
     }
 
+    // Team Portal containment: a portal-only member must NEVER receive a full
+    // dashboard token. They log in through the separate /portal/login (which
+    // issues a project-scoped token). Password was already verified above, so
+    // this is not an oracle beyond "this email is portal-only".
+    if (user.portalOnly) {
+      res.status(403).json({ error: "use_portal", message: "This is a Team Portal account. Please use the portal login link your project manager shared with you." });
+      return;
+    }
+
     await clearAttempts(email);
     await db.update(usersTable).set({ lastActiveAt: new Date() }).where(eq(usersTable.id, user.id));
 

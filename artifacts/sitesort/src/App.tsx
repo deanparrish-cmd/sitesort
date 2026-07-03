@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Redirect, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -32,6 +32,11 @@ const NotificationsPage = lazy(() => import("@/pages/notifications"));
 const SettingsPage = lazy(() => import("@/pages/settings"));
 const IssuesPage = lazy(() => import("@/pages/issues"));
 const CheckinsPage = lazy(() => import("@/pages/checkins"));
+
+// Team Portal — separate member-facing app section (own login + stripped shell).
+const PortalLogin = lazy(() => import("@/pages/portal/login"));
+const PortalAccept = lazy(() => import("@/pages/portal/accept"));
+const PortalSection = lazy(() => import("@/pages/portal/section"));
 
 // Set up the fetch interceptor for auth
 setupApiInterceptor();
@@ -86,6 +91,12 @@ function Router() {
 
       {/* Admin */}
       <Route path="/admin" component={AdminDashboard} />
+
+      {/* Team Portal (member-facing). Login/accept must precede /portal/:section. */}
+      <Route path="/portal/login" component={PortalLogin} />
+      <Route path="/portal/accept/:token" component={PortalAccept} />
+      <Route path="/portal" ><Redirect to="/portal/overview" /></Route>
+      <Route path="/portal/:section" component={PortalSection} />
 
       {/* Fallback */}
       <Route component={NotFound} />

@@ -15,6 +15,11 @@ export const usersTable = pgTable("users", {
   avatarUrl: text("avatar_url"),
   emailVerified: boolean("email_verified").notNull().default(false),
   emailNotifications: boolean("email_notifications").notNull().default(true),
+  // Team Portal: a portal-only member (onboarded via a project invite) can log
+  // in ONLY through the member portal, never the main dashboard. The main
+  // /auth/login rejects these accounts (→ use portal login) and portal login
+  // accepts only these. A regular dashboard user has this false.
+  portalOnly: boolean("portal_only").notNull().default(false),
   emailVerificationToken: text("email_verification_token"),
   emailVerificationExpiry: timestamp("email_verification_expiry"),
   passwordResetToken: text("password_reset_token"),

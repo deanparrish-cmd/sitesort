@@ -86,7 +86,59 @@ export async function ensureSchema(): Promise<void> {
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified boolean NOT NULL DEFAULT false`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_token text`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_expiry timestamp`);
-    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols ready");
+    // Team Portal — portal-only member accounts (invited into a single project).
+    // The main /auth/login rejects these; portal login accepts only these.
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS portal_only boolean NOT NULL DEFAULT false`);
+    // Team Portal — a user is a member of a project at most once. Partial unique
+    // index (skips subcontractor-only rows where user_id IS NULL). Must exist
+    // before invite-accept relies on ON CONFLICT semantics / duplicate guards.
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS project_members_project_user_uq
+      ON project_members (project_id, user_id) WHERE user_id IS NOT NULL
+    `);
+    // Team Portal — single-use, time-boxed project invites. Only the token HASH
+    // is stored. New table → must exist in prod before the invite endpoints run.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS project_invites (
+        id text PRIMARY KEY,
+        project_id text NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        company_id text NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        email text NOT NULL,
+        name text NOT NULL,
+        token_hash text NOT NULL,
+        role text NOT NULL DEFAULT 'worker',
+        status text NOT NULL DEFAULT 'pending',
+        expires_at timestamp NOT NULL,
+        invited_by_user_id text NOT NULL REFERENCES users(id),
+        accepted_user_id text REFERENCES users(id),
+        accepted_at timestamp,
+        revoked_at timestamp,
+        created_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS project_invites_project_idx ON project_invites (project_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS project_invites_token_idx ON project_invites (token_hash)`);
+    // Team Portal — activity audit log. Written automatically by portal
+    // middleware on every section-open / document-view (+ blocked attempts).
+    // New table → must exist in prod before the portal middleware runs.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS activity_log (
+        id text PRIMARY KEY,
+        user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        project_id text NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        company_id text NOT NULL,
+        section text NOT NULL,
+        action text NOT NULL DEFAULT 'view',
+        item_type text,
+        item_id text,
+        user_agent text,
+        ip_address text,
+        created_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS activity_log_project_idx ON activity_log (project_id, created_at)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS activity_log_user_idx ON activity_log (user_id, created_at)`);
+    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) ready");
   } catch (err) {
     // Don't crash the server — membership lookups fall back to the home company.
     logger.error({ err }, "ensureSchema failed (continuing with home-company fallback)");

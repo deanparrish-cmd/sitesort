@@ -6,4 +6,4 @@ export * from "./generated/types";
 // ambiguous under declaration emit. Explicit named re-exports take precedence over
 // `export *`, so re-export the zod schema values to resolve the collision (the matching
 // types are redundant — derive them via `z.infer<typeof ListDocumentsParams>`).
-export { ListDocumentsParams, ListPhotosParams } from "./generated/api";
+export { ListDocumentsParams, ListPhotosParams, GetProjectActivityParams, PortalLoginResponse } from "./generated/api";

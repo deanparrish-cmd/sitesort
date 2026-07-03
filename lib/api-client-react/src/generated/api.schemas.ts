@@ -666,6 +666,230 @@ export interface QrContent {
   documents: Document[];
 }
 
+export interface PortalProjectRef {
+  id: string;
+  name: string;
+}
+
+export interface PortalMemberRef {
+  name: string;
+  role: string;
+  email: string;
+}
+
+export interface PortalLoginRequest {
+  email: string;
+  password: string;
+  projectId?: string;
+}
+
+export interface PortalLoginResponse {
+  requiresProjectChoice: boolean;
+  token?: string;
+  project?: PortalProjectRef;
+  member?: PortalMemberRef;
+  projects?: PortalProjectRef[];
+}
+
+export interface PortalInviteInfo {
+  valid: boolean;
+  name: string;
+  email: string;
+  projectName: string;
+  expiresAt?: string;
+}
+
+export interface AcceptInviteRequest {
+  password: string;
+}
+
+export interface PortalProject {
+  id: string;
+  name: string;
+  address: string;
+  status: string;
+  startDate?: string;
+  targetEndDate?: string;
+  trades?: string[];
+  progressPercent: number;
+}
+
+export interface PortalContext {
+  project: PortalProject;
+  member: PortalMemberRef;
+  sections: string[];
+}
+
+export interface PortalNote {
+  id: string;
+  body: string;
+  noteDate: string;
+  authorName: string;
+  photoUrl?: string;
+}
+
+export interface PortalOverviewStats {
+  openIssues: number;
+  upcomingMilestones: number;
+  activePermits: number;
+  teamSize: number;
+}
+
+export interface PortalOverview {
+  project: PortalProject;
+  stats: PortalOverviewStats;
+  recentNotes: PortalNote[];
+}
+
+export interface PortalMilestone {
+  id: string;
+  title: string;
+  dueDate: string;
+  completedAt?: string;
+  order: number;
+}
+
+export interface PortalProgress {
+  progressPercent: number;
+  milestones: PortalMilestone[];
+}
+
+export interface PortalTeamMember {
+  name: string;
+  role: string;
+  type: string;
+  phone?: string;
+  avatarUrl?: string;
+  trades?: string[];
+}
+
+export interface PortalIssue {
+  id: string;
+  category: string;
+  description?: string;
+  zone?: string;
+  referenceNumber: string;
+  status?: string;
+  photoUrl?: string;
+  takenAt?: string;
+  latitude?: string;
+  longitude?: string;
+}
+
+export interface PortalDocument {
+  id: string;
+  name: string;
+  type: string;
+  version: number;
+  revision?: string;
+  fileUrl: string;
+  fileSize?: number;
+  status: string;
+  createdAt?: string;
+}
+
+export interface PortalPermit {
+  id: string;
+  type: string;
+  description: string;
+  startDate?: string;
+  expiryDate: string;
+  status: string;
+  documentUrl?: string;
+}
+
+export interface PortalEvent {
+  id: string;
+  title: string;
+  eventDate: string;
+  note?: string;
+  scope: string;
+}
+
+export interface PortalSiteBoard {
+  documents: PortalDocument[];
+  photos: PortalIssue[];
+  permits: PortalPermit[];
+  upcomingEvents: PortalEvent[];
+}
+
+export interface PortalHs {
+  methodStatements: PortalDocument[];
+  safety: PortalDocument[];
+  permits: PortalPermit[];
+}
+
+export interface PortalGeneral {
+  documents: PortalDocument[];
+  notes: PortalNote[];
+}
+
+export interface ProjectInvite {
+  id: string;
+  projectId: string;
+  email: string;
+  name: string;
+  role: string;
+  status: string;
+  expiresAt: string;
+  acceptedUserId?: string;
+  acceptedAt?: string;
+  revokedAt?: string;
+  createdAt: string;
+}
+
+export type CreateInviteRequestRole =
+  (typeof CreateInviteRequestRole)[keyof typeof CreateInviteRequestRole];
+
+export const CreateInviteRequestRole = {
+  worker: "worker",
+  manager: "manager",
+  subcontractor: "subcontractor",
+} as const;
+
+export interface CreateInviteRequest {
+  name: string;
+  email: string;
+  role?: CreateInviteRequestRole;
+}
+
+export interface CreateInviteResponse {
+  invite: ProjectInvite;
+  inviteUrl: string;
+}
+
+export interface ActivityEntry {
+  id: string;
+  userId: string;
+  memberName: string;
+  section: string;
+  sectionLabel: string;
+  action: string;
+  itemType?: string;
+  itemId?: string;
+  createdAt: string;
+}
+
+export interface ProjectActivityFeed {
+  entries: ActivityEntry[];
+  total: number;
+}
+
+export interface SectionCount {
+  section: string;
+  sectionLabel: string;
+  count: number;
+}
+
+export interface MemberActivitySummary {
+  userId: string;
+  memberName: string;
+  role: string;
+  lastActiveAt?: string;
+  totalViews: number;
+  topSections: SectionCount[];
+}
+
 export type ListDocumentsParams = {
   type?: string;
   status?: string;
@@ -673,4 +897,12 @@ export type ListDocumentsParams = {
 
 export type ListPhotosParams = {
   category?: string;
+};
+
+export type GetProjectActivityParams = {
+  memberId?: string;
+  section?: string;
+  from?: string;
+  to?: string;
+  limit?: number;
 };
