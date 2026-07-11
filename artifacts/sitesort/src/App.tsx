@@ -32,6 +32,7 @@ const NotificationsPage = lazy(() => import("@/pages/notifications"));
 const SettingsPage = lazy(() => import("@/pages/settings"));
 const IssuesPage = lazy(() => import("@/pages/issues"));
 const CheckinsPage = lazy(() => import("@/pages/checkins"));
+const DailyReportsPage = lazy(() => import("@/pages/daily-reports"));
 
 // Team Portal — separate member-facing app section (own login + stripped shell).
 const PortalLogin = lazy(() => import("@/pages/portal/login"));
@@ -86,6 +87,7 @@ function Router() {
       <Route path="/settings" component={SettingsPage} />
 
       <Route path="/invoices" component={InvoicesPage} />
+      <Route path="/daily-reports" component={DailyReportsPage} />
       <Route path="/issues" component={IssuesPage} />
       <Route path="/checkins" component={CheckinsPage} />
 

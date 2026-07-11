@@ -18,6 +18,7 @@ import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { OverdueBadge } from "@/components/ui/overdue-badge";
 import { Textarea } from "@/components/ui/textarea";
 import { InsuranceCertZone } from "@/components/ui/insurance-cert-zone";
+import { DailyReportDetail, type ManagerReport } from "@/components/daily-report-detail";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetProject,
@@ -62,7 +63,7 @@ export default function ProjectDetail() {
   type PhotoItem = { id: string; uploadedBy: string; uploaderName: string; photoUrl: string | null; category: string; description: string | null; zone: string | null; referenceNumber: string; takenAt: string; status: string | null; resolvedAt: string | null; latitude?: number | null; longitude?: number | null; assignedToUserId?: string | null; assignedToName?: string | null; dueDate?: string | null; overdue?: boolean };
   type MilestoneItem = { id: string; title: string; dueDate: string; completedAt: string | null; order: number };
   type CheckinItem = { id: string; workerName: string; photoUrl: string; checkedInAt: string; lat: number | null; lng: number | null };
-  type ReportSummary = { id: string; reportDate: string; generatedAt: string; checkinCount: number; documentEventCount: number; photoCount: number };
+  type ReportSummary = { id: string; reportDate: string; generatedAt: string; checkinCount: number; documentEventCount: number; photoCount: number; hasManagerReport?: boolean };
   type DailyReportData = {
     subcontractorsOnSite: { id: string; workerName: string; checkedInAt: string; photoUrl: string | null }[];
     documentActivity: {
@@ -74,7 +75,7 @@ export default function ProjectDetail() {
     sitePhotos: { id: string; referenceNumber: string; category: string; description: string | null; zone: string | null; uploaderName: string; photoUrl: string | null; takenAt: string }[];
     siteManagerNotes: { id: string; authorName: string; body: string; source: string; at: string }[];
   };
-  type ReportDetail = ReportSummary & { projectId: string; projectName: string; data: DailyReportData };
+  type ReportDetail = ReportSummary & { projectId: string; projectName: string; data: DailyReportData; managerReport?: ManagerReport | null; authorName?: string | null; authoredAt?: string | null };
   type DailyNote = { id: string; body: string; source: string; noteDate: string; photoUrl: string | null; authorName: string; createdAt: string };
 
   const PERMIT_TYPES = ["CSCS Check", "IPAF Certificate", "Hot Works", "Working at Heights", "Scaffolding Inspection", "Confined Space Entry", "Excavation", "Electrical Isolation", "Demolition", "Asbestos", "Method Statement", "Other"];
@@ -129,6 +130,7 @@ export default function ProjectDetail() {
   const [reports, setReports] = useState<ReportSummary[]>([]);
   const [openReport, setOpenReport] = useState<ReportDetail | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
+  const [reportInitialEditing, setReportInitialEditing] = useState(false);
   const [milestoneTitle, setMilestoneTitle] = useState("");
   const [milestoneDue, setMilestoneDue] = useState("");
   const [milestoneAdding, setMilestoneAdding] = useState(false);
@@ -262,7 +264,8 @@ export default function ProjectDetail() {
     }
   };
 
-  const openReportDetail = async (id: string) => {
+  const openReportDetail = async (id: string, editing = false) => {
+    setReportInitialEditing(editing);
     setReportLoading(true);
     try {
       const r = await fetch(`/api/daily-reports/${id}`, { headers: authHeaders() });
@@ -270,6 +273,20 @@ export default function ProjectDetail() {
     } finally {
       setReportLoading(false);
     }
+  };
+
+  // Open the site-diary editor for today (creating the report row on first save).
+  const openTodaysDiary = () => {
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    const existing = reports.find(r => r.reportDate === today);
+    if (existing) { openReportDetail(existing.id, true); return; }
+    setReportInitialEditing(true);
+    setOpenReport({
+      id: "", projectId, projectName: project?.name ?? "",
+      reportDate: today, generatedAt: "", checkinCount: 0, documentEventCount: 0, photoCount: 0,
+      data: { subcontractorsOnSite: [], documentActivity: { uploaded: [], amended: [], viewed: [], signedOff: [] }, sitePhotos: [], siteManagerNotes: [] },
+      managerReport: null, authorName: null, authoredAt: null,
+    });
   };
 
   const submitSnagPhoto = async () => {
@@ -2344,14 +2361,21 @@ tr:last-child td{border-bottom:none}
 
         {caps.isInternal && (
           <TabsContent value="reports">
-            <div className="flex items-center gap-2 mb-2">
-              <ClipboardCheck className="w-5 h-5 text-primary" />
-              <h3 className="font-bold text-lg">Daily Site Reports</h3>
+            <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <ClipboardCheck className="w-5 h-5 text-primary" />
+                <h3 className="font-bold text-lg">Daily Site Reports</h3>
+              </div>
+              {caps.isInternal && (
+                <Button variant="accent" size="sm" onClick={openTodaysDiary} className="shrink-0">
+                  <Plus className="w-4 h-4 mr-1.5" />Today's site diary
+                </Button>
+              )}
             </div>
-            <p className="text-sm text-muted-foreground mb-6">Auto-generated each evening (~18:00). Each report collates the day's subcontractor check-ins, document activity and tagged site photos.</p>
+            <p className="text-sm text-muted-foreground mb-6">Auto-generated each evening (~18:00), collating the day's check-ins, document activity and tagged site photos. Add a site diary any time to record weather, labour, work done, delays and H&amp;S.</p>
             {reports.length === 0 ? (
               <Card><CardContent className="py-12 text-center text-muted-foreground text-sm">
-                No daily reports yet. The first one will appear after today's site activity is collated this evening.
+                No daily reports yet. The first one appears after today's site activity is collated this evening — or add today's site diary now.
               </CardContent></Card>
             ) : (
               <div className="space-y-2">
@@ -2365,7 +2389,14 @@ tr:last-child td{border-bottom:none}
                       <FileText className="w-5 h-5 text-primary" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm">{formatDate(rep.reportDate)}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-semibold text-sm">{formatDate(rep.reportDate)}</p>
+                        {rep.hasManagerReport && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded border border-primary/30 bg-primary/10 text-primary">
+                            <Pencil className="w-3 h-3" />Site diary
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-muted-foreground">
                         {rep.checkinCount} check-in{rep.checkinCount === 1 ? "" : "s"} · {rep.documentEventCount} document update{rep.documentEventCount === 1 ? "" : "s"} · {rep.photoCount} site photo{rep.photoCount === 1 ? "" : "s"}
                       </p>
@@ -3305,122 +3336,18 @@ tr:last-child td{border-bottom:none}
         </DialogHeader>
         {reportLoading && !openReport ? (
           <div className="py-10 flex justify-center"><RefreshCw className="w-6 h-6 text-muted-foreground animate-spin" /></div>
-        ) : openReport ? (() => {
-          const raw = openReport.data;
-          const d: DailyReportData = {
-            subcontractorsOnSite: raw?.subcontractorsOnSite ?? [],
-            documentActivity: {
-              uploaded: raw?.documentActivity?.uploaded ?? [],
-              amended: raw?.documentActivity?.amended ?? [],
-              viewed: raw?.documentActivity?.viewed ?? [],
-              signedOff: raw?.documentActivity?.signedOff ?? [],
-            },
-            sitePhotos: raw?.sitePhotos ?? [],
-            siteManagerNotes: raw?.siteManagerNotes ?? [],
-          };
-          const REPORT_CATEGORY_LABELS: Record<string, string> = {
-            general: "General", progress: "Progress", snag: "Snag", safety_concern: "Safety Concern",
-            mistake: "Mistake", work_completed: "Work completed",
-          };
-          const totalEvents = openReport.checkinCount + openReport.documentEventCount + openReport.photoCount;
-          const time = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-          return (
-            <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-1">
-              <p className="text-xs text-muted-foreground">{openReport.projectName} · generated {formatDate(openReport.generatedAt)}</p>
-              {totalEvents === 0 && (
-                <Card><CardContent className="py-8 text-center text-muted-foreground text-sm">No site activity was recorded on this day.</CardContent></Card>
-              )}
-
-              {d.subcontractorsOnSite.length > 0 && (
-                <div>
-                  <h4 className="flex items-center gap-2 font-semibold text-sm mb-2"><Users className="w-4 h-4 text-primary" />Contacts on site ({d.subcontractorsOnSite.length})</h4>
-                  <div className="space-y-1.5">
-                    {d.subcontractorsOnSite.map(c => (
-                      <div key={c.id} className="flex items-center justify-between text-sm border rounded-lg px-3 py-2">
-                        <span className="font-medium">{c.workerName}</span>
-                        <span className="text-xs text-muted-foreground">checked in {time(c.checkedInAt)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {openReport.documentEventCount > 0 && (
-                <div>
-                  <h4 className="flex items-center gap-2 font-semibold text-sm mb-2"><FileText className="w-4 h-4 text-primary" />Document activity ({openReport.documentEventCount})</h4>
-                  <div className="space-y-1.5">
-                    {d.documentActivity.uploaded.map(e => (
-                      <div key={`u-${e.documentId}-${e.at}`} className="flex items-center gap-2 text-sm border rounded-lg px-3 py-2">
-                        <Upload className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span className="flex-1 min-w-0 truncate"><span className="font-medium">{e.name}</span> uploaded by {e.uploaderName}</span>
-                        <span className="text-xs text-muted-foreground shrink-0">{time(e.at)}</span>
-                      </div>
-                    ))}
-                    {d.documentActivity.amended.map(e => (
-                      <div key={`a-${e.documentId}-${e.at}`} className="flex items-center gap-2 text-sm border rounded-lg px-3 py-2">
-                        <Pencil className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                        <span className="flex-1 min-w-0 truncate"><span className="font-medium">{e.name}</span> amended (v{e.version}) by {e.uploaderName}</span>
-                        <span className="text-xs text-muted-foreground shrink-0">{time(e.at)}</span>
-                      </div>
-                    ))}
-                    {d.documentActivity.signedOff.map(e => (
-                      <div key={`s-${e.documentId}-${e.at}`} className="flex items-center gap-2 text-sm border rounded-lg px-3 py-2">
-                        <ShieldCheck className="w-3.5 h-3.5 text-primary shrink-0" />
-                        <span className="flex-1 min-w-0 truncate"><span className="font-medium">{e.documentName}</span> signed off by {e.userName}</span>
-                        <span className="text-xs text-muted-foreground shrink-0">{time(e.at)}</span>
-                      </div>
-                    ))}
-                    {d.documentActivity.viewed.map(e => (
-                      <div key={`v-${e.documentId}-${e.at}`} className="flex items-center gap-2 text-sm border rounded-lg px-3 py-2">
-                        <Eye className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                        <span className="flex-1 min-w-0 truncate"><span className="font-medium">{e.documentName}</span> viewed by {e.userName}</span>
-                        <span className="text-xs text-muted-foreground shrink-0">{time(e.at)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {d.sitePhotos.length > 0 && (
-                <div>
-                  <h4 className="flex items-center gap-2 font-semibold text-sm mb-2"><Camera className="w-4 h-4 text-primary" />Site photos ({d.sitePhotos.length})</h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {d.sitePhotos.map(p => (
-                      <div key={p.id} className="rounded-lg border overflow-hidden">
-                        {p.photoUrl ? (
-                          <a href={p.photoUrl} target="_blank" rel="noopener noreferrer">
-                            <img src={p.photoUrl} alt={p.description ?? p.category} className="w-full h-28 object-cover" />
-                          </a>
-                        ) : (
-                          <div className="w-full h-28 bg-muted flex items-center justify-center"><Camera className="w-6 h-6 text-muted-foreground" /></div>
-                        )}
-                        <div className="p-2 space-y-1">
-                          <span className="text-[10px] font-bold">{REPORT_CATEGORY_LABELS[p.category] ?? p.category}</span>
-                          {p.description && <p className="text-[11px] text-foreground line-clamp-2">{p.description}</p>}
-                          <p className="text-[10px] text-muted-foreground">{time(p.takenAt)} · {p.uploaderName}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {d.siteManagerNotes.length > 0 && (
-                <div>
-                  <h4 className="flex items-center gap-2 font-semibold text-sm mb-2"><ClipboardCheck className="w-4 h-4 text-primary" />Site reports ({d.siteManagerNotes.length})</h4>
-                  <div className="space-y-2">
-                    {d.siteManagerNotes.map(n => (
-                      <div key={n.id} className="rounded-lg border bg-muted/30 p-3">
-                        <p className="text-[13px] text-foreground whitespace-pre-wrap">{n.body}</p>
-                        <p className="text-[10px] text-muted-foreground mt-1">{time(n.at)} · {n.authorName}{n.source === "voice" ? " · spoken" : ""}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })() : null}
+        ) : openReport ? (
+          <DailyReportDetail
+            report={openReport}
+            canEdit={caps.isInternal}
+            initialEditing={reportInitialEditing}
+            onSaved={(mr) => {
+              setOpenReport(prev => prev ? { ...prev, managerReport: mr } : prev);
+              fetch(`/api/projects/${projectId}/daily-reports`, { headers: authHeaders() })
+                .then(r => r.ok ? r.json() : []).then(setReports).catch(() => {});
+            }}
+          />
+        ) : null}
       </Dialog>
 
       <Dialog open={!!editDocModal} onOpenChange={v => { if (!v) setEditDocModal(null); }}>

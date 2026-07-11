@@ -16,6 +16,7 @@ import {
   MessageSquare,
   AlertCircle,
   AlertTriangle,
+  ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetMe, useLogout } from "@workspace/api-client-react";
@@ -141,9 +142,12 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const isInternal = ["admin", "project_manager", "site_worker"].includes(user?.role ?? "");
   const mainNavItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, badge: 0 },
     { name: "Projects", href: "/projects", icon: Building2, badge: 0 },
+    // Daily Reports hub — internal staff only (subcontractors are 403'd by the API).
+    ...(isInternal ? [{ name: "Daily Reports", href: "/daily-reports", icon: ClipboardList, badge: 0 }] : []),
     { name: "Contacts", href: "/subcontractors", icon: Users, badge: 0 },
     { name: "In House Team", href: "/team", icon: Users, badge: 0 },
     { name: "Messages", href: "/messages", icon: MessageSquare, badge: unreadMsgCount },

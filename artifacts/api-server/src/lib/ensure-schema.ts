@@ -138,7 +138,41 @@ export async function ensureSchema(): Promise<void> {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS activity_log_project_idx ON activity_log (project_id, created_at)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS activity_log_user_idx ON activity_log (user_id, created_at)`);
-    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) ready");
+    // F5 — Daily Site Reports hub. These base tables were only ever created via
+    // `drizzle push` (dev-only), so they may NOT exist in prod. Create them here
+    // (idempotent) before the reports routes / 18:00 generation job / daily-notes
+    // authoring touch them, then add the F5 manager-authored site-diary columns.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS daily_notes (
+        id text PRIMARY KEY,
+        project_id text NOT NULL REFERENCES projects(id),
+        author_id text NOT NULL REFERENCES users(id),
+        note_date text NOT NULL,
+        body text NOT NULL,
+        source text NOT NULL DEFAULT 'voice',
+        photo_url text,
+        created_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS daily_reports (
+        id text PRIMARY KEY,
+        project_id text NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        report_date text NOT NULL,
+        generated_at timestamp NOT NULL DEFAULT now(),
+        checkin_count integer NOT NULL DEFAULT 0,
+        document_event_count integer NOT NULL DEFAULT 0,
+        photo_count integer NOT NULL DEFAULT 0,
+        data jsonb NOT NULL,
+        CONSTRAINT daily_reports_project_date_uq UNIQUE (project_id, report_date)
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS daily_reports_project_idx ON daily_reports (project_id)`);
+    await pool.query(`ALTER TABLE daily_reports ADD COLUMN IF NOT EXISTS manager_report jsonb`);
+    await pool.query(`ALTER TABLE daily_reports ADD COLUMN IF NOT EXISTS authored_by text`);
+    await pool.query(`ALTER TABLE daily_reports ADD COLUMN IF NOT EXISTS authored_at timestamp`);
+    await pool.query(`ALTER TABLE daily_reports ADD COLUMN IF NOT EXISTS auto_generated boolean NOT NULL DEFAULT false`);
+    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols ready");
   } catch (err) {
     // Don't crash the server — membership lookups fall back to the home company.
     logger.error({ err }, "ensureSchema failed (continuing with home-company fallback)");
