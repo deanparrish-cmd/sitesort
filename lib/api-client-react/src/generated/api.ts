@@ -24,9 +24,8 @@ import type {
   AuditLogEntry,
   AuthResponse,
   ComplianceOverview,
-  CreateInviteRequest,
-  CreateInviteResponse,
   CreatePermitRequest,
+  CreatePersonRequest,
   CreateProjectRequest,
   CreateSubcontractorRequest,
   DistributeRequest,
@@ -41,17 +40,21 @@ import type {
   InviteUserRequest,
   ListDocumentsParams,
   ListPhotosParams,
+  ListSubcontractorPeopleParams,
   LogPhotoRequest,
   LoginRequest,
   MemberActivitySummary,
   Notification,
   Permit,
+  Person,
   Photo,
   PortalContext,
   PortalDocument,
   PortalGeneral,
   PortalHs,
   PortalInviteInfo,
+  PortalInviteRequest,
+  PortalInviteResponse,
   PortalIssue,
   PortalLoginRequest,
   PortalLoginResponse,
@@ -4909,46 +4912,167 @@ export function useListProjectInvites<
 }
 
 /**
- * @summary Invite a member to a project (PM)
+ * @summary List individual people of a subcontractor firm (PM)
  */
-export const getCreateProjectInviteUrl = (projectId: string) => {
-  return `/api/projects/${projectId}/invites`;
+export const getListSubcontractorPeopleUrl = (
+  subcontractorId: string,
+  params?: ListSubcontractorPeopleParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/subcontractors/${subcontractorId}/people?${stringifiedParams}`
+    : `/api/subcontractors/${subcontractorId}/people`;
 };
 
-export const createProjectInvite = async (
-  projectId: string,
-  createInviteRequest: CreateInviteRequest,
+export const listSubcontractorPeople = async (
+  subcontractorId: string,
+  params?: ListSubcontractorPeopleParams,
   options?: RequestInit,
-): Promise<CreateInviteResponse> => {
-  return customFetch<CreateInviteResponse>(
-    getCreateProjectInviteUrl(projectId),
+): Promise<Person[]> => {
+  return customFetch<Person[]>(
+    getListSubcontractorPeopleUrl(subcontractorId, params),
     {
       ...options,
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...options?.headers },
-      body: JSON.stringify(createInviteRequest),
+      method: "GET",
     },
   );
 };
 
-export const getCreateProjectInviteMutationOptions = <
+export const getListSubcontractorPeopleQueryKey = (
+  subcontractorId: string,
+  params?: ListSubcontractorPeopleParams,
+) => {
+  return [
+    `/api/subcontractors/${subcontractorId}/people`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getListSubcontractorPeopleQueryOptions = <
+  TData = Awaited<ReturnType<typeof listSubcontractorPeople>>,
+  TError = ErrorType<unknown>,
+>(
+  subcontractorId: string,
+  params?: ListSubcontractorPeopleParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listSubcontractorPeople>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListSubcontractorPeopleQueryKey(subcontractorId, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listSubcontractorPeople>>
+  > = ({ signal }) =>
+    listSubcontractorPeople(subcontractorId, params, {
+      signal,
+      ...requestOptions,
+    });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!subcontractorId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listSubcontractorPeople>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListSubcontractorPeopleQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listSubcontractorPeople>>
+>;
+export type ListSubcontractorPeopleQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List individual people of a subcontractor firm (PM)
+ */
+
+export function useListSubcontractorPeople<
+  TData = Awaited<ReturnType<typeof listSubcontractorPeople>>,
+  TError = ErrorType<unknown>,
+>(
+  subcontractorId: string,
+  params?: ListSubcontractorPeopleParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listSubcontractorPeople>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListSubcontractorPeopleQueryOptions(
+    subcontractorId,
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Add an individual person to a subcontractor firm (PM)
+ */
+export const getCreateSubcontractorPersonUrl = (subcontractorId: string) => {
+  return `/api/subcontractors/${subcontractorId}/people`;
+};
+
+export const createSubcontractorPerson = async (
+  subcontractorId: string,
+  createPersonRequest: CreatePersonRequest,
+  options?: RequestInit,
+): Promise<Person> => {
+  return customFetch<Person>(getCreateSubcontractorPersonUrl(subcontractorId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createPersonRequest),
+  });
+};
+
+export const getCreateSubcontractorPersonMutationOptions = <
   TError = ErrorType<unknown>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof createProjectInvite>>,
+    Awaited<ReturnType<typeof createSubcontractorPerson>>,
     TError,
-    { projectId: string; data: BodyType<CreateInviteRequest> },
+    { subcontractorId: string; data: BodyType<CreatePersonRequest> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
-  Awaited<ReturnType<typeof createProjectInvite>>,
+  Awaited<ReturnType<typeof createSubcontractorPerson>>,
   TError,
-  { projectId: string; data: BodyType<CreateInviteRequest> },
+  { subcontractorId: string; data: BodyType<CreatePersonRequest> },
   TContext
 > => {
-  const mutationKey = ["createProjectInvite"];
+  const mutationKey = ["createSubcontractorPerson"];
   const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
@@ -4958,44 +5082,397 @@ export const getCreateProjectInviteMutationOptions = <
     : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof createProjectInvite>>,
-    { projectId: string; data: BodyType<CreateInviteRequest> }
+    Awaited<ReturnType<typeof createSubcontractorPerson>>,
+    { subcontractorId: string; data: BodyType<CreatePersonRequest> }
   > = (props) => {
-    const { projectId, data } = props ?? {};
+    const { subcontractorId, data } = props ?? {};
 
-    return createProjectInvite(projectId, data, requestOptions);
+    return createSubcontractorPerson(subcontractorId, data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
 };
 
-export type CreateProjectInviteMutationResult = NonNullable<
-  Awaited<ReturnType<typeof createProjectInvite>>
+export type CreateSubcontractorPersonMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createSubcontractorPerson>>
 >;
-export type CreateProjectInviteMutationBody = BodyType<CreateInviteRequest>;
-export type CreateProjectInviteMutationError = ErrorType<unknown>;
+export type CreateSubcontractorPersonMutationBody =
+  BodyType<CreatePersonRequest>;
+export type CreateSubcontractorPersonMutationError = ErrorType<unknown>;
 
 /**
- * @summary Invite a member to a project (PM)
+ * @summary Add an individual person to a subcontractor firm (PM)
  */
-export const useCreateProjectInvite = <
+export const useCreateSubcontractorPerson = <
   TError = ErrorType<unknown>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof createProjectInvite>>,
+    Awaited<ReturnType<typeof createSubcontractorPerson>>,
     TError,
-    { projectId: string; data: BodyType<CreateInviteRequest> },
+    { subcontractorId: string; data: BodyType<CreatePersonRequest> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
-  Awaited<ReturnType<typeof createProjectInvite>>,
+  Awaited<ReturnType<typeof createSubcontractorPerson>>,
   TError,
-  { projectId: string; data: BodyType<CreateInviteRequest> },
+  { subcontractorId: string; data: BodyType<CreatePersonRequest> },
   TContext
 > => {
-  return useMutation(getCreateProjectInviteMutationOptions(options));
+  return useMutation(getCreateSubcontractorPersonMutationOptions(options));
+};
+
+/**
+ * @summary Remove an individual person (PM)
+ */
+export const getDeletePersonUrl = (personId: string) => {
+  return `/api/people/${personId}`;
+};
+
+export const deletePerson = async (
+  personId: string,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getDeletePersonUrl(personId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeletePersonMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deletePerson>>,
+    TError,
+    { personId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deletePerson>>,
+  TError,
+  { personId: string },
+  TContext
+> => {
+  const mutationKey = ["deletePerson"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deletePerson>>,
+    { personId: string }
+  > = (props) => {
+    const { personId } = props ?? {};
+
+    return deletePerson(personId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeletePersonMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deletePerson>>
+>;
+
+export type DeletePersonMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Remove an individual person (PM)
+ */
+export const useDeletePerson = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deletePerson>>,
+    TError,
+    { personId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deletePerson>>,
+  TError,
+  { personId: string },
+  TContext
+> => {
+  return useMutation(getDeletePersonMutationOptions(options));
+};
+
+/**
+ * @summary In-house people (portal-only) with per-project portal status (PM)
+ */
+export const getListInHousePeopleUrl = (projectId: string) => {
+  return `/api/projects/${projectId}/in-house-people`;
+};
+
+export const listInHousePeople = async (
+  projectId: string,
+  options?: RequestInit,
+): Promise<Person[]> => {
+  return customFetch<Person[]>(getListInHousePeopleUrl(projectId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListInHousePeopleQueryKey = (projectId: string) => {
+  return [`/api/projects/${projectId}/in-house-people`] as const;
+};
+
+export const getListInHousePeopleQueryOptions = <
+  TData = Awaited<ReturnType<typeof listInHousePeople>>,
+  TError = ErrorType<unknown>,
+>(
+  projectId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listInHousePeople>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListInHousePeopleQueryKey(projectId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listInHousePeople>>
+  > = ({ signal }) =>
+    listInHousePeople(projectId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!projectId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listInHousePeople>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListInHousePeopleQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listInHousePeople>>
+>;
+export type ListInHousePeopleQueryError = ErrorType<unknown>;
+
+/**
+ * @summary In-house people (portal-only) with per-project portal status (PM)
+ */
+
+export function useListInHousePeople<
+  TData = Awaited<ReturnType<typeof listInHousePeople>>,
+  TError = ErrorType<unknown>,
+>(
+  projectId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listInHousePeople>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListInHousePeopleQueryOptions(projectId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Add an in-house person (portal-only) (PM)
+ */
+export const getCreateInHousePersonUrl = (projectId: string) => {
+  return `/api/projects/${projectId}/in-house-people`;
+};
+
+export const createInHousePerson = async (
+  projectId: string,
+  createPersonRequest: CreatePersonRequest,
+  options?: RequestInit,
+): Promise<Person> => {
+  return customFetch<Person>(getCreateInHousePersonUrl(projectId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createPersonRequest),
+  });
+};
+
+export const getCreateInHousePersonMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createInHousePerson>>,
+    TError,
+    { projectId: string; data: BodyType<CreatePersonRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createInHousePerson>>,
+  TError,
+  { projectId: string; data: BodyType<CreatePersonRequest> },
+  TContext
+> => {
+  const mutationKey = ["createInHousePerson"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createInHousePerson>>,
+    { projectId: string; data: BodyType<CreatePersonRequest> }
+  > = (props) => {
+    const { projectId, data } = props ?? {};
+
+    return createInHousePerson(projectId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateInHousePersonMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createInHousePerson>>
+>;
+export type CreateInHousePersonMutationBody = BodyType<CreatePersonRequest>;
+export type CreateInHousePersonMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Add an in-house person (portal-only) (PM)
+ */
+export const useCreateInHousePerson = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createInHousePerson>>,
+    TError,
+    { projectId: string; data: BodyType<CreatePersonRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createInHousePerson>>,
+  TError,
+  { projectId: string; data: BodyType<CreatePersonRequest> },
+  TContext
+> => {
+  return useMutation(getCreateInHousePersonMutationOptions(options));
+};
+
+/**
+ * Single invite path for everyone (subcontractor or in-house). Always portal-only: creates or rotates a pending invite and returns a copyable link. The person becomes a portalOnly account when they accept it.
+
+ * @summary Invite an individual person to a project's portal (PM)
+ */
+export const getCreatePortalInviteUrl = (projectId: string) => {
+  return `/api/projects/${projectId}/portal-invites`;
+};
+
+export const createPortalInvite = async (
+  projectId: string,
+  portalInviteRequest: PortalInviteRequest,
+  options?: RequestInit,
+): Promise<PortalInviteResponse> => {
+  return customFetch<PortalInviteResponse>(
+    getCreatePortalInviteUrl(projectId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(portalInviteRequest),
+    },
+  );
+};
+
+export const getCreatePortalInviteMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPortalInvite>>,
+    TError,
+    { projectId: string; data: BodyType<PortalInviteRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createPortalInvite>>,
+  TError,
+  { projectId: string; data: BodyType<PortalInviteRequest> },
+  TContext
+> => {
+  const mutationKey = ["createPortalInvite"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createPortalInvite>>,
+    { projectId: string; data: BodyType<PortalInviteRequest> }
+  > = (props) => {
+    const { projectId, data } = props ?? {};
+
+    return createPortalInvite(projectId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreatePortalInviteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createPortalInvite>>
+>;
+export type CreatePortalInviteMutationBody = BodyType<PortalInviteRequest>;
+export type CreatePortalInviteMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Invite an individual person to a project's portal (PM)
+ */
+export const useCreatePortalInvite = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPortalInvite>>,
+    TError,
+    { projectId: string; data: BodyType<PortalInviteRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createPortalInvite>>,
+  TError,
+  { projectId: string; data: BodyType<PortalInviteRequest> },
+  TContext
+> => {
+  return useMutation(getCreatePortalInviteMutationOptions(options));
 };
 
 /**

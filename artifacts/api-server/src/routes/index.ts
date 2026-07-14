@@ -26,6 +26,7 @@ import calendarEventsRouter from "./calendar-events";
 import closeoutRouter from "./closeout";
 import portalRouter from "./portal";
 import teamActivityRouter from "./team-activity";
+import peopleRouter from "./people";
 
 const router: IRouter = Router();
 
@@ -56,5 +57,6 @@ router.use(calendarEventsRouter);
 router.use(closeoutRouter);
 router.use(portalRouter);
 router.use(teamActivityRouter);
+router.use(peopleRouter);
 
 export default router;

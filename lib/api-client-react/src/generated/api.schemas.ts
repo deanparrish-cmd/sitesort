@@ -858,6 +858,85 @@ export interface CreateInviteResponse {
   inviteUrl: string;
 }
 
+export type PortalStatusStatus =
+  (typeof PortalStatusStatus)[keyof typeof PortalStatusStatus];
+
+export const PortalStatusStatus = {
+  not_invited: "not_invited",
+  invited: "invited",
+  member: "member",
+} as const;
+
+/**
+ * A person's portal state for one project.
+ */
+export interface PortalStatus {
+  status: PortalStatusStatus;
+  role?: string;
+  inviteId?: string;
+  lastActiveAt?: string;
+}
+
+export type PersonKind = (typeof PersonKind)[keyof typeof PersonKind];
+
+export const PersonKind = {
+  subcontractor: "subcontractor",
+  in_house: "in_house",
+} as const;
+
+/**
+ * An individual person (subcontractor person when subcontractorId set, else in-house).
+ */
+export interface Person {
+  id: string;
+  subcontractorId?: string;
+  userId?: string;
+  name: string;
+  email: string;
+  phone?: string;
+  roleTitle?: string;
+  kind: PersonKind;
+  portal?: PortalStatus;
+}
+
+export interface CreatePersonRequest {
+  name: string;
+  email: string;
+  phone?: string;
+  roleTitle?: string;
+}
+
+export type PortalInviteRequestRole =
+  (typeof PortalInviteRequestRole)[keyof typeof PortalInviteRequestRole];
+
+export const PortalInviteRequestRole = {
+  worker: "worker",
+  manager: "manager",
+  subcontractor: "subcontractor",
+} as const;
+
+/**
+ * Invite an individual person (subcontractor or in-house) to the portal.
+ */
+export interface PortalInviteRequest {
+  personId: string;
+  role?: PortalInviteRequestRole;
+}
+
+export type PortalInviteResponseStatus =
+  (typeof PortalInviteResponseStatus)[keyof typeof PortalInviteResponseStatus];
+
+export const PortalInviteResponseStatus = {
+  invited: "invited",
+  member: "member",
+} as const;
+
+export interface PortalInviteResponse {
+  status: PortalInviteResponseStatus;
+  person: Person;
+  inviteUrl?: string | null;
+}
+
 export interface ActivityEntry {
   id: string;
   userId: string;
@@ -897,6 +976,13 @@ export type ListDocumentsParams = {
 
 export type ListPhotosParams = {
   category?: string;
+};
+
+export type ListSubcontractorPeopleParams = {
+  /**
+   * When set, each person carries per-project portal status.
+   */
+  projectId?: string;
 };
 
 export type GetProjectActivityParams = {

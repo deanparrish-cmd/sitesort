@@ -3,6 +3,7 @@ import { useRoute } from "wouter";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ProjectTeamActivity, RecentActivityGlance } from "./team-activity";
+import { SubcontractorPeople, InHousePortalPanel } from "./portal-people";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -2113,6 +2114,14 @@ tr:last-child td{border-bottom:none}
                         onSaved={() => queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/members`] })}
                       />
                     )}
+                    {isSubcontractor && (
+                      <SubcontractorPeople
+                        subcontractorId={member.subcontractorId}
+                        projectId={projectId}
+                        primaryContact={{ name: member.contactName, email: member.email, phone: member.phone }}
+                        canManage={caps.canManageTeam}
+                      />
+                    )}
                       </div>
                     );
                   })}
@@ -2142,6 +2151,7 @@ tr:last-child td{border-bottom:none}
                     <FolderOpen className="w-4 h-4" />+ Add Trade Folder
                   </button>
                 ))}
+                {caps.canManageTeam && <InHousePortalPanel projectId={projectId} canManage={caps.canManageTeam} />}
               </div>
             );
           })()}

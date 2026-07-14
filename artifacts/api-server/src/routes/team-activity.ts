@@ -1,29 +1,16 @@
 import { Router, type IRouter } from "express";
-import { randomBytes, createHash } from "crypto";
 import { db } from "@workspace/db";
 import {
   projectsTable, projectInvitesTable, projectMembersTable, usersTable, activityLogTable,
 } from "@workspace/db/schema";
 import { and, eq, desc, gte, lte, count, max } from "drizzle-orm";
-import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
-import { sendProjectInviteEmail } from "../lib/invite-email";
 import { SECTION_LABELS } from "../lib/activity";
-import { CreateProjectInviteBody, GetProjectActivityQueryParams } from "@workspace/api-zod";
+import { GetProjectActivityQueryParams } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
 const MANAGER_ROLES = ["admin", "project_manager"];
-
-function hashToken(raw: string): string {
-  return createHash("sha256").update(raw).digest("hex");
-}
-
-// Full copyable invite link. APP_URL wins; falls back to the Replit dev domain
-// (mirrors the pattern used by the verification/reset emails).
-function inviteBaseUrl(): string {
-  return process.env.APP_URL ?? `https://${process.env.REPLIT_DEV_DOMAIN ?? "www.sitesort.co.uk"}`;
-}
 
 async function loadOwnedProject(projectId: string, companyId: string) {
   const rows = await db.select().from(projectsTable)
@@ -51,41 +38,10 @@ function requireManager(req: import("express").Request, res: import("express").R
 }
 
 // ---- Invites (PM) ----
-
-// POST /api/projects/:projectId/invites — create a single-use, 7-day invite.
-// "Sending" is deferred: the response includes the copyable link. Only the token
-// hash is stored.
-router.post("/projects/:projectId/invites", authenticate, async (req, res) => {
-  try {
-    if (!requireManager(req, res)) return;
-    const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
-    if (!project) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
-
-    const parsed = CreateProjectInviteBody.safeParse(req.body);
-    if (!parsed.success) { res.status(400).json({ error: "validation_error", message: "A name and email are required." }); return; }
-    const email = parsed.data.email.trim().toLowerCase();
-    const role = parsed.data.role ?? "worker";
-
-    const rawToken = randomBytes(32).toString("hex");
-    const id = generateId();
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    await db.insert(projectInvitesTable).values({
-      id, projectId: req.params.projectId, companyId: req.user!.companyId,
-      email, name: parsed.data.name.trim(), tokenHash: hashToken(rawToken), role,
-      status: "pending", expiresAt, invitedByUserId: req.user!.id,
-    });
-
-    const inviteUrl = `${inviteBaseUrl()}/portal/accept/${rawToken}`;
-    // Delivery deferred — never blocks the response (PM always has the link).
-    void sendProjectInviteEmail({ email, name: parsed.data.name.trim(), projectName: project.name, inviteUrl });
-
-    const rows = await db.select().from(projectInvitesTable).where(eq(projectInvitesTable.id, id)).limit(1);
-    res.status(201).json({ invite: serializeInvite(rows[0]), inviteUrl });
-  } catch (err) {
-    req.log.error({ err }, "Create invite error");
-    res.status(500).json({ error: "server_error", message: "Failed to create invite" });
-  }
-});
+// NOTE: invites are CREATED per-individual-person via the single invite path in
+// `routes/people.ts` (POST /projects/:projectId/portal-invites). This router now
+// only READS/manages them (list, revoke) + activity reporting — one source of
+// truth, no duplicate create path (the old name+email form was removed).
 
 // GET /api/projects/:projectId/invites
 router.get("/projects/:projectId/invites", authenticate, async (req, res) => {
@@ -117,7 +73,13 @@ router.post("/projects/:projectId/invites/:inviteId/revoke", authenticate, async
     if (!inv) { res.status(404).json({ error: "not_found", message: "Invite not found" }); return; }
 
     await db.update(projectInvitesTable).set({ status: "revoked", revokedAt: new Date() }).where(eq(projectInvitesTable.id, inv.id));
-    if (inv.acceptedUserId) {
+    // Cut portal access immediately by removing the membership row. Prefer the
+    // person link (the portal membership this invite created); fall back to the
+    // accepted user for legacy invites that predate person_id.
+    if (inv.personId) {
+      await db.delete(projectMembersTable)
+        .where(and(eq(projectMembersTable.projectId, req.params.projectId), eq(projectMembersTable.personId, inv.personId)));
+    } else if (inv.acceptedUserId) {
       await db.delete(projectMembersTable)
         .where(and(eq(projectMembersTable.projectId, req.params.projectId), eq(projectMembersTable.userId, inv.acceptedUserId)));
     }

@@ -1184,10 +1184,100 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ProjectInvite"
-    post:
-      operationId: createProjectInvite
+
+  /subcontractors/{subcontractorId}/people:
+    get:
+      operationId: listSubcontractorPeople
       tags: [portal]
-      summary: Invite a member to a project (PM)
+      summary: List individual people of a subcontractor firm (PM)
+      parameters:
+        - name: subcontractorId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: projectId
+          in: query
+          required: false
+          description: When set, each person carries per-project portal status.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: People
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Person"
+    post:
+      operationId: createSubcontractorPerson
+      tags: [portal]
+      summary: Add an individual person to a subcontractor firm (PM)
+      parameters:
+        - name: subcontractorId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePersonRequest"
+      responses:
+        "201":
+          description: Person created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Person"
+
+  /people/{personId}:
+    delete:
+      operationId: deletePerson
+      tags: [portal]
+      summary: Remove an individual person (PM)
+      parameters:
+        - name: personId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /projects/{projectId}/in-house-people:
+    get:
+      operationId: listInHousePeople
+      tags: [portal]
+      summary: In-house people (portal-only) with per-project portal status (PM)
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: In-house people
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Person"
+    post:
+      operationId: createInHousePerson
+      tags: [portal]
+      summary: Add an in-house person (portal-only) (PM)
       parameters:
         - name: projectId
           in: path
@@ -1199,14 +1289,43 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateInviteRequest"
+              $ref: "#/components/schemas/CreatePersonRequest"
       responses:
         "201":
-          description: Invite created (returns the copyable link)
+          description: Person created
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CreateInviteResponse"
+                $ref: "#/components/schemas/Person"
+
+  /projects/{projectId}/portal-invites:
+    post:
+      operationId: createPortalInvite
+      tags: [portal]
+      summary: Invite an individual person to a project's portal (PM)
+      description: >
+        Single invite path for everyone (subcontractor or in-house). Always
+        portal-only: creates or rotates a pending invite and returns a copyable
+        link. The person becomes a portalOnly account when they accept it.
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PortalInviteRequest"
+      responses:
+        "201":
+          description: Invite created or member provisioned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalInviteResponse"
 
   /projects/{projectId}/invites/{inviteId}/revoke:
     post:
@@ -2555,6 +2674,84 @@ components:
         inviteUrl:
           type: string
       required: [invite, inviteUrl]
+
+    PortalStatus:
+      type: object
+      description: A person's portal state for one project.
+      properties:
+        status:
+          type: string
+          enum: [not_invited, invited, member]
+        role:
+          type: string
+        inviteId:
+          type: string
+        lastActiveAt:
+          type: string
+      required: [status]
+
+    Person:
+      type: object
+      description: An individual person (subcontractor person when subcontractorId set, else in-house).
+      properties:
+        id:
+          type: string
+        subcontractorId:
+          type: string
+        userId:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        roleTitle:
+          type: string
+        kind:
+          type: string
+          enum: [subcontractor, in_house]
+        portal:
+          $ref: "#/components/schemas/PortalStatus"
+      required: [id, name, email, kind]
+
+    CreatePersonRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        roleTitle:
+          type: string
+      required: [name, email]
+
+    PortalInviteRequest:
+      type: object
+      description: Invite an individual person (subcontractor or in-house) to the portal.
+      properties:
+        personId:
+          type: string
+        role:
+          type: string
+          enum: [worker, manager, subcontractor]
+      required: [personId]
+
+    PortalInviteResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [invited, member]
+        person:
+          $ref: "#/components/schemas/Person"
+        inviteUrl:
+          type: string
+          nullable: true
+      required: [status, person]
 
     ActivityEntry:
       type: object

@@ -5,7 +5,7 @@ import { db } from "@workspace/db";
 import {
   usersTable, projectsTable, projectMembersTable, projectInvitesTable,
   documentsTable, photosTable, permitsTable, milestonesTable, dailyNotesTable,
-  qrBoardPinsTable, calendarEventsTable, subcontractorsTable,
+  qrBoardPinsTable, calendarEventsTable, subcontractorsTable, peopleTable,
 } from "@workspace/db/schema";
 import { and, eq, inArray, isNull, desc, asc, gte, count } from "drizzle-orm";
 import { generateId } from "../lib/id";
@@ -113,6 +113,9 @@ router.post("/portal/login", async (req, res) => {
       else res.status(401).json({ error: "invalid_credentials", message: "Invalid email or password", attemptsRemaining: remaining });
       return;
     }
+    // Portal is portal-only: a full dashboard account never logs in here (every
+    // portal member — subcontractor or in-house — is a portalOnly account created
+    // via an invite link). Dashboard users use the main login.
     if (!user.portalOnly) {
       res.status(403).json({ error: "use_dashboard", message: "This is a full SiteSort account — please use the main login." });
       return;
@@ -224,10 +227,17 @@ router.post("/portal/invite/:token/accept", async (req, res) => {
       await db.update(usersTable).set({ passwordHash }).where(eq(usersTable.id, u.id));
     }
 
-    // Membership is a join row (user ↔ project). Idempotent via the partial
+    // Link the individual person to their new/looked-up account so per-person
+    // portal status resolves after acceptance.
+    if (inv.personId) {
+      await db.update(peopleTable).set({ userId }).where(eq(peopleTable.id, inv.personId));
+    }
+
+    // Membership is a join row (user ↔ project), carrying the person link so the
+    // Team tab shows "Portal member" on the right row. Idempotent via the partial
     // unique index, so re-accepting is harmless.
     await db.insert(projectMembersTable)
-      .values({ id: generateId(), projectId: inv.projectId, userId, role: inv.role })
+      .values({ id: generateId(), projectId: inv.projectId, userId, personId: inv.personId ?? null, role: inv.role })
       .onConflictDoNothing();
 
     await db.update(projectInvitesTable)

@@ -1,15 +1,13 @@
 import { useMemo, useState } from "react";
 import {
-  useCreateProjectInvite, useListProjectInvites, useRevokeProjectInvite,
+  useListProjectInvites, useRevokeProjectInvite,
   useGetProjectActivity, useGetProjectActivitySummary,
   getListProjectInvitesQueryKey, getGetProjectActivityQueryKey, getGetProjectActivitySummaryQueryKey,
 } from "@workspace/api-client-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { SECTION_NAV } from "@/pages/portal/layout";
 import {
-  UserPlus, Copy, Check, Trash2, Activity, Eye, ShieldAlert, Clock,
+  UserPlus, Trash2, Activity, Eye, ShieldAlert, Clock,
 } from "lucide-react";
 
 function fmtRelative(iso?: string | null): string {
@@ -59,38 +57,16 @@ export function RecentActivityGlance({ projectId, canManage }: { projectId: stri
 }
 
 export function ProjectTeamActivity({ projectId }: { projectId: string }) {
-  // ---- invites ----
+  // ---- invites (READ-ONLY here) ----
+  // Invites are CREATED per-person from the project Team tab (each subcontractor
+  // person / in-house member has their own "Invite to Portal" action). This tab
+  // only manages the resulting invites — one source of truth, no duplicate form.
   const invitesQ = useListProjectInvites(projectId, { query: { retry: false, queryKey: getListProjectInvitesQueryKey(projectId) } });
-  const createInvite = useCreateProjectInvite();
   const revokeInvite = useRevokeProjectInvite();
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState<"worker" | "manager" | "subcontractor">("worker");
-  const [error, setError] = useState<string | null>(null);
-  const [lastLink, setLastLink] = useState<string | null>(null);
-  const [copied, setCopied] = useState<string | null>(null);
-
-  const submitInvite = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null); setLastLink(null);
-    if (!name.trim() || !email.trim()) { setError("Name and email are required."); return; }
-    try {
-      const res = await createInvite.mutateAsync({ projectId, data: { name: name.trim(), email: email.trim().toLowerCase(), role } });
-      setLastLink(res.inviteUrl);
-      setName(""); setEmail(""); setRole("worker");
-      invitesQ.refetch();
-    } catch (err: any) {
-      setError(err?.data?.message || "Could not create invite.");
-    }
-  };
 
   const revoke = async (inviteId: string) => {
     await revokeInvite.mutateAsync({ projectId, inviteId }).catch(() => {});
     invitesQ.refetch();
-  };
-
-  const copy = async (text: string, key: string) => {
-    try { await navigator.clipboard.writeText(text); setCopied(key); setTimeout(() => setCopied(null), 2000); } catch { /* noop */ }
   };
 
   // ---- activity ----
@@ -112,36 +88,14 @@ export function ProjectTeamActivity({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-8">
-      {/* ---- Invite management ---- */}
+      {/* ---- Invite management (create happens per-person on the Team tab) ---- */}
       <section>
-        <h3 className="text-lg font-display font-bold mb-1 flex items-center gap-2"><UserPlus className="w-5 h-5 text-primary" /> Invite to Team Portal</h3>
-        <p className="text-sm text-muted-foreground mb-4">Members get a login scoped to this project only. Share the generated link — email delivery can be enabled later.</p>
+        <h3 className="text-lg font-display font-bold mb-1 flex items-center gap-2"><UserPlus className="w-5 h-5 text-primary" /> Portal invites</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          Invite people from the <span className="font-medium text-foreground">Team</span> tab — each subcontractor person and in-house member has their own “Invite to Portal” action. Manage the resulting invites and revoke access here.
+        </p>
 
-        <form onSubmit={submitInvite} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto_auto] gap-2 items-start [&>*]:min-w-0">
-          <Input value={name} onChange={e => setName(e.target.value)} placeholder="Full name" />
-          <Input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="Email address" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
-          <select value={role} onChange={e => setRole(e.target.value as any)} className="h-10 rounded-lg border border-input bg-background px-3 text-sm">
-            <option value="worker">Worker</option>
-            <option value="manager">Manager</option>
-            <option value="subcontractor">Subcontractor</option>
-          </select>
-          <Button type="submit" isLoading={createInvite.isPending}>Invite</Button>
-        </form>
-        {error && <p className="text-destructive text-sm mt-2">{error}</p>}
-
-        {lastLink && (
-          <div className="mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-lg dark:bg-emerald-950/30 dark:border-emerald-800">
-            <p className="text-sm text-emerald-800 dark:text-emerald-300 font-medium mb-2">Invite created — share this link:</p>
-            <div className="flex items-center gap-2">
-              <input readOnly value={lastLink} className="flex-1 min-w-0 text-xs bg-background border border-border rounded px-2 py-1.5 font-mono" onFocus={e => e.target.select()} />
-              <Button size="sm" variant="outline" onClick={() => copy(lastLink, "new")}>
-                {copied === "new" ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              </Button>
-            </div>
-          </div>
-        )}
-
-        <div className="mt-5">
+        <div className="mt-1">
           {invitesQ.isLoading ? <div className="flex justify-center py-6"><Spinner className="size-5 text-primary" /></div> : (
             (invitesQ.data ?? []).length === 0 ? <p className="text-sm text-muted-foreground">No invites yet.</p> : (
               <div className="space-y-2">

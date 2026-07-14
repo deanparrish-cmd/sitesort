@@ -1362,17 +1362,137 @@ export const ListProjectInvitesResponse = zod.array(
 );
 
 /**
- * @summary Invite a member to a project (PM)
+ * @summary List individual people of a subcontractor firm (PM)
  */
-export const CreateProjectInviteParams = zod.object({
+export const ListSubcontractorPeopleParams = zod.object({
+  subcontractorId: zod.coerce.string(),
+});
+
+export const ListSubcontractorPeopleQueryParams = zod.object({
+  projectId: zod.coerce
+    .string()
+    .optional()
+    .describe("When set, each person carries per-project portal status."),
+});
+
+export const ListSubcontractorPeopleResponseItem = zod
+  .object({
+    id: zod.string(),
+    subcontractorId: zod.string().optional(),
+    userId: zod.string().optional(),
+    name: zod.string(),
+    email: zod.string(),
+    phone: zod.string().optional(),
+    roleTitle: zod.string().optional(),
+    kind: zod.enum(["subcontractor", "in_house"]),
+    portal: zod
+      .object({
+        status: zod.enum(["not_invited", "invited", "member"]),
+        role: zod.string().optional(),
+        inviteId: zod.string().optional(),
+        lastActiveAt: zod.string().optional(),
+      })
+      .optional()
+      .describe("A person's portal state for one project."),
+  })
+  .describe(
+    "An individual person (subcontractor person when subcontractorId set, else in-house).",
+  );
+export const ListSubcontractorPeopleResponse = zod.array(
+  ListSubcontractorPeopleResponseItem,
+);
+
+/**
+ * @summary Add an individual person to a subcontractor firm (PM)
+ */
+export const CreateSubcontractorPersonParams = zod.object({
+  subcontractorId: zod.coerce.string(),
+});
+
+export const CreateSubcontractorPersonBody = zod.object({
+  name: zod.string(),
+  email: zod.string().email(),
+  phone: zod.string().optional(),
+  roleTitle: zod.string().optional(),
+});
+
+/**
+ * @summary Remove an individual person (PM)
+ */
+export const DeletePersonParams = zod.object({
+  personId: zod.coerce.string(),
+});
+
+export const DeletePersonResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * @summary In-house people (portal-only) with per-project portal status (PM)
+ */
+export const ListInHousePeopleParams = zod.object({
   projectId: zod.coerce.string(),
 });
 
-export const CreateProjectInviteBody = zod.object({
+export const ListInHousePeopleResponseItem = zod
+  .object({
+    id: zod.string(),
+    subcontractorId: zod.string().optional(),
+    userId: zod.string().optional(),
+    name: zod.string(),
+    email: zod.string(),
+    phone: zod.string().optional(),
+    roleTitle: zod.string().optional(),
+    kind: zod.enum(["subcontractor", "in_house"]),
+    portal: zod
+      .object({
+        status: zod.enum(["not_invited", "invited", "member"]),
+        role: zod.string().optional(),
+        inviteId: zod.string().optional(),
+        lastActiveAt: zod.string().optional(),
+      })
+      .optional()
+      .describe("A person's portal state for one project."),
+  })
+  .describe(
+    "An individual person (subcontractor person when subcontractorId set, else in-house).",
+  );
+export const ListInHousePeopleResponse = zod.array(
+  ListInHousePeopleResponseItem,
+);
+
+/**
+ * @summary Add an in-house person (portal-only) (PM)
+ */
+export const CreateInHousePersonParams = zod.object({
+  projectId: zod.coerce.string(),
+});
+
+export const CreateInHousePersonBody = zod.object({
   name: zod.string(),
   email: zod.string().email(),
-  role: zod.enum(["worker", "manager", "subcontractor"]).optional(),
+  phone: zod.string().optional(),
+  roleTitle: zod.string().optional(),
 });
+
+/**
+ * Single invite path for everyone (subcontractor or in-house). Always portal-only: creates or rotates a pending invite and returns a copyable link. The person becomes a portalOnly account when they accept it.
+
+ * @summary Invite an individual person to a project's portal (PM)
+ */
+export const CreatePortalInviteParams = zod.object({
+  projectId: zod.coerce.string(),
+});
+
+export const CreatePortalInviteBody = zod
+  .object({
+    personId: zod.string(),
+    role: zod.enum(["worker", "manager", "subcontractor"]).optional(),
+  })
+  .describe(
+    "Invite an individual person (subcontractor or in-house) to the portal.",
+  );
 
 /**
  * @summary Revoke a pending or accepted invite (PM)

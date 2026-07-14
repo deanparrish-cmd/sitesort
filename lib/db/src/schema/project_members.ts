@@ -5,12 +5,17 @@ import { z } from "zod/v4";
 import { projectsTable } from "./projects";
 import { usersTable } from "./users";
 import { subcontractorsTable } from "./subcontractors";
+import { peopleTable } from "./people";
 
 export const projectMembersTable = pgTable("project_members", {
   id: text("id").primaryKey(),
   projectId: text("project_id").notNull().references(() => projectsTable.id),
   userId: text("user_id").references(() => usersTable.id),
   subcontractorId: text("subcontractor_id").references(() => subcontractorsTable.id),
+  // The individual person behind a portal membership (subcontractor person or
+  // in-house member). Nullable: the pre-existing subcontractor-company link rows
+  // (subcontractorId set, no person) and legacy user rows keep personId NULL.
+  personId: text("person_id").references(() => peopleTable.id, { onDelete: "cascade" }),
   role: text("role").notNull().default("worker"),
   scheduledDays: text("scheduled_days").array().default([]),
   siteStartTime: time("site_start_time"),

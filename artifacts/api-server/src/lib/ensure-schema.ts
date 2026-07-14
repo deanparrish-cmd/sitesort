@@ -138,6 +138,29 @@ export async function ensureSchema(): Promise<void> {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS activity_log_project_idx ON activity_log (project_id, created_at)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS activity_log_user_idx ON activity_log (user_id, created_at)`);
+    // Per-person Team Portal restructure — one `people` row per individual human
+    // (subcontractor person when subcontractor_id set, else in-house member).
+    // Portal invites + memberships now reference people.id. New table + nullable
+    // person_id FK columns → must exist in prod before the person/invite endpoints
+    // run. Nullable so pre-existing invites/members (0 or legacy) never orphan.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS people (
+        id text PRIMARY KEY,
+        company_id text NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        subcontractor_id text REFERENCES subcontractors(id) ON DELETE CASCADE,
+        user_id text REFERENCES users(id) ON DELETE SET NULL,
+        name text NOT NULL,
+        email text NOT NULL,
+        phone text,
+        role_title text,
+        created_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS people_subcontractor_email_uq ON people (subcontractor_id, email) WHERE subcontractor_id IS NOT NULL`);
+    await pool.query(`DROP INDEX IF EXISTS people_company_user_uq`);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS people_company_inhouse_email_uq ON people (company_id, email) WHERE subcontractor_id IS NULL`);
+    await pool.query(`ALTER TABLE project_invites ADD COLUMN IF NOT EXISTS person_id text REFERENCES people(id) ON DELETE CASCADE`);
+    await pool.query(`ALTER TABLE project_members ADD COLUMN IF NOT EXISTS person_id text REFERENCES people(id) ON DELETE CASCADE`);
     // F5 — Daily Site Reports hub. These base tables were only ever created via
     // `drizzle push` (dev-only), so they may NOT exist in prod. Create them here
     // (idempotent) before the reports routes / 18:00 generation job / daily-notes
@@ -172,7 +195,7 @@ export async function ensureSchema(): Promise<void> {
     await pool.query(`ALTER TABLE daily_reports ADD COLUMN IF NOT EXISTS authored_by text`);
     await pool.query(`ALTER TABLE daily_reports ADD COLUMN IF NOT EXISTS authored_at timestamp`);
     await pool.query(`ALTER TABLE daily_reports ADD COLUMN IF NOT EXISTS auto_generated boolean NOT NULL DEFAULT false`);
-    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols ready");
+    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols ready");
   } catch (err) {
     // Don't crash the server — membership lookups fall back to the home company.
     logger.error({ err }, "ensureSchema failed (continuing with home-company fallback)");
