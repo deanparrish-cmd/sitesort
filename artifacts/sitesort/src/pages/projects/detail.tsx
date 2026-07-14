@@ -3,7 +3,7 @@ import { useRoute } from "wouter";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ProjectTeamActivity, RecentActivityGlance } from "./team-activity";
-import { SubcontractorPeople, InHousePortalPanel } from "./portal-people";
+import { SubcontractorPeople, PortalInvitePill } from "./portal-people";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -1978,6 +1978,15 @@ tr:last-child td{border-bottom:none}
                       <div className="flex flex-col items-end gap-1 shrink-0">
                         <div className="flex flex-wrap items-center justify-end gap-1.5">
                           <Badge variant="secondary" className="text-[10px] capitalize">{member.role.replace('_', ' ')}</Badge>
+                          {caps.canManageTeam && (
+                            <PortalInvitePill
+                              projectId={projectId}
+                              personName={isSubcontractor ? (member.contactName || member.name) : member.name}
+                              personEmail={member.email}
+                              source={isSubcontractor ? { kind: "subcontractor", subcontractorId: member.subcontractorId } : { kind: "in_house" }}
+                              canManage={caps.canManageTeam}
+                            />
+                          )}
                           {isSubcontractor && (
                             <button
                               type="button"
@@ -2118,7 +2127,7 @@ tr:last-child td{border-bottom:none}
                       <SubcontractorPeople
                         subcontractorId={member.subcontractorId}
                         projectId={projectId}
-                        primaryContact={{ name: member.contactName, email: member.email, phone: member.phone }}
+                        primaryContactEmail={member.email}
                         canManage={caps.canManageTeam}
                       />
                     )}
@@ -2154,13 +2163,6 @@ tr:last-child td{border-bottom:none}
               </div>
             );
           })()}
-          {/* Portal access for in-house people — always available to managers,
-              even on a project with no members yet. */}
-          {caps.canManageTeam && (
-            <div className="mt-3">
-              <InHousePortalPanel projectId={projectId} canManage={caps.canManageTeam} />
-            </div>
-          )}
         </TabsContent>
 
 
