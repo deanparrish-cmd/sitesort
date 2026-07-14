@@ -50,7 +50,7 @@ export function RecentActivityGlance({ projectId, canManage }: { projectId: stri
           <span className="font-medium text-foreground">{latest.sectionLabel}</span> · {fmtRelative(latest.createdAt)}
         </span>
       ) : (
-        <span className="text-muted-foreground">No portal activity yet — invite your team below.</span>
+        <span className="text-muted-foreground">No portal activity yet — invite people from the Team tab.</span>
       )}
     </div>
   );
