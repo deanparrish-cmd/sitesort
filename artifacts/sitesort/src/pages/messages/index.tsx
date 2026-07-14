@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MessageSquare, Send, Users, Eye, ArrowLeft, Check, CheckCheck, Pencil, Trash2, User, Building2, Receipt, X, ExternalLink, FileText, Image, FileCheck, Paperclip, Hash, CornerUpLeft, Search, Zap, ChevronUp, Loader2, StickyNote } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { notifyMessagesRead } from "@/lib/message-events";
 import { useSubscription } from "@/contexts/subscription";
 import { useToast } from "@/hooks/use-toast";
 
@@ -246,6 +247,16 @@ export default function MessagesPage() {
       const data = await r.json();
       setThread(data.messages ?? data);
       setDmHasMore(data.hasMore ?? false);
+      // The thread GET marks this conversation's messages read server-side.
+      // Reflect that immediately so both counts update together without a
+      // refresh: clear this conversation's unread pill locally (mirrors what
+      // fetchChannelThread already does for channels) and tell the sidebar to
+      // re-fetch its badge. Skipped in viewAll (oversight) mode, which never
+      // marks messages read.
+      if (!viewAll) {
+        setConversations(prev => prev.map(c => c.otherId === conv.otherId ? { ...c, unread: 0 } : c));
+        notifyMessagesRead();
+      }
     }
     setLoadingThread(false);
   }, [viewAll]);

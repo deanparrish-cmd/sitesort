@@ -19,6 +19,32 @@ function messagePreview(m: { content: string | null; invoiceId?: string | null; 
   return m.content ?? "";
 }
 
+// ── Single source of truth for "unread DM" ──────────────────────────────────
+// Used by BOTH the sidebar badge (`/messages/unread-count`) and the conversation
+// list, so the two can never disagree. A DM counts as unread only when it is in
+// the user's ACTIVE company (this is the key fix — a DM received in a *different*
+// company the user also belongs to must NOT inflate the badge, because the
+// conversation list is company-scoped and would never show it), the user is the
+// recipient (never their own sent messages), and it has not been read.
+function unreadDmFilter(userId: string, companyId: string) {
+  return and(
+    eq(messagesTable.companyId, companyId),
+    eq(messagesTable.recipientId, userId),
+    sql`${messagesTable.readAt} IS NULL`,
+  );
+}
+
+// JS-level counterpart of `unreadDmFilter`, for counting unread on rows that were
+// already fetched (the conversation list). Kept beside the SQL filter so the
+// definition of "unread" lives in exactly one place.
+function isUnreadDmRow(
+  msg: { companyId: string; recipientId: string; readAt: Date | null },
+  userId: string,
+  companyId: string,
+): boolean {
+  return msg.companyId === companyId && msg.recipientId === userId && !msg.readAt;
+}
+
 // GET /api/messages/conversations — list conversations for current user (or all if admin/pm)
 router.get("/messages/conversations", authenticate, async (req, res) => {
   try {
@@ -88,9 +114,9 @@ router.get("/messages/conversations", authenticate, async (req, res) => {
           otherRole: viewAll ? "" : userMap[otherId as string]?.role ?? "",
           lastMessage: messagePreview(msg),
           lastAt: msg.createdAt.toISOString(),
-          unread: (!viewAll && msg.recipientId === userId && !msg.readAt) ? 1 : 0,
+          unread: (!viewAll && isUnreadDmRow(msg, userId, companyId)) ? 1 : 0,
         });
-      } else if (!viewAll && msg.recipientId === userId && !msg.readAt) {
+      } else if (!viewAll && isUnreadDmRow(msg, userId, companyId)) {
         const conv = convMap.get(convKey)!;
         conv.unread += 1;
       }
@@ -564,12 +590,7 @@ router.get("/messages/unread-count", authenticate, async (req, res) => {
     const rows = await db
       .select({ id: messagesTable.id })
       .from(messagesTable)
-      .where(
-        and(
-          eq(messagesTable.recipientId, req.user!.id),
-          sql`${messagesTable.readAt} IS NULL`
-        )
-      );
+      .where(unreadDmFilter(req.user!.id, req.user!.companyId));
     res.json({ count: rows.length });
   } catch (err) {
     res.status(500).json({ error: "server_error", message: "Failed to get unread count" });

@@ -19,6 +19,7 @@ import {
   ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { onMessagesRead } from "@/lib/message-events";
 import { useGetMe, useLogout } from "@workspace/api-client-react";
 import { useSubscription } from "@/contexts/subscription";
 import { CheckoutGate } from "@/components/checkout-gate";
@@ -101,7 +102,11 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       setUnreadMsgCount(c => { prevUnreadRef.current = c; return c; });
     });
     const interval = setInterval(fetchUnread, 10000);
-    return () => clearInterval(interval);
+    // Refresh the badge the moment a conversation is opened/marked read, so it
+    // stays in lock-step with the conversation list instead of waiting up to 10s
+    // for the next poll.
+    const offRead = onMessagesRead(fetchUnread);
+    return () => { clearInterval(interval); offRead(); };
   }, [fetchUnread]);
 
   // Clear message badge when on messages page
