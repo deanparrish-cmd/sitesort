@@ -355,8 +355,12 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
             </button>
           </div>
         )}
-        <main className="flex-1 p-4 md:p-8">
-          <div className="max-w-7xl mx-auto slide-up">
+        {/* min-w-0 + overflow-x-clip = shared safety net: no page (e.g. a card or
+            action row that outgrows its box) can ever cause horizontal page
+            scroll. Content should still be built to fit (wrap/truncate), but this
+            guarantees the page itself never widens on mobile/tablet. */}
+        <main className="flex-1 p-4 md:p-8 min-w-0 overflow-x-clip">
+          <div className="max-w-7xl mx-auto slide-up min-w-0">
             {children}
           </div>
         </main>

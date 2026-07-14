@@ -1937,9 +1937,9 @@ tr:last-child td{border-bottom:none}
                   : null;
 
                 return (
-                  <div key={member.id} className="bg-card border rounded-xl p-5 flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3">
+                  <div key={member.id} className="bg-card border rounded-xl p-5 flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow min-w-0 overflow-hidden">
+                    <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 min-w-0">
+                      <div className="flex items-center gap-3 min-w-0">
                         <label className={cn("relative shrink-0", caps.canManageTeam ? "cursor-pointer group" : "cursor-default")} title={caps.canManageTeam ? "Click to upload photo" : undefined}>
                           {caps.canManageTeam && (
                           <input type="file" accept="image/*" className="hidden" onChange={async e => {
@@ -1968,15 +1968,15 @@ tr:last-child td{border-bottom:none}
                             </div>
                           )}
                         </label>
-                        <div>
-                          <p className="font-bold text-base leading-tight">{member.name}</p>
+                        <div className="min-w-0">
+                          <p className="font-bold text-base leading-tight break-words">{member.name}</p>
                           {isSubcontractor && member.contactName && (
-                            <p className="text-xs text-muted-foreground">Contact: {member.contactName}</p>
+                            <p className="text-xs text-muted-foreground break-words">Contact: {member.contactName}</p>
                           )}
                         </div>
                       </div>
-                      <div className="flex flex-col items-end gap-1 shrink-0">
-                        <div className="flex flex-wrap items-center justify-end gap-1.5">
+                      <div className="flex flex-col items-end gap-1 min-w-0">
+                        <div className="flex flex-wrap items-center justify-end gap-1.5 min-w-0">
                           <Badge variant="secondary" className="text-[10px] capitalize">{member.role.replace('_', ' ')}</Badge>
                           {caps.canManageTeam && (
                             <PortalInvitePill

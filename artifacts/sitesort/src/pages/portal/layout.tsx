@@ -93,8 +93,9 @@ export function PortalLayout({ active, children }: { active: string; children: R
         </nav>
       </header>
 
-      {/* Content */}
-      <main className="flex-1 w-full">
+      {/* Content — min-w-0 + overflow-x-clip: same shared safety net as the main
+          app shell, so a portal section can never scroll the (mobile-first) page. */}
+      <main className="flex-1 w-full min-w-0 overflow-x-clip">
         <div className="max-w-3xl mx-auto px-4 py-5 [&>*]:min-w-0">{children}</div>
       </main>
     </div>
