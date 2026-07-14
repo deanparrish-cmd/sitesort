@@ -41,9 +41,11 @@ function PersonRow({
   onDelete: () => Promise<void>;
   busy: boolean;
 }) {
-  const [role, setRole] = useState<PortalRole>("worker");
-  const [copied, setCopied] = useState(false);
   const portal = person.portal ?? { status: "not_invited" };
+  // Seed from the current invite's role so re-issuing a link ("Copy link") never
+  // silently downgrades the role (e.g. manager → worker) after a reload.
+  const [role, setRole] = useState<PortalRole>((portal.role as PortalRole) ?? "worker");
+  const [copied, setCopied] = useState(false);
 
   const invite = async () => { await onInvite(role); setCopied(true); setTimeout(() => setCopied(false), 2000); };
 

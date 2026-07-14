@@ -58,8 +58,8 @@ async function portalStatusFor(personIds: string[], projectId: string): Promise<
   ]);
   // Latest invite per person (invites already ordered newest-first) — used to give
   // the UI an inviteId to revoke against, for members AND pending invites alike.
-  const latestInvite = new Map<string, { id: string; status: string; expiresAt: Date }>();
-  for (const inv of invites) if (inv.personId && !latestInvite.has(inv.personId)) latestInvite.set(inv.personId, { id: inv.id, status: inv.status, expiresAt: inv.expiresAt });
+  const latestInvite = new Map<string, { id: string; status: string; expiresAt: Date; role: string }>();
+  for (const inv of invites) if (inv.personId && !latestInvite.has(inv.personId)) latestInvite.set(inv.personId, { id: inv.id, status: inv.status, expiresAt: inv.expiresAt, role: inv.role });
 
   for (const m of members) {
     if (m.personId) out.set(m.personId, {
@@ -71,7 +71,7 @@ async function portalStatusFor(personIds: string[], projectId: string): Promise<
   for (const [personId, inv] of latestInvite) {
     if (out.has(personId)) continue; // member wins
     if (inv.status === "pending" && inv.expiresAt.getTime() > Date.now()) {
-      out.set(personId, { status: "invited", inviteId: inv.id });
+      out.set(personId, { status: "invited", role: inv.role, inviteId: inv.id });
     }
   }
   for (const id of personIds) if (!out.has(id)) out.set(id, { status: "not_invited" });
@@ -106,6 +106,7 @@ async function loadOwnedProject(projectId: string, companyId: string) {
 // subcontractor firm; with projectId, each carries per-project portal status.
 router.get("/subcontractors/:subcontractorId/people", authenticate, async (req, res) => {
   try {
+    if (!requireManager(req, res)) return;
     const sub = await loadOwnedSubcontractor(req.params.subcontractorId, req.user!.companyId);
     if (!sub) { res.status(404).json({ error: "not_found", message: "Subcontractor not found" }); return; }
     const people = await db.select().from(peopleTable)

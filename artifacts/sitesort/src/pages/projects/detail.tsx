@@ -2114,7 +2114,7 @@ tr:last-child td{border-bottom:none}
                         onSaved={() => queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/members`] })}
                       />
                     )}
-                    {isSubcontractor && (
+                    {isSubcontractor && caps.canManageTeam && (
                       <SubcontractorPeople
                         subcontractorId={member.subcontractorId}
                         projectId={projectId}
@@ -2151,10 +2151,16 @@ tr:last-child td{border-bottom:none}
                     <FolderOpen className="w-4 h-4" />+ Add Trade Folder
                   </button>
                 ))}
-                {caps.canManageTeam && <InHousePortalPanel projectId={projectId} canManage={caps.canManageTeam} />}
               </div>
             );
           })()}
+          {/* Portal access for in-house people — always available to managers,
+              even on a project with no members yet. */}
+          {caps.canManageTeam && (
+            <div className="mt-3">
+              <InHousePortalPanel projectId={projectId} canManage={caps.canManageTeam} />
+            </div>
+          )}
         </TabsContent>
 
 
