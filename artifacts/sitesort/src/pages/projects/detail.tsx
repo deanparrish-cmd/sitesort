@@ -1188,9 +1188,9 @@ tr:last-child td{border-bottom:none}
         <div className="relative z-10">
           <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
             <div>
-              <div className="flex items-center gap-3 mb-2">
-                <h1 className="text-3xl md:text-4xl font-display font-extrabold text-primary">{project.name}</h1>
-                <Badge variant={project.status === 'active' ? 'success' : 'secondary'} className="text-sm">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mb-2 min-w-0">
+                <h1 className="text-3xl md:text-4xl font-display font-extrabold text-primary min-w-0 break-words">{project.name}</h1>
+                <Badge variant={project.status === 'active' ? 'success' : 'secondary'} className="text-sm shrink-0">
                   {project.status.toUpperCase()}
                 </Badge>
               </div>
