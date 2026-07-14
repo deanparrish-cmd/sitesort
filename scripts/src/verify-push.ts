@@ -10,26 +10,13 @@ async function getFile(p: string): Promise<string> {
 }
 
 // [path, signature string that MUST be present for my change to have landed]
-// Nav cleanup — 2026-07-03: Compliance Centre + Site Check-Ins removed from sidebar.
+// Messages unread badge/list company-scope fix — 2026-07-14 push.
 const checks: [string, string][] = [
-  ["artifacts/sitesort/src/components/layout/sidebar-layout.tsx", "Compliance Centre and Site Check-Ins removed from the nav"],
-  // Team Portal (Feature #61) — 2026-07-03 push.
-  ["artifacts/api-server/src/routes/portal.ts", '"/portal/login"'],
-  ["artifacts/api-server/src/routes/team-activity.ts", "sendProjectInviteEmail"],
-  ["artifacts/api-server/src/middlewares/portal.ts", "requirePortalMember"],
-  ["artifacts/api-server/src/middlewares/auth.ts", "generatePortalToken"],
-  ["artifacts/api-server/src/lib/activity.ts", "PORTAL_SECTIONS"],
-  ["artifacts/api-server/src/lib/invite-email.ts", "sendProjectInviteEmail"],
-  ["artifacts/api-server/src/routes/auth.ts", '"use_portal"'],
-  ["artifacts/api-server/src/routes/index.ts", "teamActivityRouter"],
-  ["artifacts/api-server/src/lib/ensure-schema.ts", "project_invites"],
-  ["lib/db/src/schema/project_invites.ts", "projectInvitesTable"],
-  ["lib/db/src/schema/activity_log.ts", "activityLogTable"],
-  ["lib/db/src/schema/users.ts", "portal_only"],
-  ["artifacts/sitesort/src/pages/portal/section.tsx", "PortalSectionPage"],
-  ["artifacts/sitesort/src/pages/portal/login.tsx", "sitesort_portal_token"],
-  ["artifacts/sitesort/src/pages/projects/team-activity.tsx", "ProjectTeamActivity"],
-  ["artifacts/sitesort/src/App.tsx", "/portal/:section"],
+  ["artifacts/api-server/src/routes/messages.ts", "function unreadDmFilter"],
+  ["artifacts/api-server/src/routes/messages.ts", "isUnreadDmRow(msg, userId, companyId)"],
+  ["artifacts/sitesort/src/lib/message-events.ts", "sitesort:messages-read"],
+  ["artifacts/sitesort/src/pages/messages/index.tsx", "notifyMessagesRead"],
+  ["artifacts/sitesort/src/components/layout/sidebar-layout.tsx", "onMessagesRead"],
 ];
 
 let ok = 0, bad: string[] = [];
