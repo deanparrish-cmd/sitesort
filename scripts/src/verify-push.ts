@@ -10,13 +10,16 @@ async function getFile(p: string): Promise<string> {
 }
 
 // [path, signature string that MUST be present for my change to have landed]
-// Messages unread badge/list company-scope fix — 2026-07-14 push.
+// Per-person portal invites (portal-only for everyone) + review fixes — 2026-07-14.
 const checks: [string, string][] = [
-  ["artifacts/api-server/src/routes/messages.ts", "function unreadDmFilter"],
-  ["artifacts/api-server/src/routes/messages.ts", "isUnreadDmRow(msg, userId, companyId)"],
-  ["artifacts/sitesort/src/lib/message-events.ts", "sitesort:messages-read"],
-  ["artifacts/sitesort/src/pages/messages/index.tsx", "notifyMessagesRead"],
-  ["artifacts/sitesort/src/components/layout/sidebar-layout.tsx", "onMessagesRead"],
+  ["lib/db/src/schema/people.ts", "peopleTable"],
+  ["artifacts/api-server/src/routes/people.ts", "portal-invites"],
+  ["artifacts/api-server/src/routes/people.ts", "in-house-people"],
+  ["artifacts/api-server/src/lib/ensure-schema.ts", "people_company_inhouse_email_uq"],
+  ["artifacts/api-server/src/routes/portal.ts", "portal-only"],
+  ["artifacts/sitesort/src/pages/projects/portal-people.tsx", "InHousePortalPanel"],
+  ["artifacts/sitesort/src/pages/projects/team-activity.tsx", "Portal invites"],
+  ["lib/api-spec/openapi.yaml", "createPortalInvite"],
 ];
 
 let ok = 0, bad: string[] = [];
