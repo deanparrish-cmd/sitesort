@@ -19,6 +19,8 @@ const checks: [string, string][] = [
   ["artifacts/api-server/src/routes/portal.ts", "Portal access is an explicit grant"],
   ["artifacts/api-server/src/routes/people.ts", "dashInCompany"],
   ["artifacts/api-server/src/middlewares/portal.ts", "isNotNull(projectMembersTable.personId)"],
+  ["artifacts/sitesort/src/lib/documents.ts", "cadBadgeLabel"],
+  ["artifacts/api-server/src/routes/upload.ts", "dwg|dxf|dwf|rvt|ifc"],
   ["artifacts/sitesort/src/pages/projects/portal-people.tsx", "PortalInvitePill"],
   ["artifacts/sitesort/src/pages/projects/detail.tsx", "PortalInvitePill"],
   ["artifacts/sitesort/src/components/layout/sidebar-layout.tsx", "overflow-x-clip"],
