@@ -7,7 +7,7 @@ import {
   documentsTable, photosTable, permitsTable, milestonesTable, dailyNotesTable,
   qrBoardPinsTable, calendarEventsTable, subcontractorsTable, peopleTable,
 } from "@workspace/db/schema";
-import { and, eq, inArray, isNull, desc, asc, gte, count } from "drizzle-orm";
+import { and, eq, inArray, isNull, isNotNull, desc, asc, gte, count } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate, generatePortalToken } from "../middlewares/auth";
 import { requirePortalMember, autoLogPortalActivity } from "../middlewares/portal";
@@ -113,23 +113,25 @@ router.post("/portal/login", async (req, res) => {
       else res.status(401).json({ error: "invalid_credentials", message: "Invalid email or password", attemptsRemaining: remaining });
       return;
     }
-    // Portal is portal-only: a full dashboard account never logs in here (every
-    // portal member — subcontractor or in-house — is a portalOnly account created
-    // via an invite link). Dashboard users use the main login.
-    if (!user.portalOnly) {
-      res.status(403).json({ error: "use_dashboard", message: "This is a full SiteSort account — please use the main login." });
-      return;
-    }
     await clearAttempts(email);
 
+    // Portal access is an explicit grant: a project_members row with person_id set.
+    // This works for BOTH a portalOnly account (created via an invite link) and an
+    // in-house team member using their existing dashboard login — the difference is
+    // just whether they also have dashboard access, which is a superset, not a leak.
+    // A dashboard account with no portal grant is nudged back to the main login.
     const memberships = await db
       .select({ projectId: projectMembersTable.projectId, role: projectMembersTable.role, name: projectsTable.name })
       .from(projectMembersTable)
       .innerJoin(projectsTable, eq(projectMembersTable.projectId, projectsTable.id))
-      .where(eq(projectMembersTable.userId, user.id));
+      .where(and(eq(projectMembersTable.userId, user.id), isNotNull(projectMembersTable.personId)));
 
     if (memberships.length === 0) {
-      res.status(403).json({ error: "no_projects", message: "You haven't been added to any project yet. Ask your project manager for an invite." });
+      if (user.portalOnly) {
+        res.status(403).json({ error: "no_projects", message: "You haven't been added to any project yet. Ask your project manager for an invite." });
+      } else {
+        res.status(403).json({ error: "use_dashboard", message: "This is a full SiteSort account — please use the main login." });
+      }
       return;
     }
 

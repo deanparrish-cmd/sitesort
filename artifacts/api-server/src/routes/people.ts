@@ -3,7 +3,7 @@ import { randomBytes, createHash } from "crypto";
 import { db } from "@workspace/db";
 import {
   peopleTable, subcontractorsTable, projectsTable, projectMembersTable,
-  projectInvitesTable, usersTable,
+  projectInvitesTable, usersTable, companyMembersTable,
 } from "@workspace/db/schema";
 import { and, eq, desc, inArray, isNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
@@ -245,7 +245,53 @@ router.post("/projects/:projectId/portal-invites", authenticate, async (req, res
     const role = input.role ?? "worker";
     const pid = req.params.projectId;
 
-    // Create or ROTATE a pending invite, return a fresh copyable link.
+    // If a DASHBOARD (non-portalOnly) account IN THIS COMPANY already owns this
+    // email, grant portal access via their EXISTING login — no signup/link. Link
+    // the person to that account and set person_id on their project membership (the
+    // portal grant), preserving any existing team role. They enter the portal with
+    // their normal SiteSort credentials. The company check is essential: without it
+    // an email that matches a user in ANOTHER tenant would grant that outside user
+    // access to this project.
+    const dashUser = (await db.select().from(usersTable)
+      .where(and(eq(usersTable.email, person.email), eq(usersTable.portalOnly, false))).limit(1))[0];
+    let dashInCompany = false;
+    if (dashUser) {
+      if (dashUser.companyId === req.user!.companyId) dashInCompany = true;
+      else {
+        const cm = await db.select({ id: companyMembersTable.id }).from(companyMembersTable)
+          .where(and(eq(companyMembersTable.userId, dashUser.id), eq(companyMembersTable.companyId, req.user!.companyId))).limit(1);
+        dashInCompany = cm.length > 0;
+      }
+    }
+    if (dashUser && dashInCompany) {
+      if (person.userId !== dashUser.id) {
+        await db.update(peopleTable).set({ userId: dashUser.id }).where(eq(peopleTable.id, person.id));
+      }
+      const existingMember = await db.select().from(projectMembersTable)
+        .where(and(eq(projectMembersTable.projectId, pid), eq(projectMembersTable.userId, dashUser.id))).limit(1);
+      if (existingMember[0]) {
+        await db.update(projectMembersTable).set({ personId: person.id }).where(eq(projectMembersTable.id, existingMember[0].id));
+      } else {
+        await db.insert(projectMembersTable).values({ id: generateId(), projectId: pid, userId: dashUser.id, personId: person.id, role });
+      }
+      // Record an accepted invite row (once) so the Team Portal list/revoke/audit is
+      // uniform. Dedup: don't stack duplicate accepted rows on repeat grants.
+      const alreadyAccepted = await db.select({ id: projectInvitesTable.id }).from(projectInvitesTable)
+        .where(and(eq(projectInvitesTable.projectId, pid), eq(projectInvitesTable.personId, person.id), eq(projectInvitesTable.status, "accepted"))).limit(1);
+      if (!alreadyAccepted[0]) {
+        await db.insert(projectInvitesTable).values({
+          id: generateId(), projectId: pid, companyId: req.user!.companyId, personId: person.id,
+          email: person.email, name: person.name, tokenHash: hashToken(randomBytes(16).toString("hex")),
+          role, status: "accepted", expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          invitedByUserId: req.user!.id, acceptedUserId: dashUser.id, acceptedAt: new Date(),
+        });
+      }
+      res.status(201).json({ status: "member", person: serializePerson({ ...person, userId: dashUser.id }), inviteUrl: null });
+      return;
+    }
+
+    // Otherwise (external person, no dashboard account): create or ROTATE a pending
+    // invite + link; they set a password on accept → a portalOnly account.
     const rawToken = randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     const pending = await db.select().from(projectInvitesTable)

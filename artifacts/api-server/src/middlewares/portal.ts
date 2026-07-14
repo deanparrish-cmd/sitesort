@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { db } from "@workspace/db";
 import { projectMembersTable, projectsTable } from "@workspace/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { logActivity, isPortalSection, PORTAL_SECTIONS } from "../lib/activity";
 
 declare global {
@@ -31,10 +31,18 @@ export async function requirePortalMember(req: Request, res: Response, next: Nex
   }
 
   try {
+    // Portal access requires an explicit grant: a membership row with person_id set.
+    // A plain team membership (person_id NULL) does NOT grant portal access, so a
+    // revoked in-house member (person_id cleared) is 403'd here while keeping their
+    // team role.
     const rows = await db
       .select({ role: projectMembersTable.role })
       .from(projectMembersTable)
-      .where(and(eq(projectMembersTable.projectId, u.projectId), eq(projectMembersTable.userId, u.id)))
+      .where(and(
+        eq(projectMembersTable.projectId, u.projectId),
+        eq(projectMembersTable.userId, u.id),
+        isNotNull(projectMembersTable.personId),
+      ))
       .limit(1);
 
     if (rows.length === 0) {

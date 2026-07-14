@@ -77,8 +77,20 @@ router.post("/projects/:projectId/invites/:inviteId/revoke", authenticate, async
     // person link (the portal membership this invite created); fall back to the
     // accepted user for legacy invites that predate person_id.
     if (inv.personId) {
-      await db.delete(projectMembersTable)
-        .where(and(eq(projectMembersTable.projectId, req.params.projectId), eq(projectMembersTable.personId, inv.personId)));
+      // Cut portal access by clearing the person_id grant on the membership. For a
+      // portalOnly account there's no team role to keep, so remove the row entirely;
+      // for a dashboard (in-house) account, keep the row + team role and just drop
+      // the portal grant.
+      const mem = (await db.select({ id: projectMembersTable.id, userId: projectMembersTable.userId })
+        .from(projectMembersTable)
+        .where(and(eq(projectMembersTable.projectId, req.params.projectId), eq(projectMembersTable.personId, inv.personId))).limit(1))[0];
+      if (mem) {
+        const portalOnly = mem.userId
+          ? (await db.select({ p: usersTable.portalOnly }).from(usersTable).where(eq(usersTable.id, mem.userId)).limit(1))[0]?.p === true
+          : false;
+        if (portalOnly) await db.delete(projectMembersTable).where(eq(projectMembersTable.id, mem.id));
+        else await db.update(projectMembersTable).set({ personId: null }).where(eq(projectMembersTable.id, mem.id));
+      }
     } else if (inv.acceptedUserId) {
       await db.delete(projectMembersTable)
         .where(and(eq(projectMembersTable.projectId, req.params.projectId), eq(projectMembersTable.userId, inv.acceptedUserId)));
