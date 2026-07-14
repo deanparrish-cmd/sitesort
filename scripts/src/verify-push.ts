@@ -21,6 +21,7 @@ const checks: [string, string][] = [
   ["artifacts/sitesort/src/pages/projects/detail.tsx", "PortalInvitePill"],
   ["artifacts/sitesort/src/components/layout/sidebar-layout.tsx", "overflow-x-clip"],
   ["artifacts/sitesort/src/pages/portal/layout.tsx", "overflow-x-clip"],
+  ["artifacts/sitesort/src/pages/portal/layout.tsx", "flex flex-wrap gap-1"],
   ["artifacts/sitesort/src/pages/projects/team-activity.tsx", "Portal invites"],
   ["lib/api-spec/openapi.yaml", "createPortalInvite"],
 ];
