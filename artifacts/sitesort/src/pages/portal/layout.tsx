@@ -74,8 +74,9 @@ export function PortalLayout({ active, children }: { active: string; children: R
           </button>
         </div>
 
-        {/* Horizontally scrollable section nav (mobile-first) */}
-        <nav className="max-w-3xl mx-auto px-2 pb-2 flex gap-1 overflow-x-auto no-scrollbar">
+        {/* Section nav — wraps so every section (Drawings / Method Statements /
+            Permits …) is visible on mobile without horizontal scrolling. */}
+        <nav className="max-w-3xl mx-auto px-2 pb-2 flex flex-wrap gap-1">
           {SECTION_NAV.map(({ key, label, Icon }) => {
             const isActive = key === active;
             return (

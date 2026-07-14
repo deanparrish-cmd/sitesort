@@ -1617,7 +1617,7 @@ tr:last-child td{border-bottom:none}
                 </Button>
               )}
             </div>
-            <div className="flex gap-2 flex-nowrap overflow-x-auto items-center [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pb-1">
+            <div className="flex flex-wrap gap-2 items-center">
               <Button
                 variant={selectedDocType === 'all' ? 'default' : 'secondary'}
                 size="sm" onClick={() => setSelectedDocType('all')}
@@ -1663,8 +1663,8 @@ tr:last-child td{border-bottom:none}
                         <FileText className="w-4 h-4" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className={cn("font-bold text-sm leading-tight", isSuperseded && "line-through text-muted-foreground")}>{doc.name}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{formatBytes(doc.fileSize)} · By {doc.uploaderName}</p>
+                        <p className={cn("font-bold text-sm leading-tight break-words", isSuperseded && "line-through text-muted-foreground")}>{doc.name}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5 break-words">{formatBytes(doc.fileSize)} · By {doc.uploaderName}</p>
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-1.5 mb-2.5">
@@ -2458,7 +2458,7 @@ tr:last-child td{border-bottom:none}
                       </p>
                     )}
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex flex-wrap items-center gap-1 shrink-0">
                     {caps.canManageTeam && (
                       <button
                         onClick={() => { setEditingPermit(p); setEditPermitError(null); }}
@@ -2601,7 +2601,7 @@ tr:last-child td{border-bottom:none}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <FileText className="w-4 h-4 text-primary shrink-0" />
-                            <p className={`font-semibold text-sm truncate ${isSuperseded ? "line-through text-muted-foreground" : ""}`}>{doc.name}</p>
+                            <p className={`font-semibold text-sm min-w-0 break-words ${isSuperseded ? "line-through text-muted-foreground" : ""}`}>{doc.name}</p>
                             <span className="font-mono text-[10px] bg-muted px-1.5 py-0.5 rounded">{docRev(doc)}</span>
                             {isSuperseded && <span className="text-[10px] font-semibold text-destructive bg-red-100 px-1.5 py-0.5 rounded">Superseded</span>}
                           </div>
