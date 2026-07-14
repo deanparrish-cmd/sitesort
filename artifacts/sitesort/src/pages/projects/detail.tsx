@@ -16,6 +16,7 @@ import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, Shield
 import { QRCodeSVG } from "qrcode.react";
 import { ShareModal } from "@/components/share-modal";
 import { FileDropZone } from "@/components/ui/file-drop-zone";
+import { openDocument, cadBadgeLabel } from "@/lib/documents";
 import { OverdueBadge } from "@/components/ui/overdue-badge";
 import { Textarea } from "@/components/ui/textarea";
 import { InsuranceCertZone } from "@/components/ui/insurance-cert-zone";
@@ -1656,6 +1657,7 @@ tr:last-child td{border-bottom:none}
                 (searchQuery === '' || d.name.toLowerCase().includes(searchQuery.toLowerCase()))
               ).map(doc => {
                 const isSuperseded = doc.status === 'superseded';
+                const cadBadge = cadBadgeLabel(doc.fileUrl, doc.name);
                 return (
                   <div key={doc.id} className={cn("px-4 py-4", isSuperseded && "opacity-70 bg-muted/20")}>
                     <div className="flex items-start gap-3 mb-2">
@@ -1673,6 +1675,7 @@ tr:last-child td{border-bottom:none}
                         ? <Badge variant="destructive" className="text-[10px]"><AlertTriangle className="w-3 h-3 mr-1"/>SUPERSEDED</Badge>
                         : <Badge variant="success" className="text-[10px]">CURRENT</Badge>
                       }
+                      {cadBadge && <span className="font-mono bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 px-2 py-0.5 rounded text-[10px] font-bold">{cadBadge}</span>}
                       <span className="text-xs text-muted-foreground capitalize">{doc.type.replace('_', ' ')}</span>
                       <span className="text-xs text-muted-foreground">· {formatDate(doc.createdAt)}</span>
                     </div>
@@ -1694,10 +1697,10 @@ tr:last-child td{border-bottom:none}
                         <span className="flex items-center gap-1 text-xs text-success font-semibold"><CheckCircle2 className="w-3 h-3" />Signed off</span>
                       )}
                       <button
-                        onClick={() => window.open(doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/"), '_blank', 'noopener,noreferrer')}
+                        onClick={() => openDocument(doc.fileUrl, doc.name)}
                         className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-primary/25 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/15 transition-colors"
                       >
-                        <ExternalLink className="w-3 h-3" />Open
+                        {cadBadge ? <><Download className="w-3 h-3" />Download</> : <><ExternalLink className="w-3 h-3" />Open</>}
                       </button>
                       {!isSuperseded && caps.canUploadDocument && (
                         <button onClick={() => openAllocate({ id: doc.id, name: doc.name })}
@@ -1781,6 +1784,7 @@ tr:last-child td{border-bottom:none}
                           ) : (
                             <Badge variant="success" className="text-[10px]">CURRENT</Badge>
                           )}
+                          {cadBadgeLabel(doc.fileUrl, doc.name) && <span className="font-mono bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 px-2 py-0.5 rounded text-[10px] font-bold">{cadBadgeLabel(doc.fileUrl, doc.name)}</span>}
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -1812,11 +1816,13 @@ tr:last-child td{border-bottom:none}
                           )}
                           <button
                             type="button"
-                            onClick={() => window.open(doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/"), '_blank', 'noopener,noreferrer')}
+                            onClick={() => openDocument(doc.fileUrl, doc.name)}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-primary/25 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/15 transition-colors"
-                            title="Open document"
+                            title={cadBadgeLabel(doc.fileUrl, doc.name) ? "Download document" : "Open document"}
                           >
-                            <ExternalLink className="w-3.5 h-3.5" />Open
+                            {cadBadgeLabel(doc.fileUrl, doc.name)
+                              ? <><Download className="w-3.5 h-3.5" />Download</>
+                              : <><ExternalLink className="w-3.5 h-3.5" />Open</>}
                           </button>
                           {!isSuperseded && caps.canUploadDocument && (
                             <button
@@ -2593,9 +2599,8 @@ tr:last-child td{border-bottom:none}
                 {/* H&S documents — grouped by type (Method Statements / Permits / Safety) */}
                 {(() => {
                   const renderDocRow = (doc: NonNullable<typeof documents>[number]) => {
-                    const norm = doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/");
-                    const docUrl = norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
                     const isSuperseded = doc.status === "superseded";
+                    const cadBadge = cadBadgeLabel(doc.fileUrl, doc.name);
                     return (
                       <div key={doc.id} className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-4 py-3 rounded-xl border ${isSuperseded ? "opacity-60 bg-muted/20" : "bg-card"}`}>
                         <div className="flex-1 min-w-0">
@@ -2603,17 +2608,18 @@ tr:last-child td{border-bottom:none}
                             <FileText className="w-4 h-4 text-primary shrink-0" />
                             <p className={`font-semibold text-sm min-w-0 break-words ${isSuperseded ? "line-through text-muted-foreground" : ""}`}>{doc.name}</p>
                             <span className="font-mono text-[10px] bg-muted px-1.5 py-0.5 rounded">{docRev(doc)}</span>
+                            {cadBadge && <span className="font-mono text-[10px] bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 px-1.5 py-0.5 rounded font-bold">{cadBadge}</span>}
                             {isSuperseded && <span className="text-[10px] font-semibold text-destructive bg-red-100 px-1.5 py-0.5 rounded">Superseded</span>}
                           </div>
                           <p className="text-xs text-muted-foreground mt-0.5 ml-6">{formatDate(doc.createdAt)} · {doc.uploaderName}</p>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
                           <button
-                            onClick={() => window.open(docUrl, "_blank", "noopener,noreferrer")}
+                            onClick={() => openDocument(doc.fileUrl, doc.name)}
                             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-primary/25 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/15 transition-colors"
-                            title="Open document"
+                            title={cadBadge ? "Download document" : "Open document"}
                           >
-                            <ExternalLink className="w-3.5 h-3.5" /> Open
+                            {cadBadge ? <><Download className="w-3.5 h-3.5" /> Download</> : <><ExternalLink className="w-3.5 h-3.5" /> Open</>}
                           </button>
                           <button
                             onClick={() => setSharingDoc({ type: "document", id: doc.id, name: doc.name, version: doc.version, fileUrl: doc.fileUrl })}
@@ -2868,14 +2874,16 @@ tr:last-child td{border-bottom:none}
                                   ? <Badge className="text-[10px] bg-yellow-100 text-yellow-700 border-yellow-200">{pending} pending sign-off</Badge>
                                   : <Badge variant="success" className="text-[10px]">All signed off</Badge>
                                 }
+                                {cadBadgeLabel(doc.fileUrl, doc.name) && <span className="ml-1 font-mono bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 px-1.5 py-0.5 rounded text-[10px] font-bold">{cadBadgeLabel(doc.fileUrl, doc.name)}</span>}
                                 <p className="text-xs text-muted-foreground mt-0.5">{formatDate(doc.createdAt)}</p>
                               </div>
                               <button
                                 type="button"
-                                onClick={() => window.open(doc.fileUrl.replace(/^\/uploads\//, "/api/uploads/"), "_blank", "noopener,noreferrer")}
+                                onClick={() => openDocument(doc.fileUrl, doc.name)}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-xs font-medium text-foreground hover:bg-muted transition-colors"
+                                title={cadBadgeLabel(doc.fileUrl, doc.name) ? "Download document" : "Open document"}
                               >
-                                <ExternalLink className="w-3.5 h-3.5" />Open
+                                {cadBadgeLabel(doc.fileUrl, doc.name) ? <><Download className="w-3.5 h-3.5" />Download</> : <><ExternalLink className="w-3.5 h-3.5" />Open</>}
                               </button>
                               <button
                                 type="button"
@@ -3440,8 +3448,8 @@ tr:last-child td{border-bottom:none}
                     {i === 0 && r.status !== "superseded"
                       ? <Badge variant="success" className="text-[10px] shrink-0">CURRENT</Badge>
                       : <Badge variant="secondary" className="text-[10px] shrink-0">Superseded</Badge>}
-                    <button onClick={() => window.open(r.fileUrl.replace(/^\/uploads\//, "/api/uploads/"), "_blank", "noopener,noreferrer")} className="shrink-0 text-muted-foreground hover:text-foreground" title="Open this revision">
-                      <ExternalLink className="w-4 h-4" />
+                    <button onClick={() => openDocument(r.fileUrl)} className="shrink-0 text-muted-foreground hover:text-foreground" title={cadBadgeLabel(r.fileUrl) ? "Download this revision" : "Open this revision"}>
+                      {cadBadgeLabel(r.fileUrl) ? <Download className="w-4 h-4" /> : <ExternalLink className="w-4 h-4" />}
                     </button>
                   </div>
                 ))}

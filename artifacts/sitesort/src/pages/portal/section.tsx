@@ -9,8 +9,9 @@ import { PortalLayout } from "./layout";
 import { Spinner } from "@/components/ui/spinner";
 import {
   ExternalLink, MapPin, Calendar, CheckCircle2, Circle, Phone,
-  FileText, AlertTriangle, StickyNote,
+  FileText, AlertTriangle, StickyNote, Download,
 } from "lucide-react";
+import { isCadFile, cadBadgeLabel, downloadFile } from "@/lib/documents";
 
 // ---------- shared helpers ----------
 
@@ -20,12 +21,15 @@ function fileHref(url?: string | null): string | undefined {
   return url.startsWith("/uploads/") ? `/api${url}` : url;
 }
 
-// Open a document AND record the specific item view (drawings + method statements
-// have a per-item endpoint that logs itemId server-side). Fire-and-forget.
-function logAndOpen(section: string, id: string, url?: string | null) {
-  void fetch(`/api/portal/${section}/${id}`).catch(() => {});
-  const href = fileHref(url);
-  if (href) window.open(href, "_blank", "noopener");
+// Open/download a document AND record the specific item view (drawings + method
+// statements have a per-item endpoint that logs itemId server-side; the fetch is
+// what registers the view/download in the activity log). CAD files download since
+// the browser can't render them; PDFs/images open in a new tab. Fire-and-forget.
+function viewDoc(doc: { id: string; fileUrl?: string | null; name?: string | null }, section: string, logItem: boolean) {
+  if (logItem) void fetch(`/api/portal/${section}/${doc.id}`).catch(() => {});
+  if (!doc.fileUrl) return;
+  if (isCadFile(doc.fileUrl, doc.name)) downloadFile(doc.fileUrl, doc.name);
+  else { const href = fileHref(doc.fileUrl); if (href) window.open(href, "_blank", "noopener"); }
 }
 
 function fmtDate(d?: string | null): string {
@@ -64,19 +68,21 @@ function Badge({ label, className }: { label: string; className?: string }) {
 // A row for a document (drawing / method statement / safety / general doc).
 function DocRow({ doc, section }: { doc: any; section: string }) {
   const clickable = section === "drawings" || section === "method-statements";
+  const cad = cadBadgeLabel(doc.fileUrl, doc.name);
   return (
     <div className="flex items-center justify-between gap-3 py-2.5 border-b border-border/60 last:border-0">
       <div className="min-w-0">
         <p className="font-medium truncate">{doc.name}</p>
-        <p className="text-xs text-muted-foreground">
-          {doc.revision ? `Rev ${doc.revision}` : `v${doc.version}`} · {fmtDate(doc.createdAt)}
+        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+          <span>{doc.revision ? `Rev ${doc.revision}` : `v${doc.version}`} · {fmtDate(doc.createdAt)}</span>
+          {cad && <span className="font-mono bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 px-1.5 py-0.5 rounded text-[10px] font-bold">{cad}</span>}
         </p>
       </div>
       <button
-        onClick={() => clickable ? logAndOpen(section, doc.id, doc.fileUrl) : window.open(fileHref(doc.fileUrl), "_blank", "noopener")}
+        onClick={() => viewDoc(doc, section, clickable)}
         className="shrink-0 flex items-center gap-1 text-sm text-primary font-medium hover:underline"
       >
-        <ExternalLink className="w-3.5 h-3.5" /> View
+        {cad ? <><Download className="w-3.5 h-3.5" /> Download</> : <><ExternalLink className="w-3.5 h-3.5" /> View</>}
       </button>
     </div>
   );

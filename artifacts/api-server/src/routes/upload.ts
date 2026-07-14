@@ -9,7 +9,7 @@ const router: IRouter = Router();
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB (CAD files can be large)
   fileFilter: (_req, file, cb) => {
     const allowed = [
       "application/pdf",
@@ -19,8 +19,11 @@ const upload = multer({
       "application/vnd.ms-excel",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "application/vnd.dwg", "image/vnd.dwg", "application/acad",
+      "application/dxf", "image/vnd.dxf", "model/vnd.dwf", "drawing/x-dwf",
     ];
-    if (allowed.includes(file.mimetype) || file.originalname.match(/\.(dwg|dxf|rvt|ifc)$/i)) {
+    // Validate by EXTENSION as well as MIME: browsers commonly send CAD files as
+    // application/octet-stream, so the mimetype list alone would reject them.
+    if (allowed.includes(file.mimetype) || file.originalname.match(/\.(dwg|dxf|dwf|rvt|ifc)$/i)) {
       cb(null, true);
     } else {
       cb(new Error(`File type not allowed: ${file.mimetype}`));
