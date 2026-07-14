@@ -17,7 +17,8 @@ const checks: [string, string][] = [
   ["artifacts/api-server/src/routes/people.ts", "in-house-people"],
   ["artifacts/api-server/src/lib/ensure-schema.ts", "people_company_inhouse_email_uq"],
   ["artifacts/api-server/src/routes/portal.ts", "portal-only"],
-  ["artifacts/sitesort/src/pages/projects/portal-people.tsx", "InHousePortalPanel"],
+  ["artifacts/sitesort/src/pages/projects/portal-people.tsx", "PortalInvitePill"],
+  ["artifacts/sitesort/src/pages/projects/detail.tsx", "PortalInvitePill"],
   ["artifacts/sitesort/src/pages/projects/team-activity.tsx", "Portal invites"],
   ["lib/api-spec/openapi.yaml", "createPortalInvite"],
 ];
