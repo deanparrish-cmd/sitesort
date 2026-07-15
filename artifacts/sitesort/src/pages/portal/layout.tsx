@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useGetPortalContext, getGetPortalContextQueryKey } from "@workspace/api-client-react";
 import { Spinner } from "@/components/ui/spinner";
+import { PortalInstallPrompt } from "@/components/portal-install-prompt";
 import {
   LayoutDashboard, TrendingUp, Users, AlertTriangle, LayoutGrid,
   ShieldCheck, PencilRuler, FileText, FileCheck, HardHat, StickyNote, LogOut, Inbox,
@@ -37,7 +38,13 @@ export function PortalLayout({ active, children }: { active: string; children: R
   const { data, isLoading, isError } = useGetPortalContext({ query: { enabled: !!token, retry: false, queryKey: getGetPortalContextQueryKey() } });
 
   useEffect(() => {
-    if (!token) setLocation("/portal/login");
+    if (!token) {
+      // Preserve the deep link they were trying to reach (e.g. a shared document)
+      // so login can return them to it — critical for shared portal links.
+      const here = window.location.pathname + window.location.search;
+      const next = here.startsWith("/portal/") && !here.startsWith("/portal/login") ? `?next=${encodeURIComponent(here)}` : "";
+      setLocation(`/portal/login${next}`);
+    }
   }, [token, setLocation]);
 
   useEffect(() => {
@@ -100,6 +107,8 @@ export function PortalLayout({ active, children }: { active: string; children: R
       <main className="flex-1 w-full min-w-0 overflow-x-clip">
         <div className="max-w-3xl mx-auto px-4 py-5 [&>*]:min-w-0">{children}</div>
       </main>
+
+      <PortalInstallPrompt />
     </div>
   );
 }

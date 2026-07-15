@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { usePortalLogin } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,11 @@ import { Mail, Lock, Eye, EyeOff, HardHat } from "lucide-react";
 // it never touches a dashboard session in the same browser.
 export default function PortalLogin() {
   const [, setLocation] = useLocation();
+  const search = useSearch();
+  // Return the member to the portal deep link they came from (e.g. a shared
+  // document), falling back to the portal home. Only in-portal paths are honoured.
+  const nextParam = new URLSearchParams(search).get("next");
+  const dest = nextParam && nextParam.startsWith("/portal/") ? nextParam : "/portal/overview";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -29,7 +34,7 @@ export default function PortalLogin() {
       }
       if (res.token) {
         localStorage.setItem("sitesort_portal_token", res.token);
-        setLocation("/portal/overview");
+        setLocation(dest);
       }
     } catch (err: any) {
       const code = err?.data?.error;

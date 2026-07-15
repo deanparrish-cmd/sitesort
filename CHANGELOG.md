@@ -12,6 +12,21 @@ _Nothing pending._
 ## 2026-07-15
 
 ### Added
+- **Real email delivery for Team Portal invites** (#66). Invites now send a real,
+  mobile-friendly email via Resend (from `invites@mail.sitesort.co.uk`) the moment
+  they're created — who invited them + company, project, role, a "Set up your portal
+  access" button, 7-day expiry note and a fallback link. Delivery state (sent/failed)
+  shows in the invites list, with a rate-limited **Resend** action (max 1 / 5 min).
+  "Copy link" stays as a backup. Expired links now show a clear "this invite has
+  expired — ask your project manager to resend it" page.
+- **Portal invites work for people who already have a SiteSort account** (#66). An
+  invitee whose email already has an account (including admins in another company) now
+  **joins the portal with their existing login** instead of hitting "this email already
+  has a SiteSort account". The invite grants their account access; they then sign in at
+  `/portal/login` with their **own password** — no session is ever issued without a
+  password check.
+- **Delete a subcontractor** + **orphaned portal-account cleanup** endpoints (tenant-
+  scoped, manager-gated) — the app previously had no way to remove either.
 - **Team Portal sharing — Everyone / Trade(s) / Individual(s)** (#65). A PM shares a
   Document, Photo (Site Issue) or Permit to a portal audience via the single shared
   Share dialog. Trade shares are stored as a rule and resolved at read time, so they

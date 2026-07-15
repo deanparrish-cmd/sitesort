@@ -519,6 +519,7 @@ export async function sendPortalInviteEmail(params: {
   const company = params.companyName?.trim() || "their company";
   const project = params.projectName?.trim() || "a project";
   const roleLabel = ROLE_LABEL[params.role] ?? "Site worker";
+  const portalUrl = `${APP_URL}/portal/login`;
   return send({
     from: INVITE_FROM,
     to: params.to,
@@ -533,6 +534,7 @@ export async function sendPortalInviteEmail(params: {
       `)}
       ${btn(params.inviteUrl, "Set up your portal access")}
       ${muted(`This invite link expires in 7 days. Button not working? Copy and paste this link:<br><a href="${params.inviteUrl}" style="color:#ea580c;word-break:break-all;">${params.inviteUrl}</a>`)}
+      ${muted(`Once you're set up, bookmark your portal to sign back in any time:<br><a href="${portalUrl}" style="color:#ea580c;word-break:break-all;">${portalUrl}</a>`)}
     `),
     text: textLayout(`You've been invited to a project portal
 
@@ -546,6 +548,9 @@ Your role: ${roleLabel}
 Set up your portal access:
 ${params.inviteUrl}
 
-This invite link expires in 7 days.`),
+This invite link expires in 7 days.
+
+Once you're set up, bookmark your portal to sign back in any time:
+${portalUrl}`),
   });
 }

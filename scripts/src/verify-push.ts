@@ -10,27 +10,19 @@ async function getFile(p: string): Promise<string> {
 }
 
 // [path, signature string that MUST be present for my change to have landed]
-// Team Portal sharing (all/trade/individual) + Site Board pin/QR fix — 2026-07-15.
+// Real invite emails (Resend) + existing-account portal join — 2026-07-15.
 const checks: [string, string][] = [
-  ["lib/db/src/schema/portal-shares.ts", "portalSharesTable"],
-  ["lib/db/src/schema/index.ts", "portal-shares"],
-  ["artifacts/api-server/src/lib/ensure-schema.ts", "CREATE TABLE IF NOT EXISTS portal_shares"],
-  ["artifacts/api-server/src/routes/portal-shares.ts", "portal-audience"],
-  ["artifacts/api-server/src/routes/portal-shares.ts", "acceptedMembers"],
-  ["artifacts/api-server/src/routes/index.ts", "portalSharesRouter"],
-  ["artifacts/api-server/src/routes/portal.ts", "async function visibleIds"],
-  ["artifacts/api-server/src/routes/portal.ts", "/portal/shared"],
-  ["artifacts/api-server/src/routes/team.ts", "Portal member row (person link)"],
-  ["artifacts/api-server/src/lib/activity.ts", "Shared with me"],
-  ["lib/api-spec/openapi.yaml", "getPortalShared"],
-  ["artifacts/sitesort/src/components/share-modal.tsx", "PORTAL_ENTITY_TYPES"],
-  ["artifacts/sitesort/src/components/share-modal.tsx", "submitPortalShare"],
-  ["artifacts/sitesort/src/pages/portal/section.tsx", "function SharedView"],
-  ["artifacts/sitesort/src/pages/portal/layout.tsx", "Shared with me"],
-  ["artifacts/sitesort/src/pages/projects/detail.tsx", "Pinned documents"],
-  ["artifacts/api-server/src/routes/subcontractors.ts", "Only an admin or project manager can delete a subcontractor"],
-  ["artifacts/api-server/src/routes/people.ts", "orphanPortalUsers"],
-  ["artifacts/sitesort/src/pages/subcontractors/index.tsx", "Delete subcontractor"],
+  ["artifacts/api-server/src/lib/email.ts", "sendPortalInviteEmail"],
+  ["artifacts/api-server/src/lib/invite-email.ts", "delivered: boolean"],
+  ["artifacts/api-server/src/routes/people.ts", "portal-invites/:inviteId/resend"],
+  ["artifacts/api-server/src/routes/people.ts", "RESEND_COOLDOWN_MS"],
+  ["artifacts/api-server/src/routes/portal.ts", "grantOnly"],
+  ["artifacts/api-server/src/routes/portal.ts", "existingAccount"],
+  ["lib/db/src/schema/project_invites.ts", "emailStatus"],
+  ["artifacts/sitesort/src/pages/projects/portal-people.tsx", "InviteEmailStatus"],
+  ["artifacts/sitesort/src/pages/portal/accept.tsx", "Join project portal"],
+  ["lib/api-spec/openapi.yaml", "resendPortalInvite"],
+  ["CHANGELOG.md", "Real email delivery for Team Portal invites"],
 ];
 
 let ok = 0, bad: string[] = [];
