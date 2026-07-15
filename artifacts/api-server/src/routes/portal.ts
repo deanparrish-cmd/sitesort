@@ -228,22 +228,24 @@ router.get("/portal/invite/:token", async (req, res) => {
     if (!inv) { res.status(410).json({ error: "invalid_invite", message: "This invite link is not valid." }); return; }
     if (inv.status !== "pending") { res.status(410).json({ error: "invite_used", message: "This invite has already been used or revoked." }); return; }
     if (inv.expiresAt.getTime() < Date.now()) { res.status(410).json({ error: "invite_expired", message: "This invite link has expired." }); return; }
-    res.json({ valid: true, name: inv.name, email: inv.email, projectName: inv.projectName, expiresAt: inv.expiresAt.toISOString() });
+    // Does this email already have a full (dashboard) SiteSort account? If so, the
+    // accept flow attaches portal access to it instead of asking for a new password.
+    const acct = (await db.select({ portalOnly: usersTable.portalOnly }).from(usersTable)
+      .where(eq(usersTable.email, inv.email.trim().toLowerCase())).limit(1))[0];
+    const existingAccount = !!acct && !acct.portalOnly;
+    res.json({ valid: true, name: inv.name, email: inv.email, projectName: inv.projectName, expiresAt: inv.expiresAt.toISOString(), existingAccount });
   } catch (err) {
     req.log.error({ err }, "Get portal invite error");
     res.status(500).json({ error: "server_error", message: "Failed to load invite" });
   }
 });
 
-// POST /api/portal/invite/:token/accept — set a password and enter the portal.
+// POST /api/portal/invite/:token/accept — enter the portal. New/portal-only
+// invitees set a password here. An invitee whose email ALREADY has a full SiteSort
+// account (this or another company) joins with their EXISTING login — no password
+// is required or changed; the valid single-use invite token is the authorisation.
 router.post("/portal/invite/:token/accept", async (req, res) => {
   try {
-    const parsed = AcceptPortalInviteBody.safeParse(req.body);
-    if (!parsed.success || String(parsed.data.password).length < 8) {
-      res.status(400).json({ error: "validation_error", message: "A password of at least 8 characters is required." });
-      return;
-    }
-
     const invRows = await db.select().from(projectInvitesTable)
       .where(eq(projectInvitesTable.tokenHash, hashToken(req.params.token))).limit(1);
     const inv = invRows[0];
@@ -252,50 +254,76 @@ router.post("/portal/invite/:token/accept", async (req, res) => {
     if (inv.expiresAt.getTime() < Date.now()) { res.status(410).json({ error: "invite_expired", message: "This invite link has expired." }); return; }
 
     const email = inv.email.trim().toLowerCase();
-    const passwordHash = await bcrypt.hash(String(parsed.data.password), 10);
+    const existing = (await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1))[0];
 
-    const existing = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
+    // A password is required ONLY when we're creating or (re)securing a portal-only
+    // account. An existing dashboard account keeps its own password untouched.
+    const needsPassword = !existing || existing.portalOnly;
+    const parsed = AcceptPortalInviteBody.safeParse(req.body);
+    const password = parsed.success ? String(parsed.data.password ?? "") : "";
+    if (needsPassword && password.length < 8) {
+      res.status(400).json({ error: "validation_error", message: "A password of at least 8 characters is required." });
+      return;
+    }
+
     let userId: string;
     let userName: string;
     let userCompanyId: string;
-    if (existing.length === 0) {
+    // For an existing FULL account we only GRANT access here — we never issue a
+    // session without a password check (that would let anyone holding the link in
+    // as that account). They authenticate at /portal/login with their own password.
+    let grantOnly = false;
+    if (!existing) {
       userId = generateId();
       userName = inv.name;
       userCompanyId = inv.companyId;
       await db.insert(usersTable).values({
-        id: userId, companyId: inv.companyId, email, passwordHash, name: inv.name,
+        id: userId, companyId: inv.companyId, email, passwordHash: await bcrypt.hash(password, 10), name: inv.name,
         role: "site_worker", emailVerified: true, portalOnly: true,
       });
+    } else if (existing.portalOnly) {
+      userId = existing.id; userName = existing.name; userCompanyId = existing.companyId;
+      await db.update(usersTable).set({ passwordHash: await bcrypt.hash(password, 10) }).where(eq(usersTable.id, existing.id));
     } else {
-      const u = existing[0];
-      if (!u.portalOnly) {
-        // A full dashboard account already owns this email — don't silently
-        // convert it. Deferred: merging portal access into dashboard accounts.
-        res.status(409).json({ error: "account_exists", message: "This email already has a SiteSort account. Please log in with it instead." });
-        return;
-      }
-      userId = u.id; userName = u.name; userCompanyId = u.companyId;
-      await db.update(usersTable).set({ passwordHash }).where(eq(usersTable.id, u.id));
+      // Existing full account — attach portal access, DO NOT touch their password
+      // and DO NOT auto-authenticate. They sign in with their own credentials.
+      userId = existing.id; userName = existing.name; userCompanyId = existing.companyId;
+      grantOnly = true;
     }
 
-    // Link the individual person to their new/looked-up account so per-person
-    // portal status resolves after acceptance.
+    // Link the individual person to their account so per-person portal status resolves.
     if (inv.personId) {
       await db.update(peopleTable).set({ userId }).where(eq(peopleTable.id, inv.personId));
     }
 
-    // Membership is a join row (user ↔ project), carrying the person link so the
-    // Team tab shows "Portal member" on the right row. Idempotent via the partial
-    // unique index, so re-accepting is harmless.
-    await db.insert(projectMembersTable)
-      .values({ id: generateId(), projectId: inv.projectId, userId, personId: inv.personId ?? null, role: inv.role })
-      .onConflictDoNothing();
+    // Membership (user ↔ project) carrying the person link. If a membership row
+    // already exists for this user+project, set person_id on it; else insert one.
+    const existingMember = (await db.select({ id: projectMembersTable.id }).from(projectMembersTable)
+      .where(and(eq(projectMembersTable.projectId, inv.projectId), eq(projectMembersTable.userId, userId))).limit(1))[0];
+    if (existingMember) {
+      await db.update(projectMembersTable).set({ personId: inv.personId ?? null }).where(eq(projectMembersTable.id, existingMember.id));
+    } else {
+      await db.insert(projectMembersTable)
+        .values({ id: generateId(), projectId: inv.projectId, userId, personId: inv.personId ?? null, role: inv.role })
+        .onConflictDoNothing();
+    }
 
     await db.update(projectInvitesTable)
       .set({ status: "accepted", acceptedUserId: userId, acceptedAt: new Date() })
       .where(eq(projectInvitesTable.id, inv.id));
 
     const proj = await db.select({ name: projectsTable.name }).from(projectsTable).where(eq(projectsTable.id, inv.projectId)).limit(1);
+    // Existing account: access granted, but they must sign in with their own
+    // password — no token issued here.
+    if (grantOnly) {
+      res.json({
+        requiresProjectChoice: false,
+        requiresLogin: true,
+        project: { id: inv.projectId, name: proj[0]?.name ?? "" },
+        member: { name: userName, role: inv.role, email },
+      });
+      return;
+    }
     const token = generatePortalToken({ id: userId, email, companyId: userCompanyId, projectId: inv.projectId, role: inv.role });
     res.json({
       requiresProjectChoice: false,

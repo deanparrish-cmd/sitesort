@@ -685,6 +685,8 @@ export interface PortalLoginRequest {
 
 export interface PortalLoginResponse {
   requiresProjectChoice: boolean;
+  /** Set on invite-accept when the email already has a SiteSort account — access was granted; the person must now sign in at /portal/login with their existing password (no token is issued here). */
+  requiresLogin?: boolean;
   token?: string;
   project?: PortalProjectRef;
   member?: PortalMemberRef;
@@ -697,10 +699,15 @@ export interface PortalInviteInfo {
   email: string;
   projectName: string;
   expiresAt?: string;
+  /** True when the invited email already has a full SiteSort account — accept joins the portal with that login (no password needed). */
+  existingAccount?: boolean;
 }
 
+/**
+ * Password is only required for new/portal-only accounts; an existing SiteSort account joins with its own login.
+ */
 export interface AcceptInviteRequest {
-  password: string;
+  password?: string;
 }
 
 export interface PortalProject {

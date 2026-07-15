@@ -12,4 +12,6 @@ export interface PortalInviteInfo {
   email: string;
   projectName: string;
   expiresAt?: string;
+  /** True when the invited email already has a full SiteSort account — accept joins the portal with that login (no password needed). */
+  existingAccount?: boolean;
 }

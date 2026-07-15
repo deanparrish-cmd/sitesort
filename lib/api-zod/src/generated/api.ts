@@ -932,6 +932,12 @@ export const PortalLoginBody = zod.object({
 
 export const PortalLoginResponse = zod.object({
   requiresProjectChoice: zod.boolean(),
+  requiresLogin: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Set on invite-accept when the email already has a SiteSort account — access was granted; the person must now sign in at \/portal\/login with their existing password (no token is issued here).",
+    ),
   token: zod.string().optional(),
   project: zod
     .object({
@@ -969,6 +975,12 @@ export const GetPortalInviteResponse = zod.object({
   email: zod.string(),
   projectName: zod.string(),
   expiresAt: zod.string().optional(),
+  existingAccount: zod
+    .boolean()
+    .optional()
+    .describe(
+      "True when the invited email already has a full SiteSort account — accept joins the portal with that login (no password needed).",
+    ),
 });
 
 /**
@@ -978,12 +990,22 @@ export const AcceptPortalInviteParams = zod.object({
   token: zod.coerce.string(),
 });
 
-export const AcceptPortalInviteBody = zod.object({
-  password: zod.string(),
-});
+export const AcceptPortalInviteBody = zod
+  .object({
+    password: zod.string().optional(),
+  })
+  .describe(
+    "Password is only required for new\/portal-only accounts; an existing SiteSort account joins with its own login.",
+  );
 
 export const AcceptPortalInviteResponse = zod.object({
   requiresProjectChoice: zod.boolean(),
+  requiresLogin: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Set on invite-accept when the email already has a SiteSort account — access was granted; the person must now sign in at \/portal\/login with their existing password (no token is issued here).",
+    ),
   token: zod.string().optional(),
   project: zod
     .object({

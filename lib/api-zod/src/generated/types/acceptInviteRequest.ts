@@ -6,6 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Password is only required for new/portal-only accounts; an existing SiteSort account joins with its own login.
+ */
 export interface AcceptInviteRequest {
-  password: string;
+  password?: string;
 }

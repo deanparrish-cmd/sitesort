@@ -10,6 +10,8 @@ import type { PortalProjectRef } from "./portalProjectRef";
 
 export interface PortalLoginResponse {
   requiresProjectChoice: boolean;
+  /** Set on invite-accept when the email already has a SiteSort account — access was granted; the person must now sign in at /portal/login with their existing password (no token is issued here). */
+  requiresLogin?: boolean;
   token?: string;
   project?: PortalProjectRef;
   member?: PortalMemberRef;

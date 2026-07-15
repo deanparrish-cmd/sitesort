@@ -17,9 +17,19 @@ export default function PortalAccept() {
   const [confirm, setConfirm] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [granted, setGranted] = useState(false);
 
   const invite = useGetPortalInvite(token, { query: { enabled: !!token, retry: false, queryKey: getGetPortalInviteQueryKey(token) } });
   const accept = useAcceptPortalInvite();
+
+  const existingAccount = !!invite.data?.existingAccount;
+
+  const enterPortal = (res: { token?: string }) => {
+    if (res.token) {
+      localStorage.setItem("sitesort_portal_token", res.token);
+      setLocation("/portal/overview");
+    }
+  };
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,13 +37,23 @@ export default function PortalAccept() {
     if (password.length < 8) { setError("Please choose a password of at least 8 characters."); return; }
     if (password !== confirm) { setError("Passwords do not match."); return; }
     try {
-      const res = await accept.mutateAsync({ token, data: { password } });
-      if (res.token) {
-        localStorage.setItem("sitesort_portal_token", res.token);
-        setLocation("/portal/overview");
-      }
+      enterPortal(await accept.mutateAsync({ token, data: { password } }));
     } catch (err: any) {
       setError(err?.data?.message || "Could not complete sign-up. The invite may have expired.");
+    }
+  };
+
+  // Existing SiteSort account: grant access, then they sign in with their own
+  // password (no token is issued here — we never auto-authenticate an existing
+  // account from a link).
+  const joinWithExisting = async () => {
+    setError(null);
+    try {
+      const res = await accept.mutateAsync({ token, data: {} });
+      if (res.token) enterPortal(res); // portal-only edge case
+      else setGranted(true);
+    } catch (err: any) {
+      setError(err?.data?.message || "Could not join the portal. The invite may have expired.");
     }
   };
 
@@ -89,30 +109,59 @@ export default function PortalAccept() {
               </div>
             )}
 
-            <form onSubmit={onSubmit} className="space-y-4">
-              <Input
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                type={showPassword ? "text" : "password"}
-                placeholder="Choose a password (min 8 chars)"
-                icon={<Lock className="w-5 h-5" />}
-                rightAction={
-                  <button type="button" onClick={() => setShowPassword(p => !p)} className="p-1 text-muted-foreground hover:text-foreground" tabIndex={-1}>
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                }
-              />
-              <Input
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                type={showPassword ? "text" : "password"}
-                placeholder="Confirm password"
-                icon={<Lock className="w-5 h-5" />}
-              />
-              <Button type="submit" className="w-full" size="lg" isLoading={accept.isPending}>
-                Set password & continue
-              </Button>
-            </form>
+            {existingAccount ? (
+              granted ? (
+                <div className="space-y-4 text-center">
+                  <div className="flex flex-col items-center gap-2">
+                    <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+                    <p className="text-sm font-medium">Portal access granted</p>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    You can now open <span className="font-medium text-foreground">{invite.data.projectName}</span> in the portal. Sign in with your existing SiteSort password.
+                  </p>
+                  <Button type="button" className="w-full" size="lg" onClick={() => setLocation("/portal/login")}>
+                    Go to portal login
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    You already have a SiteSort account for <span className="font-medium text-foreground">{invite.data.email}</span>. Join this project's portal with your existing login — no new password needed.
+                  </p>
+                  <Button type="button" className="w-full" size="lg" isLoading={accept.isPending} onClick={joinWithExisting}>
+                    Join project portal
+                  </Button>
+                  <p className="text-xs text-muted-foreground text-center">
+                    You'll then sign in at the portal with your usual SiteSort password.
+                  </p>
+                </div>
+              )
+            ) : (
+              <form onSubmit={onSubmit} className="space-y-4">
+                <Input
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Choose a password (min 8 chars)"
+                  icon={<Lock className="w-5 h-5" />}
+                  rightAction={
+                    <button type="button" onClick={() => setShowPassword(p => !p)} className="p-1 text-muted-foreground hover:text-foreground" tabIndex={-1}>
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  }
+                />
+                <Input
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Confirm password"
+                  icon={<Lock className="w-5 h-5" />}
+                />
+                <Button type="submit" className="w-full" size="lg" isLoading={accept.isPending}>
+                  Set password & continue
+                </Button>
+              </form>
+            )}
           </>
         )}
       </div>

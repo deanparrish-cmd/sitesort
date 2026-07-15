@@ -2376,6 +2376,9 @@ components:
       properties:
         requiresProjectChoice:
           type: boolean
+        requiresLogin:
+          type: boolean
+          description: Set on invite-accept when the email already has a SiteSort account — access was granted; the person must now sign in at /portal/login with their existing password (no token is issued here).
         token:
           type: string
         project:
@@ -2401,14 +2404,17 @@ components:
           type: string
         expiresAt:
           type: string
+        existingAccount:
+          type: boolean
+          description: True when the invited email already has a full SiteSort account — accept joins the portal with that login (no password needed).
       required: [valid, name, email, projectName]
 
     AcceptInviteRequest:
       type: object
+      description: Password is only required for new/portal-only accounts; an existing SiteSort account joins with its own login.
       properties:
         password:
           type: string
-      required: [password]
 
     PortalProject:
       type: object
