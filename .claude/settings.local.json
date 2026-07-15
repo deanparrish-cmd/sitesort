@@ -23,7 +23,13 @@
       "Bash(node -e \"require\\('child_process'\\).execSync\\('npx --yes tsx scripts/src/github-push.ts', {stdio:'inherit'}\\)\")",
       "Bash(/home/runner/workspace/scripts/node_modules/.bin/tsx *)",
       "Bash(node --check artifacts/sitesort/public/sw.js)",
-      "Bash(APP_URL=http://localhost:8092 node portal-360.mjs)"
+      "Bash(APP_URL=http://localhost:8092 node portal-360.mjs)",
+      "Bash(curl -s -m8 https://www.sitesort.co.uk/api/health)",
+      "Bash(curl -s -m8 https://www.sitesort.co.uk/sw.js)",
+      "Bash(curl -s -m8 -o /dev/null -w \"%{http_code}\" https://www.sitesort.co.uk/api/portal/push/public-key)",
+      "Bash(curl -s -m8 -o /dev/null -w \"%{http_code}\" https://www.sitesort.co.uk/api/portal/unseen)",
+      "Bash(curl -s -m8 -o /dev/null -w \"%{http_code}\" -X POST https://www.sitesort.co.uk/api/portal/logout)",
+      "Bash(APP_URL=http://localhost:8092 node portal-widths.mjs2)"
     ]
   },
   "hooks": {
