@@ -17,4 +17,6 @@ export interface PortalIssue {
   takenAt?: string;
   latitude?: string;
   longitude?: string;
+  unseen?: boolean;
+  sharedAt?: string;
 }

@@ -28,6 +28,41 @@ self.addEventListener("message", (event) => {
   if (event.data === "SKIP_WAITING") self.skipWaiting();
 });
 
+// ---- Web Push (Team Portal notifications) ----
+// A push payload is JSON: { title, body, url, tag }. `url` is a portal deep-link
+// (e.g. /portal/drawings?doc=123); tapping the notification opens/focuses it. If
+// the member isn't logged in, PortalLayout bounces to /portal/login?next=<url>
+// and returns them after sign-in — so this just needs to open the deep link.
+self.addEventListener("push", (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (e) { data = {}; }
+  const title = data.title || "SiteSort";
+  const options = {
+    body: data.body || "",
+    icon: "/icon-192.png",
+    badge: "/icon-192.png",
+    tag: data.tag || undefined,
+    data: { url: data.url || "/portal/overview" },
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || "/portal/overview";
+  event.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    // Prefer focusing an already-open portal window and navigating it there.
+    for (const c of all) {
+      if (c.url.indexOf("/portal") !== -1 && "focus" in c) {
+        try { await c.navigate(target); } catch (e) { /* cross-origin nav guard */ }
+        return c.focus();
+      }
+    }
+    if (self.clients.openWindow) return self.clients.openWindow(target);
+  })());
+});
+
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;

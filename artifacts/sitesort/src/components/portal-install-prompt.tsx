@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Download, Share, SquarePlus, X } from "lucide-react";
+import { notifyPromptEligible } from "@/lib/portal-push";
 
 // Dismissible "install this app" card for the member-facing Team Portal. Shows at
 // most once per week if dismissed, never when already installed. Android/Chrome
@@ -35,6 +36,10 @@ export function PortalInstallPrompt() {
 
   useEffect(() => {
     if (isStandalone() || recentlyDismissed()) return;
+    // Defer to the notifications card when it's eligible — never stack two bottom
+    // cards. Once notifications are handled (enabled/denied/skipped), the plain
+    // install nudge can appear again.
+    if (notifyPromptEligible()) return;
     if (isIOS()) { setIos(true); setVisible(true); return; }
     const onPrompt = (e: Event) => { e.preventDefault(); setDeferred(e as BeforeInstallPromptEvent); setVisible(true); };
     const onInstalled = () => { localStorage.setItem(DISMISS_KEY, String(Date.now())); setVisible(false); };

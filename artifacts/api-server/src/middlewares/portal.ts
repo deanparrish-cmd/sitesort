@@ -122,15 +122,21 @@ export function autoLogPortalActivity(req: Request, res: Response, next: NextFun
 
   if (section && isPortalSection(section)) {
     const docSections = new Set(["drawings", "method-statements", "hs", "safety", "general"]);
-    void logActivity({
-      userId: u.id,
-      projectId: req.portalProjectId,
-      companyId: u.companyId,
-      section,
-      action: "view",
-      itemType: itemId ? (docSections.has(section) ? "document" : section) : null,
-      itemId: itemId ?? null,
-      req,
+    // Log the view AFTER the response is sent, so this request's own handler sees
+    // the PREVIOUS last-viewed time — that's what "unseen since last viewed" and
+    // the "Shared with me" highlight compare against. This visit updates the mark
+    // for NEXT time.
+    res.on("finish", () => {
+      void logActivity({
+        userId: u.id,
+        projectId: req.portalProjectId!,
+        companyId: u.companyId,
+        section,
+        action: "view",
+        itemType: itemId ? (docSections.has(section) ? "document" : section) : null,
+        itemId: itemId ?? null,
+        req,
+      });
     });
   }
   next();

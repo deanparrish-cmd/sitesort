@@ -232,7 +232,39 @@ export async function ensureSchema(): Promise<void> {
       )
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS portal_sessions_user_project_idx ON portal_sessions (user_id, project_id)`);
-    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols + portal_shares + portal_sessions ready");
+
+    // Web Push — per-member per-device subscriptions + a debounce/batch queue.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id text PRIMARY KEY,
+        user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        project_id text NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        endpoint text NOT NULL,
+        p256dh text NOT NULL,
+        auth text NOT NULL,
+        user_agent text,
+        created_at timestamp NOT NULL DEFAULT now(),
+        last_seen_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS push_subscriptions_endpoint_uq ON push_subscriptions (endpoint)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS push_subscriptions_user_idx ON push_subscriptions (user_id, project_id)`);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS pending_pushes (
+        id text PRIMARY KEY,
+        user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        project_id text NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        kind text NOT NULL,
+        item_type text,
+        item_id text,
+        title text NOT NULL,
+        project_name text NOT NULL,
+        deep_link text NOT NULL,
+        created_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS pending_pushes_user_idx ON pending_pushes (user_id, created_at)`);
+    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols + portal_shares + portal_sessions + push_subscriptions + pending_pushes ready");
   } catch (err) {
     // Don't crash the server — membership lookups fall back to the home company.
     logger.error({ err }, "ensureSchema failed (continuing with home-company fallback)");

@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { useGetPortalContext, getGetPortalContextQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useGetPortalContext, getGetPortalContextQueryKey, useGetPortalUnseen, getGetPortalUnseenQueryKey } from "@workspace/api-client-react";
 import { Spinner } from "@/components/ui/spinner";
 import { PortalInstallPrompt } from "@/components/portal-install-prompt";
+import { PortalNotifyPrompt } from "@/components/portal-notify-prompt";
+import { markPortalSession, disablePush } from "@/lib/portal-push";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, TrendingUp, Users, AlertTriangle, LayoutGrid,
   ShieldCheck, PencilRuler, FileText, FileCheck, HardHat, StickyNote, LogOut, Inbox,
-  Menu, X,
+  Settings, Menu, X,
 } from "lucide-react";
 
 // The fixed portal nav — order + labels + icons. `key` matches the URL segment
@@ -25,14 +28,15 @@ export const SECTION_NAV: { key: string; label: string; Icon: typeof LayoutDashb
   { key: "permits", label: "Permits", Icon: FileCheck },
   { key: "safety", label: "Safety", Icon: HardHat },
   { key: "general", label: "General", Icon: StickyNote },
+  { key: "settings", label: "Settings", Icon: Settings },
 ];
 
 export function portalLogout(setLocation: (to: string) => void) {
-  // End the session SERVER-SIDE first (revoked, not just cleared on the device),
-  // then drop the local token and return to login. Best-effort + fire-and-forget:
-  // the interceptor attaches the portal token to /api/portal/*, and a token that's
-  // already dead simply 401s here — either way we still clear locally and redirect.
+  // Clean up this device's push subscription (a logged-out device must stop
+  // receiving), end the session SERVER-SIDE (revoked, not just cleared locally),
+  // then drop the local token and return to login. All best-effort.
   const token = typeof window !== "undefined" ? localStorage.getItem("sitesort_portal_token") : null;
+  void disablePush();
   if (token) {
     void fetch("/api/portal/logout", { method: "POST", headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
   }
@@ -47,8 +51,26 @@ export function portalLogout(setLocation: (to: string) => void) {
 export function PortalLayout({ active, children }: { active: string; children: React.ReactNode }) {
   const [, setLocation] = useLocation();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const queryClient = useQueryClient();
   const token = typeof window !== "undefined" ? localStorage.getItem("sitesort_portal_token") : null;
   const { data, isLoading, isError } = useGetPortalContext({ query: { enabled: !!token, retry: false, queryKey: getGetPortalContextQueryKey() } });
+  // Unseen counts per section for the nav badges (polled + refetched on focus by
+  // the portal query client). Silent on error → no badges rather than a broken nav.
+  const { data: unseen } = useGetPortalUnseen({ query: { enabled: !!token, retry: false, refetchInterval: 60_000, queryKey: getGetPortalUnseenQueryKey() } });
+  const counts = (unseen?.counts ?? {}) as Record<string, number>;
+
+  // Count this app open once (drives when the "enable notifications" card may appear).
+  useEffect(() => { markPortalSession(); }, []);
+
+  // Focus-refetch fallback for standalone PWAs: React Query's own window-focus
+  // handling can be unreliable when installed to the home screen, so when the
+  // app returns to the foreground we invalidate every portal query — guaranteeing
+  // fresh data after the app has been backgrounded (even for hours).
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === "visible") void queryClient.invalidateQueries(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [queryClient]);
 
   useEffect(() => {
     if (!token) {
@@ -115,6 +137,7 @@ export function PortalLayout({ active, children }: { active: string; children: R
           <div className="space-y-1">
             {SECTION_NAV.map(({ key, label, Icon }) => {
               const isActive = key === active;
+              const badge = counts[key] ?? 0;
               return (
                 <Link
                   key={key}
@@ -129,6 +152,17 @@ export function PortalLayout({ active, children }: { active: string; children: R
                 >
                   <Icon className={cn("w-5 h-5", isActive ? "text-primary-foreground" : "text-muted-foreground")} />
                   <span className="flex-1">{label}</span>
+                  {badge > 0 && (
+                    <span
+                      aria-label={`${badge} unseen`}
+                      className={cn(
+                        "shrink-0 min-w-[1.25rem] h-5 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center",
+                        isActive ? "bg-primary-foreground/20 text-primary-foreground" : "bg-primary text-primary-foreground",
+                      )}
+                    >
+                      {badge > 99 ? "99+" : badge}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -165,6 +199,7 @@ export function PortalLayout({ active, children }: { active: string; children: R
         <div className="fixed inset-0 bg-primary/20 backdrop-blur-sm z-30 md:hidden" onClick={() => setIsMobileOpen(false)} />
       )}
 
+      <PortalNotifyPrompt />
       <PortalInstallPrompt />
     </div>
   );

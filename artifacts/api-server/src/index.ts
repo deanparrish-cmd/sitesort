@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { schedulePermitReminders } from "./lib/permit-reminders";
 import { scheduleDailyReports } from "./lib/daily-reports";
+import { schedulePushFlush } from "./lib/push-triggers";
 import { ensureSchema } from "./lib/ensure-schema";
 import { checkDbConnection } from "@workspace/db";
 
@@ -63,6 +64,7 @@ async function start(): Promise<void> {
     logger.info({ port, host: "0.0.0.0" }, "Server listening");
     schedulePermitReminders();
     scheduleDailyReports();
+    schedulePushFlush();
   });
   server.on("error", (err) => {
     logger.error({ err }, "HTTP server error (failed to bind / listen)");

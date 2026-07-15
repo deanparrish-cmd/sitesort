@@ -1137,6 +1137,8 @@ export const GetPortalSiteIssuesResponseItem = zod.object({
   takenAt: zod.string().optional(),
   latitude: zod.string().optional(),
   longitude: zod.string().optional(),
+  unseen: zod.boolean().optional(),
+  sharedAt: zod.string().optional(),
 });
 export const GetPortalSiteIssuesResponse = zod.array(
   GetPortalSiteIssuesResponseItem,
@@ -1232,6 +1234,18 @@ export const GetPortalHsResponse = zod.object({
       fileSize: zod.number().optional(),
       status: zod.string(),
       createdAt: zod.string().optional(),
+      unseen: zod
+        .boolean()
+        .optional()
+        .describe(
+          'Set in \"Shared with me\" when shared to the member after they last viewed that section.',
+        ),
+      sharedAt: zod
+        .string()
+        .optional()
+        .describe(
+          "When this item was shared to the member (for newest-first ordering).",
+        ),
     }),
   ),
   safety: zod.array(
@@ -1245,6 +1259,18 @@ export const GetPortalHsResponse = zod.object({
       fileSize: zod.number().optional(),
       status: zod.string(),
       createdAt: zod.string().optional(),
+      unseen: zod
+        .boolean()
+        .optional()
+        .describe(
+          'Set in \"Shared with me\" when shared to the member after they last viewed that section.',
+        ),
+      sharedAt: zod
+        .string()
+        .optional()
+        .describe(
+          "When this item was shared to the member (for newest-first ordering).",
+        ),
     }),
   ),
   permits: zod.array(
@@ -1256,6 +1282,8 @@ export const GetPortalHsResponse = zod.object({
       expiryDate: zod.string(),
       status: zod.string(),
       documentUrl: zod.string().optional(),
+      unseen: zod.boolean().optional(),
+      sharedAt: zod.string().optional(),
     }),
   ),
 });
@@ -1275,6 +1303,18 @@ export const GetPortalSharedResponse = zod.object({
       fileSize: zod.number().optional(),
       status: zod.string(),
       createdAt: zod.string().optional(),
+      unseen: zod
+        .boolean()
+        .optional()
+        .describe(
+          'Set in \"Shared with me\" when shared to the member after they last viewed that section.',
+        ),
+      sharedAt: zod
+        .string()
+        .optional()
+        .describe(
+          "When this item was shared to the member (for newest-first ordering).",
+        ),
     }),
   ),
   photos: zod.array(
@@ -1289,6 +1329,8 @@ export const GetPortalSharedResponse = zod.object({
       takenAt: zod.string().optional(),
       latitude: zod.string().optional(),
       longitude: zod.string().optional(),
+      unseen: zod.boolean().optional(),
+      sharedAt: zod.string().optional(),
     }),
   ),
   permits: zod.array(
@@ -1300,6 +1342,8 @@ export const GetPortalSharedResponse = zod.object({
       expiryDate: zod.string(),
       status: zod.string(),
       documentUrl: zod.string().optional(),
+      unseen: zod.boolean().optional(),
+      sharedAt: zod.string().optional(),
     }),
   ),
 });
@@ -1317,6 +1361,18 @@ export const GetPortalDrawingsResponseItem = zod.object({
   fileSize: zod.number().optional(),
   status: zod.string(),
   createdAt: zod.string().optional(),
+  unseen: zod
+    .boolean()
+    .optional()
+    .describe(
+      'Set in \"Shared with me\" when shared to the member after they last viewed that section.',
+    ),
+  sharedAt: zod
+    .string()
+    .optional()
+    .describe(
+      "When this item was shared to the member (for newest-first ordering).",
+    ),
 });
 export const GetPortalDrawingsResponse = zod.array(
   GetPortalDrawingsResponseItem,
@@ -1339,6 +1395,18 @@ export const GetPortalDrawingResponse = zod.object({
   fileSize: zod.number().optional(),
   status: zod.string(),
   createdAt: zod.string().optional(),
+  unseen: zod
+    .boolean()
+    .optional()
+    .describe(
+      'Set in \"Shared with me\" when shared to the member after they last viewed that section.',
+    ),
+  sharedAt: zod
+    .string()
+    .optional()
+    .describe(
+      "When this item was shared to the member (for newest-first ordering).",
+    ),
 });
 
 /**
@@ -1354,6 +1422,18 @@ export const GetPortalMethodStatementsResponseItem = zod.object({
   fileSize: zod.number().optional(),
   status: zod.string(),
   createdAt: zod.string().optional(),
+  unseen: zod
+    .boolean()
+    .optional()
+    .describe(
+      'Set in \"Shared with me\" when shared to the member after they last viewed that section.',
+    ),
+  sharedAt: zod
+    .string()
+    .optional()
+    .describe(
+      "When this item was shared to the member (for newest-first ordering).",
+    ),
 });
 export const GetPortalMethodStatementsResponse = zod.array(
   GetPortalMethodStatementsResponseItem,
@@ -1376,6 +1456,18 @@ export const GetPortalMethodStatementResponse = zod.object({
   fileSize: zod.number().optional(),
   status: zod.string(),
   createdAt: zod.string().optional(),
+  unseen: zod
+    .boolean()
+    .optional()
+    .describe(
+      'Set in \"Shared with me\" when shared to the member after they last viewed that section.',
+    ),
+  sharedAt: zod
+    .string()
+    .optional()
+    .describe(
+      "When this item was shared to the member (for newest-first ordering).",
+    ),
 });
 
 /**
@@ -1389,6 +1481,8 @@ export const GetPortalPermitsResponseItem = zod.object({
   expiryDate: zod.string(),
   status: zod.string(),
   documentUrl: zod.string().optional(),
+  unseen: zod.boolean().optional(),
+  sharedAt: zod.string().optional(),
 });
 export const GetPortalPermitsResponse = zod.array(GetPortalPermitsResponseItem);
 
@@ -1405,6 +1499,18 @@ export const GetPortalSafetyResponseItem = zod.object({
   fileSize: zod.number().optional(),
   status: zod.string(),
   createdAt: zod.string().optional(),
+  unseen: zod
+    .boolean()
+    .optional()
+    .describe(
+      'Set in \"Shared with me\" when shared to the member after they last viewed that section.',
+    ),
+  sharedAt: zod
+    .string()
+    .optional()
+    .describe(
+      "When this item was shared to the member (for newest-first ordering).",
+    ),
 });
 export const GetPortalSafetyResponse = zod.array(GetPortalSafetyResponseItem);
 
@@ -1423,6 +1529,18 @@ export const GetPortalGeneralResponse = zod.object({
       fileSize: zod.number().optional(),
       status: zod.string(),
       createdAt: zod.string().optional(),
+      unseen: zod
+        .boolean()
+        .optional()
+        .describe(
+          'Set in \"Shared with me\" when shared to the member after they last viewed that section.',
+        ),
+      sharedAt: zod
+        .string()
+        .optional()
+        .describe(
+          "When this item was shared to the member (for newest-first ordering).",
+        ),
     }),
   ),
   notes: zod.array(
@@ -1434,6 +1552,62 @@ export const GetPortalGeneralResponse = zod.object({
       photoUrl: zod.string().optional(),
     }),
   ),
+});
+
+/**
+ * @summary Per-section unseen counts since the member last viewed each section
+ */
+export const GetPortalUnseenResponse = zod.object({
+  counts: zod
+    .record(zod.string(), zod.number())
+    .describe(
+      "Unseen item count keyed by portal section key (e.g. drawings, site-issues, shared).",
+    ),
+  total: zod.number(),
+});
+
+/**
+ * @summary The VAPID public key (null when push is not configured)
+ */
+export const GetPortalPushKeyResponse = zod.object({
+  publicKey: zod.string().nullable(),
+});
+
+/**
+ * @summary Register this device's Web Push subscription for the member
+ */
+export const PortalPushSubscribeBody = zod.object({
+  endpoint: zod.string(),
+  keys: zod.object({
+    p256dh: zod.string(),
+    auth: zod.string(),
+  }),
+  userAgent: zod.string().optional(),
+});
+
+export const PortalPushSubscribeResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * @summary Remove a device's Web Push subscription
+ */
+export const PortalPushUnsubscribeBody = zod.object({
+  endpoint: zod.string(),
+});
+
+export const PortalPushUnsubscribeResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * @summary End the current portal session server-side
+ */
+export const PortalLogoutResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
 });
 
 /**

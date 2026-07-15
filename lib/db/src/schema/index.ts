@@ -30,6 +30,8 @@ export * from "./daily_notes";
 export * from "./qr_board_pins";
 export * from "./portal-shares";
 export * from "./portal_sessions";
+export * from "./push_subscriptions";
+export * from "./pending_pushes";
 export * from "./share_logs";
 export * from "./user_notes";
 export * from "./calendar_events";

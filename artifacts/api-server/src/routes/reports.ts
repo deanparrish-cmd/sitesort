@@ -5,6 +5,7 @@ import { eq, and, desc, gte, lte } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
 import { generateDailyReportForProject, EMPTY_REPORT_DATA } from "../lib/daily-reports";
 import { generateId } from "../lib/id";
+import { enqueuePushForMembers, acceptedPortalMemberUserIds } from "../lib/push-triggers";
 
 const router: IRouter = Router();
 
@@ -306,6 +307,18 @@ router.post("/projects/:projectId/daily-notes", authenticate, async (req, res) =
       source,
       photoUrl,
     });
+
+    // Notify every portal member — a site update reaches the whole project.
+    try {
+      const proj = (await db.select({ name: projectsTable.name }).from(projectsTable).where(eq(projectsTable.id, req.params.projectId)).limit(1))[0];
+      const members = await acceptedPortalMemberUserIds(req.params.projectId);
+      await enqueuePushForMembers(members, req.params.projectId, {
+        kind: "site_update", itemType: "note", itemId: id,
+        title: `New site update — ${proj?.name ?? "your project"}`,
+        projectName: proj?.name ?? "your project",
+        deepLink: "/portal/overview",
+      });
+    } catch (e) { req.log.warn({ e }, "daily-note push enqueue failed"); }
 
     res.status(201).json({ id, photoUrl });
   } catch (err) {

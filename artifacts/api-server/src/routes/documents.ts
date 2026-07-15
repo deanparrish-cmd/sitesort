@@ -6,6 +6,7 @@ import { eq, and, desc } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { sendDocumentNotificationEmail } from "../lib/email";
+import { enqueuePushForMembers, acceptedPortalMemberUserIds } from "../lib/push-triggers";
 import { isPinLockedOut, recordFailedPinAttempt, clearPinAttempts } from "../lib/pin-attempts";
 
 // Document types that require a PIN to sign off (critical compliance documents).
@@ -199,6 +200,21 @@ router.post("/projects/:projectId/documents", authenticate, async (req, res) => 
     // Look up project name once for all notifications
     const projectRows = await db.select({ name: projectsTable.name }).from(projectsTable).where(eq(projectsTable.id, req.params.projectId)).limit(1);
     const projectName = projectRows[0]?.name ?? "your project";
+
+    // Safety notices are always visible to every portal member (never gated), so
+    // a new one notifies the whole project. Other doc types notify only when
+    // explicitly shared to the portal (handled in portal-shares).
+    if (type === "safety") {
+      try {
+        const members = await acceptedPortalMemberUserIds(req.params.projectId);
+        await enqueuePushForMembers(members, req.params.projectId, {
+          kind: "site_update", itemType: "safety", itemId: docId,
+          title: `New safety notice: ${name}`,
+          projectName,
+          deepLink: `/portal/safety?doc=${docId}`,
+        });
+      } catch (e) { req.log.warn({ e }, "safety-notice push enqueue failed"); }
+    }
 
     if (distributeToUserIds && Array.isArray(distributeToUserIds)) {
       for (const userId of distributeToUserIds) {

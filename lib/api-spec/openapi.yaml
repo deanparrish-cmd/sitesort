@@ -1176,6 +1176,83 @@ paths:
               schema:
                 $ref: "#/components/schemas/PortalGeneral"
 
+  /portal/unseen:
+    get:
+      operationId: getPortalUnseen
+      tags: [portal]
+      summary: Per-section unseen counts since the member last viewed each section
+      responses:
+        "200":
+          description: Unseen counts keyed by section
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalUnseen"
+
+  /portal/push/public-key:
+    get:
+      operationId: getPortalPushKey
+      tags: [portal]
+      summary: The VAPID public key (null when push is not configured)
+      responses:
+        "200":
+          description: Public key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalPushKey"
+
+  /portal/push/subscribe:
+    post:
+      operationId: portalPushSubscribe
+      tags: [portal]
+      summary: Register this device's Web Push subscription for the member
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PortalPushSubscribeRequest"
+      responses:
+        "200":
+          description: Subscribed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /portal/push/unsubscribe:
+    post:
+      operationId: portalPushUnsubscribe
+      tags: [portal]
+      summary: Remove a device's Web Push subscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PortalPushUnsubscribeRequest"
+      responses:
+        "200":
+          description: Unsubscribed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /portal/logout:
+    post:
+      operationId: portalLogout
+      tags: [portal]
+      summary: End the current portal session server-side
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
   # ---- Team Portal: PM-side invite management + activity reporting ----
   /projects/{projectId}/invites:
     get:
@@ -2589,6 +2666,10 @@ components:
           type: string
         longitude:
           type: string
+        unseen:
+          type: boolean
+        sharedAt:
+          type: string
       required: [id, category, referenceNumber]
 
     PortalDocument:
@@ -2612,6 +2693,12 @@ components:
           type: string
         createdAt:
           type: string
+        unseen:
+          type: boolean
+          description: Set in "Shared with me" when shared to the member after they last viewed that section.
+        sharedAt:
+          type: string
+          description: When this item was shared to the member (for newest-first ordering).
       required: [id, name, type, version, fileUrl, status]
 
     PortalPermit:
@@ -2630,6 +2717,10 @@ components:
         status:
           type: string
         documentUrl:
+          type: string
+        unseen:
+          type: boolean
+        sharedAt:
           type: string
       required: [id, type, description, expiryDate, status]
 
@@ -2770,6 +2861,50 @@ components:
           items:
             $ref: "#/components/schemas/PortalNote"
       required: [documents, notes]
+
+    PortalUnseen:
+      type: object
+      properties:
+        counts:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Unseen item count keyed by portal section key (e.g. drawings, site-issues, shared).
+        total:
+          type: integer
+      required: [counts, total]
+
+    PortalPushKey:
+      type: object
+      properties:
+        publicKey:
+          type: string
+          nullable: true
+      required: [publicKey]
+
+    PortalPushSubscribeRequest:
+      type: object
+      properties:
+        endpoint:
+          type: string
+        keys:
+          type: object
+          properties:
+            p256dh:
+              type: string
+            auth:
+              type: string
+          required: [p256dh, auth]
+        userAgent:
+          type: string
+      required: [endpoint, keys]
+
+    PortalPushUnsubscribeRequest:
+      type: object
+      properties:
+        endpoint:
+          type: string
+      required: [endpoint]
 
     ProjectInvite:
       type: object

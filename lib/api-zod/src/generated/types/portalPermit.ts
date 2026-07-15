@@ -14,4 +14,6 @@ export interface PortalPermit {
   expiryDate: string;
   status: string;
   documentUrl?: string;
+  unseen?: boolean;
+  sharedAt?: string;
 }

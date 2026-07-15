@@ -1,12 +1,17 @@
+import { useState, useEffect, useRef } from "react";
 import { useRoute, useSearch, Link } from "wouter";
+import { QueryClientProvider } from "@tanstack/react-query";
 import {
   useGetPortalOverview, useGetPortalProgress, useGetPortalTeam,
   useGetPortalSiteIssues, useGetPortalSiteBoard, useGetPortalHs,
   useGetPortalDrawings, useGetPortalMethodStatements, useGetPortalPermits,
   useGetPortalSafety, useGetPortalGeneral, useGetPortalShared,
+  getGetPortalOverviewQueryKey, getGetPortalSiteIssuesQueryKey,
+  getGetPortalGeneralQueryKey, getGetPortalSharedQueryKey,
 } from "@workspace/api-client-react";
 import { QRCodeSVG } from "qrcode.react";
 import { PortalLayout } from "./layout";
+import { portalQueryClient, PORTAL_LIVE_REFETCH } from "./query-client";
 import { Spinner } from "@/components/ui/spinner";
 import { LinkRow } from "@/components/ui/link-row";
 import {
@@ -15,6 +20,13 @@ import {
   QrCode, Copy, Building2, ShieldCheck, X,
 } from "lucide-react";
 import { isCadFile, cadBadgeLabel, downloadFile } from "@/lib/documents";
+import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
+import {
+  pushSupported, permissionState, isDeviceSubscribed, enablePush, disablePush,
+  iosNeedsInstall,
+} from "@/lib/portal-push";
+import { Bell, BellOff } from "lucide-react";
 
 // ---------- shared helpers ----------
 
@@ -24,15 +36,32 @@ function fileHref(url?: string | null): string | undefined {
   return url.startsWith("/uploads/") ? `/api${url}` : url;
 }
 
-// Open/download a document AND record the specific item view (drawings + method
-// statements have a per-item endpoint that logs itemId server-side; the fetch is
-// what registers the view/download in the activity log). CAD files download since
-// the browser can't render them; PDFs/images open in a new tab. Fire-and-forget.
-function viewDoc(doc: { id: string; fileUrl?: string | null; name?: string | null }, section: string, logItem: boolean) {
-  if (logItem) void fetch(`/api/portal/${section}/${doc.id}`).catch(() => {});
-  if (!doc.fileUrl) return;
-  if (isCadFile(doc.fileUrl, doc.name)) downloadFile(doc.fileUrl, doc.name);
-  else { const href = fileHref(doc.fileUrl); if (href) window.open(href, "_blank", "noopener"); }
+// Open/download a document. CAD files download (the browser can't render them);
+// PDFs/images open in a new tab. The window is opened SYNCHRONOUSLY from the click
+// so popup blockers don't fire. Returns whether a file was actually opened.
+function openDocFile(doc: { fileUrl?: string | null; name?: string | null }): boolean {
+  if (!doc.fileUrl) return false;
+  if (isCadFile(doc.fileUrl, doc.name)) { downloadFile(doc.fileUrl, doc.name); return true; }
+  const href = fileHref(doc.fileUrl);
+  if (href) { window.open(href, "_blank", "noopener"); return true; }
+  return false;
+}
+
+// Re-check a document's CURRENT status at the moment it's opened (drawings +
+// method statements have a per-item endpoint that returns fresh data AND logs the
+// view server-side). This guarantees a doc that was superseded — or unshared —
+// since the list was last fetched is reported accurately, never from a stale
+// cache. Fired after the file opens; the result drives a toast, not the open.
+type FreshDoc = { status?: string } | null;
+async function fetchFreshDoc(section: string, id: string): Promise<{ ok: boolean; doc: FreshDoc }> {
+  try {
+    const res = await fetch(`/api/portal/${section}/${id}`);
+    if (res.status === 404) return { ok: false, doc: null };
+    if (!res.ok) return { ok: true, doc: null };
+    return { ok: true, doc: await res.json() };
+  } catch {
+    return { ok: true, doc: null };
+  }
 }
 
 function fmtDate(d?: string | null): string {
@@ -79,16 +108,44 @@ function Badge({ label, className }: { label: string; className?: string }) {
   return <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${className ?? "bg-muted text-muted-foreground"}`}>{label}</span>;
 }
 
-// A row for a document (drawing / method statement / safety / general doc).
-function DocRow({ doc, section }: { doc: any; section: string }) {
+// Small "New" pill for unseen (newly-shared) items in "Shared with me".
+function NewPill() {
+  return <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-primary text-primary-foreground px-1.5 py-0.5 rounded">New</span>;
+}
+
+// A row for a document (drawing / method statement / safety / general doc). The
+// superseded badge reflects the last list fetch; opening re-checks live status.
+function DocRow({ doc, section, unseen }: { doc: any; section: string; unseen?: boolean }) {
+  const { toast } = useToast();
   const clickable = section === "drawings" || section === "method-statements";
   const cad = cadBadgeLabel(doc.fileUrl, doc.name);
+  const [supersededNow, setSupersededNow] = useState(doc.status === "superseded");
+
+  const open = () => {
+    openDocFile(doc);
+    if (!clickable) return;
+    // Confirm current status at open (not from the cached list row).
+    void fetchFreshDoc(section, doc.id).then(({ ok, doc: fresh }) => {
+      if (!ok) {
+        toast({ title: "No longer available", description: "This document has been removed or is no longer shared with you.", variant: "destructive" });
+        return;
+      }
+      if (fresh?.status === "superseded") {
+        setSupersededNow(true);
+        toast({ title: "Superseded document", description: `"${doc.name}" has been superseded by a newer version.`, variant: "destructive" });
+      } else if (fresh && fresh.status !== "superseded") {
+        setSupersededNow(false);
+      }
+    });
+  };
+
   return (
-    <div className="flex items-center justify-between gap-3 py-2.5 border-b border-border/60 last:border-0">
+    <div className={cn("flex items-center justify-between gap-3 py-2.5 border-b border-border/60 last:border-0", unseen && "-mx-4 px-4 bg-primary/5")}>
       <div className="min-w-0">
         <p className="font-medium truncate flex items-center gap-1.5">
+          {unseen && <NewPill />}
           <span className="truncate">{doc.name}</span>
-          {doc.status === "superseded" && (
+          {supersededNow && (
             <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 px-1.5 py-0.5 rounded">Superseded</span>
           )}
         </p>
@@ -98,7 +155,7 @@ function DocRow({ doc, section }: { doc: any; section: string }) {
         </p>
       </div>
       <button
-        onClick={() => viewDoc(doc, section, clickable)}
+        onClick={open}
         className="shrink-0 flex items-center gap-1 text-sm text-primary font-medium hover:underline"
       >
         {cad ? <><Download className="w-3.5 h-3.5" /> Download</> : <><ExternalLink className="w-3.5 h-3.5" /> View</>}
@@ -106,11 +163,11 @@ function DocRow({ doc, section }: { doc: any; section: string }) {
     </div>
   );
 }
-function PermitRow({ p }: { p: any }) {
+function PermitRow({ p, unseen }: { p: any; unseen?: boolean }) {
   return (
-    <div className="flex items-center justify-between gap-3 py-2.5 border-b border-border/60 last:border-0">
+    <div className={cn("flex items-center justify-between gap-3 py-2.5 border-b border-border/60 last:border-0", unseen && "-mx-4 px-4 bg-primary/5")}>
       <div className="min-w-0">
-        <p className="font-medium truncate">{p.type}</p>
+        <p className="font-medium truncate flex items-center gap-1.5">{unseen && <NewPill />}<span className="truncate">{p.type}</span></p>
         <p className="text-xs text-muted-foreground truncate">{p.description} · expires {fmtDate(p.expiryDate)}</p>
       </div>
       <Badge label={p.status === "expiring_soon" ? "Expiring" : p.status === "expired" ? "Expired" : "Active"} className={PERMIT_BADGE[p.status]} />
@@ -121,7 +178,8 @@ function PermitRow({ p }: { p: any }) {
 // ---------- section views ----------
 
 function OverviewView() {
-  const { data, isLoading } = useGetPortalOverview();
+  // Site updates are time-sensitive → poll while visible.
+  const { data, isLoading } = useGetPortalOverview({ query: { refetchInterval: PORTAL_LIVE_REFETCH, queryKey: getGetPortalOverviewQueryKey() } });
   if (isLoading) return <Loading />;
   if (!data) return <Empty>Nothing to show yet.</Empty>;
   const stats = [
@@ -244,7 +302,7 @@ function TeamView() {
 
 function SiteIssuesView() {
   const openOnly = new URLSearchParams(useSearch()).get("status") === "open";
-  const { data, isLoading } = useGetPortalSiteIssues();
+  const { data, isLoading } = useGetPortalSiteIssues({ query: { refetchInterval: PORTAL_LIVE_REFETCH, queryKey: getGetPortalSiteIssuesQueryKey() } });
   if (isLoading) return <Loading />;
   if (!data || data.length === 0) return <Empty>Nothing shared with you here yet.</Empty>;
   const issues = openOnly ? data.filter(i => (i.status ?? "open") !== "resolved") : data;
@@ -436,8 +494,8 @@ function HsView() {
   );
 }
 
-function DocListView({ section, hook, empty }: { section: string; hook: any; empty: string }) {
-  const { data, isLoading } = hook();
+function DocListView({ section, hook, empty, live }: { section: string; hook: any; empty: string; live?: boolean }) {
+  const { data, isLoading } = hook(live ? { query: { refetchInterval: PORTAL_LIVE_REFETCH } } : undefined);
   if (isLoading) return <Loading />;
   if (!data || data.length === 0) return <Empty>{empty}</Empty>;
   return <Card>{data.map((d: any) => <DocRow key={d.id} doc={d} section={section} />)}</Card>;
@@ -458,7 +516,8 @@ function PermitsView() {
 }
 
 function GeneralView() {
-  const { data, isLoading } = useGetPortalGeneral();
+  // Site notes are time-sensitive → poll while visible.
+  const { data, isLoading } = useGetPortalGeneral({ query: { refetchInterval: PORTAL_LIVE_REFETCH, queryKey: getGetPortalGeneralQueryKey() } });
   if (isLoading) return <Loading />;
   if (!data) return <Empty>Nothing to show yet.</Empty>;
   return (
@@ -495,25 +554,35 @@ function docTypeSection(type?: string): string {
 }
 
 function SharedView() {
-  const { data, isLoading } = useGetPortalShared();
+  const { data, isLoading } = useGetPortalShared({ query: { refetchInterval: PORTAL_LIVE_REFETCH, queryKey: getGetPortalSharedQueryKey() } });
+  // "New" highlights are STICKY for the visit: capture the unseen ids on first
+  // load and keep highlighting them, so a background refetch (which sees the
+  // section as now-viewed → unseen:false) doesn't make the highlight flicker away
+  // while the member is still reading the page. The nav badge still clears.
+  const unseenIds = useRef<Set<string> | null>(null);
+  if (data && unseenIds.current === null) {
+    unseenIds.current = new Set<string>([...data.documents, ...data.permits, ...data.photos].filter((i: any) => i.unseen).map((i: any) => i.id));
+  }
+  const isNew = (id: string) => unseenIds.current?.has(id) ?? false;
   if (isLoading) return <Loading />;
   const empty = !data || (!data.documents.length && !data.photos.length && !data.permits.length);
   if (empty) return <Empty>Nothing has been shared with you yet. Your project manager will share drawings, documents and updates here.</Empty>;
   return (
     <div className="space-y-5">
       {data!.documents.length > 0 && (
-        <div><SectionTitle>Documents</SectionTitle><Card>{data!.documents.map(d => <DocRow key={d.id} doc={d} section={docTypeSection(d.type)} />)}</Card></div>
+        <div><SectionTitle>Documents</SectionTitle><Card>{data!.documents.map(d => <DocRow key={d.id} doc={d} section={docTypeSection(d.type)} unseen={isNew(d.id)} />)}</Card></div>
       )}
       {data!.permits.length > 0 && (
-        <div><SectionTitle>Permits</SectionTitle><Card>{data!.permits.map(p => <PermitRow key={p.id} p={p} />)}</Card></div>
+        <div><SectionTitle>Permits</SectionTitle><Card>{data!.permits.map(p => <PermitRow key={p.id} p={p} unseen={isNew(p.id)} />)}</Card></div>
       )}
       {data!.photos.length > 0 && (
         <div><SectionTitle>Site issues</SectionTitle><div className="space-y-3">
           {data!.photos.map(issue => (
-            <Card key={issue.id}>
+            <Card key={issue.id} className={cn(isNew(issue.id) && "ring-1 ring-primary/40")}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
+                    {isNew(issue.id) && <NewPill />}
                     <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
                     <span className="font-medium">{issue.category === "safety_concern" ? "Safety concern" : "Snag"}</span>
                     <span className="text-xs text-muted-foreground">#{issue.referenceNumber}</span>
@@ -532,16 +601,80 @@ function SharedView() {
   );
 }
 
+// Portal member Settings — notification preferences (per member, per device).
+function SettingsView() {
+  const { toast } = useToast();
+  const [subscribed, setSubscribed] = useState(false);
+  const [perm, setPerm] = useState<NotificationPermission | "unsupported">("default");
+  const [busy, setBusy] = useState(false);
+  const needsInstall = iosNeedsInstall();
+
+  const refresh = () => { setPerm(permissionState()); isDeviceSubscribed().then(setSubscribed); };
+  useEffect(() => { refresh(); }, []);
+
+  const enable = async () => {
+    setBusy(true);
+    const r = await enablePush();
+    setBusy(false);
+    if (r === "enabled") { toast({ title: "Notifications on" }); refresh(); }
+    else if (r === "denied") toast({ title: "Notifications blocked", description: "Allow notifications for this site in your browser settings, then try again.", variant: "destructive" });
+    else if (r === "needs_install") toast({ title: "Add to Home Screen first", description: "On iPhone, install the portal to your Home Screen, then enable notifications.", variant: "destructive" });
+    else if (r !== "unsupported") toast({ title: "Couldn't enable notifications", variant: "destructive" });
+  };
+  const disable = async () => { setBusy(true); await disablePush(); setBusy(false); setSubscribed(false); toast({ title: "Notifications off" }); };
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <SectionTitle>Notifications</SectionTitle>
+        <Card>
+          {!pushSupported() && !needsInstall ? (
+            <p className="text-sm text-muted-foreground">This device or browser doesn't support notifications.</p>
+          ) : needsInstall ? (
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Add SiteSort to your Home Screen to get notifications</p>
+              <ol className="space-y-1.5 text-xs text-foreground">
+                <li>1. Tap the Share icon in Safari</li>
+                <li>2. Choose “Add to Home Screen”</li>
+                <li>3. Open SiteSort from your Home Screen, then come back here to enable</li>
+              </ol>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-medium">New content alerts</p>
+                <p className="text-xs text-muted-foreground">
+                  {subscribed ? "On — you'll be notified when new drawings or notices are shared." : perm === "denied" ? "Blocked in your browser settings for this site." : "Off — get a heads-up when something new is shared with you."}
+                </p>
+              </div>
+              {subscribed ? (
+                <button onClick={disable} disabled={busy} className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm font-medium hover:bg-muted disabled:opacity-50">
+                  <BellOff className="w-4 h-4" /> Turn off
+                </button>
+              ) : (
+                <button onClick={enable} disabled={busy || perm === "denied"} className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50">
+                  <Bell className="w-4 h-4" /> {busy ? "…" : "Turn on"}
+                </button>
+              )}
+            </div>
+          )}
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 function renderSection(section: string) {
   switch (section) {
     case "overview": return <OverviewView />;
     case "shared": return <SharedView />;
+    case "settings": return <SettingsView />;
     case "progress": return <ProgressView />;
     case "team": return <TeamView />;
     case "site-issues": return <SiteIssuesView />;
     case "site-board": return <SiteBoardView />;
     case "hs": return <HsView />;
-    case "drawings": return <DocListView section="drawings" hook={useGetPortalDrawings} empty="Nothing shared with you here yet." />;
+    case "drawings": return <DocListView section="drawings" hook={useGetPortalDrawings} empty="Nothing shared with you here yet." live />;
     case "method-statements": return <DocListView section="method-statements" hook={useGetPortalMethodStatements} empty="Nothing shared with you here yet." />;
     case "permits": return <PermitsView />;
     case "safety": return <DocListView section="safety" hook={useGetPortalSafety} empty="No safety documents uploaded." />;
@@ -553,5 +686,11 @@ function renderSection(section: string) {
 export default function PortalSectionPage() {
   const [, params] = useRoute("/portal/:section");
   const section = params?.section ?? "overview";
-  return <PortalLayout active={section}>{renderSection(section)}</PortalLayout>;
+  // Portal pages run on their own QueryClient (fresh-on-focus/mount + polling)
+  // so a long-lived member session never shows stale content.
+  return (
+    <QueryClientProvider client={portalQueryClient}>
+      <PortalLayout active={section}>{renderSection(section)}</PortalLayout>
+    </QueryClientProvider>
+  );
 }

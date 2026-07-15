@@ -8,12 +8,15 @@ import {
   qrBoardPinsTable, calendarEventsTable, subcontractorsTable, peopleTable,
   portalSharesTable, documentDistributionsTable, companiesTable, qrCodesTable,
 } from "@workspace/db/schema";
-import { and, eq, inArray, isNull, isNotNull, desc, asc, gte, count } from "drizzle-orm";
+import { and, eq, inArray, isNull, isNotNull, desc, asc, gte, count, max } from "drizzle-orm";
 import { buildSiteBoardPayload } from "../lib/site-board";
 import { generateId } from "../lib/id";
 import { authenticate, generatePortalToken } from "../middlewares/auth";
 import { requirePortalMember, requirePortalSession, autoLogPortalActivity } from "../middlewares/portal";
 import { createPortalSession, revokePortalSession } from "../lib/portal-sessions";
+import { getVapidPublicKey } from "../lib/web-push";
+import { pushSubscriptionsTable, activityLogTable } from "@workspace/db/schema";
+import { PortalPushSubscribeBody, PortalPushUnsubscribeBody } from "@workspace/api-zod";
 import { isLockedOut, recordFailedAttempt, clearAttempts } from "../lib/login-attempts";
 import { expiryStatus } from "../lib/expiry";
 import { PORTAL_SECTIONS } from "../lib/activity";
@@ -109,6 +112,84 @@ async function visibleIds(projectId: string, itemType: string, viewer: Viewer): 
     else if (s.audienceType === "trade" && s.trade && (viewer.trades.includes(s.trade) || (viewer.isSiteStaff && s.trade === SITE_STAFF))) set.add(s.itemId);
   }
   return set;
+}
+
+// Like visibleIds, but maps each visible item to the MOST RECENT matching share
+// time — the "shared with me at" timestamp used for unseen-since detection and
+// newest-first ordering.
+async function visibleShareMap(projectId: string, itemType: string, viewer: Viewer): Promise<Map<string, Date>> {
+  const shares = await db.select().from(portalSharesTable)
+    .where(and(eq(portalSharesTable.projectId, projectId), eq(portalSharesTable.itemType, itemType)));
+  const map = new Map<string, Date>();
+  for (const s of shares) {
+    const matches = s.audienceType === "all"
+      || (s.audienceType === "person" && viewer.personId && s.personId === viewer.personId)
+      || (s.audienceType === "trade" && !!s.trade && (viewer.trades.includes(s.trade) || (viewer.isSiteStaff && s.trade === SITE_STAFF)));
+    if (!matches) continue;
+    const prev = map.get(s.itemId);
+    if (!prev || s.createdAt > prev) map.set(s.itemId, s.createdAt);
+  }
+  return map;
+}
+
+// When did this member last VIEW each section? Reuses the existing portal
+// activity-log view tracking (one row per section-open). Returns a map keyed by
+// section; a section absent from the map has never been viewed (→ all unseen).
+async function lastViewedBySection(userId: string, projectId: string): Promise<Map<string, Date>> {
+  const rows = await db.select({ section: activityLogTable.section, t: max(activityLogTable.createdAt) })
+    .from(activityLogTable)
+    .where(and(eq(activityLogTable.userId, userId), eq(activityLogTable.projectId, projectId), eq(activityLogTable.action, "view")))
+    .groupBy(activityLogTable.section);
+  const m = new Map<string, Date>();
+  for (const r of rows) if (r.t) m.set(r.section, r.t as unknown as Date);
+  return m;
+}
+
+const isAfter = (d: Date | null | undefined, since: Date | undefined): boolean => !!d && (!since || d > since);
+
+// Per-section unseen counts for the member's nav badges. "Unseen" = content
+// whose share/create time is newer than the member's last view of that section.
+async function computeUnseen(userId: string, projectId: string): Promise<{ counts: Record<string, number>; total: number }> {
+  const viewer = await resolveViewer(userId, projectId);
+  const [docMap, photoMap, permitMap, lastView] = await Promise.all([
+    visibleShareMap(projectId, "document", viewer),
+    visibleShareMap(projectId, "photo", viewer),
+    visibleShareMap(projectId, "permit", viewer),
+    lastViewedBySection(userId, projectId),
+  ]);
+  const lv = (s: string) => lastView.get(s);
+  const counts: Record<string, number> = {};
+  const bump = (s: string, n = 1) => { if (n) counts[s] = (counts[s] ?? 0) + n; };
+
+  // Gated documents, by type → their section; plus the aggregate "shared".
+  const docIds = [...docMap.keys()];
+  const docs = docIds.length
+    ? await db.select({ id: documentsTable.id, type: documentsTable.type }).from(documentsTable)
+        .where(and(eq(documentsTable.projectId, projectId), inArray(documentsTable.id, docIds), inArray(documentsTable.status, ["current", "superseded"])))
+    : [];
+  const sectionForType = (t: string) => t === "drawing" ? "drawings" : t === "method_statement" ? "method-statements" : t === "general" ? "general" : null;
+  let sharedCount = 0;
+  for (const d of docs) {
+    const at = docMap.get(d.id);
+    if (isAfter(at, lv("shared"))) sharedCount++;
+    const sec = sectionForType(d.type);
+    if (sec && isAfter(at, lv(sec))) bump(sec);
+  }
+  for (const at of photoMap.values()) { if (isAfter(at, lv("shared"))) sharedCount++; if (isAfter(at, lv("site-issues"))) bump("site-issues"); }
+  for (const at of permitMap.values()) { if (isAfter(at, lv("shared"))) sharedCount++; if (isAfter(at, lv("permits"))) bump("permits"); }
+  bump("shared", sharedCount);
+
+  // Safety docs are always visible (never gated) → new ones are unseen too.
+  const safetyDocs = await db.select({ createdAt: documentsTable.createdAt }).from(documentsTable)
+    .where(and(eq(documentsTable.projectId, projectId), eq(documentsTable.type, "safety"), eq(documentsTable.status, "current")));
+  for (const s of safetyDocs) if (isAfter(s.createdAt, lv("safety"))) bump("safety");
+
+  // Site updates (daily notes) drive Overview + General badges.
+  const notes = await db.select({ createdAt: dailyNotesTable.createdAt }).from(dailyNotesTable).where(eq(dailyNotesTable.projectId, projectId));
+  for (const n of notes) { if (isAfter(n.createdAt, lv("overview"))) bump("overview"); if (isAfter(n.createdAt, lv("general"))) bump("general"); }
+
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  return { counts, total };
 }
 
 // Register a portal member's view of a shared document in distribution tracking
@@ -366,6 +447,66 @@ router.post("/portal/logout", authenticate, requirePortalSession, async (req, re
   res.json({ success: true });
 });
 
+// GET /api/portal/unseen — per-section badge counts (unseen since last view).
+router.get("/portal/unseen", ...portalGuards, async (req, res) => {
+  try {
+    const result = await computeUnseen(req.user!.id, req.portalProjectId!);
+    res.json(result);
+  } catch (err) {
+    req.log.error({ err }, "Portal unseen error");
+    res.json({ counts: {}, total: 0 });
+  }
+});
+
+// GET /api/portal/push/public-key — VAPID public key for this deployment (null
+// if push isn't configured; the client hides the enable UI in that case).
+router.get("/portal/push/public-key", authenticate, requirePortalSession, requirePortalMember, async (_req, res) => {
+  res.json({ publicKey: getVapidPublicKey() });
+});
+
+// POST /api/portal/push/subscribe — register (or refresh) this device's push
+// subscription for the signed-in member. Keyed on the unique endpoint.
+router.post("/portal/push/subscribe", authenticate, requirePortalSession, requirePortalMember, async (req, res) => {
+  const parsed = PortalPushSubscribeBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "validation_error", message: "Invalid subscription." }); return; }
+  const { endpoint, keys, userAgent } = parsed.data;
+  try {
+    const existing = (await db.select({ id: pushSubscriptionsTable.id }).from(pushSubscriptionsTable)
+      .where(eq(pushSubscriptionsTable.endpoint, endpoint)).limit(1))[0];
+    if (existing) {
+      await db.update(pushSubscriptionsTable)
+        .set({ userId: req.user!.id, projectId: req.portalProjectId!, p256dh: keys.p256dh, auth: keys.auth, userAgent: userAgent ?? null, lastSeenAt: new Date() })
+        .where(eq(pushSubscriptionsTable.id, existing.id));
+    } else {
+      await db.insert(pushSubscriptionsTable).values({
+        id: generateId(), userId: req.user!.id, projectId: req.portalProjectId!,
+        endpoint, p256dh: keys.p256dh, auth: keys.auth, userAgent: userAgent ?? null,
+      });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Portal push subscribe error");
+    res.status(500).json({ error: "server_error", message: "Failed to subscribe" });
+  }
+});
+
+// POST /api/portal/push/unsubscribe — remove a device's subscription (settings
+// toggle-off or logout). Scoped to the member so one can't delete another's.
+router.post("/portal/push/unsubscribe", authenticate, requirePortalSession, requirePortalMember, async (req, res) => {
+  const parsed = PortalPushUnsubscribeBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "validation_error", message: "Invalid request." }); return; }
+  try {
+    await db.delete(pushSubscriptionsTable).where(and(
+      eq(pushSubscriptionsTable.endpoint, parsed.data.endpoint),
+      eq(pushSubscriptionsTable.userId, req.user!.id),
+    ));
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Portal push unsubscribe error");
+    res.status(500).json({ error: "server_error", message: "Failed to unsubscribe" });
+  }
+});
+
 // GET /api/portal/overview
 router.get("/portal/overview", ...portalGuards, async (req, res) => {
   const pid = req.portalProjectId!;
@@ -417,17 +558,31 @@ router.get("/portal/overview", ...portalGuards, async (req, res) => {
 router.get("/portal/shared", ...portalGuards, async (req, res) => {
   const pid = req.portalProjectId!;
   const viewer = await resolveViewer(req.user!.id, pid);
-  const [docIds, photoIds, permitIds] = await Promise.all([
-    visibleIds(pid, "document", viewer),
-    visibleIds(pid, "photo", viewer),
-    visibleIds(pid, "permit", viewer),
+  const [docMap, photoMap, permitMap, lastView] = await Promise.all([
+    visibleShareMap(pid, "document", viewer),
+    visibleShareMap(pid, "photo", viewer),
+    visibleShareMap(pid, "permit", viewer),
+    lastViewedBySection(req.user!.id, pid),
   ]);
+  const seenBefore = lastView.get("shared");
+  const docIds = [...docMap.keys()], photoIds = [...photoMap.keys()], permitIds = [...permitMap.keys()];
   const [docs, photos, permits] = await Promise.all([
-    docIds.size ? db.select().from(documentsTable).where(and(eq(documentsTable.projectId, pid), inArray(documentsTable.id, [...docIds]), inArray(documentsTable.status, ["current", "superseded"]))).orderBy(asc(documentsTable.name)) : Promise.resolve([]),
-    photoIds.size ? db.select().from(photosTable).where(and(eq(photosTable.projectId, pid), inArray(photosTable.id, [...photoIds]))).orderBy(desc(photosTable.takenAt)) : Promise.resolve([]),
-    permitIds.size ? db.select().from(permitsTable).where(and(eq(permitsTable.projectId, pid), isNull(permitsTable.archivedAt), inArray(permitsTable.id, [...permitIds]))).orderBy(asc(permitsTable.expiryDate)) : Promise.resolve([]),
+    docIds.length ? db.select().from(documentsTable).where(and(eq(documentsTable.projectId, pid), inArray(documentsTable.id, docIds), inArray(documentsTable.status, ["current", "superseded"]))) : Promise.resolve([]),
+    photoIds.length ? db.select().from(photosTable).where(and(eq(photosTable.projectId, pid), inArray(photosTable.id, photoIds))) : Promise.resolve([]),
+    permitIds.length ? db.select().from(permitsTable).where(and(eq(permitsTable.projectId, pid), isNull(permitsTable.archivedAt), inArray(permitsTable.id, permitIds))) : Promise.resolve([]),
   ]);
-  res.json({ documents: docs.map(serializeDoc), photos: photos.map(serializeIssue), permits: permits.map(serializePermit) });
+  // Annotate each item with when it was shared + whether it's unseen, and order
+  // NEWEST-shared first so fresh content is at the top with the unseen highlight.
+  const annotate = <T extends { id: string }>(rows: T[], serialize: (r: T) => any, map: Map<string, Date>) =>
+    rows
+      .map(r => { const at = map.get(r.id); return { ...serialize(r), sharedAt: at?.toISOString(), _at: at?.getTime() ?? 0, unseen: isAfter(at, seenBefore) }; })
+      .sort((a, b) => b._at - a._at)
+      .map(({ _at, ...rest }) => rest);
+  res.json({
+    documents: annotate(docs, serializeDoc, docMap),
+    photos: annotate(photos, serializeIssue, photoMap),
+    permits: annotate(permits, serializePermit, permitMap),
+  });
 });
 
 // GET /api/portal/progress

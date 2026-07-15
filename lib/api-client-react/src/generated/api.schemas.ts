@@ -785,6 +785,8 @@ export interface PortalIssue {
   takenAt?: string;
   latitude?: string;
   longitude?: string;
+  unseen?: boolean;
+  sharedAt?: string;
 }
 
 export interface PortalDocument {
@@ -797,6 +799,10 @@ export interface PortalDocument {
   fileSize?: number;
   status: string;
   createdAt?: string;
+  /** Set in "Shared with me" when shared to the member after they last viewed that section. */
+  unseen?: boolean;
+  /** When this item was shared to the member (for newest-first ordering). */
+  sharedAt?: string;
 }
 
 export interface PortalPermit {
@@ -807,6 +813,8 @@ export interface PortalPermit {
   expiryDate: string;
   status: string;
   documentUrl?: string;
+  unseen?: boolean;
+  sharedAt?: string;
 }
 
 export interface PortalEvent {
@@ -896,6 +904,36 @@ export interface PortalShared {
 export interface PortalGeneral {
   documents: PortalDocument[];
   notes: PortalNote[];
+}
+
+/**
+ * Unseen item count keyed by portal section key (e.g. drawings, site-issues, shared).
+ */
+export type PortalUnseenCounts = { [key: string]: number };
+
+export interface PortalUnseen {
+  /** Unseen item count keyed by portal section key (e.g. drawings, site-issues, shared). */
+  counts: PortalUnseenCounts;
+  total: number;
+}
+
+export interface PortalPushKey {
+  publicKey: string | null;
+}
+
+export type PortalPushSubscribeRequestKeys = {
+  p256dh: string;
+  auth: string;
+};
+
+export interface PortalPushSubscribeRequest {
+  endpoint: string;
+  keys: PortalPushSubscribeRequestKeys;
+  userAgent?: string;
+}
+
+export interface PortalPushUnsubscribeRequest {
+  endpoint: string;
 }
 
 export interface ProjectInvite {

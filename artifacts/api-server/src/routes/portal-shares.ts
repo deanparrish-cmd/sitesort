@@ -2,11 +2,12 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import {
   portalSharesTable, projectsTable, projectMembersTable, peopleTable,
-  subcontractorsTable, documentDistributionsTable,
+  subcontractorsTable, documentDistributionsTable, documentsTable,
 } from "@workspace/db/schema";
 import { and, eq, isNotNull, inArray } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
+import { enqueuePushForMembers } from "../lib/push-triggers";
 
 const router: IRouter = Router();
 
@@ -167,6 +168,24 @@ router.post("/projects/:projectId/portal-shares", authenticate, async (req, res)
           .where(and(eq(documentDistributionsTable.documentId, itemId), eq(documentDistributionsTable.userId, userId))).limit(1);
         if (existing.length === 0) {
           await db.insert(documentDistributionsTable).values({ id: generateId(), documentId: itemId, userId, status: "pending" });
+        }
+      }
+
+      // Notify the resolved members (batched/debounced). A drawing shared to a
+      // trade/everyone/individual all funnel here — the audience is already
+      // flattened to the exact members it reaches.
+      if (targetUserIds.size > 0) {
+        const doc = (await db.select({ name: documentsTable.name, type: documentsTable.type }).from(documentsTable).where(eq(documentsTable.id, itemId)).limit(1))[0];
+        const proj = (await db.select({ name: projectsTable.name }).from(projectsTable).where(eq(projectsTable.id, req.params.projectId)).limit(1))[0];
+        if (doc && proj) {
+          const label = doc.type === "drawing" ? "drawing" : doc.type === "method_statement" ? "method statement" : doc.type === "safety" ? "safety document" : "document";
+          const section = doc.type === "drawing" ? "drawings" : doc.type === "method_statement" ? "method-statements" : doc.type === "safety" ? "safety" : doc.type === "general" ? "general" : "shared";
+          await enqueuePushForMembers([...targetUserIds], req.params.projectId, {
+            kind: "document", itemType: doc.type, itemId,
+            title: `New ${label}: ${doc.name}`,
+            projectName: proj.name,
+            deepLink: section === "shared" ? "/portal/shared" : `/portal/${section}?doc=${itemId}`,
+          });
         }
       }
     }

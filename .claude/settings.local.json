@@ -1,19 +1,4 @@
 {
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "if jq -r '.tool_input.command // \"\"' | grep -q 'git commit'; then cd /home/runner/workspace && /home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/push-robust.ts 2>&1; fi",
-            "timeout": 240,
-            "statusMessage": "Pushing to GitHub…"
-          }
-        ]
-      }
-    ]
-  },
   "permissions": {
     "allow": [
       "Bash(PORT=8080 node --enable-source-maps ./dist/index.mjs)",
@@ -36,7 +21,24 @@
       "Bash(git pull *)",
       "Bash(node --loader ts-node/esm scripts/src/github-push.ts)",
       "Bash(node -e \"require\\('child_process'\\).execSync\\('npx --yes tsx scripts/src/github-push.ts', {stdio:'inherit'}\\)\")",
-      "Bash(/home/runner/workspace/scripts/node_modules/.bin/tsx *)"
+      "Bash(/home/runner/workspace/scripts/node_modules/.bin/tsx *)",
+      "Bash(node --check artifacts/sitesort/public/sw.js)",
+      "Bash(APP_URL=http://localhost:8092 node portal-360.mjs)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if jq -r '.tool_input.command // \"\"' | grep -q 'git commit'; then cd /home/runner/workspace && /home/runner/workspace/scripts/node_modules/.bin/tsx scripts/src/push-robust.ts 2>&1; fi",
+            "timeout": 240,
+            "statusMessage": "Pushing to GitHub…"
+          }
+        ]
+      }
     ]
   }
 }

@@ -1,5 +1,5 @@
 import { db } from "@workspace/db";
-import { portalSessionsTable } from "@workspace/db/schema";
+import { portalSessionsTable, pushSubscriptionsTable } from "@workspace/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { generateId } from "./id";
 
@@ -66,7 +66,8 @@ export async function revokePortalSession(sid: string): Promise<void> {
 }
 
 // Dashboard revoke — kill every live session a member holds for a project, so
-// their next request is booted even before the membership re-check would catch it.
+// their next request is booted even before the membership re-check would catch it,
+// AND delete their push subscriptions so a revoked member receives nothing.
 export async function revokePortalSessionsForMember(userId: string, projectId: string): Promise<void> {
   await db.update(portalSessionsTable).set({ revokedAt: new Date() })
     .where(and(
@@ -74,4 +75,7 @@ export async function revokePortalSessionsForMember(userId: string, projectId: s
       eq(portalSessionsTable.projectId, projectId),
       isNull(portalSessionsTable.revokedAt),
     ));
+  await db.delete(pushSubscriptionsTable)
+    .where(and(eq(pushSubscriptionsTable.userId, userId), eq(pushSubscriptionsTable.projectId, projectId)))
+    .catch(() => {});
 }

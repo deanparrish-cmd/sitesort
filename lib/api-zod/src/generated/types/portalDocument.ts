@@ -16,4 +16,8 @@ export interface PortalDocument {
   fileSize?: number;
   status: string;
   createdAt?: string;
+  /** Set in "Shared with me" when shared to the member after they last viewed that section. */
+  unseen?: boolean;
+  /** When this item was shared to the member (for newest-first ordering). */
+  sharedAt?: string;
 }

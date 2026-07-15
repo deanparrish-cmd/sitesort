@@ -61,9 +61,13 @@ import type {
   PortalOverview,
   PortalPermit,
   PortalProgress,
+  PortalPushKey,
+  PortalPushSubscribeRequest,
+  PortalPushUnsubscribeRequest,
   PortalShared,
   PortalSiteBoard,
   PortalTeamMember,
+  PortalUnseen,
   Project,
   ProjectActivityFeed,
   ProjectDetail,
@@ -4899,6 +4903,411 @@ export function useGetPortalGeneral<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Per-section unseen counts since the member last viewed each section
+ */
+export const getGetPortalUnseenUrl = () => {
+  return `/api/portal/unseen`;
+};
+
+export const getPortalUnseen = async (
+  options?: RequestInit,
+): Promise<PortalUnseen> => {
+  return customFetch<PortalUnseen>(getGetPortalUnseenUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPortalUnseenQueryKey = () => {
+  return [`/api/portal/unseen`] as const;
+};
+
+export const getGetPortalUnseenQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPortalUnseen>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalUnseen>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPortalUnseenQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getPortalUnseen>>> = ({
+    signal,
+  }) => getPortalUnseen({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalUnseen>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPortalUnseenQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPortalUnseen>>
+>;
+export type GetPortalUnseenQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Per-section unseen counts since the member last viewed each section
+ */
+
+export function useGetPortalUnseen<
+  TData = Awaited<ReturnType<typeof getPortalUnseen>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalUnseen>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPortalUnseenQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary The VAPID public key (null when push is not configured)
+ */
+export const getGetPortalPushKeyUrl = () => {
+  return `/api/portal/push/public-key`;
+};
+
+export const getPortalPushKey = async (
+  options?: RequestInit,
+): Promise<PortalPushKey> => {
+  return customFetch<PortalPushKey>(getGetPortalPushKeyUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPortalPushKeyQueryKey = () => {
+  return [`/api/portal/push/public-key`] as const;
+};
+
+export const getGetPortalPushKeyQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPortalPushKey>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalPushKey>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPortalPushKeyQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPortalPushKey>>
+  > = ({ signal }) => getPortalPushKey({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalPushKey>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPortalPushKeyQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPortalPushKey>>
+>;
+export type GetPortalPushKeyQueryError = ErrorType<unknown>;
+
+/**
+ * @summary The VAPID public key (null when push is not configured)
+ */
+
+export function useGetPortalPushKey<
+  TData = Awaited<ReturnType<typeof getPortalPushKey>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalPushKey>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPortalPushKeyQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Register this device's Web Push subscription for the member
+ */
+export const getPortalPushSubscribeUrl = () => {
+  return `/api/portal/push/subscribe`;
+};
+
+export const portalPushSubscribe = async (
+  portalPushSubscribeRequest: PortalPushSubscribeRequest,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getPortalPushSubscribeUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(portalPushSubscribeRequest),
+  });
+};
+
+export const getPortalPushSubscribeMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof portalPushSubscribe>>,
+    TError,
+    { data: BodyType<PortalPushSubscribeRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof portalPushSubscribe>>,
+  TError,
+  { data: BodyType<PortalPushSubscribeRequest> },
+  TContext
+> => {
+  const mutationKey = ["portalPushSubscribe"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof portalPushSubscribe>>,
+    { data: BodyType<PortalPushSubscribeRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return portalPushSubscribe(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PortalPushSubscribeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof portalPushSubscribe>>
+>;
+export type PortalPushSubscribeMutationBody =
+  BodyType<PortalPushSubscribeRequest>;
+export type PortalPushSubscribeMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Register this device's Web Push subscription for the member
+ */
+export const usePortalPushSubscribe = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof portalPushSubscribe>>,
+    TError,
+    { data: BodyType<PortalPushSubscribeRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof portalPushSubscribe>>,
+  TError,
+  { data: BodyType<PortalPushSubscribeRequest> },
+  TContext
+> => {
+  return useMutation(getPortalPushSubscribeMutationOptions(options));
+};
+
+/**
+ * @summary Remove a device's Web Push subscription
+ */
+export const getPortalPushUnsubscribeUrl = () => {
+  return `/api/portal/push/unsubscribe`;
+};
+
+export const portalPushUnsubscribe = async (
+  portalPushUnsubscribeRequest: PortalPushUnsubscribeRequest,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getPortalPushUnsubscribeUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(portalPushUnsubscribeRequest),
+  });
+};
+
+export const getPortalPushUnsubscribeMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof portalPushUnsubscribe>>,
+    TError,
+    { data: BodyType<PortalPushUnsubscribeRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof portalPushUnsubscribe>>,
+  TError,
+  { data: BodyType<PortalPushUnsubscribeRequest> },
+  TContext
+> => {
+  const mutationKey = ["portalPushUnsubscribe"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof portalPushUnsubscribe>>,
+    { data: BodyType<PortalPushUnsubscribeRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return portalPushUnsubscribe(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PortalPushUnsubscribeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof portalPushUnsubscribe>>
+>;
+export type PortalPushUnsubscribeMutationBody =
+  BodyType<PortalPushUnsubscribeRequest>;
+export type PortalPushUnsubscribeMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Remove a device's Web Push subscription
+ */
+export const usePortalPushUnsubscribe = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof portalPushUnsubscribe>>,
+    TError,
+    { data: BodyType<PortalPushUnsubscribeRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof portalPushUnsubscribe>>,
+  TError,
+  { data: BodyType<PortalPushUnsubscribeRequest> },
+  TContext
+> => {
+  return useMutation(getPortalPushUnsubscribeMutationOptions(options));
+};
+
+/**
+ * @summary End the current portal session server-side
+ */
+export const getPortalLogoutUrl = () => {
+  return `/api/portal/logout`;
+};
+
+export const portalLogout = async (
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getPortalLogoutUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getPortalLogoutMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof portalLogout>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof portalLogout>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["portalLogout"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof portalLogout>>,
+    void
+  > = () => {
+    return portalLogout(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PortalLogoutMutationResult = NonNullable<
+  Awaited<ReturnType<typeof portalLogout>>
+>;
+
+export type PortalLogoutMutationError = ErrorType<unknown>;
+
+/**
+ * @summary End the current portal session server-side
+ */
+export const usePortalLogout = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof portalLogout>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof portalLogout>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getPortalLogoutMutationOptions(options));
+};
 
 /**
  * @summary List invites for a project (PM)
