@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { subcontractorsTable, insuranceRecordsTable, projectMembersTable, projectsTable, subcontractorNotesTable, usersTable } from "@workspace/db/schema";
+import { subcontractorsTable, insuranceRecordsTable, projectMembersTable, projectsTable, subcontractorNotesTable, usersTable, peopleTable } from "@workspace/db/schema";
 import { eq, and, desc, or, isNull, isNotNull, inArray } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
@@ -364,6 +364,32 @@ router.post("/subcontractors/:subcontractorId/notes", authenticate, async (req, 
   } catch (err) {
     req.log.error({ err }, "Add subcontractor note error");
     res.status(500).json({ error: "server_error", message: "Failed to add note" });
+  }
+});
+
+// DELETE /api/subcontractors/:id — remove a subcontractor and its dependents.
+// Manager-gated + tenant-scoped. Clears child rows whose FKs are NOT ON DELETE
+// CASCADE (insurance records, subcontractor notes, project-member links) before
+// deleting the firm; `people` (and their invites/memberships) cascade.
+router.delete("/subcontractors/:id", authenticate, async (req, res) => {
+  try {
+    if (!["admin", "project_manager"].includes(req.user!.role)) {
+      res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can delete a subcontractor." });
+      return;
+    }
+    const sub = await db.select({ id: subcontractorsTable.id }).from(subcontractorsTable)
+      .where(and(eq(subcontractorsTable.id, req.params.id), eq(subcontractorsTable.companyId, req.user!.companyId))).limit(1);
+    if (!sub[0]) { res.status(404).json({ error: "not_found", message: "Subcontractor not found" }); return; }
+
+    await db.delete(insuranceRecordsTable).where(eq(insuranceRecordsTable.subcontractorId, req.params.id));
+    await db.delete(subcontractorNotesTable).where(eq(subcontractorNotesTable.subcontractorId, req.params.id));
+    await db.delete(projectMembersTable).where(eq(projectMembersTable.subcontractorId, req.params.id));
+    await db.delete(peopleTable).where(eq(peopleTable.subcontractorId, req.params.id));
+    await db.delete(subcontractorsTable).where(eq(subcontractorsTable.id, req.params.id));
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Delete subcontractor error");
+    res.status(500).json({ error: "server_error", message: "Failed to delete subcontractor" });
   }
 });
 
