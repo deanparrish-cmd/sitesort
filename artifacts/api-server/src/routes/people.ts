@@ -112,6 +112,7 @@ function serializePerson(p: typeof peopleTable.$inferSelect, portal?: PortalStat
   return {
     id: p.id, subcontractorId: p.subcontractorId ?? undefined, userId: p.userId ?? undefined,
     name: p.name, email: p.email, phone: p.phone ?? undefined, roleTitle: p.roleTitle ?? undefined,
+    showContactInPortal: p.showContactInPortal ?? undefined,
     kind: p.subcontractorId ? "subcontractor" : "in_house",
     portal: portal ?? undefined,
   };
@@ -194,6 +195,32 @@ router.delete("/people/:personId", authenticate, async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Delete person error");
     res.status(500).json({ error: "server_error", message: "Failed to delete person" });
+  }
+});
+
+// PATCH /api/people/:personId — update a person's portal contact-visibility flag
+// and/or job title (manager-gated, tenant-scoped). `showContactInPortal: null`
+// resets to the role-based default.
+router.patch("/people/:personId", authenticate, async (req, res) => {
+  try {
+    if (!requireManager(req, res)) return;
+    const rows = await db.select().from(peopleTable)
+      .where(and(eq(peopleTable.id, req.params.personId), eq(peopleTable.companyId, req.user!.companyId))).limit(1);
+    if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Person not found" }); return; }
+    const body = req.body as { showContactInPortal?: boolean | null; roleTitle?: string | null };
+    const patch: { showContactInPortal?: boolean | null; roleTitle?: string | null } = {};
+    if ("showContactInPortal" in body) {
+      const v = body.showContactInPortal;
+      patch.showContactInPortal = v === null ? null : !!v;
+    }
+    if ("roleTitle" in body) patch.roleTitle = (body.roleTitle ?? "").toString().trim() || null;
+    if (Object.keys(patch).length === 0) { res.status(400).json({ error: "validation_error", message: "Nothing to update." }); return; }
+    await db.update(peopleTable).set(patch).where(eq(peopleTable.id, req.params.personId));
+    const updated = (await db.select().from(peopleTable).where(eq(peopleTable.id, req.params.personId)).limit(1))[0];
+    res.json(serializePerson(updated));
+  } catch (err) {
+    req.log.error({ err }, "Update person error");
+    res.status(500).json({ error: "server_error", message: "Failed to update person" });
   }
 });
 

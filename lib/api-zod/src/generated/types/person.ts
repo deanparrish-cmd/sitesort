@@ -19,6 +19,8 @@ export interface Person {
   email: string;
   phone?: string;
   roleTitle?: string;
+  /** Whether email/phone show on this person's portal Team row (absent = role-based default). */
+  showContactInPortal?: boolean;
   kind: PersonKind;
   portal?: PortalStatus;
 }

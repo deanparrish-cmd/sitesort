@@ -5,14 +5,23 @@
  * SiteSort API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { PortalDocument } from "./portalDocument";
+import type { PortalBoardPin } from "./portalBoardPin";
 import type { PortalEvent } from "./portalEvent";
-import type { PortalIssue } from "./portalIssue";
-import type { PortalPermit } from "./portalPermit";
+import type { PortalSiteBoardDocumentsItem } from "./portalSiteBoardDocumentsItem";
+import type { PortalSiteBoardPermitsItem } from "./portalSiteBoardPermitsItem";
+import type { PortalSiteBoardProject } from "./portalSiteBoardProject";
+import type { PortalSiteBoardSiteManager } from "./portalSiteBoardSiteManager";
 
+/**
+ * Full site board — same source as the public scanned view + the board QR token.
+ */
 export interface PortalSiteBoard {
-  documents: PortalDocument[];
-  photos: PortalIssue[];
-  permits: PortalPermit[];
+  project: PortalSiteBoardProject;
+  siteManager?: PortalSiteBoardSiteManager;
+  teamSize: number;
+  permits: PortalSiteBoardPermitsItem[];
+  documents: PortalSiteBoardDocumentsItem[];
+  pinnedItems: PortalBoardPin[];
   upcomingEvents: PortalEvent[];
+  qrToken?: string | null;
 }

@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uniqueIndex, boolean } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -25,6 +25,10 @@ export const peopleTable = pgTable("people", {
   phone: text("phone"),
   // Optional free-text job title, e.g. "Site Foreman". NOT the portal role.
   roleTitle: text("role_title"),
+  // Whether this person's email/phone are shown on their portal Team row. NULL =
+  // use the role-based default (managers ON, workers OFF); a non-null value is the
+  // PM's explicit choice, set from the dashboard Team tab.
+  showContactInPortal: boolean("show_contact_in_portal"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => ({
   // One person per email within a subcontractor firm (dedupe repeat adds).

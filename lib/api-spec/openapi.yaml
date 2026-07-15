@@ -1266,6 +1266,29 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
+    patch:
+      operationId: updatePerson
+      tags: [portal]
+      summary: Update a person's portal contact visibility and/or job title (PM)
+      parameters:
+        - name: personId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePersonRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Person"
 
   /projects/{projectId}/in-house-people:
     get:
@@ -2524,19 +2547,24 @@ components:
       properties:
         name:
           type: string
-        role:
+        company:
           type: string
-        type:
+          description: Subcontractor company name, or our company name for in-house members.
+        jobTitle:
+          type: string
+        role:
           type: string
         phone:
           type: string
-        avatarUrl:
+          description: Only present when contact details are shown for this person.
+        email:
           type: string
+          description: Only present when contact details are shown for this person.
         trades:
           type: array
           items:
             type: string
-      required: [name, role, type]
+      required: [name, company, role]
 
     PortalIssue:
       type: object
@@ -2620,26 +2648,81 @@ components:
           type: string
       required: [id, title, eventDate, scope]
 
+    PortalBoardPin:
+      type: object
+      description: A pinned board item (document, photo, or permit) — polymorphic.
+      properties:
+        itemType: { type: string }
+        id: { type: string }
+        name: { type: string }
+        type: { type: string }
+        version: { type: integer }
+        superseded: { type: boolean }
+        fileUrl: { type: string }
+        referenceNumber: { type: string }
+        category: { type: string }
+        description: { type: string, nullable: true }
+        photoUrl: { type: string, nullable: true }
+        expiryDate: { type: string }
+        status: { type: string }
+      required: [itemType, id]
+
     PortalSiteBoard:
       type: object
+      description: Full site board — same source as the public scanned view + the board QR token.
       properties:
-        documents:
-          type: array
-          items:
-            $ref: "#/components/schemas/PortalDocument"
-        photos:
-          type: array
-          items:
-            $ref: "#/components/schemas/PortalIssue"
+        project:
+          type: object
+          properties:
+            id: { type: string }
+            name: { type: string }
+            address: { type: string }
+            status: { type: string }
+            startDate: { type: string, nullable: true }
+            targetEndDate: { type: string, nullable: true }
+            trades: { type: array, items: { type: string } }
+          required: [id, name, address, status, trades]
+        siteManager:
+          type: object
+          nullable: true
+          properties:
+            name: { type: string }
+            email: { type: string }
+            phone: { type: string, nullable: true }
+        teamSize: { type: integer }
         permits:
           type: array
           items:
-            $ref: "#/components/schemas/PortalPermit"
+            type: object
+            properties:
+              id: { type: string }
+              type: { type: string }
+              description: { type: string }
+              expiryDate: { type: string }
+            required: [id, type, expiryDate]
+        documents:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              name: { type: string }
+              type: { type: string }
+              version: { type: integer }
+              uploadedAt: { type: string }
+            required: [id, name, type]
+        pinnedItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/PortalBoardPin"
         upcomingEvents:
           type: array
           items:
             $ref: "#/components/schemas/PortalEvent"
-      required: [documents, photos, permits, upcomingEvents]
+        qrToken:
+          type: string
+          nullable: true
+      required: [project, teamSize, permits, documents, pinnedItems, upcomingEvents]
 
     PortalHs:
       type: object
@@ -2777,6 +2860,9 @@ components:
           type: string
         roleTitle:
           type: string
+        showContactInPortal:
+          type: boolean
+          description: Whether email/phone show on this person's portal Team row (absent = role-based default).
         kind:
           type: string
           enum: [subcontractor, in_house]
@@ -2797,6 +2883,17 @@ components:
         roleTitle:
           type: string
       required: [name, email]
+
+    UpdatePersonRequest:
+      type: object
+      description: Partial update; omit a field to leave it unchanged. showContactInPortal null = reset to role default.
+      properties:
+        showContactInPortal:
+          type: boolean
+          nullable: true
+        roleTitle:
+          type: string
+          nullable: true
 
     PortalInviteRequest:
       type: object

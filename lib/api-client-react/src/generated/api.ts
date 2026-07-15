@@ -79,6 +79,7 @@ import type {
   SuccessResponse,
   UpdateInsuranceRequest,
   UpdatePermitRequest,
+  UpdatePersonRequest,
   UpdateProjectRequest,
   UpdateSubcontractorRequest,
   UpdateUserRequest,
@@ -5282,6 +5283,93 @@ export const useDeletePerson = <
   TContext
 > => {
   return useMutation(getDeletePersonMutationOptions(options));
+};
+
+/**
+ * @summary Update a person's portal contact visibility and/or job title (PM)
+ */
+export const getUpdatePersonUrl = (personId: string) => {
+  return `/api/people/${personId}`;
+};
+
+export const updatePerson = async (
+  personId: string,
+  updatePersonRequest: UpdatePersonRequest,
+  options?: RequestInit,
+): Promise<Person> => {
+  return customFetch<Person>(getUpdatePersonUrl(personId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updatePersonRequest),
+  });
+};
+
+export const getUpdatePersonMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updatePerson>>,
+    TError,
+    { personId: string; data: BodyType<UpdatePersonRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updatePerson>>,
+  TError,
+  { personId: string; data: BodyType<UpdatePersonRequest> },
+  TContext
+> => {
+  const mutationKey = ["updatePerson"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updatePerson>>,
+    { personId: string; data: BodyType<UpdatePersonRequest> }
+  > = (props) => {
+    const { personId, data } = props ?? {};
+
+    return updatePerson(personId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdatePersonMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updatePerson>>
+>;
+export type UpdatePersonMutationBody = BodyType<UpdatePersonRequest>;
+export type UpdatePersonMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a person's portal contact visibility and/or job title (PM)
+ */
+export const useUpdatePerson = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updatePerson>>,
+    TError,
+    { personId: string; data: BodyType<UpdatePersonRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updatePerson>>,
+  TError,
+  { personId: string; data: BodyType<UpdatePersonRequest> },
+  TContext
+> => {
+  return useMutation(getUpdatePersonMutationOptions(options));
 };
 
 /**

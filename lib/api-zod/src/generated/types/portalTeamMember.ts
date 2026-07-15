@@ -8,9 +8,13 @@
 
 export interface PortalTeamMember {
   name: string;
+  /** Subcontractor company name, or our company name for in-house members. */
+  company: string;
+  jobTitle?: string;
   role: string;
-  type: string;
+  /** Only present when contact details are shown for this person. */
   phone?: string;
-  avatarUrl?: string;
+  /** Only present when contact details are shown for this person. */
+  email?: string;
   trades?: string[];
 }

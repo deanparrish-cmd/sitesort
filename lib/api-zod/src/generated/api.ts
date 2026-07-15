@@ -1104,10 +1104,21 @@ export const GetPortalProgressResponse = zod.object({
  */
 export const GetPortalTeamResponseItem = zod.object({
   name: zod.string(),
+  company: zod
+    .string()
+    .describe(
+      "Subcontractor company name, or our company name for in-house members.",
+    ),
+  jobTitle: zod.string().optional(),
   role: zod.string(),
-  type: zod.string(),
-  phone: zod.string().optional(),
-  avatarUrl: zod.string().optional(),
+  phone: zod
+    .string()
+    .optional()
+    .describe("Only present when contact details are shown for this person."),
+  email: zod
+    .string()
+    .optional()
+    .describe("Only present when contact details are shown for this person."),
   trades: zod.array(zod.string()).optional(),
 });
 export const GetPortalTeamResponse = zod.array(GetPortalTeamResponseItem);
@@ -1134,55 +1145,77 @@ export const GetPortalSiteIssuesResponse = zod.array(
 /**
  * @summary Pinned site-board items + upcoming events
  */
-export const GetPortalSiteBoardResponse = zod.object({
-  documents: zod.array(
-    zod.object({
+export const GetPortalSiteBoardResponse = zod
+  .object({
+    project: zod.object({
       id: zod.string(),
       name: zod.string(),
-      type: zod.string(),
-      version: zod.number(),
-      revision: zod.string().optional(),
-      fileUrl: zod.string(),
-      fileSize: zod.number().optional(),
+      address: zod.string(),
       status: zod.string(),
-      createdAt: zod.string().optional(),
+      startDate: zod.string().nullish(),
+      targetEndDate: zod.string().nullish(),
+      trades: zod.array(zod.string()),
     }),
-  ),
-  photos: zod.array(
-    zod.object({
-      id: zod.string(),
-      category: zod.string(),
-      description: zod.string().optional(),
-      zone: zod.string().optional(),
-      referenceNumber: zod.string(),
-      status: zod.string().optional(),
-      photoUrl: zod.string().optional(),
-      takenAt: zod.string().optional(),
-      latitude: zod.string().optional(),
-      longitude: zod.string().optional(),
-    }),
-  ),
-  permits: zod.array(
-    zod.object({
-      id: zod.string(),
-      type: zod.string(),
-      description: zod.string(),
-      startDate: zod.string().optional(),
-      expiryDate: zod.string(),
-      status: zod.string(),
-      documentUrl: zod.string().optional(),
-    }),
-  ),
-  upcomingEvents: zod.array(
-    zod.object({
-      id: zod.string(),
-      title: zod.string(),
-      eventDate: zod.string(),
-      note: zod.string().optional(),
-      scope: zod.string(),
-    }),
-  ),
-});
+    siteManager: zod
+      .object({
+        name: zod.string().optional(),
+        email: zod.string().optional(),
+        phone: zod.string().nullish(),
+      })
+      .nullish(),
+    teamSize: zod.number(),
+    permits: zod.array(
+      zod.object({
+        id: zod.string(),
+        type: zod.string(),
+        description: zod.string().optional(),
+        expiryDate: zod.string(),
+      }),
+    ),
+    documents: zod.array(
+      zod.object({
+        id: zod.string(),
+        name: zod.string(),
+        type: zod.string(),
+        version: zod.number().optional(),
+        uploadedAt: zod.string().optional(),
+      }),
+    ),
+    pinnedItems: zod.array(
+      zod
+        .object({
+          itemType: zod.string(),
+          id: zod.string(),
+          name: zod.string().optional(),
+          type: zod.string().optional(),
+          version: zod.number().optional(),
+          superseded: zod.boolean().optional(),
+          fileUrl: zod.string().optional(),
+          referenceNumber: zod.string().optional(),
+          category: zod.string().optional(),
+          description: zod.string().nullish(),
+          photoUrl: zod.string().nullish(),
+          expiryDate: zod.string().optional(),
+          status: zod.string().optional(),
+        })
+        .describe(
+          "A pinned board item (document, photo, or permit) — polymorphic.",
+        ),
+    ),
+    upcomingEvents: zod.array(
+      zod.object({
+        id: zod.string(),
+        title: zod.string(),
+        eventDate: zod.string(),
+        note: zod.string().optional(),
+        scope: zod.string(),
+      }),
+    ),
+    qrToken: zod.string().nullish(),
+  })
+  .describe(
+    "Full site board — same source as the public scanned view + the board QR token.",
+  );
 
 /**
  * @summary Health & Safety hub (method statements + safety docs + permits)
@@ -1450,6 +1483,12 @@ export const ListSubcontractorPeopleResponseItem = zod
     email: zod.string(),
     phone: zod.string().optional(),
     roleTitle: zod.string().optional(),
+    showContactInPortal: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Whether email\/phone show on this person's portal Team row (absent = role-based default).",
+      ),
     kind: zod.enum(["subcontractor", "in_house"]),
     portal: zod
       .object({
@@ -1505,6 +1544,62 @@ export const DeletePersonResponse = zod.object({
 });
 
 /**
+ * @summary Update a person's portal contact visibility and/or job title (PM)
+ */
+export const UpdatePersonParams = zod.object({
+  personId: zod.coerce.string(),
+});
+
+export const UpdatePersonBody = zod
+  .object({
+    showContactInPortal: zod.boolean().nullish(),
+    roleTitle: zod.string().nullish(),
+  })
+  .describe(
+    "Partial update; omit a field to leave it unchanged. showContactInPortal null = reset to role default.",
+  );
+
+export const UpdatePersonResponse = zod
+  .object({
+    id: zod.string(),
+    subcontractorId: zod.string().optional(),
+    userId: zod.string().optional(),
+    name: zod.string(),
+    email: zod.string(),
+    phone: zod.string().optional(),
+    roleTitle: zod.string().optional(),
+    showContactInPortal: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Whether email\/phone show on this person's portal Team row (absent = role-based default).",
+      ),
+    kind: zod.enum(["subcontractor", "in_house"]),
+    portal: zod
+      .object({
+        status: zod.enum(["not_invited", "invited", "member"]),
+        role: zod.string().optional(),
+        inviteId: zod.string().optional(),
+        lastActiveAt: zod.string().optional(),
+        emailStatus: zod
+          .enum(["sent", "failed"])
+          .optional()
+          .describe(
+            "Delivery state of the invite email (absent = never attempted).",
+          ),
+        emailLastSentAt: zod
+          .string()
+          .optional()
+          .describe("ISO timestamp of the last invite-email send attempt."),
+      })
+      .optional()
+      .describe("A person's portal state for one project."),
+  })
+  .describe(
+    "An individual person (subcontractor person when subcontractorId set, else in-house).",
+  );
+
+/**
  * @summary In-house people (portal-only) with per-project portal status (PM)
  */
 export const ListInHousePeopleParams = zod.object({
@@ -1520,6 +1615,12 @@ export const ListInHousePeopleResponseItem = zod
     email: zod.string(),
     phone: zod.string().optional(),
     roleTitle: zod.string().optional(),
+    showContactInPortal: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Whether email\/phone show on this person's portal Team row (absent = role-based default).",
+      ),
     kind: zod.enum(["subcontractor", "in_house"]),
     portal: zod
       .object({

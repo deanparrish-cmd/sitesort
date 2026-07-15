@@ -160,6 +160,8 @@ export async function ensureSchema(): Promise<void> {
     await pool.query(`DROP INDEX IF EXISTS people_company_user_uq`);
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS people_company_inhouse_email_uq ON people (company_id, email) WHERE subcontractor_id IS NULL`);
     await pool.query(`ALTER TABLE project_invites ADD COLUMN IF NOT EXISTS person_id text REFERENCES people(id) ON DELETE CASCADE`);
+    // Per-person "show contact details in portal" flag (NULL = role-based default).
+    await pool.query(`ALTER TABLE people ADD COLUMN IF NOT EXISTS show_contact_in_portal boolean`);
     // Invite email delivery state (Resend integration).
     await pool.query(`ALTER TABLE project_invites ADD COLUMN IF NOT EXISTS email_status text`);
     await pool.query(`ALTER TABLE project_invites ADD COLUMN IF NOT EXISTS email_last_sent_at timestamp`);

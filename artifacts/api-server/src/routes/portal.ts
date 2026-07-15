@@ -6,9 +6,10 @@ import {
   usersTable, projectsTable, projectMembersTable, projectInvitesTable,
   documentsTable, photosTable, permitsTable, milestonesTable, dailyNotesTable,
   qrBoardPinsTable, calendarEventsTable, subcontractorsTable, peopleTable,
-  portalSharesTable, documentDistributionsTable,
+  portalSharesTable, documentDistributionsTable, companiesTable, qrCodesTable,
 } from "@workspace/db/schema";
 import { and, eq, inArray, isNull, isNotNull, desc, asc, gte, count } from "drizzle-orm";
+import { buildSiteBoardPayload } from "../lib/site-board";
 import { generateId } from "../lib/id";
 import { authenticate, generatePortalToken } from "../middlewares/auth";
 import { requirePortalMember, autoLogPortalActivity } from "../middlewares/portal";
@@ -359,14 +360,20 @@ router.get("/portal/overview", ...portalGuards, async (req, res) => {
   const pid = req.portalProjectId!;
   const proj = await loadProject(pid);
   if (!proj) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
-  const [issues, milestonesRows, permitsRows, teamRows, notes] = await Promise.all([
-    db.select({ total: count() }).from(photosTable).where(and(
+  // The Open Issues + Active Permits stats deep-link into GATED sections, so their
+  // counts must only include what this member is allowed to see (shared items).
+  const viewer = await resolveViewer(req.user!.id, pid);
+  const [photoVisible, permitVisible] = await Promise.all([visibleIds(pid, "photo", viewer), visibleIds(pid, "permit", viewer)]);
+  const [openIssueRows, permitRows, milestonesRows, teamRows, notes] = await Promise.all([
+    photoVisible.size ? db.select({ id: photosTable.id }).from(photosTable).where(and(
       eq(photosTable.projectId, pid),
       inArray(photosTable.category, ["snag", "safety_concern"]),
       inArray(photosTable.status, ["open", "in_progress"]),
-    )),
+      inArray(photosTable.id, [...photoVisible]),
+    )) : Promise.resolve([]),
+    permitVisible.size ? db.select({ expiryDate: permitsTable.expiryDate }).from(permitsTable)
+      .where(and(eq(permitsTable.projectId, pid), isNull(permitsTable.archivedAt), inArray(permitsTable.id, [...permitVisible]))) : Promise.resolve([]),
     db.select({ completedAt: milestonesTable.completedAt }).from(milestonesTable).where(eq(milestonesTable.projectId, pid)),
-    db.select({ total: count() }).from(permitsTable).where(and(eq(permitsTable.projectId, pid), isNull(permitsTable.archivedAt))),
     db.select({ total: count() }).from(projectMembersTable).where(eq(projectMembersTable.projectId, pid)),
     // DECISION: portal members see project history from BEFORE their join date —
     // the site-updates feed (and every portal section) filters by project only,
@@ -381,12 +388,13 @@ router.get("/portal/overview", ...portalGuards, async (req, res) => {
       .orderBy(desc(dailyNotesTable.createdAt)).limit(5),
   ]);
   const progressPercent = milestonesRows.length === 0 ? 0 : Math.round(milestonesRows.filter(m => m.completedAt !== null).length / milestonesRows.length * 100);
+  const activePermits = (permitRows as { expiryDate: string }[]).filter(p => expiryStatus(p.expiryDate) === "active").length;
   res.json({
     project: serializeProject(proj, progressPercent),
     stats: {
-      openIssues: Number(issues[0]?.total ?? 0),
+      openIssues: openIssueRows.length,
       upcomingMilestones: milestonesRows.filter(m => m.completedAt === null).length,
-      activePermits: Number(permitsRows[0]?.total ?? 0),
+      activePermits,
       teamSize: Number(teamRows[0]?.total ?? 0),
     },
     recentNotes: notes.map(n => ({ id: n.id, body: n.body, noteDate: n.noteDate, authorName: n.authorName ?? "Unknown", photoUrl: n.photoUrl ?? undefined })),
@@ -423,24 +431,62 @@ router.get("/portal/progress", ...portalGuards, async (req, res) => {
   });
 });
 
-// GET /api/portal/team
+// GET /api/portal/team — each member disambiguated by name + company + job title.
 router.get("/portal/team", ...portalGuards, async (req, res) => {
   const pid = req.portalProjectId!;
-  const userMembers = await db.select({
-    role: projectMembersTable.role, name: usersTable.name, phone: usersTable.phone, avatarUrl: usersTable.avatarUrl,
-  }).from(projectMembersTable)
-    .innerJoin(usersTable, eq(projectMembersTable.userId, usersTable.id))
-    .where(eq(projectMembersTable.projectId, pid));
-  const subMembers = await db.select({
-    contactName: subcontractorsTable.contactName, companyName: subcontractorsTable.companyName,
-    phone: subcontractorsTable.contactPhone, avatarUrl: subcontractorsTable.avatarUrl, trades: subcontractorsTable.trades,
-  }).from(projectMembersTable)
-    .innerJoin(subcontractorsTable, eq(projectMembersTable.subcontractorId, subcontractorsTable.id))
-    .where(eq(projectMembersTable.projectId, pid));
-  res.json([
-    ...userMembers.map(m => ({ name: m.name, role: m.role, type: "user", phone: m.phone ?? undefined, avatarUrl: m.avatarUrl ?? undefined })),
-    ...subMembers.map(s => ({ name: `${s.contactName} · ${s.companyName}`, role: "subcontractor", type: "subcontractor", phone: s.phone ?? undefined, avatarUrl: s.avatarUrl ?? undefined, trades: s.trades ?? [] })),
+  const proj = await loadProject(pid);
+  const ourCompany = proj
+    ? (await db.select({ name: companiesTable.name }).from(companiesTable).where(eq(companiesTable.id, proj.companyId)).limit(1))[0]?.name ?? "In-house"
+    : "In-house";
+
+  const members = await db.select().from(projectMembersTable).where(eq(projectMembersTable.projectId, pid));
+  const personIds = members.map(m => m.personId).filter(Boolean) as string[];
+  const userIds = members.map(m => m.userId).filter(Boolean) as string[];
+  const [people, users] = await Promise.all([
+    personIds.length ? db.select().from(peopleTable).where(inArray(peopleTable.id, personIds)) : Promise.resolve([]),
+    userIds.length ? db.select({ id: usersTable.id, name: usersTable.name, phone: usersTable.phone, email: usersTable.email }).from(usersTable).where(inArray(usersTable.id, userIds)) : Promise.resolve([]),
   ]);
+  // All subcontractors referenced either directly (company link) or via a person.
+  const subIds = [...new Set([
+    ...members.map(m => m.subcontractorId).filter(Boolean) as string[],
+    ...people.map(p => p.subcontractorId).filter(Boolean) as string[],
+  ])];
+  const subs = subIds.length ? await db.select().from(subcontractorsTable).where(inArray(subcontractorsTable.id, subIds)) : [];
+  const subById = new Map(subs.map(s => [s.id, s]));
+  const personById = new Map(people.map(p => [p.id, p]));
+  const userById = new Map(users.map(u => [u.id, u]));
+
+  // Contact details are shown per-person only when allowed: the person's explicit
+  // flag, else the role default (managers ON, everyone else OFF). When OFF the row
+  // is name + company + job title only.
+  const showsContact = (flag: boolean | null | undefined, role: string) => flag ?? role === "manager";
+
+  const result = members.map(m => {
+    // A portal member (person link) carries the richest info: name + firm + job title.
+    const person = m.personId ? personById.get(m.personId) : undefined;
+    if (person) {
+      const sub = person.subcontractorId ? subById.get(person.subcontractorId) : undefined;
+      const user = m.userId ? userById.get(m.userId) : undefined;
+      const contact = showsContact(person.showContactInPortal, m.role);
+      return {
+        name: person.name,
+        company: sub ? sub.companyName : ourCompany,
+        jobTitle: person.roleTitle ?? undefined,
+        role: m.role,
+        trades: sub?.trades ?? [],
+        ...(contact ? { email: person.email ?? undefined, phone: (person.phone ?? user?.phone) ?? undefined } : {}),
+      };
+    }
+    const sub = m.subcontractorId ? subById.get(m.subcontractorId) : undefined;
+    if (sub) {
+      const contact = showsContact(null, "subcontractor");
+      return { name: sub.contactName, company: sub.companyName, jobTitle: undefined, role: "subcontractor", trades: sub.trades ?? [], ...(contact ? { email: sub.contactEmail ?? undefined, phone: sub.contactPhone ?? undefined } : {}) };
+    }
+    const user = m.userId ? userById.get(m.userId) : undefined;
+    const contact = showsContact(null, m.role);
+    return { name: user?.name ?? "Unknown", company: ourCompany, jobTitle: undefined, role: m.role, trades: [], ...(contact ? { email: user?.email ?? undefined, phone: user?.phone ?? undefined } : {}) };
+  });
+  res.json(result);
 });
 
 // GET /api/portal/site-issues — GATED to shared photos.
@@ -455,33 +501,16 @@ router.get("/portal/site-issues", ...portalGuards, async (req, res) => {
   res.json(rows.map(serializeIssue));
 });
 
-// GET /api/portal/site-board — pinned items + upcoming events.
+// GET /api/portal/site-board — FULL parity with the public scanned board, read
+// from the SAME source (buildSiteBoardPayload), plus the board's QR token so a
+// member can rescan/share it. This is public-parity content, not gated.
 router.get("/portal/site-board", ...portalGuards, async (req, res) => {
   const pid = req.portalProjectId!;
-  const proj = await loadProject(pid);
-  if (!proj) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
-  const pins = await db.select().from(qrBoardPinsTable).where(eq(qrBoardPinsTable.projectId, pid));
-  const docIds = pins.filter(p => p.itemType === "document").map(p => p.itemId);
-  const photoIds = pins.filter(p => p.itemType === "photo").map(p => p.itemId);
-  const permitIds = pins.filter(p => p.itemType === "permit").map(p => p.itemId);
-
-  const [docs, photos, permits, events] = await Promise.all([
-    docIds.length ? db.select().from(documentsTable).where(inArray(documentsTable.id, docIds)) : Promise.resolve([]),
-    photoIds.length ? db.select().from(photosTable).where(inArray(photosTable.id, photoIds)) : Promise.resolve([]),
-    permitIds.length ? db.select().from(permitsTable).where(and(inArray(permitsTable.id, permitIds), isNull(permitsTable.archivedAt))) : Promise.resolve([]),
-    db.select().from(calendarEventsTable).where(and(
-      eq(calendarEventsTable.companyId, proj.companyId),
-      gte(calendarEventsTable.eventDate, new Date().toISOString().slice(0, 10)),
-    )).orderBy(asc(calendarEventsTable.eventDate)).limit(20),
-  ]);
-  res.json({
-    documents: docs.map(serializeDoc),
-    photos: photos.map(serializeIssue),
-    permits: permits.map(serializePermit),
-    upcomingEvents: events
-      .filter(e => e.projectId === null || e.projectId === pid)
-      .map(e => ({ id: e.id, title: e.title, eventDate: e.eventDate, note: e.note ?? undefined, scope: e.projectId ? "project" : "company" })),
-  });
+  const payload = await buildSiteBoardPayload(pid);
+  if (!payload) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+  const qr = (await db.select({ token: qrCodesTable.token }).from(qrCodesTable)
+    .where(and(eq(qrCodesTable.projectId, pid), eq(qrCodesTable.category, "site_board"))).limit(1))[0];
+  res.json({ ...payload, qrToken: qr?.token ?? null });
 });
 
 // GET /api/portal/hs — Health & Safety hub. Safety docs are always visible;

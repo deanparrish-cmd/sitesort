@@ -763,10 +763,14 @@ export interface PortalProgress {
 
 export interface PortalTeamMember {
   name: string;
+  /** Subcontractor company name, or our company name for in-house members. */
+  company: string;
+  jobTitle?: string;
   role: string;
-  type: string;
+  /** Only present when contact details are shown for this person. */
   phone?: string;
-  avatarUrl?: string;
+  /** Only present when contact details are shown for this person. */
+  email?: string;
   trades?: string[];
 }
 
@@ -813,11 +817,68 @@ export interface PortalEvent {
   scope: string;
 }
 
+/**
+ * A pinned board item (document, photo, or permit) — polymorphic.
+ */
+export interface PortalBoardPin {
+  itemType: string;
+  id: string;
+  name?: string;
+  type?: string;
+  version?: number;
+  superseded?: boolean;
+  fileUrl?: string;
+  referenceNumber?: string;
+  category?: string;
+  description?: string | null;
+  photoUrl?: string | null;
+  expiryDate?: string;
+  status?: string;
+}
+
+export type PortalSiteBoardProject = {
+  id: string;
+  name: string;
+  address: string;
+  status: string;
+  startDate?: string | null;
+  targetEndDate?: string | null;
+  trades: string[];
+};
+
+export type PortalSiteBoardSiteManager = {
+  name?: string;
+  email?: string;
+  phone?: string | null;
+} | null;
+
+export type PortalSiteBoardPermitsItem = {
+  id: string;
+  type: string;
+  description?: string;
+  expiryDate: string;
+};
+
+export type PortalSiteBoardDocumentsItem = {
+  id: string;
+  name: string;
+  type: string;
+  version?: number;
+  uploadedAt?: string;
+};
+
+/**
+ * Full site board — same source as the public scanned view + the board QR token.
+ */
 export interface PortalSiteBoard {
-  documents: PortalDocument[];
-  photos: PortalIssue[];
-  permits: PortalPermit[];
+  project: PortalSiteBoardProject;
+  siteManager?: PortalSiteBoardSiteManager;
+  teamSize: number;
+  permits: PortalSiteBoardPermitsItem[];
+  documents: PortalSiteBoardDocumentsItem[];
+  pinnedItems: PortalBoardPin[];
   upcomingEvents: PortalEvent[];
+  qrToken?: string | null;
 }
 
 export interface PortalHs {
@@ -923,6 +984,8 @@ export interface Person {
   email: string;
   phone?: string;
   roleTitle?: string;
+  /** Whether email/phone show on this person's portal Team row (absent = role-based default). */
+  showContactInPortal?: boolean;
   kind: PersonKind;
   portal?: PortalStatus;
 }
@@ -932,6 +995,14 @@ export interface CreatePersonRequest {
   email: string;
   phone?: string;
   roleTitle?: string;
+}
+
+/**
+ * Partial update; omit a field to leave it unchanged. showContactInPortal null = reset to role default.
+ */
+export interface UpdatePersonRequest {
+  showContactInPortal?: boolean | null;
+  roleTitle?: string | null;
 }
 
 export type PortalInviteRequestRole =

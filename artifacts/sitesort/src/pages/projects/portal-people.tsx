@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   useListSubcontractorPeople, useCreateSubcontractorPerson, useDeletePerson,
   useListInHousePeople, useCreateInHousePerson, useCreatePortalInvite, useRevokeProjectInvite,
-  useResendPortalInvite,
+  useResendPortalInvite, useUpdatePerson,
   getListSubcontractorPeopleQueryKey, getListInHousePeopleQueryKey,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -60,7 +60,7 @@ function InviteEmailStatus({ projectId, portal, onDone }: { projectId: string; p
     </span>
   );
 }
-type PersonLike = { id: string; name: string; email: string; phone?: string; roleTitle?: string; portal?: PortalStatus };
+type PersonLike = { id: string; name: string; email: string; phone?: string; roleTitle?: string; showContactInPortal?: boolean; portal?: PortalStatus };
 type PortalRole = "worker" | "manager" | "subcontractor";
 type PersonInput = { name: string; email: string; phone?: string; roleTitle?: string };
 type PillSource = { kind: "in_house" } | { kind: "subcontractor"; subcontractorId: string };
@@ -221,6 +221,14 @@ function PersonRow({
   const [copied, setCopied] = useState(false);
   const invite = async () => { await onInvite(role); setCopied(true); setTimeout(() => setCopied(false), 2000); };
 
+  const updatePerson = useUpdatePerson();
+  // Effective contact visibility: explicit flag, else role default (managers ON).
+  const contactOn = person.showContactInPortal ?? (portal.role === "manager");
+  const toggleContact = async () => {
+    try { await updatePerson.mutateAsync({ personId: person.id, data: { showContactInPortal: !contactOn } }); onChanged(); } catch { /* noop */ }
+  };
+  const onPortal = portal.status === "member" || portal.status === "invited";
+
   return (
     <div className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-lg hover:bg-muted/40">
       <div className="min-w-0">
@@ -228,6 +236,14 @@ function PersonRow({
         <p className="text-xs text-muted-foreground truncate flex items-center gap-1"><Mail className="w-3 h-3 shrink-0" />{person.email}</p>
         {portal.status === "invited" && (
           <div className="mt-0.5"><InviteEmailStatus projectId={projectId} portal={portal} onDone={onChanged} /></div>
+        )}
+        {onPortal && (
+          <button onClick={toggleContact} disabled={updatePerson.isPending} className="mt-1 inline-flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground" title="Show this person's email & phone on their portal Team row">
+            <span className={cn("relative inline-flex h-4 w-7 rounded-full transition-colors shrink-0", contactOn ? "bg-primary" : "bg-muted-foreground/30")}>
+              <span className={cn("absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform", contactOn ? "translate-x-3.5" : "translate-x-0.5")} />
+            </span>
+            Show contact in portal
+          </button>
         )}
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
