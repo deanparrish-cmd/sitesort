@@ -91,6 +91,19 @@ export default function IssuesPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Apply deep-link filters carried in the URL (shareable, e.g. /issues?status=open).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get("status");
+    const type = params.get("type");
+    const q = params.get("q");
+    if (status && ["all", "open", "in_progress", "resolved"].includes(status)) setStatusFilter(status as typeof statusFilter);
+    if (type && ["all", "snag", "safety_concern"].includes(type)) setCatFilter(type as typeof catFilter);
+    if (q) setSearch(q);
+    if (status || type || q) window.history.replaceState({}, "", "/issues");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const updateStatus = async (issueId: string, status: string) => {
     const res = await fetch(`/api/photos/${issueId}`, {
       method: "PATCH",

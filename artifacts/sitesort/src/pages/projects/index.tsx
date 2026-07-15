@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, Building, MapPin, Calendar, Sparkles, AlertTriangle, CheckCircle2, Camera, Loader2, ClipboardCheck, Lock } from "lucide-react";
+import { Search, Plus, Building, MapPin, Calendar, Sparkles, AlertTriangle, CheckCircle2, Camera, Loader2, ClipboardCheck, Lock, X } from "lucide-react";
 import { useListProjects, useCreateProject } from "@workspace/api-client-react";
 import { useSubscription } from "@/contexts/subscription";
 import { useToast } from "@/hooks/use-toast";
@@ -34,6 +34,7 @@ export default function ProjectsList() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "alerts">("all");
   const { register, handleSubmit, reset } = useForm();
 
   const planLimit = PLAN_LIMITS[tier] ?? 1;
@@ -270,10 +271,22 @@ export default function ProjectsList() {
     if (match) setLocation(`/projects/${match.id}`);
   }, [projects, setLocation]);
 
-  const filteredProjects = projects?.filter(p => 
-    p.name.toLowerCase().includes(search.toLowerCase()) || 
-    p.address.toLowerCase().includes(search.toLowerCase())
-  );
+  // Apply deep-link filters (?status=active from the dashboard stat card, ?filter=alerts from the portfolio snapshot).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("filter") === "alerts") { setStatusFilter("alerts"); window.history.replaceState({}, "", "/projects"); }
+    else if (params.get("status") === "active") { setStatusFilter("active"); window.history.replaceState({}, "", "/projects"); }
+  }, []);
+
+  const filteredProjects = projects?.filter(p => {
+    const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
+      p.address.toLowerCase().includes(search.toLowerCase());
+    const matchesStatus =
+      statusFilter === "all" ? true :
+      statusFilter === "active" ? p.status === "active" :
+      /* alerts */ (p as any).alertCount > 0;
+    return matchesSearch && matchesStatus;
+  });
 
   const onSubmit = async (data: any) => {
     setCreateError(null);
@@ -327,6 +340,16 @@ export default function ProjectsList() {
               onChange={e => setSearch(e.target.value)}
             />
           </div>
+          {statusFilter !== "all" && (
+            <div className="flex flex-wrap items-center gap-2 mt-3">
+              <span className="inline-flex items-center gap-1.5 max-w-full rounded-full bg-primary/10 text-primary text-xs font-semibold pl-3 pr-1.5 py-1">
+                <span className="truncate">{statusFilter === "alerts" ? "Needs attention (alerts)" : "Active projects"}</span>
+                <button type="button" onClick={() => setStatusFilter("all")} className="shrink-0 rounded-full p-0.5 hover:bg-primary/20" aria-label="Clear filter">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Mobile card list */}

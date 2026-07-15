@@ -212,6 +212,22 @@ export default function MessagesPage() {
   const [searchChannels, setSearchChannels] = useState<ChannelSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [quickReplyOpen, setQuickReplyOpen] = useState(false);
+  const unreadDeepLinkRef = useRef(false);
+
+  // Deep-link ?filter=unread (e.g. from the dashboard "Unread Messages" card):
+  // once threads load, open the first conversation/channel that has unread messages.
+  useEffect(() => {
+    if (unreadDeepLinkRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("filter") !== "unread") { unreadDeepLinkRef.current = true; return; }
+    if (conversations.length === 0 && channels.length === 0) return; // wait for first load
+    unreadDeepLinkRef.current = true;
+    window.history.replaceState({}, "", "/messages");
+    const unreadConv = conversations.find(c => c.unread > 0);
+    const unreadChan = channels.find(ch => ch.unread > 0);
+    if (unreadConv) { setActiveConv(unreadConv); setActiveChannel(null); }
+    else if (unreadChan) { setActiveChannel(unreadChan); setActiveConv(null); }
+  }, [conversations, channels]);
 
   // Pagination state
   const [dmHasMore, setDmHasMore] = useState(false);

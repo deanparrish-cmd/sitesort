@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { LinkRow } from "@/components/ui/link-row";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -202,14 +203,15 @@ function SiteCalendar({ events, alerts, canManage, projects, onCreate, onDelete 
                 : "bg-muted border-border text-muted-foreground";
               const tag = expired ? "Expired" : urgent ? "Expires soon" : `${a.daysLeft}d`;
               return (
-                <div key={i} className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs ${styles}`}>
+                <Link key={i} href={`/compliance?filter=expiring&kind=${a.kind}`} className={`group flex items-center gap-2 px-3 py-2 rounded-lg border text-xs min-h-[44px] transition-colors hover:brightness-95 ${styles}`}>
                   <Bell className="w-3.5 h-3.5 flex-shrink-0" />
                   <span className="flex-1 font-medium truncate">{a.label}</span>
                   <span className="flex-shrink-0 font-semibold">{tag}</span>
-                </div>
+                  <ChevronRight className="w-3.5 h-3.5 flex-shrink-0 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                </Link>
               );
             })}
-            <Link href="/compliance" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors mt-1">
+            <Link href="/compliance?filter=expiring" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors mt-1">
               <ArrowRight className="w-3 h-3" /> View Compliance Centre
             </Link>
           </div>
@@ -272,12 +274,23 @@ function SiteCalendar({ events, alerts, canManage, projects, onCreate, onDelete 
         {upcoming.length > 0 && (
           <div className="mt-4 pt-3 border-t space-y-2">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Upcoming</p>
-            {upcoming.map((e, i) => (
-              <div key={i} className={`flex items-center justify-between px-3 py-2 rounded-lg border text-xs ${EVENT_STYLES[e.type].badge}`}>
-                <span className="font-medium truncate">{e.label}</span>
-                <span className="ml-3 flex-shrink-0 font-mono">{new Date(e.date + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>
-              </div>
-            ))}
+            {upcoming.map((e, i) => {
+              const to = e.href ?? EVENT_LINK[e.type].href;
+              const linkable = !!to && to !== "#";
+              const dateStr = new Date(e.date + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+              const rowCls = `flex items-center justify-between gap-3 px-3 py-2 rounded-lg border text-xs min-h-[44px] ${EVENT_STYLES[e.type].badge}`;
+              return linkable ? (
+                <Link key={i} href={to} className={`group ${rowCls} transition-colors hover:brightness-95`}>
+                  <span className="font-medium truncate">{e.label}</span>
+                  <span className="flex-shrink-0 flex items-center gap-1.5 font-mono">{dateStr}<ChevronRight className="w-3.5 h-3.5 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></span>
+                </Link>
+              ) : (
+                <div key={i} className={rowCls}>
+                  <span className="font-medium truncate">{e.label}</span>
+                  <span className="flex-shrink-0 font-mono">{dateStr}</span>
+                </div>
+              );
+            })}
           </div>
         )}
       </CardContent>
@@ -590,23 +603,23 @@ export default function Dashboard() {
 
     // Expired compliance
     for (const a of expiryAlerts) {
-      if (a.daysLeft < 0) items.push({ icon: <ShieldAlert className="w-4 h-4" />, label: `${a.label} — expired`, href: "/compliance", severity: "critical" });
-      else if (a.daysLeft <= 3) items.push({ icon: <ShieldAlert className="w-4 h-4" />, label: `${a.label} — expires in ${a.daysLeft}d`, href: "/compliance", severity: "critical" });
+      if (a.daysLeft < 0) items.push({ icon: <ShieldAlert className="w-4 h-4" />, label: `${a.label} — expired`, href: "/compliance?filter=expiring", severity: "critical" });
+      else if (a.daysLeft <= 3) items.push({ icon: <ShieldAlert className="w-4 h-4" />, label: `${a.label} — expires in ${a.daysLeft}d`, href: "/compliance?filter=expiring", severity: "critical" });
     }
 
     // Overdue invoices
     const overdue = invoices.filter(inv => inv.status !== "paid" && inv.dueDate.slice(0, 10) < todayStr);
     if (overdue.length > 0)
-      items.push({ icon: <FileText className="w-4 h-4" />, label: `${overdue.length} overdue invoice${overdue.length > 1 ? "s" : ""}`, href: "/invoices", severity: "critical" });
+      items.push({ icon: <FileText className="w-4 h-4" />, label: `${overdue.length} overdue invoice${overdue.length > 1 ? "s" : ""}`, href: "/invoices?status=overdue", severity: "critical" });
 
     // Pending sign-offs
     const pending = compliance?.pendingAcknowledgments?.reduce((a, c) => a + c.pendingCount, 0) ?? 0;
     if (pending > 0)
-      items.push({ icon: <FileSignature className="w-4 h-4" />, label: `${pending} pending document sign-off${pending > 1 ? "s" : ""}`, href: "/projects", severity: "warning" });
+      items.push({ icon: <FileSignature className="w-4 h-4" />, label: `${pending} pending document sign-off${pending > 1 ? "s" : ""}`, href: "/compliance?filter=signoffs", severity: "warning" });
 
     // Unread messages
     if (unreadMessages > 0)
-      items.push({ icon: <MessageSquare className="w-4 h-4" />, label: `${unreadMessages} unread message${unreadMessages > 1 ? "s" : ""}`, href: "/messages", severity: "warning" });
+      items.push({ icon: <MessageSquare className="w-4 h-4" />, label: `${unreadMessages} unread message${unreadMessages > 1 ? "s" : ""}`, href: "/messages?filter=unread", severity: "warning" });
 
     return items;
   }, [expiryAlerts, invoices, compliance, unreadMessages, todayStr]);
@@ -708,7 +721,7 @@ export default function Dashboard() {
         const steps = [
           { key: "hasProject",       done: onboarding.hasProject,       title: "Create your first project",         desc: "Set up a project with a name, address, and start date.",  href: "/projects?new=1",       cta: "Create project" },
           { key: "hasTeamMember",    done: onboarding.hasTeamMember,    title: "Invite an in house team member",    desc: "Add a colleague to one of your projects.",                 href: "/subcontractors?new=1", cta: "Add to directory" },
-          { key: "hasDocument",      done: onboarding.hasDocument,      title: "Upload your first document",        desc: "Share a drawing, method statement, or compliance doc.",    href: "/projects",             cta: "Go to projects" },
+          { key: "hasDocument",      done: onboarding.hasDocument,      title: "Upload your first document",        desc: "Share a drawing, method statement, or compliance doc.",    href: "/compliance?upload=1",  cta: "Upload document" },
           { key: "hasSubcontractor", done: onboarding.hasSubcontractor, title: "Add a contact",                    desc: "Build your directory of contacts with trade info.",         href: "/subcontractors",       cta: "Add contact" },
           { key: "hasMilestone",     done: onboarding.hasMilestone,     title: "Set milestones on a project",      desc: "Track progress with key dates and completion markers.",     href: "/projects",             cta: "Go to projects" },
         ];
@@ -764,14 +777,14 @@ export default function Dashboard() {
           label="Active Projects"
           value={activeProjects.length}
           sub={`${(projects?.filter(p => p.status === "complete") ?? []).length} completed`}
-          href="/projects"
+          href="/projects?status=active"
         />
         <StatCard
           icon={<ShieldAlert className={cn("w-5 h-5", expiringCount > 0 ? "text-orange-500" : "text-muted-foreground")} />}
           label="Expiring Soon"
           value={expiringCount}
           sub="insurance + permits (30d)"
-          href="/compliance"
+          href="/compliance?filter=expiring"
           color={expiringCount > 0 ? "border-orange-200 bg-orange-50/50" : undefined}
         />
         <StatCard
@@ -779,7 +792,7 @@ export default function Dashboard() {
           label="Pending Sign-offs"
           value={pendingSignOffs}
           sub="awaiting acknowledgment"
-          href="/projects"
+          href="/compliance?filter=signoffs"
           color={pendingSignOffs > 0 ? "border-destructive/20 bg-destructive/5" : undefined}
         />
         <StatCard
@@ -787,7 +800,7 @@ export default function Dashboard() {
           label="Unread Messages"
           value={unreadMessages}
           sub="from in house team"
-          href="/messages"
+          href="/messages?filter=unread"
           color={unreadMessages > 0 ? "border-blue-200 bg-blue-50/50" : undefined}
         />
       </div>
@@ -919,7 +932,7 @@ export default function Dashboard() {
               <Building2 className="w-10 h-10 mx-auto text-muted-foreground mb-3 opacity-40" />
               <h3 className="font-bold mb-1">{search ? "No matches" : "No active projects"}</h3>
               <p className="text-sm text-muted-foreground mb-4">{search ? "Try a different search term." : "Create your first project to get started."}</p>
-              {!search && <Link href="/projects"><Button size="sm">Create Project</Button></Link>}
+              {!search && <Link href="/projects?new=1"><Button size="sm">Create Project</Button></Link>}
             </Card>
           ) : (
             <div className="space-y-3">
@@ -1019,29 +1032,39 @@ export default function Dashboard() {
                   <TrendingUp className="w-4 h-4 text-primary" /> Portfolio Snapshot
                 </CardTitle>
               </CardHeader>
-              <CardContent className="px-4 pb-4 space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Avg. progress</span>
-                  <span className="font-bold">
-                    {Math.round(activeProjects.reduce((a, p) => a + p.progressPercent, 0) / (activeProjects.length || 1))}%
-                  </span>
-                </div>
+              <CardContent className="px-4 pb-4 space-y-1">
+                <LinkRow
+                  plain
+                  href="/projects?status=active"
+                  label={<span className="text-muted-foreground">Avg. progress</span>}
+                  detail={<span className="font-bold text-foreground">{Math.round(activeProjects.reduce((a, p) => a + p.progressPercent, 0) / (activeProjects.length || 1))}%</span>}
+                />
                 <div className="w-full bg-muted rounded-full h-2">
                   <div
                     className="bg-primary h-2 rounded-full"
                     style={{ width: `${Math.round(activeProjects.reduce((a, p) => a + p.progressPercent, 0) / (activeProjects.length || 1))}%` }}
                   />
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Total in house team</span>
-                  <span className="font-bold">{activeProjects.reduce((a, p) => a + p.memberCount, 0)} members</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Projects on track</span>
-                  <span className="font-bold text-emerald-600">
-                    {activeProjects.filter(p => p.alertCount === 0).length}/{activeProjects.length}
-                  </span>
-                </div>
+                <LinkRow
+                  plain
+                  href="/team"
+                  label={<span className="text-muted-foreground">Total in house team</span>}
+                  detail={<span className="font-bold text-foreground">{activeProjects.reduce((a, p) => a + p.memberCount, 0)} members</span>}
+                />
+                {(() => {
+                  const onTrack = activeProjects.filter(p => p.alertCount === 0).length;
+                  const total = activeProjects.length;
+                  const allClear = onTrack === total;
+                  return (
+                    <LinkRow
+                      plain
+                      href={allClear ? "/projects?status=active" : "/projects?filter=alerts"}
+                      quiet={allClear}
+                      label={<span className="text-muted-foreground">Projects on track</span>}
+                      detail={<span className={cn("font-bold", allClear ? "text-emerald-600" : "text-amber-600")}>{onTrack}/{total}</span>}
+                    />
+                  );
+                })()}
               </CardContent>
             </Card>
           )}

@@ -46,6 +46,16 @@ export default function CheckinsPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Apply deep-link filters carried in the URL (e.g. /checkins?project=<id>).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const project = params.get("project");
+    const query = params.get("q");
+    if (project) setProjectFilter(project);
+    if (query) setQ(query);
+    if (project || query) window.history.replaceState({}, "", "/checkins");
+  }, []);
+
   const projects = Array.from(new Map(checkins.map(c => [c.projectId, c.projectName])).entries());
 
   const filtered = checkins.filter(c => {

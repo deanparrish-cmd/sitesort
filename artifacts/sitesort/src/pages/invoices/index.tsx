@@ -99,7 +99,8 @@ export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<"all" | "inbound" | "outbound" | "pending" | "paid">("all");
+  const [filter, setFilter] = useState<"all" | "inbound" | "outbound" | "pending" | "paid" | "overdue">("all");
+  const [projectFilter, setProjectFilter] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -149,6 +150,17 @@ export default function InvoicesPage() {
     const target = invoices.find(inv => inv.id === id);
     if (target) setViewingInvoice(target);
   }, [loading, invoices]);
+
+  // Apply deep-link filters: ?status=overdue|pending|inbound|outbound|paid and ?project=<id>
+  // (e.g. dashboard "overdue invoices", a project's Finances "Due to You / You Owe" totals).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get("status");
+    const project = params.get("project");
+    if (status && ["all", "inbound", "outbound", "pending", "paid", "overdue"].includes(status)) setFilter(status as typeof filter);
+    if (project) setProjectFilter(project);
+    if (status || project) window.history.replaceState({}, "", "/invoices");
+  }, []);
 
   async function markPaid(id: string) {
     if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
@@ -290,8 +302,11 @@ export default function InvoicesPage() {
     clickUploadIdRef.current = null;
   }
 
+  const todayStr = new Date().toISOString().slice(0, 10);
   const filtered = invoices.filter(inv => {
-    if (inv.projectId) return false;
+    // Default list shows only unassigned invoices; a ?project=<id> deep-link scopes to that project instead.
+    if (projectFilter) { if (inv.projectId !== projectFilter) return false; }
+    else if (inv.projectId) return false;
     const matchSearch = inv.counterpartyName.toLowerCase().includes(search.toLowerCase()) ||
       inv.description.toLowerCase().includes(search.toLowerCase()) ||
       (inv.reference ?? "").toLowerCase().includes(search.toLowerCase());
@@ -300,6 +315,7 @@ export default function InvoicesPage() {
       filter === "inbound" ? inv.direction === "inbound" :
       filter === "outbound" ? inv.direction === "outbound" :
       filter === "pending" ? inv.status !== "paid" :
+      filter === "overdue" ? (inv.status !== "paid" && inv.dueDate.slice(0, 10) < todayStr) :
       inv.status === "paid";
     return matchSearch && matchFilter;
   }).sort((a, b) => {
@@ -391,7 +407,7 @@ export default function InvoicesPage() {
           />
         </div>
         <div className="flex flex-wrap gap-2">
-          {(["all", "inbound", "outbound", "pending", "paid"] as const).map(f => (
+          {(["all", "inbound", "outbound", "pending", "overdue", "paid"] as const).map(f => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -403,6 +419,16 @@ export default function InvoicesPage() {
           ))}
         </div>
       </div>
+      {projectFilter && (
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <span className="inline-flex items-center gap-1.5 max-w-full rounded-full bg-primary/10 text-primary text-xs font-semibold pl-3 pr-1.5 py-1">
+            <span className="truncate">Project: {projects?.find(p => p.id === projectFilter)?.name ?? "selected project"}</span>
+            <button type="button" onClick={() => setProjectFilter(null)} className="shrink-0 rounded-full p-0.5 hover:bg-primary/20" aria-label="Clear project filter">
+              <X className="w-3 h-3" />
+            </button>
+          </span>
+        </div>
+      )}
 
       {/* Drag hint */}
       <p className="text-xs text-muted-foreground mb-3 flex items-center gap-1.5">

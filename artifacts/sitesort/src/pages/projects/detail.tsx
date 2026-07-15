@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from "react";
-import { useRoute } from "wouter";
+import { useRoute, useLocation, Link } from "wouter";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ProjectTeamActivity, RecentActivityGlance } from "./team-activity";
 import { SubcontractorPeople, PortalInvitePill } from "./portal-people";
 import { Card, CardContent } from "@/components/ui/card";
+import { LinkRow } from "@/components/ui/link-row";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -147,6 +148,7 @@ export default function ProjectDetail() {
   const [viewingPhoto, setViewingPhoto] = useState<PhotoItem | null>(null);
   const [issueSearch, setIssueSearch] = useState("");
   const [issueStatusFilter, setIssueStatusFilter] = useState<"all" | "open" | "in_progress" | "resolved" | "overdue">("all");
+  const [activeTab, setActiveTab] = useState(defaultTab);
   const [todayNotes, setTodayNotes] = useState<DailyNote[]>([]);
   const [noteBody, setNoteBody] = useState("");
   const [noteSubmitting, setNoteSubmitting] = useState(false);
@@ -157,6 +159,23 @@ export default function ProjectDetail() {
   const [ovPhotoNote, setOvPhotoNote] = useState("");
   const [ovPhotoKey, setOvPhotoKey] = useState(0);
   const [ovPhotoSubmitting, setOvPhotoSubmitting] = useState(false);
+
+  const [, navigate] = useLocation();
+
+  /**
+   * Switch tabs in-page while keeping the URL shareable (real ?tab=&… query, history push
+   * so the back button returns to the previous page). Optionally scrolls to a section anchor.
+   */
+  const openTab = (tab: string, params?: Record<string, string>, scrollId?: string) => {
+    setActiveTab(tab);
+    const sp = new URLSearchParams();
+    sp.set("tab", tab);
+    if (params) for (const [k, v] of Object.entries(params)) sp.set(k, v);
+    navigate(`${window.location.pathname}?${sp.toString()}`);
+    if (scrollId) {
+      setTimeout(() => document.getElementById(scrollId)?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+    }
+  };
 
   const authHeaders = () => {
     const t = localStorage.getItem("sitesort_token");
@@ -221,6 +240,7 @@ export default function ProjectDetail() {
           const match = list.find(p => p.id === photoParam);
           if (match) {
             setViewingPhoto(match);
+            setActiveTab("issues");
             window.history.replaceState({}, "", window.location.pathname + "?tab=issues");
           }
         }
@@ -370,6 +390,20 @@ export default function ProjectDetail() {
     if (rid) openReportDetail(rid);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
+
+  // Apply deep-link filters/anchors carried in the URL on first load (shareable links).
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const st = sp.get("issueStatus");
+    if (st && ["all", "open", "in_progress", "resolved", "overdue"].includes(st)) {
+      setIssueStatusFilter(st as typeof issueStatusFilter);
+    }
+    const section = sp.get("section");
+    if (section) {
+      setTimeout(() => document.getElementById(`section-${section}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 350);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { isCancelled } = useSubscription();
   const { toast } = useToast();
@@ -1211,19 +1245,19 @@ tr:last-child td{border-bottom:none}
           </div>
           
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8 pt-6 border-t border-border/50">
-            <div>
-              <p className="text-sm text-muted-foreground font-medium mb-1">Progress</p>
+            <button type="button" onClick={() => openTab("progress")} className="group text-left min-w-0 rounded-lg transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <p className="text-sm text-muted-foreground font-medium mb-1 flex items-center gap-1">Progress <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-60 transition-opacity" /></p>
               <div className="flex items-center gap-2">
                 <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                   <div className="h-full bg-success" style={{ width: `${project.progressPercent}%` }}></div>
                 </div>
                 <span className="font-bold">{project.progressPercent}%</span>
               </div>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground font-medium mb-1">Team Size</p>
+            </button>
+            <button type="button" onClick={() => openTab("team")} className="group text-left min-w-0 rounded-lg transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <p className="text-sm text-muted-foreground font-medium mb-1 flex items-center gap-1">Team Size <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-60 transition-opacity" /></p>
               <p className="font-bold text-lg">{project.memberCount}</p>
-            </div>
+            </button>
             <div>
               <p className="text-sm text-muted-foreground font-medium mb-1">Target End</p>
               <p className="font-bold text-lg">{formatDate(project.targetEndDate)}</p>
@@ -1232,7 +1266,7 @@ tr:last-child td{border-bottom:none}
         </div>
       </div>
 
-      <Tabs defaultValue={defaultTab}>
+      <Tabs value={activeTab} onValueChange={t => openTab(t)}>
         <TabsList className="mb-6 w-full h-auto flex flex-wrap justify-start gap-1.5 bg-muted p-1.5 rounded-xl">
           {/* Group 1: Project management */}
           {(() => {
@@ -2287,22 +2321,27 @@ tr:last-child td{border-bottom:none}
                 )}
                 {/* Stats */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-                  <Card className="p-3 border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900 text-center">
-                    <p className="text-xl font-extrabold text-amber-700">{openCount}</p>
-                    <p className="text-xs text-amber-700 mt-0.5">Open</p>
-                  </Card>
-                  <Card className="p-3 border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-900 text-center">
-                    <p className="text-xl font-extrabold text-blue-700">{inProgressCount}</p>
-                    <p className="text-xs text-blue-700 mt-0.5">In Progress</p>
-                  </Card>
-                  <Card className="p-3 border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-900 text-center">
-                    <p className="text-xl font-extrabold text-red-700">{overdueCount}</p>
-                    <p className="text-xs text-red-700 mt-0.5">Overdue</p>
-                  </Card>
-                  <Card className="p-3 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-900 text-center">
-                    <p className="text-xl font-extrabold text-emerald-700">{resolvedCount}</p>
-                    <p className="text-xs text-emerald-700 mt-0.5">Resolved</p>
-                  </Card>
+                  {([
+                    { key: "open", count: openCount, label: "Open", cls: "border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900 text-amber-700 hover:ring-amber-300" },
+                    { key: "in_progress", count: inProgressCount, label: "In Progress", cls: "border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-900 text-blue-700 hover:ring-blue-300" },
+                    { key: "overdue", count: overdueCount, label: "Overdue", cls: "border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-900 text-red-700 hover:ring-red-300" },
+                    { key: "resolved", count: resolvedCount, label: "Resolved", cls: "border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-900 text-emerald-700 hover:ring-emerald-300" },
+                  ] as const).map(s => (
+                    <button
+                      key={s.key}
+                      type="button"
+                      aria-pressed={issueStatusFilter === s.key}
+                      onClick={() => { setIssueStatusFilter(s.key); openTab("issues", { issueStatus: s.key }); }}
+                      className={cn(
+                        "rounded-xl border p-3 text-center transition-shadow hover:ring-2 focus-visible:outline-none focus-visible:ring-2 min-h-[44px]",
+                        s.cls,
+                        issueStatusFilter === s.key && "ring-2 ring-offset-1",
+                      )}
+                    >
+                      <p className="text-xl font-extrabold">{s.count}</p>
+                      <p className="text-xs mt-0.5">{s.label}</p>
+                    </button>
+                  ))}
                 </div>
                 {/* Filters */}
                 <div className="flex flex-col sm:flex-row gap-3 mb-5">
@@ -2548,7 +2587,7 @@ tr:last-child td{border-bottom:none}
                 ) : (
                   <div className="space-y-6">
                     {expired.length > 0 && (
-                      <section>
+                      <section id="section-expired" className="scroll-mt-24">
                         <div className="flex items-center gap-2 mb-3">
                           <AlertTriangle className="w-4 h-4 text-destructive" />
                           <h3 className="font-bold text-sm uppercase tracking-wide text-destructive">Expired</h3>
@@ -2665,7 +2704,7 @@ tr:last-child td{border-bottom:none}
 
                 {/* Team Insurance */}
                 {members && (members as any[]).length > 0 && (
-                  <section>
+                  <section id="section-insurance" className="scroll-mt-24">
                     <div className="flex items-center gap-2 mb-3">
                       <UserCheck className="w-4 h-4 text-primary" />
                       <h3 className="font-bold text-sm uppercase tracking-wide text-muted-foreground">Team Insurance</h3>
@@ -2844,7 +2883,7 @@ tr:last-child td{border-bottom:none}
                 </section>
 
                 {/* Document Status */}
-                <section>
+                <section id="section-docstatus" className="scroll-mt-24">
                   <div className="flex items-center gap-2 mb-4">
                     <FileText className="w-5 h-5 text-primary" />
                     <h3 className="font-bold text-lg">Document Status</h3>
@@ -2910,14 +2949,14 @@ tr:last-child td{border-bottom:none}
 
                   {projectInvoices.length > 0 && (
                     <div className="grid grid-cols-2 gap-3 mb-4">
-                      <div className="px-4 py-3 rounded-xl border bg-emerald-50 border-emerald-200">
-                        <div className="flex items-center gap-1.5 mb-0.5"><ArrowDownCircle className="w-4 h-4 text-emerald-600" /><p className="text-xs font-medium text-emerald-700">Due to You</p></div>
+                      <Link href={`/invoices?project=${projectId}&status=inbound`} className="group block px-4 py-3 rounded-xl border bg-emerald-50 border-emerald-200 transition-shadow hover:ring-2 hover:ring-emerald-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300">
+                        <div className="flex items-center gap-1.5 mb-0.5"><ArrowDownCircle className="w-4 h-4 text-emerald-600" /><p className="text-xs font-medium text-emerald-700 flex items-center gap-1">Due to You <ChevronRight className="w-3 h-3 opacity-0 group-hover:opacity-70 transition-opacity" /></p></div>
                         <p className="text-xl font-extrabold text-emerald-700">GBP {unpaidInbound.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</p>
-                      </div>
-                      <div className="px-4 py-3 rounded-xl border bg-rose-50 border-rose-200">
-                        <div className="flex items-center gap-1.5 mb-0.5"><ArrowUpCircle className="w-4 h-4 text-rose-600" /><p className="text-xs font-medium text-rose-700">You Owe</p></div>
+                      </Link>
+                      <Link href={`/invoices?project=${projectId}&status=outbound`} className="group block px-4 py-3 rounded-xl border bg-rose-50 border-rose-200 transition-shadow hover:ring-2 hover:ring-rose-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300">
+                        <div className="flex items-center gap-1.5 mb-0.5"><ArrowUpCircle className="w-4 h-4 text-rose-600" /><p className="text-xs font-medium text-rose-700 flex items-center gap-1">You Owe <ChevronRight className="w-3 h-3 opacity-0 group-hover:opacity-70 transition-opacity" /></p></div>
                         <p className="text-xl font-extrabold text-rose-700">GBP {unpaidOutbound.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</p>
-                      </div>
+                      </Link>
                     </div>
                   )}
 
@@ -3266,18 +3305,47 @@ tr:last-child td{border-bottom:none}
                     <>
                       <div className="space-y-2">
                         {[
-                          { label: "Open snags & safety issues", ok: closeout.checks.openIssues.ok, detail: closeout.checks.openIssues.ok ? "All resolved" : `${closeout.checks.openIssues.count} open` },
-                          { label: "Subcontractor insurance", ok: closeout.checks.insurance.ok, detail: closeout.checks.insurance.subsTotal === 0 ? "No subcontractors" : closeout.checks.insurance.ok ? "All valid" : `${closeout.checks.insurance.subsWithIssues} of ${closeout.checks.insurance.subsTotal} need attention` },
-                          { label: "Permits", ok: closeout.checks.permits.ok, detail: closeout.checks.permits.ok ? "None expired" : `${closeout.checks.permits.expiredCount} expired` },
-                          { label: "Document sign-offs", ok: closeout.checks.signOffs.ok, detail: closeout.checks.signOffs.ok ? "All complete" : `${closeout.checks.signOffs.pendingCount} pending` },
+                          {
+                            label: "Open snags & safety issues",
+                            ok: closeout.checks.openIssues.ok,
+                            detail: closeout.checks.openIssues.ok ? "All resolved" : `${closeout.checks.openIssues.count} open`,
+                            onClick: () => {
+                              const st = closeout.checks.openIssues.ok ? "all" : "open";
+                              setIssueStatusFilter(st);
+                              openTab("issues", { issueStatus: st });
+                            },
+                          },
+                          {
+                            label: "Subcontractor insurance",
+                            ok: closeout.checks.insurance.ok,
+                            detail: closeout.checks.insurance.subsTotal === 0 ? "No subcontractors" : closeout.checks.insurance.ok ? "All valid" : `${closeout.checks.insurance.subsWithIssues} of ${closeout.checks.insurance.subsTotal} need attention`,
+                            onClick: () => openTab("permits", { section: "insurance" }, "section-insurance"),
+                          },
+                          {
+                            label: "Permits",
+                            ok: closeout.checks.permits.ok,
+                            detail: closeout.checks.permits.ok ? "None expired" : `${closeout.checks.permits.expiredCount} expired`,
+                            onClick: () => openTab("permits", { section: "expired" }, "section-expired"),
+                          },
+                          {
+                            label: "Document sign-offs",
+                            ok: closeout.checks.signOffs.ok,
+                            detail: closeout.checks.signOffs.ok ? "All complete" : `${closeout.checks.signOffs.pendingCount} pending`,
+                            onClick: () => openTab("finances", { signoff: "pending" }, "section-docstatus"),
+                          },
                         ].map(row => (
-                          <div key={row.label} className="flex items-center gap-3 rounded-lg border p-3">
-                            {row.ok
-                              ? <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                              : <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />}
-                            <span className="text-sm font-medium flex-1 min-w-0 truncate">{row.label}</span>
-                            <span className={cn("text-xs font-medium shrink-0", row.ok ? "text-emerald-600" : "text-amber-600")}>{row.detail}</span>
-                          </div>
+                          <LinkRow
+                            key={row.label}
+                            onClick={row.onClick}
+                            icon={row.ok
+                              ? <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                              : <AlertTriangle className="w-5 h-5 text-amber-500" />}
+                            label={row.label}
+                            detail={row.detail}
+                            tone={row.ok ? "success" : "warning"}
+                            quiet={row.ok}
+                            ariaLabel={`${row.label}: ${row.detail}`}
+                          />
                         ))}
                       </div>
                       <div className={cn("rounded-lg p-3 text-sm font-medium", closeout.ready ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700")}>

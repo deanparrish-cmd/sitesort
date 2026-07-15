@@ -130,6 +130,7 @@ export default function CompliancePage() {
   }, [assignSubId, assignDocType]);
 
   const [highlightUpload, setHighlightUpload] = useState(false);
+  const [highlightSection, setHighlightSection] = useState<"insurance" | "permits" | "signoffs" | null>(null);
 
   // ── URL param handling ──
   useEffect(() => {
@@ -147,6 +148,23 @@ export default function CompliancePage() {
       setSearch(term);
     }
   }, [caps.isLoading, caps.canManageCompliance]);
+
+  // Deep-link to a section: ?filter=expiring(&kind=permit|insurance) or ?filter=signoffs.
+  // Scrolls the relevant section into view and briefly highlights it.
+  useEffect(() => {
+    if (loading) return;
+    const params = new URLSearchParams(window.location.search);
+    const filter = params.get("filter");
+    const kind = params.get("kind");
+    let target: "insurance" | "permits" | "signoffs" | null = null;
+    if (filter === "signoffs") target = "signoffs";
+    else if (filter === "expiring") target = kind === "permit" ? "permits" : "insurance";
+    if (!target) return;
+    window.history.replaceState({}, "", "/compliance");
+    setHighlightSection(target);
+    setTimeout(() => document.getElementById(`section-${target}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+    setTimeout(() => setHighlightSection(null), 2600);
+  }, [loading]);
 
   // ── file upload ──
   const uploadFile = useCallback(async (file: File, prefilledSubId?: string) => {
@@ -350,7 +368,7 @@ export default function CompliancePage() {
         <div className="space-y-8">
 
           {/* ── Expiring Insurance ── */}
-          <section>
+          <section id="section-insurance" className={cn("scroll-mt-24 rounded-xl transition-shadow", highlightSection === "insurance" && "ring-2 ring-primary ring-offset-4")}>
             <div className="flex items-center gap-2 mb-3">
               <ShieldAlert className="w-5 h-5 text-yellow-600" />
               <h2 className="font-bold text-lg">Expiring Insurance</h2>
@@ -465,7 +483,7 @@ export default function CompliancePage() {
           )}
 
           {/* ── Expiring Permits ── */}
-          <section>
+          <section id="section-permits" className={cn("scroll-mt-24 rounded-xl transition-shadow", highlightSection === "permits" && "ring-2 ring-primary ring-offset-4")}>
             <div className="flex items-center gap-2 mb-3">
               <ShieldX className="w-5 h-5 text-orange-600" />
               <h2 className="font-bold text-lg">Expiring Permits</h2>
@@ -564,7 +582,7 @@ export default function CompliancePage() {
           )}
 
           {/* ── Pending Sign-offs ── */}
-          <section>
+          <section id="section-signoffs" className={cn("scroll-mt-24 rounded-xl transition-shadow", highlightSection === "signoffs" && "ring-2 ring-primary ring-offset-4")}>
             <div className="flex items-center gap-2 mb-3">
               <FileSignature className="w-5 h-5 text-primary" />
               <h2 className="font-bold text-lg">Pending Sign-offs</h2>
