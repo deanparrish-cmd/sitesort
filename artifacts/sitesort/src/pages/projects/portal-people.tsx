@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   useListSubcontractorPeople, useCreateSubcontractorPerson, useDeletePerson,
   useListInHousePeople, useCreateInHousePerson, useCreatePortalInvite, useRevokeProjectInvite,
+  useResendPortalInvite,
   getListSubcontractorPeopleQueryKey, getListInHousePeopleQueryKey,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -12,9 +13,53 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
   UserPlus, Copy, Trash2, Mail, ShieldCheck, Send, MoreHorizontal, X, ChevronDown, ChevronRight,
+  RefreshCw, AlertTriangle, CheckCircle2,
 } from "lucide-react";
 
-type PortalStatus = { status: "not_invited" | "invited" | "member"; role?: string; inviteId?: string; lastActiveAt?: string };
+type PortalStatus = { status: "not_invited" | "invited" | "member"; role?: string; inviteId?: string; lastActiveAt?: string; emailStatus?: "sent" | "failed"; emailLastSentAt?: string };
+
+const RESEND_COOLDOWN_MS = 5 * 60 * 1000;
+
+// Invite-email delivery state + a rate-limited "Resend" action. Shown for pending
+// invites so the PM knows whether the email went out and can re-send / fall back
+// to the copy link if it failed.
+function InviteEmailStatus({ projectId, portal, onDone }: { projectId: string; portal: PortalStatus; onDone: () => void }) {
+  const { toast } = useToast();
+  const resend = useResendPortalInvite();
+  if (!portal.inviteId) return null;
+  const lastMs = portal.emailLastSentAt ? new Date(portal.emailLastSentAt).getTime() : 0;
+  const cooling = lastMs > 0 && Date.now() - lastMs < RESEND_COOLDOWN_MS;
+  const doResend = async () => {
+    try {
+      const res = await resend.mutateAsync({ projectId, inviteId: portal.inviteId! });
+      if (res.emailStatus === "sent") toast({ title: "Invite email resent" });
+      else toast({ variant: "destructive", title: "Send failed", description: "Use the Copy link instead." });
+      onDone();
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Couldn't resend", description: e?.data?.message ?? "Please try again shortly." });
+      onDone();
+    }
+  };
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[11px] leading-tight flex-wrap">
+      {portal.emailStatus === "failed" ? (
+        <span className="inline-flex items-center gap-0.5 text-destructive font-medium"><AlertTriangle className="w-3 h-3" /> Email failed — use copy link or resend</span>
+      ) : portal.emailStatus === "sent" ? (
+        <span className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="w-3 h-3" /> Email sent {fmtRelative(portal.emailLastSentAt)}</span>
+      ) : (
+        <span className="text-muted-foreground">No email sent</span>
+      )}
+      <button
+        onClick={doResend}
+        disabled={resend.isPending || cooling}
+        className="inline-flex items-center gap-0.5 text-primary hover:underline disabled:opacity-40 disabled:no-underline disabled:cursor-not-allowed"
+        title={cooling ? "You can resend again a few minutes after the last send" : "Resend the invite email"}
+      >
+        <RefreshCw className={cn("w-3 h-3", resend.isPending && "animate-spin")} /> {resend.isPending ? "Resending…" : "Resend"}
+      </button>
+    </span>
+  );
+}
 type PersonLike = { id: string; name: string; email: string; phone?: string; roleTitle?: string; portal?: PortalStatus };
 type PortalRole = "worker" | "manager" | "subcontractor";
 type PersonInput = { name: string; email: string; phone?: string; roleTitle?: string };
@@ -133,18 +178,21 @@ export function PortalInvitePill({
 
   if (portal.status === "invited") {
     return (
-      <span className="inline-flex items-center gap-1">
-        <button className={cn(PILL, "border-amber-200 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800")} onClick={onInvite} disabled={busy} title="Copy a fresh invite link">
-          <Copy className="w-3.5 h-3.5" /> Invited · Copy link
-        </button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="p-1 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted" title="More"><MoreHorizontal className="w-4 h-4" /></button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuItem className="gap-2 cursor-pointer text-destructive focus:text-destructive" onClick={doRevoke}><Trash2 className="w-4 h-4" /> Revoke invite</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+      <span className="inline-flex flex-col items-end gap-0.5">
+        <span className="inline-flex items-center gap-1">
+          <button className={cn(PILL, portal.emailStatus === "failed" ? "border-red-200 bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300 dark:border-red-800" : "border-amber-200 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800")} onClick={onInvite} disabled={busy} title="Copy a fresh invite link">
+            <Copy className="w-3.5 h-3.5" /> Invited · Copy link
+          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="p-1 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted" title="More"><MoreHorizontal className="w-4 h-4" /></button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem className="gap-2 cursor-pointer text-destructive focus:text-destructive" onClick={doRevoke}><Trash2 className="w-4 h-4" /> Revoke invite</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </span>
+        <InviteEmailStatus projectId={projectId} portal={portal} onDone={refresh} />
       </span>
     );
   }
@@ -158,13 +206,15 @@ export function PortalInvitePill({
 
 // ── Additional-worker row (used only in the quiet "add another person" area) ──
 function PersonRow({
-  person, onInvite, onRevoke, onDelete, busy,
+  person, onInvite, onRevoke, onDelete, busy, projectId, onChanged,
 }: {
   person: PersonLike;
   onInvite: (role: PortalRole) => Promise<void>;
   onRevoke: (inviteId: string) => Promise<void>;
   onDelete: () => Promise<void>;
   busy: boolean;
+  projectId: string;
+  onChanged: () => void;
 }) {
   const portal = person.portal ?? { status: "not_invited" };
   const [role, setRole] = useState<PortalRole>((portal.role as PortalRole) ?? "worker");
@@ -176,6 +226,9 @@ function PersonRow({
       <div className="min-w-0">
         <p className="text-sm font-medium truncate">{person.name}{person.roleTitle && <span className="text-xs text-muted-foreground font-normal"> · {person.roleTitle}</span>}</p>
         <p className="text-xs text-muted-foreground truncate flex items-center gap-1"><Mail className="w-3 h-3 shrink-0" />{person.email}</p>
+        {portal.status === "invited" && (
+          <div className="mt-0.5"><InviteEmailStatus projectId={projectId} portal={portal} onDone={onChanged} /></div>
+        )}
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
         {portal.status === "member" ? (
@@ -263,7 +316,7 @@ export function SubcontractorPeople({
           ) : (
             <div className="divide-y divide-border/40">
               {people.map(p => (
-                <PersonRow key={p.id} person={p} busy={busy}
+                <PersonRow key={p.id} person={p} busy={busy} projectId={projectId} onChanged={refresh}
                   onInvite={role => invitePerson(p.id, role)} onRevoke={revokePerson} onDelete={() => removePerson(p.id)} />
               ))}
             </div>

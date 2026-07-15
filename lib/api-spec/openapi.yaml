@@ -1364,6 +1364,32 @@ paths:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
 
+  /projects/{projectId}/portal-invites/{inviteId}/resend:
+    post:
+      operationId: resendPortalInvite
+      tags: [portal]
+      summary: Re-send a pending invite's email (PM, rate-limited 1/5min)
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: inviteId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Resent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResendInviteResponse"
+        "429":
+          description: Rate limited (resent too recently)
+
   /projects/{projectId}/activity:
     get:
       operationId: getProjectActivity
@@ -2718,6 +2744,13 @@ components:
           type: string
         lastActiveAt:
           type: string
+        emailStatus:
+          type: string
+          enum: [sent, failed]
+          description: Delivery state of the invite email (absent = never attempted).
+        emailLastSentAt:
+          type: string
+          description: ISO timestamp of the last invite-email send attempt.
       required: [status]
 
     Person:
@@ -2781,7 +2814,23 @@ components:
         inviteUrl:
           type: string
           nullable: true
+        emailStatus:
+          type: string
+          enum: [sent, failed]
+          description: Delivery state of the invite email just sent (absent when provisioning an existing member).
       required: [status, person]
+
+    ResendInviteResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        emailStatus:
+          type: string
+          enum: [sent, failed]
+        inviteUrl:
+          type: string
+      required: [success, emailStatus]
 
     ActivityEntry:
       type: object

@@ -874,6 +874,17 @@ export const PortalStatusStatus = {
 } as const;
 
 /**
+ * Delivery state of the invite email (absent = never attempted).
+ */
+export type PortalStatusEmailStatus =
+  (typeof PortalStatusEmailStatus)[keyof typeof PortalStatusEmailStatus];
+
+export const PortalStatusEmailStatus = {
+  sent: "sent",
+  failed: "failed",
+} as const;
+
+/**
  * A person's portal state for one project.
  */
 export interface PortalStatus {
@@ -881,6 +892,10 @@ export interface PortalStatus {
   role?: string;
   inviteId?: string;
   lastActiveAt?: string;
+  /** Delivery state of the invite email (absent = never attempted). */
+  emailStatus?: PortalStatusEmailStatus;
+  /** ISO timestamp of the last invite-email send attempt. */
+  emailLastSentAt?: string;
 }
 
 export type PersonKind = (typeof PersonKind)[keyof typeof PersonKind];
@@ -937,10 +952,37 @@ export const PortalInviteResponseStatus = {
   member: "member",
 } as const;
 
+/**
+ * Delivery state of the invite email just sent (absent when provisioning an existing member).
+ */
+export type PortalInviteResponseEmailStatus =
+  (typeof PortalInviteResponseEmailStatus)[keyof typeof PortalInviteResponseEmailStatus];
+
+export const PortalInviteResponseEmailStatus = {
+  sent: "sent",
+  failed: "failed",
+} as const;
+
 export interface PortalInviteResponse {
   status: PortalInviteResponseStatus;
   person: Person;
   inviteUrl?: string | null;
+  /** Delivery state of the invite email just sent (absent when provisioning an existing member). */
+  emailStatus?: PortalInviteResponseEmailStatus;
+}
+
+export type ResendInviteResponseEmailStatus =
+  (typeof ResendInviteResponseEmailStatus)[keyof typeof ResendInviteResponseEmailStatus];
+
+export const ResendInviteResponseEmailStatus = {
+  sent: "sent",
+  failed: "failed",
+} as const;
+
+export interface ResendInviteResponse {
+  success: boolean;
+  emailStatus: ResendInviteResponseEmailStatus;
+  inviteUrl?: string;
 }
 
 export interface ActivityEntry {

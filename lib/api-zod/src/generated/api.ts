@@ -1435,6 +1435,16 @@ export const ListSubcontractorPeopleResponseItem = zod
         role: zod.string().optional(),
         inviteId: zod.string().optional(),
         lastActiveAt: zod.string().optional(),
+        emailStatus: zod
+          .enum(["sent", "failed"])
+          .optional()
+          .describe(
+            "Delivery state of the invite email (absent = never attempted).",
+          ),
+        emailLastSentAt: zod
+          .string()
+          .optional()
+          .describe("ISO timestamp of the last invite-email send attempt."),
       })
       .optional()
       .describe("A person's portal state for one project."),
@@ -1495,6 +1505,16 @@ export const ListInHousePeopleResponseItem = zod
         role: zod.string().optional(),
         inviteId: zod.string().optional(),
         lastActiveAt: zod.string().optional(),
+        emailStatus: zod
+          .enum(["sent", "failed"])
+          .optional()
+          .describe(
+            "Delivery state of the invite email (absent = never attempted).",
+          ),
+        emailLastSentAt: zod
+          .string()
+          .optional()
+          .describe("ISO timestamp of the last invite-email send attempt."),
       })
       .optional()
       .describe("A person's portal state for one project."),
@@ -1549,6 +1569,20 @@ export const RevokeProjectInviteParams = zod.object({
 export const RevokeProjectInviteResponse = zod.object({
   success: zod.boolean(),
   message: zod.string().optional(),
+});
+
+/**
+ * @summary Re-send a pending invite's email (PM, rate-limited 1/5min)
+ */
+export const ResendPortalInviteParams = zod.object({
+  projectId: zod.coerce.string(),
+  inviteId: zod.coerce.string(),
+});
+
+export const ResendPortalInviteResponse = zod.object({
+  success: zod.boolean(),
+  emailStatus: zod.enum(["sent", "failed"]),
+  inviteUrl: zod.string().optional(),
 });
 
 /**

@@ -3,7 +3,7 @@ import { randomBytes, createHash } from "crypto";
 import { db } from "@workspace/db";
 import {
   peopleTable, subcontractorsTable, projectsTable, projectMembersTable,
-  projectInvitesTable, usersTable, companyMembersTable,
+  projectInvitesTable, usersTable, companyMembersTable, companiesTable,
   documentDistributionsTable, notificationsTable,
 } from "@workspace/db/schema";
 import { and, eq, desc, inArray, isNull, isNotNull } from "drizzle-orm";
@@ -43,6 +43,8 @@ type PortalStatus = {
   role?: string;
   inviteId?: string;
   lastActiveAt?: string;
+  emailStatus?: string;      // 'sent' | 'failed' (undefined = never attempted)
+  emailLastSentAt?: string;
 };
 async function portalStatusFor(personIds: string[], projectId: string): Promise<Map<string, PortalStatus>> {
   const out = new Map<string, PortalStatus>();
@@ -52,15 +54,15 @@ async function portalStatusFor(personIds: string[], projectId: string): Promise<
       .from(projectMembersTable)
       .leftJoin(usersTable, eq(projectMembersTable.userId, usersTable.id))
       .where(and(eq(projectMembersTable.projectId, projectId), inArray(projectMembersTable.personId, personIds))),
-    db.select({ id: projectInvitesTable.id, personId: projectInvitesTable.personId, role: projectInvitesTable.role, status: projectInvitesTable.status, expiresAt: projectInvitesTable.expiresAt })
+    db.select({ id: projectInvitesTable.id, personId: projectInvitesTable.personId, role: projectInvitesTable.role, status: projectInvitesTable.status, expiresAt: projectInvitesTable.expiresAt, emailStatus: projectInvitesTable.emailStatus, emailLastSentAt: projectInvitesTable.emailLastSentAt })
       .from(projectInvitesTable)
       .where(and(eq(projectInvitesTable.projectId, projectId), inArray(projectInvitesTable.personId, personIds)))
       .orderBy(desc(projectInvitesTable.createdAt)),
   ]);
   // Latest invite per person (invites already ordered newest-first) — used to give
   // the UI an inviteId to revoke against, for members AND pending invites alike.
-  const latestInvite = new Map<string, { id: string; status: string; expiresAt: Date; role: string }>();
-  for (const inv of invites) if (inv.personId && !latestInvite.has(inv.personId)) latestInvite.set(inv.personId, { id: inv.id, status: inv.status, expiresAt: inv.expiresAt, role: inv.role });
+  const latestInvite = new Map<string, { id: string; status: string; expiresAt: Date; role: string; emailStatus: string | null; emailLastSentAt: Date | null }>();
+  for (const inv of invites) if (inv.personId && !latestInvite.has(inv.personId)) latestInvite.set(inv.personId, { id: inv.id, status: inv.status, expiresAt: inv.expiresAt, role: inv.role, emailStatus: inv.emailStatus, emailLastSentAt: inv.emailLastSentAt });
 
   for (const m of members) {
     if (m.personId) out.set(m.personId, {
@@ -72,11 +74,38 @@ async function portalStatusFor(personIds: string[], projectId: string): Promise<
   for (const [personId, inv] of latestInvite) {
     if (out.has(personId)) continue; // member wins
     if (inv.status === "pending" && inv.expiresAt.getTime() > Date.now()) {
-      out.set(personId, { status: "invited", role: inv.role, inviteId: inv.id });
+      out.set(personId, {
+        status: "invited", role: inv.role, inviteId: inv.id,
+        emailStatus: inv.emailStatus ?? undefined,
+        emailLastSentAt: inv.emailLastSentAt ? inv.emailLastSentAt.toISOString() : undefined,
+      });
     }
   }
   for (const id of personIds) if (!out.has(id)) out.set(id, { status: "not_invited" });
   return out;
+}
+
+// Fetch the inviter's display name + the company name once, for the invite email.
+async function inviteContext(inviterUserId: string, companyId: string): Promise<{ inviterName: string; companyName: string }> {
+  const [u, c] = await Promise.all([
+    db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, inviterUserId)).limit(1),
+    db.select({ name: companiesTable.name }).from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1),
+  ]);
+  return { inviterName: u[0]?.name ?? "Your project manager", companyName: c[0]?.name ?? "their company" };
+}
+
+// Send an invite email and persist the delivery state on the invite row. Records
+// the attempt time (drives the resend rate limit + display) regardless of outcome.
+async function deliverInvite(params: {
+  inviteId: string; email: string; name: string; role: string;
+  inviterName: string; companyName: string; projectName: string; inviteUrl: string;
+}): Promise<"sent" | "failed"> {
+  const result = await sendProjectInviteEmail(params);
+  const emailStatus = result.delivered ? "sent" : "failed";
+  await db.update(projectInvitesTable)
+    .set({ emailStatus, emailLastSentAt: new Date() })
+    .where(eq(projectInvitesTable.id, params.inviteId));
+  return emailStatus;
 }
 
 function serializePerson(p: typeof peopleTable.$inferSelect, portal?: PortalStatus) {
@@ -297,23 +326,71 @@ router.post("/projects/:projectId/portal-invites", authenticate, async (req, res
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     const pending = await db.select().from(projectInvitesTable)
       .where(and(eq(projectInvitesTable.projectId, pid), eq(projectInvitesTable.personId, person.id), eq(projectInvitesTable.status, "pending"))).limit(1);
+    let inviteId: string;
     if (pending[0]) {
+      inviteId = pending[0].id;
       await db.update(projectInvitesTable)
         .set({ tokenHash: hashToken(rawToken), role, expiresAt, email: person.email, name: person.name })
-        .where(eq(projectInvitesTable.id, pending[0].id));
+        .where(eq(projectInvitesTable.id, inviteId));
     } else {
+      inviteId = generateId();
       await db.insert(projectInvitesTable).values({
-        id: generateId(), projectId: pid, companyId: req.user!.companyId, personId: person.id,
+        id: inviteId, projectId: pid, companyId: req.user!.companyId, personId: person.id,
         email: person.email, name: person.name, tokenHash: hashToken(rawToken), role,
         status: "pending", expiresAt, invitedByUserId: req.user!.id,
       });
     }
     const inviteUrl = `${inviteBaseUrl()}/portal/accept/${rawToken}`;
-    void sendProjectInviteEmail({ email: person.email, name: person.name, projectName: project.name, inviteUrl });
-    res.status(201).json({ status: "invited", person: serializePerson(person), inviteUrl });
+    // Send the invite email now and record delivery state. Never blocks success:
+    // even a failed send leaves the invite + copyable link intact.
+    const { inviterName, companyName } = await inviteContext(req.user!.id, req.user!.companyId);
+    const emailStatus = await deliverInvite({
+      inviteId, email: person.email, name: person.name, role,
+      inviterName, companyName, projectName: project.name, inviteUrl,
+    });
+    res.status(201).json({ status: "invited", person: serializePerson(person), inviteUrl, emailStatus });
   } catch (err) {
     req.log.error({ err }, "Create portal invite error");
     res.status(500).json({ error: "server_error", message: "Failed to create invite" });
+  }
+});
+
+const RESEND_COOLDOWN_MS = 5 * 60 * 1000; // max 1 resend / 5 min per invite
+
+// POST /api/projects/:projectId/portal-invites/:inviteId/resend — re-send a
+// pending invite's email (manager-gated, rate-limited). Rotates the token (the
+// raw token is never stored) and refreshes the 7-day expiry.
+router.post("/projects/:projectId/portal-invites/:inviteId/resend", authenticate, async (req, res) => {
+  try {
+    if (!requireManager(req, res)) return;
+    const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
+    if (!project) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+    const rows = await db.select().from(projectInvitesTable).where(and(
+      eq(projectInvitesTable.id, req.params.inviteId),
+      eq(projectInvitesTable.projectId, req.params.projectId),
+      eq(projectInvitesTable.companyId, req.user!.companyId),
+    )).limit(1);
+    const inv = rows[0];
+    if (!inv) { res.status(404).json({ error: "not_found", message: "Invite not found" }); return; }
+    if (inv.status !== "pending") { res.status(409).json({ error: "not_pending", message: "This invite is no longer pending." }); return; }
+    if (inv.emailLastSentAt && Date.now() - inv.emailLastSentAt.getTime() < RESEND_COOLDOWN_MS) {
+      const waitS = Math.ceil((RESEND_COOLDOWN_MS - (Date.now() - inv.emailLastSentAt.getTime())) / 1000);
+      res.status(429).json({ error: "rate_limited", message: `Please wait before resending — try again in about ${Math.max(1, Math.ceil(waitS / 60))} min.`, retryAfterSeconds: waitS });
+      return;
+    }
+    const rawToken = randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await db.update(projectInvitesTable).set({ tokenHash: hashToken(rawToken), expiresAt }).where(eq(projectInvitesTable.id, inv.id));
+    const inviteUrl = `${inviteBaseUrl()}/portal/accept/${rawToken}`;
+    const { inviterName, companyName } = await inviteContext(req.user!.id, req.user!.companyId);
+    const emailStatus = await deliverInvite({
+      inviteId: inv.id, email: inv.email, name: inv.name, role: inv.role,
+      inviterName, companyName, projectName: project.name, inviteUrl,
+    });
+    res.json({ success: true, emailStatus, inviteUrl });
+  } catch (err) {
+    req.log.error({ err }, "Resend portal invite error");
+    res.status(500).json({ error: "server_error", message: "Failed to resend invite" });
   }
 });
 

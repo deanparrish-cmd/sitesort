@@ -28,6 +28,9 @@ const checks: [string, string][] = [
   ["artifacts/sitesort/src/pages/portal/section.tsx", "function SharedView"],
   ["artifacts/sitesort/src/pages/portal/layout.tsx", "Shared with me"],
   ["artifacts/sitesort/src/pages/projects/detail.tsx", "Pinned documents"],
+  ["artifacts/api-server/src/routes/subcontractors.ts", "Only an admin or project manager can delete a subcontractor"],
+  ["artifacts/api-server/src/routes/people.ts", "orphanPortalUsers"],
+  ["artifacts/sitesort/src/pages/subcontractors/index.tsx", "Delete subcontractor"],
 ];
 
 let ok = 0, bad: string[] = [];

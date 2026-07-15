@@ -32,6 +32,12 @@ export const projectInvitesTable = pgTable("project_invites", {
   acceptedUserId: text("accepted_user_id").references(() => usersTable.id),
   acceptedAt: timestamp("accepted_at"),
   revokedAt: timestamp("revoked_at"),
+  // Email delivery state for the invite link. null = never attempted (e.g. legacy
+  // rows); 'sent' = Resend accepted it; 'failed' = the send errored (PM falls back
+  // to Copy link / Resend). `emailLastSentAt` = last send ATTEMPT, drives the
+  // resend rate limit (max 1 / 5 min) and the "sent · time" display.
+  emailStatus: text("email_status"),
+  emailLastSentAt: timestamp("email_last_sent_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

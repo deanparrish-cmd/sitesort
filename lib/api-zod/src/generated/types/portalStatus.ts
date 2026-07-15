@@ -5,6 +5,7 @@
  * SiteSort API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { PortalStatusEmailStatus } from "./portalStatusEmailStatus";
 import type { PortalStatusStatus } from "./portalStatusStatus";
 
 /**
@@ -15,4 +16,8 @@ export interface PortalStatus {
   role?: string;
   inviteId?: string;
   lastActiveAt?: string;
+  /** Delivery state of the invite email (absent = never attempted). */
+  emailStatus?: PortalStatusEmailStatus;
+  /** ISO timestamp of the last invite-email send attempt. */
+  emailLastSentAt?: string;
 }

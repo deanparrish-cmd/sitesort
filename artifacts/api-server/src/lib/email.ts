@@ -1,6 +1,9 @@
 import { Resend } from "resend";
 
 const FROM = "SiteSort <noreply@mail.sitesort.co.uk>";
+// Team Portal invites send from a dedicated address (env-overridable). The Resend
+// domain mail.sitesort.co.uk is verified; keep the default in sync with the spec.
+const INVITE_FROM = process.env.EMAIL_FROM ?? "SiteSort <invites@mail.sitesort.co.uk>";
 const REPLY_TO = "SiteSort Support <support@sitesort.co.uk>";
 const SUPPORT_EMAIL = "support@sitesort.co.uk";
 const APP_URL = process.env.APP_URL ?? "https://www.sitesort.co.uk";
@@ -12,10 +15,10 @@ function resend() {
 }
 
 // Centralised sender so every transactional email shares the same
-// "from" name and a SiteSort reply-to address.
-function send(opts: { to: string; subject: string; html: string; text: string }) {
+// "from" name and a SiteSort reply-to address. `from` overrides the default.
+function send(opts: { to: string; subject: string; html: string; text: string; from?: string }) {
   return resend().emails.send({
-    from: FROM,
+    from: opts.from ?? FROM,
     replyTo: REPLY_TO,
     to: opts.to,
     subject: opts.subject,
@@ -494,5 +497,55 @@ ${label} · ${project}
 
 Review on SiteSort:
 ${link}`),
+  });
+}
+
+const ROLE_LABEL: Record<string, string> = { worker: "Site worker", manager: "Manager", subcontractor: "Subcontractor" };
+
+// Team Portal invite — sent from the invites@ address. Returns the Resend result
+// so the caller can record delivery state on the invite. Never called directly by
+// business logic (goes through lib/invite-email.ts).
+export async function sendPortalInviteEmail(params: {
+  to: string;
+  name: string;
+  inviterName: string;
+  companyName: string;
+  projectName: string;
+  role: string;
+  inviteUrl: string;
+}) {
+  const greeting = firstName(params.name);
+  const inviter = params.inviterName?.trim() || "Your project manager";
+  const company = params.companyName?.trim() || "their company";
+  const project = params.projectName?.trim() || "a project";
+  const roleLabel = ROLE_LABEL[params.role] ?? "Site worker";
+  return send({
+    from: INVITE_FROM,
+    to: params.to,
+    subject: `${inviter} invited you to ${project} on SiteSort`,
+    html: layout(`
+      ${h("You've been invited to a project portal")}
+      ${p(`Hi ${greeting},`)}
+      ${p(`<strong>${inviter}</strong> (${company}) has invited you to the <strong>${project}</strong> site portal on SiteSort — where you can view the drawings, documents and site information shared with you.`)}
+      ${box(`
+        <div style="font-size:14px;color:#374151;margin-bottom:4px;">Project: <strong>${project}</strong></div>
+        <div style="font-size:14px;color:#374151;">Your role: <strong>${roleLabel}</strong></div>
+      `)}
+      ${btn(params.inviteUrl, "Set up your portal access")}
+      ${muted(`This invite link expires in 7 days. Button not working? Copy and paste this link:<br><a href="${params.inviteUrl}" style="color:#ea580c;word-break:break-all;">${params.inviteUrl}</a>`)}
+    `),
+    text: textLayout(`You've been invited to a project portal
+
+Hi ${greeting},
+
+${inviter} (${company}) has invited you to the ${project} site portal on SiteSort — where you can view the drawings, documents and site information shared with you.
+
+Project: ${project}
+Your role: ${roleLabel}
+
+Set up your portal access:
+${params.inviteUrl}
+
+This invite link expires in 7 days.`),
   });
 }

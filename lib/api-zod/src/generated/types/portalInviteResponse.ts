@@ -6,10 +6,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Person } from "./person";
+import type { PortalInviteResponseEmailStatus } from "./portalInviteResponseEmailStatus";
 import type { PortalInviteResponseStatus } from "./portalInviteResponseStatus";
 
 export interface PortalInviteResponse {
   status: PortalInviteResponseStatus;
   person: Person;
   inviteUrl?: string | null;
+  /** Delivery state of the invite email just sent (absent when provisioning an existing member). */
+  emailStatus?: PortalInviteResponseEmailStatus;
 }

@@ -160,6 +160,9 @@ export async function ensureSchema(): Promise<void> {
     await pool.query(`DROP INDEX IF EXISTS people_company_user_uq`);
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS people_company_inhouse_email_uq ON people (company_id, email) WHERE subcontractor_id IS NULL`);
     await pool.query(`ALTER TABLE project_invites ADD COLUMN IF NOT EXISTS person_id text REFERENCES people(id) ON DELETE CASCADE`);
+    // Invite email delivery state (Resend integration).
+    await pool.query(`ALTER TABLE project_invites ADD COLUMN IF NOT EXISTS email_status text`);
+    await pool.query(`ALTER TABLE project_invites ADD COLUMN IF NOT EXISTS email_last_sent_at timestamp`);
     await pool.query(`ALTER TABLE project_members ADD COLUMN IF NOT EXISTS person_id text REFERENCES people(id) ON DELETE CASCADE`);
     // F5 — Daily Site Reports hub. These base tables were only ever created via
     // `drizzle push` (dev-only), so they may NOT exist in prod. Create them here

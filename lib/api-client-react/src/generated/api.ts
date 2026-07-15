@@ -73,6 +73,7 @@ import type {
   QrContent,
   RegisterRequest,
   RegisterResponse,
+  ResendInviteResponse,
   Subcontractor,
   SubcontractorDetail,
   SuccessResponse,
@@ -5640,6 +5641,97 @@ export const useRevokeProjectInvite = <
   TContext
 > => {
   return useMutation(getRevokeProjectInviteMutationOptions(options));
+};
+
+/**
+ * @summary Re-send a pending invite's email (PM, rate-limited 1/5min)
+ */
+export const getResendPortalInviteUrl = (
+  projectId: string,
+  inviteId: string,
+) => {
+  return `/api/projects/${projectId}/portal-invites/${inviteId}/resend`;
+};
+
+export const resendPortalInvite = async (
+  projectId: string,
+  inviteId: string,
+  options?: RequestInit,
+): Promise<ResendInviteResponse> => {
+  return customFetch<ResendInviteResponse>(
+    getResendPortalInviteUrl(projectId, inviteId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getResendPortalInviteMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resendPortalInvite>>,
+    TError,
+    { projectId: string; inviteId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof resendPortalInvite>>,
+  TError,
+  { projectId: string; inviteId: string },
+  TContext
+> => {
+  const mutationKey = ["resendPortalInvite"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof resendPortalInvite>>,
+    { projectId: string; inviteId: string }
+  > = (props) => {
+    const { projectId, inviteId } = props ?? {};
+
+    return resendPortalInvite(projectId, inviteId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ResendPortalInviteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof resendPortalInvite>>
+>;
+
+export type ResendPortalInviteMutationError = ErrorType<void>;
+
+/**
+ * @summary Re-send a pending invite's email (PM, rate-limited 1/5min)
+ */
+export const useResendPortalInvite = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resendPortalInvite>>,
+    TError,
+    { projectId: string; inviteId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof resendPortalInvite>>,
+  TError,
+  { projectId: string; inviteId: string },
+  TContext
+> => {
+  return useMutation(getResendPortalInviteMutationOptions(options));
 };
 
 /**

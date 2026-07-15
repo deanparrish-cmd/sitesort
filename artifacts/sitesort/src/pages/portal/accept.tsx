@@ -51,12 +51,26 @@ export default function PortalAccept() {
           <div className="flex justify-center py-8"><Spinner className="size-6 text-primary" /></div>
         )}
 
-        {invite.isError && (
-          <div className="text-center">
-            <p className="text-destructive font-medium mb-4">This invite link is not valid or has expired.</p>
-            <Link href="/portal/login" className="text-primary font-semibold hover:underline">Go to portal login</Link>
-          </div>
-        )}
+        {invite.isError && (() => {
+          const code = (invite.error as any)?.data?.error;
+          const expired = code === "invite_expired";
+          const used = code === "invite_used";
+          return (
+            <div className="text-center">
+              <p className="text-destructive font-semibold mb-2">
+                {expired ? "This invite has expired" : used ? "This invite has already been used" : "This invite link isn't valid"}
+              </p>
+              <p className="text-sm text-muted-foreground mb-4">
+                {expired
+                  ? "Invite links are valid for 7 days. Ask your project manager to resend it, then open the new link."
+                  : used
+                  ? "If this is your account, log in to the portal below. Otherwise ask your project manager for a fresh invite."
+                  : "Check you copied the whole link, or ask your project manager to resend the invite."}
+              </p>
+              <Link href="/portal/login" className="text-primary font-semibold hover:underline">Go to portal login</Link>
+            </div>
+          );
+        })()}
 
         {invite.data?.valid && (
           <>
