@@ -3,8 +3,9 @@ import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { QRCodeCanvas } from "qrcode.react";
+import { cn } from "@/lib/utils";
 import {
-  Share2, Mail, MessageCircle, Users, Send, ExternalLink,
+  Share2, Mail, MessageCircle, Users, ExternalLink, X,
   Download, Clock, Loader2, CheckCircle2, Pin, PinOff, QrCode, ChevronDown,
 } from "lucide-react";
 
@@ -12,8 +13,10 @@ type ShareLog = {
   id: string; entityType: string; entityId: string; entityName: string;
   method: string; recipientInfo: string | null; sentByName: string; createdAt: string;
 };
-type Member = { id: string; name: string; userId: string | null };
 type Project = { id: string; name: string };
+type PortalTrade = { trade: string; memberCount: number };
+type PortalMemberOpt = { personId: string; userId: string; name: string };
+type PortalShareRule = { id: string; audienceType: string; trade?: string; personId?: string; personName?: string };
 
 export interface ShareModalProps {
   open: boolean;
@@ -34,24 +37,37 @@ function normaliseUrl(url: string) {
   return norm.startsWith("http") ? norm : `${window.location.origin}${norm}`;
 }
 
-const MSG_ATTACHMENT_TYPES = new Set(["document", "photo", "permit"]);
+// Portal-shareable entity types (things portal members can actually open). Also
+// the set that can be pinned to the Site Board.
+const PORTAL_ENTITY_TYPES = new Set(["document", "photo", "permit"]);
 
 function methodLabel(method: string) {
   const map: Record<string, string> = {
     email: "Email", whatsapp: "WhatsApp", project_team: "Project Team",
-    individual: "Individual", team: "Project Team", qr: "QR Code",
+    individual: "Individual", team: "Project Team", qr: "QR Code", portal: "Team Portal",
   };
   return map[method] ?? method;
+}
+
+function shareRuleLabel(s: PortalShareRule): string {
+  if (s.audienceType === "all") return "Everyone on this project";
+  if (s.audienceType === "trade") return `Trade: ${s.trade}`;
+  return s.personName ?? "A team member";
 }
 
 export function ShareModal({ open, onClose, entityType, entityId, entityName, fileUrl, projectId, version, additionalInfo, shareText }: ShareModalProps) {
   const [tab, setTab] = useState<"share" | "qr" | "history">("share");
   const [history, setHistory] = useState<ShareLog[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [members, setMembers] = useState<Member[]>([]);
-  const [selectedUserId, setSelectedUserId] = useState("");
-  const [sending, setSending] = useState(false);
-  const [sentTo, setSentTo] = useState<string | null>(null);
+  // Team Portal sharing state
+  const [portalMode, setPortalMode] = useState<"all" | "trade" | "person">("all");
+  const [selTrades, setSelTrades] = useState<string[]>([]);
+  const [selPersons, setSelPersons] = useState<string[]>([]);
+  const [portalTrades, setPortalTrades] = useState<PortalTrade[]>([]);
+  const [portalMembers, setPortalMembers] = useState<PortalMemberOpt[]>([]);
+  const [existingShares, setExistingShares] = useState<PortalShareRule[]>([]);
+  const [portalSharing, setPortalSharing] = useState(false);
+  const [portalMsg, setPortalMsg] = useState<string | null>(null);
   const [isPinned, setIsPinned] = useState(false);
   const [pinLoading, setPinLoading] = useState(false);
   const [siteBoardUrl, setSiteBoardUrl] = useState<string | null>(null);
@@ -67,14 +83,16 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
   const effectiveProjectId = projectId || selectedProjectId || null;
 
   const fullUrl = fileUrl ? normaliseUrl(fileUrl) : null;
-  const hasAttachment = MSG_ATTACHMENT_TYPES.has(entityType);
-  const canPin = hasAttachment && !!projectId;
+  const isPortalEntity = PORTAL_ENTITY_TYPES.has(entityType);
+  const canPin = isPortalEntity && !!projectId;
   const hasContent = !!(fullUrl || shareText);
 
   useEffect(() => {
     if (!open) {
-      setTab("share"); setSentTo(null); setSelectedUserId(""); setIsPinned(false);
-      setSiteBoardUrl(null); setSelectedProjectId(""); setMembers([]);
+      setTab("share"); setIsPinned(false);
+      setSiteBoardUrl(null); setSelectedProjectId("");
+      setPortalMode("all"); setSelTrades([]); setSelPersons([]);
+      setPortalTrades([]); setPortalMembers([]); setExistingShares([]); setPortalMsg(null);
     }
   }, [open]);
 
@@ -87,14 +105,26 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
       .catch(() => {});
   }, [open, projectId]);
 
-  // Load members whenever effectiveProjectId is known
-  useEffect(() => {
-    if (!open || !effectiveProjectId) return;
-    fetch(`/api/projects/${effectiveProjectId}/members`, { headers: token() ? { Authorization: `Bearer ${token()}` } : {} })
+  // Load portal audience (trades + members) and current share rules for this item.
+  const loadPortalShares = () => {
+    if (!effectiveProjectId) return;
+    fetch(`/api/projects/${effectiveProjectId}/portal-shares?itemType=${entityType}&itemId=${entityId}`, { headers: authH() })
       .then(r => r.ok ? r.json() : [])
-      .then((data: any[]) => setMembers(data.filter((m: any) => m.userId)))
+      .then((rules: PortalShareRule[]) => setExistingShares(Array.isArray(rules) ? rules : []))
       .catch(() => {});
-  }, [open, effectiveProjectId]);
+  };
+  useEffect(() => {
+    if (!open || !isPortalEntity || !effectiveProjectId) return;
+    fetch(`/api/projects/${effectiveProjectId}/portal-audience`, { headers: authH() })
+      .then(r => r.ok ? r.json() : { trades: [], members: [] })
+      .then((d: { trades: PortalTrade[]; members: PortalMemberOpt[] }) => {
+        setPortalTrades(d.trades ?? []);
+        setPortalMembers(d.members ?? []);
+      })
+      .catch(() => {});
+    loadPortalShares();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, isPortalEntity, effectiveProjectId, entityId]);
 
   useEffect(() => {
     if (tab !== "qr" || !open || !effectiveProjectId) return;
@@ -154,45 +184,42 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
     logShare("whatsapp");
   };
 
-  const shareProjectTeam = async () => {
+  const toggleTrade = (t: string) => setSelTrades(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
+  const togglePerson = (p: string) => setSelPersons(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
+
+  const submitPortalShare = async () => {
     if (!effectiveProjectId) return;
-    setSending(true);
-    setSentTo(null);
-    const userIds = members.map(m => m.userId).filter(Boolean);
-    const content = shareText ?? `${entityName}${versionSuffix}${fullUrl ? `\n${fullUrl}` : ""}`;
-    await fetch("/api/messages/broadcast", {
-      method: "POST",
-      headers: authH(),
-      body: JSON.stringify({
-        recipientIds: userIds,
-        content,
-        ...(hasAttachment ? { attachmentType: entityType, attachmentId: entityId } : {}),
-      }),
-    }).catch(() => {});
-    logShare("project_team", `All project members (${userIds.length})`);
-    setSending(false);
-    setSentTo("project team");
+    const audiences =
+      portalMode === "all" ? [{ type: "all" as const }] :
+      portalMode === "trade" ? selTrades.map(t => ({ type: "trade" as const, trade: t })) :
+      selPersons.map(p => ({ type: "person" as const, personId: p }));
+    if (audiences.length === 0) return;
+    setPortalSharing(true);
+    setPortalMsg(null);
+    try {
+      const res = await fetch(`/api/projects/${effectiveProjectId}/portal-shares`, {
+        method: "POST",
+        headers: authH(),
+        body: JSON.stringify({ itemType: entityType, itemId: entityId, audiences }),
+      });
+      const data = await res.json().catch(() => ({}));
+      const n = typeof data.recipientCount === "number" ? data.recipientCount : null;
+      const summary = portalMode === "all" ? "everyone on this project"
+        : portalMode === "trade" ? `${selTrades.length} trade${selTrades.length !== 1 ? "s" : ""}`
+        : `${selPersons.length} ${selPersons.length !== 1 ? "people" : "person"}`;
+      setPortalMsg(`Shared to ${summary}${n !== null ? ` · ${n} member${n !== 1 ? "s" : ""} now have access` : ""}`);
+      logShare("portal", summary);
+      setSelTrades([]); setSelPersons([]);
+      loadPortalShares();
+    } finally {
+      setPortalSharing(false);
+    }
   };
 
-  const shareIndividual = async () => {
-    if (!selectedUserId) return;
-    const member = members.find(m => m.userId === selectedUserId);
-    if (!member) return;
-    setSending(true);
-    setSentTo(null);
-    const content = shareText ?? (hasAttachment ? (entityName + versionSuffix) : `${entityName}${versionSuffix}${fullUrl ? `\n${fullUrl}` : ""}`);
-    await fetch("/api/messages", {
-      method: "POST",
-      headers: authH(),
-      body: JSON.stringify({
-        recipientId: selectedUserId,
-        content,
-        ...(hasAttachment ? { attachmentType: entityType, attachmentId: entityId } : {}),
-      }),
-    }).catch(() => {});
-    logShare("individual", member.name);
-    setSending(false);
-    setSentTo(member.name);
+  const removePortalShare = async (id: string) => {
+    if (!effectiveProjectId) return;
+    await fetch(`/api/projects/${effectiveProjectId}/portal-shares/${id}`, { method: "DELETE", headers: authH() }).catch(() => {});
+    setExistingShares(prev => prev.filter(s => s.id !== id));
   };
 
   const togglePin = async () => {
@@ -236,7 +263,7 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
           {(["share", "qr", "history"] as const).map(t => (
             <button
               key={t}
-              onClick={() => { setTab(t); setSentTo(null); }}
+              onClick={() => { setTab(t); setPortalMsg(null); }}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors capitalize ${tab === t ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
             >
               {t === "qr" ? "QR Code" : t === "history" ? "History" : "Share"}
@@ -247,13 +274,6 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
         {/* ── Share tab ── */}
         {tab === "share" && (
           <div className="space-y-4">
-            {sentTo && (
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 text-sm">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                Sent to {sentTo}
-              </div>
-            )}
-
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">External</p>
               <div className="grid grid-cols-2 gap-2">
@@ -274,87 +294,133 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
               </div>
             </div>
 
-            {/* In App — always shown; project picker appears when no prop projectId */}
-            <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">In App</p>
+            {/* Team Portal — only for portal-shareable entities (document/photo/permit) */}
+            {isPortalEntity && (
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Team Portal</p>
 
-              {/* Project picker — only when projectId is not supplied by the caller */}
-              {!projectId && !selectedProjectId && (
-                <div className="space-y-1.5">
-                  <p className="text-xs text-muted-foreground">Choose a project to share with its team:</p>
-                  <div className="relative">
-                    <Select
-                      value={selectedProjectId}
-                      onValueChange={val => { setSelectedProjectId(val); setSelectedUserId(""); setMembers([]); }}
-                    >
+                {/* Project picker when no project context (rare for portal entities) */}
+                {!effectiveProjectId ? (
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-muted-foreground">Choose a project to share into its portal:</p>
+                    <Select value={selectedProjectId} onValueChange={val => setSelectedProjectId(val)}>
                       <SelectTrigger className="w-full text-sm h-10">
                         <SelectValue placeholder={projects.length ? "Select a project…" : "Loading projects…"} />
                       </SelectTrigger>
                       <SelectContent>
-                        {projects.map(p => (
-                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                        ))}
+                        {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
-                    {!projects.length && (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground absolute right-8 top-3 pointer-events-none" />
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {!projectId && selectedProjectName && (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span className="font-medium text-foreground truncate">{selectedProjectName}</span>
+                        <button onClick={() => setSelectedProjectId("")} className="flex items-center gap-0.5 hover:text-foreground shrink-0">
+                          <ChevronDown className="w-3 h-3" /> Change
+                        </button>
+                      </div>
+                    )}
+                    <p className="text-xs text-muted-foreground">Portal members see only what's shared with them. Trade shares also reach people invited later.</p>
+
+                    {/* Audience mode */}
+                    <div className="flex gap-1 p-1 rounded-lg bg-muted">
+                      {([["all", "Everyone"], ["trade", "Trades"], ["person", "People"]] as const).map(([m, label]) => (
+                        <button
+                          key={m}
+                          onClick={() => { setPortalMode(m); setPortalMsg(null); }}
+                          className={cn("flex-1 py-1.5 rounded-md text-xs font-semibold transition-colors", portalMode === m ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground")}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {portalMode === "all" && (
+                      <p className="text-xs text-muted-foreground">Everyone on this project's portal will be able to see it.</p>
+                    )}
+                    {portalMode === "trade" && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {portalTrades.length === 0 ? (
+                          <p className="text-xs text-muted-foreground">No trades on this project yet.</p>
+                        ) : portalTrades.map(t => {
+                          const empty = t.memberCount === 0;
+                          const sel = selTrades.includes(t.trade);
+                          return (
+                            <button
+                              key={t.trade}
+                              disabled={empty}
+                              onClick={() => toggleTrade(t.trade)}
+                              title={empty ? "No portal members in this trade yet" : undefined}
+                              className={cn(
+                                "inline-flex items-center gap-1 max-w-full px-2.5 py-1 rounded-full text-xs border transition-colors",
+                                empty ? "opacity-50 cursor-not-allowed border-dashed text-muted-foreground"
+                                  : sel ? "bg-primary text-primary-foreground border-primary"
+                                  : "bg-background border-border hover:border-primary/40",
+                              )}
+                            >
+                              <span className="truncate">{t.trade}</span>
+                              <span className="shrink-0 opacity-70">{empty ? "· no members" : `· ${t.memberCount}`}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {portalMode === "person" && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {portalMembers.length === 0 ? (
+                          <p className="text-xs text-muted-foreground">No portal members on this project yet.</p>
+                        ) : portalMembers.map(m => {
+                          const sel = selPersons.includes(m.personId);
+                          return (
+                            <button
+                              key={m.personId}
+                              onClick={() => togglePerson(m.personId)}
+                              className={cn(
+                                "inline-flex items-center max-w-full px-2.5 py-1 rounded-full text-xs border transition-colors",
+                                sel ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border hover:border-primary/40",
+                              )}
+                            >
+                              <span className="truncate">{m.name}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    <button
+                      onClick={submitPortalShare}
+                      disabled={portalSharing || (portalMode === "trade" && selTrades.length === 0) || (portalMode === "person" && selPersons.length === 0)}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {portalSharing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
+                      Share to portal
+                    </button>
+
+                    {portalMsg && (
+                      <p className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> {portalMsg}
+                      </p>
+                    )}
+
+                    {existingShares.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-xs font-medium text-muted-foreground">Currently shared with</p>
+                        {existingShares.map(s => (
+                          <div key={s.id} className="flex items-center gap-2 text-xs bg-muted/50 rounded-md px-2 py-1.5">
+                            <span className="flex-1 min-w-0 truncate">{shareRuleLabel(s)}</span>
+                            <button onClick={() => removePortalShare(s.id)} title="Remove" className="shrink-0 rounded-full p-0.5 hover:bg-muted">
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
-                </div>
-              )}
-
-              {/* Project label + change button when user has picked a project */}
-              {!projectId && selectedProjectId && (
-                <div className="flex items-center gap-2 mb-2 text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">{selectedProjectName}</span>
-                  <button
-                    onClick={() => { setSelectedProjectId(""); setMembers([]); setSelectedUserId(""); setSentTo(null); }}
-                    className="flex items-center gap-0.5 hover:text-foreground transition-colors"
-                  >
-                    <ChevronDown className="w-3 h-3" /> Change
-                  </button>
-                </div>
-              )}
-
-              {/* Team and Individual controls — shown once we have a project */}
-              {effectiveProjectId && (
-                <div className="space-y-2">
-                  <button
-                    disabled={sending || members.length === 0}
-                    onClick={shareProjectTeam}
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-border bg-background hover:bg-muted transition-colors text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <Users className="w-4 h-4 text-primary shrink-0" />
-                    <span className="text-left">
-                      <span className="block">Share with Project Team</span>
-                      <span className="text-xs text-muted-foreground font-normal">{members.length} member{members.length !== 1 ? "s" : ""}</span>
-                    </span>
-                    {sending && <Loader2 className="w-4 h-4 ml-auto animate-spin" />}
-                  </button>
-
-                  <div className="flex gap-2">
-                    <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                      <SelectTrigger className="flex-1 text-sm h-10">
-                        <SelectValue placeholder={members.length ? "Choose an individual…" : "No members"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {members.map(m => (
-                          <SelectItem key={m.userId!} value={m.userId!}>{m.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <button
-                      disabled={!selectedUserId || sending}
-                      onClick={shareIndividual}
-                      title="Send to individual"
-                      className="px-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

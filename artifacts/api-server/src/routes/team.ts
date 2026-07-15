@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { projectMembersTable, usersTable, subcontractorsTable, insuranceRecordsTable, projectsTable } from "@workspace/db/schema";
+import { projectMembersTable, usersTable, subcontractorsTable, insuranceRecordsTable, projectsTable, peopleTable } from "@workspace/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
@@ -52,6 +52,16 @@ router.get("/projects/:projectId/members", authenticate, async (req, res) => {
         email = userRows[0]?.email ?? null;
         phone = userRows[0]?.phone ?? null;
         avatarUrl = userRows[0]?.avatarUrl ?? null;
+        // Portal member row (person link): inherit the trades of the firm they
+        // belong to so trade-targeted portal shares can reach them. In-house
+        // people (no firm) stay trade-less → the synthetic "Site Staff" bucket.
+        if (m.personId) {
+          const personRows = await db.select({ trades: subcontractorsTable.trades })
+            .from(peopleTable)
+            .leftJoin(subcontractorsTable, eq(peopleTable.subcontractorId, subcontractorsTable.id))
+            .where(eq(peopleTable.id, m.personId)).limit(1);
+          trades = personRows[0]?.trades ?? [];
+        }
       } else if (m.subcontractorId) {
         const subRows = await db.select({
           companyName: subcontractorsTable.companyName,

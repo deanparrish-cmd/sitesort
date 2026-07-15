@@ -13,7 +13,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronUp, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, StickyNote, Send, Loader2, History, Archive, Paperclip } from "lucide-react";
+import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronUp, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, PinOff, StickyNote, Send, Loader2, History, Archive, Paperclip } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { ShareModal } from "@/components/share-modal";
 import { FileDropZone } from "@/components/ui/file-drop-zone";
@@ -185,21 +185,6 @@ export default function ProjectDetail() {
   const invoiceFullUrl = (attachmentUrl: string) => {
     const normalised = attachmentUrl.replace(/^\/uploads\//, "/api/uploads/");
     return normalised.startsWith("http") ? normalised : `${window.location.origin}${normalised}`;
-  };
-  const shareInvoiceEmail = (inv: InvoiceItem) => {
-    const url = invoiceFullUrl(inv.attachmentUrl!);
-    const subject = encodeURIComponent(`Invoice – ${inv.counterpartyName}`);
-    const body = encodeURIComponent(
-      `Hi,\n\nPlease find the invoice document attached below:\n\n${url}\n\nRef: ${inv.reference ?? "N/A"} | Amount: ${inv.currency} ${Number(inv.amount).toFixed(2)}\n\nRegards`
-    );
-    window.open(`mailto:?subject=${subject}&body=${body}`);
-  };
-  const shareInvoiceWhatsApp = (inv: InvoiceItem) => {
-    const url = invoiceFullUrl(inv.attachmentUrl!);
-    const text = encodeURIComponent(
-      `Invoice document – ${inv.counterpartyName}\nRef: ${inv.reference ?? "N/A"} | ${inv.currency} ${Number(inv.amount).toFixed(2)}\n${url}`
-    );
-    window.open(`https://wa.me/?text=${text}`, "_blank");
   };
   // PATCH a site issue (status and/or assignment). Shared by the status pickers
   // and the assign-to / due-by controls so all updates refresh state the same way.
@@ -379,7 +364,13 @@ export default function ProjectDetail() {
       if (Array.isArray(pins)) setQrPins(pins);
       if (Array.isArray(qrCodes) && qrCodes.length > 0) {
         const qr = qrCodes.find((q: any) => q.category === "site_board") ?? qrCodes[0];
-        setSiteBoardUrl(qr.siteUrl);
+        const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+        const url = qr.siteUrl ?? `${window.location.origin}${BASE}/site/${qr.token}`;
+        // Persist the generated QR so the Site Board tab shows it (not the empty
+        // "Generate" state) on reload — the token was already saved server-side.
+        setSiteBoardUrl(url);
+        setQrCode({ token: qr.token, siteUrl: url });
+        setQrFetched(true);
       }
     });
   }, [projectId]);
@@ -877,6 +868,9 @@ export default function ProjectDetail() {
   };
   type SharingDoc = { type: string; id: string; name: string; version: number | null; fileUrl: string; additionalInfo?: string };
   const [sharingDoc, setSharingDoc] = useState<SharingDoc | null>(null);
+  // Contact / invoice shares route through the one ShareModal (External channels).
+  const [sharingContact, setSharingContact] = useState<{ id: string; name: string; text: string } | null>(null);
+  const [sharingInvoice, setSharingInvoice] = useState<InvoiceItem | null>(null);
 
   // Sub notes dialog (project Team tab)
   type SubNote = { id: string; body: string; authorName: string; projectId: string | null; projectName: string | null; createdAt: string };
@@ -2037,34 +2031,18 @@ tr:last-child td{border-bottom:none}
                               <StickyNote className="w-3.5 h-3.5" />Notes
                             </button>
                           )}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button type="button" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-xs font-medium text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Share contact">
-                                <Share2 className="w-3.5 h-3.5" />Share
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-44">
-                              <DropdownMenuItem
-                                className="gap-2 cursor-pointer"
-                                onClick={() => {
-                                  const subject = encodeURIComponent(`Contact – ${member.name}`);
-                                  const body = encodeURIComponent(`Hi,\n\nHere are the contact details for ${member.name}:\n\nRole: ${member.role.replace(/_/g, " ")}${member.trades?.length ? `\nTrades: ${member.trades.join(", ")}` : ""}\nEmail: ${member.email ?? "N/A"}${member.phone ? `\nPhone: ${member.phone}` : ""}`);
-                                  window.open(`mailto:?subject=${subject}&body=${body}`);
-                                }}
-                              >
-                                <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                className="gap-2 cursor-pointer"
-                                onClick={() => {
-                                  const text = encodeURIComponent(`${member.name} (${member.role.replace(/_/g, " ")})${member.trades?.length ? `\nTrades: ${member.trades.join(", ")}` : ""}\nEmail: ${member.email ?? "N/A"}${member.phone ? `\nPhone: ${member.phone}` : ""}`);
-                                  window.open(`https://wa.me/?text=${text}`, "_blank");
-                                }}
-                              >
-                                <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          <button
+                            type="button"
+                            onClick={() => setSharingContact({
+                              id: member.id,
+                              name: member.name,
+                              text: `${member.name} (${member.role.replace(/_/g, " ")})${member.trades?.length ? `\nTrades: ${member.trades.join(", ")}` : ""}\nEmail: ${member.email ?? "N/A"}${member.phone ? `\nPhone: ${member.phone}` : ""}`,
+                            })}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-xs font-medium text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
+                            title="Share contact"
+                          >
+                            <Share2 className="w-3.5 h-3.5" />Share
+                          </button>
                         </div>
                         {complianceBadge}
                       </div>
@@ -2847,33 +2825,14 @@ tr:last-child td{border-bottom:none}
                                   <ExternalLink className="w-3.5 h-3.5" />Open
                                 </button>
                               )}
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <button type="button" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-xs font-medium text-foreground hover:bg-muted transition-colors" title="Share permit">
-                                    <Share2 className="w-3.5 h-3.5" />Share
-                                  </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-44">
-                                  {p.documentUrl && (
-                                    <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => window.open(p.documentUrl!.replace(/^\/uploads\//, "/api/uploads/"), "_blank", "noopener,noreferrer")}>
-                                      <ExternalLink className="w-4 h-4 text-muted-foreground" /> Open Certificate
-                                    </DropdownMenuItem>
-                                  )}
-                                  <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
-                                    const subject = encodeURIComponent(`Permit – ${p.type}`);
-                                    const body = encodeURIComponent(`Permit details:\n\nType: ${p.type}\nDescription: ${p.description}\nExpiry: ${fmtDate(p.expiryDate)} (${permitLabel(days)})${p.responsibleName ? `\nResponsible: ${p.responsibleName}` : ""}${p.documentUrl ? `\nCertificate: ${p.documentUrl.replace(/^\/uploads\//, "/api/uploads/")}` : ""}\nProject: ${project?.name ?? ""}`);
-                                    window.open(`mailto:?subject=${subject}&body=${body}`);
-                                  }}>
-                                    <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
-                                    const text = encodeURIComponent(`Permit – ${p.type}\nExpiry: ${fmtDate(p.expiryDate)} (${permitLabel(days)})\n${p.description}${p.responsibleName ? `\nResponsible: ${p.responsibleName}` : ""}${p.documentUrl ? `\nCertificate: ${p.documentUrl.replace(/^\/uploads\//, "/api/uploads/")}` : ""}`);
-                                    window.open(`https://wa.me/?text=${text}`, "_blank");
-                                  }}>
-                                    <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                              <button
+                                type="button"
+                                onClick={() => setSharingDoc({ type: "permit", id: p.id, name: `${p.type} – ${p.description}`, version: null, fileUrl: p.documentUrl ?? "" })}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-xs font-medium text-foreground hover:bg-muted transition-colors"
+                                title="Share permit"
+                              >
+                                <Share2 className="w-3.5 h-3.5" />Share
+                              </button>
                             </div>
                           </div>
                         );
@@ -3000,24 +2959,14 @@ tr:last-child td{border-bottom:none}
                                 </button>
                               )}
                               {inv.attachmentUrl && (
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <button
-                                      type="button"
-                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-sm font-medium text-foreground hover:bg-muted transition-colors"
-                                    >
-                                      <Share2 className="w-3.5 h-3.5" />Share
-                                    </button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="start" className="w-44">
-                                    <DropdownMenuItem onClick={() => shareInvoiceEmail(inv)} className="gap-2 cursor-pointer">
-                                      <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => shareInvoiceWhatsApp(inv)} className="gap-2 cursor-pointer">
-                                      <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
+                                <button
+                                  type="button"
+                                  onClick={() => setSharingInvoice(inv)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-sm font-medium text-foreground hover:bg-muted transition-colors"
+                                  title="Share invoice"
+                                >
+                                  <Share2 className="w-3.5 h-3.5" />Share
+                                </button>
                               )}
                               {paid && caps.canManageInvoices && (
                                 <button
@@ -3050,6 +2999,43 @@ tr:last-child td{border-bottom:none}
                 Print this QR code and post it on site. Workers can scan it to view live project information, permits, and documents — no login required.
               </p>
             </div>
+
+            {/* Pinned documents — always visible so the PM can see what's on the board.
+                Matches the public scanned view. Pin via Board Contents below or the Share dialog. */}
+            {(() => {
+              const pinnedDocs = (documents ?? []).filter(d => isPinned("document", d.id!));
+              if (pinnedDocs.length === 0) return null;
+              return (
+                <div className="mb-6 rounded-xl border bg-muted/20 p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Pin className="w-4 h-4 text-primary" fill="currentColor" />
+                    <h3 className="font-semibold text-sm">Pinned documents</h3>
+                    <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{pinnedDocs.length}</span>
+                  </div>
+                  <div className="rounded-lg border divide-y bg-background">
+                    {pinnedDocs.map(doc => (
+                      <div key={doc.id} className="flex items-center gap-3 px-3 py-2.5">
+                        <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{doc.name}</p>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[10px] font-semibold uppercase tracking-wide bg-muted px-1.5 py-0.5 rounded">{doc.type}</span>
+                            <span className="text-xs text-muted-foreground">{docRev(doc)}</span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => togglePin("document", doc.id!)}
+                          className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-destructive transition-colors px-2 py-1 rounded-lg hover:bg-muted"
+                          title="Unpin from board"
+                        >
+                          <PinOff className="w-3.5 h-3.5" /> Unpin
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
 
             {!qrFetched ? (
               <div className="flex flex-col items-center gap-4">
@@ -3921,6 +3907,27 @@ tr:last-child td{border-bottom:none}
         fileUrl={null}
         projectId={projectId}
         shareText={sharingNote?.body ?? null}
+      />
+
+      <ShareModal
+        open={!!sharingContact}
+        onClose={() => setSharingContact(null)}
+        entityType="contact"
+        entityId={sharingContact?.id ?? ""}
+        entityName={sharingContact?.name ?? ""}
+        fileUrl={null}
+        projectId={projectId}
+        shareText={sharingContact?.text ?? null}
+      />
+
+      <ShareModal
+        open={!!sharingInvoice}
+        onClose={() => setSharingInvoice(null)}
+        entityType="invoice"
+        entityId={sharingInvoice?.id ?? ""}
+        entityName={`Invoice — ${sharingInvoice?.counterpartyName ?? ""}`}
+        fileUrl={sharingInvoice?.attachmentUrl ?? null}
+        projectId={projectId}
       />
 
       <Dialog open={!!scheduleTarget} onOpenChange={v => { if (!v) { setScheduleTarget(null); setScheduleError(null); } }}>

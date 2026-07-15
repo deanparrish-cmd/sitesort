@@ -1206,6 +1206,50 @@ export const GetPortalHsResponse = zod.object({
 });
 
 /**
+ * @summary Everything shared with the member (Shared with me)
+ */
+export const GetPortalSharedResponse = zod.object({
+  documents: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      type: zod.string(),
+      version: zod.number(),
+      revision: zod.string().optional(),
+      fileUrl: zod.string(),
+      fileSize: zod.number().optional(),
+      status: zod.string(),
+      createdAt: zod.string().optional(),
+    }),
+  ),
+  photos: zod.array(
+    zod.object({
+      id: zod.string(),
+      category: zod.string(),
+      description: zod.string().optional(),
+      zone: zod.string().optional(),
+      referenceNumber: zod.string(),
+      status: zod.string().optional(),
+      photoUrl: zod.string().optional(),
+      takenAt: zod.string().optional(),
+      latitude: zod.string().optional(),
+      longitude: zod.string().optional(),
+    }),
+  ),
+  permits: zod.array(
+    zod.object({
+      id: zod.string(),
+      type: zod.string(),
+      description: zod.string(),
+      startDate: zod.string().optional(),
+      expiryDate: zod.string(),
+      status: zod.string(),
+      documentUrl: zod.string().optional(),
+    }),
+  ),
+});
+
+/**
  * @summary Drawings (current, with revisions)
  */
 export const GetPortalDrawingsResponseItem = zod.object({

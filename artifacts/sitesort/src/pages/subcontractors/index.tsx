@@ -5,15 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { ShareModal } from "@/components/share-modal";
 import {
   Plus, Search, ChevronDown, ChevronRight, HardHat, Mail, Phone,
   ShieldCheck, ShieldAlert, ShieldX, Shield, Star, AlertTriangle,
   Users, Pencil, X, FolderOpen, MessageSquare,
   FolderPlus, CheckCircle2, Loader2, Building2,
-  Share2, MessageCircle, StickyNote, Clock, Send, FileText, ExternalLink, UserCheck,
+  Share2, StickyNote, Clock, Send, FileText, ExternalLink, UserCheck,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { cn } from "@/lib/utils";
@@ -228,6 +226,7 @@ export default function SubcontractorsPage() {
   type ProjectLinkStatus = "idle" | "loading" | "added" | "already" | "error";
   type ActiveProject = { id: string; name: string; address: string };
   const [shareTarget, setShareTarget] = useState<Sub | null>(null);
+  const [sharingContact, setSharingContact] = useState<{ id: string; name: string; text: string } | null>(null);
   const [shareProjects, setShareProjects] = useState<ActiveProject[]>([]);
   const [shareProjectsLoading, setShareProjectsLoading] = useState(false);
   const [linkStatus, setLinkStatus] = useState<Record<string, ProjectLinkStatus>>({});
@@ -706,28 +705,17 @@ export default function SubcontractorsPage() {
                             <button onClick={() => openNotes(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors" title="Notes & reminders log">
                               <StickyNote className="w-3.5 h-3.5" />
                             </button>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <button className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Share contact">
-                                  <Share2 className="w-3.5 h-3.5" />
-                                </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-44">
-                                <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
-                                  const subject = encodeURIComponent(`Subcontractor – ${sub.companyName}`);
-                                  const body = encodeURIComponent(`Hi,\n\nHere are the contact details for ${sub.companyName}:\n\nContact: ${sub.contactName}${sub.contactEmail ? `\nEmail: ${sub.contactEmail}` : ""}${sub.contactPhone ? `\nPhone: ${sub.contactPhone}` : ""}${sub.trades.length ? `\nTrades: ${sub.trades.join(", ")}` : ""}`);
-                                  window.open(`mailto:?subject=${subject}&body=${body}`);
-                                }}>
-                                  <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
-                                </DropdownMenuItem>
-                                <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
-                                  const text = encodeURIComponent(`${sub.companyName}\nContact: ${sub.contactName}${sub.contactEmail ? `\nEmail: ${sub.contactEmail}` : ""}${sub.contactPhone ? `\nPhone: ${sub.contactPhone}` : ""}${sub.trades.length ? `\nTrades: ${sub.trades.join(", ")}` : ""}`);
-                                  window.open(`https://wa.me/?text=${text}`, "_blank");
-                                }}>
-                                  <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                            <button
+                              onClick={() => setSharingContact({
+                                id: sub.id,
+                                name: sub.companyName,
+                                text: `${sub.companyName}\nContact: ${sub.contactName}${sub.contactEmail ? `\nEmail: ${sub.contactEmail}` : ""}${sub.contactPhone ? `\nPhone: ${sub.contactPhone}` : ""}${sub.trades.length ? `\nTrades: ${sub.trades.join(", ")}` : ""}`,
+                              })}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
+                              title="Share contact"
+                            >
+                              <Share2 className="w-3.5 h-3.5" />
+                            </button>
                             {caps.canManageSubcontractors && (
                               <>
                                 <button onClick={() => setShareTarget(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Add to a project">
@@ -752,28 +740,17 @@ export default function SubcontractorsPage() {
                             <button onClick={() => openNotes(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors" title="Notes & reminders log">
                               <StickyNote className="w-3.5 h-3.5" />
                             </button>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <button className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Share contact">
-                                  <Share2 className="w-3.5 h-3.5" />
-                                </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-44">
-                                <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
-                                  const subject = encodeURIComponent(`Subcontractor – ${sub.companyName}`);
-                                  const body = encodeURIComponent(`Hi,\n\nHere are the contact details for ${sub.companyName}:\n\nContact: ${sub.contactName}${sub.contactEmail ? `\nEmail: ${sub.contactEmail}` : ""}${sub.contactPhone ? `\nPhone: ${sub.contactPhone}` : ""}${sub.trades.length ? `\nTrades: ${sub.trades.join(", ")}` : ""}`);
-                                  window.open(`mailto:?subject=${subject}&body=${body}`);
-                                }}>
-                                  <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
-                                </DropdownMenuItem>
-                                <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => {
-                                  const text = encodeURIComponent(`${sub.companyName}\nContact: ${sub.contactName}${sub.contactEmail ? `\nEmail: ${sub.contactEmail}` : ""}${sub.contactPhone ? `\nPhone: ${sub.contactPhone}` : ""}${sub.trades.length ? `\nTrades: ${sub.trades.join(", ")}` : ""}`);
-                                  window.open(`https://wa.me/?text=${text}`, "_blank");
-                                }}>
-                                  <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                            <button
+                              onClick={() => setSharingContact({
+                                id: sub.id,
+                                name: sub.companyName,
+                                text: `${sub.companyName}\nContact: ${sub.contactName}${sub.contactEmail ? `\nEmail: ${sub.contactEmail}` : ""}${sub.contactPhone ? `\nPhone: ${sub.contactPhone}` : ""}${sub.trades.length ? `\nTrades: ${sub.trades.join(", ")}` : ""}`,
+                              })}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
+                              title="Share contact"
+                            >
+                              <Share2 className="w-3.5 h-3.5" />
+                            </button>
                             {caps.canManageSubcontractors && (
                               <>
                                 <button onClick={() => setShareTarget(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Add to a project">
@@ -1182,6 +1159,16 @@ export default function SubcontractorsPage() {
           <Button variant="accent" onClick={saveInsAssign} isLoading={insSubmitting}>Save</Button>
         </DialogFooter>
       </Dialog>
+
+      <ShareModal
+        open={!!sharingContact}
+        onClose={() => setSharingContact(null)}
+        entityType="contact"
+        entityId={sharingContact?.id ?? ""}
+        entityName={sharingContact?.name ?? ""}
+        fileUrl={null}
+        shareText={sharingContact?.text ?? null}
+      />
     </SidebarLayout>
   );
 }

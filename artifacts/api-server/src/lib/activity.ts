@@ -9,6 +9,7 @@ import { logger } from "./logger";
 // in sync with the portal frontend nav and the PM activity filters.
 export const PORTAL_SECTIONS = [
   "overview",
+  "shared",
   "progress",
   "team",
   "site-issues",
@@ -30,6 +31,7 @@ export function isPortalSection(s: string): s is PortalSection {
 // Human labels for the PM activity feed / summary ("Dean viewed Drawings").
 export const SECTION_LABELS: Record<string, string> = {
   overview: "Overview",
+  shared: "Shared with me",
   progress: "Progress",
   team: "Team",
   "site-issues": "Site Issues",

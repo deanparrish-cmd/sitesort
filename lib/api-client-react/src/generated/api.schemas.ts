@@ -819,6 +819,12 @@ export interface PortalHs {
   permits: PortalPermit[];
 }
 
+export interface PortalShared {
+  documents: PortalDocument[];
+  photos: PortalIssue[];
+  permits: PortalPermit[];
+}
+
 export interface PortalGeneral {
   documents: PortalDocument[];
   notes: PortalNote[];

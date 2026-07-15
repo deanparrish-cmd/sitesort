@@ -295,6 +295,7 @@ router.get("/site/:token", async (req, res) => {
           name: d.name,
           type: d.type,
           version: d.version,
+          superseded: d.status === "superseded",
           fileUrl: normaliseUrl(d.fileUrl),
         })),
         ...pinnedPhotos.map(p => ({

@@ -195,7 +195,24 @@ export async function ensureSchema(): Promise<void> {
     await pool.query(`ALTER TABLE daily_reports ADD COLUMN IF NOT EXISTS authored_by text`);
     await pool.query(`ALTER TABLE daily_reports ADD COLUMN IF NOT EXISTS authored_at timestamp`);
     await pool.query(`ALTER TABLE daily_reports ADD COLUMN IF NOT EXISTS auto_generated boolean NOT NULL DEFAULT false`);
-    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols ready");
+    // Team Portal share targets (gated portal visibility). Polymorphic item + audience rule.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS portal_shares (
+        id text PRIMARY KEY,
+        project_id text NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        item_type text NOT NULL,
+        item_id text NOT NULL,
+        audience_type text NOT NULL,
+        trade text,
+        person_id text REFERENCES people(id) ON DELETE CASCADE,
+        shared_by_user_id text REFERENCES users(id) ON DELETE SET NULL,
+        created_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS portal_shares_uq ON portal_shares (project_id, item_type, item_id, audience_type, coalesce(trade, ''), coalesce(person_id, ''))`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS portal_shares_project_idx ON portal_shares (project_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS portal_shares_item_idx ON portal_shares (item_type, item_id)`);
+    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols + portal_shares ready");
   } catch (err) {
     // Don't crash the server — membership lookups fall back to the home company.
     logger.error({ err }, "ensureSchema failed (continuing with home-company fallback)");

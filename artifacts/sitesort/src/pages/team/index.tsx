@@ -5,11 +5,9 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { ShareModal } from "@/components/share-modal";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Users, Search, Mail, Phone, ShieldCheck, Share2, MessageCircle,
+  Users, Search, Mail, Phone, ShieldCheck, Share2,
   MessageSquare, StickyNote, Send, Loader2, Clock, UserPlus, FolderOpen, Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -99,6 +97,7 @@ export default function TeamPage() {
   const [selectedProjects, setSelectedProjects] = useState<Set<string>>(new Set());
 
   // Notes dialog state
+  const [sharingContact, setSharingContact] = useState<{ id: string; name: string; text: string } | null>(null);
   const [notesTarget, setNotesTarget] = useState<TeamMember | null>(null);
   const [notesList, setNotesList] = useState<UserNote[]>([]);
   const [notesLoading, setNotesLoading] = useState(false);
@@ -337,34 +336,17 @@ export default function TeamPage() {
                             </button>
 
                             {/* Share */}
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <button className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors" title="Share contact">
-                                  <Share2 className="w-4 h-4" />
-                                </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-44">
-                                <DropdownMenuItem
-                                  className="gap-2 cursor-pointer"
-                                  onClick={() => {
-                                    const subject = encodeURIComponent(`Contact – ${m.name}`);
-                                    const body = encodeURIComponent(`Hi,\n\nHere are the contact details for ${m.name}:\n\nRole: ${m.role.replace(/_/g, " ")}\nEmail: ${m.email}${m.phone ? `\nPhone: ${m.phone}` : ""}`);
-                                    window.open(`mailto:?subject=${subject}&body=${body}`);
-                                  }}
-                                >
-                                  <Mail className="w-4 h-4 text-muted-foreground" /> Send via Email
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  className="gap-2 cursor-pointer"
-                                  onClick={() => {
-                                    const text = encodeURIComponent(`${m.name} (${m.role.replace(/_/g, " ")})\nEmail: ${m.email}${m.phone ? `\nPhone: ${m.phone}` : ""}`);
-                                    window.open(`https://wa.me/?text=${text}`, "_blank");
-                                  }}
-                                >
-                                  <MessageCircle className="w-4 h-4 text-green-600" /> Send via WhatsApp
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                            <button
+                              onClick={() => setSharingContact({
+                                id: m.id,
+                                name: m.name,
+                                text: `${m.name} (${m.role.replace(/_/g, " ")})\nEmail: ${m.email}${m.phone ? `\nPhone: ${m.phone}` : ""}`,
+                              })}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                              title="Share contact"
+                            >
+                              <Share2 className="w-4 h-4" />
+                            </button>
                           </div>
                         </div>
 
@@ -517,6 +499,16 @@ export default function TeamPage() {
           <Button variant="outline" onClick={closeNotes}>Close</Button>
         </DialogFooter>
       </Dialog>
+
+      <ShareModal
+        open={!!sharingContact}
+        onClose={() => setSharingContact(null)}
+        entityType="contact"
+        entityId={sharingContact?.id ?? ""}
+        entityName={sharingContact?.name ?? ""}
+        fileUrl={null}
+        shareText={sharingContact?.text ?? null}
+      />
     </SidebarLayout>
   );
 }

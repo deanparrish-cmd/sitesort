@@ -595,7 +595,12 @@ export default function SiteBoard() {
                         <div className="flex items-center gap-2 flex-1 min-w-0">
                           <FileText className="w-4 h-4 text-gray-400 shrink-0" />
                           <div className="min-w-0">
-                            <p className="font-medium text-gray-900 text-sm truncate">{doc.name}</p>
+                            <p className="font-medium text-gray-900 text-sm truncate flex items-center gap-1.5">
+                              <span className="truncate">{doc.name}</span>
+                              {doc.superseded && (
+                                <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded">Superseded</span>
+                              )}
+                            </p>
                             <p className="text-gray-400 text-xs">{TYPE_LABELS[doc.type] ?? doc.type} · v{doc.version}</p>
                           </div>
                         </div>

@@ -6,6 +6,7 @@ import {
   usersTable, projectsTable, projectMembersTable, projectInvitesTable,
   documentsTable, photosTable, permitsTable, milestonesTable, dailyNotesTable,
   qrBoardPinsTable, calendarEventsTable, subcontractorsTable, peopleTable,
+  portalSharesTable, documentDistributionsTable,
 } from "@workspace/db/schema";
 import { and, eq, inArray, isNull, isNotNull, desc, asc, gte, count } from "drizzle-orm";
 import { generateId } from "../lib/id";
@@ -74,6 +75,54 @@ function serializeProject(p: typeof projectsTable.$inferSelect, progressPercent:
 async function loadProject(projectId: string) {
   const rows = await db.select().from(projectsTable).where(eq(projectsTable.id, projectId)).limit(1);
   return rows[0] ?? null;
+}
+
+// ---- gated portal visibility (Team Portal sharing) ----
+// A portal member sees ONLY items shared with them (via 'all' / their trade /
+// them personally), EXCEPT `safety`-type documents which are always open. The
+// portal NEVER exposes who else an item was shared with.
+const SITE_STAFF = "Site Staff";
+type Viewer = { personId: string | null; trades: string[]; isSiteStaff: boolean };
+
+async function resolveViewer(userId: string, projectId: string): Promise<Viewer> {
+  const rows = await db.select({ personId: projectMembersTable.personId, trades: subcontractorsTable.trades })
+    .from(projectMembersTable)
+    .leftJoin(peopleTable, eq(projectMembersTable.personId, peopleTable.id))
+    .leftJoin(subcontractorsTable, eq(peopleTable.subcontractorId, subcontractorsTable.id))
+    .where(and(eq(projectMembersTable.projectId, projectId), eq(projectMembersTable.userId, userId), isNotNull(projectMembersTable.personId)))
+    .limit(1);
+  const trades = (rows[0]?.trades ?? []) as string[];
+  return { personId: (rows[0]?.personId ?? null) as string | null, trades, isSiteStaff: trades.length === 0 };
+}
+
+// Ids of a given item type visible to this viewer, resolved from share rules at
+// read time (so trade/all shares automatically include members invited later).
+async function visibleIds(projectId: string, itemType: string, viewer: Viewer): Promise<Set<string>> {
+  const shares = await db.select().from(portalSharesTable)
+    .where(and(eq(portalSharesTable.projectId, projectId), eq(portalSharesTable.itemType, itemType)));
+  const set = new Set<string>();
+  for (const s of shares) {
+    if (s.audienceType === "all") set.add(s.itemId);
+    else if (s.audienceType === "person" && viewer.personId && s.personId === viewer.personId) set.add(s.itemId);
+    else if (s.audienceType === "trade" && s.trade && (viewer.trades.includes(s.trade) || (viewer.isSiteStaff && s.trade === SITE_STAFF))) set.add(s.itemId);
+  }
+  return set;
+}
+
+// Register a portal member's view of a shared document in distribution tracking
+// (best-effort): create the row lazily for members reached via a rule, and flip
+// pending → viewed. The PM dashboard reads these counts.
+async function recordDocView(documentId: string, userId: string): Promise<void> {
+  try {
+    const existing = await db.select({ id: documentDistributionsTable.id, status: documentDistributionsTable.status })
+      .from(documentDistributionsTable)
+      .where(and(eq(documentDistributionsTable.documentId, documentId), eq(documentDistributionsTable.userId, userId))).limit(1);
+    if (existing.length === 0) {
+      await db.insert(documentDistributionsTable).values({ id: generateId(), documentId, userId, status: "viewed", viewedAt: new Date() });
+    } else if (existing[0].status === "pending") {
+      await db.update(documentDistributionsTable).set({ status: "viewed", viewedAt: new Date() }).where(eq(documentDistributionsTable.id, existing[0].id));
+    }
+  } catch { /* tracking is best-effort */ }
 }
 
 // ==========================================================================
@@ -312,6 +361,24 @@ router.get("/portal/overview", ...portalGuards, async (req, res) => {
   });
 });
 
+// GET /api/portal/shared — everything shared with this member across types
+// (the "Shared with me" landing). Safety docs are included as always-available.
+router.get("/portal/shared", ...portalGuards, async (req, res) => {
+  const pid = req.portalProjectId!;
+  const viewer = await resolveViewer(req.user!.id, pid);
+  const [docIds, photoIds, permitIds] = await Promise.all([
+    visibleIds(pid, "document", viewer),
+    visibleIds(pid, "photo", viewer),
+    visibleIds(pid, "permit", viewer),
+  ]);
+  const [docs, photos, permits] = await Promise.all([
+    docIds.size ? db.select().from(documentsTable).where(and(eq(documentsTable.projectId, pid), inArray(documentsTable.id, [...docIds]), inArray(documentsTable.status, ["current", "superseded"]))).orderBy(asc(documentsTable.name)) : Promise.resolve([]),
+    photoIds.size ? db.select().from(photosTable).where(and(eq(photosTable.projectId, pid), inArray(photosTable.id, [...photoIds]))).orderBy(desc(photosTable.takenAt)) : Promise.resolve([]),
+    permitIds.size ? db.select().from(permitsTable).where(and(eq(permitsTable.projectId, pid), isNull(permitsTable.archivedAt), inArray(permitsTable.id, [...permitIds]))).orderBy(asc(permitsTable.expiryDate)) : Promise.resolve([]),
+  ]);
+  res.json({ documents: docs.map(serializeDoc), photos: photos.map(serializeIssue), permits: permits.map(serializePermit) });
+});
+
 // GET /api/portal/progress
 router.get("/portal/progress", ...portalGuards, async (req, res) => {
   const pid = req.portalProjectId!;
@@ -344,11 +411,14 @@ router.get("/portal/team", ...portalGuards, async (req, res) => {
   ]);
 });
 
-// GET /api/portal/site-issues
+// GET /api/portal/site-issues — GATED to shared photos.
 router.get("/portal/site-issues", ...portalGuards, async (req, res) => {
   const pid = req.portalProjectId!;
+  const viewer = await resolveViewer(req.user!.id, pid);
+  const ids = await visibleIds(pid, "photo", viewer);
+  if (ids.size === 0) { res.json([]); return; }
   const rows = await db.select().from(photosTable)
-    .where(and(eq(photosTable.projectId, pid), inArray(photosTable.category, ["snag", "safety_concern"])))
+    .where(and(eq(photosTable.projectId, pid), inArray(photosTable.category, ["snag", "safety_concern"]), inArray(photosTable.id, [...ids])))
     .orderBy(desc(photosTable.takenAt));
   res.json(rows.map(serializeIssue));
 });
@@ -382,32 +452,57 @@ router.get("/portal/site-board", ...portalGuards, async (req, res) => {
   });
 });
 
-// GET /api/portal/hs — Health & Safety hub.
+// GET /api/portal/hs — Health & Safety hub. Safety docs are always visible;
+// method statements + permits are GATED to what's shared with the member.
 router.get("/portal/hs", ...portalGuards, async (req, res) => {
   const pid = req.portalProjectId!;
+  const viewer = await resolveViewer(req.user!.id, pid);
+  const [docIds, permitIds] = await Promise.all([visibleIds(pid, "document", viewer), visibleIds(pid, "permit", viewer)]);
   const [methodStatements, safety, permits] = await Promise.all([
-    db.select().from(documentsTable).where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, "method_statement"), eq(documentsTable.status, "current"))).orderBy(asc(documentsTable.name)),
+    docIds.size ? db.select().from(documentsTable).where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, "method_statement"), inArray(documentsTable.id, [...docIds]), inArray(documentsTable.status, ["current", "superseded"]))).orderBy(asc(documentsTable.name)) : Promise.resolve([]),
     db.select().from(documentsTable).where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, "safety"), eq(documentsTable.status, "current"))).orderBy(asc(documentsTable.name)),
-    db.select().from(permitsTable).where(and(eq(permitsTable.projectId, pid), isNull(permitsTable.archivedAt))).orderBy(asc(permitsTable.expiryDate)),
+    permitIds.size ? db.select().from(permitsTable).where(and(eq(permitsTable.projectId, pid), isNull(permitsTable.archivedAt), inArray(permitsTable.id, [...permitIds]))).orderBy(asc(permitsTable.expiryDate)) : Promise.resolve([]),
   ]);
   res.json({ methodStatements: methodStatements.map(serializeDoc), safety: safety.map(serializeDoc), permits: permits.map(serializePermit) });
 });
 
-// Shared list/detail handlers for document sections keyed by type.
+// Shared list/detail handlers for document sections keyed by type. GATED: only
+// documents shared with this member are returned — EXCEPT `safety`, which is
+// always open (safety-critical content must never be hidden by a missed share).
+// Shared docs are shown even when superseded (with their status flag).
 function docListHandler(type: string) {
   return async (req: import("express").Request, res: import("express").Response) => {
+    const pid = req.portalProjectId!;
+    if (type === "safety") {
+      const rows = await db.select().from(documentsTable)
+        .where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, type), eq(documentsTable.status, "current")))
+        .orderBy(asc(documentsTable.name));
+      res.json(rows.map(serializeDoc));
+      return;
+    }
+    const viewer = await resolveViewer(req.user!.id, pid);
+    const ids = await visibleIds(pid, "document", viewer);
+    if (ids.size === 0) { res.json([]); return; }
     const rows = await db.select().from(documentsTable)
-      .where(and(eq(documentsTable.projectId, req.portalProjectId!), eq(documentsTable.type, type), eq(documentsTable.status, "current")))
+      .where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, type), inArray(documentsTable.id, [...ids]), inArray(documentsTable.status, ["current", "superseded"])))
       .orderBy(asc(documentsTable.name));
     res.json(rows.map(serializeDoc));
   };
 }
 function docDetailHandler(type: string) {
   return async (req: import("express").Request, res: import("express").Response) => {
+    const pid = req.portalProjectId!;
     const rows = await db.select().from(documentsTable)
-      .where(and(eq(documentsTable.id, req.params.documentId), eq(documentsTable.projectId, req.portalProjectId!), eq(documentsTable.type, type)))
+      .where(and(eq(documentsTable.id, req.params.documentId), eq(documentsTable.projectId, pid), eq(documentsTable.type, type)))
       .limit(1);
     if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Document not found" }); return; }
+    // Gate everything except safety; opening a shared doc records the view.
+    if (type !== "safety") {
+      const viewer = await resolveViewer(req.user!.id, pid);
+      const ids = await visibleIds(pid, "document", viewer);
+      if (!ids.has(rows[0].id)) { res.status(404).json({ error: "not_found", message: "Document not found" }); return; }
+      await recordDocView(rows[0].id, req.user!.id);
+    }
     res.json(serializeDoc(rows[0]));
   };
 }
@@ -423,19 +518,25 @@ router.get("/portal/method-statements/:documentId", ...portalGuards, docDetailHa
 // GET /api/portal/safety
 router.get("/portal/safety", ...portalGuards, docListHandler("safety"));
 
-// GET /api/portal/permits
+// GET /api/portal/permits — GATED to shared permits.
 router.get("/portal/permits", ...portalGuards, async (req, res) => {
+  const pid = req.portalProjectId!;
+  const viewer = await resolveViewer(req.user!.id, pid);
+  const ids = await visibleIds(pid, "permit", viewer);
+  if (ids.size === 0) { res.json([]); return; }
   const rows = await db.select().from(permitsTable)
-    .where(and(eq(permitsTable.projectId, req.portalProjectId!), isNull(permitsTable.archivedAt)))
+    .where(and(eq(permitsTable.projectId, pid), isNull(permitsTable.archivedAt), inArray(permitsTable.id, [...ids])))
     .orderBy(asc(permitsTable.expiryDate));
   res.json(rows.map(serializePermit));
 });
 
-// GET /api/portal/general — general documents + recent site notes.
+// GET /api/portal/general — general documents (GATED) + recent site notes (open).
 router.get("/portal/general", ...portalGuards, async (req, res) => {
   const pid = req.portalProjectId!;
+  const viewer = await resolveViewer(req.user!.id, pid);
+  const gIds = await visibleIds(pid, "document", viewer);
   const [docs, notes] = await Promise.all([
-    db.select().from(documentsTable).where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, "general"), eq(documentsTable.status, "current"))).orderBy(asc(documentsTable.name)),
+    gIds.size ? db.select().from(documentsTable).where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, "general"), inArray(documentsTable.id, [...gIds]), inArray(documentsTable.status, ["current", "superseded"]))).orderBy(asc(documentsTable.name)) : Promise.resolve([]),
     db.select({
       id: dailyNotesTable.id, body: dailyNotesTable.body, noteDate: dailyNotesTable.noteDate,
       photoUrl: dailyNotesTable.photoUrl, authorName: usersTable.name,

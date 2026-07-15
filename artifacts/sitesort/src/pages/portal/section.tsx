@@ -3,7 +3,7 @@ import {
   useGetPortalOverview, useGetPortalProgress, useGetPortalTeam,
   useGetPortalSiteIssues, useGetPortalSiteBoard, useGetPortalHs,
   useGetPortalDrawings, useGetPortalMethodStatements, useGetPortalPermits,
-  useGetPortalSafety, useGetPortalGeneral,
+  useGetPortalSafety, useGetPortalGeneral, useGetPortalShared,
 } from "@workspace/api-client-react";
 import { PortalLayout } from "./layout";
 import { Spinner } from "@/components/ui/spinner";
@@ -72,7 +72,12 @@ function DocRow({ doc, section }: { doc: any; section: string }) {
   return (
     <div className="flex items-center justify-between gap-3 py-2.5 border-b border-border/60 last:border-0">
       <div className="min-w-0">
-        <p className="font-medium truncate">{doc.name}</p>
+        <p className="font-medium truncate flex items-center gap-1.5">
+          <span className="truncate">{doc.name}</span>
+          {doc.status === "superseded" && (
+            <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 px-1.5 py-0.5 rounded">Superseded</span>
+          )}
+        </p>
         <p className="text-xs text-muted-foreground flex items-center gap-1.5">
           <span>{doc.revision ? `Rev ${doc.revision}` : `v${doc.version}`} · {fmtDate(doc.createdAt)}</span>
           {cad && <span className="font-mono bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 px-1.5 py-0.5 rounded text-[10px] font-bold">{cad}</span>}
@@ -207,7 +212,7 @@ function TeamView() {
 function SiteIssuesView() {
   const { data, isLoading } = useGetPortalSiteIssues();
   if (isLoading) return <Loading />;
-  if (!data || data.length === 0) return <Empty>No site issues logged.</Empty>;
+  if (!data || data.length === 0) return <Empty>Nothing shared with you here yet.</Empty>;
   return (
     <div className="space-y-3">
       {data.map(issue => (
@@ -311,7 +316,7 @@ function DocListView({ section, hook, empty }: { section: string; hook: any; emp
 function PermitsView() {
   const { data, isLoading } = useGetPortalPermits();
   if (isLoading) return <Loading />;
-  if (!data || data.length === 0) return <Empty>No permits for this project.</Empty>;
+  if (!data || data.length === 0) return <Empty>Nothing shared with you here yet.</Empty>;
   return <Card>{data.map(p => <PermitRow key={p.id} p={p} />)}</Card>;
 }
 
@@ -323,7 +328,7 @@ function GeneralView() {
     <div className="space-y-5">
       <div>
         <SectionTitle>General documents</SectionTitle>
-        {data.documents.length === 0 ? <Empty>No general documents.</Empty> : <Card>{data.documents.map(d => <DocRow key={d.id} doc={d} section="general" />)}</Card>}
+        {data.documents.length === 0 ? <Empty>Nothing shared with you here yet.</Empty> : <Card>{data.documents.map(d => <DocRow key={d.id} doc={d} section="general" />)}</Card>}
       </div>
       <div>
         <SectionTitle>Site notes</SectionTitle>
@@ -342,16 +347,65 @@ function GeneralView() {
   );
 }
 
+// Map a document's type to its portal section so opening it from the aggregate
+// "Shared with me" view still hits the per-item endpoint that logs the view +
+// registers it in distribution tracking.
+function docTypeSection(type?: string): string {
+  if (type === "drawing") return "drawings";
+  if (type === "method_statement") return "method-statements";
+  if (type === "safety") return "safety";
+  return "general";
+}
+
+function SharedView() {
+  const { data, isLoading } = useGetPortalShared();
+  if (isLoading) return <Loading />;
+  const empty = !data || (!data.documents.length && !data.photos.length && !data.permits.length);
+  if (empty) return <Empty>Nothing has been shared with you yet. Your project manager will share drawings, documents and updates here.</Empty>;
+  return (
+    <div className="space-y-5">
+      {data!.documents.length > 0 && (
+        <div><SectionTitle>Documents</SectionTitle><Card>{data!.documents.map(d => <DocRow key={d.id} doc={d} section={docTypeSection(d.type)} />)}</Card></div>
+      )}
+      {data!.permits.length > 0 && (
+        <div><SectionTitle>Permits</SectionTitle><Card>{data!.permits.map(p => <PermitRow key={p.id} p={p} />)}</Card></div>
+      )}
+      {data!.photos.length > 0 && (
+        <div><SectionTitle>Site issues</SectionTitle><div className="space-y-3">
+          {data!.photos.map(issue => (
+            <Card key={issue.id}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                    <span className="font-medium">{issue.category === "safety_concern" ? "Safety concern" : "Snag"}</span>
+                    <span className="text-xs text-muted-foreground">#{issue.referenceNumber}</span>
+                  </div>
+                  {issue.description && <p className="text-sm mt-1 break-words">{issue.description}</p>}
+                  <p className="text-xs text-muted-foreground mt-1">{issue.zone ? `${issue.zone} · ` : ""}{fmtDate(issue.takenAt)}</p>
+                </div>
+                <Badge label={(issue.status ?? "open").replace("_", " ")} className={ISSUE_BADGE[issue.status ?? "open"]} />
+              </div>
+              {issue.photoUrl && <img src={fileHref(issue.photoUrl)} alt="" className="mt-3 rounded-lg w-full max-h-56 object-cover" loading="lazy" />}
+            </Card>
+          ))}
+        </div></div>
+      )}
+    </div>
+  );
+}
+
 function renderSection(section: string) {
   switch (section) {
     case "overview": return <OverviewView />;
+    case "shared": return <SharedView />;
     case "progress": return <ProgressView />;
     case "team": return <TeamView />;
     case "site-issues": return <SiteIssuesView />;
     case "site-board": return <SiteBoardView />;
     case "hs": return <HsView />;
-    case "drawings": return <DocListView section="drawings" hook={useGetPortalDrawings} empty="No drawings uploaded." />;
-    case "method-statements": return <DocListView section="method-statements" hook={useGetPortalMethodStatements} empty="No method statements uploaded." />;
+    case "drawings": return <DocListView section="drawings" hook={useGetPortalDrawings} empty="Nothing shared with you here yet." />;
+    case "method-statements": return <DocListView section="method-statements" hook={useGetPortalMethodStatements} empty="Nothing shared with you here yet." />;
     case "permits": return <PermitsView />;
     case "safety": return <DocListView section="safety" hook={useGetPortalSafety} empty="No safety documents uploaded." />;
     case "general": return <GeneralView />;

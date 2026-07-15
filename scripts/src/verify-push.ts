@@ -10,24 +10,24 @@ async function getFile(p: string): Promise<string> {
 }
 
 // [path, signature string that MUST be present for my change to have landed]
-// Per-person portal invites (portal-only for everyone) + review fixes — 2026-07-14.
+// Team Portal sharing (all/trade/individual) + Site Board pin/QR fix — 2026-07-15.
 const checks: [string, string][] = [
-  ["lib/db/src/schema/people.ts", "peopleTable"],
-  ["artifacts/api-server/src/routes/people.ts", "portal-invites"],
-  ["artifacts/api-server/src/routes/people.ts", "in-house-people"],
-  ["artifacts/api-server/src/lib/ensure-schema.ts", "people_company_inhouse_email_uq"],
-  ["artifacts/api-server/src/routes/portal.ts", "Portal access is an explicit grant"],
-  ["artifacts/api-server/src/routes/people.ts", "dashInCompany"],
-  ["artifacts/api-server/src/middlewares/portal.ts", "isNotNull(projectMembersTable.personId)"],
-  ["artifacts/sitesort/src/lib/documents.ts", "cadBadgeLabel"],
-  ["artifacts/api-server/src/routes/upload.ts", "dwg|dxf|dwf|rvt|ifc"],
-  ["artifacts/sitesort/src/pages/projects/portal-people.tsx", "PortalInvitePill"],
-  ["artifacts/sitesort/src/pages/projects/detail.tsx", "PortalInvitePill"],
-  ["artifacts/sitesort/src/components/layout/sidebar-layout.tsx", "overflow-x-clip"],
-  ["artifacts/sitesort/src/pages/portal/layout.tsx", "overflow-x-clip"],
-  ["artifacts/sitesort/src/pages/portal/layout.tsx", "flex flex-wrap gap-1"],
-  ["artifacts/sitesort/src/pages/projects/team-activity.tsx", "Portal invites"],
-  ["lib/api-spec/openapi.yaml", "createPortalInvite"],
+  ["lib/db/src/schema/portal-shares.ts", "portalSharesTable"],
+  ["lib/db/src/schema/index.ts", "portal-shares"],
+  ["artifacts/api-server/src/lib/ensure-schema.ts", "CREATE TABLE IF NOT EXISTS portal_shares"],
+  ["artifacts/api-server/src/routes/portal-shares.ts", "portal-audience"],
+  ["artifacts/api-server/src/routes/portal-shares.ts", "acceptedMembers"],
+  ["artifacts/api-server/src/routes/index.ts", "portalSharesRouter"],
+  ["artifacts/api-server/src/routes/portal.ts", "async function visibleIds"],
+  ["artifacts/api-server/src/routes/portal.ts", "/portal/shared"],
+  ["artifacts/api-server/src/routes/team.ts", "Portal member row (person link)"],
+  ["artifacts/api-server/src/lib/activity.ts", "Shared with me"],
+  ["lib/api-spec/openapi.yaml", "getPortalShared"],
+  ["artifacts/sitesort/src/components/share-modal.tsx", "PORTAL_ENTITY_TYPES"],
+  ["artifacts/sitesort/src/components/share-modal.tsx", "submitPortalShare"],
+  ["artifacts/sitesort/src/pages/portal/section.tsx", "function SharedView"],
+  ["artifacts/sitesort/src/pages/portal/layout.tsx", "Shared with me"],
+  ["artifacts/sitesort/src/pages/projects/detail.tsx", "Pinned documents"],
 ];
 
 let ok = 0, bad: string[] = [];

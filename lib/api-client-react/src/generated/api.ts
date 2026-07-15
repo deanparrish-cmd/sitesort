@@ -61,6 +61,7 @@ import type {
   PortalOverview,
   PortalPermit,
   PortalProgress,
+  PortalShared,
   PortalSiteBoard,
   PortalTeamMember,
   Project,
@@ -4254,6 +4255,81 @@ export function useGetPortalHs<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetPortalHsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Everything shared with the member (Shared with me)
+ */
+export const getGetPortalSharedUrl = () => {
+  return `/api/portal/shared`;
+};
+
+export const getPortalShared = async (
+  options?: RequestInit,
+): Promise<PortalShared> => {
+  return customFetch<PortalShared>(getGetPortalSharedUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPortalSharedQueryKey = () => {
+  return [`/api/portal/shared`] as const;
+};
+
+export const getGetPortalSharedQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPortalShared>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalShared>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPortalSharedQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getPortalShared>>> = ({
+    signal,
+  }) => getPortalShared({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalShared>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPortalSharedQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPortalShared>>
+>;
+export type GetPortalSharedQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Everything shared with the member (Shared with me)
+ */
+
+export function useGetPortalShared<
+  TData = Awaited<ReturnType<typeof getPortalShared>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalShared>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPortalSharedQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

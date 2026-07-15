@@ -28,6 +28,7 @@ export * from "./site_checkins";
 export * from "./daily_reports";
 export * from "./daily_notes";
 export * from "./qr_board_pins";
+export * from "./portal-shares";
 export * from "./share_logs";
 export * from "./user_notes";
 export * from "./calendar_events";

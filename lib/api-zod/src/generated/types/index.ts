@@ -87,6 +87,7 @@ export * from "./portalPermit";
 export * from "./portalProgress";
 export * from "./portalProject";
 export * from "./portalProjectRef";
+export * from "./portalShared";
 export * from "./portalSiteBoard";
 export * from "./portalStatus";
 export * from "./portalStatusStatus";

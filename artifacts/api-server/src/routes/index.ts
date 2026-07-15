@@ -27,6 +27,7 @@ import closeoutRouter from "./closeout";
 import portalRouter from "./portal";
 import teamActivityRouter from "./team-activity";
 import peopleRouter from "./people";
+import portalSharesRouter from "./portal-shares";
 
 const router: IRouter = Router();
 
@@ -58,5 +59,6 @@ router.use(closeoutRouter);
 router.use(portalRouter);
 router.use(teamActivityRouter);
 router.use(peopleRouter);
+router.use(portalSharesRouter);
 
 export default router;
