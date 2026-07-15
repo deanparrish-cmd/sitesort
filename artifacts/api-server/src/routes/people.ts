@@ -4,8 +4,9 @@ import { db } from "@workspace/db";
 import {
   peopleTable, subcontractorsTable, projectsTable, projectMembersTable,
   projectInvitesTable, usersTable, companyMembersTable,
+  documentDistributionsTable, notificationsTable,
 } from "@workspace/db/schema";
-import { and, eq, desc, inArray, isNull } from "drizzle-orm";
+import { and, eq, desc, inArray, isNull, isNotNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { sendProjectInviteEmail } from "../lib/invite-email";
@@ -313,6 +314,51 @@ router.post("/projects/:projectId/portal-invites", authenticate, async (req, res
   } catch (err) {
     req.log.error({ err }, "Create portal invite error");
     res.status(500).json({ error: "server_error", message: "Failed to create invite" });
+  }
+});
+
+// Orphaned portal-only accounts: portalOnly users in this company with NO
+// project_members row (revoked or leftover) — they can't log into anything.
+async function orphanPortalUsers(companyId: string) {
+  const users = await db.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email })
+    .from(usersTable).where(and(eq(usersTable.companyId, companyId), eq(usersTable.portalOnly, true)));
+  if (users.length === 0) return [];
+  const ids = users.map(u => u.id);
+  const members = await db.select({ userId: projectMembersTable.userId }).from(projectMembersTable)
+    .where(and(inArray(projectMembersTable.userId, ids), isNotNull(projectMembersTable.userId)));
+  const active = new Set(members.map(m => m.userId));
+  return users.filter(u => !active.has(u.id));
+}
+
+// GET /api/portal-users/orphaned — list them (manager-gated).
+router.get("/portal-users/orphaned", authenticate, async (req, res) => {
+  try {
+    if (!requireManager(req, res)) return;
+    res.json(await orphanPortalUsers(req.user!.companyId));
+  } catch (err) {
+    req.log.error({ err }, "List orphan portal users error");
+    res.status(500).json({ error: "server_error", message: "Failed to list orphaned portal users" });
+  }
+});
+
+// DELETE /api/portal-users/:userId — purge ONE orphaned portal-only account +
+// its non-cascade dependents (distributions, notifications). Refuses to touch a
+// user that isn't portalOnly, isn't in this company, or still has a membership.
+router.delete("/portal-users/:userId", authenticate, async (req, res) => {
+  try {
+    if (!requireManager(req, res)) return;
+    const orphans = await orphanPortalUsers(req.user!.companyId);
+    if (!orphans.some(u => u.id === req.params.userId)) {
+      res.status(404).json({ error: "not_found", message: "No orphaned portal-only account with that id in this company." });
+      return;
+    }
+    await db.delete(documentDistributionsTable).where(eq(documentDistributionsTable.userId, req.params.userId));
+    await db.delete(notificationsTable).where(eq(notificationsTable.userId, req.params.userId));
+    await db.delete(usersTable).where(eq(usersTable.id, req.params.userId));
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Delete orphan portal user error");
+    res.status(500).json({ error: "server_error", message: "Failed to delete portal user" });
   }
 });
 
