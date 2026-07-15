@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { projectMembersTable, projectsTable } from "@workspace/db/schema";
 import { and, eq, isNotNull } from "drizzle-orm";
 import { logActivity, isPortalSection, PORTAL_SECTIONS } from "../lib/activity";
+import { checkAndTouchSession } from "../lib/portal-sessions";
 
 declare global {
   namespace Express {
@@ -12,6 +13,42 @@ declare global {
       portalProjectId?: string;
       portalMemberRole?: string;
     }
+  }
+}
+
+// Server-side session enforcement for portal tokens. Runs right after
+// `authenticate`, BEFORE membership checks. The portal JWT carries only a
+// session id (`sid`); the portal_sessions row is the real authority for the
+// sliding-30-day lifetime, the 12-hour inactivity timeout, and explicit
+// logout/revoke. On success it slides the window forward (throttled).
+// A 401 here (any reason) tells the client to bounce to the portal login.
+// Tokens issued before this policy shipped have no `sid` → treated as expired,
+// so members simply re-login once.
+export async function requirePortalSession(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const u = req.user;
+  if (!u || u.scope !== "portal" || !u.projectId) {
+    res.status(403).json({ error: "forbidden", message: "Portal access required." });
+    return;
+  }
+  if (!u.sid) {
+    res.status(401).json({ error: "session_expired", message: "Please sign in again." });
+    return;
+  }
+  try {
+    const check = await checkAndTouchSession(u.sid, u.id, u.projectId);
+    if (!check.ok) {
+      const message = check.reason === "inactive"
+        ? "You've been signed out after 12 hours of inactivity. Please sign in again."
+        : check.reason === "revoked"
+        ? "This session has been ended. Please sign in again."
+        : "Your session has expired. Please sign in again.";
+      res.status(401).json({ error: "session_expired", reason: check.reason, message });
+      return;
+    }
+    next();
+  } catch (err) {
+    req.log.error({ err }, "requirePortalSession failed");
+    res.status(500).json({ error: "server_error", message: "Session check failed." });
   }
 }
 

@@ -217,7 +217,22 @@ export async function ensureSchema(): Promise<void> {
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS portal_shares_uq ON portal_shares (project_id, item_type, item_id, audience_type, coalesce(trade, ''), coalesce(person_id, ''))`);
     await pool.query(`CREATE INDEX IF NOT EXISTS portal_shares_project_idx ON portal_shares (project_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS portal_shares_item_idx ON portal_shares (item_type, item_id)`);
-    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols + portal_shares ready");
+
+    // Team Portal member sessions — server-side lifetime (sliding 30d + 12h
+    // inactivity + explicit-logout/revoke). Portal JWTs carry only a session id.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS portal_sessions (
+        id text PRIMARY KEY,
+        user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        project_id text NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        created_at timestamp NOT NULL DEFAULT now(),
+        last_active_at timestamp NOT NULL DEFAULT now(),
+        expires_at timestamp NOT NULL,
+        revoked_at timestamp
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS portal_sessions_user_project_idx ON portal_sessions (user_id, project_id)`);
+    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols + portal_shares + portal_sessions ready");
   } catch (err) {
     // Don't crash the server — membership lookups fall back to the home company.
     logger.error({ err }, "ensureSchema failed (continuing with home-company fallback)");

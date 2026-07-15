@@ -15,6 +15,9 @@ export interface AuthUser {
   // projectId they are locked to. Absent on normal dashboard tokens.
   scope?: "portal";
   projectId?: string;
+  // Portal session id — the server-side session row that enforces the sliding
+  // 30-day / 12-hour-inactivity / revoke policy. Absent on dashboard tokens.
+  sid?: string;
 }
 
 declare global {
@@ -90,9 +93,12 @@ export function generatePortalToken(params: {
   companyId: string;
   projectId: string;
   role: string;
+  // Server-side session id. The DB session (portal_sessions) is the real
+  // lifetime authority; the JWT's own 30d exp is just a coarse backstop.
+  sid: string;
 }): string {
   return jwt.sign(
-    { id: params.id, email: params.email, companyId: params.companyId, role: params.role, scope: "portal", projectId: params.projectId },
+    { id: params.id, email: params.email, companyId: params.companyId, role: params.role, scope: "portal", projectId: params.projectId, sid: params.sid },
     JWT_SECRET,
     { expiresIn: "30d" },
   );

@@ -5,6 +5,7 @@ import {
 } from "@workspace/db/schema";
 import { and, eq, desc, gte, lte, count, max } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
+import { revokePortalSessionsForMember } from "../lib/portal-sessions";
 import { SECTION_LABELS } from "../lib/activity";
 import { GetProjectActivityQueryParams } from "@workspace/api-zod";
 
@@ -90,10 +91,14 @@ router.post("/projects/:projectId/invites/:inviteId/revoke", authenticate, async
           : false;
         if (portalOnly) await db.delete(projectMembersTable).where(eq(projectMembersTable.id, mem.id));
         else await db.update(projectMembersTable).set({ personId: null }).where(eq(projectMembersTable.id, mem.id));
+        // Kill any live portal session immediately (the membership re-check would
+        // also 403 them, but this ends the session cleanly + server-side at once).
+        if (mem.userId) await revokePortalSessionsForMember(mem.userId, req.params.projectId);
       }
     } else if (inv.acceptedUserId) {
       await db.delete(projectMembersTable)
         .where(and(eq(projectMembersTable.projectId, req.params.projectId), eq(projectMembersTable.userId, inv.acceptedUserId)));
+      await revokePortalSessionsForMember(inv.acceptedUserId, req.params.projectId);
     }
     res.json({ success: true, message: "Access revoked." });
   } catch (err) {

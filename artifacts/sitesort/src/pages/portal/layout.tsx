@@ -28,6 +28,14 @@ export const SECTION_NAV: { key: string; label: string; Icon: typeof LayoutDashb
 ];
 
 export function portalLogout(setLocation: (to: string) => void) {
+  // End the session SERVER-SIDE first (revoked, not just cleared on the device),
+  // then drop the local token and return to login. Best-effort + fire-and-forget:
+  // the interceptor attaches the portal token to /api/portal/*, and a token that's
+  // already dead simply 401s here — either way we still clear locally and redirect.
+  const token = typeof window !== "undefined" ? localStorage.getItem("sitesort_portal_token") : null;
+  if (token) {
+    void fetch("/api/portal/logout", { method: "POST", headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
+  }
   localStorage.removeItem("sitesort_portal_token");
   setLocation("/portal/login");
 }
@@ -72,7 +80,11 @@ export function PortalLayout({ active, children }: { active: string; children: R
     <div className="min-h-screen bg-background flex flex-col md:flex-row">
       {/* Mobile header — safe-area top so it clears the status bar / notch in standalone */}
       <div className="md:hidden flex items-center justify-between px-4 pb-4 border-b bg-card pt-[calc(1rem+env(safe-area-inset-top))]">
-        <img src={logoSrc} alt="SiteSort" className="w-auto shrink-0 object-contain" style={{ height: "56px" }} />
+        {/* Tapping the logo always returns to the portal home (project overview) —
+            never the marketing site or dashboard login. Works in standalone PWA. */}
+        <Link href="/portal/overview" onClick={() => setIsMobileOpen(false)} className="shrink-0" aria-label="Portal home">
+          <img src={logoSrc} alt="SiteSort" className="w-auto shrink-0 object-contain" style={{ height: "56px" }} />
+        </Link>
         <button onClick={() => setIsMobileOpen(o => !o)} className="p-2 text-primary" aria-label="Menu">
           {isMobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
@@ -85,7 +97,9 @@ export function PortalLayout({ active, children }: { active: string; children: R
         isMobileOpen ? "translate-x-0" : "-translate-x-full",
       )}>
         <div className="p-6 hidden md:flex items-center">
-          <img src={logoSrc} alt="SiteSort" className="h-[6.25rem] w-auto" />
+          <Link href="/portal/overview" className="inline-flex" aria-label="Portal home">
+            <img src={logoSrc} alt="SiteSort" className="h-[6.25rem] w-auto" />
+          </Link>
         </div>
 
         {/* Project identity (single project — no switcher) */}

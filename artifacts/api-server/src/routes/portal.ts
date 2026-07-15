@@ -12,7 +12,8 @@ import { and, eq, inArray, isNull, isNotNull, desc, asc, gte, count } from "driz
 import { buildSiteBoardPayload } from "../lib/site-board";
 import { generateId } from "../lib/id";
 import { authenticate, generatePortalToken } from "../middlewares/auth";
-import { requirePortalMember, autoLogPortalActivity } from "../middlewares/portal";
+import { requirePortalMember, requirePortalSession, autoLogPortalActivity } from "../middlewares/portal";
+import { createPortalSession, revokePortalSession } from "../lib/portal-sessions";
 import { isLockedOut, recordFailedAttempt, clearAttempts } from "../lib/login-attempts";
 import { expiryStatus } from "../lib/expiry";
 import { PORTAL_SECTIONS } from "../lib/activity";
@@ -20,10 +21,10 @@ import { PortalLoginBody, AcceptPortalInviteBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
-// The three-middleware chain every read-only member endpoint runs: verify the
-// portal token → re-check membership → auto-log the view. No per-page manual
-// logging anywhere.
-const portalGuards = [authenticate, requirePortalMember, autoLogPortalActivity];
+// The middleware chain every read-only member endpoint runs: verify the portal
+// token → enforce the server-side session (sliding 30d / 12h inactivity / revoke)
+// → re-check membership → auto-log the view. No per-page manual logging anywhere.
+const portalGuards = [authenticate, requirePortalSession, requirePortalMember, autoLogPortalActivity];
 
 // Only the token HASH is ever stored, so a DB leak can't be replayed.
 function hashToken(raw: string): string {
@@ -199,7 +200,8 @@ router.post("/portal/login", async (req, res) => {
     }
 
     await db.update(usersTable).set({ lastActiveAt: new Date() }).where(eq(usersTable.id, user.id));
-    const token = generatePortalToken({ id: user.id, email: user.email, companyId: user.companyId, projectId: target.projectId, role: target.role });
+    const sid = await createPortalSession(user.id, target.projectId);
+    const token = generatePortalToken({ id: user.id, email: user.email, companyId: user.companyId, projectId: target.projectId, role: target.role, sid });
     res.json({
       requiresProjectChoice: false,
       token,
@@ -325,7 +327,8 @@ router.post("/portal/invite/:token/accept", async (req, res) => {
       });
       return;
     }
-    const token = generatePortalToken({ id: userId, email, companyId: userCompanyId, projectId: inv.projectId, role: inv.role });
+    const sid = await createPortalSession(userId, inv.projectId);
+    const token = generatePortalToken({ id: userId, email, companyId: userCompanyId, projectId: inv.projectId, role: inv.role, sid });
     res.json({
       requiresProjectChoice: false,
       token,
@@ -353,6 +356,14 @@ router.get("/portal/me", ...portalGuards, async (req, res) => {
     member: { name: urow[0]?.name ?? "", role: req.portalMemberRole ?? "worker", email: req.user!.email },
     sections: PORTAL_SECTIONS,
   });
+});
+
+// POST /api/portal/logout — end THIS session server-side (revoked, not just a
+// client-side token clear). Idempotent. Uses only authenticate+session so a
+// still-valid session can always sign itself out.
+router.post("/portal/logout", authenticate, requirePortalSession, async (req, res) => {
+  if (req.user?.sid) await revokePortalSession(req.user.sid);
+  res.json({ success: true });
 });
 
 // GET /api/portal/overview
