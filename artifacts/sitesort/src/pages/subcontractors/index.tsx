@@ -11,7 +11,7 @@ import {
   ShieldCheck, ShieldAlert, ShieldX, Shield, Star, AlertTriangle,
   Users, Pencil, X, FolderOpen, MessageSquare,
   FolderPlus, CheckCircle2, Loader2, Building2,
-  Share2, StickyNote, Clock, Send, FileText, ExternalLink, UserCheck,
+  Share2, StickyNote, Clock, Send, FileText, ExternalLink, UserCheck, Trash2,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { cn } from "@/lib/utils";
@@ -227,6 +227,8 @@ export default function SubcontractorsPage() {
   type ActiveProject = { id: string; name: string; address: string };
   const [shareTarget, setShareTarget] = useState<Sub | null>(null);
   const [sharingContact, setSharingContact] = useState<{ id: string; name: string; text: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Sub | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [shareProjects, setShareProjects] = useState<ActiveProject[]>([]);
   const [shareProjectsLoading, setShareProjectsLoading] = useState(false);
   const [linkStatus, setLinkStatus] = useState<Record<string, ProjectLinkStatus>>({});
@@ -325,6 +327,24 @@ export default function SubcontractorsPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const res = await apiFetch(`/api/subcontractors/${deleteTarget.id}`, { method: "DELETE" });
+      if (res.ok) {
+        toast({ title: "Subcontractor deleted", description: `${deleteTarget.companyName} was removed.` });
+        setDeleteTarget(null);
+        await load();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: "Couldn't delete", description: err.message ?? "Please try again.", variant: "destructive" });
+      }
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   // Handle params: ?new=1 opens modal, ?q=term pre-fills search
   useEffect(() => {
@@ -724,6 +744,9 @@ export default function SubcontractorsPage() {
                                 <button onClick={() => openEdit(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Edit">
                                   <Pencil className="w-3.5 h-3.5" />
                                 </button>
+                                <button onClick={() => setDeleteTarget(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="Delete subcontractor">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
                               </>
                             )}
                           </div>
@@ -758,6 +781,9 @@ export default function SubcontractorsPage() {
                                 </button>
                                 <button onClick={() => openEdit(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Edit">
                                   <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                                <button onClick={() => setDeleteTarget(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="Delete subcontractor">
+                                  <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                               </>
                             )}
@@ -1169,6 +1195,21 @@ export default function SubcontractorsPage() {
         fileUrl={null}
         shareText={sharingContact?.text ?? null}
       />
+
+      <Dialog open={!!deleteTarget} onOpenChange={v => { if (!v && !deleting) setDeleteTarget(null); }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-destructive"><Trash2 className="w-4 h-4" /> Delete subcontractor</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-1">
+          <p className="text-sm">
+            Permanently delete <span className="font-semibold">{deleteTarget?.companyName}</span>? This also removes their people/portal access, insurance records, notes, and any links to projects. This can't be undone.
+          </p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>Cancel</Button>
+          <Button variant="destructive" onClick={confirmDelete} isLoading={deleting}>Delete</Button>
+        </DialogFooter>
+      </Dialog>
     </SidebarLayout>
   );
 }
