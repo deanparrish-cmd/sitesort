@@ -1,11 +1,13 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useGetPortalContext, getGetPortalContextQueryKey } from "@workspace/api-client-react";
 import { Spinner } from "@/components/ui/spinner";
 import { PortalInstallPrompt } from "@/components/portal-install-prompt";
+import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, TrendingUp, Users, AlertTriangle, LayoutGrid,
   ShieldCheck, PencilRuler, FileText, FileCheck, HardHat, StickyNote, LogOut, Inbox,
+  Menu, X,
 } from "lucide-react";
 
 // The fixed portal nav — order + labels + icons. `key` matches the URL segment
@@ -30,10 +32,13 @@ export function portalLogout(setLocation: (to: string) => void) {
   setLocation("/portal/login");
 }
 
-// Stripped-down, mobile-first shell for ONE project. No sidebar, no project
-// switcher, no dashboard link — a portal member only ever sees their project.
+// Member-facing shell for ONE project. Mirrors the main app shell (logo + left
+// sidebar with rounded active-primary nav on desktop, a hamburger drawer on
+// mobile) using the same shared palette — but scoped to a single project, with
+// no project switcher, dashboard link or company nav.
 export function PortalLayout({ active, children }: { active: string; children: React.ReactNode }) {
   const [, setLocation] = useLocation();
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
   const token = typeof window !== "undefined" ? localStorage.getItem("sitesort_portal_token") : null;
   const { data, isLoading, isError } = useGetPortalContext({ query: { enabled: !!token, retry: false, queryKey: getGetPortalContextQueryKey() } });
 
@@ -60,53 +65,90 @@ export function PortalLayout({ active, children }: { active: string; children: R
     );
   }
 
+  const logoSrc = `${import.meta.env.BASE_URL}images/logo.webp?v=5`;
+  const initial = (data?.member.name ?? "?").charAt(0).toUpperCase();
+
   return (
-    <div className="min-h-screen bg-muted/20 flex flex-col">
-      {/* Header */}
-      <header className="sticky top-0 z-20 bg-card border-b border-border">
-        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 text-primary">
-              <HardHat className="w-4 h-4 shrink-0" />
-              <span className="font-display font-bold truncate">{data?.project.name}</span>
+    <div className="min-h-screen bg-background flex flex-col md:flex-row">
+      {/* Mobile header */}
+      <div className="md:hidden flex items-center justify-between p-4 border-b bg-card">
+        <img src={logoSrc} alt="SiteSort" className="w-auto shrink-0 object-contain" style={{ height: "56px" }} />
+        <button onClick={() => setIsMobileOpen(o => !o)} className="p-2 text-primary" aria-label="Menu">
+          {isMobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+        </button>
+      </div>
+
+      {/* Sidebar */}
+      <div className={cn(
+        "fixed inset-y-0 left-0 z-40 w-72 bg-card border-r flex flex-col transition-transform duration-300 ease-in-out md:translate-x-0 md:static md:w-64 lg:w-72",
+        isMobileOpen ? "translate-x-0" : "-translate-x-full",
+      )}>
+        <div className="p-6 hidden md:flex items-center">
+          <img src={logoSrc} alt="SiteSort" className="h-[6.25rem] w-auto" />
+        </div>
+
+        {/* Project identity (single project — no switcher) */}
+        <div className="px-6 pt-5 md:pt-0 pb-1">
+          <div className="flex items-center gap-2 text-primary">
+            <HardHat className="w-4 h-4 shrink-0" />
+            <span className="font-display font-bold truncate">{data?.project.name}</span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">Team Portal</p>
+        </div>
+
+        <nav className="flex-1 px-4 py-6 overflow-y-auto">
+          <div className="space-y-1">
+            {SECTION_NAV.map(({ key, label, Icon }) => {
+              const isActive = key === active;
+              return (
+                <Link
+                  key={key}
+                  href={`/portal/${key}`}
+                  onClick={() => setIsMobileOpen(false)}
+                  className={cn(
+                    "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200",
+                    isActive
+                      ? "bg-primary text-primary-foreground shadow-md shadow-primary/10"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
+                >
+                  <Icon className={cn("w-5 h-5", isActive ? "text-primary-foreground" : "text-muted-foreground")} />
+                  <span className="flex-1">{label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+
+        {/* Member footer + logout */}
+        <div className="p-4 border-t">
+          <div className="flex items-center gap-3 mb-4 px-2">
+            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold shrink-0">{initial}</div>
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-foreground truncate">{data?.member.name}</p>
+              <p className="text-xs text-muted-foreground capitalize truncate">{data?.member.role}</p>
             </div>
-            <p className="text-xs text-muted-foreground truncate">
-              {data?.member.name} · <span className="capitalize">{data?.member.role}</span>
-            </p>
           </div>
           <button
             onClick={() => portalLogout(setLocation)}
-            className="shrink-0 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground px-2 py-1.5 rounded-lg hover:bg-muted transition-colors"
+            className="flex w-full items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
           >
-            <LogOut className="w-4 h-4" /> <span className="hidden sm:inline">Log out</span>
+            <LogOut className="w-5 h-5" /> Log out
           </button>
         </div>
+      </div>
 
-        {/* Section nav — wraps so every section (Drawings / Method Statements /
-            Permits …) is visible on mobile without horizontal scrolling. */}
-        <nav className="max-w-3xl mx-auto px-2 pb-2 flex flex-wrap gap-1">
-          {SECTION_NAV.map(({ key, label, Icon }) => {
-            const isActive = key === active;
-            return (
-              <Link
-                key={key}
-                href={`/portal/${key}`}
-                className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition-colors ${
-                  isActive ? "bg-primary text-primary-foreground font-semibold" : "text-muted-foreground hover:bg-muted"
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5" /> {label}
-              </Link>
-            );
-          })}
-        </nav>
-      </header>
+      {/* Main content — same container + overflow safety net as the main app shell */}
+      <div className="flex-1 flex flex-col min-w-0 max-h-screen overflow-y-auto">
+        <main className="flex-1 p-4 md:p-8 min-w-0 overflow-x-clip">
+          <div className="max-w-4xl mx-auto slide-up min-w-0 [&>*]:min-w-0">{children}</div>
+        </main>
+      </div>
 
-      {/* Content — min-w-0 + overflow-x-clip: same shared safety net as the main
-          app shell, so a portal section can never scroll the (mobile-first) page. */}
-      <main className="flex-1 w-full min-w-0 overflow-x-clip">
-        <div className="max-w-3xl mx-auto px-4 py-5 [&>*]:min-w-0">{children}</div>
-      </main>
+      {/* Mobile backdrop */}
+      {isMobileOpen && (
+        <div className="fixed inset-0 bg-primary/20 backdrop-blur-sm z-30 md:hidden" onClick={() => setIsMobileOpen(false)} />
+      )}
 
       <PortalInstallPrompt />
     </div>

@@ -47,14 +47,17 @@ export default function PortalLogin() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
-      <div className="w-full max-w-sm p-6 sm:p-8 bg-card rounded-2xl shadow-2xl border border-border/50">
+    <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4 relative">
+      <div className="absolute inset-0 z-0 opacity-20">
+        <img src={`${import.meta.env.BASE_URL}images/auth-bg.webp`} alt="" className="w-full h-full object-cover" decoding="async" />
+      </div>
+      <div className="w-full max-w-md p-8 bg-card rounded-2xl shadow-2xl border border-border/50 relative z-10 slide-up">
         <div className="flex flex-col items-center mb-8">
           <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center mb-4 shadow-lg">
             <HardHat className="w-6 h-6 text-primary-foreground" />
           </div>
-          <h1 className="text-2xl font-display font-bold text-primary text-center">Team Portal</h1>
-          <p className="text-muted-foreground mt-2 text-center text-sm">Log in to your project</p>
+          <h1 className="text-3xl font-display font-bold text-primary text-center">Team Portal</h1>
+          <p className="text-muted-foreground mt-2 text-center">Log in to your project</p>
         </div>
 
         {error && (
