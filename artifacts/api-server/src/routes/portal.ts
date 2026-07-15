@@ -368,6 +368,10 @@ router.get("/portal/overview", ...portalGuards, async (req, res) => {
     db.select({ completedAt: milestonesTable.completedAt }).from(milestonesTable).where(eq(milestonesTable.projectId, pid)),
     db.select({ total: count() }).from(permitsTable).where(and(eq(permitsTable.projectId, pid), isNull(permitsTable.archivedAt))),
     db.select({ total: count() }).from(projectMembersTable).where(eq(projectMembersTable.projectId, pid)),
+    // DECISION: portal members see project history from BEFORE their join date —
+    // the site-updates feed (and every portal section) filters by project only,
+    // never by join/added date. This is consistent with trade/everyone document
+    // shares including later joiners. No per-project toggle.
     db.select({
       id: dailyNotesTable.id, body: dailyNotesTable.body, noteDate: dailyNotesTable.noteDate,
       photoUrl: dailyNotesTable.photoUrl, authorName: usersTable.name,

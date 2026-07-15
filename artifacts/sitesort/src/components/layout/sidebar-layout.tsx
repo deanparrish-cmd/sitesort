@@ -183,8 +183,8 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row">
-      {/* Mobile Header */}
-      <div className="md:hidden flex items-center justify-between p-4 border-b bg-card">
+      {/* Mobile Header — safe-area top so it clears the status bar / notch */}
+      <div className="md:hidden flex items-center justify-between px-4 pb-4 border-b bg-card pt-[calc(1rem+env(safe-area-inset-top))]">
         <div className="flex items-center gap-2">
           <Link href="/dashboard">
             <img src={`${import.meta.env.BASE_URL}images/logo.webp?v=5`} alt="SiteSort" className="w-auto shrink-0 object-contain" style={{ height: '72px' }} />

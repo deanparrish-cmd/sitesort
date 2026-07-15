@@ -70,17 +70,18 @@ export function PortalLayout({ active, children }: { active: string; children: R
 
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row">
-      {/* Mobile header */}
-      <div className="md:hidden flex items-center justify-between p-4 border-b bg-card">
+      {/* Mobile header — safe-area top so it clears the status bar / notch in standalone */}
+      <div className="md:hidden flex items-center justify-between px-4 pb-4 border-b bg-card pt-[calc(1rem+env(safe-area-inset-top))]">
         <img src={logoSrc} alt="SiteSort" className="w-auto shrink-0 object-contain" style={{ height: "56px" }} />
         <button onClick={() => setIsMobileOpen(o => !o)} className="p-2 text-primary" aria-label="Menu">
           {isMobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
       </div>
 
-      {/* Sidebar */}
+      {/* Sidebar — safe-area insets so the drawer content clears system UI in standalone */}
       <div className={cn(
         "fixed inset-y-0 left-0 z-40 w-72 bg-card border-r flex flex-col transition-transform duration-300 ease-in-out md:translate-x-0 md:static md:w-64 lg:w-72",
+        "pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] md:pt-0 md:pb-0",
         isMobileOpen ? "translate-x-0" : "-translate-x-full",
       )}>
         <div className="p-6 hidden md:flex items-center">
