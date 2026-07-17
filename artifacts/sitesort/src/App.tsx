@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
-import { Switch, Route, Redirect, Router as WouterRouter } from "wouter";
+import { Switch, Route, Redirect, Router as WouterRouter, useLocation } from "wouter";
+import { ErrorBoundary } from "@/components/error-boundary";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -62,8 +63,10 @@ function PageLoader() {
 }
 
 function Router() {
+  const [location] = useLocation();
   return (
-    <Switch>
+    <ErrorBoundary resetKey={location}>
+      <Switch>
       {/* Public Routes */}
       <Route path="/" component={LandingPage} />
       <Route path="/login" component={Login} />
@@ -102,7 +105,8 @@ function Router() {
 
       {/* Fallback */}
       <Route component={NotFound} />
-    </Switch>
+      </Switch>
+    </ErrorBoundary>
   );
 }
 

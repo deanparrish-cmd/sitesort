@@ -436,6 +436,14 @@ router.post("/channel-messages/:id/react", authenticate, async (req, res) => {
     const userId = req.user!.id;
     const channelMessageId = req.params.id;
 
+    // Tenant scoping: the message must belong to the user's active company —
+    // otherwise any authenticated user could react to (and read reaction
+    // counts of) another company's messages by guessing ids.
+    const msg = await db.select({ id: channelMessagesTable.id }).from(channelMessagesTable)
+      .where(and(eq(channelMessagesTable.id, channelMessageId), eq(channelMessagesTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!msg[0]) { res.status(404).json({ error: "not_found", message: "Message not found" }); return; }
+
     const existing = await db.select().from(channelMessageReactionsTable)
       .where(and(eq(channelMessageReactionsTable.channelMessageId, channelMessageId), eq(channelMessageReactionsTable.userId, userId), eq(channelMessageReactionsTable.emoji, emoji)))
       .limit(1);
