@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Card, CardContent } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -632,18 +633,16 @@ export default function SubcontractorsPage() {
 
   return (
     <SidebarLayout>
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-3xl font-bold">Contacts</h1>
-          <p className="text-muted-foreground">Directory of all your contacts — subcontractors, merchants, suppliers and more.</p>
-        </div>
-        {caps.canManageSubcontractors && (
+      <PageHeader
+        className="mb-8"
+        title="Contacts"
+        description="Directory of all your contacts — subcontractors, merchants, suppliers and more."
+        actions={caps.canManageSubcontractors && (
           <Button variant="accent" onClick={() => { setAddOpen(true); setAddError(null); reset(); setSelectedTradesAdd([]); }}>
             <Plus className="w-4 h-4 mr-2" /> Add Contact
           </Button>
         )}
-      </div>
+      />
 
       {/* Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">

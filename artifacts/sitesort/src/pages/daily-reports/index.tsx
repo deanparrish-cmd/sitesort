@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Card } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -126,19 +127,17 @@ export default function DailyReportsPage() {
 
   return (
     <SidebarLayout>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-3">
-            <ClipboardList className="w-7 h-7 text-primary" /> Daily Site Reports
-          </h1>
-          <p className="text-muted-foreground">Every project's daily report in one place — auto-collated activity plus the site diary.</p>
-        </div>
-        {caps.isInternal && projects.length > 0 && (
-          <Button variant="accent" onClick={() => setNewOpen(true)} className="shrink-0">
+      <PageHeader
+        className="mb-8"
+        icon={<ClipboardList className="w-7 h-7 text-primary" />}
+        title="Daily Site Reports"
+        description="Every project's daily report in one place — auto-collated activity plus the site diary."
+        actions={caps.isInternal && projects.length > 0 && (
+          <Button variant="accent" onClick={() => setNewOpen(true)}>
             <Plus className="w-4 h-4 mr-1.5" />New site diary
           </Button>
         )}
-      </div>
+      />
 
       {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">

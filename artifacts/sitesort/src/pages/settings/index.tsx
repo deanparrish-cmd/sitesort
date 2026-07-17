@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Card } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -900,10 +901,11 @@ export default function SettingsPage() {
 
   return (
     <SidebarLayout>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground">Settings</h1>
-        <p className="text-muted-foreground text-sm mt-1">Manage your account and company preferences.</p>
-      </div>
+      <PageHeader
+        className="mb-6"
+        title="Settings"
+        description="Manage your account and company preferences."
+      />
 
       <div className="flex flex-col md:flex-row gap-6">
         {/* Tab nav */}

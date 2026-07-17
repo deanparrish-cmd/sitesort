@@ -6,6 +6,8 @@ import { ProjectTeamActivity, RecentActivityGlance } from "./team-activity";
 import { SubcontractorPeople, PortalInvitePill } from "./portal-people";
 import { Card, CardContent } from "@/components/ui/card";
 import { LinkRow } from "@/components/ui/link-row";
+import { PageHeader } from "@/components/ui/page-header";
+import { ListRow, Pill } from "@/components/ui/list-row";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -2635,20 +2637,14 @@ tr:last-child td{border-bottom:none}
 
             return (
               <div className="space-y-6">
-                {/* Header */}
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h2 className="text-xl font-bold">Health &amp; Safety</h2>
-                      {overdueCount > 0 && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs font-bold">
-                          <AlertTriangle className="w-3 h-3" />{overdueCount} overdue
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-0.5">Permits, method statements, safety documents and insurance for this project.</p>
-                  </div>
-                  <div className="flex items-center gap-2">
+                <PageHeader
+                  level="section"
+                  title="Health & Safety"
+                  badge={overdueCount > 0 && (
+                    <Pill className="bg-red-100 text-red-700" icon={<AlertTriangle className="w-3 h-3" />}>{overdueCount} overdue</Pill>
+                  )}
+                  description="Permits, method statements, safety documents and insurance for this project."
+                  actions={<>
                     {caps.canUploadDocument && (
                       <Button variant="outline" size="sm" onClick={() => { setValue("type", "permit"); setIsUploadOpen(true); }}>
                         <Upload className="w-4 h-4 mr-1.5" /> Upload Doc
@@ -2659,8 +2655,8 @@ tr:last-child td{border-bottom:none}
                         <Plus className="w-4 h-4 mr-1.5" /> Add Permit
                       </Button>
                     )}
-                  </div>
-                </div>
+                  </>}
+                />
 
                 {/* Permits list */}
                 {livePermits.length === 0 && supersededPermits.length === 0 ? (
@@ -2766,8 +2762,8 @@ tr:last-child td{border-bottom:none}
                     const docs = (documents ?? []).filter(d => d.type === g.key);
                     return (
                       <section key={g.key}>
-                        <div className="flex items-center justify-between gap-4 mb-3">
-                          <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <FileText className="w-4 h-4 text-primary" />
                             <h3 className="font-bold text-sm uppercase tracking-wide text-muted-foreground">{g.label}</h3>
                             <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{docs.length}</span>
@@ -2825,8 +2821,8 @@ tr:last-child td{border-bottom:none}
                 )}
                 {/* Project Share Log */}
                 <section>
-                  <div className="flex items-center justify-between gap-4 mb-3">
-                    <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <History className="w-4 h-4 text-primary" />
                       <h3 className="font-bold text-sm uppercase tracking-wide text-muted-foreground">Share Activity Log</h3>
                       {projectShareLog.length > 0 && <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{projectShareLog.length}</span>}
@@ -2914,13 +2910,15 @@ tr:last-child td{border-bottom:none}
                       {[...permits].filter(p => !p.archivedAt).sort((a, b) => a.expiryDate.localeCompare(b.expiryDate)).map(p => {
                         const days = daysLeft(p.expiryDate);
                         return (
-                          <div key={p.id} className={`flex items-center justify-between gap-3 px-4 py-3 rounded-xl border ${statusStyle(days)}`}>
-                            <div className="min-w-0 flex-1">
+                          <ListRow
+                            key={p.id}
+                            className={statusStyle(days)}
+                            content={<>
                               <p className="font-semibold text-sm truncate">{p.type}</p>
                               <p className="text-xs opacity-70 truncate">{p.description}{p.responsibleName ? ` · ${p.responsibleName}` : ""}</p>
-                            </div>
-                            <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
-                              <div className="text-right">
+                            </>}
+                            actions={<>
+                              <div className="text-left sm:text-right">
                                 <p className="text-xs font-semibold">{permitLabel(days)}</p>
                                 <p className="text-xs opacity-70">{fmtDate(p.expiryDate)}</p>
                               </div>
@@ -2941,8 +2939,8 @@ tr:last-child td{border-bottom:none}
                               >
                                 <Share2 className="w-3.5 h-3.5" />Share
                               </button>
-                            </div>
-                          </div>
+                            </>}
+                          />
                         );
                       })}
                     </div>
@@ -2964,16 +2962,18 @@ tr:last-child td{border-bottom:none}
                         const isSuperseded = doc.status === "superseded";
                         const pending = doc.distributionSummary?.pending ?? 0;
                         return (
-                          <div key={doc.id} className={`flex items-center justify-between gap-4 px-4 py-3 rounded-xl border ${isSuperseded ? "bg-muted/30 border-border opacity-60" : pending > 0 ? "bg-yellow-50 border-yellow-200" : "bg-emerald-50 border-emerald-200"}`}>
-                            <div className="flex items-center gap-3 min-w-0">
+                          <ListRow
+                            key={doc.id}
+                            className={isSuperseded ? "bg-muted/30 border-border opacity-60" : pending > 0 ? "bg-yellow-50 border-yellow-200" : "bg-emerald-50 border-emerald-200"}
+                            content={<div className="flex items-center gap-3 min-w-0">
                               <FileText className="w-4 h-4 shrink-0 text-muted-foreground" />
                               <div className="min-w-0">
                                 <p className={`font-semibold text-sm truncate ${isSuperseded ? "line-through text-muted-foreground" : ""}`}>{doc.name}</p>
                                 <p className="text-xs text-muted-foreground capitalize">{doc.type.replace("_", " ")} · {docRev(doc)}</p>
                               </div>
-                            </div>
-                            <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
-                              <div className="text-right">
+                            </div>}
+                            actions={<>
+                              <div className="text-left sm:text-right">
                                 {isSuperseded
                                   ? <Badge variant="secondary" className="text-[10px]">Superseded</Badge>
                                   : pending > 0
@@ -2998,8 +2998,8 @@ tr:last-child td{border-bottom:none}
                               >
                                 <Share2 className="w-3.5 h-3.5" />Share
                               </button>
-                            </div>
-                          </div>
+                            </>}
+                          />
                         );
                       })}
                     </div>
@@ -3303,12 +3303,12 @@ tr:last-child td{border-bottom:none}
         </TabsContent>
 
         <TabsContent value="checkins">
-          <div className="mb-4 flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-xl font-bold">Site Check-Ins</h2>
-              <p className="text-muted-foreground text-sm mt-0.5">Workers who checked in on site via the QR code board.</p>
-            </div>
-            <div className="flex items-center gap-3 shrink-0">
+          <PageHeader
+            level="section"
+            className="mb-4"
+            title="Site Check-Ins"
+            description="Workers who checked in on site via the QR code board."
+            actions={<>
               {siteBoardUrl && (
                 <a
                   href={siteBoardUrl}
@@ -3319,9 +3319,9 @@ tr:last-child td{border-bottom:none}
                   <QrCode className="w-3.5 h-3.5 text-primary" /> View Site Board
                 </a>
               )}
-              <span className="text-sm text-muted-foreground">{checkins.length} {checkins.length === 1 ? "check-in" : "check-ins"}</span>
-            </div>
-          </div>
+              <span className="text-sm text-muted-foreground whitespace-nowrap">{checkins.length} {checkins.length === 1 ? "check-in" : "check-ins"}</span>
+            </>}
+          />
 
           {checkins.length === 0 ? (
             <Card className="p-12 text-center border-dashed border-2">

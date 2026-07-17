@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Card } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -350,18 +351,16 @@ export default function InvoicesPage() {
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-3xl font-bold">Invoices</h1>
-          <p className="text-muted-foreground">Track payments in and out.</p>
-        </div>
-        {caps.canManageInvoices && (
+      <PageHeader
+        className="mb-8"
+        title="Invoices"
+        description="Track payments in and out."
+        actions={caps.canManageInvoices && (
           <Button variant="accent" onClick={() => setModalOpen(true)}>
             <Plus className="w-4 h-4 mr-2" /> New Invoice
           </Button>
         )}
-      </div>
+      />
 
       {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">

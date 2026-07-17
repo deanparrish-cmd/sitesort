@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Card } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -309,19 +310,18 @@ export default function CompliancePage() {
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-3xl font-bold">Compliance Centre</h1>
-          <p className="text-muted-foreground">Expiring insurance, permits and pending sign-offs across all projects.</p>
-        </div>
-        {!loading && (
-          <span className={cn("text-sm font-semibold px-3 py-1.5 rounded-full border",
+      <PageHeader
+        className="mb-6"
+        title="Compliance Centre"
+        description="Expiring insurance, permits and pending sign-offs across all projects."
+        actions={!loading && (
+          <span className={cn("text-sm font-semibold px-3 py-1.5 rounded-full border whitespace-nowrap",
             totalIssues === 0 ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-orange-50 text-orange-700 border-orange-200"
           )}>
             {totalIssues === 0 ? "✓ All clear" : `${totalIssues} item${totalIssues !== 1 ? "s" : ""} need attention`}
           </span>
         )}
-      </div>
+      />
 
       {/* ── Upload tip banner (manager-only) ── */}
       {caps.canManageCompliance && (

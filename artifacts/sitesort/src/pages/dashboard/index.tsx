@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
 import { LinkRow } from "@/components/ui/link-row";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -687,15 +688,11 @@ export default function Dashboard() {
 
   return (
     <SidebarLayout>
-      {/* Header */}
-      <div className="mb-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold">
-            {greeting}{userName ? `, ${userName}` : ""}!
-          </h1>
-          <p className="text-muted-foreground mt-1">{dateLabel}</p>
-        </div>
-        <div className="flex flex-wrap gap-2 sm:flex-nowrap">
+      <PageHeader
+        className="mb-6"
+        title={<>{greeting}{userName ? `, ${userName}` : ""}!</>}
+        description={dateLabel}
+        actions={<>
           {caps.canManageProjects && (
             <Button variant="accent" size="sm" onClick={() => {
               if (isCancelled) { navigate("/settings?tab=billing"); return; }
@@ -718,8 +715,8 @@ export default function Dashboard() {
               <FilePlus className="w-4 h-4 mr-1.5" /> Upload Doc
             </Button>
           )}
-        </div>
-      </div>
+        </>}
+      />
 
       {/* Onboarding checklist — setup actions are manager-only */}
       {onboarding && !onboardingDismissed && caps.canManageProjects && (() => {

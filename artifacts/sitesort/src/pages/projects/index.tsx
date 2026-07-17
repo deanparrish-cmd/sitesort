@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
@@ -309,12 +310,11 @@ export default function ProjectsList() {
 
   return (
     <SidebarLayout>
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-        <div>
-          <h1 className="text-3xl font-bold">Projects</h1>
-          <p className="text-muted-foreground">Manage all your construction sites.</p>
-        </div>
-        {caps.canManageProjects && (
+      <PageHeader
+        className="mb-8"
+        title="Projects"
+        description="Manage all your construction sites."
+        actions={caps.canManageProjects && (
           <Button
             variant="accent"
             onClick={() => {
@@ -327,7 +327,7 @@ export default function ProjectsList() {
             <Plus className="w-5 h-5 mr-2" /> New Project
           </Button>
         )}
-      </div>
+      />
 
       <div className="bg-card border rounded-2xl shadow-sm overflow-hidden">
         <div className="p-4 border-b bg-muted/20">

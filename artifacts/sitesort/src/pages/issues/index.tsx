@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Card } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -134,15 +135,12 @@ export default function IssuesPage() {
 
   return (
     <SidebarLayout>
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-3">
-            <AlertTriangle className="w-7 h-7 text-amber-500" /> Site Issues
-          </h1>
-          <p className="text-muted-foreground">All snags and safety concerns logged across your projects.</p>
-        </div>
-      </div>
+      <PageHeader
+        className="mb-8"
+        icon={<AlertTriangle className="w-7 h-7 text-amber-500" />}
+        title="Site Issues"
+        description="All snags and safety concerns logged across your projects."
+      />
 
       {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">

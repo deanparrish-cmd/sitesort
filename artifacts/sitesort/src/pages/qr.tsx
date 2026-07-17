@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { QrCode, Download, Printer, Plus, RefreshCw, Building2, MapPin } from "lucide-react";
@@ -155,12 +156,11 @@ export default function QrPage() {
 
   return (
     <SidebarLayout>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">QR Code Site Boards</h1>
-        <p className="text-muted-foreground mt-1">
-          Generate a QR code for each project. Print and post it on site — workers can scan it to view live site information without needing an account.
-        </p>
-      </div>
+      <PageHeader
+        className="mb-8"
+        title="QR Code Site Boards"
+        description="Generate a QR code for each project. Print and post it on site — workers can scan it to view live site information without needing an account."
+      />
 
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 animate-pulse">

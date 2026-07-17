@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Card } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -208,13 +209,12 @@ export default function TeamPage() {
 
   return (
     <SidebarLayout>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-3xl font-bold">In House Team</h1>
-          <p className="text-muted-foreground">All staff and users in your company account.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-muted-foreground bg-muted px-3 py-1.5 rounded-full border">
+      <PageHeader
+        className="mb-8"
+        title="In House Team"
+        description="All staff and users in your company account."
+        actions={<>
+          <span className="text-sm font-semibold text-muted-foreground bg-muted px-3 py-1.5 rounded-full border whitespace-nowrap">
             {members.length} {members.length === 1 ? "member" : "members"}
           </span>
           {caps.canManageTeam && (
@@ -222,8 +222,8 @@ export default function TeamPage() {
               <UserPlus className="w-4 h-4 mr-2" /> Add Team Member
             </Button>
           )}
-        </div>
-      </div>
+        </>}
+      />
 
       <div className="relative max-w-sm mb-8">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />

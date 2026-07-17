@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Card } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
 import { Input } from "@/components/ui/input";
 import { ShareModal } from "@/components/share-modal";
 import {
@@ -78,15 +79,12 @@ export default function CheckinsPage() {
 
   return (
     <SidebarLayout>
-      {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <ClipboardCheck className="w-6 h-6 text-primary" /> Site Check-Ins
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">All worker check-ins across your projects via QR site boards.</p>
-        </div>
-      </div>
+      <PageHeader
+        className="mb-6"
+        icon={<ClipboardCheck className="w-6 h-6 text-primary" />}
+        title="Site Check-Ins"
+        description="All worker check-ins across your projects via QR site boards."
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">

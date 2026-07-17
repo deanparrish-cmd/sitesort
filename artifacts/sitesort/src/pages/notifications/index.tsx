@@ -4,6 +4,7 @@ import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   Bell,
   MessageSquare,
@@ -197,16 +198,15 @@ export default function NotificationsPage() {
 
   return (
     <SidebarLayout>
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold">Notifications</h1>
-          {unreadCount > 0 && (
-            <Badge variant="destructive" className="text-xs px-2 py-0.5">
-              {unreadCount} unread
-            </Badge>
-          )}
-        </div>
-        {unreadCount > 0 && (
+      <PageHeader
+        className="mb-6"
+        title="Notifications"
+        badge={unreadCount > 0 && (
+          <Badge variant="destructive" className="text-xs px-2 py-0.5">
+            {unreadCount} unread
+          </Badge>
+        )}
+        actions={unreadCount > 0 && (
           <Button
             variant="outline"
             size="sm"
@@ -218,7 +218,7 @@ export default function NotificationsPage() {
             Mark all as read
           </Button>
         )}
-      </div>
+      />
 
       {/* Filter tabs */}
       <div className="flex overflow-x-auto gap-1 mb-4 border-b">

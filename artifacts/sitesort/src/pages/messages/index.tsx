@@ -2,6 +2,7 @@ import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from
 import { useLocation } from "wouter";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Card } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -739,13 +740,11 @@ export default function MessagesPage() {
   return (
     <SidebarLayout>
       <div className="flex flex-col h-[calc(100vh-6rem)]">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-3xl font-bold">Messages</h1>
-            <p className="text-muted-foreground text-sm">Direct messages between team members.</p>
-          </div>
-          {isManager && (
+        <PageHeader
+          className="mb-4"
+          title="Messages"
+          description="Direct messages between team members."
+          actions={isManager && (
             <Button
               variant={viewAll ? "default" : "outline"}
               size="sm"
@@ -756,7 +755,7 @@ export default function MessagesPage() {
               {viewAll ? "All Conversations" : "View All"}
             </Button>
           )}
-        </div>
+        />
 
         <div className="flex flex-1 gap-4 min-h-0">
           {/* Conversation list */}
