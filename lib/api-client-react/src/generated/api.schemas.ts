@@ -454,6 +454,87 @@ export interface UpdateInsuranceRequest {
   dueDate?: string | null;
 }
 
+export type SubcontractorDocumentType =
+  (typeof SubcontractorDocumentType)[keyof typeof SubcontractorDocumentType];
+
+export const SubcontractorDocumentType = {
+  terms: "terms",
+  tax_form: "tax_form",
+  certification: "certification",
+  id_verification: "id_verification",
+  other: "other",
+} as const;
+
+export type SubcontractorDocumentStatus =
+  (typeof SubcontractorDocumentStatus)[keyof typeof SubcontractorDocumentStatus];
+
+export const SubcontractorDocumentStatus = {
+  current: "current",
+  superseded: "superseded",
+} as const;
+
+export interface SubcontractorDocument {
+  id: string;
+  subcontractorId: string;
+  projectId?: string | null;
+  projectName?: string | null;
+  uploadedBy: string;
+  uploaderName: string;
+  name: string;
+  type: SubcontractorDocumentType;
+  version: number;
+  fileUrl: string;
+  fileSize: number;
+  previousVersionId?: string | null;
+  status: SubcontractorDocumentStatus;
+  createdAt: string;
+}
+
+export type CreateSubcontractorDocumentRequestType =
+  (typeof CreateSubcontractorDocumentRequestType)[keyof typeof CreateSubcontractorDocumentRequestType];
+
+export const CreateSubcontractorDocumentRequestType = {
+  terms: "terms",
+  tax_form: "tax_form",
+  certification: "certification",
+  id_verification: "id_verification",
+  other: "other",
+} as const;
+
+export interface CreateSubcontractorDocumentRequest {
+  name: string;
+  type: CreateSubcontractorDocumentRequestType;
+  fileUrl: string;
+  fileSize: number;
+  projectId?: string | null;
+  supersededDocumentId?: string | null;
+}
+
+export type UpdateSubcontractorDocumentRequestType =
+  (typeof UpdateSubcontractorDocumentRequestType)[keyof typeof UpdateSubcontractorDocumentRequestType];
+
+export const UpdateSubcontractorDocumentRequestType = {
+  terms: "terms",
+  tax_form: "tax_form",
+  certification: "certification",
+  id_verification: "id_verification",
+  other: "other",
+} as const;
+
+export type UpdateSubcontractorDocumentRequestStatus =
+  (typeof UpdateSubcontractorDocumentRequestStatus)[keyof typeof UpdateSubcontractorDocumentRequestStatus];
+
+export const UpdateSubcontractorDocumentRequestStatus = {
+  current: "current",
+  superseded: "superseded",
+} as const;
+
+export interface UpdateSubcontractorDocumentRequest {
+  name?: string;
+  type?: UpdateSubcontractorDocumentRequestType;
+  status?: UpdateSubcontractorDocumentRequestStatus;
+}
+
 export type PermitType = (typeof PermitType)[keyof typeof PermitType];
 
 export const PermitType = {
@@ -1136,6 +1217,10 @@ export interface MemberActivitySummary {
 export type ListDocumentsParams = {
   type?: string;
   status?: string;
+};
+
+export type ListSubcontractorDocumentsParams = {
+  projectId?: string;
 };
 
 export type ListPhotosParams = {

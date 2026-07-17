@@ -17,4 +17,5 @@ export {
   ListInHousePeopleParams,
   CreateInHousePersonParams,
   CreatePortalInviteParams,
+  ListSubcontractorDocumentsParams,
 } from "./generated/api";

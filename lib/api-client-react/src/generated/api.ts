@@ -27,6 +27,7 @@ import type {
   CreatePermitRequest,
   CreatePersonRequest,
   CreateProjectRequest,
+  CreateSubcontractorDocumentRequest,
   CreateSubcontractorRequest,
   DistributeRequest,
   Distribution,
@@ -40,6 +41,7 @@ import type {
   InviteUserRequest,
   ListDocumentsParams,
   ListPhotosParams,
+  ListSubcontractorDocumentsParams,
   ListSubcontractorPeopleParams,
   LogPhotoRequest,
   LoginRequest,
@@ -80,11 +82,13 @@ import type {
   ResendInviteResponse,
   Subcontractor,
   SubcontractorDetail,
+  SubcontractorDocument,
   SuccessResponse,
   UpdateInsuranceRequest,
   UpdatePermitRequest,
   UpdatePersonRequest,
   UpdateProjectRequest,
+  UpdateSubcontractorDocumentRequest,
   UpdateSubcontractorRequest,
   UpdateUserRequest,
   UploadDocumentRequest,
@@ -2295,6 +2299,467 @@ export const useUpdateInsuranceRecord = <
 > => {
   return useMutation(getUpdateInsuranceRecordMutationOptions(options));
 };
+
+/**
+ * @summary List a subcontractor's documents (base docs, plus a project's extras if projectId given)
+ */
+export const getListSubcontractorDocumentsUrl = (
+  subcontractorId: string,
+  params?: ListSubcontractorDocumentsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/subcontractors/${subcontractorId}/documents?${stringifiedParams}`
+    : `/api/subcontractors/${subcontractorId}/documents`;
+};
+
+export const listSubcontractorDocuments = async (
+  subcontractorId: string,
+  params?: ListSubcontractorDocumentsParams,
+  options?: RequestInit,
+): Promise<SubcontractorDocument[]> => {
+  return customFetch<SubcontractorDocument[]>(
+    getListSubcontractorDocumentsUrl(subcontractorId, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListSubcontractorDocumentsQueryKey = (
+  subcontractorId: string,
+  params?: ListSubcontractorDocumentsParams,
+) => {
+  return [
+    `/api/subcontractors/${subcontractorId}/documents`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getListSubcontractorDocumentsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listSubcontractorDocuments>>,
+  TError = ErrorType<unknown>,
+>(
+  subcontractorId: string,
+  params?: ListSubcontractorDocumentsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listSubcontractorDocuments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListSubcontractorDocumentsQueryKey(subcontractorId, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listSubcontractorDocuments>>
+  > = ({ signal }) =>
+    listSubcontractorDocuments(subcontractorId, params, {
+      signal,
+      ...requestOptions,
+    });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!subcontractorId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listSubcontractorDocuments>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListSubcontractorDocumentsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listSubcontractorDocuments>>
+>;
+export type ListSubcontractorDocumentsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List a subcontractor's documents (base docs, plus a project's extras if projectId given)
+ */
+
+export function useListSubcontractorDocuments<
+  TData = Awaited<ReturnType<typeof listSubcontractorDocuments>>,
+  TError = ErrorType<unknown>,
+>(
+  subcontractorId: string,
+  params?: ListSubcontractorDocumentsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listSubcontractorDocuments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListSubcontractorDocumentsQueryOptions(
+    subcontractorId,
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Upload a document for a subcontractor (auto-supersedes a same-name doc in the same scope)
+ */
+export const getCreateSubcontractorDocumentUrl = (subcontractorId: string) => {
+  return `/api/subcontractors/${subcontractorId}/documents`;
+};
+
+export const createSubcontractorDocument = async (
+  subcontractorId: string,
+  createSubcontractorDocumentRequest: CreateSubcontractorDocumentRequest,
+  options?: RequestInit,
+): Promise<SubcontractorDocument> => {
+  return customFetch<SubcontractorDocument>(
+    getCreateSubcontractorDocumentUrl(subcontractorId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(createSubcontractorDocumentRequest),
+    },
+  );
+};
+
+export const getCreateSubcontractorDocumentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createSubcontractorDocument>>,
+    TError,
+    {
+      subcontractorId: string;
+      data: BodyType<CreateSubcontractorDocumentRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createSubcontractorDocument>>,
+  TError,
+  {
+    subcontractorId: string;
+    data: BodyType<CreateSubcontractorDocumentRequest>;
+  },
+  TContext
+> => {
+  const mutationKey = ["createSubcontractorDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createSubcontractorDocument>>,
+    {
+      subcontractorId: string;
+      data: BodyType<CreateSubcontractorDocumentRequest>;
+    }
+  > = (props) => {
+    const { subcontractorId, data } = props ?? {};
+
+    return createSubcontractorDocument(subcontractorId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateSubcontractorDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createSubcontractorDocument>>
+>;
+export type CreateSubcontractorDocumentMutationBody =
+  BodyType<CreateSubcontractorDocumentRequest>;
+export type CreateSubcontractorDocumentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Upload a document for a subcontractor (auto-supersedes a same-name doc in the same scope)
+ */
+export const useCreateSubcontractorDocument = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createSubcontractorDocument>>,
+    TError,
+    {
+      subcontractorId: string;
+      data: BodyType<CreateSubcontractorDocumentRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createSubcontractorDocument>>,
+  TError,
+  {
+    subcontractorId: string;
+    data: BodyType<CreateSubcontractorDocumentRequest>;
+  },
+  TContext
+> => {
+  return useMutation(getCreateSubcontractorDocumentMutationOptions(options));
+};
+
+/**
+ * @summary Update a subcontractor document (name, type, or status)
+ */
+export const getUpdateSubcontractorDocumentUrl = (
+  subcontractorId: string,
+  documentId: string,
+) => {
+  return `/api/subcontractors/${subcontractorId}/documents/${documentId}`;
+};
+
+export const updateSubcontractorDocument = async (
+  subcontractorId: string,
+  documentId: string,
+  updateSubcontractorDocumentRequest: UpdateSubcontractorDocumentRequest,
+  options?: RequestInit,
+): Promise<SubcontractorDocument> => {
+  return customFetch<SubcontractorDocument>(
+    getUpdateSubcontractorDocumentUrl(subcontractorId, documentId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updateSubcontractorDocumentRequest),
+    },
+  );
+};
+
+export const getUpdateSubcontractorDocumentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateSubcontractorDocument>>,
+    TError,
+    {
+      subcontractorId: string;
+      documentId: string;
+      data: BodyType<UpdateSubcontractorDocumentRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateSubcontractorDocument>>,
+  TError,
+  {
+    subcontractorId: string;
+    documentId: string;
+    data: BodyType<UpdateSubcontractorDocumentRequest>;
+  },
+  TContext
+> => {
+  const mutationKey = ["updateSubcontractorDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateSubcontractorDocument>>,
+    {
+      subcontractorId: string;
+      documentId: string;
+      data: BodyType<UpdateSubcontractorDocumentRequest>;
+    }
+  > = (props) => {
+    const { subcontractorId, documentId, data } = props ?? {};
+
+    return updateSubcontractorDocument(
+      subcontractorId,
+      documentId,
+      data,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateSubcontractorDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateSubcontractorDocument>>
+>;
+export type UpdateSubcontractorDocumentMutationBody =
+  BodyType<UpdateSubcontractorDocumentRequest>;
+export type UpdateSubcontractorDocumentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a subcontractor document (name, type, or status)
+ */
+export const useUpdateSubcontractorDocument = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateSubcontractorDocument>>,
+    TError,
+    {
+      subcontractorId: string;
+      documentId: string;
+      data: BodyType<UpdateSubcontractorDocumentRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateSubcontractorDocument>>,
+  TError,
+  {
+    subcontractorId: string;
+    documentId: string;
+    data: BodyType<UpdateSubcontractorDocumentRequest>;
+  },
+  TContext
+> => {
+  return useMutation(getUpdateSubcontractorDocumentMutationOptions(options));
+};
+
+/**
+ * @summary Walk the supersede chain for a subcontractor document, newest first
+ */
+export const getListSubcontractorDocumentRevisionsUrl = (
+  subcontractorId: string,
+  documentId: string,
+) => {
+  return `/api/subcontractors/${subcontractorId}/documents/${documentId}/revisions`;
+};
+
+export const listSubcontractorDocumentRevisions = async (
+  subcontractorId: string,
+  documentId: string,
+  options?: RequestInit,
+): Promise<SubcontractorDocument[]> => {
+  return customFetch<SubcontractorDocument[]>(
+    getListSubcontractorDocumentRevisionsUrl(subcontractorId, documentId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListSubcontractorDocumentRevisionsQueryKey = (
+  subcontractorId: string,
+  documentId: string,
+) => {
+  return [
+    `/api/subcontractors/${subcontractorId}/documents/${documentId}/revisions`,
+  ] as const;
+};
+
+export const getListSubcontractorDocumentRevisionsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listSubcontractorDocumentRevisions>>,
+  TError = ErrorType<unknown>,
+>(
+  subcontractorId: string,
+  documentId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listSubcontractorDocumentRevisions>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListSubcontractorDocumentRevisionsQueryKey(subcontractorId, documentId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listSubcontractorDocumentRevisions>>
+  > = ({ signal }) =>
+    listSubcontractorDocumentRevisions(subcontractorId, documentId, {
+      signal,
+      ...requestOptions,
+    });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(subcontractorId && documentId),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listSubcontractorDocumentRevisions>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListSubcontractorDocumentRevisionsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listSubcontractorDocumentRevisions>>
+>;
+export type ListSubcontractorDocumentRevisionsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Walk the supersede chain for a subcontractor document, newest first
+ */
+
+export function useListSubcontractorDocumentRevisions<
+  TData = Awaited<ReturnType<typeof listSubcontractorDocumentRevisions>>,
+  TError = ErrorType<unknown>,
+>(
+  subcontractorId: string,
+  documentId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listSubcontractorDocumentRevisions>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListSubcontractorDocumentRevisionsQueryOptions(
+    subcontractorId,
+    documentId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary List permits for a project

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { ShareModal } from "@/components/share-modal";
+import { FileDropZone } from "@/components/ui/file-drop-zone";
 import {
   Plus, Search, ChevronDown, ChevronRight, HardHat, Mail, Phone,
   ShieldCheck, ShieldAlert, ShieldX, Shield, Star, AlertTriangle,
@@ -80,6 +81,28 @@ type SubNote = {
   projectId: string | null;
   projectName: string | null;
   createdAt: string;
+};
+
+type SubDoc = {
+  id: string;
+  name: string;
+  type: string;
+  version: number;
+  fileUrl: string;
+  fileSize: number;
+  status: "current" | "superseded";
+  projectId: string | null;
+  projectName: string | null;
+  uploaderName: string;
+  createdAt: string;
+};
+
+const DOC_TYPE_LABELS: Record<string, string> = {
+  terms: "Signed T&Cs",
+  tax_form: "Tax Form (W9/UTR)",
+  certification: "Certification",
+  id_verification: "ID Verification",
+  other: "Other",
 };
 
 function formatNoteTime(iso: string) {
@@ -242,6 +265,19 @@ export default function SubcontractorsPage() {
   const [noteScope, setNoteScope] = useState<"general" | "project">("general");
   const [noteProjectId, setNoteProjectId] = useState("");
   const [noteProjects, setNoteProjects] = useState<{ id: string; name: string }[]>([]);
+
+  // Documents state (F6)
+  const [docsTarget, setDocsTarget] = useState<Sub | null>(null);
+  const [docsList, setDocsList] = useState<SubDoc[]>([]);
+  const [docsLoading, setDocsLoading] = useState(false);
+  const [docScope, setDocScope] = useState<"general" | "project">("general");
+  const [docProjectId, setDocProjectId] = useState("");
+  const [docProjects, setDocProjects] = useState<{ id: string; name: string }[]>([]);
+  const [docName, setDocName] = useState("");
+  const [docType, setDocType] = useState("terms");
+  const [docFile, setDocFile] = useState<{ url: string; size: number } | null>(null);
+  const [docSubmitting, setDocSubmitting] = useState(false);
+  const [docFileZoneKey, setDocFileZoneKey] = useState(0);
 
   // Insurance assign/reassign dialog (F1 Phase 3)
   const [insTarget, setInsTarget] = useState<{ sub: Sub; record: InsuranceRecord } | null>(null);
@@ -444,6 +480,59 @@ export default function SubcontractorsPage() {
       toast({ title: "Couldn't save note", description: "Please try again.", variant: "destructive" });
     }
     setNoteSubmitting(false);
+  }
+
+  async function openDocs(sub: Sub) {
+    setDocsTarget(sub);
+    setDocsList([]);
+    setDocScope("general");
+    setDocProjectId("");
+    setDocName("");
+    setDocType("terms");
+    setDocFile(null);
+    setDocFileZoneKey(k => k + 1);
+    setDocsLoading(true);
+    const [docsRes, projectsRes] = await Promise.all([
+      apiFetch(`/api/subcontractors/${sub.id}/documents`),
+      apiFetch("/api/projects"),
+    ]);
+    if (docsRes.ok) {
+      const data: SubDoc[] = await docsRes.json();
+      setDocsList(data);
+    }
+    if (projectsRes.ok) {
+      const all = await projectsRes.json();
+      setDocProjects((all as any[]).filter(p => p.status === "active").map(p => ({ id: p.id, name: p.name })));
+    }
+    setDocsLoading(false);
+  }
+
+  async function uploadDoc() {
+    if (!docsTarget || !docName.trim() || !docFile) return;
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
+    if (docScope === "project" && !docProjectId) {
+      toast({ title: "Select a project", description: "Choose a project or switch to General.", variant: "destructive" });
+      return;
+    }
+    setDocSubmitting(true);
+    const projectId = docScope === "project" ? docProjectId : null;
+    const res = await apiFetch(`/api/subcontractors/${docsTarget.id}/documents`, {
+      method: "POST",
+      body: JSON.stringify({ name: docName.trim(), type: docType, fileUrl: docFile.url, fileSize: docFile.size, projectId }),
+    });
+    if (res.ok) {
+      const created: SubDoc = await res.json();
+      setDocsList(prev => [
+        created,
+        ...prev.map(d => (d.name === created.name && d.projectId === created.projectId && d.status === "current") ? { ...d, status: "superseded" as const } : d),
+      ]);
+      setDocName("");
+      setDocFile(null);
+      setDocFileZoneKey(k => k + 1);
+    } else {
+      toast({ title: "Couldn't upload", description: "Please try again.", variant: "destructive" });
+    }
+    setDocSubmitting(false);
   }
 
   async function onAdd(data: AddFormData) {
@@ -725,6 +814,9 @@ export default function SubcontractorsPage() {
                             <button onClick={() => openNotes(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors" title="Notes & reminders log">
                               <StickyNote className="w-3.5 h-3.5" />
                             </button>
+                            <button onClick={() => openDocs(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Documents">
+                              <FileText className="w-3.5 h-3.5" />
+                            </button>
                             <button
                               onClick={() => setSharingContact({
                                 id: sub.id,
@@ -762,6 +854,9 @@ export default function SubcontractorsPage() {
                             <ContactActions email={sub.contactEmail} phone={sub.contactPhone} />
                             <button onClick={() => openNotes(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors" title="Notes & reminders log">
                               <StickyNote className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={() => openDocs(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Documents">
+                              <FileText className="w-3.5 h-3.5" />
                             </button>
                             <button
                               onClick={() => setSharingContact({
@@ -1145,6 +1240,132 @@ export default function SubcontractorsPage() {
         )}
         <DialogFooter>
           <Button variant="outline" onClick={() => { setNotesTarget(null); setNotesList([]); setNoteDraft(""); setNoteScope("general"); setNoteProjectId(""); }}>Close</Button>
+        </DialogFooter>
+      </Dialog>
+
+      {/* Documents dialog (F6) */}
+      <Dialog open={!!docsTarget} onOpenChange={open => { if (!open) { setDocsTarget(null); setDocsList([]); setDocScope("general"); setDocProjectId(""); } }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FileText className="w-4 h-4 text-primary" /> Documents
+          </DialogTitle>
+        </DialogHeader>
+        {docsTarget && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/40">
+              <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                {docsTarget.companyName.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <p className="font-semibold text-sm truncate">{docsTarget.companyName}</p>
+                <p className="text-xs text-muted-foreground truncate">{docsTarget.contactName}</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">General documents</span> apply to this contact everywhere. <span className="font-medium text-foreground">Project documents</span> only show within that project's Team tab.
+            </p>
+
+            {caps.canManageSubcontractors && (
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setDocScope("general")}
+                    className={`flex-1 text-xs font-semibold py-1.5 rounded-lg border transition-colors ${docScope === "general" ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-input hover:border-primary/50"}`}
+                  >
+                    General (everywhere)
+                  </button>
+                  <button
+                    onClick={() => setDocScope("project")}
+                    className={`flex-1 text-xs font-semibold py-1.5 rounded-lg border transition-colors ${docScope === "project" ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-input hover:border-primary/50"}`}
+                  >
+                    Specific project
+                  </button>
+                </div>
+                {docScope === "project" && (
+                  <select
+                    value={docProjectId}
+                    onChange={e => setDocProjectId(e.target.value)}
+                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">Select project…</option>
+                    {docProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                )}
+                <div className="grid grid-cols-2 gap-2 [&>*]:min-w-0">
+                  <Input placeholder="Document name" value={docName} onChange={e => setDocName(e.target.value)} />
+                  <select
+                    value={docType}
+                    onChange={e => setDocType(e.target.value)}
+                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    {Object.entries(DOC_TYPE_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+                <FileDropZone
+                  key={docFileZoneKey}
+                  onUploaded={f => setDocFile({ url: f.url, size: f.size })}
+                  onCleared={() => setDocFile(null)}
+                />
+                <div className="flex justify-end">
+                  <Button variant="accent" size="sm" onClick={uploadDoc} disabled={docSubmitting || !docName.trim() || !docFile}>
+                    {docSubmitting ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Uploading…</> : <>Upload</>}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className="border-t pt-3 max-h-72 overflow-y-auto -mr-1 pr-1">
+              {docsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : docsList.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <FileText className="w-8 h-8 text-muted-foreground/30 mb-2" />
+                  <p className="text-sm text-muted-foreground">No documents yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {docsList.map(d => (
+                    <div key={d.id} className="rounded-lg border bg-muted/30 p-3">
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[13px] font-medium text-foreground truncate">{d.name}</p>
+                          <p className="text-[11px] text-muted-foreground">{DOC_TYPE_LABELS[d.type] ?? d.type} · v{d.version}</p>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {d.status === "superseded" ? (
+                            <Badge variant="destructive" className="text-[9px]">SUPERSEDED</Badge>
+                          ) : (
+                            <Badge variant="success" className="text-[9px]">CURRENT</Badge>
+                          )}
+                          {d.projectId ? (
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-primary/10 text-primary">{d.projectName ?? "Project"}</span>
+                          ) : (
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground">General</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                          <Clock className="w-3 h-3" />{formatNoteTime(d.createdAt)} · {d.uploaderName}
+                        </p>
+                        <button onClick={() => window.open(normaliseUrl(d.fileUrl), "_blank")} className="shrink-0 text-muted-foreground hover:text-primary transition-colors" title="Open document">
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => { setDocsTarget(null); setDocsList([]); setDocScope("general"); setDocProjectId(""); }}>Close</Button>
         </DialogFooter>
       </Dialog>
 

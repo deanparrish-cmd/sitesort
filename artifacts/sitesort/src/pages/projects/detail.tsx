@@ -908,6 +908,62 @@ export default function ProjectDetail() {
     setSubNoteSubmitting(false);
   }
 
+  // Sub documents dialog (project Team tab) — F6
+  type SubDocItem = { id: string; name: string; type: string; version: number; fileUrl: string; fileSize: number; status: "current" | "superseded"; projectId: string | null; projectName: string | null; uploaderName: string; createdAt: string };
+  const SUB_DOC_TYPE_LABELS: Record<string, string> = { terms: "Signed T&Cs", tax_form: "Tax Form (W9/UTR)", certification: "Certification", id_verification: "ID Verification", other: "Other" };
+  const [subDocsTarget, setSubDocsTarget] = useState<{ id: string; name: string } | null>(null);
+  const [subDocsList, setSubDocsList] = useState<SubDocItem[]>([]);
+  const [subDocsLoading, setSubDocsLoading] = useState(false);
+  const [subDocScope, setSubDocScope] = useState<"general" | "project">("project");
+  const [subDocName, setSubDocName] = useState("");
+  const [subDocType, setSubDocType] = useState("terms");
+  const [subDocFile, setSubDocFile] = useState<{ url: string; size: number } | null>(null);
+  const [subDocSubmitting, setSubDocSubmitting] = useState(false);
+  const [subDocFileZoneKey, setSubDocFileZoneKey] = useState(0);
+
+  async function openSubDocs(memberId: string, memberName: string) {
+    setSubDocsTarget({ id: memberId, name: memberName });
+    setSubDocsList([]);
+    setSubDocScope("project");
+    setSubDocName("");
+    setSubDocType("terms");
+    setSubDocFile(null);
+    setSubDocFileZoneKey(k => k + 1);
+    setSubDocsLoading(true);
+    const token = localStorage.getItem("sitesort_token");
+    const res = await fetch(`/api/subcontractors/${memberId}/documents?projectId=${projectId}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (res.ok) setSubDocsList(await res.json());
+    setSubDocsLoading(false);
+  }
+
+  async function submitSubDoc() {
+    if (!subDocsTarget || !subDocName.trim() || !subDocFile) return;
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
+    setSubDocSubmitting(true);
+    const token = localStorage.getItem("sitesort_token");
+    const res = await fetch(`/api/subcontractors/${subDocsTarget.id}/documents`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({
+        name: subDocName.trim(), type: subDocType, fileUrl: subDocFile.url, fileSize: subDocFile.size,
+        projectId: subDocScope === "project" ? projectId : null,
+      }),
+    });
+    if (res.ok) {
+      const created: SubDocItem = await res.json();
+      setSubDocsList(prev => [
+        created,
+        ...prev.map(d => (d.name === created.name && d.projectId === created.projectId && d.status === "current") ? { ...d, status: "superseded" as const } : d),
+      ]);
+      setSubDocName("");
+      setSubDocFile(null);
+      setSubDocFileZoneKey(k => k + 1);
+    } else {
+      toast({ title: "Couldn't upload", description: "Please try again.", variant: "destructive" });
+    }
+    setSubDocSubmitting(false);
+  }
+
   const { register: schedRegister, handleSubmit: schedHandleSubmit, reset: schedReset, setValue: schedSetValue, watch: schedWatch } = useForm();
 
   const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -2029,6 +2085,16 @@ tr:last-child td{border-bottom:none}
                               title="Notes & reminders"
                             >
                               <StickyNote className="w-3.5 h-3.5" />Notes
+                            </button>
+                          )}
+                          {isSubcontractor && (
+                            <button
+                              type="button"
+                              onClick={() => openSubDocs(member.subcontractorId, member.name)}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-xs font-medium text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
+                              title="Documents"
+                            >
+                              <FileText className="w-3.5 h-3.5" />Docs
                             </button>
                           )}
                           <button
@@ -4054,6 +4120,110 @@ tr:last-child td{border-bottom:none}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => { setSubNotesTarget(null); setSubNotesList([]); setSubNoteDraft(""); setSubNoteScope("general"); }}>Close</Button>
+        </DialogFooter>
+      </Dialog>
+
+      {/* Subcontractor Documents dialog (project context) — F6 */}
+      <Dialog open={!!subDocsTarget} onOpenChange={open => { if (!open) { setSubDocsTarget(null); setSubDocsList([]); setSubDocScope("project"); } }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FileText className="w-4 h-4 text-primary" /> Documents — {subDocsTarget?.name}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <p className="text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">General documents</span> apply everywhere this contact is linked. <span className="font-medium text-foreground">This project only</span> documents stay here.
+          </p>
+
+          {caps.canManageSubcontractors && (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setSubDocScope("general")}
+                  className={`flex-1 text-xs font-semibold py-1.5 rounded-lg border transition-colors ${subDocScope === "general" ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-input hover:border-primary/50"}`}
+                >
+                  General (everywhere)
+                </button>
+                <button
+                  onClick={() => setSubDocScope("project")}
+                  className={`flex-1 text-xs font-semibold py-1.5 rounded-lg border transition-colors ${subDocScope === "project" ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-input hover:border-primary/50"}`}
+                >
+                  This project only
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2 [&>*]:min-w-0">
+                <Input placeholder="Document name" value={subDocName} onChange={e => setSubDocName(e.target.value)} />
+                <select
+                  value={subDocType}
+                  onChange={e => setSubDocType(e.target.value)}
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  {Object.entries(SUB_DOC_TYPE_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </div>
+              <FileDropZone
+                key={subDocFileZoneKey}
+                onUploaded={f => setSubDocFile({ url: f.url, size: f.size })}
+                onCleared={() => setSubDocFile(null)}
+              />
+              <div className="flex justify-end">
+                <Button variant="accent" size="sm" onClick={submitSubDoc} disabled={subDocSubmitting || !subDocName.trim() || !subDocFile}>
+                  {subDocSubmitting ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Uploading…</> : <>Upload</>}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <div className="border-t pt-3 max-h-72 overflow-y-auto -mr-1 pr-1">
+            {subDocsLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : subDocsList.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <FileText className="w-8 h-8 text-muted-foreground/30 mb-2" />
+                <p className="text-sm text-muted-foreground">No documents yet.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {subDocsList.map(d => (
+                  <div key={d.id} className="rounded-lg border bg-muted/30 p-3">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[13px] font-medium text-foreground truncate">{d.name}</p>
+                        <p className="text-[11px] text-muted-foreground">{SUB_DOC_TYPE_LABELS[d.type] ?? d.type} · v{d.version}</p>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {d.status === "superseded" ? (
+                          <Badge variant="destructive" className="text-[9px]">SUPERSEDED</Badge>
+                        ) : (
+                          <Badge variant="success" className="text-[9px]">CURRENT</Badge>
+                        )}
+                        {d.projectId ? (
+                          <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-primary/10 text-primary">This project</span>
+                        ) : (
+                          <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground">General</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                        <Clock className="w-3 h-3" />{new Date(d.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })} · {d.uploaderName}
+                      </p>
+                      <button onClick={() => openDocument(d.fileUrl, d.name)} className="shrink-0 text-muted-foreground hover:text-primary transition-colors" title="Open document">
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => { setSubDocsTarget(null); setSubDocsList([]); setSubDocScope("project"); }}>Close</Button>
         </DialogFooter>
       </Dialog>
 

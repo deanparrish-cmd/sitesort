@@ -264,7 +264,30 @@ export async function ensureSchema(): Promise<void> {
       )
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS pending_pushes_user_idx ON pending_pushes (user_id, created_at)`);
-    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols + portal_shares + portal_sessions + push_subscriptions + pending_pushes ready");
+
+    // F6 — versioned subcontractor/merchant contact documents (T&Cs, tax
+    // forms, certifications, ID verification — insurance stays in its own
+    // feature). Null project_id = company-wide base doc; set = per-project
+    // extra. New table → must exist in prod before the routes run.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS subcontractor_documents (
+        id text PRIMARY KEY,
+        subcontractor_id text NOT NULL REFERENCES subcontractors(id),
+        project_id text REFERENCES projects(id) ON DELETE SET NULL,
+        uploaded_by text NOT NULL REFERENCES users(id),
+        name text NOT NULL,
+        type text NOT NULL,
+        version integer NOT NULL DEFAULT 1,
+        file_url text NOT NULL,
+        file_size integer NOT NULL DEFAULT 0,
+        previous_version_id text,
+        status text NOT NULL DEFAULT 'current',
+        created_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS subcontractor_documents_subcontractor_idx ON subcontractor_documents (subcontractor_id)`);
+
+    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols + portal_shares + portal_sessions + push_subscriptions + pending_pushes + subcontractor_documents ready");
   } catch (err) {
     // Don't crash the server — membership lookups fall back to the home company.
     logger.error({ err }, "ensureSchema failed (continuing with home-company fallback)");

@@ -582,6 +582,138 @@ export const UpdateInsuranceRecordResponse = zod.object({
 });
 
 /**
+ * @summary List a subcontractor's documents (base docs, plus a project's extras if projectId given)
+ */
+export const ListSubcontractorDocumentsParams = zod.object({
+  subcontractorId: zod.coerce.string(),
+});
+
+export const ListSubcontractorDocumentsQueryParams = zod.object({
+  projectId: zod.coerce.string().optional(),
+});
+
+export const ListSubcontractorDocumentsResponseItem = zod.object({
+  id: zod.string(),
+  subcontractorId: zod.string(),
+  projectId: zod.string().nullish(),
+  projectName: zod.string().nullish(),
+  uploadedBy: zod.string(),
+  uploaderName: zod.string(),
+  name: zod.string(),
+  type: zod.enum([
+    "terms",
+    "tax_form",
+    "certification",
+    "id_verification",
+    "other",
+  ]),
+  version: zod.number(),
+  fileUrl: zod.string(),
+  fileSize: zod.number(),
+  previousVersionId: zod.string().nullish(),
+  status: zod.enum(["current", "superseded"]),
+  createdAt: zod.date(),
+});
+export const ListSubcontractorDocumentsResponse = zod.array(
+  ListSubcontractorDocumentsResponseItem,
+);
+
+/**
+ * @summary Upload a document for a subcontractor (auto-supersedes a same-name doc in the same scope)
+ */
+export const CreateSubcontractorDocumentParams = zod.object({
+  subcontractorId: zod.coerce.string(),
+});
+
+export const CreateSubcontractorDocumentBody = zod.object({
+  name: zod.string(),
+  type: zod.enum([
+    "terms",
+    "tax_form",
+    "certification",
+    "id_verification",
+    "other",
+  ]),
+  fileUrl: zod.string(),
+  fileSize: zod.number(),
+  projectId: zod.string().nullish(),
+  supersededDocumentId: zod.string().nullish(),
+});
+
+/**
+ * @summary Update a subcontractor document (name, type, or status)
+ */
+export const UpdateSubcontractorDocumentParams = zod.object({
+  subcontractorId: zod.coerce.string(),
+  documentId: zod.coerce.string(),
+});
+
+export const UpdateSubcontractorDocumentBody = zod.object({
+  name: zod.string().optional(),
+  type: zod
+    .enum(["terms", "tax_form", "certification", "id_verification", "other"])
+    .optional(),
+  status: zod.enum(["current", "superseded"]).optional(),
+});
+
+export const UpdateSubcontractorDocumentResponse = zod.object({
+  id: zod.string(),
+  subcontractorId: zod.string(),
+  projectId: zod.string().nullish(),
+  projectName: zod.string().nullish(),
+  uploadedBy: zod.string(),
+  uploaderName: zod.string(),
+  name: zod.string(),
+  type: zod.enum([
+    "terms",
+    "tax_form",
+    "certification",
+    "id_verification",
+    "other",
+  ]),
+  version: zod.number(),
+  fileUrl: zod.string(),
+  fileSize: zod.number(),
+  previousVersionId: zod.string().nullish(),
+  status: zod.enum(["current", "superseded"]),
+  createdAt: zod.date(),
+});
+
+/**
+ * @summary Walk the supersede chain for a subcontractor document, newest first
+ */
+export const ListSubcontractorDocumentRevisionsParams = zod.object({
+  subcontractorId: zod.coerce.string(),
+  documentId: zod.coerce.string(),
+});
+
+export const ListSubcontractorDocumentRevisionsResponseItem = zod.object({
+  id: zod.string(),
+  subcontractorId: zod.string(),
+  projectId: zod.string().nullish(),
+  projectName: zod.string().nullish(),
+  uploadedBy: zod.string(),
+  uploaderName: zod.string(),
+  name: zod.string(),
+  type: zod.enum([
+    "terms",
+    "tax_form",
+    "certification",
+    "id_verification",
+    "other",
+  ]),
+  version: zod.number(),
+  fileUrl: zod.string(),
+  fileSize: zod.number(),
+  previousVersionId: zod.string().nullish(),
+  status: zod.enum(["current", "superseded"]),
+  createdAt: zod.date(),
+});
+export const ListSubcontractorDocumentRevisionsResponse = zod.array(
+  ListSubcontractorDocumentRevisionsResponseItem,
+);
+
+/**
  * @summary List permits for a project
  */
 export const ListPermitsParams = zod.object({

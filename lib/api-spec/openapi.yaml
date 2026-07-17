@@ -25,6 +25,8 @@ tags:
     description: Subcontractor management
   - name: insurance
     description: Insurance records
+  - name: subcontractor-documents
+    description: Versioned documents on a subcontractor/merchant contact
   - name: permits
     description: Permit management
   - name: photos
@@ -593,6 +595,111 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InsuranceRecord"
+
+  /subcontractors/{subcontractorId}/documents:
+    get:
+      operationId: listSubcontractorDocuments
+      tags: [subcontractor-documents]
+      summary: List a subcontractor's documents (base docs, plus a project's extras if projectId given)
+      parameters:
+        - name: subcontractorId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: projectId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of subcontractor documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SubcontractorDocument"
+    post:
+      operationId: createSubcontractorDocument
+      tags: [subcontractor-documents]
+      summary: Upload a document for a subcontractor (auto-supersedes a same-name doc in the same scope)
+      parameters:
+        - name: subcontractorId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSubcontractorDocumentRequest"
+      responses:
+        "201":
+          description: Document uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubcontractorDocument"
+
+  /subcontractors/{subcontractorId}/documents/{documentId}:
+    patch:
+      operationId: updateSubcontractorDocument
+      tags: [subcontractor-documents]
+      summary: Update a subcontractor document (name, type, or status)
+      parameters:
+        - name: subcontractorId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSubcontractorDocumentRequest"
+      responses:
+        "200":
+          description: Updated document
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubcontractorDocument"
+
+  /subcontractors/{subcontractorId}/documents/{documentId}/revisions:
+    get:
+      operationId: listSubcontractorDocumentRevisions
+      tags: [subcontractor-documents]
+      summary: Walk the supersede chain for a subcontractor document, newest first
+      parameters:
+        - name: subcontractorId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Revision chain, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SubcontractorDocument"
 
   /projects/{projectId}/permits:
     get:
@@ -2162,6 +2269,77 @@ components:
           type: string
           format: date
           nullable: true
+
+    SubcontractorDocument:
+      type: object
+      properties:
+        id:
+          type: string
+        subcontractorId:
+          type: string
+        projectId:
+          type: string
+          nullable: true
+        projectName:
+          type: string
+          nullable: true
+        uploadedBy:
+          type: string
+        uploaderName:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [terms, tax_form, certification, id_verification, other]
+        version:
+          type: integer
+        fileUrl:
+          type: string
+        fileSize:
+          type: integer
+        previousVersionId:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [current, superseded]
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, subcontractorId, uploadedBy, uploaderName, name, type, version, fileUrl, fileSize, status, createdAt]
+
+    CreateSubcontractorDocumentRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [terms, tax_form, certification, id_verification, other]
+        fileUrl:
+          type: string
+        fileSize:
+          type: integer
+        projectId:
+          type: string
+          nullable: true
+        supersededDocumentId:
+          type: string
+          nullable: true
+      required: [name, type, fileUrl, fileSize]
+
+    UpdateSubcontractorDocumentRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [terms, tax_form, certification, id_verification, other]
+        status:
+          type: string
+          enum: [current, superseded]
 
     Permit:
       type: object

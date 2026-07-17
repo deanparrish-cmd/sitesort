@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { subcontractorsTable, insuranceRecordsTable, projectMembersTable, projectsTable, subcontractorNotesTable, usersTable, peopleTable } from "@workspace/db/schema";
+import { subcontractorsTable, insuranceRecordsTable, projectMembersTable, projectsTable, subcontractorNotesTable, usersTable, peopleTable, subcontractorDocumentsTable } from "@workspace/db/schema";
 import { eq, and, desc, or, isNull, isNotNull, inArray } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
@@ -369,8 +369,9 @@ router.post("/subcontractors/:subcontractorId/notes", authenticate, async (req, 
 
 // DELETE /api/subcontractors/:id — remove a subcontractor and its dependents.
 // Manager-gated + tenant-scoped. Clears child rows whose FKs are NOT ON DELETE
-// CASCADE (insurance records, subcontractor notes, project-member links) before
-// deleting the firm; `people` (and their invites/memberships) cascade.
+// CASCADE (insurance records, subcontractor notes, contact documents,
+// project-member links) before deleting the firm; `people` (and their
+// invites/memberships) cascade.
 router.delete("/subcontractors/:id", authenticate, async (req, res) => {
   try {
     if (!["admin", "project_manager"].includes(req.user!.role)) {
@@ -383,6 +384,7 @@ router.delete("/subcontractors/:id", authenticate, async (req, res) => {
 
     await db.delete(insuranceRecordsTable).where(eq(insuranceRecordsTable.subcontractorId, req.params.id));
     await db.delete(subcontractorNotesTable).where(eq(subcontractorNotesTable.subcontractorId, req.params.id));
+    await db.delete(subcontractorDocumentsTable).where(eq(subcontractorDocumentsTable.subcontractorId, req.params.id));
     await db.delete(projectMembersTable).where(eq(projectMembersTable.subcontractorId, req.params.id));
     await db.delete(peopleTable).where(eq(peopleTable.subcontractorId, req.params.id));
     await db.delete(subcontractorsTable).where(eq(subcontractorsTable.id, req.params.id));
