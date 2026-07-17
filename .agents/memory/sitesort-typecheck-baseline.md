@@ -1,19 +1,12 @@
 ---
 name: SiteSort typecheck baseline errors
-description: Pre-existing tsc errors in artifacts/sitesort that are NOT regressions — don't chase them.
+description: Status of pre-existing tsc errors in artifacts/sitesort — baseline is now clean.
 ---
 
-Running `pnpm run typecheck` in `artifacts/sitesort` reports ~10 errors that are
-pre-existing baseline noise, unrelated to most feature work. The dev server
-(Vite) compiles and runs fine regardless.
+As of July 2026 the sitesort typecheck baseline is CLEAN: `npx tsc --noEmit -p tsconfig.json`
+in `artifacts/sitesort` exits 0. The ~10 old baseline errors (buttonVariants/DialogContent
+exports, enum comparisons, orval queryKey mismatch) no longer reproduce after the detail-page
+rebuild and earlier hardening passes.
 
-**The baseline errors:**
-- `components/ui/{alert-dialog,calendar,pagination}.tsx` — `buttonVariants` not exported from `@/components/ui/button`.
-- `components/ui/command.tsx` — `DialogContent` not exported from `@/components/ui/dialog`.
-- `pages/dashboard/index.tsx` — `ProjectStatus` vs `"completed"` comparison has no overlap.
-- `pages/site-board.tsx` — `"capturing"` vs `"uploading"` comparison has no overlap.
-- `pages/projects/detail.tsx` (the `useListProjectMembers`/`useGetProjectDetail`/documents query hook calls) — `Property 'queryKey' is missing in type '{ enabled: boolean }'`. This one persists even after rebuilding `lib/api-client-react` declarations (`tsc -p lib/api-client-react/tsconfig.json`), so it's a genuine orval-generated-hook signature mismatch, not a stale-dist artifact.
-
-**How to apply:** After editing sitesort, run typecheck and diff against this list.
-Only treat *new* errors (ones mentioning your changed files/symbols) as yours.
-The 10 above are not introduced by your change.
+**How to apply:** Treat ANY tsc error in sitesort as a real regression now — do not dismiss
+errors as "baseline noise" anymore.
