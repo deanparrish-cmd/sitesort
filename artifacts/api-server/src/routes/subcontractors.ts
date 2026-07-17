@@ -6,6 +6,8 @@ import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { expiryStatus } from "../lib/expiry";
 import { isOverdue } from "../lib/accountability";
+import { activeProjectsForSubcontractor, hasAnyHistoricalFootprint } from "../lib/contact-removal";
+import { CreateSubcontractorBody, UpdateSubcontractorBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -53,9 +55,16 @@ async function serializeInsuranceRecords(records: InsuranceRow[]) {
   }));
 }
 
+// ?archived=true → only archived contacts (for the Contacts "Archived" filter);
+// default → active contacts only (archivedAt IS NULL).
 router.get("/subcontractors", authenticate, async (req, res) => {
   try {
-    const subs = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.companyId, req.user!.companyId));
+    const wantArchived = req.query.archived === "true";
+    const subs = await db.select().from(subcontractorsTable)
+      .where(and(
+        eq(subcontractorsTable.companyId, req.user!.companyId),
+        wantArchived ? isNotNull(subcontractorsTable.archivedAt) : isNull(subcontractorsTable.archivedAt),
+      ));
     const result = await Promise.all(subs.map(async (s) => {
       const insurance = await db.select().from(insuranceRecordsTable)
         .where(and(eq(insuranceRecordsTable.subcontractorId, s.id), isNull(insuranceRecordsTable.archivedAt)));
@@ -64,6 +73,8 @@ router.get("/subcontractors", authenticate, async (req, res) => {
         companyId: s.companyId,
         companyName: s.companyName,
         contactName: s.contactName,
+        contactFirstName: s.contactFirstName ?? null,
+        contactLastName: s.contactLastName ?? null,
         contactEmail: s.contactEmail,
         contactPhone: s.contactPhone ?? null,
         contactType: s.contactType ?? "subcontractor",
@@ -71,6 +82,7 @@ router.get("/subcontractors", authenticate, async (req, res) => {
         reliabilityRating: s.reliabilityRating ? Number(s.reliabilityRating) : null,
         paymentHold: s.paymentHold,
         notes: s.notes ?? null,
+        archivedAt: s.archivedAt ? s.archivedAt.toISOString() : null,
         insuranceStatus: computeInsuranceStatus(insurance),
         insuranceRecords: await serializeInsuranceRecords(insurance),
         createdAt: s.createdAt.toISOString(),
@@ -85,11 +97,12 @@ router.get("/subcontractors", authenticate, async (req, res) => {
 
 router.post("/subcontractors", authenticate, async (req, res) => {
   try {
-    const { companyName, contactName, contactEmail, contactPhone, contactType, trades, notes } = req.body;
-    if (!companyName || !contactName || !contactEmail) {
-      res.status(400).json({ error: "validation_error", message: "companyName, contactName, contactEmail required" });
-      return;
-    }
+    const parsed = CreateSubcontractorBody.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: "validation_error", message: "companyName, a first name and surname (2+ chars each), and contactEmail are required" }); return; }
+    const { companyName, contactFirstName, contactLastName, contactEmail, contactPhone, contactType, trades, notes } = parsed.data;
+    const firstName = contactFirstName.trim();
+    const lastName = contactLastName.trim();
+    const contactName = `${firstName} ${lastName}`.trim();
 
     const id = generateId();
     await db.insert(subcontractorsTable).values({
@@ -97,6 +110,8 @@ router.post("/subcontractors", authenticate, async (req, res) => {
       companyId: req.user!.companyId,
       companyName,
       contactName,
+      contactFirstName: firstName,
+      contactLastName: lastName,
       contactEmail,
       contactPhone: contactPhone ?? null,
       contactType: contactType ?? "subcontractor",
@@ -105,7 +120,7 @@ router.post("/subcontractors", authenticate, async (req, res) => {
       paymentHold: false,
     });
 
-    res.status(201).json({ id, companyId: req.user!.companyId, companyName, contactName, contactEmail, contactPhone: contactPhone ?? null, contactType: contactType ?? "subcontractor", trades: trades ?? [], reliabilityRating: null, paymentHold: false, notes: notes ?? null, insuranceStatus: "none", insuranceRecords: [], createdAt: new Date().toISOString() });
+    res.status(201).json({ id, companyId: req.user!.companyId, companyName, contactName, contactFirstName: firstName, contactLastName: lastName, contactEmail, contactPhone: contactPhone ?? null, contactType: contactType ?? "subcontractor", trades: trades ?? [], reliabilityRating: null, paymentHold: false, notes: notes ?? null, archivedAt: null, insuranceStatus: "none", insuranceRecords: [], createdAt: new Date().toISOString() });
   } catch (err) {
     req.log.error({ err }, "Create subcontractor error");
     res.status(500).json({ error: "server_error", message: "Failed to create subcontractor" });
@@ -137,6 +152,8 @@ router.get("/subcontractors/:subcontractorId", authenticate, async (req, res) =>
       companyId: s.companyId,
       companyName: s.companyName,
       contactName: s.contactName,
+      contactFirstName: s.contactFirstName ?? null,
+      contactLastName: s.contactLastName ?? null,
       contactEmail: s.contactEmail,
       contactPhone: s.contactPhone ?? null,
       contactType: s.contactType ?? "subcontractor",
@@ -144,6 +161,7 @@ router.get("/subcontractors/:subcontractorId", authenticate, async (req, res) =>
       reliabilityRating: s.reliabilityRating ? Number(s.reliabilityRating) : null,
       paymentHold: s.paymentHold,
       notes: s.notes ?? null,
+      archivedAt: s.archivedAt ? s.archivedAt.toISOString() : null,
       insuranceStatus: computeInsuranceStatus(insurance),
       createdAt: s.createdAt.toISOString(),
       insuranceRecords: await serializeInsuranceRecords(insurance),
@@ -157,10 +175,25 @@ router.get("/subcontractors/:subcontractorId", authenticate, async (req, res) =>
 
 router.patch("/subcontractors/:subcontractorId", authenticate, async (req, res) => {
   try {
-    const { companyName, contactName, contactEmail, contactPhone, contactType, trades, reliabilityRating, paymentHold, notes } = req.body;
+    const parsed = UpdateSubcontractorBody.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: "validation_error", message: "Invalid update — a first name and surname must be at least 2 characters each." }); return; }
+    const { companyName, contactFirstName, contactLastName, contactEmail, contactPhone, contactType, trades, reliabilityRating, paymentHold, notes } = parsed.data;
+    // Name is stored as two parts + a derived display string; if only one of
+    // first/last is given, require the other too so contactName never drifts
+    // out of sync with the parts.
+    if ((contactFirstName !== undefined) !== (contactLastName !== undefined)) {
+      res.status(400).json({ error: "validation_error", message: "Provide both first name and surname together." });
+      return;
+    }
     const updates: Record<string, unknown> = {};
     if (companyName !== undefined) updates.companyName = companyName;
-    if (contactName !== undefined) updates.contactName = contactName;
+    if (contactFirstName !== undefined && contactLastName !== undefined) {
+      const firstName = contactFirstName.trim();
+      const lastName = contactLastName.trim();
+      updates.contactFirstName = firstName;
+      updates.contactLastName = lastName;
+      updates.contactName = `${firstName} ${lastName}`.trim();
+    }
     if (contactEmail !== undefined) updates.contactEmail = contactEmail;
     if (contactPhone !== undefined) updates.contactPhone = contactPhone;
     if (contactType !== undefined) updates.contactType = contactType;
@@ -183,7 +216,7 @@ router.patch("/subcontractors/:subcontractorId", authenticate, async (req, res) 
     const insurance = await db.select().from(insuranceRecordsTable)
       .where(and(eq(insuranceRecordsTable.subcontractorId, s.id), isNull(insuranceRecordsTable.archivedAt)));
 
-    res.json({ id: s.id, companyId: s.companyId, companyName: s.companyName, contactName: s.contactName, contactEmail: s.contactEmail, contactPhone: s.contactPhone ?? null, contactType: s.contactType ?? "subcontractor", trades: s.trades ?? [], reliabilityRating: s.reliabilityRating ? Number(s.reliabilityRating) : null, paymentHold: s.paymentHold, notes: s.notes ?? null, insuranceStatus: computeInsuranceStatus(insurance), insuranceRecords: await serializeInsuranceRecords(insurance), createdAt: s.createdAt.toISOString() });
+    res.json({ id: s.id, companyId: s.companyId, companyName: s.companyName, contactName: s.contactName, contactFirstName: s.contactFirstName ?? null, contactLastName: s.contactLastName ?? null, contactEmail: s.contactEmail, contactPhone: s.contactPhone ?? null, contactType: s.contactType ?? "subcontractor", trades: s.trades ?? [], reliabilityRating: s.reliabilityRating ? Number(s.reliabilityRating) : null, paymentHold: s.paymentHold, notes: s.notes ?? null, archivedAt: s.archivedAt ? s.archivedAt.toISOString() : null, insuranceStatus: computeInsuranceStatus(insurance), insuranceRecords: await serializeInsuranceRecords(insurance), createdAt: s.createdAt.toISOString() });
   } catch (err) {
     req.log.error({ err }, "Update subcontractor error");
     res.status(500).json({ error: "server_error", message: "Failed to update subcontractor" });
@@ -367,11 +400,12 @@ router.post("/subcontractors/:subcontractorId/notes", authenticate, async (req, 
   }
 });
 
-// DELETE /api/subcontractors/:id — remove a subcontractor and its dependents.
-// Manager-gated + tenant-scoped. Clears child rows whose FKs are NOT ON DELETE
-// CASCADE (insurance records, subcontractor notes, contact documents,
-// project-member links) before deleting the firm; `people` (and their
-// invites/memberships) cascade.
+// DELETE /api/subcontractors/:id — remove a subcontractor from the directory.
+// Manager-gated + tenant-scoped. Blocked outright if the firm (or any of its
+// people) is on an ACTIVE project. Otherwise: zero footprint anywhere (never
+// on any project, no activity/distribution/sign-off history) → hard-delete,
+// same cascade cleanup as before; any footprint → archive instead, so past
+// records (which key off users.id, never touched here) keep resolving names.
 router.delete("/subcontractors/:id", authenticate, async (req, res) => {
   try {
     if (!["admin", "project_manager"].includes(req.user!.role)) {
@@ -382,16 +416,55 @@ router.delete("/subcontractors/:id", authenticate, async (req, res) => {
       .where(and(eq(subcontractorsTable.id, req.params.id), eq(subcontractorsTable.companyId, req.user!.companyId))).limit(1);
     if (!sub[0]) { res.status(404).json({ error: "not_found", message: "Subcontractor not found" }); return; }
 
+    const activeProjects = await activeProjectsForSubcontractor(req.params.id);
+    if (activeProjects.length > 0) {
+      res.status(400).json({ error: "on_active_project", message: `Remove them from ${activeProjects.join(", ")} first.`, projects: activeProjects });
+      return;
+    }
+
+    const people = await db.select({ id: peopleTable.id, userId: peopleTable.userId }).from(peopleTable)
+      .where(eq(peopleTable.subcontractorId, req.params.id));
+    const footprint = await hasAnyHistoricalFootprint({
+      personIds: people.map(p => p.id),
+      subcontractorId: req.params.id,
+      userIds: people.map(p => p.userId).filter((x): x is string => !!x),
+    });
+
+    if (footprint) {
+      await db.update(subcontractorsTable).set({ archivedAt: new Date() }).where(eq(subcontractorsTable.id, req.params.id));
+      res.json({ success: true, archived: true });
+      return;
+    }
+
     await db.delete(insuranceRecordsTable).where(eq(insuranceRecordsTable.subcontractorId, req.params.id));
     await db.delete(subcontractorNotesTable).where(eq(subcontractorNotesTable.subcontractorId, req.params.id));
     await db.delete(subcontractorDocumentsTable).where(eq(subcontractorDocumentsTable.subcontractorId, req.params.id));
     await db.delete(projectMembersTable).where(eq(projectMembersTable.subcontractorId, req.params.id));
     await db.delete(peopleTable).where(eq(peopleTable.subcontractorId, req.params.id));
     await db.delete(subcontractorsTable).where(eq(subcontractorsTable.id, req.params.id));
-    res.json({ success: true });
+    res.json({ success: true, archived: false });
   } catch (err) {
     req.log.error({ err }, "Delete subcontractor error");
     res.status(500).json({ error: "server_error", message: "Failed to delete subcontractor" });
+  }
+});
+
+// PATCH /api/subcontractors/:id/restore — un-archive a previously archived
+// subcontractor. Manager-gated + tenant-scoped.
+router.patch("/subcontractors/:id/restore", authenticate, async (req, res) => {
+  try {
+    if (!["admin", "project_manager"].includes(req.user!.role)) {
+      res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can restore a subcontractor." });
+      return;
+    }
+    const sub = await db.select({ id: subcontractorsTable.id }).from(subcontractorsTable)
+      .where(and(eq(subcontractorsTable.id, req.params.id), eq(subcontractorsTable.companyId, req.user!.companyId))).limit(1);
+    if (!sub[0]) { res.status(404).json({ error: "not_found", message: "Subcontractor not found" }); return; }
+    await db.update(subcontractorsTable).set({ archivedAt: null }).where(eq(subcontractorsTable.id, req.params.id));
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Restore subcontractor error");
+    res.status(500).json({ error: "server_error", message: "Failed to restore subcontractor" });
   }
 });
 

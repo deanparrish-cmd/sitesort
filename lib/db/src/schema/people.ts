@@ -21,6 +21,14 @@ export const peopleTable = pgTable("people", {
   subcontractorId: text("subcontractor_id").references(() => subcontractorsTable.id, { onDelete: "cascade" }),
   userId: text("user_id").references(() => usersTable.id, { onDelete: "set null" }),
   name: text("name").notNull(),
+  // First/last split (Feature: person name split). Nullable — existing
+  // records are backfilled by splitting `name` on the first space; a record
+  // left with an empty lastName shows a "surname missing" badge and must be
+  // completed before a new portal invite can be sent to them. New writes are
+  // Zod-validated (min 2 chars each, trimmed) — `name` stays as a derived
+  // "First Last" display field for backward compatibility.
+  firstName: text("first_name"),
+  lastName: text("last_name"),
   email: text("email").notNull(),
   phone: text("phone"),
   // Optional free-text job title, e.g. "Site Foreman". NOT the portal role.
@@ -30,6 +38,9 @@ export const peopleTable = pgTable("people", {
   // PM's explicit choice, set from the dashboard Team tab.
   showContactInPortal: boolean("show_contact_in_portal"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  // Soft-delete (same convention as subcontractors.archivedAt) — set when a
+  // person has history and can't be safely hard-deleted; null = active.
+  archivedAt: timestamp("archived_at"),
 }, (t) => ({
   // One person per email within a subcontractor firm (dedupe repeat adds).
   subPersonUq: uniqueIndex("people_subcontractor_email_uq")

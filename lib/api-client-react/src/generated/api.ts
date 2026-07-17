@@ -40,9 +40,11 @@ import type {
   InsuranceRecord,
   InviteUserRequest,
   ListDocumentsParams,
+  ListInHousePeopleParams,
   ListPhotosParams,
   ListSubcontractorDocumentsParams,
   ListSubcontractorPeopleParams,
+  ListSubcontractorsParams,
   LogPhotoRequest,
   LoginRequest,
   MemberActivitySummary,
@@ -79,6 +81,9 @@ import type {
   QrContent,
   RegisterRequest,
   RegisterResponse,
+  RemoveCompanyMembersResponse,
+  RemoveContactResponse,
+  RemoveMemberResponse,
   ResendInviteResponse,
   Subcontractor,
   SubcontractorDetail,
@@ -1652,7 +1657,7 @@ export const useAddProjectMember = <
 };
 
 /**
- * @summary Remove a member from a project
+ * @summary Remove a member from a project (manager-gated). Revokes portal access and cancels any pending invite; past activity/distribution/sign-off history is retained.
  */
 export const getRemoveProjectMemberUrl = (
   projectId: string,
@@ -1665,8 +1670,8 @@ export const removeProjectMember = async (
   projectId: string,
   memberId: string,
   options?: RequestInit,
-): Promise<SuccessResponse> => {
-  return customFetch<SuccessResponse>(
+): Promise<RemoveMemberResponse> => {
+  return customFetch<RemoveMemberResponse>(
     getRemoveProjectMemberUrl(projectId, memberId),
     {
       ...options,
@@ -1720,7 +1725,7 @@ export type RemoveProjectMemberMutationResult = NonNullable<
 export type RemoveProjectMemberMutationError = ErrorType<unknown>;
 
 /**
- * @summary Remove a member from a project
+ * @summary Remove a member from a project (manager-gated). Revokes portal access and cancels any pending invite; past activity/distribution/sign-off history is retained.
  */
 export const useRemoveProjectMember = <
   TError = ErrorType<unknown>,
@@ -1743,43 +1748,157 @@ export const useRemoveProjectMember = <
 };
 
 /**
+ * @summary Remove a subcontractor firm and all its people from a project in one action (manager-gated)
+ */
+export const getRemoveProjectMemberCompanyUrl = (
+  projectId: string,
+  subcontractorId: string,
+) => {
+  return `/api/projects/${projectId}/members/company/${subcontractorId}`;
+};
+
+export const removeProjectMemberCompany = async (
+  projectId: string,
+  subcontractorId: string,
+  options?: RequestInit,
+): Promise<RemoveCompanyMembersResponse> => {
+  return customFetch<RemoveCompanyMembersResponse>(
+    getRemoveProjectMemberCompanyUrl(projectId, subcontractorId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getRemoveProjectMemberCompanyMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeProjectMemberCompany>>,
+    TError,
+    { projectId: string; subcontractorId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof removeProjectMemberCompany>>,
+  TError,
+  { projectId: string; subcontractorId: string },
+  TContext
+> => {
+  const mutationKey = ["removeProjectMemberCompany"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof removeProjectMemberCompany>>,
+    { projectId: string; subcontractorId: string }
+  > = (props) => {
+    const { projectId, subcontractorId } = props ?? {};
+
+    return removeProjectMemberCompany(
+      projectId,
+      subcontractorId,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RemoveProjectMemberCompanyMutationResult = NonNullable<
+  Awaited<ReturnType<typeof removeProjectMemberCompany>>
+>;
+
+export type RemoveProjectMemberCompanyMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Remove a subcontractor firm and all its people from a project in one action (manager-gated)
+ */
+export const useRemoveProjectMemberCompany = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeProjectMemberCompany>>,
+    TError,
+    { projectId: string; subcontractorId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof removeProjectMemberCompany>>,
+  TError,
+  { projectId: string; subcontractorId: string },
+  TContext
+> => {
+  return useMutation(getRemoveProjectMemberCompanyMutationOptions(options));
+};
+
+/**
  * @summary List all subcontractors for the company
  */
-export const getListSubcontractorsUrl = () => {
-  return `/api/subcontractors`;
+export const getListSubcontractorsUrl = (params?: ListSubcontractorsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/subcontractors?${stringifiedParams}`
+    : `/api/subcontractors`;
 };
 
 export const listSubcontractors = async (
+  params?: ListSubcontractorsParams,
   options?: RequestInit,
 ): Promise<Subcontractor[]> => {
-  return customFetch<Subcontractor[]>(getListSubcontractorsUrl(), {
+  return customFetch<Subcontractor[]>(getListSubcontractorsUrl(params), {
     ...options,
     method: "GET",
   });
 };
 
-export const getListSubcontractorsQueryKey = () => {
-  return [`/api/subcontractors`] as const;
+export const getListSubcontractorsQueryKey = (
+  params?: ListSubcontractorsParams,
+) => {
+  return [`/api/subcontractors`, ...(params ? [params] : [])] as const;
 };
 
 export const getListSubcontractorsQueryOptions = <
   TData = Awaited<ReturnType<typeof listSubcontractors>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof listSubcontractors>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
+>(
+  params?: ListSubcontractorsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listSubcontractors>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
-  const queryKey = queryOptions?.queryKey ?? getListSubcontractorsQueryKey();
+  const queryKey =
+    queryOptions?.queryKey ?? getListSubcontractorsQueryKey(params);
 
   const queryFn: QueryFunction<
     Awaited<ReturnType<typeof listSubcontractors>>
-  > = ({ signal }) => listSubcontractors({ signal, ...requestOptions });
+  > = ({ signal }) => listSubcontractors(params, { signal, ...requestOptions });
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof listSubcontractors>>,
@@ -1800,15 +1919,18 @@ export type ListSubcontractorsQueryError = ErrorType<unknown>;
 export function useListSubcontractors<
   TData = Awaited<ReturnType<typeof listSubcontractors>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof listSubcontractors>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getListSubcontractorsQueryOptions(options);
+>(
+  params?: ListSubcontractorsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listSubcontractors>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListSubcontractorsQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -2088,6 +2210,180 @@ export const useUpdateSubcontractor = <
   TContext
 > => {
   return useMutation(getUpdateSubcontractorMutationOptions(options));
+};
+
+/**
+ * @summary Remove a subcontractor from the directory (blocked if on an active project; archived if it has history, else hard-deleted)
+ */
+export const getDeleteSubcontractorUrl = (subcontractorId: string) => {
+  return `/api/subcontractors/${subcontractorId}`;
+};
+
+export const deleteSubcontractor = async (
+  subcontractorId: string,
+  options?: RequestInit,
+): Promise<RemoveContactResponse> => {
+  return customFetch<RemoveContactResponse>(
+    getDeleteSubcontractorUrl(subcontractorId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getDeleteSubcontractorMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteSubcontractor>>,
+    TError,
+    { subcontractorId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteSubcontractor>>,
+  TError,
+  { subcontractorId: string },
+  TContext
+> => {
+  const mutationKey = ["deleteSubcontractor"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteSubcontractor>>,
+    { subcontractorId: string }
+  > = (props) => {
+    const { subcontractorId } = props ?? {};
+
+    return deleteSubcontractor(subcontractorId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteSubcontractorMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteSubcontractor>>
+>;
+
+export type DeleteSubcontractorMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Remove a subcontractor from the directory (blocked if on an active project; archived if it has history, else hard-deleted)
+ */
+export const useDeleteSubcontractor = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteSubcontractor>>,
+    TError,
+    { subcontractorId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteSubcontractor>>,
+  TError,
+  { subcontractorId: string },
+  TContext
+> => {
+  return useMutation(getDeleteSubcontractorMutationOptions(options));
+};
+
+/**
+ * @summary Un-archive a previously archived subcontractor
+ */
+export const getRestoreSubcontractorUrl = (subcontractorId: string) => {
+  return `/api/subcontractors/${subcontractorId}/restore`;
+};
+
+export const restoreSubcontractor = async (
+  subcontractorId: string,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(
+    getRestoreSubcontractorUrl(subcontractorId),
+    {
+      ...options,
+      method: "PATCH",
+    },
+  );
+};
+
+export const getRestoreSubcontractorMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof restoreSubcontractor>>,
+    TError,
+    { subcontractorId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof restoreSubcontractor>>,
+  TError,
+  { subcontractorId: string },
+  TContext
+> => {
+  const mutationKey = ["restoreSubcontractor"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof restoreSubcontractor>>,
+    { subcontractorId: string }
+  > = (props) => {
+    const { subcontractorId } = props ?? {};
+
+    return restoreSubcontractor(subcontractorId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RestoreSubcontractorMutationResult = NonNullable<
+  Awaited<ReturnType<typeof restoreSubcontractor>>
+>;
+
+export type RestoreSubcontractorMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Un-archive a previously archived subcontractor
+ */
+export const useRestoreSubcontractor = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof restoreSubcontractor>>,
+    TError,
+    { subcontractorId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof restoreSubcontractor>>,
+  TError,
+  { subcontractorId: string },
+  TContext
+> => {
+  return useMutation(getRestoreSubcontractorMutationOptions(options));
 };
 
 /**
@@ -6076,7 +6372,7 @@ export const useCreateSubcontractorPerson = <
 };
 
 /**
- * @summary Remove an individual person (PM)
+ * @summary Remove an individual person (PM) — blocked if on an active project; archived if they have history, else hard-deleted
  */
 export const getDeletePersonUrl = (personId: string) => {
   return `/api/people/${personId}`;
@@ -6085,15 +6381,15 @@ export const getDeletePersonUrl = (personId: string) => {
 export const deletePerson = async (
   personId: string,
   options?: RequestInit,
-): Promise<SuccessResponse> => {
-  return customFetch<SuccessResponse>(getDeletePersonUrl(personId), {
+): Promise<RemoveContactResponse> => {
+  return customFetch<RemoveContactResponse>(getDeletePersonUrl(personId), {
     ...options,
     method: "DELETE",
   });
 };
 
 export const getDeletePersonMutationOptions = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<ErrorResponse>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -6134,13 +6430,13 @@ export type DeletePersonMutationResult = NonNullable<
   Awaited<ReturnType<typeof deletePerson>>
 >;
 
-export type DeletePersonMutationError = ErrorType<unknown>;
+export type DeletePersonMutationError = ErrorType<ErrorResponse>;
 
 /**
- * @summary Remove an individual person (PM)
+ * @summary Remove an individual person (PM) — blocked if on an active project; archived if they have history, else hard-deleted
  */
 export const useDeletePerson = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<ErrorResponse>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -6247,24 +6543,130 @@ export const useUpdatePerson = <
 };
 
 /**
+ * @summary Un-archive a previously archived person
+ */
+export const getRestorePersonUrl = (personId: string) => {
+  return `/api/people/${personId}/restore`;
+};
+
+export const restorePerson = async (
+  personId: string,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getRestorePersonUrl(personId), {
+    ...options,
+    method: "PATCH",
+  });
+};
+
+export const getRestorePersonMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof restorePerson>>,
+    TError,
+    { personId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof restorePerson>>,
+  TError,
+  { personId: string },
+  TContext
+> => {
+  const mutationKey = ["restorePerson"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof restorePerson>>,
+    { personId: string }
+  > = (props) => {
+    const { personId } = props ?? {};
+
+    return restorePerson(personId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RestorePersonMutationResult = NonNullable<
+  Awaited<ReturnType<typeof restorePerson>>
+>;
+
+export type RestorePersonMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Un-archive a previously archived person
+ */
+export const useRestorePerson = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof restorePerson>>,
+    TError,
+    { personId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof restorePerson>>,
+  TError,
+  { personId: string },
+  TContext
+> => {
+  return useMutation(getRestorePersonMutationOptions(options));
+};
+
+/**
  * @summary In-house people (portal-only) with per-project portal status (PM)
  */
-export const getListInHousePeopleUrl = (projectId: string) => {
-  return `/api/projects/${projectId}/in-house-people`;
+export const getListInHousePeopleUrl = (
+  projectId: string,
+  params?: ListInHousePeopleParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/projects/${projectId}/in-house-people?${stringifiedParams}`
+    : `/api/projects/${projectId}/in-house-people`;
 };
 
 export const listInHousePeople = async (
   projectId: string,
+  params?: ListInHousePeopleParams,
   options?: RequestInit,
 ): Promise<Person[]> => {
-  return customFetch<Person[]>(getListInHousePeopleUrl(projectId), {
+  return customFetch<Person[]>(getListInHousePeopleUrl(projectId, params), {
     ...options,
     method: "GET",
   });
 };
 
-export const getListInHousePeopleQueryKey = (projectId: string) => {
-  return [`/api/projects/${projectId}/in-house-people`] as const;
+export const getListInHousePeopleQueryKey = (
+  projectId: string,
+  params?: ListInHousePeopleParams,
+) => {
+  return [
+    `/api/projects/${projectId}/in-house-people`,
+    ...(params ? [params] : []),
+  ] as const;
 };
 
 export const getListInHousePeopleQueryOptions = <
@@ -6272,6 +6674,7 @@ export const getListInHousePeopleQueryOptions = <
   TError = ErrorType<unknown>,
 >(
   projectId: string,
+  params?: ListInHousePeopleParams,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof listInHousePeople>>,
@@ -6284,12 +6687,12 @@ export const getListInHousePeopleQueryOptions = <
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
   const queryKey =
-    queryOptions?.queryKey ?? getListInHousePeopleQueryKey(projectId);
+    queryOptions?.queryKey ?? getListInHousePeopleQueryKey(projectId, params);
 
   const queryFn: QueryFunction<
     Awaited<ReturnType<typeof listInHousePeople>>
   > = ({ signal }) =>
-    listInHousePeople(projectId, { signal, ...requestOptions });
+    listInHousePeople(projectId, params, { signal, ...requestOptions });
 
   return {
     queryKey,
@@ -6317,6 +6720,7 @@ export function useListInHousePeople<
   TError = ErrorType<unknown>,
 >(
   projectId: string,
+  params?: ListInHousePeopleParams,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof listInHousePeople>>,
@@ -6326,7 +6730,11 @@ export function useListInHousePeople<
     request?: SecondParameter<typeof customFetch>;
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getListInHousePeopleQueryOptions(projectId, options);
+  const queryOptions = getListInHousePeopleQueryOptions(
+    projectId,
+    params,
+    options,
+  );
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

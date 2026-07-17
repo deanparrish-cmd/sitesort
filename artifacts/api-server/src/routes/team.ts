@@ -1,12 +1,45 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { projectMembersTable, usersTable, subcontractorsTable, insuranceRecordsTable, projectsTable, peopleTable } from "@workspace/db/schema";
+import { projectMembersTable, usersTable, subcontractorsTable, insuranceRecordsTable, projectsTable, peopleTable, projectInvitesTable } from "@workspace/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { expiryStatus } from "../lib/expiry";
+import { revokePortalSessionsForMember } from "../lib/portal-sessions";
 
 const router: IRouter = Router();
+
+const MANAGER_ROLES = ["admin", "project_manager"];
+
+function requireManager(req: import("express").Request, res: import("express").Response): boolean {
+  if (!MANAGER_ROLES.includes(req.user!.role)) {
+    res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can remove team members." });
+    return false;
+  }
+  return true;
+}
+
+async function loadOwnedProject(projectId: string, companyId: string) {
+  const rows = await db.select().from(projectsTable)
+    .where(and(eq(projectsTable.id, projectId), eq(projectsTable.companyId, companyId))).limit(1);
+  return rows[0] ?? null;
+}
+
+// Revokes portal access + cancels any pending invite for a person being
+// removed from a project. Safe to call for a legacy row with no personId
+// (no-op). Reused by both single-member and whole-company removal below.
+async function revokePersonFromProject(personId: string, projectId: string) {
+  const person = await db.select({ userId: peopleTable.userId }).from(peopleTable)
+    .where(eq(peopleTable.id, personId)).limit(1);
+  if (person[0]?.userId) await revokePortalSessionsForMember(person[0].userId, projectId);
+  await db.update(projectInvitesTable)
+    .set({ status: "revoked", revokedAt: new Date() })
+    .where(and(
+      eq(projectInvitesTable.personId, personId),
+      eq(projectInvitesTable.projectId, projectId),
+      eq(projectInvitesTable.status, "pending"),
+    ));
+}
 
 // Reuse the canonical expiry helper (F1) — insurance says "valid" where the
 // shared helper says "active"; the expiring_soon/expired bands are identical.
@@ -97,6 +130,7 @@ router.get("/projects/:projectId/members", authenticate, async (req, res) => {
         projectId: m.projectId,
         userId: m.userId ?? null,
         subcontractorId: m.subcontractorId ?? null,
+        personId: m.personId ?? null,
         name,
         contactName,
         email,
@@ -274,13 +308,86 @@ router.patch("/projects/:projectId/members/:memberId/schedule", authenticate, as
   }
 });
 
+// DELETE /api/projects/:projectId/members/:memberId — remove one person/user
+// from a project's team. Manager-gated, tenant-scoped. Revokes any live
+// portal session + cancels a pending invite before deleting the membership
+// row, so access dies immediately (requirePortalMember also re-checks the
+// row on the member's very next request as a backstop). Past activity_log /
+// document_distributions / acknowledgment_audit_log rows are untouched —
+// they key off users.id, which is never deleted here.
 router.delete("/projects/:projectId/members/:memberId", authenticate, async (req, res) => {
   try {
-    await db.delete(projectMembersTable).where(and(eq(projectMembersTable.id, req.params.memberId), eq(projectMembersTable.projectId, req.params.projectId)));
-    res.json({ success: true, message: "Member removed" });
+    if (!requireManager(req, res)) return;
+    const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
+    if (!project) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+
+    const rows = await db.select().from(projectMembersTable)
+      .where(and(eq(projectMembersTable.id, req.params.memberId), eq(projectMembersTable.projectId, req.params.projectId))).limit(1);
+    const member = rows[0];
+    if (!member) { res.status(404).json({ error: "not_found", message: "Member not found" }); return; }
+
+    let removedName = "Team member";
+    if (member.personId) {
+      const person = await db.select({ name: peopleTable.name }).from(peopleTable).where(eq(peopleTable.id, member.personId)).limit(1);
+      if (person[0]) removedName = person[0].name;
+      await revokePersonFromProject(member.personId, req.params.projectId);
+    } else if (member.userId) {
+      const user = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, member.userId)).limit(1);
+      if (user[0]) removedName = user[0].name;
+    }
+
+    await db.delete(projectMembersTable).where(eq(projectMembersTable.id, member.id));
+    res.json({ success: true, removedName });
   } catch (err) {
     req.log.error({ err }, "Remove member error");
     res.status(500).json({ error: "server_error", message: "Failed to remove member" });
+  }
+});
+
+// DELETE /api/projects/:projectId/members/company/:subcontractorId — remove a
+// subcontractor firm AND every one of its people from this project in one
+// action. Manager-gated, tenant-scoped. Mirrors the single-member removal
+// above per row (revoke session, cancel pending invite, delete).
+router.delete("/projects/:projectId/members/company/:subcontractorId", authenticate, async (req, res) => {
+  try {
+    if (!requireManager(req, res)) return;
+    const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
+    if (!project) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+
+    const sub = await db.select({ id: subcontractorsTable.id, companyName: subcontractorsTable.companyName }).from(subcontractorsTable)
+      .where(and(eq(subcontractorsTable.id, req.params.subcontractorId), eq(subcontractorsTable.companyId, req.user!.companyId))).limit(1);
+    if (!sub[0]) { res.status(404).json({ error: "not_found", message: "Subcontractor not found" }); return; }
+
+    const removedNames: string[] = [];
+
+    // The company's own row (subcontractorId set, personId null).
+    const companyRow = await db.select({ id: projectMembersTable.id }).from(projectMembersTable)
+      .where(and(
+        eq(projectMembersTable.projectId, req.params.projectId),
+        eq(projectMembersTable.subcontractorId, sub[0].id),
+        isNull(projectMembersTable.personId),
+      )).limit(1);
+    if (companyRow[0]) {
+      await db.delete(projectMembersTable).where(eq(projectMembersTable.id, companyRow[0].id));
+      removedNames.push(sub[0].companyName);
+    }
+
+    // Every person under this firm who's on this project.
+    const people = await db.select({ id: peopleTable.id, name: peopleTable.name }).from(peopleTable)
+      .where(eq(peopleTable.subcontractorId, sub[0].id));
+    for (const person of people) {
+      const memberRow = await db.select({ id: projectMembersTable.id }).from(projectMembersTable)
+        .where(and(eq(projectMembersTable.projectId, req.params.projectId), eq(projectMembersTable.personId, person.id))).limit(1);
+      if (!memberRow[0]) continue;
+      await revokePersonFromProject(person.id, req.params.projectId);
+      await db.delete(projectMembersTable).where(eq(projectMembersTable.id, memberRow[0].id));
+      removedNames.push(person.name);
+    }
+
+    res.json({ success: true, removedNames });
+  } catch (err) {
+    req.log.error({ err }, "Remove company error");
+    res.status(500).json({ error: "server_error", message: "Failed to remove subcontractor from project" });
   }
 });
 

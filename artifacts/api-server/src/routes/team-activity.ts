@@ -6,6 +6,7 @@ import {
 import { and, eq, desc, gte, lte, count, max } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
 import { revokePortalSessionsForMember } from "../lib/portal-sessions";
+import { removedFromProjectUserIds } from "../lib/project-membership";
 import { SECTION_LABELS } from "../lib/activity";
 import { GetProjectActivityQueryParams } from "@workspace/api-zod";
 
@@ -138,12 +139,14 @@ router.get("/projects/:projectId/activity", authenticate, async (req, res) => {
       db.select({ total: count() }).from(activityLogTable).where(where),
     ]);
 
+    const removedIds = await removedFromProjectUserIds(req.params.projectId, rows.map(r => r.userId));
     res.json({
       total: Number(totalRows[0]?.total ?? 0),
       entries: rows.map(r => ({
         id: r.id, userId: r.userId, memberName: r.memberName ?? "Unknown",
         section: r.section, sectionLabel: SECTION_LABELS[r.section] ?? r.section,
         action: r.action, itemType: r.itemType ?? undefined, itemId: r.itemId ?? undefined,
+        removedFromProject: removedIds.has(r.userId),
         createdAt: r.createdAt.toISOString(),
       })),
     });

@@ -17,4 +17,5 @@ export interface Distribution {
   distributedAt: Date;
   viewedAt?: Date | null;
   acknowledgedAt?: Date | null;
+  removedFromProject?: boolean;
 }

@@ -60,9 +60,21 @@ function InviteEmailStatus({ projectId, portal, onDone }: { projectId: string; p
     </span>
   );
 }
-type PersonLike = { id: string; name: string; email: string; phone?: string; roleTitle?: string; showContactInPortal?: boolean; portal?: PortalStatus };
+type PersonLike = { id: string; name: string; lastName?: string | null; email: string; phone?: string; roleTitle?: string; showContactInPortal?: boolean; portal?: PortalStatus };
 type PortalRole = "worker" | "manager" | "subcontractor";
-type PersonInput = { name: string; email: string; phone?: string; roleTitle?: string };
+type PersonInput = { firstName: string; lastName: string; email: string; phone?: string; roleTitle?: string };
+
+// Best-effort split for the one-click "quick invite" path, which has no name
+// form of its own — it reuses whatever display name is already on file (a
+// dashboard user's name or a subcontractor's contact name). A single-word
+// name is duplicated into both fields rather than left blank, so the
+// required first+surname (min 2 chars each) validation never blocks this flow.
+function splitName(full: string): { firstName: string; lastName: string } {
+  const trimmed = full.trim();
+  const idx = trimmed.indexOf(" ");
+  if (idx === -1) return { firstName: trimmed, lastName: trimmed };
+  return { firstName: trimmed.slice(0, idx), lastName: trimmed.slice(idx + 1).trim() || trimmed.slice(0, idx) };
+}
 type PillSource = { kind: "in_house" } | { kind: "subcontractor"; subcontractorId: string };
 
 function fmtRelative(iso?: string | null): string {
@@ -97,7 +109,7 @@ export function PortalInvitePill({
   const subId = isSub ? source.subcontractorId : "";
 
   const subQ = useListSubcontractorPeople(subId, { projectId }, { query: { enabled: isSub && canManage, retry: false, queryKey: getListSubcontractorPeopleQueryKey(subId, { projectId }) } });
-  const inHouseQ = useListInHousePeople(projectId, { query: { enabled: !isSub && canManage, retry: false, queryKey: getListInHousePeopleQueryKey(projectId) } });
+  const inHouseQ = useListInHousePeople(projectId, {}, { query: { enabled: !isSub && canManage, retry: false, queryKey: getListInHousePeopleQueryKey(projectId, {}) } });
   const people = ((isSub ? subQ.data : inHouseQ.data) ?? []) as PersonLike[];
   const loading = isSub ? subQ.isLoading : inHouseQ.isLoading;
   const refresh = () => { void (isSub ? subQ.refetch() : inHouseQ.refetch()); };
@@ -119,7 +131,7 @@ export function PortalInvitePill({
     try {
       let personId = person?.id;
       if (!personId) {
-        const data: PersonInput = { name: personName || useEmail, email: useEmail };
+        const data: PersonInput = { ...splitName(personName || useEmail), email: useEmail };
         const created = isSub
           ? await createSub.mutateAsync({ subcontractorId: subId, data })
           : await createInHouse.mutateAsync({ projectId, data });
@@ -232,7 +244,10 @@ function PersonRow({
   return (
     <div className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-lg hover:bg-muted/40">
       <div className="min-w-0">
-        <p className="text-sm font-medium truncate">{person.name}{person.roleTitle && <span className="text-xs text-muted-foreground font-normal"> · {person.roleTitle}</span>}</p>
+        <p className="text-sm font-medium truncate">
+          {person.name}{person.roleTitle && <span className="text-xs text-muted-foreground font-normal"> · {person.roleTitle}</span>}
+          {!person.lastName?.trim() && <span className="ml-1.5 text-[10px] font-semibold text-amber-700 bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 rounded px-1.5 py-0.5 align-middle">Surname missing</span>}
+        </p>
         <p className="text-xs text-muted-foreground truncate flex items-center gap-1"><Mail className="w-3 h-3 shrink-0" />{person.email}</p>
         {portal.status === "invited" && (
           <div className="mt-0.5"><InviteEmailStatus projectId={projectId} portal={portal} onDone={onChanged} /></div>
@@ -291,7 +306,7 @@ export function SubcontractorPeople({
 
   const [open, setOpen] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", phone: "", roleTitle: "" });
+  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", phone: "", roleTitle: "" });
 
   const primary = (primaryContactEmail ?? "").toLowerCase();
   const people = ((peopleQ.data ?? []) as PersonLike[]).filter(p => p.email.toLowerCase() !== primary);
@@ -315,7 +330,13 @@ export function SubcontractorPeople({
     try { await revoke.mutateAsync({ projectId, inviteId }); refresh(); } catch { toast({ variant: "destructive", title: "Could not revoke access" }); }
   };
   const removePerson = async (personId: string) => {
-    try { await deletePerson.mutateAsync({ personId }); refresh(); } catch { toast({ variant: "destructive", title: "Could not remove person" }); }
+    try {
+      const res = await deletePerson.mutateAsync({ personId });
+      toast(res.archived ? { title: "Archived", description: "They have history so were archived, not deleted — restorable from Contacts." } : { title: "Removed" });
+      refresh();
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Could not remove person", description: e?.data?.message ?? "Please try again." });
+    }
   };
 
   return (
@@ -340,13 +361,14 @@ export function SubcontractorPeople({
 
           {adding ? (
             <div className="mt-2 grid grid-cols-2 gap-1.5">
-              <Input className="h-8 text-sm" placeholder="Full name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-              <Input className="h-8 text-sm" type="email" placeholder="Email" autoCapitalize="none" autoCorrect="off" spellCheck={false} value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+              <Input className="h-8 text-sm" placeholder="First name" value={form.firstName} onChange={e => setForm(f => ({ ...f, firstName: e.target.value }))} />
+              <Input className="h-8 text-sm" placeholder="Surname" value={form.lastName} onChange={e => setForm(f => ({ ...f, lastName: e.target.value }))} />
+              <Input className="h-8 text-sm col-span-2" type="email" placeholder="Email" autoCapitalize="none" autoCorrect="off" spellCheck={false} value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
               <Input className="h-8 text-sm" placeholder="Phone (optional)" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
               <Input className="h-8 text-sm" placeholder="Job title (optional)" value={form.roleTitle} onChange={e => setForm(f => ({ ...f, roleTitle: e.target.value }))} />
               <div className="col-span-2 flex items-center gap-2">
-                <Button size="sm" className="h-8" isLoading={createPerson.isPending} disabled={!form.name.trim() || !form.email.trim()}
-                  onClick={async () => { await addPerson({ name: form.name.trim(), email: form.email.trim(), phone: form.phone.trim() || undefined, roleTitle: form.roleTitle.trim() || undefined }); setForm({ name: "", email: "", phone: "", roleTitle: "" }); setAdding(false); }}>Add</Button>
+                <Button size="sm" className="h-8" isLoading={createPerson.isPending} disabled={form.firstName.trim().length < 2 || form.lastName.trim().length < 2 || !form.email.trim()}
+                  onClick={async () => { await addPerson({ firstName: form.firstName.trim(), lastName: form.lastName.trim(), email: form.email.trim(), phone: form.phone.trim() || undefined, roleTitle: form.roleTitle.trim() || undefined }); setForm({ firstName: "", lastName: "", email: "", phone: "", roleTitle: "" }); setAdding(false); }}>Add</Button>
                 <Button size="sm" variant="ghost" className="h-8" onClick={() => setAdding(false)}>Cancel</Button>
               </div>
             </div>

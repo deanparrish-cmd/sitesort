@@ -66,13 +66,15 @@ router.get("/projects/:projectId/portal-audience", authenticate, async (req, res
       .where(eq(projectsTable.id, req.params.projectId)).limit(1);
     const members = await acceptedMembers(req.params.projectId);
 
-    // Member names for the individual multi-select.
+    // Member names for the individual multi-select (sorted by surname).
     const named = await db.select({
-      personId: projectMembersTable.personId, name: peopleTable.name,
+      personId: projectMembersTable.personId, name: peopleTable.name, lastName: peopleTable.lastName,
     }).from(projectMembersTable)
       .innerJoin(peopleTable, eq(projectMembersTable.personId, peopleTable.id))
       .where(and(eq(projectMembersTable.projectId, req.params.projectId), isNotNull(projectMembersTable.userId)));
     const nameByPerson = new Map(named.map(n => [n.personId as string, n.name]));
+    const surnameOf = (n: { name: string; lastName: string | null }) => (n.lastName?.trim() || n.name.trim().split(" ").slice(-1)[0] || n.name).toLowerCase();
+    const surnameByPerson = new Map(named.map(n => [n.personId as string, surnameOf(n)]));
 
     const counts = new Map<string, number>();
     for (const m of members) {
@@ -84,7 +86,9 @@ router.get("/projects/:projectId/portal-audience", authenticate, async (req, res
 
     res.json({
       trades: [...tradeSet].sort().map(trade => ({ trade, memberCount: counts.get(trade) ?? 0 })),
-      members: members.map(m => ({ personId: m.personId, userId: m.userId, name: nameByPerson.get(m.personId) ?? "Unknown" })),
+      members: members
+        .map(m => ({ personId: m.personId, userId: m.userId, name: nameByPerson.get(m.personId) ?? "Unknown" }))
+        .sort((a, b) => (surnameByPerson.get(a.personId) ?? "").localeCompare(surnameByPerson.get(b.personId) ?? "")),
     });
   } catch (err) {
     req.log.error({ err }, "Portal audience error");

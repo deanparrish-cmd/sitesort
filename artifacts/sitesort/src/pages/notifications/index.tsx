@@ -15,6 +15,7 @@ import {
   ClipboardCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AlertViewer } from "@/components/alert-viewer";
 
 type Notification = {
   id: string;
@@ -119,6 +120,7 @@ export default function NotificationsPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>("all");
   const [markingAll, setMarkingAll] = useState(false);
+  const [viewer, setViewer] = useState<{ items: Notification[]; index: number } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -269,7 +271,7 @@ export default function NotificationsPage() {
           {visible.map(n => (
             <Card
               key={n.id}
-              onClick={() => handleClick(n)}
+              onClick={() => setViewer({ items: visible, index: visible.indexOf(n) })}
               className={cn(
                 "flex items-start gap-4 px-4 py-4 cursor-pointer transition-colors hover:bg-muted/50",
                 !n.read && "bg-primary/5 border-primary/20"
@@ -295,6 +297,16 @@ export default function NotificationsPage() {
             </Card>
           ))}
         </div>
+      )}
+
+      {viewer && (
+        <AlertViewer
+          items={viewer.items}
+          startIndex={viewer.index}
+          onOpenItem={handleClick}
+          onMarkRead={markRead}
+          onClose={() => setViewer(null)}
+        />
       )}
     </SidebarLayout>
   );

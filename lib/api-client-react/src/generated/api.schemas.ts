@@ -14,6 +14,22 @@ export interface SuccessResponse {
   message?: string;
 }
 
+export interface RemoveMemberResponse {
+  success: boolean;
+  removedName?: string;
+}
+
+export interface RemoveCompanyMembersResponse {
+  success: boolean;
+  removedNames?: string[];
+}
+
+export interface RemoveContactResponse {
+  success: boolean;
+  /** true if the contact was archived (has history), false if hard-deleted (zero footprint) */
+  archived?: boolean;
+}
+
 export interface ErrorResponse {
   error: string;
   message: string;
@@ -239,6 +255,7 @@ export interface Distribution {
   distributedAt: string;
   viewedAt?: string | null;
   acknowledgedAt?: string | null;
+  removedFromProject?: boolean;
 }
 
 export type DocumentDetail = Document & {
@@ -289,6 +306,7 @@ export interface AuditLogEntry {
   signedOffWithPin: boolean;
   ipAddress?: string | null;
   userAgent?: string | null;
+  removedFromProject?: boolean;
   createdAt: string;
 }
 
@@ -315,6 +333,7 @@ export interface ProjectMember {
   projectId: string;
   userId?: string | null;
   subcontractorId?: string | null;
+  personId?: string | null;
   name: string;
   role: ProjectMemberRole;
   complianceStatus: ProjectMemberComplianceStatus;
@@ -350,13 +369,17 @@ export interface Subcontractor {
   id: string;
   companyId: string;
   companyName: string;
+  /** Computed "First Last" — kept for backward compatibility. Use contactFirstName/contactLastName for editing. */
   contactName: string;
+  contactFirstName?: string | null;
+  contactLastName?: string | null;
   contactEmail: string;
   contactPhone?: string | null;
   trades: string[];
   reliabilityRating?: number | null;
   paymentHold: boolean;
   insuranceStatus: SubcontractorInsuranceStatus;
+  archivedAt?: string | null;
   createdAt: string;
 }
 
@@ -402,20 +425,52 @@ export type SubcontractorDetail = Subcontractor & {
   assignedProjects: SubcontractorDetailAssignedProjectsItem[];
 };
 
+export type CreateSubcontractorRequestContactType =
+  (typeof CreateSubcontractorRequestContactType)[keyof typeof CreateSubcontractorRequestContactType];
+
+export const CreateSubcontractorRequestContactType = {
+  subcontractor: "subcontractor",
+  merchant: "merchant",
+  supplier: "supplier",
+  professional: "professional",
+  other: "other",
+} as const;
+
 export interface CreateSubcontractorRequest {
   companyName: string;
-  contactName: string;
+  /** @minLength 2 */
+  contactFirstName: string;
+  /** @minLength 2 */
+  contactLastName: string;
   contactEmail: string;
   contactPhone?: string;
+  contactType?: CreateSubcontractorRequestContactType;
   trades: string[];
+  notes?: string;
 }
+
+export type UpdateSubcontractorRequestContactType =
+  (typeof UpdateSubcontractorRequestContactType)[keyof typeof UpdateSubcontractorRequestContactType];
+
+export const UpdateSubcontractorRequestContactType = {
+  subcontractor: "subcontractor",
+  merchant: "merchant",
+  supplier: "supplier",
+  professional: "professional",
+  other: "other",
+} as const;
 
 export interface UpdateSubcontractorRequest {
   companyName?: string;
-  contactName?: string;
+  /** @minLength 2 */
+  contactFirstName?: string;
+  /** @minLength 2 */
+  contactLastName?: string;
   contactEmail?: string;
   contactPhone?: string;
+  contactType?: UpdateSubcontractorRequestContactType;
   trades?: string[];
+  notes?: string;
   reliabilityRating?: number;
   paymentHold?: boolean;
 }
@@ -1099,18 +1154,25 @@ export interface Person {
   id: string;
   subcontractorId?: string;
   userId?: string;
+  /** Computed "First Last" — kept for backward compatibility. Use firstName/lastName for editing. */
   name: string;
+  firstName?: string | null;
+  lastName?: string | null;
   email: string;
   phone?: string;
   roleTitle?: string;
   /** Whether email/phone show on this person's portal Team row (absent = role-based default). */
   showContactInPortal?: boolean;
+  archivedAt?: string;
   kind: PersonKind;
   portal?: PortalStatus;
 }
 
 export interface CreatePersonRequest {
-  name: string;
+  /** @minLength 2 */
+  firstName: string;
+  /** @minLength 2 */
+  lastName: string;
   email: string;
   phone?: string;
   roleTitle?: string;
@@ -1120,6 +1182,10 @@ export interface CreatePersonRequest {
  * Partial update; omit a field to leave it unchanged. showContactInPortal null = reset to role default.
  */
 export interface UpdatePersonRequest {
+  /** @minLength 2 */
+  firstName?: string;
+  /** @minLength 2 */
+  lastName?: string;
   showContactInPortal?: boolean | null;
   roleTitle?: string | null;
 }
@@ -1191,6 +1257,7 @@ export interface ActivityEntry {
   action: string;
   itemType?: string;
   itemId?: string;
+  removedFromProject?: boolean;
   createdAt: string;
 }
 
@@ -1219,6 +1286,13 @@ export type ListDocumentsParams = {
   status?: string;
 };
 
+export type ListSubcontractorsParams = {
+  /**
+   * true → only archived contacts; omitted/false → active only
+   */
+  archived?: string;
+};
+
 export type ListSubcontractorDocumentsParams = {
   projectId?: string;
 };
@@ -1232,6 +1306,17 @@ export type ListSubcontractorPeopleParams = {
    * When set, each person carries per-project portal status.
    */
   projectId?: string;
+  /**
+   * true → only archived people; omitted/false → active only
+   */
+  archived?: string;
+};
+
+export type ListInHousePeopleParams = {
+  /**
+   * true → only archived people; omitted/false → active only
+   */
+  archived?: string;
 };
 
 export type GetProjectActivityParams = {

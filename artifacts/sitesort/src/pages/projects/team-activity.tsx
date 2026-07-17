@@ -173,7 +173,8 @@ export function ProjectTeamActivity({ projectId }: { projectId: string }) {
                   <div key={en.id} className="flex items-center gap-3 px-3 py-2.5 bg-card text-sm">
                     {en.action === "blocked" ? <ShieldAlert className="w-4 h-4 text-rose-500 shrink-0" /> : <Eye className="w-4 h-4 text-muted-foreground shrink-0" />}
                     <div className="min-w-0 flex-1">
-                      <span className="font-medium">{en.memberName}</span>{" "}
+                      <span className="font-medium">{en.memberName}</span>
+                      {en.removedFromProject && <span className="text-muted-foreground"> (removed from project)</span>}{" "}
                       <span className="text-muted-foreground">
                         {en.action === "blocked" ? "was blocked from" : "viewed"} {en.sectionLabel}
                         {en.itemId ? " (opened an item)" : ""}

@@ -15,12 +15,16 @@ export interface Person {
   id: string;
   subcontractorId?: string;
   userId?: string;
+  /** Computed "First Last" — kept for backward compatibility. Use firstName/lastName for editing. */
   name: string;
+  firstName?: string | null;
+  lastName?: string | null;
   email: string;
   phone?: string;
   roleTitle?: string;
   /** Whether email/phone show on this person's portal Team row (absent = role-based default). */
   showContactInPortal?: boolean;
+  archivedAt?: Date;
   kind: PersonKind;
   portal?: PortalStatus;
 }

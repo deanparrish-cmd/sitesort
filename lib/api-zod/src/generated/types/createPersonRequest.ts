@@ -7,7 +7,10 @@
  */
 
 export interface CreatePersonRequest {
-  name: string;
+  /** @minLength 2 */
+  firstName: string;
+  /** @minLength 2 */
+  lastName: string;
   email: string;
   phone?: string;
   roleTitle?: string;

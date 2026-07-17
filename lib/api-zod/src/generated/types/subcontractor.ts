@@ -11,12 +11,16 @@ export interface Subcontractor {
   id: string;
   companyId: string;
   companyName: string;
+  /** Computed "First Last" — kept for backward compatibility. Use contactFirstName/contactLastName for editing. */
   contactName: string;
+  contactFirstName?: string | null;
+  contactLastName?: string | null;
   contactEmail: string;
   contactPhone?: string | null;
   trades: string[];
   reliabilityRating?: number | null;
   paymentHold: boolean;
   insuranceStatus: SubcontractorInsuranceStatus;
+  archivedAt?: Date | null;
   createdAt: Date;
 }

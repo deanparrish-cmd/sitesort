@@ -13,6 +13,7 @@ export interface ProjectMember {
   projectId: string;
   userId?: string | null;
   subcontractorId?: string | null;
+  personId?: string | null;
   name: string;
   role: ProjectMemberRole;
   complianceStatus: ProjectMemberComplianceStatus;

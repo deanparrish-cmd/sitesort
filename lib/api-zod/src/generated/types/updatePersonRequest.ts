@@ -10,6 +10,10 @@
  * Partial update; omit a field to leave it unchanged. showContactInPortal null = reset to role default.
  */
 export interface UpdatePersonRequest {
+  /** @minLength 2 */
+  firstName?: string;
+  /** @minLength 2 */
+  lastName?: string;
   showContactInPortal?: boolean | null;
   roleTitle?: string | null;
 }

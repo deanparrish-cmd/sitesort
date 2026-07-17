@@ -5,13 +5,19 @@
  * SiteSort API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { UpdateSubcontractorRequestContactType } from "./updateSubcontractorRequestContactType";
 
 export interface UpdateSubcontractorRequest {
   companyName?: string;
-  contactName?: string;
+  /** @minLength 2 */
+  contactFirstName?: string;
+  /** @minLength 2 */
+  contactLastName?: string;
   contactEmail?: string;
   contactPhone?: string;
+  contactType?: UpdateSubcontractorRequestContactType;
   trades?: string[];
+  notes?: string;
   reliabilityRating?: number;
   paymentHold?: boolean;
 }

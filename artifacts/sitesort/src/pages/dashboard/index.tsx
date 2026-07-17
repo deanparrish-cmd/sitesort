@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { ShareModal } from "@/components/share-modal";
+import { AlertViewer } from "@/components/alert-viewer";
 import { useToast } from "@/hooks/use-toast";
 import { useListProjects, useGetComplianceOverview } from "@workspace/api-client-react";
 import type { ExpiringInsuranceItem, ExpiringPermitItem } from "@workspace/api-client-react";
@@ -639,11 +640,15 @@ export default function Dashboard() {
   );
 
   const recentActivity = notifications.slice(0, 8);
+  const [activityViewer, setActivityViewer] = useState<{ items: Notification[]; index: number } | null>(null);
+
+  const markActivityRead = (id: string) => {
+    setNotifications(prev => prev.map(x => x.id === id ? { ...x, read: true } : x));
+    fetch(`/api/notifications/${id}/read`, { method: "PATCH", headers: authHeaders() }).catch(() => {});
+  };
 
   const handleActivityClick = async (n: Notification) => {
-    // Optimistically mark as read
-    setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x));
-    fetch(`/api/notifications/${n.id}/read`, { method: "PATCH", headers: authHeaders() }).catch(() => {});
+    markActivityRead(n.id);
 
     const h = authHeaders();
 
@@ -1001,7 +1006,7 @@ export default function Dashboard() {
                   {recentActivity.map(n => (
                     <button
                       key={n.id}
-                      onClick={() => handleActivityClick(n)}
+                      onClick={() => setActivityViewer({ items: recentActivity, index: recentActivity.indexOf(n) })}
                       className="w-full text-left"
                     >
                       <div className={cn(
@@ -1149,6 +1154,16 @@ export default function Dashboard() {
         fileUrl={shareInvoice?.attachmentUrl ?? undefined}
         projectId={shareInvoice?.projectId}
       />
+
+      {activityViewer && (
+        <AlertViewer
+          items={activityViewer.items}
+          startIndex={activityViewer.index}
+          onOpenItem={handleActivityClick}
+          onMarkRead={markActivityRead}
+          onClose={() => setActivityViewer(null)}
+        />
+      )}
     </SidebarLayout>
   );
 }

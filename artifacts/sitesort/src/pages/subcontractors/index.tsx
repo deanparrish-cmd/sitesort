@@ -13,6 +13,7 @@ import {
   Users, Pencil, X, FolderOpen, MessageSquare,
   FolderPlus, CheckCircle2, Loader2, Building2,
   Share2, StickyNote, Clock, Send, FileText, ExternalLink, UserCheck, Trash2,
+  Archive, ArchiveRestore,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { cn } from "@/lib/utils";
@@ -62,6 +63,8 @@ type Sub = {
   id: string;
   companyName: string;
   contactName: string;
+  contactFirstName: string | null;
+  contactLastName: string | null;
   contactEmail: string;
   contactPhone: string | null;
   contactType: ContactType;
@@ -71,6 +74,7 @@ type Sub = {
   notes: string | null;
   insuranceStatus: InsuranceStatus;
   insuranceRecords: InsuranceRecord[];
+  archivedAt: string | null;
   createdAt: string;
 };
 
@@ -218,7 +222,8 @@ function apiFetch(path: string, options?: RequestInit) {
 
 type AddFormData = {
   companyName: string;
-  contactName: string;
+  contactFirstName: string;
+  contactLastName: string;
   contactEmail: string;
   contactPhone: string;
   contactType: ContactType;
@@ -244,6 +249,8 @@ export default function SubcontractorsPage() {
   const [selectedTradesAdd, setSelectedTradesAdd] = useState<string[]>([]);
   const [selectedTradesEdit, setSelectedTradesEdit] = useState<string[]>([]);
   const [typeFilter, setTypeFilter] = useState<ContactType | "all">("all");
+  const [showArchived, setShowArchived] = useState(false);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
 
   // Share-to-project state
   type ProjectLinkStatus = "idle" | "loading" | "added" | "already" | "error";
@@ -357,10 +364,10 @@ export default function SubcontractorsPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await apiFetch("/api/subcontractors");
+    const res = await apiFetch(`/api/subcontractors${showArchived ? "?archived=true" : ""}`);
     if (res.ok) setSubs(await res.json());
     setLoading(false);
-  }, []);
+  }, [showArchived]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -370,15 +377,36 @@ export default function SubcontractorsPage() {
     try {
       const res = await apiFetch(`/api/subcontractors/${deleteTarget.id}`, { method: "DELETE" });
       if (res.ok) {
-        toast({ title: "Subcontractor deleted", description: `${deleteTarget.companyName} was removed.` });
+        const body = await res.json().catch(() => ({}));
+        toast({
+          title: body.archived ? "Contact archived" : "Contact deleted",
+          description: body.archived
+            ? `${deleteTarget.companyName} was archived — restore it any time from the Archived filter.`
+            : `${deleteTarget.companyName} was removed.`,
+        });
         setDeleteTarget(null);
         await load();
       } else {
         const err = await res.json().catch(() => ({}));
-        toast({ title: "Couldn't delete", description: err.message ?? "Please try again.", variant: "destructive" });
+        toast({ title: "Couldn't remove", description: err.message ?? "Please try again.", variant: "destructive" });
       }
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const restoreSub = async (sub: Sub) => {
+    setRestoringId(sub.id);
+    try {
+      const res = await apiFetch(`/api/subcontractors/${sub.id}/restore`, { method: "PATCH" });
+      if (res.ok) {
+        toast({ title: "Restored", description: `${sub.companyName} is active again.` });
+        await load();
+      } else {
+        toast({ title: "Couldn't restore", description: "Please try again.", variant: "destructive" });
+      }
+    } finally {
+      setRestoringId(null);
     }
   };
 
@@ -560,7 +588,8 @@ export default function SubcontractorsPage() {
     setEditError(null);
     editReset({
       companyName: sub.companyName,
-      contactName: sub.contactName,
+      contactFirstName: sub.contactFirstName ?? "",
+      contactLastName: sub.contactLastName ?? "",
       contactEmail: sub.contactEmail,
       contactPhone: sub.contactPhone ?? "",
       contactType: sub.contactType ?? "subcontractor",
@@ -661,6 +690,17 @@ export default function SubcontractorsPage() {
               )}
             >{label}</button>
           ))}
+          <button
+            onClick={() => setShowArchived(v => !v)}
+            className={cn(
+              "px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors flex items-center gap-1.5",
+              showArchived
+                ? "bg-muted-foreground text-background border-muted-foreground"
+                : "bg-background text-muted-foreground border-input hover:border-primary/50"
+            )}
+          >
+            <Archive className="w-3.5 h-3.5" />Archived
+          </button>
         </div>
       </div>
 
@@ -721,7 +761,7 @@ export default function SubcontractorsPage() {
                 {open && (
                   <div className="border-t divide-y">
                     {members.map(sub => (
-                      <div key={sub.id} className={cn("px-4 py-3 hover:bg-muted/10 transition-colors", sub.paymentHold && "bg-red-50/50 dark:bg-red-950/10")}>
+                      <div key={sub.id} className={cn("px-4 py-3 hover:bg-muted/10 transition-colors", sub.paymentHold && "bg-red-50/50 dark:bg-red-950/10", sub.archivedAt && "opacity-60")}>
                         {/* Top row: avatar + info + desktop-only actions */}
                         <div className="flex items-start gap-3">
                           {/* Avatar */}
@@ -746,6 +786,9 @@ export default function SubcontractorsPage() {
                               )}
                               {sub.paymentHold && (
                                 <Badge variant="destructive" className="text-[10px] gap-1 shrink-0"><AlertTriangle className="w-3 h-3" />Payment Hold</Badge>
+                              )}
+                              {!sub.contactLastName?.trim() && (
+                                <Badge variant="warning" className="text-[10px] shrink-0">Surname missing</Badge>
                               )}
                             </div>
                             <p className="text-xs text-muted-foreground truncate">{sub.contactName}</p>
@@ -806,39 +849,49 @@ export default function SubcontractorsPage() {
 
                           {/* Desktop-only: status + all action icons */}
                           <div className="hidden md:flex items-center gap-1 shrink-0">
-                            <div className="flex flex-col items-end gap-1.5 mr-1">
-                              {insuranceBadge(sub.insuranceStatus)}
-                              <RatingStars rating={sub.reliabilityRating} />
-                            </div>
-                            <ContactActions email={sub.contactEmail} phone={sub.contactPhone} />
-                            <button onClick={() => openNotes(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors" title="Notes & reminders log">
-                              <StickyNote className="w-3.5 h-3.5" />
-                            </button>
-                            <button onClick={() => openDocs(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Documents">
-                              <FileText className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => setSharingContact({
-                                id: sub.id,
-                                name: sub.companyName,
-                                text: `${sub.companyName}\nContact: ${sub.contactName}${sub.contactEmail ? `\nEmail: ${sub.contactEmail}` : ""}${sub.contactPhone ? `\nPhone: ${sub.contactPhone}` : ""}${sub.trades.length ? `\nTrades: ${sub.trades.join(", ")}` : ""}`,
-                              })}
-                              className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
-                              title="Share contact"
-                            >
-                              <Share2 className="w-3.5 h-3.5" />
-                            </button>
-                            {caps.canManageSubcontractors && (
+                            {sub.archivedAt ? (
+                              caps.canManageSubcontractors && (
+                                <Button size="sm" variant="outline" onClick={() => restoreSub(sub)} isLoading={restoringId === sub.id}>
+                                  <ArchiveRestore className="w-3.5 h-3.5 mr-1.5" />Restore
+                                </Button>
+                              )
+                            ) : (
                               <>
-                                <button onClick={() => setShareTarget(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Add to a project">
-                                  <FolderPlus className="w-3.5 h-3.5" />
+                                <div className="flex flex-col items-end gap-1.5 mr-1">
+                                  {insuranceBadge(sub.insuranceStatus)}
+                                  <RatingStars rating={sub.reliabilityRating} />
+                                </div>
+                                <ContactActions email={sub.contactEmail} phone={sub.contactPhone} />
+                                <button onClick={() => openNotes(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors" title="Notes & reminders log">
+                                  <StickyNote className="w-3.5 h-3.5" />
                                 </button>
-                                <button onClick={() => openEdit(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Edit">
-                                  <Pencil className="w-3.5 h-3.5" />
+                                <button onClick={() => openDocs(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Documents">
+                                  <FileText className="w-3.5 h-3.5" />
                                 </button>
-                                <button onClick={() => setDeleteTarget(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="Delete subcontractor">
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                <button
+                                  onClick={() => setSharingContact({
+                                    id: sub.id,
+                                    name: sub.companyName,
+                                    text: `${sub.companyName}\nContact: ${sub.contactName}${sub.contactEmail ? `\nEmail: ${sub.contactEmail}` : ""}${sub.contactPhone ? `\nPhone: ${sub.contactPhone}` : ""}${sub.trades.length ? `\nTrades: ${sub.trades.join(", ")}` : ""}`,
+                                  })}
+                                  className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
+                                  title="Share contact"
+                                >
+                                  <Share2 className="w-3.5 h-3.5" />
                                 </button>
+                                {caps.canManageSubcontractors && (
+                                  <>
+                                    <button onClick={() => setShareTarget(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Add to a project">
+                                      <FolderPlus className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button onClick={() => openEdit(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Edit">
+                                      <Pencil className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button onClick={() => setDeleteTarget(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="Remove contact">
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </>
+                                )}
                               </>
                             )}
                           </div>
@@ -846,43 +899,56 @@ export default function SubcontractorsPage() {
 
                         {/* Mobile-only bottom bar: insurance badge left, action icons right */}
                         <div className="flex md:hidden items-center justify-between mt-2 pt-2 border-t border-border/40">
-                          <div className="flex items-center gap-2">
-                            {insuranceBadge(sub.insuranceStatus)}
-                            <RatingStars rating={sub.reliabilityRating} />
-                          </div>
-                          <div className="flex items-center gap-0.5">
-                            <ContactActions email={sub.contactEmail} phone={sub.contactPhone} />
-                            <button onClick={() => openNotes(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors" title="Notes & reminders log">
-                              <StickyNote className="w-3.5 h-3.5" />
-                            </button>
-                            <button onClick={() => openDocs(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Documents">
-                              <FileText className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => setSharingContact({
-                                id: sub.id,
-                                name: sub.companyName,
-                                text: `${sub.companyName}\nContact: ${sub.contactName}${sub.contactEmail ? `\nEmail: ${sub.contactEmail}` : ""}${sub.contactPhone ? `\nPhone: ${sub.contactPhone}` : ""}${sub.trades.length ? `\nTrades: ${sub.trades.join(", ")}` : ""}`,
-                              })}
-                              className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
-                              title="Share contact"
-                            >
-                              <Share2 className="w-3.5 h-3.5" />
-                            </button>
-                            {caps.canManageSubcontractors && (
-                              <>
-                                <button onClick={() => setShareTarget(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Add to a project">
-                                  <FolderPlus className="w-3.5 h-3.5" />
+                          {sub.archivedAt ? (
+                            <div className="flex items-center justify-between w-full">
+                              <Badge variant="secondary" className="text-[10px] gap-1"><Archive className="w-3 h-3" />Archived</Badge>
+                              {caps.canManageSubcontractors && (
+                                <Button size="sm" variant="outline" onClick={() => restoreSub(sub)} isLoading={restoringId === sub.id}>
+                                  <ArchiveRestore className="w-3.5 h-3.5 mr-1.5" />Restore
+                                </Button>
+                              )}
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex items-center gap-2">
+                                {insuranceBadge(sub.insuranceStatus)}
+                                <RatingStars rating={sub.reliabilityRating} />
+                              </div>
+                              <div className="flex items-center gap-0.5">
+                                <ContactActions email={sub.contactEmail} phone={sub.contactPhone} />
+                                <button onClick={() => openNotes(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors" title="Notes & reminders log">
+                                  <StickyNote className="w-3.5 h-3.5" />
                                 </button>
-                                <button onClick={() => openEdit(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Edit">
-                                  <Pencil className="w-3.5 h-3.5" />
+                                <button onClick={() => openDocs(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Documents">
+                                  <FileText className="w-3.5 h-3.5" />
                                 </button>
-                                <button onClick={() => setDeleteTarget(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="Delete subcontractor">
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                <button
+                                  onClick={() => setSharingContact({
+                                    id: sub.id,
+                                    name: sub.companyName,
+                                    text: `${sub.companyName}\nContact: ${sub.contactName}${sub.contactEmail ? `\nEmail: ${sub.contactEmail}` : ""}${sub.contactPhone ? `\nPhone: ${sub.contactPhone}` : ""}${sub.trades.length ? `\nTrades: ${sub.trades.join(", ")}` : ""}`,
+                                  })}
+                                  className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
+                                  title="Share contact"
+                                >
+                                  <Share2 className="w-3.5 h-3.5" />
                                 </button>
-                              </>
-                            )}
-                          </div>
+                                {caps.canManageSubcontractors && (
+                                  <>
+                                    <button onClick={() => setShareTarget(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Add to a project">
+                                      <FolderPlus className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button onClick={() => openEdit(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Edit">
+                                      <Pencil className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button onClick={() => setDeleteTarget(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="Remove contact">
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -916,9 +982,14 @@ export default function SubcontractorsPage() {
               {errors.companyName && <p className="text-xs text-destructive mt-1">Required</p>}
             </div>
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Contact Name</label>
-              <Input placeholder="John Smith" {...register("contactName", { required: true })} />
-              {errors.contactName && <p className="text-xs text-destructive mt-1">Required</p>}
+              <label className="text-sm font-medium mb-1.5 block">First Name</label>
+              <Input placeholder="John" {...register("contactFirstName", { required: true, minLength: 2 })} />
+              {errors.contactFirstName && <p className="text-xs text-destructive mt-1">At least 2 characters</p>}
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Surname</label>
+              <Input placeholder="Smith" {...register("contactLastName", { required: true, minLength: 2 })} />
+              {errors.contactLastName && <p className="text-xs text-destructive mt-1">At least 2 characters</p>}
             </div>
             <div>
               <label className="text-sm font-medium mb-1.5 block">Phone</label>
@@ -1073,8 +1144,12 @@ export default function SubcontractorsPage() {
               <Input {...editReg("companyName", { required: true })} />
             </div>
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Contact Name</label>
-              <Input {...editReg("contactName", { required: true })} />
+              <label className="text-sm font-medium mb-1.5 block">First Name</label>
+              <Input {...editReg("contactFirstName", { required: true, minLength: 2 })} />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Surname</label>
+              <Input {...editReg("contactLastName", { required: true, minLength: 2 })} />
             </div>
             <div>
               <label className="text-sm font-medium mb-1.5 block">Phone</label>
@@ -1419,11 +1494,14 @@ export default function SubcontractorsPage() {
 
       <Dialog open={!!deleteTarget} onOpenChange={v => { if (!v && !deleting) setDeleteTarget(null); }}>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-destructive"><Trash2 className="w-4 h-4" /> Delete subcontractor</DialogTitle>
+          <DialogTitle className="flex items-center gap-2 text-destructive"><Trash2 className="w-4 h-4" /> Remove contact</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-1">
           <p className="text-sm">
-            Permanently delete <span className="font-semibold">{deleteTarget?.companyName}</span>? This also removes their people/portal access, insurance records, notes, and any links to projects. This can't be undone.
+            Remove <span className="font-semibold">{deleteTarget?.companyName}</span> from your Contacts directory?
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Blocked if they're currently on an active project. If they have any history (past projects, documents, sign-offs), they'll be archived instead of deleted — restorable any time from the Archived filter. Otherwise they're removed for good.
           </p>
         </div>
         <DialogFooter>

@@ -964,6 +964,30 @@ export default function ProjectDetail() {
     setSubDocSubmitting(false);
   }
 
+  // Remove from project (person, legacy user, or whole subcontractor company)
+  type RemoveTarget = { kind: "member" | "company"; id: string; name: string; isPortal: boolean };
+  const [removeTarget, setRemoveTarget] = useState<RemoveTarget | null>(null);
+  const [removing, setRemoving] = useState(false);
+
+  async function confirmRemove() {
+    if (!removeTarget) return;
+    setRemoving(true);
+    const token = localStorage.getItem("sitesort_token");
+    const url = removeTarget.kind === "company"
+      ? `/api/projects/${projectId}/members/company/${removeTarget.id}`
+      : `/api/projects/${projectId}/members/${removeTarget.id}`;
+    const res = await fetch(url, { method: "DELETE", headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (res.ok) {
+      toast({ title: "Removed from project", description: `${removeTarget.name} ${removeTarget.kind === "company" ? "and their people were" : "was"} removed from this project.` });
+      setRemoveTarget(null);
+      await queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/members`] });
+    } else {
+      const err = await res.json().catch(() => ({}));
+      toast({ title: "Couldn't remove", description: err.message ?? "Please try again.", variant: "destructive" });
+    }
+    setRemoving(false);
+  }
+
   const { register: schedRegister, handleSubmit: schedHandleSubmit, reset: schedReset, setValue: schedSetValue, watch: schedWatch } = useForm();
 
   const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -2109,6 +2133,24 @@ tr:last-child td{border-bottom:none}
                           >
                             <Share2 className="w-3.5 h-3.5" />Share
                           </button>
+                          {caps.canManageTeam && (() => {
+                            const isCompanyRow = !!member.subcontractorId && !member.personId;
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => setRemoveTarget({
+                                  kind: isCompanyRow ? "company" : "member",
+                                  id: isCompanyRow ? member.subcontractorId : member.id,
+                                  name: member.name,
+                                  isPortal: !!member.personId,
+                                })}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-xs font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                                title={isCompanyRow ? "Remove company from project" : "Remove from project"}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />Remove
+                              </button>
+                            );
+                          })()}
                         </div>
                         {complianceBadge}
                       </div>
@@ -3687,7 +3729,7 @@ tr:last-child td{border-bottom:none}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-semibold text-sm">{entry.userName}</p>
+                        <p className="font-semibold text-sm">{entry.userName}{entry.removedFromProject && <span className="font-normal text-muted-foreground"> (removed from project)</span>}</p>
                         <Badge variant="secondary" className="text-[10px] capitalize">{entry.userRole.replace(/_/g, " ")}</Badge>
                         <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-[10px] font-bold">v{entry.documentVersion}</span>
                         {entry.signedOffWithPin && (
@@ -4224,6 +4266,32 @@ tr:last-child td{border-bottom:none}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => { setSubDocsTarget(null); setSubDocsList([]); setSubDocScope("project"); }}>Close</Button>
+        </DialogFooter>
+      </Dialog>
+
+      {/* Remove from project — confirmation (Phase B) */}
+      <Dialog open={!!removeTarget} onOpenChange={v => { if (!v && !removing) setRemoveTarget(null); }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-destructive">
+            <Trash2 className="w-4 h-4" /> {removeTarget?.kind === "company" ? "Remove company from project" : "Remove from project"}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-1">
+          <p className="text-sm">
+            Remove <span className="font-semibold">{removeTarget?.name}</span>
+            {removeTarget?.kind === "company" ? " and everyone who works for them" : ""} from this project?
+          </p>
+          <ul className="text-sm text-muted-foreground list-disc pl-5 space-y-1">
+            {removeTarget?.isPortal && <li>Portal access is revoked immediately — any active session ends on their next request.</li>}
+            {removeTarget?.isPortal && <li>Any pending portal invite is cancelled.</li>}
+            <li>They'll disappear from team lists and share-target pickers for this project.</li>
+            <li>Their past activity, document views, sign-offs and distribution records for this project are kept — shown with a "(removed from project)" note.</li>
+          </ul>
+          <p className="text-xs text-muted-foreground">This can be undone by adding them back to the project later.</p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setRemoveTarget(null)} disabled={removing}>Cancel</Button>
+          <Button variant="destructive" onClick={confirmRemove} isLoading={removing}>Remove</Button>
         </DialogFooter>
       </Dialog>
 

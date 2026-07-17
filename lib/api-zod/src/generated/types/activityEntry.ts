@@ -15,5 +15,6 @@ export interface ActivityEntry {
   action: string;
   itemType?: string;
   itemId?: string;
+  removedFromProject?: boolean;
   createdAt: string;
 }

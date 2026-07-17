@@ -447,7 +447,7 @@ paths:
     delete:
       operationId: removeProjectMember
       tags: [team]
-      summary: Remove a member from a project
+      summary: Remove a member from a project (manager-gated). Revokes portal access and cancels any pending invite; past activity/distribution/sign-off history is retained.
       parameters:
         - name: projectId
           in: path
@@ -465,13 +465,44 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                $ref: "#/components/schemas/RemoveMemberResponse"
+
+  /projects/{projectId}/members/company/{subcontractorId}:
+    delete:
+      operationId: removeProjectMemberCompany
+      tags: [team]
+      summary: Remove a subcontractor firm and all its people from a project in one action (manager-gated)
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: subcontractorId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Company and its people removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RemoveCompanyMembersResponse"
 
   /subcontractors:
     get:
       operationId: listSubcontractors
       tags: [subcontractors]
       summary: List all subcontractors for the company
+      parameters:
+        - name: archived
+          in: query
+          required: false
+          description: "true → only archived contacts; omitted/false → active only"
+          schema:
+            type: string
       responses:
         "200":
           description: List of subcontractors
@@ -540,6 +571,48 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Subcontractor"
+    delete:
+      operationId: deleteSubcontractor
+      tags: [subcontractors]
+      summary: Remove a subcontractor from the directory (blocked if on an active project; archived if it has history, else hard-deleted)
+      parameters:
+        - name: subcontractorId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Removed (archived or hard-deleted)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RemoveContactResponse"
+        "400":
+          description: Blocked — on an active project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /subcontractors/{subcontractorId}/restore:
+    patch:
+      operationId: restoreSubcontractor
+      tags: [subcontractors]
+      summary: Un-archive a previously archived subcontractor
+      parameters:
+        - name: subcontractorId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
 
   /subcontractors/{subcontractorId}/insurance:
     post:
@@ -1399,6 +1472,12 @@ paths:
           description: When set, each person carries per-project portal status.
           schema:
             type: string
+        - name: archived
+          in: query
+          required: false
+          description: "true → only archived people; omitted/false → active only"
+          schema:
+            type: string
       responses:
         "200":
           description: People
@@ -1436,7 +1515,7 @@ paths:
     delete:
       operationId: deletePerson
       tags: [portal]
-      summary: Remove an individual person (PM)
+      summary: Remove an individual person (PM) — blocked if on an active project; archived if they have history, else hard-deleted
       parameters:
         - name: personId
           in: path
@@ -1445,11 +1524,17 @@ paths:
             type: string
       responses:
         "200":
-          description: Deleted
+          description: Removed (archived or hard-deleted)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                $ref: "#/components/schemas/RemoveContactResponse"
+        "400":
+          description: Blocked — on an active project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     patch:
       operationId: updatePerson
       tags: [portal]
@@ -1474,6 +1559,25 @@ paths:
               schema:
                 $ref: "#/components/schemas/Person"
 
+  /people/{personId}/restore:
+    patch:
+      operationId: restorePerson
+      tags: [portal]
+      summary: Un-archive a previously archived person
+      parameters:
+        - name: personId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
   /projects/{projectId}/in-house-people:
     get:
       operationId: listInHousePeople
@@ -1483,6 +1587,12 @@ paths:
         - name: projectId
           in: path
           required: true
+          schema:
+            type: string
+        - name: archived
+          in: query
+          required: false
+          description: "true → only archived people; omitted/false → active only"
           schema:
             type: string
       responses:
@@ -1678,6 +1788,36 @@ components:
           type: boolean
         message:
           type: string
+      required: [success]
+
+    RemoveMemberResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        removedName:
+          type: string
+      required: [success]
+
+    RemoveCompanyMembersResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        removedNames:
+          type: array
+          items:
+            type: string
+      required: [success]
+
+    RemoveContactResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        archived:
+          type: boolean
+          description: true if the contact was archived (has history), false if hard-deleted (zero footprint)
       required: [success]
 
     ErrorResponse:
@@ -2032,6 +2172,8 @@ components:
           type: string
           format: date-time
           nullable: true
+        removedFromProject:
+          type: boolean
       required: [id, documentId, userId, userName, userRole, status, distributedAt]
 
     AuditLogEntry:
@@ -2059,6 +2201,8 @@ components:
         userAgent:
           type: string
           nullable: true
+        removedFromProject:
+          type: boolean
         createdAt:
           type: string
           format: date-time
@@ -2075,6 +2219,9 @@ components:
           type: string
           nullable: true
         subcontractorId:
+          type: string
+          nullable: true
+        personId:
           type: string
           nullable: true
         name:
@@ -2115,6 +2262,13 @@ components:
           type: string
         contactName:
           type: string
+          description: Computed "First Last" — kept for backward compatibility. Use contactFirstName/contactLastName for editing.
+        contactFirstName:
+          type: string
+          nullable: true
+        contactLastName:
+          type: string
+          nullable: true
         contactEmail:
           type: string
         contactPhone:
@@ -2132,6 +2286,10 @@ components:
         insuranceStatus:
           type: string
           enum: [valid, expiring_soon, expired, none]
+        archivedAt:
+          type: string
+          format: date-time
+          nullable: true
         createdAt:
           type: string
           format: date-time
@@ -2163,34 +2321,52 @@ components:
       properties:
         companyName:
           type: string
-        contactName:
+        contactFirstName:
           type: string
+          minLength: 2
+        contactLastName:
+          type: string
+          minLength: 2
         contactEmail:
           type: string
           format: email
         contactPhone:
           type: string
+        contactType:
+          type: string
+          enum: [subcontractor, merchant, supplier, professional, other]
         trades:
           type: array
           items:
             type: string
-      required: [companyName, contactName, contactEmail, trades]
+        notes:
+          type: string
+      required: [companyName, contactFirstName, contactLastName, contactEmail, trades]
 
     UpdateSubcontractorRequest:
       type: object
       properties:
         companyName:
           type: string
-        contactName:
+        contactFirstName:
           type: string
+          minLength: 2
+        contactLastName:
+          type: string
+          minLength: 2
         contactEmail:
           type: string
         contactPhone:
           type: string
+        contactType:
+          type: string
+          enum: [subcontractor, merchant, supplier, professional, other]
         trades:
           type: array
           items:
             type: string
+        notes:
+          type: string
         reliabilityRating:
           type: number
         paymentHold:
@@ -3167,6 +3343,13 @@ components:
           type: string
         name:
           type: string
+          description: Computed "First Last" — kept for backward compatibility. Use firstName/lastName for editing.
+        firstName:
+          type: string
+          nullable: true
+        lastName:
+          type: string
+          nullable: true
         email:
           type: string
         phone:
@@ -3176,6 +3359,9 @@ components:
         showContactInPortal:
           type: boolean
           description: Whether email/phone show on this person's portal Team row (absent = role-based default).
+        archivedAt:
+          type: string
+          format: date-time
         kind:
           type: string
           enum: [subcontractor, in_house]
@@ -3186,8 +3372,12 @@ components:
     CreatePersonRequest:
       type: object
       properties:
-        name:
+        firstName:
           type: string
+          minLength: 2
+        lastName:
+          type: string
+          minLength: 2
         email:
           type: string
           format: email
@@ -3195,12 +3385,18 @@ components:
           type: string
         roleTitle:
           type: string
-      required: [name, email]
+      required: [firstName, lastName, email]
 
     UpdatePersonRequest:
       type: object
       description: Partial update; omit a field to leave it unchanged. showContactInPortal null = reset to role default.
       properties:
+        firstName:
+          type: string
+          minLength: 2
+        lastName:
+          type: string
+          minLength: 2
         showContactInPortal:
           type: boolean
           nullable: true
@@ -3267,6 +3463,8 @@ components:
           type: string
         itemId:
           type: string
+        removedFromProject:
+          type: boolean
         createdAt:
           type: string
       required: [id, userId, memberName, section, sectionLabel, action, createdAt]

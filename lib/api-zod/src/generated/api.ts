@@ -294,6 +294,7 @@ export const GetDocumentResponse = zod
           distributedAt: zod.date(),
           viewedAt: zod.date().nullish(),
           acknowledgedAt: zod.date().nullish(),
+          removedFromProject: zod.boolean().optional(),
         }),
       ),
     }),
@@ -350,6 +351,7 @@ export const GetDocumentDistributionsResponseItem = zod.object({
   distributedAt: zod.date(),
   viewedAt: zod.date().nullish(),
   acknowledgedAt: zod.date().nullish(),
+  removedFromProject: zod.boolean().optional(),
 });
 export const GetDocumentDistributionsResponse = zod.array(
   GetDocumentDistributionsResponseItem,
@@ -374,6 +376,7 @@ export const GetDocumentAuditLogResponseItem = zod.object({
   signedOffWithPin: zod.boolean(),
   ipAddress: zod.string().nullish(),
   userAgent: zod.string().nullish(),
+  removedFromProject: zod.boolean().optional(),
   createdAt: zod.date(),
 });
 export const GetDocumentAuditLogResponse = zod.array(
@@ -392,6 +395,7 @@ export const ListProjectMembersResponseItem = zod.object({
   projectId: zod.string(),
   userId: zod.string().nullish(),
   subcontractorId: zod.string().nullish(),
+  personId: zod.string().nullish(),
   name: zod.string(),
   role: zod.enum(["manager", "worker", "subcontractor"]),
   complianceStatus: zod.enum(["ok", "warning", "hold"]),
@@ -415,7 +419,7 @@ export const AddProjectMemberBody = zod.object({
 });
 
 /**
- * @summary Remove a member from a project
+ * @summary Remove a member from a project (manager-gated). Revokes portal access and cancels any pending invite; past activity/distribution/sign-off history is retained.
  */
 export const RemoveProjectMemberParams = zod.object({
   projectId: zod.coerce.string(),
@@ -424,23 +428,50 @@ export const RemoveProjectMemberParams = zod.object({
 
 export const RemoveProjectMemberResponse = zod.object({
   success: zod.boolean(),
-  message: zod.string().optional(),
+  removedName: zod.string().optional(),
+});
+
+/**
+ * @summary Remove a subcontractor firm and all its people from a project in one action (manager-gated)
+ */
+export const RemoveProjectMemberCompanyParams = zod.object({
+  projectId: zod.coerce.string(),
+  subcontractorId: zod.coerce.string(),
+});
+
+export const RemoveProjectMemberCompanyResponse = zod.object({
+  success: zod.boolean(),
+  removedNames: zod.array(zod.string()).optional(),
 });
 
 /**
  * @summary List all subcontractors for the company
  */
+export const ListSubcontractorsQueryParams = zod.object({
+  archived: zod.coerce
+    .string()
+    .optional()
+    .describe("true → only archived contacts; omitted\/false → active only"),
+});
+
 export const ListSubcontractorsResponseItem = zod.object({
   id: zod.string(),
   companyId: zod.string(),
   companyName: zod.string(),
-  contactName: zod.string(),
+  contactName: zod
+    .string()
+    .describe(
+      'Computed \"First Last\" — kept for backward compatibility. Use contactFirstName\/contactLastName for editing.',
+    ),
+  contactFirstName: zod.string().nullish(),
+  contactLastName: zod.string().nullish(),
   contactEmail: zod.string(),
   contactPhone: zod.string().nullish(),
   trades: zod.array(zod.string()),
   reliabilityRating: zod.number().nullish(),
   paymentHold: zod.boolean(),
   insuranceStatus: zod.enum(["valid", "expiring_soon", "expired", "none"]),
+  archivedAt: zod.date().nullish(),
   createdAt: zod.date(),
 });
 export const ListSubcontractorsResponse = zod.array(
@@ -450,12 +481,23 @@ export const ListSubcontractorsResponse = zod.array(
 /**
  * @summary Add a new subcontractor
  */
+export const createSubcontractorBodyContactFirstNameMin = 2;
+
+export const createSubcontractorBodyContactLastNameMin = 2;
+
 export const CreateSubcontractorBody = zod.object({
   companyName: zod.string(),
-  contactName: zod.string(),
+  contactFirstName: zod
+    .string()
+    .min(createSubcontractorBodyContactFirstNameMin),
+  contactLastName: zod.string().min(createSubcontractorBodyContactLastNameMin),
   contactEmail: zod.string().email(),
   contactPhone: zod.string().optional(),
+  contactType: zod
+    .enum(["subcontractor", "merchant", "supplier", "professional", "other"])
+    .optional(),
   trades: zod.array(zod.string()),
+  notes: zod.string().optional(),
 });
 
 /**
@@ -470,13 +512,20 @@ export const GetSubcontractorResponse = zod
     id: zod.string(),
     companyId: zod.string(),
     companyName: zod.string(),
-    contactName: zod.string(),
+    contactName: zod
+      .string()
+      .describe(
+        'Computed \"First Last\" — kept for backward compatibility. Use contactFirstName\/contactLastName for editing.',
+      ),
+    contactFirstName: zod.string().nullish(),
+    contactLastName: zod.string().nullish(),
     contactEmail: zod.string(),
     contactPhone: zod.string().nullish(),
     trades: zod.array(zod.string()),
     reliabilityRating: zod.number().nullish(),
     paymentHold: zod.boolean(),
     insuranceStatus: zod.enum(["valid", "expiring_soon", "expired", "none"]),
+    archivedAt: zod.date().nullish(),
     createdAt: zod.date(),
   })
   .and(
@@ -512,12 +561,27 @@ export const UpdateSubcontractorParams = zod.object({
   subcontractorId: zod.coerce.string(),
 });
 
+export const updateSubcontractorBodyContactFirstNameMin = 2;
+
+export const updateSubcontractorBodyContactLastNameMin = 2;
+
 export const UpdateSubcontractorBody = zod.object({
   companyName: zod.string().optional(),
-  contactName: zod.string().optional(),
+  contactFirstName: zod
+    .string()
+    .min(updateSubcontractorBodyContactFirstNameMin)
+    .optional(),
+  contactLastName: zod
+    .string()
+    .min(updateSubcontractorBodyContactLastNameMin)
+    .optional(),
   contactEmail: zod.string().optional(),
   contactPhone: zod.string().optional(),
+  contactType: zod
+    .enum(["subcontractor", "merchant", "supplier", "professional", "other"])
+    .optional(),
   trades: zod.array(zod.string()).optional(),
+  notes: zod.string().optional(),
   reliabilityRating: zod.number().optional(),
   paymentHold: zod.boolean().optional(),
 });
@@ -526,14 +590,50 @@ export const UpdateSubcontractorResponse = zod.object({
   id: zod.string(),
   companyId: zod.string(),
   companyName: zod.string(),
-  contactName: zod.string(),
+  contactName: zod
+    .string()
+    .describe(
+      'Computed \"First Last\" — kept for backward compatibility. Use contactFirstName\/contactLastName for editing.',
+    ),
+  contactFirstName: zod.string().nullish(),
+  contactLastName: zod.string().nullish(),
   contactEmail: zod.string(),
   contactPhone: zod.string().nullish(),
   trades: zod.array(zod.string()),
   reliabilityRating: zod.number().nullish(),
   paymentHold: zod.boolean(),
   insuranceStatus: zod.enum(["valid", "expiring_soon", "expired", "none"]),
+  archivedAt: zod.date().nullish(),
   createdAt: zod.date(),
+});
+
+/**
+ * @summary Remove a subcontractor from the directory (blocked if on an active project; archived if it has history, else hard-deleted)
+ */
+export const DeleteSubcontractorParams = zod.object({
+  subcontractorId: zod.coerce.string(),
+});
+
+export const DeleteSubcontractorResponse = zod.object({
+  success: zod.boolean(),
+  archived: zod
+    .boolean()
+    .optional()
+    .describe(
+      "true if the contact was archived (has history), false if hard-deleted (zero footprint)",
+    ),
+});
+
+/**
+ * @summary Un-archive a previously archived subcontractor
+ */
+export const RestoreSubcontractorParams = zod.object({
+  subcontractorId: zod.coerce.string(),
+});
+
+export const RestoreSubcontractorResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
 });
 
 /**
@@ -1778,6 +1878,10 @@ export const ListSubcontractorPeopleQueryParams = zod.object({
     .string()
     .optional()
     .describe("When set, each person carries per-project portal status."),
+  archived: zod.coerce
+    .string()
+    .optional()
+    .describe("true → only archived people; omitted\/false → active only"),
 });
 
 export const ListSubcontractorPeopleResponseItem = zod
@@ -1785,7 +1889,13 @@ export const ListSubcontractorPeopleResponseItem = zod
     id: zod.string(),
     subcontractorId: zod.string().optional(),
     userId: zod.string().optional(),
-    name: zod.string(),
+    name: zod
+      .string()
+      .describe(
+        'Computed \"First Last\" — kept for backward compatibility. Use firstName\/lastName for editing.',
+      ),
+    firstName: zod.string().nullish(),
+    lastName: zod.string().nullish(),
     email: zod.string(),
     phone: zod.string().optional(),
     roleTitle: zod.string().optional(),
@@ -1795,6 +1905,7 @@ export const ListSubcontractorPeopleResponseItem = zod
       .describe(
         "Whether email\/phone show on this person's portal Team row (absent = role-based default).",
       ),
+    archivedAt: zod.date().optional(),
     kind: zod.enum(["subcontractor", "in_house"]),
     portal: zod
       .object({
@@ -1830,15 +1941,20 @@ export const CreateSubcontractorPersonParams = zod.object({
   subcontractorId: zod.coerce.string(),
 });
 
+export const createSubcontractorPersonBodyFirstNameMin = 2;
+
+export const createSubcontractorPersonBodyLastNameMin = 2;
+
 export const CreateSubcontractorPersonBody = zod.object({
-  name: zod.string(),
+  firstName: zod.string().min(createSubcontractorPersonBodyFirstNameMin),
+  lastName: zod.string().min(createSubcontractorPersonBodyLastNameMin),
   email: zod.string().email(),
   phone: zod.string().optional(),
   roleTitle: zod.string().optional(),
 });
 
 /**
- * @summary Remove an individual person (PM)
+ * @summary Remove an individual person (PM) — blocked if on an active project; archived if they have history, else hard-deleted
  */
 export const DeletePersonParams = zod.object({
   personId: zod.coerce.string(),
@@ -1846,7 +1962,12 @@ export const DeletePersonParams = zod.object({
 
 export const DeletePersonResponse = zod.object({
   success: zod.boolean(),
-  message: zod.string().optional(),
+  archived: zod
+    .boolean()
+    .optional()
+    .describe(
+      "true if the contact was archived (has history), false if hard-deleted (zero footprint)",
+    ),
 });
 
 /**
@@ -1856,8 +1977,14 @@ export const UpdatePersonParams = zod.object({
   personId: zod.coerce.string(),
 });
 
+export const updatePersonBodyFirstNameMin = 2;
+
+export const updatePersonBodyLastNameMin = 2;
+
 export const UpdatePersonBody = zod
   .object({
+    firstName: zod.string().min(updatePersonBodyFirstNameMin).optional(),
+    lastName: zod.string().min(updatePersonBodyLastNameMin).optional(),
     showContactInPortal: zod.boolean().nullish(),
     roleTitle: zod.string().nullish(),
   })
@@ -1870,7 +1997,13 @@ export const UpdatePersonResponse = zod
     id: zod.string(),
     subcontractorId: zod.string().optional(),
     userId: zod.string().optional(),
-    name: zod.string(),
+    name: zod
+      .string()
+      .describe(
+        'Computed \"First Last\" — kept for backward compatibility. Use firstName\/lastName for editing.',
+      ),
+    firstName: zod.string().nullish(),
+    lastName: zod.string().nullish(),
     email: zod.string(),
     phone: zod.string().optional(),
     roleTitle: zod.string().optional(),
@@ -1880,6 +2013,7 @@ export const UpdatePersonResponse = zod
       .describe(
         "Whether email\/phone show on this person's portal Team row (absent = role-based default).",
       ),
+    archivedAt: zod.date().optional(),
     kind: zod.enum(["subcontractor", "in_house"]),
     portal: zod
       .object({
@@ -1906,10 +2040,29 @@ export const UpdatePersonResponse = zod
   );
 
 /**
+ * @summary Un-archive a previously archived person
+ */
+export const RestorePersonParams = zod.object({
+  personId: zod.coerce.string(),
+});
+
+export const RestorePersonResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
  * @summary In-house people (portal-only) with per-project portal status (PM)
  */
 export const ListInHousePeopleParams = zod.object({
   projectId: zod.coerce.string(),
+});
+
+export const ListInHousePeopleQueryParams = zod.object({
+  archived: zod.coerce
+    .string()
+    .optional()
+    .describe("true → only archived people; omitted\/false → active only"),
 });
 
 export const ListInHousePeopleResponseItem = zod
@@ -1917,7 +2070,13 @@ export const ListInHousePeopleResponseItem = zod
     id: zod.string(),
     subcontractorId: zod.string().optional(),
     userId: zod.string().optional(),
-    name: zod.string(),
+    name: zod
+      .string()
+      .describe(
+        'Computed \"First Last\" — kept for backward compatibility. Use firstName\/lastName for editing.',
+      ),
+    firstName: zod.string().nullish(),
+    lastName: zod.string().nullish(),
     email: zod.string(),
     phone: zod.string().optional(),
     roleTitle: zod.string().optional(),
@@ -1927,6 +2086,7 @@ export const ListInHousePeopleResponseItem = zod
       .describe(
         "Whether email\/phone show on this person's portal Team row (absent = role-based default).",
       ),
+    archivedAt: zod.date().optional(),
     kind: zod.enum(["subcontractor", "in_house"]),
     portal: zod
       .object({
@@ -1962,8 +2122,13 @@ export const CreateInHousePersonParams = zod.object({
   projectId: zod.coerce.string(),
 });
 
+export const createInHousePersonBodyFirstNameMin = 2;
+
+export const createInHousePersonBodyLastNameMin = 2;
+
 export const CreateInHousePersonBody = zod.object({
-  name: zod.string(),
+  firstName: zod.string().min(createInHousePersonBodyFirstNameMin),
+  lastName: zod.string().min(createInHousePersonBodyLastNameMin),
   email: zod.string().email(),
   phone: zod.string().optional(),
   roleTitle: zod.string().optional(),
@@ -2040,6 +2205,7 @@ export const GetProjectActivityResponse = zod.object({
       action: zod.string(),
       itemType: zod.string().optional(),
       itemId: zod.string().optional(),
+      removedFromProject: zod.boolean().optional(),
       createdAt: zod.string(),
     }),
   ),

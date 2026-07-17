@@ -7,6 +7,7 @@ import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { sendDocumentNotificationEmail } from "../lib/email";
 import { enqueuePushForMembers, acceptedPortalMemberUserIds } from "../lib/push-triggers";
+import { removedFromProjectUserIds } from "../lib/project-membership";
 import { isPinLockedOut, recordFailedPinAttempt, clearPinAttempts } from "../lib/pin-attempts";
 
 // Document types that require a PIN to sign off (critical compliance documents).
@@ -314,12 +315,14 @@ router.get("/documents/:documentId", authenticate, async (req, res) => {
       acknowledgedAt: documentDistributionsTable.acknowledgedAt,
     }).from(documentDistributionsTable).where(eq(documentDistributionsTable.documentId, d.id));
 
+    const removedIds = await removedFromProjectUserIds(d.projectId, dists.map(dist => dist.userId));
     const distsWithUsers = await Promise.all(dists.map(async (dist) => {
       const userRows = await db.select({ name: usersTable.name, role: usersTable.role }).from(usersTable).where(eq(usersTable.id, dist.userId)).limit(1);
       return {
         ...dist,
         userName: userRows[0]?.name ?? "Unknown",
         userRole: userRows[0]?.role ?? "site_worker",
+        removedFromProject: removedIds.has(dist.userId),
         distributedAt: dist.distributedAt.toISOString(),
         viewedAt: dist.viewedAt?.toISOString() ?? null,
         acknowledgedAt: dist.acknowledgedAt?.toISOString() ?? null,
@@ -584,6 +587,7 @@ router.get("/documents/:documentId/audit-log", authenticate, async (req, res) =>
       .where(eq(acknowledgmentAuditTable.documentId, req.params.documentId))
       .orderBy(desc(acknowledgmentAuditTable.createdAt));
 
+    const removedIds = await removedFromProjectUserIds(docs[0].projectId, entries.map(e => e.userId));
     res.json(entries.map(e => ({
       id: e.id,
       documentId: e.documentId,
@@ -593,6 +597,7 @@ router.get("/documents/:documentId/audit-log", authenticate, async (req, res) =>
       userRole: e.userRole,
       action: e.action,
       signedOffWithPin: e.signedOffWithPin,
+      removedFromProject: removedIds.has(e.userId),
       ipAddress: e.ipAddress ?? null,
       userAgent: e.userAgent ?? null,
       createdAt: e.createdAt.toISOString(),

@@ -6,11 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ListSubcontractorPeopleParams = {
-  /**
-   * When set, each person carries per-project portal status.
-   */
-  projectId?: string;
+export type ListInHousePeopleParams = {
   /**
    * true → only archived people; omitted/false → active only
    */

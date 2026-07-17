@@ -287,7 +287,41 @@ export async function ensureSchema(): Promise<void> {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS subcontractor_documents_subcontractor_idx ON subcontractor_documents (subcontractor_id)`);
 
-    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols + portal_shares + portal_sessions + push_subscriptions + pending_pushes + subcontractor_documents ready");
+    // Phase C — contacts directory archive (soft-delete). Deletion is blocked
+    // outright if the contact is on an active project; otherwise a contact
+    // with history anywhere is archived instead of hard-deleted, so past
+    // records (which key off users.id, never deleted) keep resolving names.
+    await pool.query(`ALTER TABLE subcontractors ADD COLUMN IF NOT EXISTS archived_at timestamp`);
+    await pool.query(`ALTER TABLE people ADD COLUMN IF NOT EXISTS archived_at timestamp`);
+
+    // Phase D — first/last name split (people + the subcontractor's primary
+    // contact). Idempotent one-time backfill: only touches rows where
+    // first_name is still NULL, splitting the existing single-field name on
+    // its first space. A name with no space (e.g. "Cher") ends up with an
+    // empty last_name — that's the "surname missing" case, shown as a badge
+    // rather than blocking anything, per the feature's design.
+    await pool.query(`ALTER TABLE people ADD COLUMN IF NOT EXISTS first_name text`);
+    await pool.query(`ALTER TABLE people ADD COLUMN IF NOT EXISTS last_name text`);
+    await pool.query(`
+      UPDATE people SET
+        first_name = split_part(trim(name), ' ', 1),
+        last_name = CASE WHEN position(' ' in trim(name)) > 0
+          THEN trim(substring(trim(name) from position(' ' in trim(name)) + 1))
+          ELSE '' END
+      WHERE first_name IS NULL
+    `);
+    await pool.query(`ALTER TABLE subcontractors ADD COLUMN IF NOT EXISTS contact_first_name text`);
+    await pool.query(`ALTER TABLE subcontractors ADD COLUMN IF NOT EXISTS contact_last_name text`);
+    await pool.query(`
+      UPDATE subcontractors SET
+        contact_first_name = split_part(trim(contact_name), ' ', 1),
+        contact_last_name = CASE WHEN position(' ' in trim(contact_name)) > 0
+          THEN trim(substring(trim(contact_name) from position(' ' in trim(contact_name)) + 1))
+          ELSE '' END
+      WHERE contact_first_name IS NULL
+    `);
+
+    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols + portal_shares + portal_sessions + push_subscriptions + pending_pushes + subcontractor_documents + subcontractors/people.archived_at + people.first_name/last_name + subcontractors.contact_first_name/contact_last_name ready");
   } catch (err) {
     // Don't crash the server — membership lookups fall back to the home company.
     logger.error({ err }, "ensureSchema failed (continuing with home-company fallback)");

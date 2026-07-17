@@ -10,7 +10,8 @@ import { and, eq, desc, inArray, isNull, isNotNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { sendProjectInviteEmail } from "../lib/invite-email";
-import { CreateSubcontractorPersonBody, CreatePortalInviteBody } from "@workspace/api-zod";
+import { CreateSubcontractorPersonBody, CreatePortalInviteBody, UpdatePersonBody } from "@workspace/api-zod";
+import { activeProjectsForPerson, hasAnyHistoricalFootprint } from "../lib/contact-removal";
 
 const router: IRouter = Router();
 
@@ -32,7 +33,7 @@ function inviteBaseUrl(): string {
 }
 
 // Request-body types (validated by the generated api-zod schemas).
-type CreatePersonInput = { name: string; email: string; phone?: string; roleTitle?: string };
+type CreatePersonInput = { firstName: string; lastName: string; email: string; phone?: string; roleTitle?: string };
 type PortalInviteInput = { personId?: string; role?: "worker" | "manager" | "subcontractor" };
 
 // ---- shared: portal status for a person on a project ----
@@ -111,8 +112,10 @@ async function deliverInvite(params: {
 function serializePerson(p: typeof peopleTable.$inferSelect, portal?: PortalStatus) {
   return {
     id: p.id, subcontractorId: p.subcontractorId ?? undefined, userId: p.userId ?? undefined,
-    name: p.name, email: p.email, phone: p.phone ?? undefined, roleTitle: p.roleTitle ?? undefined,
+    name: p.name, firstName: p.firstName ?? null, lastName: p.lastName ?? null,
+    email: p.email, phone: p.phone ?? undefined, roleTitle: p.roleTitle ?? undefined,
     showContactInPortal: p.showContactInPortal ?? undefined,
+    archivedAt: p.archivedAt ? p.archivedAt.toISOString() : undefined,
     kind: p.subcontractorId ? "subcontractor" : "in_house",
     portal: portal ?? undefined,
   };
@@ -140,8 +143,12 @@ router.get("/subcontractors/:subcontractorId/people", authenticate, async (req, 
     if (!requireManager(req, res)) return;
     const sub = await loadOwnedSubcontractor(req.params.subcontractorId, req.user!.companyId);
     if (!sub) { res.status(404).json({ error: "not_found", message: "Subcontractor not found" }); return; }
+    const wantArchived = req.query.archived === "true";
     const people = await db.select().from(peopleTable)
-      .where(eq(peopleTable.subcontractorId, sub.id)).orderBy(desc(peopleTable.createdAt));
+      .where(and(
+        eq(peopleTable.subcontractorId, sub.id),
+        wantArchived ? isNotNull(peopleTable.archivedAt) : isNull(peopleTable.archivedAt),
+      )).orderBy(desc(peopleTable.createdAt));
     const projectId = typeof req.query.projectId === "string" ? req.query.projectId : undefined;
     const statusMap = projectId ? await portalStatusFor(people.map(p => p.id), projectId) : undefined;
     res.json(people.map(p => serializePerson(p, statusMap?.get(p.id))));
@@ -160,11 +167,12 @@ router.post("/subcontractors/:subcontractorId/people", authenticate, async (req,
     const sub = await loadOwnedSubcontractor(req.params.subcontractorId, req.user!.companyId);
     if (!sub) { res.status(404).json({ error: "not_found", message: "Subcontractor not found" }); return; }
     const parsed = CreateSubcontractorPersonBody.safeParse(req.body);
-    if (!parsed.success) { res.status(400).json({ error: "validation_error", message: "A name and valid email are required." }); return; }
+    if (!parsed.success) { res.status(400).json({ error: "validation_error", message: "A first name, surname (2+ chars each) and valid email are required." }); return; }
     const input = parsed.data as CreatePersonInput;
-    const name = input.name.trim();
+    const firstName = input.firstName.trim();
+    const lastName = input.lastName.trim();
+    const name = `${firstName} ${lastName}`.trim();
     const email = input.email.trim().toLowerCase();
-    if (!name) { res.status(400).json({ error: "validation_error", message: "A name is required." }); return; }
 
     const existing = await db.select().from(peopleTable)
       .where(and(eq(peopleTable.subcontractorId, sub.id), eq(peopleTable.email, email))).limit(1);
@@ -172,7 +180,7 @@ router.post("/subcontractors/:subcontractorId/people", authenticate, async (req,
 
     const row = {
       id: generateId(), companyId: req.user!.companyId, subcontractorId: sub.id, userId: null,
-      name, email, phone: input.phone?.trim() || null,
+      name, firstName, lastName, email, phone: input.phone?.trim() || null,
       roleTitle: input.roleTitle?.trim() || null,
     };
     await db.insert(peopleTable).values(row);
@@ -183,18 +191,54 @@ router.post("/subcontractors/:subcontractorId/people", authenticate, async (req,
   }
 });
 
-// DELETE /api/people/:personId — remove a person (cascades their invites/members).
+// DELETE /api/people/:personId — remove a person from the directory. Blocked
+// if they're on an ACTIVE project; otherwise zero footprint anywhere → hard
+// delete (cascades their invites/memberships); any footprint → archive
+// instead, so past records (keyed off users.id) keep resolving their name.
 router.delete("/people/:personId", authenticate, async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
     const rows = await db.select().from(peopleTable)
       .where(and(eq(peopleTable.id, req.params.personId), eq(peopleTable.companyId, req.user!.companyId))).limit(1);
     if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Person not found" }); return; }
+
+    const activeProjects = await activeProjectsForPerson(req.params.personId);
+    if (activeProjects.length > 0) {
+      res.status(400).json({ error: "on_active_project", message: `Remove them from ${activeProjects.join(", ")} first.`, projects: activeProjects });
+      return;
+    }
+
+    const footprint = await hasAnyHistoricalFootprint({
+      personIds: [req.params.personId],
+      userIds: rows[0].userId ? [rows[0].userId] : [],
+    });
+
+    if (footprint) {
+      await db.update(peopleTable).set({ archivedAt: new Date() }).where(eq(peopleTable.id, req.params.personId));
+      res.json({ success: true, archived: true });
+      return;
+    }
+
     await db.delete(peopleTable).where(eq(peopleTable.id, req.params.personId));
-    res.json({ success: true });
+    res.json({ success: true, archived: false });
   } catch (err) {
     req.log.error({ err }, "Delete person error");
     res.status(500).json({ error: "server_error", message: "Failed to delete person" });
+  }
+});
+
+// PATCH /api/people/:personId/restore — un-archive a previously archived person.
+router.patch("/people/:personId/restore", authenticate, async (req, res) => {
+  try {
+    if (!requireManager(req, res)) return;
+    const rows = await db.select().from(peopleTable)
+      .where(and(eq(peopleTable.id, req.params.personId), eq(peopleTable.companyId, req.user!.companyId))).limit(1);
+    if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Person not found" }); return; }
+    await db.update(peopleTable).set({ archivedAt: null }).where(eq(peopleTable.id, req.params.personId));
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Restore person error");
+    res.status(500).json({ error: "server_error", message: "Failed to restore person" });
   }
 });
 
@@ -207,13 +251,24 @@ router.patch("/people/:personId", authenticate, async (req, res) => {
     const rows = await db.select().from(peopleTable)
       .where(and(eq(peopleTable.id, req.params.personId), eq(peopleTable.companyId, req.user!.companyId))).limit(1);
     if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Person not found" }); return; }
-    const body = req.body as { showContactInPortal?: boolean | null; roleTitle?: string | null };
-    const patch: { showContactInPortal?: boolean | null; roleTitle?: string | null } = {};
-    if ("showContactInPortal" in body) {
-      const v = body.showContactInPortal;
-      patch.showContactInPortal = v === null ? null : !!v;
+
+    const parsed = UpdatePersonBody.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: "validation_error", message: "Invalid update — a first name and surname must be at least 2 characters each." }); return; }
+    const { showContactInPortal, roleTitle, firstName, lastName } = parsed.data;
+    if ((firstName !== undefined) !== (lastName !== undefined)) {
+      res.status(400).json({ error: "validation_error", message: "Provide both first name and surname together." });
+      return;
     }
-    if ("roleTitle" in body) patch.roleTitle = (body.roleTitle ?? "").toString().trim() || null;
+    const patch: Record<string, unknown> = {};
+    if (showContactInPortal !== undefined) patch.showContactInPortal = showContactInPortal === null ? null : !!showContactInPortal;
+    if (roleTitle !== undefined) patch.roleTitle = (roleTitle ?? "").toString().trim() || null;
+    if (firstName !== undefined && lastName !== undefined) {
+      const fn = firstName.trim();
+      const ln = lastName.trim();
+      patch.firstName = fn;
+      patch.lastName = ln;
+      patch.name = `${fn} ${ln}`.trim();
+    }
     if (Object.keys(patch).length === 0) { res.status(400).json({ error: "validation_error", message: "Nothing to update." }); return; }
     await db.update(peopleTable).set(patch).where(eq(peopleTable.id, req.params.personId));
     const updated = (await db.select().from(peopleTable).where(eq(peopleTable.id, req.params.personId)).limit(1))[0];
@@ -237,8 +292,13 @@ router.get("/projects/:projectId/in-house-people", authenticate, async (req, res
     if (!requireManager(req, res)) return;
     const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
     if (!project) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+    const wantArchived = req.query.archived === "true";
     const people = await db.select().from(peopleTable)
-      .where(and(eq(peopleTable.companyId, req.user!.companyId), isNull(peopleTable.subcontractorId)))
+      .where(and(
+        eq(peopleTable.companyId, req.user!.companyId),
+        isNull(peopleTable.subcontractorId),
+        wantArchived ? isNotNull(peopleTable.archivedAt) : isNull(peopleTable.archivedAt),
+      ))
       .orderBy(desc(peopleTable.createdAt));
     const statusMap = await portalStatusFor(people.map(p => p.id), req.params.projectId);
     res.json(people.map(p => serializePerson(p, statusMap.get(p.id))));
@@ -256,11 +316,12 @@ router.post("/projects/:projectId/in-house-people", authenticate, async (req, re
     const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
     if (!project) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
     const parsed = CreateSubcontractorPersonBody.safeParse(req.body);
-    if (!parsed.success) { res.status(400).json({ error: "validation_error", message: "A name and valid email are required." }); return; }
+    if (!parsed.success) { res.status(400).json({ error: "validation_error", message: "A first name, surname (2+ chars each) and valid email are required." }); return; }
     const input = parsed.data as CreatePersonInput;
-    const name = input.name.trim();
+    const firstName = input.firstName.trim();
+    const lastName = input.lastName.trim();
+    const name = `${firstName} ${lastName}`.trim();
     const email = input.email.trim().toLowerCase();
-    if (!name) { res.status(400).json({ error: "validation_error", message: "A name is required." }); return; }
     const companyId = req.user!.companyId;
 
     const existing = await db.select().from(peopleTable)
@@ -269,7 +330,7 @@ router.post("/projects/:projectId/in-house-people", authenticate, async (req, re
 
     const row = {
       id: generateId(), companyId, subcontractorId: null, userId: null,
-      name, email, phone: input.phone?.trim() || null, roleTitle: input.roleTitle?.trim() || null,
+      name, firstName, lastName, email, phone: input.phone?.trim() || null, roleTitle: input.roleTitle?.trim() || null,
     };
     await db.insert(peopleTable).values(row);
     res.status(201).json(serializePerson({ ...row, createdAt: new Date() } as typeof peopleTable.$inferSelect));
@@ -299,6 +360,10 @@ router.post("/projects/:projectId/portal-invites", authenticate, async (req, res
       .where(and(eq(peopleTable.id, input.personId), eq(peopleTable.companyId, req.user!.companyId))).limit(1);
     const person = personRows[0];
     if (!person) { res.status(404).json({ error: "not_found", message: "Person not found" }); return; }
+    if (!person.lastName?.trim()) {
+      res.status(400).json({ error: "validation_error", message: "Add a surname for this person before sending a portal invite." });
+      return;
+    }
     const role = input.role ?? "worker";
     const pid = req.params.projectId;
 

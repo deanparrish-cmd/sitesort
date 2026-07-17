@@ -627,6 +627,11 @@ router.get("/portal/team", ...portalGuards, async (req, res) => {
   // is name + company + job title only.
   const showsContact = (flag: boolean | null | undefined, role: string) => flag ?? role === "manager";
 
+  // Best-effort surname for sorting: the split field when we have it, else the
+  // last word of the full name (legacy dashboard users have no firstName/
+  // lastName split — see Phase D scope note in people.ts).
+  const surnameOf = (name: string, lastName?: string | null) => (lastName?.trim() || name.trim().split(" ").slice(-1)[0] || name).toLowerCase();
+
   const result = members.map(m => {
     // A portal member (person link) carries the richest info: name + firm + job title.
     const person = m.personId ? personById.get(m.personId) : undefined;
@@ -636,6 +641,7 @@ router.get("/portal/team", ...portalGuards, async (req, res) => {
       const contact = showsContact(person.showContactInPortal, m.role);
       return {
         name: person.name,
+        sortKey: surnameOf(person.name, person.lastName),
         company: sub ? sub.companyName : ourCompany,
         jobTitle: person.roleTitle ?? undefined,
         role: m.role,
@@ -646,12 +652,13 @@ router.get("/portal/team", ...portalGuards, async (req, res) => {
     const sub = m.subcontractorId ? subById.get(m.subcontractorId) : undefined;
     if (sub) {
       const contact = showsContact(null, "subcontractor");
-      return { name: sub.contactName, company: sub.companyName, jobTitle: undefined, role: "subcontractor", trades: sub.trades ?? [], ...(contact ? { email: sub.contactEmail ?? undefined, phone: sub.contactPhone ?? undefined } : {}) };
+      return { name: sub.contactName, sortKey: surnameOf(sub.contactName, sub.contactLastName), company: sub.companyName, jobTitle: undefined, role: "subcontractor", trades: sub.trades ?? [], ...(contact ? { email: sub.contactEmail ?? undefined, phone: sub.contactPhone ?? undefined } : {}) };
     }
     const user = m.userId ? userById.get(m.userId) : undefined;
     const contact = showsContact(null, m.role);
-    return { name: user?.name ?? "Unknown", company: ourCompany, jobTitle: undefined, role: m.role, trades: [], ...(contact ? { email: user?.email ?? undefined, phone: user?.phone ?? undefined } : {}) };
-  });
+    const name = user?.name ?? "Unknown";
+    return { name, sortKey: surnameOf(name), company: ourCompany, jobTitle: undefined, role: m.role, trades: [], ...(contact ? { email: user?.email ?? undefined, phone: user?.phone ?? undefined } : {}) };
+  }).sort((a, b) => a.sortKey.localeCompare(b.sortKey)).map(({ sortKey, ...rest }) => rest);
   res.json(result);
 });
 

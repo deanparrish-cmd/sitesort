@@ -17,5 +17,6 @@ export interface AuditLogEntry {
   signedOffWithPin: boolean;
   ipAddress?: string | null;
   userAgent?: string | null;
+  removedFromProject?: boolean;
   createdAt: Date;
 }
