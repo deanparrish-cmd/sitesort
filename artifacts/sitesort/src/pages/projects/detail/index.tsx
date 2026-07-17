@@ -7,6 +7,7 @@ import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, Shield
 import { formatDate, formatBytes, cn } from "@/lib/utils";
 import { useProjectDetailState } from "./use-project-detail";
 import { ProjectDetailProvider, useDetail, type ProjectDetailReady } from "./context";
+import { buildManagementTabs, buildActivityTabs } from "./tab-config";
 import { OverviewTab } from "./tabs/overview-tab";
 import { ProgressTab } from "./tabs/progress-tab";
 import { DocumentsTab } from "./tabs/documents-tab";
@@ -111,19 +112,7 @@ function ProjectDetailInner() {
       <Tabs value={activeTab} onValueChange={t => openTab(t)}>
         <TabsList className="mb-6 w-full h-auto flex flex-wrap justify-start gap-1.5 bg-muted p-1.5 rounded-xl">
           {/* Group 1: Project management */}
-          {(() => {
-            const openIssues = photos.filter(p => (p.category === "snag" || p.category === "safety_concern") && (!p.status || p.status === "open")).length;
-            return [
-              { value: "overview", label: "Overview" },
-              { value: "progress", label: "Progress" },
-              { value: "team", label: "Team" },
-              { value: "issues", label: openIssues > 0 ? `Site Issues (${openIssues})` : "Site Issues" },
-              { value: "qr", label: "Site Board" },
-              { value: "documents", label: "Documents" },
-              { value: "permits", label: "H&S" },
-              ...(caps.canManageProjects ? [{ value: "closeout", label: "Close-out" }] : []),
-            ];
-          })().map(tab => (
+          {buildManagementTabs(caps, photos.filter(p => (p.category === "snag" || p.category === "safety_concern") && (!p.status || p.status === "open")).length).map(tab => (
             <TabsTrigger key={tab.value} value={tab.value} className="flex-1 sm:flex-none justify-center rounded-lg py-2 px-3 sm:px-4 text-sm whitespace-nowrap">
               {tab.label}
             </TabsTrigger>
@@ -131,12 +120,7 @@ function ProjectDetailInner() {
           {/* Divider */}
           <div className="w-px self-stretch bg-border/60 mx-0.5 my-0.5" />
           {/* Group 2: Site activity */}
-          {[
-            { value: "finances", label: "Finances & Expiry" },
-            { value: "checkins", label: `Check-ins${checkins.length > 0 ? ` (${checkins.length})` : ""}` },
-            ...(caps.isInternal ? [{ value: "reports", label: "Daily Reports" }] : []),
-            ...(caps.canManageProjects ? [{ value: "teamportal", label: "Team Portal" }] : []),
-          ].map(tab => (
+          {buildActivityTabs(caps, checkins.length).map(tab => (
             <TabsTrigger key={tab.value} value={tab.value} className="flex-1 sm:flex-none justify-center rounded-lg py-2 px-3 sm:px-4 text-sm whitespace-nowrap">
               {tab.label}
             </TabsTrigger>
