@@ -48,6 +48,7 @@ import type {
   LogPhotoRequest,
   LoginRequest,
   MemberActivitySummary,
+  MemberDocument,
   Notification,
   Permit,
   Person,
@@ -62,6 +63,7 @@ import type {
   PortalIssue,
   PortalLoginRequest,
   PortalLoginResponse,
+  PortalMemberDocument,
   PortalOverview,
   PortalPermit,
   PortalProgress,
@@ -85,6 +87,7 @@ import type {
   RemoveContactResponse,
   RemoveMemberResponse,
   ResendInviteResponse,
+  ReviewMemberDocumentRequest,
   Subcontractor,
   SubcontractorDetail,
   SubcontractorDocument,
@@ -97,6 +100,7 @@ import type {
   UpdateSubcontractorRequest,
   UpdateUserRequest,
   UploadDocumentRequest,
+  UploadPortalMyDocumentBody,
   User,
 } from "./api.schemas";
 
@@ -5181,6 +5185,82 @@ export function useGetPortalDrawings<
 }
 
 /**
+ * @summary Download all current drawings as a zip
+ */
+export const getDownloadAllPortalDrawingsUrl = () => {
+  return `/api/portal/drawings/download-all`;
+};
+
+export const downloadAllPortalDrawings = async (
+  options?: RequestInit,
+): Promise<Blob> => {
+  return customFetch<Blob>(getDownloadAllPortalDrawingsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getDownloadAllPortalDrawingsQueryKey = () => {
+  return [`/api/portal/drawings/download-all`] as const;
+};
+
+export const getDownloadAllPortalDrawingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof downloadAllPortalDrawings>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof downloadAllPortalDrawings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getDownloadAllPortalDrawingsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof downloadAllPortalDrawings>>
+  > = ({ signal }) => downloadAllPortalDrawings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof downloadAllPortalDrawings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type DownloadAllPortalDrawingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof downloadAllPortalDrawings>>
+>;
+export type DownloadAllPortalDrawingsQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Download all current drawings as a zip
+ */
+
+export function useDownloadAllPortalDrawings<
+  TData = Awaited<ReturnType<typeof downloadAllPortalDrawings>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof downloadAllPortalDrawings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getDownloadAllPortalDrawingsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * @summary A single drawing (logs the view)
  */
 export const getGetPortalDrawingUrl = (documentId: string) => {
@@ -5268,6 +5348,467 @@ export function useGetPortalDrawing<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Download a single document's file as an attachment
+ */
+export const getDownloadPortalDocumentUrl = (documentId: string) => {
+  return `/api/portal/documents/${documentId}/download`;
+};
+
+export const downloadPortalDocument = async (
+  documentId: string,
+  options?: RequestInit,
+): Promise<Blob> => {
+  return customFetch<Blob>(getDownloadPortalDocumentUrl(documentId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getDownloadPortalDocumentQueryKey = (documentId: string) => {
+  return [`/api/portal/documents/${documentId}/download`] as const;
+};
+
+export const getDownloadPortalDocumentQueryOptions = <
+  TData = Awaited<ReturnType<typeof downloadPortalDocument>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  documentId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof downloadPortalDocument>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getDownloadPortalDocumentQueryKey(documentId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof downloadPortalDocument>>
+  > = ({ signal }) =>
+    downloadPortalDocument(documentId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!documentId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof downloadPortalDocument>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type DownloadPortalDocumentQueryResult = NonNullable<
+  Awaited<ReturnType<typeof downloadPortalDocument>>
+>;
+export type DownloadPortalDocumentQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Download a single document's file as an attachment
+ */
+
+export function useDownloadPortalDocument<
+  TData = Awaited<ReturnType<typeof downloadPortalDocument>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  documentId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof downloadPortalDocument>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getDownloadPortalDocumentQueryOptions(
+    documentId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary The signed-in member's own uploaded documents (newest first)
+ */
+export const getGetPortalMyDocumentsUrl = () => {
+  return `/api/portal/my-documents`;
+};
+
+export const getPortalMyDocuments = async (
+  options?: RequestInit,
+): Promise<PortalMemberDocument[]> => {
+  return customFetch<PortalMemberDocument[]>(getGetPortalMyDocumentsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPortalMyDocumentsQueryKey = () => {
+  return [`/api/portal/my-documents`] as const;
+};
+
+export const getGetPortalMyDocumentsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPortalMyDocuments>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalMyDocuments>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPortalMyDocumentsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPortalMyDocuments>>
+  > = ({ signal }) => getPortalMyDocuments({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalMyDocuments>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPortalMyDocumentsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPortalMyDocuments>>
+>;
+export type GetPortalMyDocumentsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary The signed-in member's own uploaded documents (newest first)
+ */
+
+export function useGetPortalMyDocuments<
+  TData = Awaited<ReturnType<typeof getPortalMyDocuments>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalMyDocuments>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPortalMyDocumentsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Upload a document for manager review (multipart)
+ */
+export const getUploadPortalMyDocumentUrl = () => {
+  return `/api/portal/my-documents`;
+};
+
+export const uploadPortalMyDocument = async (
+  uploadPortalMyDocumentBody: UploadPortalMyDocumentBody,
+  options?: RequestInit,
+): Promise<PortalMemberDocument> => {
+  const formData = new FormData();
+  formData.append(`file`, uploadPortalMyDocumentBody.file);
+  formData.append(`name`, uploadPortalMyDocumentBody.name);
+  if (uploadPortalMyDocumentBody.kind !== undefined) {
+    formData.append(`kind`, uploadPortalMyDocumentBody.kind);
+  }
+
+  return customFetch<PortalMemberDocument>(getUploadPortalMyDocumentUrl(), {
+    ...options,
+    method: "POST",
+    body: formData,
+  });
+};
+
+export const getUploadPortalMyDocumentMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof uploadPortalMyDocument>>,
+    TError,
+    { data: BodyType<UploadPortalMyDocumentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof uploadPortalMyDocument>>,
+  TError,
+  { data: BodyType<UploadPortalMyDocumentBody> },
+  TContext
+> => {
+  const mutationKey = ["uploadPortalMyDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof uploadPortalMyDocument>>,
+    { data: BodyType<UploadPortalMyDocumentBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return uploadPortalMyDocument(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UploadPortalMyDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof uploadPortalMyDocument>>
+>;
+export type UploadPortalMyDocumentMutationBody =
+  BodyType<UploadPortalMyDocumentBody>;
+export type UploadPortalMyDocumentMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Upload a document for manager review (multipart)
+ */
+export const useUploadPortalMyDocument = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof uploadPortalMyDocument>>,
+    TError,
+    { data: BodyType<UploadPortalMyDocumentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof uploadPortalMyDocument>>,
+  TError,
+  { data: BodyType<UploadPortalMyDocumentBody> },
+  TContext
+> => {
+  return useMutation(getUploadPortalMyDocumentMutationOptions(options));
+};
+
+/**
+ * @summary List member-submitted documents for a project (manager-gated)
+ */
+export const getListMemberDocumentsUrl = (projectId: string) => {
+  return `/api/projects/${projectId}/member-documents`;
+};
+
+export const listMemberDocuments = async (
+  projectId: string,
+  options?: RequestInit,
+): Promise<MemberDocument[]> => {
+  return customFetch<MemberDocument[]>(getListMemberDocumentsUrl(projectId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListMemberDocumentsQueryKey = (projectId: string) => {
+  return [`/api/projects/${projectId}/member-documents`] as const;
+};
+
+export const getListMemberDocumentsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listMemberDocuments>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  projectId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listMemberDocuments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListMemberDocumentsQueryKey(projectId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listMemberDocuments>>
+  > = ({ signal }) =>
+    listMemberDocuments(projectId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!projectId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listMemberDocuments>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListMemberDocumentsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listMemberDocuments>>
+>;
+export type ListMemberDocumentsQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary List member-submitted documents for a project (manager-gated)
+ */
+
+export function useListMemberDocuments<
+  TData = Awaited<ReturnType<typeof listMemberDocuments>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  projectId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listMemberDocuments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListMemberDocumentsQueryOptions(projectId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Approve or reject a member-submitted document (manager-gated)
+ */
+export const getReviewMemberDocumentUrl = (projectId: string, id: string) => {
+  return `/api/projects/${projectId}/member-documents/${id}/review`;
+};
+
+export const reviewMemberDocument = async (
+  projectId: string,
+  id: string,
+  reviewMemberDocumentRequest: ReviewMemberDocumentRequest,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(
+    getReviewMemberDocumentUrl(projectId, id),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(reviewMemberDocumentRequest),
+    },
+  );
+};
+
+export const getReviewMemberDocumentMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reviewMemberDocument>>,
+    TError,
+    {
+      projectId: string;
+      id: string;
+      data: BodyType<ReviewMemberDocumentRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reviewMemberDocument>>,
+  TError,
+  {
+    projectId: string;
+    id: string;
+    data: BodyType<ReviewMemberDocumentRequest>;
+  },
+  TContext
+> => {
+  const mutationKey = ["reviewMemberDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reviewMemberDocument>>,
+    {
+      projectId: string;
+      id: string;
+      data: BodyType<ReviewMemberDocumentRequest>;
+    }
+  > = (props) => {
+    const { projectId, id, data } = props ?? {};
+
+    return reviewMemberDocument(projectId, id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReviewMemberDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reviewMemberDocument>>
+>;
+export type ReviewMemberDocumentMutationBody =
+  BodyType<ReviewMemberDocumentRequest>;
+export type ReviewMemberDocumentMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Approve or reject a member-submitted document (manager-gated)
+ */
+export const useReviewMemberDocument = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reviewMemberDocument>>,
+    TError,
+    {
+      projectId: string;
+      id: string;
+      data: BodyType<ReviewMemberDocumentRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof reviewMemberDocument>>,
+  TError,
+  {
+    projectId: string;
+    id: string;
+    data: BodyType<ReviewMemberDocumentRequest>;
+  },
+  TContext
+> => {
+  return useMutation(getReviewMemberDocumentMutationOptions(options));
+};
 
 /**
  * @summary Method statements

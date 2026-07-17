@@ -1,5 +1,7 @@
 import { Router, type IRouter } from "express";
-import { createHash } from "crypto";
+import { createHash, randomUUID } from "crypto";
+import path from "path";
+import multer from "multer";
 import bcrypt from "bcryptjs";
 import { db } from "@workspace/db";
 import {
@@ -7,6 +9,7 @@ import {
   documentsTable, photosTable, permitsTable, milestonesTable, dailyNotesTable,
   qrBoardPinsTable, calendarEventsTable, subcontractorsTable, peopleTable,
   portalSharesTable, documentDistributionsTable, companiesTable, qrCodesTable,
+  portalMemberDocumentsTable, notificationsTable, companyMembersTable,
 } from "@workspace/db/schema";
 import { and, eq, inArray, isNull, isNotNull, desc, asc, gte, count, max } from "drizzle-orm";
 import { buildSiteBoardPayload } from "../lib/site-board";
@@ -21,8 +24,36 @@ import { isLockedOut, recordFailedAttempt, clearAttempts } from "../lib/login-at
 import { expiryStatus } from "../lib/expiry";
 import { PORTAL_SECTIONS } from "../lib/activity";
 import { PortalLoginBody, AcceptPortalInviteBody } from "@workspace/api-zod";
+import { getBucket, objectKey } from "../lib/gcs";
+import { createRequire } from "module";
+import type { Archiver, ArchiverOptions } from "archiver";
+const nodeRequire = createRequire(import.meta.url);
+const archiver = nodeRequire("archiver") as (format: string, options?: ArchiverOptions) => Archiver;
 
 const router: IRouter = Router();
+
+// Portal self-uploads go straight to memory then object storage, 15MB cap
+// (matches the dashboard upload limits for member-scale files, not CAD drawings).
+// Strict allowlist: documents and photos only — no HTML/SVG/scripts, which could
+// execute in a manager's browser when reviewed (stored-XSS vector).
+const MEMBER_UPLOAD_EXTS = new Set([".pdf", ".png", ".jpg", ".jpeg", ".webp", ".heic", ".doc", ".docx", ".xls", ".xlsx"]);
+const MEMBER_UPLOAD_MIMES = new Set([
+  "application/pdf", "image/png", "image/jpeg", "image/webp", "image/heic",
+  "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+]);
+const memberUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!MEMBER_UPLOAD_EXTS.has(ext) || !MEMBER_UPLOAD_MIMES.has(file.mimetype)) {
+      cb(new Error("Only PDF, image (PNG/JPG/WebP/HEIC), Word or Excel files can be uploaded."));
+      return;
+    }
+    cb(null, true);
+  },
+});
 
 // The middleware chain every read-only member endpoint runs: verify the portal
 // token → enforce the server-side session (sliding 30d / 12h inactivity / revoke)
@@ -35,6 +66,30 @@ function hashToken(raw: string): string {
 }
 
 const iso = (d: Date | null | undefined) => (d ? d.toISOString() : undefined);
+
+// A stored doc.fileUrl is "/api/uploads/<filename>" or legacy "/uploads/<filename>".
+// Pull the bare filename out so it can be resolved to an object storage key.
+function fileUrlToFilename(fileUrl: string): string | null {
+  const m = fileUrl.match(/\/uploads\/([^/?#]+)$/);
+  return m ? m[1] : null;
+}
+
+// Follow the supersede chain forward from a superseded doc to its live
+// replacement: the next doc is the one whose previousVersionId points at the
+// current id. Walk until a `current` doc (or a dead end), capped at 10 hops to
+// avoid a cycle ever looping forever.
+async function resolveReplacement(projectId: string, supersededId: string) {
+  let currentId = supersededId;
+  for (let i = 0; i < 10; i++) {
+    const next = (await db.select().from(documentsTable)
+      .where(and(eq(documentsTable.projectId, projectId), eq(documentsTable.previousVersionId, currentId)))
+      .limit(1))[0];
+    if (!next) return null;
+    if (next.status === "current") return next;
+    currentId = next.id;
+  }
+  return null;
+}
 
 // ---- serializers (shape-match the OpenAPI Portal* schemas) ----
 function serializeDoc(d: typeof documentsTable.$inferSelect) {
@@ -737,13 +792,101 @@ function docDetailHandler(type: string) {
       if (!ids.has(rows[0].id)) { res.status(404).json({ error: "not_found", message: "Document not found" }); return; }
       await recordDocView(rows[0].id, req.user!.id);
     }
-    res.json(serializeDoc(rows[0]));
+    const payload: Record<string, unknown> = serializeDoc(rows[0]);
+    // If this doc has been superseded, point the member at its live replacement
+    // so they can jump straight to the current version.
+    if (rows[0].status === "superseded") {
+      const replacement = await resolveReplacement(pid, rows[0].id);
+      if (replacement) {
+        payload.supersededBy = {
+          id: replacement.id, name: replacement.name,
+          version: replacement.version, revision: replacement.revision ?? undefined,
+        };
+      }
+    }
+    res.json(payload);
   };
 }
 
 // GET /api/portal/drawings (+ /:documentId)
 router.get("/portal/drawings", ...portalGuards, docListHandler("drawing"));
+// GET /api/portal/drawings/download-all — zip every CURRENT drawing the viewer
+// can see. Registered before /:documentId so "download-all" isn't swallowed as an id.
+router.get("/portal/drawings/download-all", ...portalGuards, async (req, res) => {
+  const pid = req.portalProjectId!;
+  const viewer = await resolveViewer(req.user!.id, pid);
+  const ids = await visibleIds(pid, "document", viewer);
+  const rows = ids.size
+    ? await db.select().from(documentsTable)
+        .where(and(
+          eq(documentsTable.projectId, pid), eq(documentsTable.type, "drawing"),
+          eq(documentsTable.status, "current"), inArray(documentsTable.id, [...ids]),
+        ))
+        .orderBy(asc(documentsTable.name))
+    : [];
+  if (rows.length === 0) { res.status(404).json({ error: "not_found", message: "No drawings available to download" }); return; }
+
+  const bucket = getBucket();
+  const archive = archiver("zip", { zlib: { level: 9 } });
+  archive.on("error", (err: Error) => {
+    req.log.error({ err }, "Drawings zip error");
+    if (!res.headersSent) res.status(500).json({ error: "server_error", message: "Failed to build archive" });
+    else res.destroy();
+  });
+  res.setHeader("Content-Type", "application/zip");
+  res.setHeader("Content-Disposition", 'attachment; filename="drawings.zip"');
+  archive.pipe(res);
+
+  const used = new Set<string>();
+  for (const doc of rows) {
+    const filename = fileUrlToFilename(doc.fileUrl);
+    if (!filename) continue;
+    let entryName = doc.name.replace(/[/\\]/g, "-");
+    if (!/\.[a-z0-9]+$/i.test(entryName)) {
+      const ext = filename.match(/\.[a-z0-9]+$/i)?.[0] ?? "";
+      entryName += ext;
+    }
+    let unique = entryName, n = 1;
+    while (used.has(unique)) { unique = entryName.replace(/(\.[^.]+)?$/, `-${n++}$1`); }
+    used.add(unique);
+    archive.append(bucket.file(objectKey(filename)).createReadStream(), { name: unique });
+  }
+  await archive.finalize();
+});
+
 router.get("/portal/drawings/:documentId", ...portalGuards, docDetailHandler("drawing"));
+
+// GET /api/portal/documents/:documentId/download — stream a single doc's file
+// as an attachment, gated to what the viewer may see (safety docs are open).
+router.get("/portal/documents/:documentId/download", ...portalGuards, async (req, res) => {
+  const pid = req.portalProjectId!;
+  const rows = await db.select().from(documentsTable)
+    .where(and(eq(documentsTable.id, req.params.documentId), eq(documentsTable.projectId, pid)))
+    .limit(1);
+  if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Document not found" }); return; }
+  const doc = rows[0];
+  if (doc.type !== "safety") {
+    const viewer = await resolveViewer(req.user!.id, pid);
+    const ids = await visibleIds(pid, "document", viewer);
+    if (!ids.has(doc.id)) { res.status(404).json({ error: "not_found", message: "Document not found" }); return; }
+  }
+  const filename = fileUrlToFilename(doc.fileUrl);
+  if (!filename) { res.status(404).json({ error: "not_found", message: "Document file unavailable" }); return; }
+
+  let downloadName = doc.name.replace(/[/\\"]/g, "-");
+  if (!/\.[a-z0-9]+$/i.test(downloadName)) {
+    downloadName += filename.match(/\.[a-z0-9]+$/i)?.[0] ?? "";
+  }
+  const stream = getBucket().file(objectKey(filename)).createReadStream();
+  stream.on("error", (err) => {
+    req.log.error({ err }, "Document download error");
+    if (!res.headersSent) res.status(404).json({ error: "not_found", message: "Document file unavailable" });
+    else res.destroy();
+  });
+  res.setHeader("Content-Type", "application/octet-stream");
+  res.setHeader("Content-Disposition", `attachment; filename="${downloadName}"`);
+  stream.pipe(res);
+});
 
 // GET /api/portal/method-statements (+ /:documentId)
 router.get("/portal/method-statements", ...portalGuards, docListHandler("method_statement"));
@@ -783,6 +926,98 @@ router.get("/portal/general", ...portalGuards, async (req, res) => {
     documents: docs.map(serializeDoc),
     notes: notes.map(n => ({ id: n.id, body: n.body, noteDate: n.noteDate, authorName: n.authorName ?? "Unknown", photoUrl: n.photoUrl ?? undefined })),
   });
+});
+
+// ---- My Documents (contractor self-upload with manager approval) ----
+function serializeMemberDoc(d: typeof portalMemberDocumentsTable.$inferSelect) {
+  return {
+    id: d.id, name: d.name, kind: d.kind, fileUrl: d.fileUrl, fileSize: d.fileSize,
+    status: d.status, reviewNote: d.reviewNote ?? undefined,
+    reviewedAt: iso(d.reviewedAt), createdAt: d.createdAt.toISOString(),
+  };
+}
+
+// GET /api/portal/my-documents — the signed-in member's own uploads for this
+// project, newest first (with their current review status).
+router.get("/portal/my-documents", ...portalGuards, async (req, res) => {
+  const pid = req.portalProjectId!;
+  const rows = await db.select().from(portalMemberDocumentsTable)
+    .where(and(eq(portalMemberDocumentsTable.projectId, pid), eq(portalMemberDocumentsTable.userId, req.user!.id)))
+    .orderBy(desc(portalMemberDocumentsTable.createdAt));
+  res.json(rows.map(serializeMemberDoc));
+});
+
+// POST /api/portal/my-documents — upload a document for manager review
+// (multipart: file + name + kind). Saved to object storage, row starts pending.
+router.post("/portal/my-documents", authenticate, requirePortalSession, requirePortalMember, (req, res, next) => {
+  memberUpload.single("file")(req, res, (err) => {
+    if (err) {
+      res.status(400).json({ error: "upload_error", message: err.message ?? "Upload failed" });
+      return;
+    }
+    next();
+  });
+}, async (req, res) => {
+  const pid = req.portalProjectId!;
+  if (!req.file) { res.status(400).json({ error: "validation_error", message: "No file provided" }); return; }
+  const name = String(req.body?.name ?? "").trim();
+  const kind = String(req.body?.kind ?? "").trim() || "other";
+  if (!name) { res.status(400).json({ error: "validation_error", message: "A document name is required." }); return; }
+
+  try {
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    const filename = `${randomUUID()}${ext}`;
+    const file = getBucket().file(objectKey(filename));
+    await file.save(req.file.buffer, {
+      contentType: req.file.mimetype,
+      resumable: false,
+      metadata: {
+        cacheControl: "private, max-age=300",
+        metadata: {
+          originalName: req.file.originalname,
+          uploadedBy: req.user?.id ?? "",
+          companyId: req.user?.companyId ?? "",
+        },
+      },
+    });
+
+    // Resolve the uploader's person link (if any) for the PM-side listing.
+    const member = (await db.select({ personId: projectMembersTable.personId }).from(projectMembersTable)
+      .where(and(eq(projectMembersTable.projectId, pid), eq(projectMembersTable.userId, req.user!.id))).limit(1))[0];
+
+    const id = generateId();
+    await db.insert(portalMemberDocumentsTable).values({
+      id, projectId: pid, userId: req.user!.id, personId: member?.personId ?? null,
+      name, fileUrl: `/api/uploads/${filename}`, fileSize: req.file.size, kind, status: "pending",
+    });
+
+    // Best-effort: notify the project's managers that a document awaits review.
+    try {
+      const proj = (await db.select({ name: projectsTable.name, companyId: projectsTable.companyId })
+        .from(projectsTable).where(eq(projectsTable.id, pid)).limit(1))[0];
+      if (proj) {
+        const uploader = (await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1))[0];
+        const managers = await db.select({ userId: companyMembersTable.userId })
+          .from(companyMembersTable)
+          .where(and(eq(companyMembersTable.companyId, proj.companyId), inArray(companyMembersTable.role, ["admin", "project_manager"])));
+        const managerIds = [...new Set(managers.map(m => m.userId))];
+        for (const userId of managerIds) {
+          await db.insert(notificationsTable).values({
+            id: generateId(), userId, type: "member_document_uploaded",
+            title: `Document for review at ${proj.name}`,
+            message: `${uploader?.name ?? "A member"} uploaded a document for review.`,
+            relatedEntityId: pid, relatedEntityType: "project", read: false,
+          });
+        }
+      }
+    } catch { /* notifying managers is best-effort */ }
+
+    const created = (await db.select().from(portalMemberDocumentsTable).where(eq(portalMemberDocumentsTable.id, id)).limit(1))[0];
+    res.status(201).json(serializeMemberDoc(created));
+  } catch (err) {
+    req.log.error({ err }, "Portal my-documents upload error");
+    res.status(500).json({ error: "server_error", message: "Failed to upload document" });
+  }
 });
 
 export default router;

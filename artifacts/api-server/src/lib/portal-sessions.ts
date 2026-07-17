@@ -6,12 +6,14 @@ import { generateId } from "./id";
 // Server-side portal session policy (see portal_sessions schema for the "why"):
 //   • SLIDING_MS  — sliding lifetime; each active request pushes expires_at to
 //     now + 30 days, so a worker in regular use is never logged out.
-//   • INACTIVITY_MS — a session untouched for 12h is dead and must re-login.
+//   • INACTIVITY_MS — matched to the sliding window (30 days): site workers must
+//     NOT be booted after a short idle gap (e.g. a weekend or a 12h break). The
+//     sliding 30-day expiry is the only thing that ends a session on its own.
 export const SLIDING_MS = 30 * 24 * 60 * 60 * 1000;   // 30 days
-export const INACTIVITY_MS = 12 * 60 * 60 * 1000;     // 12 hours
+export const INACTIVITY_MS = 30 * 24 * 60 * 60 * 1000; // 30 days (== sliding window)
 // Throttle the sliding write: don't touch the row on every request (portal pages
-// fetch several endpoints), only once activity is >1 min stale. 1 min ≪ 12h so
-// the inactivity check stays effectively exact.
+// fetch several endpoints), only once activity is >1 min stale. 1 min ≪ 30d so
+// the sliding-window slide stays effectively continuous.
 const TOUCH_THROTTLE_MS = 60 * 1000;
 
 export type SessionCheck =

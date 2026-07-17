@@ -5,6 +5,7 @@
  * SiteSort API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { PortalDocumentSupersededBy } from "./portalDocumentSupersededBy";
 
 export interface PortalDocument {
   id: string;
@@ -20,4 +21,6 @@ export interface PortalDocument {
   unseen?: boolean;
   /** When this item was shared to the member (for newest-first ordering). */
   sharedAt?: string;
+  /** Set when this document is superseded — points at the live replacement. */
+  supersededBy?: PortalDocumentSupersededBy;
 }

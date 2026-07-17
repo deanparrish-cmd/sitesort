@@ -1,32 +1,54 @@
 import { useState, useEffect, useRef } from "react";
 import { useRoute, useSearch, Link } from "wouter";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import {
   useGetPortalOverview, useGetPortalProgress, useGetPortalTeam,
   useGetPortalSiteIssues, useGetPortalSiteBoard, useGetPortalHs,
   useGetPortalDrawings, useGetPortalMethodStatements, useGetPortalPermits,
   useGetPortalSafety, useGetPortalGeneral, useGetPortalShared,
+  useGetPortalMyDocuments, useGetPortalUnseen,
   getGetPortalOverviewQueryKey, getGetPortalSiteIssuesQueryKey,
   getGetPortalGeneralQueryKey, getGetPortalSharedQueryKey,
+  getGetPortalMyDocumentsQueryKey, getGetPortalUnseenQueryKey,
 } from "@workspace/api-client-react";
 import { QRCodeSVG } from "qrcode.react";
-import { PortalLayout } from "./layout";
+import { PortalLayout, SECTION_NAV } from "./layout";
 import { portalQueryClient, PORTAL_LIVE_REFETCH } from "./query-client";
 import { Spinner } from "@/components/ui/spinner";
 import { LinkRow } from "@/components/ui/link-row";
 import {
   ExternalLink, MapPin, Calendar, CheckCircle2, Circle, Phone, Mail,
   FileText, AlertTriangle, StickyNote, Download, TrendingUp, FileCheck, Users,
-  QrCode, Copy, Building2, ShieldCheck, X,
+  QrCode, Copy, Building2, ShieldCheck, X, Sparkles, UploadCloud, Share, Plus,
 } from "lucide-react";
 import { isCadFile, cadBadgeLabel, downloadFile } from "@/lib/documents";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import {
   pushSupported, permissionState, isDeviceSubscribed, enablePush, disablePush,
-  iosNeedsInstall,
+  iosNeedsInstall, isIOS,
 } from "@/lib/portal-push";
 import { Bell, BellOff } from "lucide-react";
+
+// Portal-authed binary download: the app's global fetch interceptor attaches the
+// portal bearer token to /api/portal/* requests, so a plain <a href> (which does
+// NOT carry the Authorization header) would 401. Instead fetch to a blob, then
+// trigger a download from that in-memory object URL.
+async function downloadAuthed(url: string, filename: string): Promise<void> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Download failed (${res.status})`);
+  const blob = await res.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = objectUrl;
+  a.download = filename;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(objectUrl);
+}
 
 // ---------- shared helpers ----------
 
@@ -115,28 +137,72 @@ function NewPill() {
 
 // A row for a document (drawing / method statement / safety / general doc). The
 // superseded badge reflects the last list fetch; opening re-checks live status.
+// FreshDoc extended to carry the superseded replacement (T003): the per-item
+// endpoint returns supersededBy pointing at the live version so we can offer it.
+type SupersededBy = { id: string; name: string; version: number; revision?: string };
+type FreshDocFull = { status?: string; supersededBy?: SupersededBy } | null;
+
 function DocRow({ doc, section, unseen }: { doc: any; section: string; unseen?: boolean }) {
   const { toast } = useToast();
   const clickable = section === "drawings" || section === "method-statements";
   const cad = cadBadgeLabel(doc.fileUrl, doc.name);
   const [supersededNow, setSupersededNow] = useState(doc.status === "superseded");
+  const [downloading, setDownloading] = useState(false);
+
+  // Open the live replacement of a superseded document: fetch its detail for the
+  // freshest fileUrl, then open/download it.
+  const openReplacement = async (replacement: SupersededBy) => {
+    try {
+      const res = await fetch(`/api/portal/${section}/${replacement.id}`);
+      if (!res.ok) throw new Error();
+      const fresh = await res.json();
+      if (!openDocFile(fresh)) throw new Error();
+    } catch {
+      toast({ title: "Couldn't open replacement", description: "Please try again from the list.", variant: "destructive" });
+    }
+  };
 
   const open = () => {
     openDocFile(doc);
     if (!clickable) return;
     // Confirm current status at open (not from the cached list row).
-    void fetchFreshDoc(section, doc.id).then(({ ok, doc: fresh }) => {
+    void fetchFreshDoc(section, doc.id).then(({ ok, doc: fresh }: { ok: boolean; doc: FreshDocFull }) => {
       if (!ok) {
         toast({ title: "No longer available", description: "This document has been removed or is no longer shared with you.", variant: "destructive" });
         return;
       }
       if (fresh?.status === "superseded") {
         setSupersededNow(true);
-        toast({ title: "Superseded document", description: `"${doc.name}" has been superseded by a newer version.`, variant: "destructive" });
+        const repl = fresh.supersededBy;
+        toast({
+          title: "Superseded document",
+          description: repl
+            ? `"${doc.name}" has been replaced by "${repl.name}"${repl.revision ? ` (Rev ${repl.revision})` : ` (v${repl.version})`}.`
+            : `"${doc.name}" has been superseded by a newer version.`,
+          variant: "destructive",
+          action: repl ? (
+            <ToastAction altText="Open the latest version" onClick={() => void openReplacement(repl)}>
+              Open latest
+            </ToastAction>
+          ) : undefined,
+        });
       } else if (fresh && fresh.status !== "superseded") {
         setSupersededNow(false);
       }
     });
+  };
+
+  // Download the file itself (always, regardless of type) via the authed portal
+  // download endpoint that streams with Content-Disposition attachment.
+  const download = async () => {
+    setDownloading(true);
+    try {
+      await downloadAuthed(`/api/portal/documents/${doc.id}/download`, doc.name || "document");
+    } catch {
+      toast({ title: "Download failed", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setDownloading(false);
+    }
   };
 
   return (
@@ -154,12 +220,24 @@ function DocRow({ doc, section, unseen }: { doc: any; section: string; unseen?: 
           {cad && <span className="font-mono bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 px-1.5 py-0.5 rounded text-[10px] font-bold">{cad}</span>}
         </p>
       </div>
-      <button
-        onClick={open}
-        className="shrink-0 flex items-center gap-1 text-sm text-primary font-medium hover:underline"
-      >
-        {cad ? <><Download className="w-3.5 h-3.5" /> Download</> : <><ExternalLink className="w-3.5 h-3.5" /> View</>}
-      </button>
+      <div className="shrink-0 flex items-center gap-1">
+        <button
+          onClick={open}
+          className="inline-flex items-center gap-1 rounded-lg px-3 min-h-11 text-sm text-primary font-medium hover:bg-primary/10"
+        >
+          {cad ? <><Download className="w-4 h-4" /> Download</> : <><ExternalLink className="w-4 h-4" /> View</>}
+        </button>
+        {!cad && (
+          <button
+            onClick={() => void download()}
+            disabled={downloading}
+            aria-label={`Download ${doc.name}`}
+            className="inline-flex items-center justify-center rounded-lg px-3 min-h-11 text-sm text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+          >
+            <Download className="w-4 h-4" />
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -177,6 +255,41 @@ function PermitRow({ p, unseen }: { p: any; unseen?: boolean }) {
 
 // ---------- section views ----------
 
+// Human labels for the "New since your last visit" card — keyed by section key
+// (from SECTION_NAV, minus non-content sections that never carry unseen counts).
+const SECTION_LABEL: Record<string, string> = Object.fromEntries(SECTION_NAV.map(s => [s.key, s.label]));
+
+function WhatsNewCard() {
+  // Reuse the same unseen data the nav badges use (polled + focus-refetched).
+  const { data } = useGetPortalUnseen({ query: { refetchInterval: 60_000, queryKey: getGetPortalUnseenQueryKey() } });
+  const counts = (data?.counts ?? {}) as Record<string, number>;
+  // Don't list Overview itself (you're already here); order follows the nav.
+  const entries = SECTION_NAV
+    .filter(s => s.key !== "overview" && (counts[s.key] ?? 0) > 0)
+    .map(s => ({ key: s.key, label: SECTION_LABEL[s.key] ?? s.key, count: counts[s.key], Icon: s.Icon }));
+  if (entries.length === 0) return null;
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <Sparkles className="w-5 h-5 text-primary" />
+        <h2 className="text-lg font-display font-bold">New since your last visit</h2>
+      </div>
+      <div className="space-y-2">
+        {entries.map(e => (
+          <LinkRow
+            key={e.key}
+            href={`/portal/${e.key}`}
+            icon={<e.Icon className="w-5 h-5 text-primary" />}
+            label={e.label}
+            detail={<span className="min-w-[1.5rem] h-6 px-1.5 rounded-full text-xs font-bold flex items-center justify-center bg-primary text-primary-foreground">{e.count > 99 ? "99+" : e.count}</span>}
+            ariaLabel={`${e.label}: ${e.count} new`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function OverviewView() {
   // Site updates are time-sensitive → poll while visible.
   const { data, isLoading } = useGetPortalOverview({ query: { refetchInterval: PORTAL_LIVE_REFETCH, queryKey: getGetPortalOverviewQueryKey() } });
@@ -190,6 +303,7 @@ function OverviewView() {
   ];
   return (
     <div className="space-y-5">
+      <WhatsNewCard />
       <Card>
         <p className="text-sm text-muted-foreground">{data.project.address}</p>
         <div className="flex items-center gap-2 mt-3">
@@ -494,11 +608,36 @@ function HsView() {
   );
 }
 
-function DocListView({ section, hook, empty, live }: { section: string; hook: any; empty: string; live?: boolean }) {
+function DocListView({ section, hook, empty, live, downloadAll }: { section: string; hook: any; empty: string; live?: boolean; downloadAll?: boolean }) {
+  const { toast } = useToast();
+  const [downloading, setDownloading] = useState(false);
   const { data, isLoading } = hook(live ? { query: { refetchInterval: PORTAL_LIVE_REFETCH } } : undefined);
   if (isLoading) return <Loading />;
   if (!data || data.length === 0) return <Empty>{empty}</Empty>;
-  return <Card>{data.map((d: any) => <DocRow key={d.id} doc={d} section={section} />)}</Card>;
+  const grabAll = async () => {
+    setDownloading(true);
+    try {
+      await downloadAuthed("/api/portal/drawings/download-all", "drawings.zip");
+    } catch {
+      toast({ title: "Download failed", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setDownloading(false);
+    }
+  };
+  return (
+    <div className="space-y-3">
+      {downloadAll && (
+        <button
+          onClick={() => void grabAll()}
+          disabled={downloading}
+          className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 min-h-12 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+        >
+          <Download className="w-4 h-4" /> {downloading ? "Preparing…" : "Download all"}
+        </button>
+      )}
+      <Card>{data.map((d: any) => <DocRow key={d.id} doc={d} section={section} />)}</Card>
+    </div>
+  );
 }
 
 function PermitsView() {
@@ -601,6 +740,219 @@ function SharedView() {
   );
 }
 
+const MY_DOC_STATUS: Record<string, { label: string; className: string }> = {
+  pending: { label: "Pending review", className: "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300" },
+  approved: { label: "Approved", className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300" },
+  rejected: { label: "Rejected", className: "bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300" },
+};
+const MY_DOC_KINDS = [
+  { value: "insurance", label: "Insurance" },
+  { value: "certification", label: "Certification" },
+  { value: "other", label: "Other" },
+];
+
+// "My documents" — a portal member's own self-uploads (insurance, certs) with
+// their manager-review status, plus an upload form. Big touch-friendly controls.
+function MyDocumentsView() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useGetPortalMyDocuments();
+  const [name, setName] = useState("");
+  const [kind, setKind] = useState("insurance");
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const reset = () => { setName(""); setKind("insurance"); setFile(null); if (fileRef.current) fileRef.current.value = ""; };
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!file || !name.trim()) {
+      toast({ title: "Add a name and file", variant: "destructive" });
+      return;
+    }
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("name", name.trim());
+      form.append("kind", kind);
+      // Raw fetch (multipart) — the global interceptor attaches the portal token.
+      const res = await fetch("/api/portal/my-documents", { method: "POST", body: form });
+      if (!res.ok) throw new Error();
+      toast({ title: "Uploaded", description: "Your document was sent for review." });
+      reset();
+      await queryClient.invalidateQueries({ queryKey: getGetPortalMyDocumentsQueryKey() });
+    } catch {
+      toast({ title: "Upload failed", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <SectionTitle>Upload a document</SectionTitle>
+        <Card>
+          <form onSubmit={submit} className="space-y-3">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Document name</label>
+              <input
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="e.g. Public liability insurance"
+                className="mt-1 w-full min-h-12 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Type</label>
+              <select
+                value={kind}
+                onChange={e => setKind(e.target.value)}
+                className="mt-1 w-full min-h-12 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+              >
+                {MY_DOC_KINDS.map(k => <option key={k.value} value={k.value}>{k.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">File</label>
+              <input
+                ref={fileRef}
+                type="file"
+                onChange={e => setFile(e.target.files?.[0] ?? null)}
+                className="mt-1 w-full text-sm file:mr-3 file:min-h-10 file:rounded-lg file:border-0 file:bg-primary/10 file:px-4 file:text-sm file:font-medium file:text-primary"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={uploading}
+              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary min-h-12 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            >
+              <UploadCloud className="w-4 h-4" /> {uploading ? "Uploading…" : "Upload for review"}
+            </button>
+          </form>
+        </Card>
+      </div>
+      <div>
+        <SectionTitle>My uploads</SectionTitle>
+        {isLoading ? <Loading /> : !data || data.length === 0 ? (
+          <Empty>You haven't uploaded any documents yet.</Empty>
+        ) : (
+          <Card>
+            {data.map(d => {
+              const st = MY_DOC_STATUS[d.status] ?? { label: d.status, className: "bg-muted text-muted-foreground" };
+              return (
+                <div key={d.id} className="py-3 border-b border-border/60 last:border-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{d.name}</p>
+                      <p className="text-xs text-muted-foreground capitalize">{d.kind} · {fmtDate(d.createdAt)}</p>
+                    </div>
+                    <Badge label={st.label} className={st.className} />
+                  </div>
+                  {d.status === "rejected" && d.reviewNote && (
+                    <p className="mt-2 text-xs text-rose-700 dark:text-rose-300 break-words">Reason: {d.reviewNote}</p>
+                  )}
+                  <div className="mt-2">
+                    <button
+                      onClick={() => window.open(fileHref(d.fileUrl), "_blank", "noopener")}
+                      className="inline-flex items-center gap-1 rounded-lg px-3 min-h-11 text-sm text-primary font-medium hover:bg-primary/10"
+                    >
+                      <ExternalLink className="w-4 h-4" /> View
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
+
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+};
+
+const INSTALL_HELP_DISMISS_KEY = "sitesort_portal_install_help_dismissed";
+
+// "Add to Home Screen" help card (T004). iOS Safari can't prompt programmatically
+// → show the Share → Add to Home Screen steps; Android/Chrome captures
+// beforeinstallprompt and offers a one-tap Install button. Hidden when already
+// installed (standalone) or dismissed.
+function AddToHomeScreenCard() {
+  const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
+  const [dismissed, setDismissed] = useState(() => {
+    try { return localStorage.getItem(INSTALL_HELP_DISMISS_KEY) === "1"; } catch { return false; }
+  });
+  const [standalone] = useState(() => {
+    try {
+      return window.matchMedia?.("(display-mode: standalone)").matches
+        || (window.navigator as unknown as { standalone?: boolean }).standalone === true;
+    } catch { return false; }
+  });
+  const ios = isIOS();
+
+  useEffect(() => {
+    const onPrompt = (e: Event) => { e.preventDefault(); setDeferred(e as BeforeInstallPromptEvent); };
+    window.addEventListener("beforeinstallprompt", onPrompt);
+    return () => window.removeEventListener("beforeinstallprompt", onPrompt);
+  }, []);
+
+  const dismiss = () => { try { localStorage.setItem(INSTALL_HELP_DISMISS_KEY, "1"); } catch { /* ignore */ } setDismissed(true); };
+  const install = async () => {
+    if (!deferred) return;
+    await deferred.prompt();
+    await deferred.userChoice.catch(() => {});
+    setDeferred(null);
+    dismiss();
+  };
+
+  // Already installed, dismissed, or a desktop browser with no install path → hide.
+  if (standalone || dismissed) return null;
+  if (!ios && !deferred) return null;
+
+  return (
+    <div>
+      <SectionTitle>Install app</SectionTitle>
+      <Card>
+        <div className="flex items-start gap-3">
+          <img src="/icon-192.png" alt="" className="w-11 h-11 rounded-xl shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="font-medium">Add SiteSort to your Home Screen</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Get quick, one-tap access to your project portal.</p>
+          </div>
+          <button onClick={dismiss} aria-label="Dismiss" className="shrink-0 -mr-1 -mt-1 p-1.5 rounded-lg text-muted-foreground hover:bg-muted">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        {ios ? (
+          <ol className="mt-3 space-y-1.5 text-xs text-foreground">
+            <li className="flex items-center gap-2">
+              <span className="shrink-0 w-5 h-5 rounded-full bg-muted flex items-center justify-center font-semibold text-[11px]">1</span>
+              <span className="flex items-center gap-1">Tap the <Share className="w-4 h-4 text-primary inline" /> <span className="font-medium">Share</span> icon in Safari</span>
+            </li>
+            <li className="flex items-center gap-2">
+              <span className="shrink-0 w-5 h-5 rounded-full bg-muted flex items-center justify-center font-semibold text-[11px]">2</span>
+              <span className="flex items-center gap-1">Choose <Plus className="w-4 h-4 text-primary inline" /> <span className="font-medium">Add to Home Screen</span></span>
+            </li>
+          </ol>
+        ) : (
+          <button
+            onClick={() => void install()}
+            className="mt-3 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary min-h-12 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+          >
+            <Download className="w-4 h-4" /> Install app
+          </button>
+        )}
+      </Card>
+    </div>
+  );
+}
+
 // Portal member Settings — notification preferences (per member, per device).
 function SettingsView() {
   const { toast } = useToast();
@@ -660,6 +1012,7 @@ function SettingsView() {
           )}
         </Card>
       </div>
+      <AddToHomeScreenCard />
     </div>
   );
 }
@@ -668,13 +1021,14 @@ function renderSection(section: string) {
   switch (section) {
     case "overview": return <OverviewView />;
     case "shared": return <SharedView />;
+    case "my-documents": return <MyDocumentsView />;
     case "settings": return <SettingsView />;
     case "progress": return <ProgressView />;
     case "team": return <TeamView />;
     case "site-issues": return <SiteIssuesView />;
     case "site-board": return <SiteBoardView />;
     case "hs": return <HsView />;
-    case "drawings": return <DocListView section="drawings" hook={useGetPortalDrawings} empty="Nothing shared with you here yet." live />;
+    case "drawings": return <DocListView section="drawings" hook={useGetPortalDrawings} empty="Nothing shared with you here yet." live downloadAll />;
     case "method-statements": return <DocListView section="method-statements" hook={useGetPortalMethodStatements} empty="Nothing shared with you here yet." />;
     case "permits": return <PermitsView />;
     case "safety": return <DocListView section="safety" hook={useGetPortalSafety} empty="No safety documents uploaded." />;

@@ -925,6 +925,16 @@ export interface PortalIssue {
   sharedAt?: string;
 }
 
+/**
+ * Set when this document is superseded — points at the live replacement.
+ */
+export type PortalDocumentSupersededBy = {
+  id: string;
+  name: string;
+  version: number;
+  revision?: string;
+};
+
 export interface PortalDocument {
   id: string;
   name: string;
@@ -939,6 +949,48 @@ export interface PortalDocument {
   unseen?: boolean;
   /** When this item was shared to the member (for newest-first ordering). */
   sharedAt?: string;
+  /** Set when this document is superseded — points at the live replacement. */
+  supersededBy?: PortalDocumentSupersededBy;
+}
+
+export interface PortalMemberDocument {
+  id: string;
+  name: string;
+  kind: string;
+  fileUrl: string;
+  fileSize: number;
+  /** pending | approved | rejected */
+  status: string;
+  reviewNote?: string;
+  reviewedAt?: string;
+  createdAt: string;
+}
+
+export interface MemberDocument {
+  id: string;
+  name: string;
+  kind: string;
+  fileUrl: string;
+  fileSize: number;
+  /** pending | approved | rejected */
+  status: string;
+  reviewNote?: string;
+  reviewedAt?: string;
+  createdAt: string;
+  uploaderName: string;
+}
+
+export type ReviewMemberDocumentRequestAction =
+  (typeof ReviewMemberDocumentRequestAction)[keyof typeof ReviewMemberDocumentRequestAction];
+
+export const ReviewMemberDocumentRequestAction = {
+  approve: "approve",
+  reject: "reject",
+} as const;
+
+export interface ReviewMemberDocumentRequest {
+  action: ReviewMemberDocumentRequestAction;
+  note?: string;
 }
 
 export interface PortalPermit {
@@ -1299,6 +1351,12 @@ export type ListSubcontractorDocumentsParams = {
 
 export type ListPhotosParams = {
   category?: string;
+};
+
+export type UploadPortalMyDocumentBody = {
+  file: Blob;
+  name: string;
+  kind?: string;
 };
 
 export type ListSubcontractorPeopleParams = {

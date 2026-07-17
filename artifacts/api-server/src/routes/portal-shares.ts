@@ -2,12 +2,14 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import {
   portalSharesTable, projectsTable, projectMembersTable, peopleTable,
-  subcontractorsTable, documentDistributionsTable, documentsTable,
+  subcontractorsTable, documentDistributionsTable, documentsTable, usersTable,
+  portalMemberDocumentsTable,
 } from "@workspace/db/schema";
-import { and, eq, isNotNull, inArray } from "drizzle-orm";
+import { and, eq, isNotNull, inArray, desc } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { enqueuePushForMembers } from "../lib/push-triggers";
+import { sendDocumentNotificationEmail } from "../lib/email";
 
 const router: IRouter = Router();
 
@@ -179,7 +181,7 @@ router.post("/projects/:projectId/portal-shares", authenticate, async (req, res)
       // trade/everyone/individual all funnel here — the audience is already
       // flattened to the exact members it reaches.
       if (targetUserIds.size > 0) {
-        const doc = (await db.select({ name: documentsTable.name, type: documentsTable.type }).from(documentsTable).where(eq(documentsTable.id, itemId)).limit(1))[0];
+        const doc = (await db.select({ name: documentsTable.name, type: documentsTable.type, version: documentsTable.version }).from(documentsTable).where(eq(documentsTable.id, itemId)).limit(1))[0];
         const proj = (await db.select({ name: projectsTable.name }).from(projectsTable).where(eq(projectsTable.id, req.params.projectId)).limit(1))[0];
         if (doc && proj) {
           const label = doc.type === "drawing" ? "drawing" : doc.type === "method_statement" ? "method statement" : doc.type === "safety" ? "safety document" : "document";
@@ -190,6 +192,16 @@ router.post("/projects/:projectId/portal-shares", authenticate, async (req, res)
             projectName: proj.name,
             deepLink: section === "shared" ? "/portal/shared" : `/portal/${section}?doc=${itemId}`,
           });
+
+          // Email each target member too (fire-and-forget). A failed send must
+          // never fail the share — the push + in-portal listing already stand.
+          const recipients = await db.select({ email: usersTable.email, name: usersTable.name })
+            .from(usersTable).where(inArray(usersTable.id, [...targetUserIds]));
+          for (const r of recipients) {
+            if (!r.email) continue;
+            sendDocumentNotificationEmail(r.email, r.name, doc.name, doc.version, proj.name, false)
+              .catch(err => req.log.error({ err }, "Failed to send portal share email"));
+          }
         }
       }
     }
@@ -214,6 +226,71 @@ router.delete("/projects/:projectId/portal-shares/:id", authenticate, async (req
   } catch (err) {
     req.log.error({ err }, "Delete portal share error");
     res.status(500).json({ error: "server_error", message: "Failed to remove share" });
+  }
+});
+
+// ==========================================================================
+// Member document review — the PM side of the contractor "My Documents" flow.
+// ==========================================================================
+
+// GET /api/projects/:projectId/member-documents — all member-submitted docs for
+// the project (joined with the uploader's name), newest first. Manager-gated.
+router.get("/projects/:projectId/member-documents", authenticate, async (req, res) => {
+  try {
+    if (!(await ownedProject(req))) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+    if (!requireManager(req, res)) return;
+    const rows = await db.select({
+      id: portalMemberDocumentsTable.id,
+      name: portalMemberDocumentsTable.name,
+      kind: portalMemberDocumentsTable.kind,
+      fileUrl: portalMemberDocumentsTable.fileUrl,
+      fileSize: portalMemberDocumentsTable.fileSize,
+      status: portalMemberDocumentsTable.status,
+      reviewNote: portalMemberDocumentsTable.reviewNote,
+      reviewedAt: portalMemberDocumentsTable.reviewedAt,
+      createdAt: portalMemberDocumentsTable.createdAt,
+      uploaderName: usersTable.name,
+    }).from(portalMemberDocumentsTable)
+      .leftJoin(usersTable, eq(portalMemberDocumentsTable.userId, usersTable.id))
+      .where(eq(portalMemberDocumentsTable.projectId, req.params.projectId))
+      .orderBy(desc(portalMemberDocumentsTable.createdAt));
+    res.json(rows.map(r => ({
+      id: r.id, name: r.name, kind: r.kind, fileUrl: r.fileUrl, fileSize: r.fileSize,
+      status: r.status, reviewNote: r.reviewNote ?? undefined,
+      reviewedAt: r.reviewedAt ? r.reviewedAt.toISOString() : undefined,
+      createdAt: r.createdAt.toISOString(),
+      uploaderName: r.uploaderName ?? "Unknown",
+    })));
+  } catch (err) {
+    req.log.error({ err }, "List member documents error");
+    res.status(500).json({ error: "server_error", message: "Failed to load member documents" });
+  }
+});
+
+// POST /api/projects/:projectId/member-documents/:id/review — approve or reject a
+// member-submitted document with an optional note. Manager-gated.
+router.post("/projects/:projectId/member-documents/:id/review", authenticate, async (req, res) => {
+  try {
+    if (!(await ownedProject(req))) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+    if (!requireManager(req, res)) return;
+    const { action, note } = req.body as { action?: string; note?: string };
+    if (action !== "approve" && action !== "reject") {
+      res.status(400).json({ error: "validation_error", message: "action must be 'approve' or 'reject'." });
+      return;
+    }
+    const existing = (await db.select({ id: portalMemberDocumentsTable.id }).from(portalMemberDocumentsTable)
+      .where(and(eq(portalMemberDocumentsTable.id, req.params.id), eq(portalMemberDocumentsTable.projectId, req.params.projectId))).limit(1))[0];
+    if (!existing) { res.status(404).json({ error: "not_found", message: "Document not found" }); return; }
+    await db.update(portalMemberDocumentsTable).set({
+      status: action === "approve" ? "approved" : "rejected",
+      reviewNote: typeof note === "string" && note.trim() ? note.trim() : null,
+      reviewedByUserId: req.user!.id,
+      reviewedAt: new Date(),
+    }).where(eq(portalMemberDocumentsTable.id, existing.id));
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Review member document error");
+    res.status(500).json({ error: "server_error", message: "Failed to review document" });
   }
 });
 

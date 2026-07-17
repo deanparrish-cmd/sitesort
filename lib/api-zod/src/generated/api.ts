@@ -1478,6 +1478,17 @@ export const GetPortalHsResponse = zod.object({
         .describe(
           "When this item was shared to the member (for newest-first ordering).",
         ),
+      supersededBy: zod
+        .object({
+          id: zod.string(),
+          name: zod.string(),
+          version: zod.number(),
+          revision: zod.string().optional(),
+        })
+        .optional()
+        .describe(
+          "Set when this document is superseded — points at the live replacement.",
+        ),
     }),
   ),
   safety: zod.array(
@@ -1502,6 +1513,17 @@ export const GetPortalHsResponse = zod.object({
         .optional()
         .describe(
           "When this item was shared to the member (for newest-first ordering).",
+        ),
+      supersededBy: zod
+        .object({
+          id: zod.string(),
+          name: zod.string(),
+          version: zod.number(),
+          revision: zod.string().optional(),
+        })
+        .optional()
+        .describe(
+          "Set when this document is superseded — points at the live replacement.",
         ),
     }),
   ),
@@ -1546,6 +1568,17 @@ export const GetPortalSharedResponse = zod.object({
         .optional()
         .describe(
           "When this item was shared to the member (for newest-first ordering).",
+        ),
+      supersededBy: zod
+        .object({
+          id: zod.string(),
+          name: zod.string(),
+          version: zod.number(),
+          revision: zod.string().optional(),
+        })
+        .optional()
+        .describe(
+          "Set when this document is superseded — points at the live replacement.",
         ),
     }),
   ),
@@ -1605,6 +1638,17 @@ export const GetPortalDrawingsResponseItem = zod.object({
     .describe(
       "When this item was shared to the member (for newest-first ordering).",
     ),
+  supersededBy: zod
+    .object({
+      id: zod.string(),
+      name: zod.string(),
+      version: zod.number(),
+      revision: zod.string().optional(),
+    })
+    .optional()
+    .describe(
+      "Set when this document is superseded — points at the live replacement.",
+    ),
 });
 export const GetPortalDrawingsResponse = zod.array(
   GetPortalDrawingsResponseItem,
@@ -1639,6 +1683,92 @@ export const GetPortalDrawingResponse = zod.object({
     .describe(
       "When this item was shared to the member (for newest-first ordering).",
     ),
+  supersededBy: zod
+    .object({
+      id: zod.string(),
+      name: zod.string(),
+      version: zod.number(),
+      revision: zod.string().optional(),
+    })
+    .optional()
+    .describe(
+      "Set when this document is superseded — points at the live replacement.",
+    ),
+});
+
+/**
+ * @summary Download a single document's file as an attachment
+ */
+export const DownloadPortalDocumentParams = zod.object({
+  documentId: zod.coerce.string(),
+});
+
+/**
+ * @summary The signed-in member's own uploaded documents (newest first)
+ */
+export const GetPortalMyDocumentsResponseItem = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  kind: zod.string(),
+  fileUrl: zod.string(),
+  fileSize: zod.number(),
+  status: zod.string().describe("pending | approved | rejected"),
+  reviewNote: zod.string().optional(),
+  reviewedAt: zod.string().optional(),
+  createdAt: zod.string(),
+});
+export const GetPortalMyDocumentsResponse = zod.array(
+  GetPortalMyDocumentsResponseItem,
+);
+
+/**
+ * @summary Upload a document for manager review (multipart)
+ */
+export const UploadPortalMyDocumentBody = zod.object({
+  file: zod.instanceof(File),
+  name: zod.string(),
+  kind: zod.string().optional(),
+});
+
+/**
+ * @summary List member-submitted documents for a project (manager-gated)
+ */
+export const ListMemberDocumentsParams = zod.object({
+  projectId: zod.coerce.string(),
+});
+
+export const ListMemberDocumentsResponseItem = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  kind: zod.string(),
+  fileUrl: zod.string(),
+  fileSize: zod.number(),
+  status: zod.string().describe("pending | approved | rejected"),
+  reviewNote: zod.string().optional(),
+  reviewedAt: zod.string().optional(),
+  createdAt: zod.string(),
+  uploaderName: zod.string(),
+});
+export const ListMemberDocumentsResponse = zod.array(
+  ListMemberDocumentsResponseItem,
+);
+
+/**
+ * @summary Approve or reject a member-submitted document (manager-gated)
+ */
+export const ReviewMemberDocumentParams = zod.object({
+  projectId: zod.coerce.string(),
+  id: zod.coerce.string(),
+});
+
+export const ReviewMemberDocumentBody = zod.object({
+  action: zod.enum(["approve", "reject"]),
+  note: zod.string().optional(),
+});
+
+export const ReviewMemberDocumentResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
 });
 
 /**
@@ -1665,6 +1795,17 @@ export const GetPortalMethodStatementsResponseItem = zod.object({
     .optional()
     .describe(
       "When this item was shared to the member (for newest-first ordering).",
+    ),
+  supersededBy: zod
+    .object({
+      id: zod.string(),
+      name: zod.string(),
+      version: zod.number(),
+      revision: zod.string().optional(),
+    })
+    .optional()
+    .describe(
+      "Set when this document is superseded — points at the live replacement.",
     ),
 });
 export const GetPortalMethodStatementsResponse = zod.array(
@@ -1699,6 +1840,17 @@ export const GetPortalMethodStatementResponse = zod.object({
     .optional()
     .describe(
       "When this item was shared to the member (for newest-first ordering).",
+    ),
+  supersededBy: zod
+    .object({
+      id: zod.string(),
+      name: zod.string(),
+      version: zod.number(),
+      revision: zod.string().optional(),
+    })
+    .optional()
+    .describe(
+      "Set when this document is superseded — points at the live replacement.",
     ),
 });
 
@@ -1743,6 +1895,17 @@ export const GetPortalSafetyResponseItem = zod.object({
     .describe(
       "When this item was shared to the member (for newest-first ordering).",
     ),
+  supersededBy: zod
+    .object({
+      id: zod.string(),
+      name: zod.string(),
+      version: zod.number(),
+      revision: zod.string().optional(),
+    })
+    .optional()
+    .describe(
+      "Set when this document is superseded — points at the live replacement.",
+    ),
 });
 export const GetPortalSafetyResponse = zod.array(GetPortalSafetyResponseItem);
 
@@ -1772,6 +1935,17 @@ export const GetPortalGeneralResponse = zod.object({
         .optional()
         .describe(
           "When this item was shared to the member (for newest-first ordering).",
+        ),
+      supersededBy: zod
+        .object({
+          id: zod.string(),
+          name: zod.string(),
+          version: zod.number(),
+          revision: zod.string().optional(),
+        })
+        .optional()
+        .describe(
+          "Set when this document is superseded — points at the live replacement.",
         ),
     }),
   ),

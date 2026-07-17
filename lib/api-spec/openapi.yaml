@@ -1260,6 +1260,26 @@ paths:
                 items:
                   $ref: "#/components/schemas/PortalDocument"
 
+  /portal/drawings/download-all:
+    get:
+      operationId: downloadAllPortalDrawings
+      tags: [portal]
+      summary: Download all current drawings as a zip
+      responses:
+        "200":
+          description: Zip archive of current drawings
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: No drawings available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /portal/drawings/{documentId}:
     get:
       operationId: getPortalDrawing
@@ -1278,6 +1298,142 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PortalDocument"
+
+  /portal/documents/{documentId}/download:
+    get:
+      operationId: downloadPortalDocument
+      tags: [portal]
+      summary: Download a single document's file as an attachment
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Document file
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Document not found or file unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /portal/my-documents:
+    get:
+      operationId: getPortalMyDocuments
+      tags: [portal]
+      summary: The signed-in member's own uploaded documents (newest first)
+      responses:
+        "200":
+          description: Member documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PortalMemberDocument"
+    post:
+      operationId: uploadPortalMyDocument
+      tags: [portal]
+      summary: Upload a document for manager review (multipart)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, name]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                name:
+                  type: string
+                kind:
+                  type: string
+      responses:
+        "201":
+          description: Document uploaded (pending review)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalMemberDocument"
+        "400":
+          description: Validation or upload error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /projects/{projectId}/member-documents:
+    get:
+      operationId: listMemberDocuments
+      tags: [portal]
+      summary: List member-submitted documents for a project (manager-gated)
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Member documents with uploader names
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MemberDocument"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /projects/{projectId}/member-documents/{id}/review:
+    post:
+      operationId: reviewMemberDocument
+      tags: [portal]
+      summary: Approve or reject a member-submitted document (manager-gated)
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewMemberDocumentRequest"
+      responses:
+        "200":
+          description: Reviewed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /portal/method-statements:
     get:
@@ -3053,7 +3209,80 @@ components:
         sharedAt:
           type: string
           description: When this item was shared to the member (for newest-first ordering).
+        supersededBy:
+          type: object
+          description: Set when this document is superseded — points at the live replacement.
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+            version:
+              type: integer
+            revision:
+              type: string
+          required: [id, name, version]
       required: [id, name, type, version, fileUrl, status]
+
+    PortalMemberDocument:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        kind:
+          type: string
+        fileUrl:
+          type: string
+        fileSize:
+          type: integer
+        status:
+          type: string
+          description: pending | approved | rejected
+        reviewNote:
+          type: string
+        reviewedAt:
+          type: string
+        createdAt:
+          type: string
+      required: [id, name, kind, fileUrl, fileSize, status, createdAt]
+
+    MemberDocument:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        kind:
+          type: string
+        fileUrl:
+          type: string
+        fileSize:
+          type: integer
+        status:
+          type: string
+          description: pending | approved | rejected
+        reviewNote:
+          type: string
+        reviewedAt:
+          type: string
+        createdAt:
+          type: string
+        uploaderName:
+          type: string
+      required: [id, name, kind, fileUrl, fileSize, status, createdAt, uploaderName]
+
+    ReviewMemberDocumentRequest:
+      type: object
+      properties:
+        action:
+          type: string
+          enum: [approve, reject]
+        note:
+          type: string
+      required: [action]
 
     PortalPermit:
       type: object

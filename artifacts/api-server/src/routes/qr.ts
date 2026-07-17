@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db } from "@workspace/db";
-import { qrCodesTable, qrBoardPinsTable, documentsTable, projectsTable, projectMembersTable, usersTable, permitsTable, photosTable, invoicesTable, siteCheckinsTable, subcontractorsTable, insuranceRecordsTable, calendarEventsTable } from "@workspace/db/schema";
+import { qrCodesTable, qrBoardPinsTable, documentsTable, projectsTable, projectMembersTable, usersTable, permitsTable, photosTable, invoicesTable, siteCheckinsTable, subcontractorsTable, insuranceRecordsTable, calendarEventsTable, companyMembersTable, notificationsTable } from "@workspace/db/schema";
 import { eq, and, or, desc, asc, inArray, isNull, gte } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
@@ -22,6 +22,47 @@ const checkinUpload = multer({
 });
 
 const router: IRouter = Router();
+
+// Best-effort: alert the project's managers (owner company users with an admin /
+// project_manager role) when a worker is turned away at check-in, so a blocked
+// arrival never goes unseen. Never throws — a failed alert must not fail the
+// check-in response.
+async function notifyBlockedCheckin(
+  projectId: string,
+  workerName: string,
+  companyName: string,
+  reason: "not_registered" | "no_valid_insurance",
+): Promise<void> {
+  try {
+    const proj = (await db.select({ name: projectsTable.name, companyId: projectsTable.companyId })
+      .from(projectsTable).where(eq(projectsTable.id, projectId)).limit(1))[0];
+    if (!proj) return;
+    const managers = await db.select({ userId: companyMembersTable.userId })
+      .from(companyMembersTable)
+      .where(and(
+        eq(companyMembersTable.companyId, proj.companyId),
+        inArray(companyMembersTable.role, ["admin", "project_manager"]),
+      ));
+    const reasonText = reason === "not_registered"
+      ? "they are not registered on this project"
+      : "they have no valid insurance on file";
+    const managerIds = [...new Set(managers.map(m => m.userId))];
+    for (const userId of managerIds) {
+      await db.insert(notificationsTable).values({
+        id: generateId(),
+        userId,
+        type: "check_in_blocked",
+        title: `Check-in blocked at ${proj.name}`,
+        message: `${workerName} (${companyName}) was blocked from checking in — ${reasonText}.`,
+        relatedEntityId: projectId,
+        relatedEntityType: "project",
+        read: false,
+      });
+    }
+  } catch {
+    /* alerting is best-effort */
+  }
+}
 
 const CATEGORY_LABELS: Record<string, string> = {
   site_board: "Site Board",
@@ -256,6 +297,7 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
       );
 
       if (!matched) {
+        await notifyBlockedCheckin(qr.projectId, workerName.trim(), companyName.trim(), "not_registered");
         res.status(403).json({ error: "check_in_blocked", reason: "not_registered" });
         return;
       }
@@ -272,6 +314,7 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
         .limit(1);
 
       if (validInsurance.length === 0) {
+        await notifyBlockedCheckin(qr.projectId, workerName.trim(), companyName.trim(), "no_valid_insurance");
         res.status(403).json({ error: "check_in_blocked", reason: "no_valid_insurance" });
         return;
       }

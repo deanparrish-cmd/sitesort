@@ -101,15 +101,20 @@ router.get("/uploads/:filename", async (req: Request, res: Response) => {
 
     const [metadata] = await file.getMetadata();
 
-    if (metadata.contentType) res.setHeader("Content-Type", metadata.contentType);
+    // Never let stored active content (HTML/SVG/XML/JS) render inline on our
+    // origin — that would be a stored-XSS vector. Serve those as downloads.
+    const ct = (metadata.contentType ?? "").toLowerCase();
+    const activeContent = /html|svg|xml|javascript|ecmascript/.test(ct);
+    if (metadata.contentType && !activeContent) res.setHeader("Content-Type", metadata.contentType);
+    if (activeContent) res.setHeader("Content-Type", "application/octet-stream");
     if (metadata.size) res.setHeader("Content-Length", String(metadata.size));
     res.setHeader("Cache-Control", "private, max-age=300");
+    res.setHeader("X-Content-Type-Options", "nosniff");
 
     const original = metadata.metadata?.originalName as string | undefined;
-    if (original) {
-      const safe = original.replace(/"/g, "");
-      res.setHeader("Content-Disposition", `inline; filename="${safe}"`);
-    }
+    const disposition = activeContent ? "attachment" : "inline";
+    const safe = original ? original.replace(/"/g, "") : "";
+    res.setHeader("Content-Disposition", safe ? `${disposition}; filename="${safe}"` : disposition);
 
     file.createReadStream()
       .on("error", err => {

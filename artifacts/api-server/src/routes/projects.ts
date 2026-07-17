@@ -250,10 +250,33 @@ router.post("/projects/:projectId/members/link", authenticate, async (req, res) 
 
 router.post("/projects/:projectId/tradespeople", authenticate, async (req, res) => {
   try {
+    // Tenant scoping: the project must belong to the caller's company.
+    const owned = await db.select({ id: projectsTable.id }).from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId))).limit(1);
+    if (!owned.length) {
+      res.status(404).json({ error: "not_found", message: "Project not found" });
+      return;
+    }
+
     const { trade, companyName, contactName, contactEmail, contactPhone } = req.body;
     if (!trade || !companyName || !contactName) {
       res.status(400).json({ error: "validation_error", message: "trade, companyName and contactName are required" }); return;
     }
+
+    // Dedupe: don't add the same contact (company + contact name) to this project
+    // twice — a double submit or re-add would otherwise create duplicate members.
+    const nameLower = contactName.trim().toLowerCase();
+    const companyLower = companyName.trim().toLowerCase();
+    const existingContacts = await db.select({
+      companyName: subcontractorsTable.companyName, contactName: subcontractorsTable.contactName,
+    }).from(projectMembersTable)
+      .innerJoin(subcontractorsTable, eq(subcontractorsTable.id, projectMembersTable.subcontractorId))
+      .where(eq(projectMembersTable.projectId, req.params.projectId));
+    if (existingContacts.some(c => c.contactName.trim().toLowerCase() === nameLower && c.companyName.trim().toLowerCase() === companyLower)) {
+      res.status(409).json({ error: "conflict", message: "This person is already on this project" });
+      return;
+    }
+
     const subId = generateId();
     await db.insert(subcontractorsTable).values({
       id: subId,
