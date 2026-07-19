@@ -38,5 +38,7 @@ export interface ProjectMember {
   canLogIssues?: boolean;
   /** Portal write permission — can update Plant & Materials item status/location/notes. Default false. */
   canUpdatePlantMaterials?: boolean;
+  /** Portal write permission — can author/amend the project's daily site report. Default false. */
+  canEditDailyReport?: boolean;
   addedAt: Date;
 }

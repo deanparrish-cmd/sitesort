@@ -9,11 +9,14 @@ import {
   useGetPortalMyDocuments, useGetPortalUnseen, useGetPortalContext,
   useGetPortalPlantMaterials, useUpdatePortalPlantMaterialItem,
   useCreatePortalSiteIssue, useUpdatePortalSiteIssue,
+  useGetPortalDailyReport, useGetPortalDailyReportHistory, useUpdatePortalDailyReport,
   getGetPortalOverviewQueryKey, getGetPortalSiteIssuesQueryKey,
   getGetPortalGeneralQueryKey, getGetPortalSharedQueryKey,
   getGetPortalMyDocumentsQueryKey, getGetPortalUnseenQueryKey,
   getGetPortalPlantMaterialsQueryKey,
+  getGetPortalDailyReportQueryKey, getGetPortalDailyReportHistoryQueryKey,
 } from "@workspace/api-client-react";
+import { DictationButton } from "@/components/ui/dictation-button";
 import { QRCodeSVG } from "qrcode.react";
 import { PortalLayout, SECTION_NAV } from "./layout";
 import { portalQueryClient, PORTAL_LIVE_REFETCH } from "./query-client";
@@ -492,7 +495,10 @@ function LogIssueForm({ onLogged }: { onLogged: () => void }) {
         </div>
         <div>
           <label className="text-xs font-medium text-muted-foreground">Description</label>
-          <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} placeholder="What's the issue?" className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+          <div className="mt-1 flex items-start gap-2">
+            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} placeholder="What's the issue?" className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+            <DictationButton onTranscript={t => setDescription(d => (d.trim() ? d.trimEnd() + " " : "") + t)} />
+          </div>
         </div>
         <div>
           <label className="text-xs font-medium text-muted-foreground">Zone / location</label>
@@ -958,7 +964,10 @@ function PlantItemEditPanel({ item, onClose }: { item: PlantItemRow; onClose: ()
       </div>
       <div>
         <label className="text-xs font-medium text-muted-foreground">Notes</label>
-        <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+        <div className="mt-1 flex items-start gap-2">
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+          <DictationButton onTranscript={t => setNotes(n => (n.trim() ? n.trimEnd() + " " : "") + t)} />
+        </div>
       </div>
       <div>
         <label className="text-xs font-medium text-muted-foreground">Add a photo</label>
@@ -1024,6 +1033,150 @@ function PlantMaterialsView() {
           )}
         </Card>
       ))}
+    </div>
+  );
+}
+
+type DiaryFieldKey = "weather" | "labourOnSite" | "plantEquipment" | "workCompleted" | "delaysIssues" | "deliveries" | "hsNotes";
+const DIARY_FIELDS: { key: DiaryFieldKey; label: string; multiline: boolean; placeholder: string }[] = [
+  { key: "weather", label: "Weather", multiline: false, placeholder: "e.g. Dry, 16°C, light wind" },
+  { key: "labourOnSite", label: "Labour on site", multiline: false, placeholder: "e.g. 8 (3 trades)" },
+  { key: "plantEquipment", label: "Plant / equipment", multiline: false, placeholder: "e.g. Excavator, 2× dumper" },
+  { key: "workCompleted", label: "Work completed", multiline: true, placeholder: "What was done on site today…" },
+  { key: "delaysIssues", label: "Delays / issues", multiline: true, placeholder: "Anything holding up progress…" },
+  { key: "deliveries", label: "Deliveries", multiline: true, placeholder: "Materials or plant delivered…" },
+  { key: "hsNotes", label: "Health & safety / notes", multiline: true, placeholder: "Toolbox talks, incidents, observations…" },
+];
+type ManagerReportFields = Partial<Record<DiaryFieldKey, string>>;
+
+function fmtReportDate(dateStr: string): string {
+  return new Date(`${dateStr}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short", year: "numeric" });
+}
+
+// Daily Report — structural section (visible to every portal member, like
+// Team/Progress), write-gated by canEditDailyReport AND the server's lock
+// window (Feature: Daily Report in the portal). Dashboard and portal edit the
+// same record via the shared upsertManagerReport backend helper.
+function DailyReportView() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data: today, isLoading } = useGetPortalDailyReport({ query: { refetchInterval: PORTAL_LIVE_REFETCH, queryKey: getGetPortalDailyReportQueryKey() } });
+  const { data: history } = useGetPortalDailyReportHistory({ query: { queryKey: getGetPortalDailyReportHistoryQueryKey() } });
+  const update = useUpdatePortalDailyReport();
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState<ManagerReportFields>({});
+  const [showHistory, setShowHistory] = useState(false);
+
+  useEffect(() => { if (today) setForm(today.managerReport ?? {}); }, [today]);
+
+  if (isLoading) return <Loading />;
+  if (!today) return <Empty>Couldn't load today's report.</Empty>;
+
+  const setField = (key: DiaryFieldKey, value: string) => setForm(f => ({ ...f, [key]: value }));
+  const appendField = (key: DiaryFieldKey, text: string) =>
+    setForm(f => ({ ...f, [key]: ((f[key] ?? "").trim() ? (f[key] ?? "").trimEnd() + " " : "") + text }));
+
+  const save = async () => {
+    try {
+      await update.mutateAsync({ date: today.reportDate, data: form });
+      toast({ title: "Report saved" });
+      setEditing(false);
+      await queryClient.invalidateQueries({ queryKey: getGetPortalDailyReportQueryKey() });
+    } catch (e: any) {
+      if (e?.status === 403) toast({ title: "Locked", description: "This day's report can no longer be amended from the portal.", variant: "destructive" });
+      else toast({ title: "Couldn't save", variant: "destructive" });
+    }
+  };
+
+  const hasContent = (mr: ManagerReportFields | null | undefined) => !!mr && DIARY_FIELDS.some(f => (mr[f.key] ?? "").trim().length > 0);
+  const present = hasContent(today.managerReport);
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <p className="font-semibold">{fmtReportDate(today.reportDate)}</p>
+          {today.locked && <Badge label="Locked" className="bg-muted text-muted-foreground" />}
+        </div>
+        {today.contributors.length > 0 && (
+          <p className="text-xs text-muted-foreground mb-3">
+            Contributors: {today.contributors.map(c => c.name).join(", ")}
+          </p>
+        )}
+
+        {editing ? (
+          <div className="space-y-3">
+            {DIARY_FIELDS.map(f => (
+              <div key={f.key}>
+                <label className="text-xs font-medium text-muted-foreground">{f.label}</label>
+                <div className="mt-1 flex items-start gap-2">
+                  {f.multiline ? (
+                    <textarea value={form[f.key] ?? ""} onChange={e => setField(f.key, e.target.value)} placeholder={f.placeholder} rows={2}
+                      className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+                  ) : (
+                    <input value={form[f.key] ?? ""} onChange={e => setField(f.key, e.target.value)} placeholder={f.placeholder}
+                      className="flex-1 min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+                  )}
+                  {f.multiline && <DictationButton onTranscript={t => appendField(f.key, t)} />}
+                </div>
+              </div>
+            ))}
+            <div className="flex gap-2 pt-1">
+              <button onClick={save} disabled={update.isPending} className="flex-1 min-h-11 rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+                {update.isPending ? "Saving…" : "Save"}
+              </button>
+              <button onClick={() => { setForm(today.managerReport ?? {}); setEditing(false); }} className="min-h-11 px-4 rounded-xl border text-sm font-medium hover:bg-muted">Cancel</button>
+            </div>
+          </div>
+        ) : present ? (
+          <div className="space-y-3">
+            {DIARY_FIELDS.filter(f => (today.managerReport?.[f.key] ?? "").trim()).map(f => (
+              <div key={f.key}>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">{f.label}</p>
+                <p className="text-sm whitespace-pre-wrap break-words">{today.managerReport?.[f.key]}</p>
+              </div>
+            ))}
+            {today.canEdit && (
+              <button onClick={() => setEditing(true)} className="text-sm font-medium text-primary hover:underline">Edit</button>
+            )}
+          </div>
+        ) : today.canEdit ? (
+          <button onClick={() => setEditing(true)} className="text-sm font-medium text-primary hover:underline">+ Add today's report</button>
+        ) : (
+          <p className="text-sm text-muted-foreground">No report yet for today.</p>
+        )}
+      </Card>
+
+      <button onClick={() => setShowHistory(v => !v)} className="text-sm font-medium text-muted-foreground hover:text-foreground">
+        {showHistory ? "Hide" : "Show"} past reports (last 14 days)
+      </button>
+      {showHistory && (
+        (history ?? []).length === 0 ? (
+          <p className="text-sm text-muted-foreground">No past reports on file.</p>
+        ) : (
+          <div className="space-y-3">
+            {(history ?? []).map(h => (
+              <Card key={h.reportDate}>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <p className="font-medium text-sm">{fmtReportDate(h.reportDate)}</p>
+                  <Badge label="Read-only" className="bg-muted text-muted-foreground" />
+                </div>
+                {h.contributors.length > 0 && (
+                  <p className="text-xs text-muted-foreground mb-2">Contributors: {h.contributors.map(c => c.name).join(", ")}</p>
+                )}
+                <div className="space-y-2">
+                  {DIARY_FIELDS.filter(f => (h.managerReport?.[f.key] ?? "").trim()).map(f => (
+                    <div key={f.key}>
+                      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">{f.label}</p>
+                      <p className="text-sm whitespace-pre-wrap break-words">{h.managerReport?.[f.key]}</p>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            ))}
+          </div>
+        )
+      )}
     </div>
   );
 }
@@ -1309,6 +1462,7 @@ function renderSection(section: string) {
     case "safety": return <DocListView section="safety" hook={useGetPortalSafety} empty="No safety documents uploaded." />;
     case "general": return <GeneralView />;
     case "plant-materials": return <PlantMaterialsView />;
+    case "daily-report": return <DailyReportView />;
     default: return <Empty>Section not found.</Empty>;
   }
 }

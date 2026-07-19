@@ -114,6 +114,16 @@ export function PlantTab() {
                 {item.lastUpdatedByName && (
                   <p className="text-xs text-muted-foreground mt-0.5">Last updated by {item.lastUpdatedByName}, {fmtUpdated(item.lastUpdatedAt)}</p>
                 )}
+                {item.attachmentCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => caps.isInternal && setEditingItem(item)}
+                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary mt-0.5 transition-colors"
+                    title="View attachments"
+                  >
+                    <FileText className="w-3 h-3" />{item.attachmentCount} attachment{item.attachmentCount === 1 ? "" : "s"}
+                  </button>
+                )}
               </>}
               actions={<>
                 <Pill className={STATUS_PILL[item.status]}>{STATUS_LABEL[item.status] ?? item.status}</Pill>

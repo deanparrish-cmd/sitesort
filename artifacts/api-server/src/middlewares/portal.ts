@@ -111,7 +111,7 @@ export async function requirePortalMember(req: Request, res: Response, next: Nex
 // req.portalProjectId set). Re-selects the live project_members row and 403s
 // if the requested permission flag is off — enforced server-side so a member
 // without the grant can never write even by calling the endpoint directly.
-export function requirePortalPermission(permission: "canLogIssues" | "canUpdatePlantMaterials") {
+export function requirePortalPermission(permission: "canLogIssues" | "canUpdatePlantMaterials" | "canEditDailyReport") {
   return async function (req: Request, res: Response, next: NextFunction): Promise<void> {
     const u = req.user;
     if (!u || !req.portalProjectId) {
@@ -123,6 +123,7 @@ export function requirePortalPermission(permission: "canLogIssues" | "canUpdateP
         .select({
           canLogIssues: projectMembersTable.canLogIssues,
           canUpdatePlantMaterials: projectMembersTable.canUpdatePlantMaterials,
+          canEditDailyReport: projectMembersTable.canEditDailyReport,
         })
         .from(projectMembersTable)
         .where(and(

@@ -21,6 +21,7 @@ export const PORTAL_SECTIONS = [
   "safety",
   "general",
   "plant-materials",
+  "daily-report",
 ] as const;
 
 export type PortalSection = (typeof PORTAL_SECTIONS)[number];
@@ -44,6 +45,7 @@ export const SECTION_LABELS: Record<string, string> = {
   safety: "Safety",
   general: "General",
   "plant-materials": "Plant & Materials",
+  "daily-report": "Daily Report",
 };
 
 // Append one audit row. Best-effort: auditing must NEVER break the request it is

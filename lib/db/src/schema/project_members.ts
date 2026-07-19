@@ -25,6 +25,7 @@ export const projectMembersTable = pgTable("project_members", {
   // requirePortalPermission, not just hidden in the UI.
   canLogIssues: boolean("can_log_issues").notNull().default(true),
   canUpdatePlantMaterials: boolean("can_update_plant_materials").notNull().default(false),
+  canEditDailyReport: boolean("can_edit_daily_report").notNull().default(false),
   addedAt: timestamp("added_at").notNull().defaultNow(),
 }, (t) => ({
   // Team Portal: a user is a member of a project at most once (the same email

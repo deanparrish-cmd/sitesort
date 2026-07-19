@@ -1,9 +1,9 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { dailyReportsTable, dailyNotesTable, projectsTable, usersTable, type ManagerReport } from "@workspace/db/schema";
+import { dailyReportsTable, dailyNotesTable, projectsTable, usersTable } from "@workspace/db/schema";
 import { eq, and, desc, gte, lte } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
-import { generateDailyReportForProject, EMPTY_REPORT_DATA } from "../lib/daily-reports";
+import { generateDailyReportForProject, hasManagerContent, upsertManagerReport, contributorsForReport } from "../lib/daily-reports";
 import { generateId } from "../lib/id";
 import { enqueuePushForMembers, acceptedPortalMemberUserIds } from "../lib/push-triggers";
 
@@ -17,33 +17,6 @@ function isInternal(role: string): boolean {
 
 function londonToday(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-}
-
-// The structured "site diary" fields a manager/worker can author. Kept in this
-// fixed order so the frontend form and any export render consistently.
-const MANAGER_REPORT_FIELDS = [
-  "weather", "labourOnSite", "plantEquipment", "workCompleted", "delaysIssues", "deliveries", "hsNotes",
-] as const;
-const MANAGER_FIELD_MAX = 5000;
-
-// Trim/cap each provided field; drop empties. Returns null if nothing usable was
-// supplied (so an all-blank submit doesn't create a hollow report row).
-function sanitizeManagerReport(body: unknown): ManagerReport | null {
-  if (!body || typeof body !== "object") return null;
-  const src = body as Record<string, unknown>;
-  const out: ManagerReport = {};
-  for (const key of MANAGER_REPORT_FIELDS) {
-    const raw = src[key];
-    if (typeof raw !== "string") continue;
-    const val = raw.trim().slice(0, MANAGER_FIELD_MAX);
-    if (val) out[key] = val;
-  }
-  return Object.keys(out).length > 0 ? out : null;
-}
-
-// A stored managerReport counts as "present" only if it has at least one non-empty field.
-function hasManagerContent(mr: ManagerReport | null | undefined): boolean {
-  return !!mr && MANAGER_REPORT_FIELDS.some((k) => typeof mr[k] === "string" && mr[k]!.trim().length > 0);
 }
 
 // F5 — company-wide Daily Site Reports hub. Lists every project's reports for the
@@ -204,6 +177,7 @@ router.get("/daily-reports/:id", authenticate, async (req, res) => {
       managerReport: hasManagerContent(report.managerReport) ? report.managerReport : null,
       authorName: report.authorName ?? null,
       authoredAt: report.authoredAt ? report.authoredAt.toISOString() : null,
+      contributors: await contributorsForReport(report.id),
     });
   } catch (err) {
     req.log.error({ err }, "Get daily report error");
@@ -355,43 +329,15 @@ router.patch("/projects/:projectId/daily-reports/:date", authenticate, async (re
       return;
     }
 
-    const managerReport = sanitizeManagerReport(req.body);
-    const now = new Date();
-
-    if (managerReport === null) {
-      // Clearing every field: only affect an existing row, never create a hollow one.
-      const cleared = await db
-        .update(dailyReportsTable)
-        .set({ managerReport: null, authoredBy: req.user!.id, authoredAt: now })
-        .where(and(eq(dailyReportsTable.projectId, req.params.projectId), eq(dailyReportsTable.reportDate, date)))
-        .returning({ id: dailyReportsTable.id });
-      if (cleared.length === 0) {
-        res.status(400).json({ error: "validation_error", message: "Enter at least one field" });
-        return;
-      }
-      res.json({ id: cleared[0]!.id, reportDate: date, managerReport: null });
+    const result = await upsertManagerReport({
+      projectId: req.params.projectId, companyId: req.user!.companyId, date,
+      userId: req.user!.id, patch: req.body, req,
+    });
+    if ("error" in result) {
+      res.status(400).json({ error: "validation_error", message: "Enter at least one field" });
       return;
     }
-
-    const id = generateId();
-    const upserted = await db
-      .insert(dailyReportsTable)
-      .values({
-        id,
-        projectId: req.params.projectId,
-        reportDate: date,
-        data: EMPTY_REPORT_DATA,
-        managerReport,
-        authoredBy: req.user!.id,
-        authoredAt: now,
-      })
-      .onConflictDoUpdate({
-        target: [dailyReportsTable.projectId, dailyReportsTable.reportDate],
-        set: { managerReport, authoredBy: req.user!.id, authoredAt: now },
-      })
-      .returning({ id: dailyReportsTable.id });
-
-    res.json({ id: upserted[0]!.id, reportDate: date, managerReport });
+    res.json({ id: result.id, reportDate: date, managerReport: result.managerReport });
   } catch (err) {
     req.log.error({ err }, "Author daily report error");
     res.status(500).json({ error: "server_error", message: "Failed to save report" });

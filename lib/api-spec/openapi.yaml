@@ -1162,6 +1162,66 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /portal/daily-report:
+    get:
+      operationId: getPortalDailyReport
+      tags: [portal]
+      summary: Today's site diary — always visible; canEdit reflects permission AND the lock window
+      responses:
+        "200":
+          description: Today's report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalDailyReport"
+
+  /portal/daily-report/history:
+    get:
+      operationId: getPortalDailyReportHistory
+      tags: [portal]
+      summary: Past days with a site diary entry (last 14), newest first, always read-only
+      responses:
+        "200":
+          description: History
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PortalDailyReportHistoryItem"
+
+  /portal/daily-report/{date}:
+    patch:
+      operationId: updatePortalDailyReport
+      tags: [portal]
+      summary: Amend a day's site diary (requires can-edit-daily-report permission; 403 if locked)
+      parameters:
+        - name: date
+          in: path
+          required: true
+          description: YYYY-MM-DD
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePortalDailyReportRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalDailyReportHistoryItem"
+        "403":
+          description: Not permitted, or the day is locked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /projects/{projectId}/permits:
     get:
       operationId: listPermits
@@ -3021,6 +3081,9 @@ components:
         canUpdatePlantMaterials:
           type: boolean
           description: Portal write permission — can update Plant & Materials item status/location/notes. Default false.
+        canEditDailyReport:
+          type: boolean
+          description: Portal write permission — can author/amend the project's daily site report. Default false.
         addedAt:
           type: string
           format: date-time
@@ -3032,6 +3095,8 @@ components:
         canLogIssues:
           type: boolean
         canUpdatePlantMaterials:
+          type: boolean
+        canEditDailyReport:
           type: boolean
 
     AddMemberRequest:
@@ -3380,10 +3445,12 @@ components:
           type: string
           format: date-time
           nullable: true
+        attachmentCount:
+          type: integer
         createdAt:
           type: string
           format: date-time
-      required: [id, projectId, name, category, status, createdBy, createdAt]
+      required: [id, projectId, name, category, status, createdBy, createdAt, attachmentCount]
 
     CreatePlantItemRequest:
       type: object
@@ -3591,6 +3658,75 @@ components:
         notes:
           type: string
           nullable: true
+
+    DailyReportContributor:
+      type: object
+      properties:
+        userId:
+          type: string
+        name:
+          type: string
+      required: [userId, name]
+
+    ManagerReportFields:
+      type: object
+      description: The structured "site diary" — every field optional/free text.
+      properties:
+        weather:
+          type: string
+        labourOnSite:
+          type: string
+        plantEquipment:
+          type: string
+        workCompleted:
+          type: string
+        delaysIssues:
+          type: string
+        deliveries:
+          type: string
+        hsNotes:
+          type: string
+
+    PortalDailyReport:
+      type: object
+      description: Today's site diary — always visible to every portal member; canEdit reflects the caller's permission AND the lock window.
+      properties:
+        reportDate:
+          type: string
+        managerReport:
+          allOf:
+            - $ref: "#/components/schemas/ManagerReportFields"
+          nullable: true
+        contributors:
+          type: array
+          items:
+            $ref: "#/components/schemas/DailyReportContributor"
+        locked:
+          type: boolean
+        canEdit:
+          type: boolean
+      required: [reportDate, contributors, locked, canEdit]
+
+    PortalDailyReportHistoryItem:
+      type: object
+      description: A past day's site diary — always read-only in the portal.
+      properties:
+        reportDate:
+          type: string
+        managerReport:
+          allOf:
+            - $ref: "#/components/schemas/ManagerReportFields"
+          nullable: true
+        contributors:
+          type: array
+          items:
+            $ref: "#/components/schemas/DailyReportContributor"
+      required: [reportDate, contributors]
+
+    UpdatePortalDailyReportRequest:
+      allOf:
+        - $ref: "#/components/schemas/ManagerReportFields"
+      description: Any subset of fields; omitted fields are left unchanged, empty string clears a field.
 
     Permit:
       type: object
@@ -3934,7 +4070,9 @@ components:
           type: boolean
         canUpdatePlantMaterials:
           type: boolean
-      required: [userId, name, role, email, canLogIssues, canUpdatePlantMaterials]
+        canEditDailyReport:
+          type: boolean
+      required: [userId, name, role, email, canLogIssues, canUpdatePlantMaterials, canEditDailyReport]
 
     PortalLoginRequest:
       type: object

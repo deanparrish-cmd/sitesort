@@ -27,5 +27,6 @@ export interface PlantItem {
   /** First Surname of the last editor, for the "last updated by" line. */
   lastUpdatedByName?: string | null;
   lastUpdatedAt?: Date | null;
+  attachmentCount: number;
   createdAt: Date;
 }

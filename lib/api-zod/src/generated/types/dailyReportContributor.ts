@@ -6,12 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface PortalMemberRef {
+export interface DailyReportContributor {
   userId: string;
   name: string;
-  role: string;
-  email: string;
-  canLogIssues: boolean;
-  canUpdatePlantMaterials: boolean;
-  canEditDailyReport: boolean;
 }
