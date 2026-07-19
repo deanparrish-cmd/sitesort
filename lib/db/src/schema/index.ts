@@ -42,3 +42,4 @@ export * from "./stripe_webhook_events";
 export * from "./plant_items";
 export * from "./plant_item_attachments";
 export * from "./plant_item_distributions";
+export * from "./person_certifications";

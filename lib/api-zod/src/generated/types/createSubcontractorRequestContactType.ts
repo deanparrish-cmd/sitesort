@@ -6,6 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * 'self_employed' means the person IS the entity — companyName is optional (server defaults it to the contact's name if omitted).
+ */
 export type CreateSubcontractorRequestContactType =
   (typeof CreateSubcontractorRequestContactType)[keyof typeof CreateSubcontractorRequestContactType];
 
@@ -14,5 +17,6 @@ export const CreateSubcontractorRequestContactType = {
   merchant: "merchant",
   supplier: "supplier",
   professional: "professional",
+  self_employed: "self_employed",
   other: "other",
 } as const;

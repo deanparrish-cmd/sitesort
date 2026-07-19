@@ -68,13 +68,18 @@ router.get("/projects/:projectId/portal-audience", authenticate, async (req, res
       .where(eq(projectsTable.id, req.params.projectId)).limit(1);
     const members = await acceptedMembers(req.params.projectId);
 
-    // Member names for the individual multi-select (sorted by surname).
+    // Member names for the individual multi-select (sorted by surname). Company
+    // + contact type let the picker show "Name · Company · Trade" (Feature:
+    // person-first pickers) instead of a bare name.
     const named = await db.select({
       personId: projectMembersTable.personId, name: peopleTable.name, lastName: peopleTable.lastName,
+      companyName: subcontractorsTable.companyName, contactType: subcontractorsTable.contactType,
     }).from(projectMembersTable)
       .innerJoin(peopleTable, eq(projectMembersTable.personId, peopleTable.id))
+      .leftJoin(subcontractorsTable, eq(peopleTable.subcontractorId, subcontractorsTable.id))
       .where(and(eq(projectMembersTable.projectId, req.params.projectId), isNotNull(projectMembersTable.userId)));
     const nameByPerson = new Map(named.map(n => [n.personId as string, n.name]));
+    const companyByPerson = new Map(named.map(n => [n.personId as string, n.contactType === "self_employed" ? "Self-employed" : n.companyName]));
     const surnameOf = (n: { name: string; lastName: string | null }) => (n.lastName?.trim() || n.name.trim().split(" ").slice(-1)[0] || n.name).toLowerCase();
     const surnameByPerson = new Map(named.map(n => [n.personId as string, surnameOf(n)]));
 
@@ -89,7 +94,7 @@ router.get("/projects/:projectId/portal-audience", authenticate, async (req, res
     res.json({
       trades: [...tradeSet].sort().map(trade => ({ trade, memberCount: counts.get(trade) ?? 0 })),
       members: members
-        .map(m => ({ personId: m.personId, userId: m.userId, name: nameByPerson.get(m.personId) ?? "Unknown" }))
+        .map(m => ({ personId: m.personId, userId: m.userId, name: nameByPerson.get(m.personId) ?? "Unknown", companyName: companyByPerson.get(m.personId) ?? undefined, trades: m.trades }))
         .sort((a, b) => (surnameByPerson.get(a.personId) ?? "").localeCompare(surnameByPerson.get(b.personId) ?? "")),
     });
   } catch (err) {

@@ -21,10 +21,12 @@ import type {
   AcknowledgeRequest,
   AddInsuranceRequest,
   AddMemberRequest,
+  AddProjectMemberPersonRequest,
   AuditLogEntry,
   AuthResponse,
   ComplianceOverview,
   CreatePermitRequest,
+  CreatePersonCertificationRequest,
   CreatePersonRequest,
   CreatePlantItemAttachmentRequest,
   CreatePlantItemRequest,
@@ -43,6 +45,8 @@ import type {
   HealthStatus,
   InsuranceRecord,
   InviteUserRequest,
+  ListAllPeople200Item,
+  ListAllPeopleParams,
   ListDocumentsParams,
   ListInHousePeopleParams,
   ListPhotosParams,
@@ -57,6 +61,7 @@ import type {
   Notification,
   Permit,
   Person,
+  PersonCertification,
   Photo,
   PlantItem,
   PlantItemAttachment,
@@ -1974,6 +1979,96 @@ export const useRemoveProjectMemberCompany = <
   TContext
 > => {
   return useMutation(getRemoveProjectMemberCompanyMutationOptions(options));
+};
+
+/**
+ * Creates the person's project_members row immediately (personId set) — no portal acceptance required. Portal invite is a separate, optional follow-on action. Reuses the existing dashboard-account link if the person already has one.
+
+ * @summary Add a specific person (subcontractor employee, self-employed contact, or in-house) to a project's team (manager-gated)
+ */
+export const getAddProjectMemberPersonUrl = (projectId: string) => {
+  return `/api/projects/${projectId}/members/person`;
+};
+
+export const addProjectMemberPerson = async (
+  projectId: string,
+  addProjectMemberPersonRequest: AddProjectMemberPersonRequest,
+  options?: RequestInit,
+): Promise<ProjectMember> => {
+  return customFetch<ProjectMember>(getAddProjectMemberPersonUrl(projectId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(addProjectMemberPersonRequest),
+  });
+};
+
+export const getAddProjectMemberPersonMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addProjectMemberPerson>>,
+    TError,
+    { projectId: string; data: BodyType<AddProjectMemberPersonRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addProjectMemberPerson>>,
+  TError,
+  { projectId: string; data: BodyType<AddProjectMemberPersonRequest> },
+  TContext
+> => {
+  const mutationKey = ["addProjectMemberPerson"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addProjectMemberPerson>>,
+    { projectId: string; data: BodyType<AddProjectMemberPersonRequest> }
+  > = (props) => {
+    const { projectId, data } = props ?? {};
+
+    return addProjectMemberPerson(projectId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AddProjectMemberPersonMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addProjectMemberPerson>>
+>;
+export type AddProjectMemberPersonMutationBody =
+  BodyType<AddProjectMemberPersonRequest>;
+export type AddProjectMemberPersonMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Add a specific person (subcontractor employee, self-employed contact, or in-house) to a project's team (manager-gated)
+ */
+export const useAddProjectMemberPerson = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addProjectMemberPerson>>,
+    TError,
+    { projectId: string; data: BodyType<AddProjectMemberPersonRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof addProjectMemberPerson>>,
+  TError,
+  { projectId: string; data: BodyType<AddProjectMemberPersonRequest> },
+  TContext
+> => {
+  return useMutation(getAddProjectMemberPersonMutationOptions(options));
 };
 
 /**
@@ -8770,6 +8865,377 @@ export const useRestorePerson = <
 > => {
   return useMutation(getRestorePersonMutationOptions(options));
 };
+
+/**
+ * @summary List a person's individual certifications
+ */
+export const getListPersonCertificationsUrl = (personId: string) => {
+  return `/api/people/${personId}/certifications`;
+};
+
+export const listPersonCertifications = async (
+  personId: string,
+  options?: RequestInit,
+): Promise<PersonCertification[]> => {
+  return customFetch<PersonCertification[]>(
+    getListPersonCertificationsUrl(personId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListPersonCertificationsQueryKey = (personId: string) => {
+  return [`/api/people/${personId}/certifications`] as const;
+};
+
+export const getListPersonCertificationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listPersonCertifications>>,
+  TError = ErrorType<unknown>,
+>(
+  personId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listPersonCertifications>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListPersonCertificationsQueryKey(personId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listPersonCertifications>>
+  > = ({ signal }) =>
+    listPersonCertifications(personId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!personId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listPersonCertifications>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListPersonCertificationsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listPersonCertifications>>
+>;
+export type ListPersonCertificationsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List a person's individual certifications
+ */
+
+export function useListPersonCertifications<
+  TData = Awaited<ReturnType<typeof listPersonCertifications>>,
+  TError = ErrorType<unknown>,
+>(
+  personId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listPersonCertifications>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListPersonCertificationsQueryOptions(
+    personId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Add a certification to a person (auto-archives a prior cert of the same name for this person)
+ */
+export const getCreatePersonCertificationUrl = (personId: string) => {
+  return `/api/people/${personId}/certifications`;
+};
+
+export const createPersonCertification = async (
+  personId: string,
+  createPersonCertificationRequest: CreatePersonCertificationRequest,
+  options?: RequestInit,
+): Promise<PersonCertification> => {
+  return customFetch<PersonCertification>(
+    getCreatePersonCertificationUrl(personId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(createPersonCertificationRequest),
+    },
+  );
+};
+
+export const getCreatePersonCertificationMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPersonCertification>>,
+    TError,
+    { personId: string; data: BodyType<CreatePersonCertificationRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createPersonCertification>>,
+  TError,
+  { personId: string; data: BodyType<CreatePersonCertificationRequest> },
+  TContext
+> => {
+  const mutationKey = ["createPersonCertification"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createPersonCertification>>,
+    { personId: string; data: BodyType<CreatePersonCertificationRequest> }
+  > = (props) => {
+    const { personId, data } = props ?? {};
+
+    return createPersonCertification(personId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreatePersonCertificationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createPersonCertification>>
+>;
+export type CreatePersonCertificationMutationBody =
+  BodyType<CreatePersonCertificationRequest>;
+export type CreatePersonCertificationMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Add a certification to a person (auto-archives a prior cert of the same name for this person)
+ */
+export const useCreatePersonCertification = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPersonCertification>>,
+    TError,
+    { personId: string; data: BodyType<CreatePersonCertificationRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createPersonCertification>>,
+  TError,
+  { personId: string; data: BodyType<CreatePersonCertificationRequest> },
+  TContext
+> => {
+  return useMutation(getCreatePersonCertificationMutationOptions(options));
+};
+
+/**
+ * @summary Delete a person's certification
+ */
+export const getDeletePersonCertificationUrl = (
+  personId: string,
+  certId: string,
+) => {
+  return `/api/people/${personId}/certifications/${certId}`;
+};
+
+export const deletePersonCertification = async (
+  personId: string,
+  certId: string,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(
+    getDeletePersonCertificationUrl(personId, certId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getDeletePersonCertificationMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deletePersonCertification>>,
+    TError,
+    { personId: string; certId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deletePersonCertification>>,
+  TError,
+  { personId: string; certId: string },
+  TContext
+> => {
+  const mutationKey = ["deletePersonCertification"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deletePersonCertification>>,
+    { personId: string; certId: string }
+  > = (props) => {
+    const { personId, certId } = props ?? {};
+
+    return deletePersonCertification(personId, certId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeletePersonCertificationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deletePersonCertification>>
+>;
+
+export type DeletePersonCertificationMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a person's certification
+ */
+export const useDeletePersonCertification = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deletePersonCertification>>,
+    TError,
+    { personId: string; certId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deletePersonCertification>>,
+  TError,
+  { personId: string; certId: string },
+  TContext
+> => {
+  return useMutation(getDeletePersonCertificationMutationOptions(options));
+};
+
+/**
+ * @summary Flat, tenant-scoped list of every person (subcontractor-linked + in-house) for person-first pickers
+ */
+export const getListAllPeopleUrl = (params?: ListAllPeopleParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/people?${stringifiedParams}`
+    : `/api/people`;
+};
+
+export const listAllPeople = async (
+  params?: ListAllPeopleParams,
+  options?: RequestInit,
+): Promise<ListAllPeople200Item[]> => {
+  return customFetch<ListAllPeople200Item[]>(getListAllPeopleUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListAllPeopleQueryKey = (params?: ListAllPeopleParams) => {
+  return [`/api/people`, ...(params ? [params] : [])] as const;
+};
+
+export const getListAllPeopleQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAllPeople>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListAllPeopleParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAllPeople>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListAllPeopleQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listAllPeople>>> = ({
+    signal,
+  }) => listAllPeople(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAllPeople>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListAllPeopleQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAllPeople>>
+>;
+export type ListAllPeopleQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Flat, tenant-scoped list of every person (subcontractor-linked + in-house) for person-first pickers
+ */
+
+export function useListAllPeople<
+  TData = Awaited<ReturnType<typeof listAllPeople>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListAllPeopleParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAllPeople>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListAllPeopleQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary In-house people (portal-only) with per-project portal status (PM)

@@ -5,6 +5,7 @@
  * SiteSort API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { SubcontractorContactType } from "./subcontractorContactType";
 import type { SubcontractorInsuranceStatus } from "./subcontractorInsuranceStatus";
 
 export interface Subcontractor {
@@ -17,6 +18,7 @@ export interface Subcontractor {
   contactLastName?: string | null;
   contactEmail: string;
   contactPhone?: string | null;
+  contactType?: SubcontractorContactType;
   trades: string[];
   reliabilityRating?: number | null;
   paymentHold: boolean;

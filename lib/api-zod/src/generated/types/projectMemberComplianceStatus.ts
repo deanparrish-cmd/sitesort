@@ -13,4 +13,5 @@ export const ProjectMemberComplianceStatus = {
   ok: "ok",
   warning: "warning",
   hold: "hold",
+  none: "none",
 } as const;

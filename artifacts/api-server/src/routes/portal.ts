@@ -8,7 +8,7 @@ import {
   qrBoardPinsTable, calendarEventsTable, subcontractorsTable, peopleTable,
   portalSharesTable, documentDistributionsTable, companiesTable, qrCodesTable,
   portalMemberDocumentsTable, notificationsTable, companyMembersTable,
-  plantItemsTable, plantItemAttachmentsTable,
+  plantItemsTable, plantItemAttachmentsTable, personCertificationsTable,
 } from "@workspace/db/schema";
 import { and, eq, inArray, isNull, isNotNull, desc, asc, gte, count, max, or } from "drizzle-orm";
 import { buildSiteBoardPayload } from "../lib/site-board";
@@ -662,10 +662,21 @@ router.get("/portal/team", ...portalGuards, async (req, res) => {
   const members = await db.select().from(projectMembersTable).where(eq(projectMembersTable.projectId, pid));
   const personIds = members.map(m => m.personId).filter(Boolean) as string[];
   const userIds = members.map(m => m.userId).filter(Boolean) as string[];
-  const [people, users] = await Promise.all([
+  const [people, users, certs] = await Promise.all([
     personIds.length ? db.select().from(peopleTable).where(inArray(peopleTable.id, personIds)) : Promise.resolve([]),
     userIds.length ? db.select({ id: usersTable.id, name: usersTable.name, phone: usersTable.phone, email: usersTable.email }).from(usersTable).where(inArray(usersTable.id, userIds)) : Promise.resolve([]),
+    // Person certifications (Feature: person-first cards) — shown on the
+    // portal team row alongside company info, gated by the same contact
+    // visibility toggle as email/phone.
+    personIds.length ? db.select().from(personCertificationsTable).where(and(inArray(personCertificationsTable.personId, personIds), isNull(personCertificationsTable.archivedAt))) : Promise.resolve([]),
   ]);
+  const certsByPerson = new Map<string, Array<{ name: string; expiryDate: string; status: string }>>();
+  for (const c of certs) {
+    const status = expiryStatus(c.expiryDate) === "active" ? "valid" : expiryStatus(c.expiryDate);
+    const list = certsByPerson.get(c.personId) ?? [];
+    list.push({ name: c.name, expiryDate: c.expiryDate, status });
+    certsByPerson.set(c.personId, list);
+  }
   // All subcontractors referenced either directly (company link) or via a person.
   const subIds = [...new Set([
     ...members.map(m => m.subcontractorId).filter(Boolean) as string[],
@@ -696,11 +707,12 @@ router.get("/portal/team", ...portalGuards, async (req, res) => {
       return {
         name: person.name,
         sortKey: surnameOf(person.name, person.lastName),
-        company: sub ? sub.companyName : ourCompany,
+        company: sub ? (sub.contactType === "self_employed" ? "Self-employed" : sub.companyName) : ourCompany,
         jobTitle: person.roleTitle ?? undefined,
         role: m.role,
         trades: sub?.trades ?? [],
         ...(contact ? { email: person.email ?? undefined, phone: (person.phone ?? user?.phone) ?? undefined } : {}),
+        certifications: certsByPerson.get(person.id) ?? [],
       };
     }
     const sub = m.subcontractorId ? subById.get(m.subcontractorId) : undefined;

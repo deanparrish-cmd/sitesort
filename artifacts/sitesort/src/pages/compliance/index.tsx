@@ -17,6 +17,8 @@ import { useCapabilities } from "@/hooks/use-capabilities";
 
 type InsuranceItem = { subcontractorId: string; subcontractorName: string; insuranceType: string; expiryDate: string; status: string; certificateUrl?: string | null };
 type ArchivedInsuranceItem = { id: string; subcontractorId: string; subcontractorName: string; insuranceType: string; expiryDate: string; certificateUrl?: string | null; archivedAt: string };
+type CertItem = { id: string; personId: string; personName: string; certName: string; expiryDate: string; status: string; documentUrl?: string | null };
+type ArchivedCertItem = { id: string; personId: string; personName: string; certName: string; expiryDate: string; documentUrl?: string | null; archivedAt: string };
 type PermitItem = { permitId: string; projectId: string; projectName: string; permitType: string; expiryDate: string; status: string; documentUrl?: string | null };
 type ArchivedPermitItem = { id: string; projectId: string; projectName: string; permitType: string; expiryDate: string; documentUrl?: string | null; archivedAt: string };
 type ArchivedDocItem = { id: string; name: string; type: string; version: number; fileUrl: string; projectId: string; projectName: string; createdAt: string };
@@ -65,6 +67,9 @@ export default function CompliancePage() {
   const [archivedInsurance, setArchivedInsurance] = useState<ArchivedInsuranceItem[]>([]);
   const [permits, setPermits] = useState<PermitItem[]>([]);
   const [archivedPermits, setArchivedPermits] = useState<ArchivedPermitItem[]>([]);
+  const [certifications, setCertifications] = useState<CertItem[]>([]);
+  const [archivedCertifications, setArchivedCertifications] = useState<ArchivedCertItem[]>([]);
+  const [showArchivedCerts, setShowArchivedCerts] = useState(false);
   const [archivedDocs, setArchivedDocs] = useState<ArchivedDocItem[]>([]);
   const [showArchivedIns, setShowArchivedIns] = useState(false);
   const [showArchivedPermits, setShowArchivedPermits] = useState(false);
@@ -106,6 +111,8 @@ export default function CompliancePage() {
         setArchivedInsurance(d.archivedInsurance ?? []);
         setPermits(d.expiringPermits ?? []);
         setArchivedPermits(d.archivedPermits ?? []);
+        setCertifications(d.expiringCertifications ?? []);
+        setArchivedCertifications(d.archivedCertifications ?? []);
         setAcks(d.pendingAcknowledgments ?? []);
         setArchivedDocs(d.archivedDocuments ?? []);
       })
@@ -283,6 +290,7 @@ export default function CompliancePage() {
   const q = search.toLowerCase();
   const filteredIns = insurance.filter(i => !q || i.subcontractorName.toLowerCase().includes(q) || i.insuranceType.toLowerCase().includes(q));
   const filteredPermits = permits.filter(p => !q || p.projectName.toLowerCase().includes(q) || p.permitType.toLowerCase().includes(q));
+  const filteredCerts = certifications.filter(c => !q || c.personName.toLowerCase().includes(q) || c.certName.toLowerCase().includes(q));
   const filteredAcks = acks.filter(a => !q || a.documentName.toLowerCase().includes(q) || a.projectName.toLowerCase().includes(q));
   const totalIssues = insurance.length + permits.length + acks.length;
 
@@ -469,6 +477,103 @@ export default function CompliancePage() {
                           </button>
                           <button
                             onClick={() => setShareItem({ entityType: "insurance", entityId: ins.id, entityName: `${ins.subcontractorName} – ${ins.insuranceType.replace(/_/g, " ")}`, fileUrl: ins.certificateUrl })}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
+                          >
+                            <Share2 className="w-3 h-3" /> Share
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* ── Expiring Certifications ── */}
+          <section id="section-certifications" className="rounded-xl">
+            <div className="flex items-center gap-2 mb-3">
+              <ShieldAlert className="w-5 h-5 text-yellow-600" />
+              <h2 className="font-bold text-lg">Expiring Certifications</h2>
+              <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{filteredCerts.length}</span>
+            </div>
+            {filteredCerts.length === 0 ? (
+              <Card className="p-8 text-center border-dashed border-2">
+                <CheckCircle2 className="w-8 h-8 mx-auto text-emerald-500 mb-2" />
+                <p className="text-muted-foreground text-sm">{q ? "No results." : "No certifications expiring in the next 30 days."}</p>
+              </Card>
+            ) : (
+              <div className="space-y-2">
+                {[...filteredCerts].sort((a, b) => a.expiryDate.localeCompare(b.expiryDate)).map(c => {
+                  const days = daysLeft(c.expiryDate);
+                  return (
+                    <div key={c.id} className={cn(
+                      "flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 px-4 py-3 rounded-xl border transition-all",
+                      days < 0 ? "bg-red-50 border-red-200" : days <= 7 ? "bg-orange-50 border-orange-200" : "bg-yellow-50 border-yellow-200"
+                    )}>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-sm truncate">{c.personName}</p>
+                        <p className="text-xs text-muted-foreground truncate">{c.certName}</p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-xs text-muted-foreground">{fmtDate(c.expiryDate)}</p>
+                        <ExpiryBadge days={days} />
+                        {c.documentUrl && (
+                          <>
+                            <button
+                              onClick={() => window.open(c.documentUrl!.replace(/^\/uploads\//, "/api/uploads/"), '_blank', 'noopener,noreferrer')}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
+                              title="Open document"
+                            >
+                              <ExternalLink className="w-3 h-3" /> Open
+                            </button>
+                            <button
+                              onClick={() => setShareItem({ entityType: "person_certification", entityId: c.id, entityName: `${c.personName} – ${c.certName}`, fileUrl: c.documentUrl })}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
+                              title="Share"
+                            >
+                              <Share2 className="w-3 h-3" /> Share
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          {/* ── Archived Certifications ── */}
+          {archivedCertifications.length > 0 && (
+            <section>
+              <button
+                onClick={() => setShowArchivedCerts(v => !v)}
+                className="flex items-center gap-2 mb-3 text-muted-foreground hover:text-foreground transition-colors w-full text-left"
+              >
+                <Archive className="w-4 h-4" />
+                <span className="font-semibold text-sm">Superseded Certifications</span>
+                <span className="text-xs bg-muted px-2 py-0.5 rounded-full">{archivedCertifications.length}</span>
+                {showArchivedCerts ? <ChevronUp className="w-4 h-4 ml-auto" /> : <ChevronDown className="w-4 h-4 ml-auto" />}
+              </button>
+              {showArchivedCerts && (
+                <div className="space-y-2">
+                  {[...archivedCertifications].sort((a, b) => b.archivedAt.localeCompare(a.archivedAt)).map(c => (
+                    <div key={c.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 px-4 py-3 rounded-xl border bg-muted/40 border-border opacity-80">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-sm truncate">{c.personName}</p>
+                        <p className="text-xs text-muted-foreground truncate">{c.certName} · expired {fmtDate(c.expiryDate)} · archived {new Date(c.archivedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
+                      </div>
+                      {c.documentUrl && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => window.open(c.documentUrl!.replace(/^\/uploads\//, "/api/uploads/"), "_blank", "noopener,noreferrer")}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
+                          >
+                            <ExternalLink className="w-3 h-3" /> Open
+                          </button>
+                          <button
+                            onClick={() => setShareItem({ entityType: "person_certification", entityId: c.id, entityName: `${c.personName} – ${c.certName}`, fileUrl: c.documentUrl })}
                             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
                           >
                             <Share2 className="w-3 h-3" /> Share

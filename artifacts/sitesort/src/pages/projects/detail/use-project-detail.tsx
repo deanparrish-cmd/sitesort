@@ -828,8 +828,13 @@ export function useProjectDetailState() {
   const [scheduleTarget, setScheduleTarget] = useState<any | null>(null);
   const [scheduleError, setScheduleError] = useState<string | null>(null);
 
+  // "Add from Contacts Directory" — person-first (Feature: person-first cards):
+  // lists every person (subcontractor-linked or in-house), company shown as
+  // reference, and adds that SPECIFIC person to the project team immediately
+  // via POST .../members/person (no portal acceptance required — inviting them
+  // to the portal is a separate follow-on step via the pill on their new card).
   const [fromDirOpen, setFromDirOpen] = useState(false);
-  const [dirSubs, setDirSubs] = useState<any[]>([]);
+  const [dirPeople, setDirPeople] = useState<any[]>([]);
   const [dirSubsLoading, setDirSubsLoading] = useState(false);
   const [dirSearch, setDirSearch] = useState("");
   const [linkingSubId, setLinkingSubId] = useState<string | null>(null);
@@ -839,20 +844,21 @@ export function useProjectDetailState() {
     setDirSearch("");
     setDirSubsLoading(true);
     const token = localStorage.getItem("sitesort_token");
-    const res = await fetch("/api/subcontractors", { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-    if (res.ok) setDirSubs(await res.json());
+    const res = await fetch(`/api/people?projectId=${projectId}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (res.ok) setDirPeople(await res.json());
     setDirSubsLoading(false);
   };
 
-  const linkSubcontractor = async (subId: string) => {
-    setLinkingSubId(subId);
+  const addPersonToProject = async (personId: string) => {
+    setLinkingSubId(personId);
     const token = localStorage.getItem("sitesort_token");
-    const res = await fetch(`/api/projects/${projectId}/members/link`, {
+    const res = await fetch(`/api/projects/${projectId}/members/person`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      body: JSON.stringify({ subcontractorId: subId }),
+      body: JSON.stringify({ personId }),
     });
     if (res.ok) {
+      setDirPeople(prev => prev.map(p => p.id === personId ? { ...p, onProject: true } : p));
       await queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/members`] });
       await queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}`] });
     }
@@ -956,8 +962,11 @@ export function useProjectDetailState() {
     setSubDocSubmitting(false);
   }
 
-  // Remove from project (person, legacy user, or whole subcontractor company)
-  type RemoveTarget = { kind: "member" | "company"; id: string; name: string; isPortal: boolean };
+  // Remove from project (person, legacy user, or whole subcontractor company).
+  // For a company removal, peopleNames is computed client-side from the
+  // already-loaded `members` list (Feature: person-first cards) so the
+  // confirmation can name everyone it will remove BEFORE the action runs.
+  type RemoveTarget = { kind: "member" | "company"; id: string; name: string; isPortal: boolean; peopleNames?: string[] };
   const [removeTarget, setRemoveTarget] = useState<RemoveTarget | null>(null);
   const [removing, setRemoving] = useState(false);
 
@@ -1547,8 +1556,7 @@ tr:last-child td{border-bottom:none}
     setScheduleError,
     fromDirOpen,
     setFromDirOpen,
-    dirSubs,
-    setDirSubs,
+    dirPeople,
     dirSubsLoading,
     setDirSubsLoading,
     dirSearch,
@@ -1556,7 +1564,7 @@ tr:last-child td{border-bottom:none}
     linkingSubId,
     setLinkingSubId,
     openFromDirectory,
-    linkSubcontractor,
+    addPersonToProject,
     sharingDoc,
     setSharingDoc,
     sharingContact,

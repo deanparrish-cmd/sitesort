@@ -1,18 +1,17 @@
 import { useState } from "react";
 import {
-  useListSubcontractorPeople, useCreateSubcontractorPerson, useDeletePerson,
+  useListSubcontractorPeople, useCreateSubcontractorPerson,
   useListInHousePeople, useCreateInHousePerson, useCreatePortalInvite, useRevokeProjectInvite,
-  useResendPortalInvite, useUpdatePerson, useUpdateMemberPermissions,
+  useResendPortalInvite, useUpdateMemberPermissions,
   getListSubcontractorPeopleQueryKey, getListInHousePeopleQueryKey,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Spinner } from "@/components/ui/spinner";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuCheckboxItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
-  UserPlus, Copy, Trash2, Mail, ShieldCheck, Send, MoreHorizontal, X, ChevronDown, ChevronRight,
+  UserPlus, Copy, Trash2, Mail, ShieldCheck, Send, MoreHorizontal, X,
   RefreshCw, AlertTriangle, CheckCircle2,
 } from "lucide-react";
 
@@ -79,7 +78,7 @@ function splitName(full: string): { firstName: string; lastName: string } {
   if (idx === -1) return { firstName: trimmed, lastName: trimmed };
   return { firstName: trimmed.slice(0, idx), lastName: trimmed.slice(idx + 1).trim() || trimmed.slice(0, idx) };
 }
-type PillSource = { kind: "in_house" } | { kind: "subcontractor"; subcontractorId: string };
+type PillSource = { kind: "in_house" } | { kind: "subcontractor"; subcontractorId: string } | { kind: "person"; personId: string; subcontractorId?: string };
 
 function fmtRelative(iso?: string | null): string {
   if (!iso) return "never";
@@ -109,8 +108,10 @@ export function PortalInvitePill({
   canManage: boolean;
 }) {
   const { toast } = useToast();
-  const isSub = source.kind === "subcontractor";
-  const subId = isSub ? source.subcontractorId : "";
+  const isPerson = source.kind === "person";
+  const isSub = source.kind === "subcontractor" || (isPerson && !!source.subcontractorId);
+  const subId = source.kind === "subcontractor" ? source.subcontractorId : (isPerson ? (source.subcontractorId ?? "") : "");
+  const knownPersonId = isPerson ? source.personId : undefined;
 
   const subQ = useListSubcontractorPeople(subId, { projectId }, { query: { enabled: isSub && canManage, retry: false, queryKey: getListSubcontractorPeopleQueryKey(subId, { projectId }) } });
   const inHouseQ = useListInHousePeople(projectId, {}, { query: { enabled: !isSub && canManage, retry: false, queryKey: getListInHousePeopleQueryKey(projectId, {}) } });
@@ -129,12 +130,14 @@ export function PortalInvitePill({
   const busy = createSub.isPending || createInHouse.isPending || invite.isPending || revoke.isPending;
 
   const email = (personEmail ?? "").trim().toLowerCase();
-  const person = email ? people.find(p => p.email.toLowerCase() === email) : undefined;
+  // A known personId (Feature: person-first cards) matches directly — no
+  // lazy-create-by-email indirection needed, the person already exists.
+  const person = knownPersonId ? people.find(p => p.id === knownPersonId) : (email ? people.find(p => p.email.toLowerCase() === email) : undefined);
   const portal: PortalStatus = person?.portal ?? { status: "not_invited" };
 
   const doInvite = async (useEmail: string) => {
     try {
-      let personId = person?.id;
+      let personId = person?.id ?? knownPersonId;
       if (!personId) {
         const data: PersonInput = { ...splitName(personName || useEmail), email: useEmail };
         const created = isSub
@@ -243,167 +246,3 @@ export function PortalInvitePill({
   );
 }
 
-// ── Additional-worker row (used only in the quiet "add another person" area) ──
-function PersonRow({
-  person, onInvite, onRevoke, onDelete, busy, projectId, onChanged,
-}: {
-  person: PersonLike;
-  onInvite: (role: PortalRole) => Promise<void>;
-  onRevoke: (inviteId: string) => Promise<void>;
-  onDelete: () => Promise<void>;
-  busy: boolean;
-  projectId: string;
-  onChanged: () => void;
-}) {
-  const portal = person.portal ?? { status: "not_invited" };
-  const [role, setRole] = useState<PortalRole>((portal.role as PortalRole) ?? "worker");
-  const [copied, setCopied] = useState(false);
-  const invite = async () => { await onInvite(role); setCopied(true); setTimeout(() => setCopied(false), 2000); };
-
-  const updatePerson = useUpdatePerson();
-  // Effective contact visibility: explicit flag, else role default (managers ON).
-  const contactOn = person.showContactInPortal ?? (portal.role === "manager");
-  const toggleContact = async () => {
-    try { await updatePerson.mutateAsync({ personId: person.id, data: { showContactInPortal: !contactOn } }); onChanged(); } catch { /* noop */ }
-  };
-  const onPortal = portal.status === "member" || portal.status === "invited";
-
-  return (
-    <div className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-lg hover:bg-muted/40">
-      <div className="min-w-0">
-        <p className="text-sm font-medium truncate">
-          {person.name}{person.roleTitle && <span className="text-xs text-muted-foreground font-normal"> · {person.roleTitle}</span>}
-          {!person.lastName?.trim() && <span className="ml-1.5 text-[10px] font-semibold text-amber-700 bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 rounded px-1.5 py-0.5 align-middle">Surname missing</span>}
-        </p>
-        <p className="text-xs text-muted-foreground truncate flex items-center gap-1"><Mail className="w-3 h-3 shrink-0" />{person.email}</p>
-        {portal.status === "invited" && (
-          <div className="mt-0.5"><InviteEmailStatus projectId={projectId} portal={portal} onDone={onChanged} /></div>
-        )}
-        {onPortal && (
-          <button onClick={toggleContact} disabled={updatePerson.isPending} className="mt-1 inline-flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground" title="Show this person's email & phone on their portal Team row">
-            <span className={cn("relative inline-flex h-4 w-7 rounded-full transition-colors shrink-0", contactOn ? "bg-primary" : "bg-muted-foreground/30")}>
-              <span className={cn("absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform", contactOn ? "translate-x-3.5" : "translate-x-0.5")} />
-            </span>
-            Show contact in portal
-          </button>
-        )}
-      </div>
-      <div className="flex items-center gap-1.5 shrink-0">
-        {portal.status === "member" ? (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"><ShieldCheck className="w-3 h-3" /> Member</span>
-        ) : portal.status === "invited" ? (
-          <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={invite} isLoading={busy} title="Copy a fresh invite link"><Copy className="w-3.5 h-3.5" />{copied ? " Copied" : " Copy link"}</Button>
-        ) : (
-          <>
-            <select value={role} onChange={e => setRole(e.target.value as PortalRole)} className="h-7 rounded-lg border border-input bg-background px-1.5 text-xs" title="Portal role">
-              <option value="worker">Worker</option><option value="manager">Manager</option><option value="subcontractor">Subcontractor</option>
-            </select>
-            <Button size="sm" className="h-7 px-2 text-xs" onClick={invite} isLoading={busy}><Send className="w-3.5 h-3.5" /></Button>
-          </>
-        )}
-        {(portal.status !== "not_invited") && portal.inviteId && (
-          <button onClick={() => onRevoke(portal.inviteId!)} disabled={busy} className="p-1.5 text-muted-foreground hover:text-destructive rounded-lg hover:bg-muted disabled:opacity-50" title="Revoke"><Trash2 className="w-4 h-4" /></button>
-        )}
-        {portal.status === "not_invited" && (
-          <button onClick={onDelete} disabled={busy} className="p-1.5 text-muted-foreground hover:text-destructive rounded-lg hover:bg-muted disabled:opacity-50" title="Remove person"><Trash2 className="w-4 h-4" /></button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── Quiet "+ Add another person" area on a subcontractor card ────────────────
-// Shows/adds ADDITIONAL workers beyond the primary contact (the pill handles the
-// primary contact). The primary contact's own row is filtered out to avoid dupes.
-export function SubcontractorPeople({
-  subcontractorId, projectId, primaryContactEmail, canManage,
-}: {
-  subcontractorId: string;
-  projectId: string;
-  primaryContactEmail?: string;
-  canManage: boolean;
-}) {
-  const { toast } = useToast();
-  const params = { projectId };
-  const peopleQ = useListSubcontractorPeople(subcontractorId, params, { query: { enabled: canManage, retry: false, queryKey: getListSubcontractorPeopleQueryKey(subcontractorId, params) } });
-  const createPerson = useCreateSubcontractorPerson();
-  const invite = useCreatePortalInvite();
-  const revoke = useRevokeProjectInvite();
-  const deletePerson = useDeletePerson();
-
-  const [open, setOpen] = useState(false);
-  const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", phone: "", roleTitle: "" });
-
-  const primary = (primaryContactEmail ?? "").toLowerCase();
-  const people = ((peopleQ.data ?? []) as PersonLike[]).filter(p => p.email.toLowerCase() !== primary);
-  const busy = createPerson.isPending || invite.isPending || revoke.isPending || deletePerson.isPending;
-  const refresh = () => { void peopleQ.refetch(); };
-
-  if (!canManage) return null;
-
-  const addPerson = async (data: PersonInput) => {
-    try { await createPerson.mutateAsync({ subcontractorId, data }); refresh(); }
-    catch (e: any) { toast({ variant: "destructive", title: "Could not add person", description: e?.data?.message ?? "Please try again." }); }
-  };
-  const invitePerson = async (personId: string, role: PortalRole) => {
-    try {
-      const res = await invite.mutateAsync({ projectId, data: { personId, role } });
-      if (res.inviteUrl) { try { await navigator.clipboard.writeText(res.inviteUrl); } catch { /* noop */ } toast({ title: "Invite link copied", description: "Share it to grant portal-only access." }); }
-      refresh();
-    } catch (e: any) { toast({ variant: "destructive", title: "Invite failed", description: e?.data?.message ?? "Please try again." }); }
-  };
-  const revokePerson = async (inviteId: string) => {
-    try { await revoke.mutateAsync({ projectId, inviteId }); refresh(); } catch { toast({ variant: "destructive", title: "Could not revoke access" }); }
-  };
-  const removePerson = async (personId: string) => {
-    try {
-      const res = await deletePerson.mutateAsync({ personId });
-      toast(res.archived ? { title: "Archived", description: "They have history so were archived, not deleted — restorable from Contacts." } : { title: "Removed" });
-      refresh();
-    } catch (e: any) {
-      toast({ variant: "destructive", title: "Could not remove person", description: e?.data?.message ?? "Please try again." });
-    }
-  };
-
-  return (
-    <div className="pt-2">
-      <button onClick={() => setOpen(o => !o)} className="text-xs font-medium text-muted-foreground hover:text-primary flex items-center gap-1">
-        {open ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-        <UserPlus className="w-3.5 h-3.5" /> Add another person{people.length > 0 ? ` (${people.length})` : ""}
-      </button>
-
-      {open && (
-        <div className="mt-1.5">
-          {peopleQ.isLoading ? (
-            <div className="flex justify-center py-2"><Spinner className="size-4 text-primary" /></div>
-          ) : (
-            <div className="divide-y divide-border/40">
-              {people.map(p => (
-                <PersonRow key={p.id} person={p} busy={busy} projectId={projectId} onChanged={refresh}
-                  onInvite={role => invitePerson(p.id, role)} onRevoke={revokePerson} onDelete={() => removePerson(p.id)} />
-              ))}
-            </div>
-          )}
-
-          {adding ? (
-            <div className="mt-2 grid grid-cols-2 gap-1.5">
-              <Input className="h-8 text-sm" placeholder="First name" value={form.firstName} onChange={e => setForm(f => ({ ...f, firstName: e.target.value }))} />
-              <Input className="h-8 text-sm" placeholder="Surname" value={form.lastName} onChange={e => setForm(f => ({ ...f, lastName: e.target.value }))} />
-              <Input className="h-8 text-sm col-span-2" type="email" placeholder="Email" autoCapitalize="none" autoCorrect="off" spellCheck={false} value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
-              <Input className="h-8 text-sm" placeholder="Phone (optional)" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
-              <Input className="h-8 text-sm" placeholder="Job title (optional)" value={form.roleTitle} onChange={e => setForm(f => ({ ...f, roleTitle: e.target.value }))} />
-              <div className="col-span-2 flex items-center gap-2">
-                <Button size="sm" className="h-8" isLoading={createPerson.isPending} disabled={form.firstName.trim().length < 2 || form.lastName.trim().length < 2 || !form.email.trim()}
-                  onClick={async () => { await addPerson({ firstName: form.firstName.trim(), lastName: form.lastName.trim(), email: form.email.trim(), phone: form.phone.trim() || undefined, roleTitle: form.roleTitle.trim() || undefined }); setForm({ firstName: "", lastName: "", email: "", phone: "", roleTitle: "" }); setAdding(false); }}>Add</Button>
-                <Button size="sm" variant="ghost" className="h-8" onClick={() => setAdding(false)}>Cancel</Button>
-              </div>
-            </div>
-          ) : (
-            <button onClick={() => setAdding(true)} className="mt-1.5 text-xs font-medium text-primary hover:underline">+ Add person</button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
