@@ -56,7 +56,9 @@
       "Bash(replit --help)",
       "Bash(curl -s -o /dev/null -w \"health: %{http_code}\\\\n\" https://www.sitesort.co.uk/api/health)",
       "Bash(curl -s -o /dev/null -w \"portal-my-documents: %{http_code}\\\\n\" https://www.sitesort.co.uk/api/portal/my-documents)",
-      "Bash(curl -s -o /dev/null -w \"portal-sessions-logout: %{http_code}\\\\n\" -X POST https://www.sitesort.co.uk/api/portal/logout)"
+      "Bash(curl -s -o /dev/null -w \"portal-sessions-logout: %{http_code}\\\\n\" -X POST https://www.sitesort.co.uk/api/portal/logout)",
+      "Bash(curl -s https://www.sitesort.co.uk/api/health)",
+      "Bash(git commit *)"
     ]
   },
   "hooks": {
