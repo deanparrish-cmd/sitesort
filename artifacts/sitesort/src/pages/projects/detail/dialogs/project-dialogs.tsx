@@ -8,7 +8,6 @@ import { useDetail } from "../context";
 export function ProjectDialogs() {
   const {
     project,
-    members,
     updateMutation,
     isEditOpen,
     setIsEditOpen,
@@ -18,12 +17,12 @@ export function ProjectDialogs() {
     editHandleSubmit,
     fromDirOpen,
     setFromDirOpen,
-    dirSubs,
+    dirPeople,
     dirSubsLoading,
     dirSearch,
     setDirSearch,
     linkingSubId,
-    linkSubcontractor,
+    addPersonToProject,
     onEditSubmit,
   } = useDetail();
 
@@ -74,7 +73,7 @@ export function ProjectDialogs() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             <Input
-              placeholder="Search by company or contact name…"
+              placeholder="Search by name or company…"
               className="pl-9"
               value={dirSearch}
               onChange={e => setDirSearch(e.target.value)}
@@ -86,43 +85,59 @@ export function ProjectDialogs() {
             </div>
           ) : (() => {
             const q = dirSearch.toLowerCase();
-            const filtered = dirSubs.filter(s =>
-              !q || s.companyName.toLowerCase().includes(q) || s.contactName.toLowerCase().includes(q)
+            const filtered = (dirPeople as any[]).filter(p =>
+              !q || p.name.toLowerCase().includes(q) || (p.companyName ?? "").toLowerCase().includes(q)
             );
+            // Group by firm for scannability — still one row (and one Add) per person.
+            const groups = new Map<string, any[]>();
+            for (const p of filtered) {
+              const key = p.subcontractorId ? (p.companyName ?? "Unknown") : "In-house";
+              groups.set(key, [...(groups.get(key) ?? []), p]);
+            }
             return filtered.length === 0 ? (
               <p className="text-center text-muted-foreground text-sm py-8">
-                {dirSubs.length === 0 ? "No subcontractors in your directory yet." : "No results match your search."}
+                {dirPeople.length === 0 ? "No contacts in your directory yet." : "No results match your search."}
               </p>
             ) : (
-              <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-                {filtered.map((sub: any) => {
-                  const alreadyAdded = (members as any[])?.some((m: any) => m.subcontractorId === sub.id);
-                  return (
-                    <div key={sub.id} className={cn(
-                      "flex items-center justify-between gap-3 px-4 py-3 rounded-lg border transition-colors",
-                      alreadyAdded ? "opacity-50 bg-muted/50" : "hover:bg-muted/30"
-                    )}>
-                      <div className="min-w-0">
-                        <p className="font-semibold text-sm truncate">{sub.companyName}</p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {sub.contactName}{sub.trades?.length ? ` · ${sub.trades.join(", ")}` : ""}
-                        </p>
-                      </div>
-                      {alreadyAdded ? (
-                        <span className="text-xs text-muted-foreground shrink-0 font-medium">Already on project</span>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="accent"
-                          disabled={linkingSubId === sub.id}
-                          onClick={() => linkSubcontractor(sub.id)}
-                        >
-                          {linkingSubId === sub.id ? "Adding…" : "Add"}
-                        </Button>
-                      )}
+              <div className="space-y-4 max-h-80 overflow-y-auto pr-1">
+                {[...groups.entries()].map(([groupName, people]) => (
+                  <div key={groupName}>
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 px-1">
+                      {people[0].contactType === "self_employed" ? "Self-employed" : groupName}
+                    </p>
+                    <div className="space-y-2">
+                      {people.map((person: any) => {
+                        const alreadyAdded = !!person.onProject;
+                        return (
+                          <div key={person.id} className={cn(
+                            "flex items-center justify-between gap-3 px-4 py-3 rounded-lg border transition-colors",
+                            alreadyAdded ? "opacity-50 bg-muted/50" : "hover:bg-muted/30"
+                          )}>
+                            <div className="min-w-0">
+                              <p className="font-semibold text-sm truncate">{person.name}</p>
+                              <p className="text-xs text-muted-foreground truncate">
+                                {person.roleTitle ? `${person.roleTitle}` : (person.subcontractorId ? "" : "In-house")}
+                                {person.trades?.length ? ` · ${person.trades.join(", ")}` : ""}
+                              </p>
+                            </div>
+                            {alreadyAdded ? (
+                              <span className="text-xs text-muted-foreground shrink-0 font-medium">Already on project</span>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="accent"
+                                disabled={linkingSubId === person.id}
+                                onClick={() => addPersonToProject(person.id)}
+                              >
+                                {linkingSubId === person.id ? "Adding…" : "Add"}
+                              </Button>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
               </div>
             );
           })()}

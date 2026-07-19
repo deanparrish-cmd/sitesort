@@ -24,15 +24,22 @@ import { useToast } from "@/hooks/use-toast";
 
 type InsuranceStatus = "valid" | "expiring_soon" | "expired" | "none";
 
-type ContactType = "subcontractor" | "merchant" | "supplier" | "professional" | "other";
+type ContactType = "subcontractor" | "merchant" | "supplier" | "professional" | "self_employed" | "other";
 
 const CONTACT_TYPE_LABELS: Record<ContactType, string> = {
   subcontractor: "Subcontractor",
   merchant: "Merchant",
   supplier: "Supplier",
   professional: "Professional Services",
+  self_employed: "Self-employed",
   other: "Other",
 };
+
+// Wherever a company name would render, self-employed contacts show "Self-employed"
+// instead — the person IS the entity (Feature: self-employed contacts).
+function companyLabel(sub: { companyName: string; contactType?: ContactType }): string {
+  return sub.contactType === "self_employed" ? "Self-employed" : sub.companyName;
+}
 
 const CONTACT_TYPE_GROUP_LABELS: Record<string, string> = {
   merchant: "Merchants",
@@ -139,10 +146,14 @@ function normaliseUrl(url: string) {
   return url.startsWith("/uploads/") ? `/api${url}` : url;
 }
 
-function insuranceBadge(status: InsuranceStatus) {
+function insuranceBadge(status: InsuranceStatus, contactType?: ContactType) {
   if (status === "valid") return <Badge className="gap-1 text-[10px] bg-emerald-100 text-emerald-700 border-emerald-200"><ShieldCheck className="w-3 h-3" />Insurance OK</Badge>;
   if (status === "expiring_soon") return <Badge className="gap-1 text-[10px] bg-yellow-100 text-yellow-700 border-yellow-200"><ShieldAlert className="w-3 h-3" />Expiring Soon</Badge>;
   if (status === "expired") return <Badge variant="destructive" className="gap-1 text-[10px]"><ShieldX className="w-3 h-3" />Site Access Denied</Badge>;
+  // Self-employed contacts have no company to fall back on for cover — call
+  // this out (amber, non-blocking) rather than the quiet grey "No Insurance"
+  // shown for companies, where "none" often just means "not tracked here yet".
+  if (contactType === "self_employed") return <Badge className="gap-1 text-[10px] bg-amber-100 text-amber-700 border-amber-200"><ShieldAlert className="w-3 h-3" />No insurance on record</Badge>;
   return <Badge variant="secondary" className="gap-1 text-[10px]"><Shield className="w-3 h-3" />No Insurance</Badge>;
 }
 
@@ -249,6 +260,12 @@ export default function SubcontractorsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [selectedTradesAdd, setSelectedTradesAdd] = useState<string[]>([]);
   const [selectedTradesEdit, setSelectedTradesEdit] = useState<string[]>([]);
+  // "Add certification" repeater on the Add Contact form — attaches to the
+  // primary contact's `people` row right after the contact is created, since
+  // the form only knows about that one person at creation time.
+  const [newCerts, setNewCerts] = useState<{ name: string; expiryDate: string; documentUrl: string | null }[]>([]);
+  const [certDraft, setCertDraft] = useState({ name: "", expiryDate: "", documentUrl: null as string | null });
+  const [certUploading, setCertUploading] = useState(false);
   const [typeFilter, setTypeFilter] = useState<ContactType | "all">("all");
   const [showArchived, setShowArchived] = useState(false);
   const [restoringId, setRestoringId] = useState<string | null>(null);
@@ -382,8 +399,8 @@ export default function SubcontractorsPage() {
         toast({
           title: body.archived ? "Contact archived" : "Contact deleted",
           description: body.archived
-            ? `${deleteTarget.companyName} was archived — restore it any time from the Archived filter.`
-            : `${deleteTarget.companyName} was removed.`,
+            ? `${deleteTarget.contactName} was archived — restore it any time from the Archived filter.`
+            : `${deleteTarget.contactName} was removed.`,
         });
         setDeleteTarget(null);
         await load();
@@ -401,7 +418,7 @@ export default function SubcontractorsPage() {
     try {
       const res = await apiFetch(`/api/subcontractors/${sub.id}/restore`, { method: "PATCH" });
       if (res.ok) {
-        toast({ title: "Restored", description: `${sub.companyName} is active again.` });
+        toast({ title: "Restored", description: `${sub.contactName} is active again.` });
         await load();
       } else {
         toast({ title: "Couldn't restore", description: "Please try again.", variant: "destructive" });
@@ -575,7 +592,15 @@ export default function SubcontractorsPage() {
     if (res.ok) {
       const created = await res.json();
       setSubs(prev => [created, ...prev]);
-      setAddOpen(false); reset(); setSelectedTradesAdd([]);
+      // Attach any certifications entered in the repeater to the primary
+      // contact's `people` row (created server-side alongside the subcontructor).
+      if (created.personId && newCerts.length > 0) {
+        await Promise.all(newCerts.map(c => apiFetch(`/api/people/${created.personId}/certifications`, {
+          method: "POST",
+          body: JSON.stringify({ name: c.name, expiryDate: c.expiryDate, documentUrl: c.documentUrl ?? undefined }),
+        }).catch(() => null)));
+      }
+      setAddOpen(false); reset(); setSelectedTradesAdd([]); setNewCerts([]); setCertDraft({ name: "", expiryDate: "", documentUrl: null });
     } else {
       const e = await res.json().catch(() => ({}));
       setAddError(e.message ?? "Failed to add contact.");
@@ -763,23 +788,24 @@ export default function SubcontractorsPage() {
                       <div key={sub.id} className={cn("px-4 py-3 hover:bg-muted/10 transition-colors", sub.paymentHold && "bg-red-50/50 dark:bg-red-950/10", sub.archivedAt && "opacity-60")}>
                         {/* Top row: avatar + info + desktop-only actions */}
                         <div className="flex items-start gap-3">
-                          {/* Avatar */}
+                          {/* Avatar — person-first: initials from the contact's own name */}
                           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
                             <span className="font-extrabold text-primary text-sm">
-                              {sub.companyName.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
+                              {sub.contactName.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
                             </span>
                           </div>
 
-                          {/* Info */}
+                          {/* Info — person-first: heading is the contact's name, company/self-employed is the subheading */}
                           <div className="flex-1 min-w-0 overflow-hidden">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <p className="font-bold text-sm truncate">{sub.companyName}</p>
+                              <p className="font-bold text-sm truncate">{sub.contactName}</p>
                               {sub.contactType && (
                                 <Badge className={cn("text-[10px] shrink-0",
                                   sub.contactType === "subcontractor" && "bg-orange-100 text-orange-700 border-orange-200",
                                   sub.contactType === "merchant"      && "bg-blue-100 text-blue-700 border-blue-200",
                                   sub.contactType === "supplier"      && "bg-purple-100 text-purple-700 border-purple-200",
                                   sub.contactType === "professional"  && "bg-teal-100 text-teal-700 border-teal-200",
+                                  sub.contactType === "self_employed" && "bg-green-100 text-green-700 border-green-200",
                                   sub.contactType === "other"         && "bg-muted text-muted-foreground",
                                 )}>{CONTACT_TYPE_LABELS[sub.contactType]}</Badge>
                               )}
@@ -790,7 +816,9 @@ export default function SubcontractorsPage() {
                                 <Badge variant="warning" className="text-[10px] shrink-0">Surname missing</Badge>
                               )}
                             </div>
-                            <p className="text-xs text-muted-foreground truncate">{sub.contactName}</p>
+                            {sub.contactType !== "self_employed" && (
+                              <p className="text-xs text-muted-foreground truncate">{sub.companyName}</p>
+                            )}
                             <div className="flex flex-col gap-0.5 mt-0.5">
                               {sub.contactPhone && (
                                 <span className="text-xs text-muted-foreground flex items-center gap-1 min-w-0">
@@ -857,7 +885,7 @@ export default function SubcontractorsPage() {
                             ) : (
                               <>
                                 <div className="flex flex-col items-end gap-1.5 mr-1">
-                                  {insuranceBadge(sub.insuranceStatus)}
+                                  {insuranceBadge(sub.insuranceStatus, sub.contactType)}
                                   <RatingStars rating={sub.reliabilityRating} />
                                 </div>
                                 <ContactActions email={sub.contactEmail} phone={sub.contactPhone} />
@@ -870,8 +898,8 @@ export default function SubcontractorsPage() {
                                 <button
                                   onClick={() => setSharingContact({
                                     id: sub.id,
-                                    name: sub.companyName,
-                                    text: `${sub.companyName}\nContact: ${sub.contactName}${sub.contactEmail ? `\nEmail: ${sub.contactEmail}` : ""}${sub.contactPhone ? `\nPhone: ${sub.contactPhone}` : ""}${sub.trades.length ? `\nTrades: ${sub.trades.join(", ")}` : ""}`,
+                                    name: sub.contactName,
+                                    text: `${sub.contactName}\n${companyLabel(sub)}${sub.contactEmail ? `\nEmail: ${sub.contactEmail}` : ""}${sub.contactPhone ? `\nPhone: ${sub.contactPhone}` : ""}${sub.trades.length ? `\nTrades: ${sub.trades.join(", ")}` : ""}`,
                                   })}
                                   className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
                                   title="Share contact"
@@ -910,7 +938,7 @@ export default function SubcontractorsPage() {
                           ) : (
                             <>
                               <div className="flex items-center gap-2">
-                                {insuranceBadge(sub.insuranceStatus)}
+                                {insuranceBadge(sub.insuranceStatus, sub.contactType)}
                                 <RatingStars rating={sub.reliabilityRating} />
                               </div>
                               <div className="flex items-center gap-0.5">
@@ -924,8 +952,8 @@ export default function SubcontractorsPage() {
                                 <button
                                   onClick={() => setSharingContact({
                                     id: sub.id,
-                                    name: sub.companyName,
-                                    text: `${sub.companyName}\nContact: ${sub.contactName}${sub.contactEmail ? `\nEmail: ${sub.contactEmail}` : ""}${sub.contactPhone ? `\nPhone: ${sub.contactPhone}` : ""}${sub.trades.length ? `\nTrades: ${sub.trades.join(", ")}` : ""}`,
+                                    name: sub.contactName,
+                                    text: `${sub.contactName}\n${companyLabel(sub)}${sub.contactEmail ? `\nEmail: ${sub.contactEmail}` : ""}${sub.contactPhone ? `\nPhone: ${sub.contactPhone}` : ""}${sub.trades.length ? `\nTrades: ${sub.trades.join(", ")}` : ""}`,
                                   })}
                                   className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
                                   title="Share contact"
@@ -960,7 +988,7 @@ export default function SubcontractorsPage() {
       )}
 
       {/* Add modal */}
-      <Dialog open={addOpen} onOpenChange={open => { setAddOpen(open); if (!open) { reset(); setSelectedTradesAdd([]); setAddError(null); } }}>
+      <Dialog open={addOpen} onOpenChange={open => { setAddOpen(open); if (!open) { reset(); setSelectedTradesAdd([]); setAddError(null); setNewCerts([]); setCertDraft({ name: "", expiryDate: "", documentUrl: null }); } }}>
         <DialogHeader>
           <DialogTitle>Add Contact</DialogTitle>
         </DialogHeader>
@@ -975,11 +1003,13 @@ export default function SubcontractorsPage() {
           </div>
 
           <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
-            <div className="col-span-2">
-              <label className="text-sm font-medium mb-1.5 block">Company Name</label>
-              <Input placeholder="e.g. Smith Electrical Ltd" {...register("companyName", { required: true })} />
-              {errors.companyName && <p className="text-xs text-destructive mt-1">Required</p>}
-            </div>
+            {addContactType !== "self_employed" && (
+              <div className="col-span-2">
+                <label className="text-sm font-medium mb-1.5 block">Company Name</label>
+                <Input placeholder="e.g. Smith Electrical Ltd" {...register("companyName", { required: true })} />
+                {errors.companyName && <p className="text-xs text-destructive mt-1">Required</p>}
+              </div>
+            )}
             <div>
               <label className="text-sm font-medium mb-1.5 block">First Name</label>
               <Input placeholder="John" {...register("contactFirstName", { required: true, minLength: 2 })} />
@@ -1023,6 +1053,46 @@ export default function SubcontractorsPage() {
           )}
 
           <div>
+            <label className="text-sm font-medium mb-2 block">Certifications (optional)</label>
+            <p className="text-xs text-muted-foreground mb-2">CSCS, SSSTS/SMSTS, gas safe, plant tickets, etc. — attached to this contact and tracked for expiry.</p>
+            {newCerts.length > 0 && (
+              <div className="space-y-1.5 mb-2">
+                {newCerts.map((c, i) => (
+                  <div key={i} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border bg-muted/30 text-sm">
+                    <span className="truncate">{c.name} · expires {c.expiryDate}{c.documentUrl ? " · file attached" : ""}</span>
+                    <button type="button" onClick={() => setNewCerts(prev => prev.filter((_, idx) => idx !== i))} className="shrink-0 text-muted-foreground hover:text-destructive">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="grid grid-cols-[1fr_auto] gap-2 [&>*]:min-w-0">
+              <Input placeholder="Cert name, e.g. CSCS Card" value={certDraft.name} onChange={e => setCertDraft(d => ({ ...d, name: e.target.value }))} />
+              <Input type="date" className="w-40" value={certDraft.expiryDate} onChange={e => setCertDraft(d => ({ ...d, expiryDate: e.target.value }))} />
+            </div>
+            <div className="flex items-center gap-2 mt-1.5">
+              <label className={cn("inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg border cursor-pointer", certDraft.documentUrl ? "border-emerald-300 text-emerald-700 bg-emerald-50" : "border-input text-muted-foreground hover:text-primary")}>
+                <input type="file" className="hidden" disabled={certUploading} onChange={async e => {
+                  const file = e.target.files?.[0]; if (!file) return;
+                  setCertUploading(true);
+                  const token = localStorage.getItem("sitesort_token");
+                  const fd = new FormData(); fd.append("file", file);
+                  const up = await fetch("/api/upload", { method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : {}, body: fd });
+                  if (up.ok) { const { url } = await up.json(); setCertDraft(d => ({ ...d, documentUrl: url })); }
+                  setCertUploading(false);
+                }} />
+                {certUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
+                {certDraft.documentUrl ? "File attached" : "Attach file (optional)"}
+              </label>
+              <Button type="button" size="sm" variant="outline" disabled={!certDraft.name.trim() || !certDraft.expiryDate}
+                onClick={() => { setNewCerts(prev => [...prev, certDraft]); setCertDraft({ name: "", expiryDate: "", documentUrl: null }); }}>
+                + Add certification
+              </Button>
+            </div>
+          </div>
+
+          <div>
             <label className="text-sm font-medium mb-1.5 block">Notes</label>
             <textarea
               placeholder="Any additional notes…"
@@ -1052,12 +1122,12 @@ export default function SubcontractorsPage() {
             <div className="flex items-center gap-3 px-4 py-3 bg-muted/40 rounded-xl">
               <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                 <span className="font-extrabold text-primary text-sm">
-                  {shareTarget.companyName.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
+                  {shareTarget.contactName.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
                 </span>
               </div>
               <div className="min-w-0">
-                <p className="font-semibold text-sm">{shareTarget.companyName}</p>
-                <p className="text-xs text-muted-foreground">{shareTarget.contactName}{shareTarget.trades.length ? ` · ${shareTarget.trades.join(", ")}` : ""}</p>
+                <p className="font-semibold text-sm">{shareTarget.contactName}</p>
+                <p className="text-xs text-muted-foreground">{companyLabel(shareTarget)}{shareTarget.trades.length ? ` · ${shareTarget.trades.join(", ")}` : ""}</p>
               </div>
             </div>
 
@@ -1125,7 +1195,7 @@ export default function SubcontractorsPage() {
       {/* Edit modal */}
       <Dialog open={!!editTarget} onOpenChange={open => { if (!open) { setEditTarget(null); setEditError(null); } }}>
         <DialogHeader>
-          <DialogTitle>Edit — {editTarget?.companyName}</DialogTitle>
+          <DialogTitle>Edit — {editTarget && companyLabel(editTarget) === "Self-employed" ? editTarget.contactName : editTarget?.companyName}</DialogTitle>
         </DialogHeader>
         <form onSubmit={editSubmit(onEdit)} className="space-y-4 pt-2">
           <div>
@@ -1138,10 +1208,12 @@ export default function SubcontractorsPage() {
           </div>
 
           <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
-            <div className="col-span-2">
-              <label className="text-sm font-medium mb-1.5 block">Company Name</label>
-              <Input {...editReg("companyName", { required: true })} />
-            </div>
+            {editContactType !== "self_employed" && (
+              <div className="col-span-2">
+                <label className="text-sm font-medium mb-1.5 block">Company Name</label>
+                <Input {...editReg("companyName", { required: true })} />
+              </div>
+            )}
             <div>
               <label className="text-sm font-medium mb-1.5 block">First Name</label>
               <Input {...editReg("contactFirstName", { required: true, minLength: 2 })} />
@@ -1226,11 +1298,11 @@ export default function SubcontractorsPage() {
           <div className="space-y-4">
             <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/40">
               <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                {notesTarget.companyName.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
+                {notesTarget.contactName.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
               </div>
               <div className="min-w-0">
-                <p className="font-semibold text-sm truncate">{notesTarget.companyName}</p>
-                <p className="text-xs text-muted-foreground truncate">{notesTarget.contactName}</p>
+                <p className="font-semibold text-sm truncate">{notesTarget.contactName}</p>
+                <p className="text-xs text-muted-foreground truncate">{companyLabel(notesTarget)}</p>
               </div>
             </div>
 
@@ -1328,11 +1400,11 @@ export default function SubcontractorsPage() {
           <div className="space-y-4">
             <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/40">
               <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                {docsTarget.companyName.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
+                {docsTarget.contactName.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
               </div>
               <div className="min-w-0">
-                <p className="font-semibold text-sm truncate">{docsTarget.companyName}</p>
-                <p className="text-xs text-muted-foreground truncate">{docsTarget.contactName}</p>
+                <p className="font-semibold text-sm truncate">{docsTarget.contactName}</p>
+                <p className="text-xs text-muted-foreground truncate">{companyLabel(docsTarget)}</p>
               </div>
             </div>
 
@@ -1497,7 +1569,7 @@ export default function SubcontractorsPage() {
         </DialogHeader>
         <div className="space-y-3 py-1">
           <p className="text-sm">
-            Remove <span className="font-semibold">{deleteTarget?.companyName}</span> from your Contacts directory?
+            Remove <span className="font-semibold">{deleteTarget?.contactName}</span> from your Contacts directory?
           </p>
           <p className="text-xs text-muted-foreground">
             Blocked if they're currently on an active project. If they have any history (past projects, documents, sign-offs), they'll be archived instead of deleted — restorable any time from the Archived filter. Otherwise they're removed for good.

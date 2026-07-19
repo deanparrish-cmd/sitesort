@@ -397,8 +397,41 @@ export const ListProjectMembersResponseItem = zod.object({
   subcontractorId: zod.string().nullish(),
   personId: zod.string().nullish(),
   name: zod.string(),
+  contactName: zod
+    .string()
+    .nullish()
+    .describe(
+      "Legacy company-row field — the firm's primary contact name (company rows only; superseded by personId rows post-backfill).",
+    ),
+  companyName: zod
+    .string()
+    .nullish()
+    .describe(
+      'Set when this card belongs to a subcontractor-linked person or company row — \"Self-employed\" is shown client-side in place of this when contactType is self_employed.',
+    ),
+  contactType: zod
+    .enum([
+      "subcontractor",
+      "merchant",
+      "supplier",
+      "professional",
+      "self_employed",
+      "other",
+    ])
+    .nullish(),
+  roleTitle: zod.string().nullish(),
+  isPrimaryContact: zod.boolean().optional(),
+  email: zod.string().nullish(),
+  phone: zod.string().nullish(),
+  trades: zod.array(zod.string()).optional(),
+  avatarUrl: zod.string().nullish(),
+  pliCertUrl: zod.string().nullish(),
+  pliExpiryDate: zod.date().nullish(),
   role: zod.enum(["manager", "worker", "subcontractor"]),
-  complianceStatus: zod.enum(["ok", "warning", "hold"]),
+  complianceStatus: zod.enum(["ok", "warning", "hold", "none"]),
+  scheduledDays: zod.array(zod.string()).optional(),
+  siteStartTime: zod.string().nullish(),
+  siteEndTime: zod.string().nullish(),
   canLogIssues: zod
     .boolean()
     .optional()
@@ -473,6 +506,20 @@ export const RemoveProjectMemberCompanyResponse = zod.object({
 });
 
 /**
+ * Creates the person's project_members row immediately (personId set) — no portal acceptance required. Portal invite is a separate, optional follow-on action. Reuses the existing dashboard-account link if the person already has one.
+
+ * @summary Add a specific person (subcontractor employee, self-employed contact, or in-house) to a project's team (manager-gated)
+ */
+export const AddProjectMemberPersonParams = zod.object({
+  projectId: zod.coerce.string(),
+});
+
+export const AddProjectMemberPersonBody = zod.object({
+  personId: zod.string(),
+  role: zod.enum(["manager", "worker", "subcontractor"]).optional(),
+});
+
+/**
  * @summary List all subcontractors for the company
  */
 export const ListSubcontractorsQueryParams = zod.object({
@@ -495,6 +542,16 @@ export const ListSubcontractorsResponseItem = zod.object({
   contactLastName: zod.string().nullish(),
   contactEmail: zod.string(),
   contactPhone: zod.string().nullish(),
+  contactType: zod
+    .enum([
+      "subcontractor",
+      "merchant",
+      "supplier",
+      "professional",
+      "self_employed",
+      "other",
+    ])
+    .optional(),
   trades: zod.array(zod.string()),
   reliabilityRating: zod.number().nullish(),
   paymentHold: zod.boolean(),
@@ -514,7 +571,7 @@ export const createSubcontractorBodyContactFirstNameMin = 2;
 export const createSubcontractorBodyContactLastNameMin = 2;
 
 export const CreateSubcontractorBody = zod.object({
-  companyName: zod.string(),
+  companyName: zod.string().optional(),
   contactFirstName: zod
     .string()
     .min(createSubcontractorBodyContactFirstNameMin),
@@ -522,8 +579,18 @@ export const CreateSubcontractorBody = zod.object({
   contactEmail: zod.string().email(),
   contactPhone: zod.string().optional(),
   contactType: zod
-    .enum(["subcontractor", "merchant", "supplier", "professional", "other"])
-    .optional(),
+    .enum([
+      "subcontractor",
+      "merchant",
+      "supplier",
+      "professional",
+      "self_employed",
+      "other",
+    ])
+    .optional()
+    .describe(
+      "'self_employed' means the person IS the entity — companyName is optional (server defaults it to the contact's name if omitted).",
+    ),
   trades: zod.array(zod.string()),
   notes: zod.string().optional(),
 });
@@ -549,6 +616,16 @@ export const GetSubcontractorResponse = zod
     contactLastName: zod.string().nullish(),
     contactEmail: zod.string(),
     contactPhone: zod.string().nullish(),
+    contactType: zod
+      .enum([
+        "subcontractor",
+        "merchant",
+        "supplier",
+        "professional",
+        "self_employed",
+        "other",
+      ])
+      .optional(),
     trades: zod.array(zod.string()),
     reliabilityRating: zod.number().nullish(),
     paymentHold: zod.boolean(),
@@ -606,7 +683,14 @@ export const UpdateSubcontractorBody = zod.object({
   contactEmail: zod.string().optional(),
   contactPhone: zod.string().optional(),
   contactType: zod
-    .enum(["subcontractor", "merchant", "supplier", "professional", "other"])
+    .enum([
+      "subcontractor",
+      "merchant",
+      "supplier",
+      "professional",
+      "self_employed",
+      "other",
+    ])
     .optional(),
   trades: zod.array(zod.string()).optional(),
   notes: zod.string().optional(),
@@ -627,6 +711,16 @@ export const UpdateSubcontractorResponse = zod.object({
   contactLastName: zod.string().nullish(),
   contactEmail: zod.string(),
   contactPhone: zod.string().nullish(),
+  contactType: zod
+    .enum([
+      "subcontractor",
+      "merchant",
+      "supplier",
+      "professional",
+      "self_employed",
+      "other",
+    ])
+    .optional(),
   trades: zod.array(zod.string()),
   reliabilityRating: zod.number().nullish(),
   paymentHold: zod.boolean(),
@@ -1838,6 +1932,15 @@ export const GetPortalTeamResponseItem = zod.object({
     .optional()
     .describe("Only present when contact details are shown for this person."),
   trades: zod.array(zod.string()).optional(),
+  certifications: zod
+    .array(
+      zod.object({
+        name: zod.string(),
+        expiryDate: zod.string(),
+        status: zod.enum(["valid", "expiring_soon", "expired"]),
+      }),
+    )
+    .optional(),
 });
 export const GetPortalTeamResponse = zod.array(GetPortalTeamResponseItem);
 
@@ -2634,6 +2737,29 @@ export const ListSubcontractorPeopleResponseItem = zod
       ),
     archivedAt: zod.date().optional(),
     kind: zod.enum(["subcontractor", "in_house"]),
+    isPrimaryContact: zod
+      .boolean()
+      .optional()
+      .describe(
+        "True for the one auto-created row mirroring a subcontractor's own default contact fields.",
+      ),
+    companyName: zod
+      .string()
+      .nullish()
+      .describe(
+        'Populated when subcontractorId is set — \"Self-employed\" is shown client-side in place of this when the firm\'s contactType is self_employed.',
+      ),
+    contactType: zod
+      .enum([
+        "subcontractor",
+        "merchant",
+        "supplier",
+        "professional",
+        "self_employed",
+        "other",
+      ])
+      .nullish(),
+    trades: zod.array(zod.string()).optional(),
     portal: zod
       .object({
         status: zod.enum(["not_invited", "invited", "member"]),
@@ -2750,6 +2876,29 @@ export const UpdatePersonResponse = zod
       ),
     archivedAt: zod.date().optional(),
     kind: zod.enum(["subcontractor", "in_house"]),
+    isPrimaryContact: zod
+      .boolean()
+      .optional()
+      .describe(
+        "True for the one auto-created row mirroring a subcontractor's own default contact fields.",
+      ),
+    companyName: zod
+      .string()
+      .nullish()
+      .describe(
+        'Populated when subcontractorId is set — \"Self-employed\" is shown client-side in place of this when the firm\'s contactType is self_employed.',
+      ),
+    contactType: zod
+      .enum([
+        "subcontractor",
+        "merchant",
+        "supplier",
+        "professional",
+        "self_employed",
+        "other",
+      ])
+      .nullish(),
+    trades: zod.array(zod.string()).optional(),
     portal: zod
       .object({
         status: zod.enum(["not_invited", "invited", "member"]),
@@ -2795,6 +2944,154 @@ export const RestorePersonResponse = zod.object({
 });
 
 /**
+ * @summary List a person's individual certifications
+ */
+export const ListPersonCertificationsParams = zod.object({
+  personId: zod.coerce.string(),
+});
+
+export const ListPersonCertificationsResponseItem = zod
+  .object({
+    id: zod.string(),
+    personId: zod.string(),
+    name: zod.string(),
+    certNumber: zod.string().nullish(),
+    expiryDate: zod.date(),
+    status: zod.enum(["valid", "expiring_soon", "expired"]),
+    documentUrl: zod.string().nullish(),
+    createdAt: zod.date(),
+  })
+  .describe(
+    "An individual certification\/ticket held by a person (CSCS, SSSTS\/SMSTS, gas safe, plant tickets, etc.) — distinct from company-level PLI\/insurance.",
+  );
+export const ListPersonCertificationsResponse = zod.array(
+  ListPersonCertificationsResponseItem,
+);
+
+/**
+ * @summary Add a certification to a person (auto-archives a prior cert of the same name for this person)
+ */
+export const CreatePersonCertificationParams = zod.object({
+  personId: zod.coerce.string(),
+});
+
+export const CreatePersonCertificationBody = zod.object({
+  name: zod.string(),
+  certNumber: zod.string().optional(),
+  expiryDate: zod.string(),
+  documentUrl: zod.string().optional(),
+});
+
+/**
+ * @summary Delete a person's certification
+ */
+export const DeletePersonCertificationParams = zod.object({
+  personId: zod.coerce.string(),
+  certId: zod.coerce.string(),
+});
+
+export const DeletePersonCertificationResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * @summary Flat, tenant-scoped list of every person (subcontractor-linked + in-house) for person-first pickers
+ */
+export const ListAllPeopleQueryParams = zod.object({
+  projectId: zod.coerce
+    .string()
+    .optional()
+    .describe(
+      "When set, each person carries onProject (already added to this project).",
+    ),
+});
+
+export const ListAllPeopleResponseItem = zod
+  .object({
+    id: zod.string(),
+    subcontractorId: zod.string().optional(),
+    userId: zod.string().optional(),
+    name: zod
+      .string()
+      .describe(
+        'Computed \"First Last\" — kept for backward compatibility. Use firstName\/lastName for editing.',
+      ),
+    firstName: zod.string().nullish(),
+    lastName: zod.string().nullish(),
+    email: zod.string(),
+    phone: zod.string().optional(),
+    roleTitle: zod.string().optional(),
+    showContactInPortal: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Whether email\/phone show on this person's portal Team row (absent = role-based default).",
+      ),
+    archivedAt: zod.date().optional(),
+    kind: zod.enum(["subcontractor", "in_house"]),
+    isPrimaryContact: zod
+      .boolean()
+      .optional()
+      .describe(
+        "True for the one auto-created row mirroring a subcontractor's own default contact fields.",
+      ),
+    companyName: zod
+      .string()
+      .nullish()
+      .describe(
+        'Populated when subcontractorId is set — \"Self-employed\" is shown client-side in place of this when the firm\'s contactType is self_employed.',
+      ),
+    contactType: zod
+      .enum([
+        "subcontractor",
+        "merchant",
+        "supplier",
+        "professional",
+        "self_employed",
+        "other",
+      ])
+      .nullish(),
+    trades: zod.array(zod.string()).optional(),
+    portal: zod
+      .object({
+        status: zod.enum(["not_invited", "invited", "member"]),
+        role: zod.string().optional(),
+        inviteId: zod.string().optional(),
+        lastActiveAt: zod.string().optional(),
+        emailStatus: zod
+          .enum(["sent", "failed"])
+          .optional()
+          .describe(
+            "Delivery state of the invite email (absent = never attempted).",
+          ),
+        emailLastSentAt: zod
+          .string()
+          .optional()
+          .describe("ISO timestamp of the last invite-email send attempt."),
+        memberId: zod
+          .string()
+          .optional()
+          .describe(
+            'project_members.id — present when status is \"member\"; PATCH ...\/members\/{memberId}\/permissions targets this id.',
+          ),
+        canLogIssues: zod.boolean().optional(),
+        canUpdatePlantMaterials: zod.boolean().optional(),
+      })
+      .optional()
+      .describe("A person's portal state for one project."),
+  })
+  .describe(
+    "An individual person (subcontractor person when subcontractorId set, else in-house).",
+  )
+  .and(
+    zod.object({
+      onProject: zod.boolean().optional(),
+    }),
+  );
+export const ListAllPeopleResponse = zod.array(ListAllPeopleResponseItem);
+
+/**
  * @summary In-house people (portal-only) with per-project portal status (PM)
  */
 export const ListInHousePeopleParams = zod.object({
@@ -2831,6 +3128,29 @@ export const ListInHousePeopleResponseItem = zod
       ),
     archivedAt: zod.date().optional(),
     kind: zod.enum(["subcontractor", "in_house"]),
+    isPrimaryContact: zod
+      .boolean()
+      .optional()
+      .describe(
+        "True for the one auto-created row mirroring a subcontractor's own default contact fields.",
+      ),
+    companyName: zod
+      .string()
+      .nullish()
+      .describe(
+        'Populated when subcontractorId is set — \"Self-employed\" is shown client-side in place of this when the firm\'s contactType is self_employed.',
+      ),
+    contactType: zod
+      .enum([
+        "subcontractor",
+        "merchant",
+        "supplier",
+        "professional",
+        "self_employed",
+        "other",
+      ])
+      .nullish(),
+    trades: zod.array(zod.string()).optional(),
     portal: zod
       .object({
         status: zod.enum(["not_invited", "invited", "member"]),

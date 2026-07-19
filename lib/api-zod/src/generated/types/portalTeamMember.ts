@@ -5,6 +5,7 @@
  * SiteSort API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { PortalTeamMemberCertificationsItem } from "./portalTeamMemberCertificationsItem";
 
 export interface PortalTeamMember {
   name: string;
@@ -17,4 +18,5 @@ export interface PortalTeamMember {
   /** Only present when contact details are shown for this person. */
   email?: string;
   trades?: string[];
+  certifications?: PortalTeamMemberCertificationsItem[];
 }

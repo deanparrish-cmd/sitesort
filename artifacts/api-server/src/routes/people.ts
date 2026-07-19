@@ -56,7 +56,7 @@ async function portalStatusFor(personIds: string[], projectId: string): Promise<
   const [members, invites] = await Promise.all([
     db.select({
       id: projectMembersTable.id, personId: projectMembersTable.personId, role: projectMembersTable.role,
-      lastActiveAt: usersTable.lastActiveAt,
+      userId: projectMembersTable.userId, lastActiveAt: usersTable.lastActiveAt,
       canLogIssues: projectMembersTable.canLogIssues, canUpdatePlantMaterials: projectMembersTable.canUpdatePlantMaterials,
     })
       .from(projectMembersTable)
@@ -72,27 +72,40 @@ async function portalStatusFor(personIds: string[], projectId: string): Promise<
   const latestInvite = new Map<string, { id: string; status: string; expiresAt: Date; role: string; emailStatus: string | null; emailLastSentAt: Date | null }>();
   for (const inv of invites) if (inv.personId && !latestInvite.has(inv.personId)) latestInvite.set(inv.personId, { id: inv.id, status: inv.status, expiresAt: inv.expiresAt, role: inv.role, emailStatus: inv.emailStatus, emailLastSentAt: inv.emailLastSentAt });
 
+  const memberByPerson = new Map(members.filter(m => m.personId).map(m => [m.personId as string, m]));
+
   for (const m of members) {
-    if (m.personId) out.set(m.personId, {
-      status: "member", role: m.role,
-      lastActiveAt: m.lastActiveAt ? m.lastActiveAt.toISOString() : undefined,
-      inviteId: latestInvite.get(m.personId)?.id,
-      memberId: m.id,
-      canLogIssues: m.canLogIssues,
-      canUpdatePlantMaterials: m.canUpdatePlantMaterials,
-    });
+    if (!m.personId) continue;
+    // A project_members row alone only means "on this project's team" (Feature:
+    // person-first add flow can create one with no portal access at all) — a
+    // real portal member additionally has a linked userId (real or portalOnly
+    // account from accepting an invite).
+    if (m.userId) {
+      out.set(m.personId, {
+        status: "member", role: m.role,
+        lastActiveAt: m.lastActiveAt ? m.lastActiveAt.toISOString() : undefined,
+        inviteId: latestInvite.get(m.personId)?.id,
+        memberId: m.id,
+        canLogIssues: m.canLogIssues,
+        canUpdatePlantMaterials: m.canUpdatePlantMaterials,
+      });
+    }
   }
   for (const [personId, inv] of latestInvite) {
     if (out.has(personId)) continue; // member wins
     if (inv.status === "pending" && inv.expiresAt.getTime() > Date.now()) {
       out.set(personId, {
         status: "invited", role: inv.role, inviteId: inv.id,
+        memberId: memberByPerson.get(personId)?.id,
         emailStatus: inv.emailStatus ?? undefined,
         emailLastSentAt: inv.emailLastSentAt ? inv.emailLastSentAt.toISOString() : undefined,
       });
     }
   }
-  for (const id of personIds) if (!out.has(id)) out.set(id, { status: "not_invited" });
+  for (const id of personIds) {
+    if (out.has(id)) continue;
+    out.set(id, { status: "not_invited", memberId: memberByPerson.get(id)?.id });
+  }
   return out;
 }
 
@@ -119,7 +132,7 @@ async function deliverInvite(params: {
   return emailStatus;
 }
 
-function serializePerson(p: typeof peopleTable.$inferSelect, portal?: PortalStatus) {
+function serializePerson(p: typeof peopleTable.$inferSelect, portal?: PortalStatus, subInfo?: { companyName: string; contactType: string; trades: string[] }) {
   return {
     id: p.id, subcontractorId: p.subcontractorId ?? undefined, userId: p.userId ?? undefined,
     name: p.name, firstName: p.firstName ?? null, lastName: p.lastName ?? null,
@@ -127,6 +140,10 @@ function serializePerson(p: typeof peopleTable.$inferSelect, portal?: PortalStat
     showContactInPortal: p.showContactInPortal ?? undefined,
     archivedAt: p.archivedAt ? p.archivedAt.toISOString() : undefined,
     kind: p.subcontractorId ? "subcontractor" : "in_house",
+    isPrimaryContact: p.isPrimaryContact,
+    companyName: subInfo?.companyName ?? undefined,
+    contactType: subInfo?.contactType ?? undefined,
+    trades: subInfo?.trades ?? undefined,
     portal: portal ?? undefined,
   };
 }
@@ -141,6 +158,57 @@ async function loadOwnedProject(projectId: string, companyId: string) {
     .where(and(eq(projectsTable.id, projectId), eq(projectsTable.companyId, companyId))).limit(1);
   return rows[0] ?? null;
 }
+
+// ==========================================================================
+// FLAT PEOPLE DIRECTORY (Feature: person-first cards) — every person for the
+// tenant, subcontractor-linked or in-house, in one list. Powers the
+// person-first "Add from Contacts Directory" picker and share/allocate
+// pickers, so they no longer have to be assembled client-side from separate
+// per-subcontractor calls.
+// ==========================================================================
+
+// GET /api/people[?projectId=] — flat list of every active person for the
+// company. With projectId, each person carries onProject (already added to
+// that project's team).
+router.get("/people", authenticate, async (req, res) => {
+  try {
+    const projectId = typeof req.query.projectId === "string" ? req.query.projectId : undefined;
+    const people = await db.select({
+      id: peopleTable.id, subcontractorId: peopleTable.subcontractorId, userId: peopleTable.userId,
+      name: peopleTable.name, firstName: peopleTable.firstName, lastName: peopleTable.lastName,
+      email: peopleTable.email, phone: peopleTable.phone, roleTitle: peopleTable.roleTitle,
+      isPrimaryContact: peopleTable.isPrimaryContact, archivedAt: peopleTable.archivedAt,
+      companyName: subcontractorsTable.companyName, contactType: subcontractorsTable.contactType,
+      trades: subcontractorsTable.trades,
+    })
+      .from(peopleTable)
+      .leftJoin(subcontractorsTable, eq(peopleTable.subcontractorId, subcontractorsTable.id))
+      .where(and(eq(peopleTable.companyId, req.user!.companyId), isNull(peopleTable.archivedAt)));
+
+    let onProjectIds = new Set<string>();
+    if (projectId) {
+      const members = await db.select({ personId: projectMembersTable.personId }).from(projectMembersTable)
+        .where(and(eq(projectMembersTable.projectId, projectId), isNotNull(projectMembersTable.personId)));
+      onProjectIds = new Set(members.map(m => m.personId!));
+    }
+
+    res.json(people.map(p => ({
+      id: p.id, subcontractorId: p.subcontractorId ?? undefined, userId: p.userId ?? undefined,
+      name: p.name, firstName: p.firstName ?? null, lastName: p.lastName ?? null,
+      email: p.email, phone: p.phone ?? undefined, roleTitle: p.roleTitle ?? undefined,
+      archivedAt: p.archivedAt ? p.archivedAt.toISOString() : undefined,
+      kind: p.subcontractorId ? "subcontractor" : "in_house",
+      isPrimaryContact: p.isPrimaryContact,
+      companyName: p.companyName ?? undefined,
+      contactType: p.contactType ?? undefined,
+      trades: p.trades ?? undefined,
+      onProject: projectId ? onProjectIds.has(p.id) : undefined,
+    })));
+  } catch (err) {
+    req.log.error({ err }, "List all people error");
+    res.status(500).json({ error: "server_error", message: "Failed to list people" });
+  }
+});
 
 // ==========================================================================
 // PEOPLE under a subcontractor (company directory level)
@@ -281,6 +349,16 @@ router.patch("/people/:personId", authenticate, async (req, res) => {
     }
     if (Object.keys(patch).length === 0) { res.status(400).json({ error: "validation_error", message: "Nothing to update." }); return; }
     await db.update(peopleTable).set(patch).where(eq(peopleTable.id, req.params.personId));
+    // Mirror a name change back onto the parent subcontractor row when this is
+    // its primary-contact person (Feature: person-first cards — keeps
+    // subcontructors.contactName in sync for legacy readers).
+    if (rows[0].isPrimaryContact && rows[0].subcontractorId && patch.firstName !== undefined) {
+      await db.update(subcontractorsTable).set({
+        contactFirstName: patch.firstName as string,
+        contactLastName: patch.lastName as string,
+        contactName: patch.name as string,
+      }).where(eq(subcontractorsTable.id, rows[0].subcontractorId));
+    }
     const updated = (await db.select().from(peopleTable).where(eq(peopleTable.id, req.params.personId)).limit(1))[0];
     res.json(serializePerson(updated));
   } catch (err) {

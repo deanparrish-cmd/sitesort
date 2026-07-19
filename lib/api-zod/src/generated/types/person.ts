@@ -5,6 +5,7 @@
  * SiteSort API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { PersonContactType } from "./personContactType";
 import type { PersonKind } from "./personKind";
 import type { PortalStatus } from "./portalStatus";
 
@@ -26,5 +27,11 @@ export interface Person {
   showContactInPortal?: boolean;
   archivedAt?: Date;
   kind: PersonKind;
+  /** True for the one auto-created row mirroring a subcontractor's own default contact fields. */
+  isPrimaryContact?: boolean;
+  /** Populated when subcontractorId is set — "Self-employed" is shown client-side in place of this when the firm's contactType is self_employed. */
+  companyName?: string | null;
+  contactType?: PersonContactType;
+  trades?: string[];
   portal?: PortalStatus;
 }

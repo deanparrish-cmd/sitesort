@@ -2,10 +2,10 @@ import { randomUUID } from "node:crypto";
 import { db } from "@workspace/db";
 import {
   permitsTable, projectsTable, usersTable, insuranceRecordsTable,
-  subcontractorsTable, expiryReminderLogsTable,
+  subcontractorsTable, expiryReminderLogsTable, personCertificationsTable, peopleTable,
 } from "@workspace/db/schema";
 import { and, eq, gte, lte, isNull } from "drizzle-orm";
-import { sendPermitExpiryEmail, sendInsuranceExpiryEmail } from "./email";
+import { sendPermitExpiryEmail, sendInsuranceExpiryEmail, sendPersonCertExpiryEmail } from "./email";
 import { daysUntilExpiry } from "./expiry";
 import { logger } from "./logger";
 
@@ -180,6 +180,67 @@ async function runInsuranceReminders(now: Date): Promise<ReminderStats> {
   return stats;
 }
 
+// Person certifications (CSCS, SSSTS, gas safe, plant tickets, etc.) expiring
+// soon / expired. Same shape as runInsuranceReminders — notifies company admins
+// (compliance is a PM/admin concern, not the individual's).
+async function runPersonCertReminders(now: Date): Promise<ReminderStats> {
+  const stats: ReminderStats = { scanned: 0, noMilestone: 0, notifyOff: 0, deduped: 0, sent: 0 };
+  const { fromStr, toStr } = scanWindow(now);
+
+  const adminsByCompany = new Map<string, Array<{ name: string; email: string }>>();
+  async function adminsFor(companyId: string) {
+    const cached = adminsByCompany.get(companyId);
+    if (cached) return cached;
+    const admins = await db
+      .select({ name: usersTable.name, email: usersTable.email })
+      .from(usersTable)
+      .where(and(eq(usersTable.companyId, companyId), eq(usersTable.role, "admin"), eq(usersTable.emailNotifications, true)));
+    adminsByCompany.set(companyId, admins);
+    return admins;
+  }
+
+  const certs = await db
+    .select({
+      id: personCertificationsTable.id,
+      name: personCertificationsTable.name,
+      expiryDate: personCertificationsTable.expiryDate,
+      personName: peopleTable.name,
+      companyId: peopleTable.companyId,
+    })
+    .from(personCertificationsTable)
+    .innerJoin(peopleTable, eq(personCertificationsTable.personId, peopleTable.id))
+    .where(and(
+      gte(personCertificationsTable.expiryDate, fromStr),
+      lte(personCertificationsTable.expiryDate, toStr),
+      isNull(personCertificationsTable.archivedAt),
+    ));
+
+  stats.scanned = certs.length;
+  for (const cert of certs) {
+    const daysLeft = daysUntil(cert.expiryDate, now);
+    const milestone = milestoneFor(daysLeft);
+    if (!milestone) { stats.noMilestone++; continue; }
+
+    const admins = await adminsFor(cert.companyId);
+    if (admins.length === 0) { stats.notifyOff++; continue; }
+
+    if (!(await claimMilestone("person_cert", cert.id, milestone))) { stats.deduped++; continue; }
+
+    stats.sent++;
+    logger.info({ certId: cert.id, milestone, daysLeft, recipients: admins.length }, "Sending person certification expiry email");
+    for (const admin of admins) {
+      sendPersonCertExpiryEmail(
+        admin.email,
+        admin.name,
+        cert.name,
+        cert.personName,
+        daysLeft,
+      ).catch(err => logger.warn({ err, certId: cert.id }, "Failed to send person cert expiry email"));
+    }
+  }
+  return stats;
+}
+
 // Called once at startup and then every 24 h.
 async function runComplianceReminders() {
   try {
@@ -190,7 +251,8 @@ async function runComplianceReminders() {
     const now = new Date();
     const permits = await runPermitReminders(now);
     const insurance = await runInsuranceReminders(now);
-    logger.info({ permits, insurance }, "Compliance reminders run complete");
+    const personCerts = await runPersonCertReminders(now);
+    logger.info({ permits, insurance, personCerts }, "Compliance reminders run complete");
   } catch (err) {
     logger.error({ err }, "Compliance reminders error");
   }

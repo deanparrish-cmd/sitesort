@@ -6,10 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type UpdateSubcontractorRequestContactType =
-  (typeof UpdateSubcontractorRequestContactType)[keyof typeof UpdateSubcontractorRequestContactType];
+export type SubcontractorContactType =
+  (typeof SubcontractorContactType)[keyof typeof SubcontractorContactType];
 
-export const UpdateSubcontractorRequestContactType = {
+export const SubcontractorContactType = {
   subcontractor: "subcontractor",
   merchant: "merchant",
   supplier: "supplier",

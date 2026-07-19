@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { insuranceRecordsTable, subcontractorsTable, permitsTable, projectsTable, documentDistributionsTable, documentsTable } from "@workspace/db/schema";
+import { insuranceRecordsTable, subcontractorsTable, permitsTable, projectsTable, documentDistributionsTable, documentsTable, personCertificationsTable, peopleTable } from "@workspace/db/schema";
 import { eq, and, inArray, isNull, isNotNull } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
 import { expiryStatus } from "../lib/expiry";
@@ -65,6 +65,65 @@ router.get("/compliance", authenticate, async (req, res) => {
           expiryDate: ins.expiryDate,
           certificateUrl: ins.certificateUrl ?? null,
           archivedAt: ins.archivedAt!.toISOString(),
+        });
+      }
+    }
+
+    let expiringCertifications: Array<{
+      id: string;
+      personId: string;
+      personName: string;
+      certName: string;
+      expiryDate: string;
+      status: string;
+      documentUrl: string | null;
+    }> = [];
+
+    let archivedCertifications: Array<{
+      id: string;
+      personId: string;
+      personName: string;
+      certName: string;
+      expiryDate: string;
+      documentUrl: string | null;
+      archivedAt: string;
+    }> = [];
+
+    const myPeople = await db.select({ id: peopleTable.id, name: peopleTable.name })
+      .from(peopleTable).where(eq(peopleTable.companyId, req.user!.companyId));
+    const peopleIds = myPeople.map(p => p.id);
+
+    if (peopleIds.length > 0) {
+      const activeCerts = await db.select().from(personCertificationsTable)
+        .where(and(inArray(personCertificationsTable.personId, peopleIds), isNull(personCertificationsTable.archivedAt)));
+      for (const cert of activeCerts) {
+        const expiry = new Date(cert.expiryDate);
+        if (expiry <= in30Days) {
+          const person = myPeople.find(p => p.id === cert.personId);
+          expiringCertifications.push({
+            id: cert.id,
+            personId: cert.personId,
+            personName: person?.name ?? "Unknown",
+            certName: cert.name,
+            expiryDate: cert.expiryDate,
+            status: expiryStatus(cert.expiryDate, now) === "active" ? "valid" : expiryStatus(cert.expiryDate, now),
+            documentUrl: cert.documentUrl ?? null,
+          });
+        }
+      }
+
+      const archivedCerts = await db.select().from(personCertificationsTable)
+        .where(and(inArray(personCertificationsTable.personId, peopleIds), isNotNull(personCertificationsTable.archivedAt)));
+      for (const cert of archivedCerts) {
+        const person = myPeople.find(p => p.id === cert.personId);
+        archivedCertifications.push({
+          id: cert.id,
+          personId: cert.personId,
+          personName: person?.name ?? "Unknown",
+          certName: cert.name,
+          expiryDate: cert.expiryDate,
+          documentUrl: cert.documentUrl ?? null,
+          archivedAt: cert.archivedAt!.toISOString(),
         });
       }
     }
@@ -182,7 +241,7 @@ router.get("/compliance", authenticate, async (req, res) => {
       }
     }
 
-    res.json({ expiringInsurance, archivedInsurance, expiringPermits, archivedPermits, pendingAcknowledgments, archivedDocuments });
+    res.json({ expiringInsurance, archivedInsurance, expiringPermits, archivedPermits, expiringCertifications, archivedCertifications, pendingAcknowledgments, archivedDocuments });
   } catch (err) {
     req.log.error({ err }, "Compliance overview error");
     res.status(500).json({ error: "server_error", message: "Failed to get compliance overview" });

@@ -392,7 +392,66 @@ export async function ensureSchema(): Promise<void> {
       )
     `);
 
-    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols + portal_shares + portal_sessions + push_subscriptions + pending_pushes + subcontractor_documents + subcontractors/people.archived_at + people.first_name/last_name + subcontractors.contact_first_name/contact_last_name + project_members write-permission cols + activity_log.metadata + photos closure/updated_at cols + plant_items/plant_item_attachments/plant_item_distributions ready");
+    // Person-first contacts (Feature: self-employed + certifications + Team tab
+    // restructure). people.is_primary_contact marks the one auto-created row
+    // mirroring a subcontractor's own contact_first_name/contact_last_name/
+    // contact_email fields — makes "every card is a real person with a real
+    // id" true everywhere instead of needing a synthetic pseudo-person in the
+    // UI. subcontractors.ts keeps this row's name/email/phone mirrored
+    // bidirectionally with the parent row going forward.
+    await pool.query(`ALTER TABLE people ADD COLUMN IF NOT EXISTS is_primary_contact boolean NOT NULL DEFAULT false`);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS person_certifications (
+        id text PRIMARY KEY,
+        person_id text NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+        name text NOT NULL,
+        cert_number text,
+        expiry_date date NOT NULL,
+        document_url text,
+        created_by text NOT NULL REFERENCES users(id),
+        created_at timestamp NOT NULL DEFAULT now(),
+        archived_at timestamp
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS person_certifications_person_idx ON person_certifications (person_id)`);
+
+    // Backfill 1: for every subcontractor with no primary-contact people row yet,
+    // either promote an existing people row with a matching email (dedupes
+    // against a contact a PM already added manually via "Add another person")
+    // or insert a fresh one from the subcontractor's own contact fields.
+    await pool.query(`
+      UPDATE people p
+      SET is_primary_contact = true
+      FROM subcontractors s
+      WHERE p.subcontractor_id = s.id
+        AND lower(p.email) = lower(s.contact_email)
+        AND NOT EXISTS (SELECT 1 FROM people p2 WHERE p2.subcontractor_id = s.id AND p2.is_primary_contact = true)
+    `);
+    await pool.query(`
+      INSERT INTO people (id, company_id, subcontractor_id, name, first_name, last_name, email, phone, is_primary_contact, created_at)
+      SELECT gen_random_uuid()::text, s.company_id, s.id, s.contact_name, s.contact_first_name, s.contact_last_name, s.contact_email, s.contact_phone, true, now()
+      FROM subcontractors s
+      WHERE NOT EXISTS (SELECT 1 FROM people p WHERE p.subcontractor_id = s.id AND p.is_primary_contact = true)
+    `);
+
+    // Backfill 2: every legacy "whole firm" project_members row (subcontractor_id
+    // set, person_id null) gets its firm's primary contact linked in place, so
+    // it renders as a real person card immediately instead of a bare company
+    // anchor. Guarded against an (currently impossible, but cheap to guard)
+    // pre-existing row for the same project+person.
+    await pool.query(`
+      UPDATE project_members pm
+      SET person_id = p.id
+      FROM people p
+      WHERE pm.subcontractor_id = p.subcontractor_id
+        AND p.is_primary_contact = true
+        AND pm.person_id IS NULL
+        AND pm.subcontractor_id IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM project_members pm2 WHERE pm2.project_id = pm.project_id AND pm2.person_id = p.id)
+    `);
+
+    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols + portal_shares + portal_sessions + push_subscriptions + pending_pushes + subcontractor_documents + subcontractors/people.archived_at + people.first_name/last_name + subcontractors.contact_first_name/contact_last_name + project_members write-permission cols + activity_log.metadata + photos closure/updated_at cols + plant_items/plant_item_attachments/plant_item_distributions + people.is_primary_contact + person_certifications + primary-contact/project_members backfill ready");
   } catch (err) {
     // Don't crash the server — membership lookups fall back to the home company.
     logger.error({ err }, "ensureSchema failed (continuing with home-company fallback)");

@@ -8,13 +8,14 @@
 import type { CreateSubcontractorRequestContactType } from "./createSubcontractorRequestContactType";
 
 export interface CreateSubcontractorRequest {
-  companyName: string;
+  companyName?: string;
   /** @minLength 2 */
   contactFirstName: string;
   /** @minLength 2 */
   contactLastName: string;
   contactEmail: string;
   contactPhone?: string;
+  /** 'self_employed' means the person IS the entity — companyName is optional (server defaults it to the contact's name if omitted). */
   contactType?: CreateSubcontractorRequestContactType;
   trades: string[];
   notes?: string;

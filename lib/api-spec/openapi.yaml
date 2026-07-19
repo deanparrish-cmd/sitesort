@@ -521,6 +521,42 @@ paths:
               schema:
                 $ref: "#/components/schemas/RemoveCompanyMembersResponse"
 
+  /projects/{projectId}/members/person:
+    post:
+      operationId: addProjectMemberPerson
+      tags: [team]
+      summary: Add a specific person (subcontractor employee, self-employed contact, or in-house) to a project's team (manager-gated)
+      description: >
+        Creates the person's project_members row immediately (personId set) —
+        no portal acceptance required. Portal invite is a separate, optional
+        follow-on action. Reuses the existing dashboard-account link if the
+        person already has one.
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddProjectMemberPersonRequest"
+      responses:
+        "201":
+          description: Person added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectMember"
+        "409":
+          description: Already a member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /subcontractors:
     get:
       operationId: listSubcontractors
@@ -2183,6 +2219,101 @@ paths:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
 
+  /people/{personId}/certifications:
+    get:
+      operationId: listPersonCertifications
+      tags: [portal]
+      summary: List a person's individual certifications
+      parameters:
+        - name: personId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Certifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PersonCertification"
+    post:
+      operationId: createPersonCertification
+      tags: [portal]
+      summary: Add a certification to a person (auto-archives a prior cert of the same name for this person)
+      parameters:
+        - name: personId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePersonCertificationRequest"
+      responses:
+        "201":
+          description: Certification added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonCertification"
+
+  /people/{personId}/certifications/{certId}:
+    delete:
+      operationId: deletePersonCertification
+      tags: [portal]
+      summary: Delete a person's certification
+      parameters:
+        - name: personId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: certId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /people:
+    get:
+      operationId: listAllPeople
+      tags: [portal]
+      summary: Flat, tenant-scoped list of every person (subcontractor-linked + in-house) for person-first pickers
+      parameters:
+        - name: projectId
+          in: query
+          required: false
+          description: When set, each person carries onProject (already added to this project).
+          schema:
+            type: string
+      responses:
+        "200":
+          description: People
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  allOf:
+                    - $ref: "#/components/schemas/Person"
+                    - type: object
+                      properties:
+                        onProject:
+                          type: boolean
+
   /projects/{projectId}/in-house-people:
     get:
       operationId: listInHousePeople
@@ -2831,12 +2962,59 @@ components:
           nullable: true
         name:
           type: string
+        contactName:
+          type: string
+          nullable: true
+          description: Legacy company-row field — the firm's primary contact name (company rows only; superseded by personId rows post-backfill).
+        companyName:
+          type: string
+          nullable: true
+          description: Set when this card belongs to a subcontractor-linked person or company row — "Self-employed" is shown client-side in place of this when contactType is self_employed.
+        contactType:
+          type: string
+          nullable: true
+          enum: [subcontractor, merchant, supplier, professional, self_employed, other]
+        roleTitle:
+          type: string
+          nullable: true
+        isPrimaryContact:
+          type: boolean
+        email:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        trades:
+          type: array
+          items:
+            type: string
+        avatarUrl:
+          type: string
+          nullable: true
+        pliCertUrl:
+          type: string
+          nullable: true
+        pliExpiryDate:
+          type: string
+          format: date
+          nullable: true
         role:
           type: string
           enum: [manager, worker, subcontractor]
         complianceStatus:
           type: string
-          enum: [ok, warning, hold]
+          enum: [ok, warning, hold, none]
+        scheduledDays:
+          type: array
+          items:
+            type: string
+        siteStartTime:
+          type: string
+          nullable: true
+        siteEndTime:
+          type: string
+          nullable: true
         canLogIssues:
           type: boolean
           description: Portal write permission — can log a site issue. Default true.
@@ -2870,6 +3048,16 @@ components:
           enum: [manager, worker, subcontractor]
       required: [role]
 
+    AddProjectMemberPersonRequest:
+      type: object
+      properties:
+        personId:
+          type: string
+        role:
+          type: string
+          enum: [manager, worker, subcontractor]
+      required: [personId]
+
     Subcontractor:
       type: object
       properties:
@@ -2893,6 +3081,9 @@ components:
         contactPhone:
           type: string
           nullable: true
+        contactType:
+          type: string
+          enum: [subcontractor, merchant, supplier, professional, self_employed, other]
         trades:
           type: array
           items:
@@ -2953,14 +3144,15 @@ components:
           type: string
         contactType:
           type: string
-          enum: [subcontractor, merchant, supplier, professional, other]
+          description: "'self_employed' means the person IS the entity — companyName is optional (server defaults it to the contact's name if omitted)."
+          enum: [subcontractor, merchant, supplier, professional, self_employed, other]
         trades:
           type: array
           items:
             type: string
         notes:
           type: string
-      required: [companyName, contactFirstName, contactLastName, contactEmail, trades]
+      required: [contactFirstName, contactLastName, contactEmail, trades]
 
     UpdateSubcontractorRequest:
       type: object
@@ -2979,7 +3171,7 @@ components:
           type: string
         contactType:
           type: string
-          enum: [subcontractor, merchant, supplier, professional, other]
+          enum: [subcontractor, merchant, supplier, professional, self_employed, other]
         trades:
           type: array
           items:
@@ -3926,6 +4118,19 @@ components:
           type: array
           items:
             type: string
+        certifications:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              expiryDate:
+                type: string
+              status:
+                type: string
+                enum: [valid, expiring_soon, expired]
+            required: [name, expiryDate, status]
       required: [name, company, role]
 
     PortalIssue:
@@ -4398,6 +4603,21 @@ components:
         kind:
           type: string
           enum: [subcontractor, in_house]
+        isPrimaryContact:
+          type: boolean
+          description: True for the one auto-created row mirroring a subcontractor's own default contact fields.
+        companyName:
+          type: string
+          nullable: true
+          description: Populated when subcontractorId is set — "Self-employed" is shown client-side in place of this when the firm's contactType is self_employed.
+        contactType:
+          type: string
+          nullable: true
+          enum: [subcontractor, merchant, supplier, professional, self_employed, other]
+        trades:
+          type: array
+          items:
+            type: string
         portal:
           $ref: "#/components/schemas/PortalStatus"
       required: [id, name, email, kind]
@@ -4436,6 +4656,46 @@ components:
         roleTitle:
           type: string
           nullable: true
+
+    PersonCertification:
+      type: object
+      description: An individual certification/ticket held by a person (CSCS, SSSTS/SMSTS, gas safe, plant tickets, etc.) — distinct from company-level PLI/insurance.
+      properties:
+        id:
+          type: string
+        personId:
+          type: string
+        name:
+          type: string
+        certNumber:
+          type: string
+          nullable: true
+        expiryDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [valid, expiring_soon, expired]
+        documentUrl:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, personId, name, expiryDate, status, createdAt]
+
+    CreatePersonCertificationRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        certNumber:
+          type: string
+        expiryDate:
+          type: string
+        documentUrl:
+          type: string
+      required: [name, expiryDate]
 
     PortalInviteRequest:
       type: object

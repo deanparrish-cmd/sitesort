@@ -310,6 +310,19 @@ export interface AuditLogEntry {
   createdAt: string;
 }
 
+export type ProjectMemberContactType =
+  | (typeof ProjectMemberContactType)[keyof typeof ProjectMemberContactType]
+  | null;
+
+export const ProjectMemberContactType = {
+  subcontractor: "subcontractor",
+  merchant: "merchant",
+  supplier: "supplier",
+  professional: "professional",
+  self_employed: "self_employed",
+  other: "other",
+} as const;
+
 export type ProjectMemberRole =
   (typeof ProjectMemberRole)[keyof typeof ProjectMemberRole];
 
@@ -326,6 +339,7 @@ export const ProjectMemberComplianceStatus = {
   ok: "ok",
   warning: "warning",
   hold: "hold",
+  none: "none",
 } as const;
 
 export interface ProjectMember {
@@ -335,8 +349,24 @@ export interface ProjectMember {
   subcontractorId?: string | null;
   personId?: string | null;
   name: string;
+  /** Legacy company-row field — the firm's primary contact name (company rows only; superseded by personId rows post-backfill). */
+  contactName?: string | null;
+  /** Set when this card belongs to a subcontractor-linked person or company row — "Self-employed" is shown client-side in place of this when contactType is self_employed. */
+  companyName?: string | null;
+  contactType?: ProjectMemberContactType;
+  roleTitle?: string | null;
+  isPrimaryContact?: boolean;
+  email?: string | null;
+  phone?: string | null;
+  trades?: string[];
+  avatarUrl?: string | null;
+  pliCertUrl?: string | null;
+  pliExpiryDate?: string | null;
   role: ProjectMemberRole;
   complianceStatus: ProjectMemberComplianceStatus;
+  scheduledDays?: string[];
+  siteStartTime?: string | null;
+  siteEndTime?: string | null;
   /** Portal write permission — can log a site issue. Default true. */
   canLogIssues?: boolean;
   /** Portal write permission — can update Plant & Materials item status/location/notes. Default false. */
@@ -364,6 +394,32 @@ export interface AddMemberRequest {
   role: AddMemberRequestRole;
 }
 
+export type AddProjectMemberPersonRequestRole =
+  (typeof AddProjectMemberPersonRequestRole)[keyof typeof AddProjectMemberPersonRequestRole];
+
+export const AddProjectMemberPersonRequestRole = {
+  manager: "manager",
+  worker: "worker",
+  subcontractor: "subcontractor",
+} as const;
+
+export interface AddProjectMemberPersonRequest {
+  personId: string;
+  role?: AddProjectMemberPersonRequestRole;
+}
+
+export type SubcontractorContactType =
+  (typeof SubcontractorContactType)[keyof typeof SubcontractorContactType];
+
+export const SubcontractorContactType = {
+  subcontractor: "subcontractor",
+  merchant: "merchant",
+  supplier: "supplier",
+  professional: "professional",
+  self_employed: "self_employed",
+  other: "other",
+} as const;
+
 export type SubcontractorInsuranceStatus =
   (typeof SubcontractorInsuranceStatus)[keyof typeof SubcontractorInsuranceStatus];
 
@@ -384,6 +440,7 @@ export interface Subcontractor {
   contactLastName?: string | null;
   contactEmail: string;
   contactPhone?: string | null;
+  contactType?: SubcontractorContactType;
   trades: string[];
   reliabilityRating?: number | null;
   paymentHold: boolean;
@@ -434,6 +491,9 @@ export type SubcontractorDetail = Subcontractor & {
   assignedProjects: SubcontractorDetailAssignedProjectsItem[];
 };
 
+/**
+ * 'self_employed' means the person IS the entity — companyName is optional (server defaults it to the contact's name if omitted).
+ */
 export type CreateSubcontractorRequestContactType =
   (typeof CreateSubcontractorRequestContactType)[keyof typeof CreateSubcontractorRequestContactType];
 
@@ -442,17 +502,19 @@ export const CreateSubcontractorRequestContactType = {
   merchant: "merchant",
   supplier: "supplier",
   professional: "professional",
+  self_employed: "self_employed",
   other: "other",
 } as const;
 
 export interface CreateSubcontractorRequest {
-  companyName: string;
+  companyName?: string;
   /** @minLength 2 */
   contactFirstName: string;
   /** @minLength 2 */
   contactLastName: string;
   contactEmail: string;
   contactPhone?: string;
+  /** 'self_employed' means the person IS the entity — companyName is optional (server defaults it to the contact's name if omitted). */
   contactType?: CreateSubcontractorRequestContactType;
   trades: string[];
   notes?: string;
@@ -466,6 +528,7 @@ export const UpdateSubcontractorRequestContactType = {
   merchant: "merchant",
   supplier: "supplier",
   professional: "professional",
+  self_employed: "self_employed",
   other: "other",
 } as const;
 
@@ -1178,6 +1241,21 @@ export interface PortalProgress {
   milestones: PortalMilestone[];
 }
 
+export type PortalTeamMemberCertificationsItemStatus =
+  (typeof PortalTeamMemberCertificationsItemStatus)[keyof typeof PortalTeamMemberCertificationsItemStatus];
+
+export const PortalTeamMemberCertificationsItemStatus = {
+  valid: "valid",
+  expiring_soon: "expiring_soon",
+  expired: "expired",
+} as const;
+
+export type PortalTeamMemberCertificationsItem = {
+  name: string;
+  expiryDate: string;
+  status: PortalTeamMemberCertificationsItemStatus;
+};
+
 export interface PortalTeamMember {
   name: string;
   /** Subcontractor company name, or our company name for in-house members. */
@@ -1189,6 +1267,7 @@ export interface PortalTeamMember {
   /** Only present when contact details are shown for this person. */
   email?: string;
   trades?: string[];
+  certifications?: PortalTeamMemberCertificationsItem[];
 }
 
 export type PortalIssueClosureReason =
@@ -1516,6 +1595,19 @@ export const PersonKind = {
   in_house: "in_house",
 } as const;
 
+export type PersonContactType =
+  | (typeof PersonContactType)[keyof typeof PersonContactType]
+  | null;
+
+export const PersonContactType = {
+  subcontractor: "subcontractor",
+  merchant: "merchant",
+  supplier: "supplier",
+  professional: "professional",
+  self_employed: "self_employed",
+  other: "other",
+} as const;
+
 /**
  * An individual person (subcontractor person when subcontractorId set, else in-house).
  */
@@ -1534,6 +1626,12 @@ export interface Person {
   showContactInPortal?: boolean;
   archivedAt?: string;
   kind: PersonKind;
+  /** True for the one auto-created row mirroring a subcontractor's own default contact fields. */
+  isPrimaryContact?: boolean;
+  /** Populated when subcontractorId is set — "Self-employed" is shown client-side in place of this when the firm's contactType is self_employed. */
+  companyName?: string | null;
+  contactType?: PersonContactType;
+  trades?: string[];
   portal?: PortalStatus;
 }
 
@@ -1557,6 +1655,36 @@ export interface UpdatePersonRequest {
   lastName?: string;
   showContactInPortal?: boolean | null;
   roleTitle?: string | null;
+}
+
+export type PersonCertificationStatus =
+  (typeof PersonCertificationStatus)[keyof typeof PersonCertificationStatus];
+
+export const PersonCertificationStatus = {
+  valid: "valid",
+  expiring_soon: "expiring_soon",
+  expired: "expired",
+} as const;
+
+/**
+ * An individual certification/ticket held by a person (CSCS, SSSTS/SMSTS, gas safe, plant tickets, etc.) — distinct from company-level PLI/insurance.
+ */
+export interface PersonCertification {
+  id: string;
+  personId: string;
+  name: string;
+  certNumber?: string | null;
+  expiryDate: string;
+  status: PersonCertificationStatus;
+  documentUrl?: string | null;
+  createdAt: string;
+}
+
+export interface CreatePersonCertificationRequest {
+  name: string;
+  certNumber?: string;
+  expiryDate: string;
+  documentUrl?: string;
 }
 
 export type PortalInviteRequestRole =
@@ -1747,6 +1875,17 @@ export type ListSubcontractorPeopleParams = {
    * true → only archived people; omitted/false → active only
    */
   archived?: string;
+};
+
+export type ListAllPeopleParams = {
+  /**
+   * When set, each person carries onProject (already added to this project).
+   */
+  projectId?: string;
+};
+
+export type ListAllPeople200Item = Person & {
+  onProject?: boolean;
 };
 
 export type ListInHousePeopleParams = {

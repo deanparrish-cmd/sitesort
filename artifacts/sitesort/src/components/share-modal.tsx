@@ -15,7 +15,7 @@ type ShareLog = {
 };
 type Project = { id: string; name: string };
 type PortalTrade = { trade: string; memberCount: number };
-type PortalMemberOpt = { personId: string; userId: string; name: string };
+type PortalMemberOpt = { personId: string; userId: string; name: string; companyName?: string; trades?: string[] };
 type PortalShareRule = { id: string; audienceType: string; trade?: string; personId?: string; personName?: string };
 
 export interface ShareModalProps {
@@ -382,7 +382,12 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
                                 sel ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border hover:border-primary/40",
                               )}
                             >
-                              <span className="truncate">{m.name}</span>
+                              <span className="truncate">
+                                {m.name}
+                                {(m.companyName || m.trades?.length) && (
+                                  <span className="opacity-70"> · {[m.companyName, m.trades?.[0]].filter(Boolean).join(" · ")}</span>
+                                )}
+                              </span>
                             </button>
                           );
                         })}

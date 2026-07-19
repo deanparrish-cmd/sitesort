@@ -98,13 +98,21 @@ router.get("/subcontractors", authenticate, async (req, res) => {
 router.post("/subcontractors", authenticate, async (req, res) => {
   try {
     const parsed = CreateSubcontractorBody.safeParse(req.body);
-    if (!parsed.success) { res.status(400).json({ error: "validation_error", message: "companyName, a first name and surname (2+ chars each), and contactEmail are required" }); return; }
-    const { companyName, contactFirstName, contactLastName, contactEmail, contactPhone, contactType, trades, notes } = parsed.data;
+    if (!parsed.success) { res.status(400).json({ error: "validation_error", message: "A first name and surname (2+ chars each) and contactEmail are required" }); return; }
+    const { contactFirstName, contactLastName, contactEmail, contactPhone, contactType, trades, notes } = parsed.data;
     const firstName = contactFirstName.trim();
     const lastName = contactLastName.trim();
     const contactName = `${firstName} ${lastName}`.trim();
+    const type = contactType ?? "subcontractor";
+    // Self-employed: the person IS the entity — companyName is optional client-side;
+    // stays populated server-side (mirrors the contact's own name) so it remains a
+    // display fallback for any legacy reader, but new person-first UI shows
+    // "Self-employed" in its place for this contactType.
+    const companyName = parsed.data.companyName?.trim() || (type === "self_employed" ? contactName : undefined);
+    if (!companyName) { res.status(400).json({ error: "validation_error", message: "companyName is required unless contactType is self_employed" }); return; }
 
     const id = generateId();
+    const personId = generateId();
     await db.insert(subcontractorsTable).values({
       id,
       companyId: req.user!.companyId,
@@ -114,13 +122,28 @@ router.post("/subcontractors", authenticate, async (req, res) => {
       contactLastName: lastName,
       contactEmail,
       contactPhone: contactPhone ?? null,
-      contactType: contactType ?? "subcontractor",
+      contactType: type,
       trades: trades ?? [],
       notes: notes ?? null,
       paymentHold: false,
     });
+    // Every subcontractor gets a real primary-contact `people` row (Feature:
+    // person-first cards) so it's addressable everywhere a person is needed
+    // (project team, portal invites, certifications) instead of a UI-only
+    // pseudo-person derived from these subcontructors columns.
+    await db.insert(peopleTable).values({
+      id: personId,
+      companyId: req.user!.companyId,
+      subcontractorId: id,
+      name: contactName,
+      firstName,
+      lastName,
+      email: contactEmail,
+      phone: contactPhone ?? null,
+      isPrimaryContact: true,
+    });
 
-    res.status(201).json({ id, companyId: req.user!.companyId, companyName, contactName, contactFirstName: firstName, contactLastName: lastName, contactEmail, contactPhone: contactPhone ?? null, contactType: contactType ?? "subcontractor", trades: trades ?? [], reliabilityRating: null, paymentHold: false, notes: notes ?? null, archivedAt: null, insuranceStatus: "none", insuranceRecords: [], createdAt: new Date().toISOString() });
+    res.status(201).json({ id, personId, companyId: req.user!.companyId, companyName, contactName, contactFirstName: firstName, contactLastName: lastName, contactEmail, contactPhone: contactPhone ?? null, contactType: type, trades: trades ?? [], reliabilityRating: null, paymentHold: false, notes: notes ?? null, archivedAt: null, insuranceStatus: "none", insuranceRecords: [], createdAt: new Date().toISOString() });
   } catch (err) {
     req.log.error({ err }, "Create subcontractor error");
     res.status(500).json({ error: "server_error", message: "Failed to create subcontractor" });
@@ -204,6 +227,23 @@ router.patch("/subcontractors/:subcontractorId", authenticate, async (req, res) 
 
     await db.update(subcontractorsTable).set(updates)
       .where(and(eq(subcontractorsTable.id, req.params.subcontractorId), eq(subcontractorsTable.companyId, req.user!.companyId)));
+
+    // Mirror name/email/phone changes onto the linked primary-contact `people`
+    // row so it never drifts from these subcontructors columns (Feature:
+    // person-first cards — other pages still read subcontructors.contactName
+    // etc. directly, this row is what the Team tab/portal read instead).
+    const personUpdates: Record<string, unknown> = {};
+    if (contactFirstName !== undefined && contactLastName !== undefined) {
+      personUpdates.firstName = contactFirstName.trim();
+      personUpdates.lastName = contactLastName.trim();
+      personUpdates.name = `${contactFirstName.trim()} ${contactLastName.trim()}`.trim();
+    }
+    if (contactEmail !== undefined) personUpdates.email = contactEmail;
+    if (contactPhone !== undefined) personUpdates.phone = contactPhone;
+    if (Object.keys(personUpdates).length > 0) {
+      await db.update(peopleTable).set(personUpdates)
+        .where(and(eq(peopleTable.subcontractorId, req.params.subcontractorId), eq(peopleTable.isPrimaryContact, true)));
+    }
 
     const subs = await db.select().from(subcontractorsTable)
       .where(and(eq(subcontractorsTable.id, req.params.subcontractorId), eq(subcontractorsTable.companyId, req.user!.companyId)))

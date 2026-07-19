@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { projectMembersTable, usersTable, subcontractorsTable, insuranceRecordsTable, projectsTable, peopleTable, projectInvitesTable } from "@workspace/db/schema";
+import { projectMembersTable, usersTable, subcontractorsTable, insuranceRecordsTable, projectsTable, peopleTable, projectInvitesTable, companyMembersTable } from "@workspace/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
@@ -68,61 +68,110 @@ router.get("/projects/:projectId/members", authenticate, async (req, res) => {
 
     const members = await db.select().from(projectMembersTable).where(eq(projectMembersTable.projectId, req.params.projectId));
 
+    // Shared company-level compliance lookup (PLI + insurance status), used by
+    // both the personId branch (person belongs to a firm) and the legacy
+    // company-only branch below.
+    async function companyCompliance(subcontractorId: string) {
+      const sub = await db.select({ paymentHold: subcontractorsTable.paymentHold }).from(subcontractorsTable).where(eq(subcontractorsTable.id, subcontractorId)).limit(1);
+      let complianceStatus: string;
+      if (sub[0]?.paymentHold) {
+        complianceStatus = "hold";
+      } else {
+        const insuranceRows = await db.select({ expiryDate: insuranceRecordsTable.expiryDate }).from(insuranceRecordsTable).where(and(eq(insuranceRecordsTable.subcontractorId, subcontractorId), isNull(insuranceRecordsTable.archivedAt)));
+        complianceStatus = getInsuranceStatus(insuranceRows);
+      }
+      const pliRows = await db.select({ certificateUrl: insuranceRecordsTable.certificateUrl, expiryDate: insuranceRecordsTable.expiryDate })
+        .from(insuranceRecordsTable)
+        .where(and(eq(insuranceRecordsTable.subcontractorId, subcontractorId), eq(insuranceRecordsTable.type, "public_liability"), isNull(insuranceRecordsTable.archivedAt)))
+        .limit(1);
+      return { complianceStatus, pliCertUrl: pliRows[0]?.certificateUrl ?? null, pliExpiryDate: pliRows[0]?.expiryDate ?? null };
+    }
+
     const result = await Promise.all(members.map(async (m) => {
       let name = "Unknown";
       let complianceStatus: string = "ok";
       let email: string | null = null;
       let phone: string | null = null;
       let contactName: string | null = null;
+      let companyName: string | null = null;
+      let contactType: string | null = null;
+      let roleTitle: string | null = null;
+      let isPrimaryContact = false;
       let trades: string[] = [];
       let avatarUrl: string | null = null;
       let pliCertUrl: string | null = null;
       let pliExpiryDate: string | null = null;
 
-      if (m.userId) {
+      if (m.personId) {
+        // Person-first: every card sourced from a real `people` row, whether or
+        // not they've accepted a portal invite yet (Feature: person-first cards).
+        const personRows = await db.select({
+          name: peopleTable.name, email: peopleTable.email, phone: peopleTable.phone,
+          roleTitle: peopleTable.roleTitle, isPrimaryContact: peopleTable.isPrimaryContact,
+          subcontractorId: peopleTable.subcontractorId,
+          companyName: subcontractorsTable.companyName, contactType: subcontractorsTable.contactType,
+          trades: subcontractorsTable.trades, avatarUrl: subcontractorsTable.avatarUrl,
+        })
+          .from(peopleTable)
+          .leftJoin(subcontractorsTable, eq(peopleTable.subcontractorId, subcontractorsTable.id))
+          .where(eq(peopleTable.id, m.personId)).limit(1);
+        const p = personRows[0];
+        name = p?.name ?? "Unknown";
+        email = p?.email ?? null;
+        phone = p?.phone ?? null;
+        roleTitle = p?.roleTitle ?? null;
+        isPrimaryContact = p?.isPrimaryContact ?? false;
+        companyName = p?.companyName ?? null;
+        contactType = p?.contactType ?? null;
+        trades = p?.trades ?? [];
+        avatarUrl = p?.avatarUrl ?? null;
+        if (p?.subcontractorId) {
+          const c = await companyCompliance(p.subcontractorId);
+          complianceStatus = c.complianceStatus;
+          pliCertUrl = c.pliCertUrl;
+          pliExpiryDate = c.pliExpiryDate;
+        }
+        // A dashboard account (real or portalOnly) may carry its own uploaded
+        // avatar and a more current phone number — prefer those when present.
+        if (m.userId) {
+          const userRows = await db.select({ phone: usersTable.phone, avatarUrl: usersTable.avatarUrl }).from(usersTable).where(eq(usersTable.id, m.userId)).limit(1);
+          phone = userRows[0]?.phone ?? phone;
+          avatarUrl = userRows[0]?.avatarUrl ?? avatarUrl;
+        }
+      } else if (m.userId) {
+        // Legacy: a plain dashboard user added directly to a project, no
+        // `people` abstraction (in-house staff added before this feature, or
+        // added via the direct-userId path).
         const userRows = await db.select({ name: usersTable.name, email: usersTable.email, phone: usersTable.phone, avatarUrl: usersTable.avatarUrl }).from(usersTable).where(eq(usersTable.id, m.userId)).limit(1);
         name = userRows[0]?.name ?? "Unknown";
         email = userRows[0]?.email ?? null;
         phone = userRows[0]?.phone ?? null;
         avatarUrl = userRows[0]?.avatarUrl ?? null;
-        // Portal member row (person link): inherit the trades of the firm they
-        // belong to so trade-targeted portal shares can reach them. In-house
-        // people (no firm) stay trade-less → the synthetic "Site Staff" bucket.
-        if (m.personId) {
-          const personRows = await db.select({ trades: subcontractorsTable.trades })
-            .from(peopleTable)
-            .leftJoin(subcontractorsTable, eq(peopleTable.subcontractorId, subcontractorsTable.id))
-            .where(eq(peopleTable.id, m.personId)).limit(1);
-          trades = personRows[0]?.trades ?? [];
-        }
       } else if (m.subcontractorId) {
+        // Legacy: a "whole firm" row with no specific person — should be rare/
+        // none after the primary-contact backfill (ensure-schema.ts); kept for
+        // defensive backward-compat only.
         const subRows = await db.select({
           companyName: subcontractorsTable.companyName,
           contactName: subcontractorsTable.contactName,
           contactEmail: subcontractorsTable.contactEmail,
           contactPhone: subcontractorsTable.contactPhone,
+          contactType: subcontractorsTable.contactType,
           trades: subcontractorsTable.trades,
-          paymentHold: subcontractorsTable.paymentHold,
           avatarUrl: subcontractorsTable.avatarUrl,
         }).from(subcontractorsTable).where(eq(subcontractorsTable.id, m.subcontractorId)).limit(1);
         name = subRows[0]?.companyName ?? "Unknown";
         contactName = subRows[0]?.contactName ?? null;
+        companyName = subRows[0]?.companyName ?? null;
+        contactType = subRows[0]?.contactType ?? null;
         email = subRows[0]?.contactEmail ?? null;
         phone = subRows[0]?.contactPhone ?? null;
         trades = subRows[0]?.trades ?? [];
         avatarUrl = subRows[0]?.avatarUrl ?? null;
-        if (subRows[0]?.paymentHold) {
-          complianceStatus = "hold";
-        } else {
-          const insuranceRows = await db.select({ expiryDate: insuranceRecordsTable.expiryDate }).from(insuranceRecordsTable).where(and(eq(insuranceRecordsTable.subcontractorId, m.subcontractorId), isNull(insuranceRecordsTable.archivedAt)));
-          complianceStatus = getInsuranceStatus(insuranceRows);
-        }
-        const pliRows = await db.select({ certificateUrl: insuranceRecordsTable.certificateUrl, expiryDate: insuranceRecordsTable.expiryDate })
-          .from(insuranceRecordsTable)
-          .where(and(eq(insuranceRecordsTable.subcontractorId, m.subcontractorId), eq(insuranceRecordsTable.type, "public_liability"), isNull(insuranceRecordsTable.archivedAt)))
-          .limit(1);
-        pliCertUrl = pliRows[0]?.certificateUrl ?? null;
-        pliExpiryDate = pliRows[0]?.expiryDate ?? null;
+        const c = await companyCompliance(m.subcontractorId);
+        complianceStatus = c.complianceStatus;
+        pliCertUrl = c.pliCertUrl;
+        pliExpiryDate = c.pliExpiryDate;
       }
 
       return {
@@ -133,6 +182,10 @@ router.get("/projects/:projectId/members", authenticate, async (req, res) => {
         personId: m.personId ?? null,
         name,
         contactName,
+        companyName,
+        contactType,
+        roleTitle,
+        isPrimaryContact,
         email,
         phone,
         trades,
@@ -213,6 +266,75 @@ router.post("/projects/:projectId/members", authenticate, async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Add member error");
     res.status(500).json({ error: "server_error", message: "Failed to add member" });
+  }
+});
+
+// POST /projects/:projectId/members/person — add a SPECIFIC person (subcontractor
+// employee, self-employed contact, or in-house) to a project's team immediately
+// (Feature: person-first cards + add flow). Creates the project_members row with
+// personId set right away — no portal acceptance required; inviting them to the
+// portal afterwards is a separate, optional action via the existing pill.
+router.post("/projects/:projectId/members/person", authenticate, async (req, res) => {
+  try {
+    if (!requireManager(req, res)) return;
+    const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
+    if (!project) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+
+    const { personId, role } = req.body as { personId?: string; role?: string };
+    if (!personId) { res.status(400).json({ error: "validation_error", message: "personId is required" }); return; }
+
+    const personRows = await db.select().from(peopleTable)
+      .where(and(eq(peopleTable.id, personId), eq(peopleTable.companyId, req.user!.companyId))).limit(1);
+    const person = personRows[0];
+    if (!person) { res.status(404).json({ error: "not_found", message: "Person not found" }); return; }
+
+    const existing = await db.select().from(projectMembersTable)
+      .where(and(eq(projectMembersTable.projectId, req.params.projectId), eq(projectMembersTable.personId, personId)))
+      .limit(1);
+    if (existing.length > 0) {
+      res.status(409).json({ error: "conflict", message: "This person is already on the project" });
+      return;
+    }
+
+    // Reuse a linked dashboard account (real or already-portalOnly) if this
+    // person has one — same lookup as the portal-invite-accept shortcut in
+    // people.ts, so userId is consistent everywhere a person has a project row.
+    let userId: string | null = person.userId ?? null;
+    if (!userId) {
+      const dashUser = (await db.select().from(usersTable)
+        .where(and(eq(usersTable.email, person.email), eq(usersTable.portalOnly, false))).limit(1))[0];
+      if (dashUser) {
+        let dashInCompany = dashUser.companyId === req.user!.companyId;
+        if (!dashInCompany) {
+          const cm = await db.select({ id: companyMembersTable.id }).from(companyMembersTable)
+            .where(and(eq(companyMembersTable.userId, dashUser.id), eq(companyMembersTable.companyId, req.user!.companyId))).limit(1);
+          dashInCompany = cm.length > 0;
+        }
+        if (dashInCompany) {
+          userId = dashUser.id;
+          await db.update(peopleTable).set({ userId: dashUser.id }).where(eq(peopleTable.id, person.id));
+        }
+      }
+    }
+
+    const id = generateId();
+    await db.insert(projectMembersTable).values({
+      id,
+      projectId: req.params.projectId,
+      personId: person.id,
+      subcontractorId: person.subcontractorId ?? null,
+      userId,
+      role: role ?? "worker",
+    });
+
+    const inserted = await db.select().from(projectMembersTable).where(eq(projectMembersTable.id, id)).limit(1);
+    res.status(201).json({
+      id, projectId: req.params.projectId, userId, subcontractorId: person.subcontractorId ?? null, personId: person.id,
+      name: person.name, role: role ?? "worker", complianceStatus: "ok", addedAt: inserted[0].addedAt.toISOString(),
+    });
+  } catch (err) {
+    req.log.error({ err }, "Add person to project error");
+    res.status(500).json({ error: "server_error", message: "Failed to add person to project" });
   }
 });
 

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ProjectMemberComplianceStatus } from "./projectMemberComplianceStatus";
+import type { ProjectMemberContactType } from "./projectMemberContactType";
 import type { ProjectMemberRole } from "./projectMemberRole";
 
 export interface ProjectMember {
@@ -15,8 +16,24 @@ export interface ProjectMember {
   subcontractorId?: string | null;
   personId?: string | null;
   name: string;
+  /** Legacy company-row field — the firm's primary contact name (company rows only; superseded by personId rows post-backfill). */
+  contactName?: string | null;
+  /** Set when this card belongs to a subcontractor-linked person or company row — "Self-employed" is shown client-side in place of this when contactType is self_employed. */
+  companyName?: string | null;
+  contactType?: ProjectMemberContactType;
+  roleTitle?: string | null;
+  isPrimaryContact?: boolean;
+  email?: string | null;
+  phone?: string | null;
+  trades?: string[];
+  avatarUrl?: string | null;
+  pliCertUrl?: string | null;
+  pliExpiryDate?: Date | null;
   role: ProjectMemberRole;
   complianceStatus: ProjectMemberComplianceStatus;
+  scheduledDays?: string[];
+  siteStartTime?: string | null;
+  siteEndTime?: string | null;
   /** Portal write permission — can log a site issue. Default true. */
   canLogIssues?: boolean;
   /** Portal write permission — can update Plant & Materials item status/location/notes. Default false. */

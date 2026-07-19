@@ -303,6 +303,14 @@ export function TeamDialogs() {
             Remove <span className="font-semibold">{removeTarget?.name}</span>
             {removeTarget?.kind === "company" ? " and everyone who works for them" : ""} from this project?
           </p>
+          {removeTarget?.kind === "company" && removeTarget.peopleNames && removeTarget.peopleNames.length > 0 && (
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <p className="text-xs font-semibold text-muted-foreground mb-1.5">This removes {removeTarget.peopleNames.length} {removeTarget.peopleNames.length === 1 ? "person" : "people"}:</p>
+              <ul className="text-sm space-y-0.5">
+                {removeTarget.peopleNames.map(n => <li key={n}>{n}</li>)}
+              </ul>
+            </div>
+          )}
           <ul className="text-sm text-muted-foreground list-disc pl-5 space-y-1">
             {removeTarget?.isPortal && <li>Portal access is revoked immediately — any active session ends on their next request.</li>}
             {removeTarget?.isPortal && <li>Any pending portal invite is cancelled.</li>}

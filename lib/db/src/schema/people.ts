@@ -37,6 +37,14 @@ export const peopleTable = pgTable("people", {
   // use the role-based default (managers ON, workers OFF); a non-null value is the
   // PM's explicit choice, set from the dashboard Team tab.
   showContactInPortal: boolean("show_contact_in_portal"),
+  // True for the one auto-created row mirroring a subcontructor's own
+  // contactFirstName/contactLastName/contactEmail fields (Feature: person-first
+  // cards). Lets every subcontractor's default contact be a real, addressable
+  // `people` row instead of a UI-only pseudo-person — subcontractors.ts keeps
+  // this row's name/email/phone mirrored bidirectionally with the parent
+  // subcontructor row so legacy readers (Compliance Centre, invoices, Contacts
+  // directory) that still read subcontructors.contactName etc. see no change.
+  isPrimaryContact: boolean("is_primary_contact").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   // Soft-delete (same convention as subcontractors.archivedAt) — set when a
   // person has history and can't be safely hard-deleted; null = active.

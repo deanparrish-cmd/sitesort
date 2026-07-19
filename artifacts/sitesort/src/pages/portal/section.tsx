@@ -429,6 +429,20 @@ function TeamView() {
                 )}
               </div>
             )}
+            {(m.certifications?.length ?? 0) > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {m.certifications!.map((c, ci) => (
+                  <span key={ci} className={cn(
+                    "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border",
+                    c.status === "expired" ? "bg-red-50 text-red-700 border-red-200" :
+                    c.status === "expiring_soon" ? "bg-amber-50 text-amber-700 border-amber-200" :
+                    "bg-emerald-50 text-emerald-700 border-emerald-200"
+                  )}>
+                    {c.name}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </Card>
       ))}
