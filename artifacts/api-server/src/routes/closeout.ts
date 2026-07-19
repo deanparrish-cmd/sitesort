@@ -10,6 +10,7 @@ import { eq, and, inArray, isNull, count, desc } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { expiryStatus } from "../lib/expiry";
+import { issueCategoryFilter } from "../lib/accountability";
 import { isPinLockedOut, recordFailedPinAttempt, clearPinAttempts } from "../lib/pin-attempts";
 
 const router: IRouter = Router();
@@ -31,8 +32,8 @@ async function computeReadiness(projectId: string) {
   // 1. Open snags / safety concerns.
   const issueRows = await db.select({ total: count() }).from(photosTable).where(and(
     eq(photosTable.projectId, projectId),
-    inArray(photosTable.category, ["snag", "safety_concern"]),
-    inArray(photosTable.status, ["open", "in_progress"]),
+    issueCategoryFilter(),
+    inArray(photosTable.status, ["open", "in_progress", "new", "pending_confirmation"]),
   ));
   const openIssues = Number(issueRows[0]?.total ?? 0);
 

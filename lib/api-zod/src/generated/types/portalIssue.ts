@@ -5,6 +5,7 @@
  * SiteSort API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { PortalIssueClosureReason } from "./portalIssueClosureReason";
 
 export interface PortalIssue {
   id: string;
@@ -19,4 +20,9 @@ export interface PortalIssue {
   longitude?: string;
   unseen?: boolean;
   sharedAt?: string;
+  /** Present so a member can tell whether an issue is allocated to them ("Mark as done" visibility). */
+  assignedToUserId?: string;
+  /** Set only on issues this member reported themselves. */
+  reporterName?: string;
+  closureReason?: PortalIssueClosureReason;
 }

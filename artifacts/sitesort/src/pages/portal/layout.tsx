@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, TrendingUp, Users, AlertTriangle, LayoutGrid,
   ShieldCheck, PencilRuler, FileText, FileCheck, HardHat, StickyNote, LogOut, Inbox,
-  Settings, Menu, X, FolderUp,
+  Settings, Menu, X, FolderUp, Wrench,
 } from "lucide-react";
 
 // The fixed portal nav — order + labels + icons. `key` matches the URL segment
@@ -28,6 +28,7 @@ export const SECTION_NAV: { key: string; label: string; Icon: typeof LayoutDashb
   { key: "permits", label: "Permits", Icon: FileCheck },
   { key: "safety", label: "Safety", Icon: HardHat },
   { key: "general", label: "General", Icon: StickyNote },
+  { key: "plant-materials", label: "Plant & Materials", Icon: Wrench },
   { key: "my-documents", label: "My documents", Icon: FolderUp },
   { key: "settings", label: "Settings", Icon: Settings },
 ];

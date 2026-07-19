@@ -20,4 +20,8 @@ export interface PortalStatus {
   emailStatus?: PortalStatusEmailStatus;
   /** ISO timestamp of the last invite-email send attempt. */
   emailLastSentAt?: string;
+  /** project_members.id — present when status is "member"; PATCH .../members/{memberId}/permissions targets this id. */
+  memberId?: string;
+  canLogIssues?: boolean;
+  canUpdatePlantMaterials?: boolean;
 }

@@ -467,6 +467,36 @@ paths:
               schema:
                 $ref: "#/components/schemas/RemoveMemberResponse"
 
+  /projects/{projectId}/members/{memberId}/permissions:
+    patch:
+      operationId: updateMemberPermissions
+      tags: [team]
+      summary: Update a portal member's write permissions (manager-gated)
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMemberPermissionsRequest"
+      responses:
+        "200":
+          description: Permissions updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
   /projects/{projectId}/members/company/{subcontractorId}:
     delete:
       operationId: removeProjectMemberCompany
@@ -774,6 +804,328 @@ paths:
                 items:
                   $ref: "#/components/schemas/SubcontractorDocument"
 
+  /projects/{projectId}/plant-items:
+    get:
+      operationId: listPlantItems
+      tags: [plant-items]
+      summary: List Plant & Materials items for a project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [plant_equipment, materials]
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [on_site, on_order, off_hired, depleted]
+      responses:
+        "200":
+          description: List of plant/material items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlantItem"
+    post:
+      operationId: createPlantItem
+      tags: [plant-items]
+      summary: Create a Plant & Materials item (manager/site-worker gated)
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePlantItemRequest"
+      responses:
+        "201":
+          description: Item created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlantItem"
+
+  /projects/{projectId}/plant-items/{itemId}:
+    patch:
+      operationId: updatePlantItem
+      tags: [plant-items]
+      summary: Update a Plant & Materials item (manager/site-worker gated)
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePlantItemRequest"
+      responses:
+        "200":
+          description: Item updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlantItem"
+    delete:
+      operationId: deletePlantItem
+      tags: [plant-items]
+      summary: Delete a Plant & Materials item (manager-gated only)
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Item deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /projects/{projectId}/plant-items/{itemId}/attachments:
+    get:
+      operationId: listPlantItemAttachments
+      tags: [plant-items]
+      summary: List a plant/material item's documents & photos
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Attachments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlantItemAttachment"
+    post:
+      operationId: createPlantItemAttachment
+      tags: [plant-items]
+      summary: Attach a document/photo to a plant/material item (file already uploaded via /api/upload)
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePlantItemAttachmentRequest"
+      responses:
+        "201":
+          description: Attachment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlantItemAttachment"
+
+  /projects/{projectId}/plant-items/{itemId}/distribute:
+    post:
+      operationId: distributePlantItem
+      tags: [plant-items]
+      summary: Allocate a plant/material item to one or more team members (pending/viewed/acknowledged tracking)
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userIds:
+                  type: array
+                  items:
+                    type: string
+              required: [userIds]
+      responses:
+        "200":
+          description: Item distributed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /projects/{projectId}/plant-items/{itemId}/distributions:
+    get:
+      operationId: listPlantItemDistributions
+      tags: [plant-items]
+      summary: List a plant/material item's allocation tracking (pending/viewed/acknowledged per recipient)
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Distributions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlantItemDistribution"
+
+  /portal/plant-materials:
+    get:
+      operationId: getPortalPlantMaterials
+      tags: [portal]
+      summary: List Plant & Materials items shared with this portal member
+      responses:
+        "200":
+          description: Visible plant/material items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PortalPlantItem"
+
+  /portal/plant-materials/{itemId}:
+    get:
+      operationId: getPortalPlantMaterialItem
+      tags: [portal]
+      summary: Get a Plant & Materials item detail (gated to shared items)
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Item detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalPlantItem"
+    patch:
+      operationId: updatePortalPlantMaterialItem
+      tags: [portal]
+      summary: Update a plant/material item's status, location, or notes (requires can-update-plant-materials permission)
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePortalPlantItemRequest"
+      responses:
+        "200":
+          description: Item updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalPlantItem"
+
+  /portal/plant-materials/{itemId}/attachments:
+    post:
+      operationId: uploadPortalPlantMaterialAttachment
+      tags: [portal]
+      summary: Upload a document/photo for a shared plant/material item (multipart; requires can-update-plant-materials permission)
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, name]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                name:
+                  type: string
+                kind:
+                  type: string
+                  enum: [delivery_ticket, certificate, test_certificate, photo, other]
+      responses:
+        "201":
+          description: Attachment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlantItemAttachment"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /projects/{projectId}/permits:
     get:
       operationId: listPermits
@@ -890,6 +1242,37 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Photo"
+
+  /photos/{photoId}:
+    patch:
+      operationId: updatePhoto
+      tags: [photos]
+      summary: Update a photo/issue — status/assignee/due-date, or PM-only close as invalid/duplicate with a reason
+      parameters:
+        - name: photoId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePhotoRequest"
+      responses:
+        "200":
+          description: Photo updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Photo"
+        "403":
+          description: Forbidden (e.g. non-PM attempting invalid/duplicate closure)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /compliance:
     get:
@@ -1195,7 +1578,7 @@ paths:
     get:
       operationId: getPortalSiteIssues
       tags: [portal]
-      summary: Site issues (snags + safety concerns)
+      summary: Site issues (snags + safety concerns + work-completed reports) — shared items, plus any this member reported or is assigned to
       responses:
         "200":
           description: Issues
@@ -1205,6 +1588,72 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/PortalIssue"
+    post:
+      operationId: createPortalSiteIssue
+      tags: [portal]
+      summary: Log a site issue (Snag / Safety Concern / Work Completed) — requires the can-log-issues permission; no assignee/due-date accepted
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [type]
+              properties:
+                photo:
+                  type: string
+                  format: binary
+                type:
+                  type: string
+                  enum: [snag, safety_concern, work_completed]
+                description:
+                  type: string
+                zone:
+                  type: string
+      responses:
+        "201":
+          description: Issue logged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalIssue"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /portal/site-issues/{issueId}:
+    patch:
+      operationId: updatePortalSiteIssue
+      tags: [portal]
+      summary: Mark an issue assigned to this member "Done — awaiting confirmation" (ownership-gated, no body)
+      parameters:
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Issue updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalIssue"
+        "403":
+          description: Forbidden (not the assignee)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /portal/site-board:
     get:
@@ -2388,10 +2837,24 @@ components:
         complianceStatus:
           type: string
           enum: [ok, warning, hold]
+        canLogIssues:
+          type: boolean
+          description: Portal write permission — can log a site issue. Default true.
+        canUpdatePlantMaterials:
+          type: boolean
+          description: Portal write permission — can update Plant & Materials item status/location/notes. Default false.
         addedAt:
           type: string
           format: date-time
       required: [id, projectId, name, role, complianceStatus, addedAt]
+
+    UpdateMemberPermissionsRequest:
+      type: object
+      properties:
+        canLogIssues:
+          type: boolean
+        canUpdatePlantMaterials:
+          type: boolean
 
     AddMemberRequest:
       type: object
@@ -2673,6 +3136,270 @@ components:
           type: string
           enum: [current, superseded]
 
+    PlantItem:
+      type: object
+      properties:
+        id:
+          type: string
+        projectId:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+          enum: [plant_equipment, materials]
+        quantity:
+          type: string
+          nullable: true
+        unit:
+          type: string
+          nullable: true
+        supplierOwnerText:
+          type: string
+          nullable: true
+        supplierContactId:
+          type: string
+          nullable: true
+        supplierContactName:
+          type: string
+          nullable: true
+        location:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [on_site, on_order, off_hired, depleted]
+        notes:
+          type: string
+          nullable: true
+        onSiteDate:
+          type: string
+          nullable: true
+        expectedOffHireDate:
+          type: string
+          nullable: true
+        createdBy:
+          type: string
+        lastUpdatedByName:
+          type: string
+          nullable: true
+          description: "First Surname of the last editor, for the \"last updated by\" line."
+        lastUpdatedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, projectId, name, category, status, createdBy, createdAt]
+
+    CreatePlantItemRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+          enum: [plant_equipment, materials]
+        quantity:
+          type: string
+          nullable: true
+        unit:
+          type: string
+          nullable: true
+        supplierOwnerText:
+          type: string
+          nullable: true
+        supplierContactId:
+          type: string
+          nullable: true
+        location:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [on_site, on_order, off_hired, depleted]
+        notes:
+          type: string
+          nullable: true
+        onSiteDate:
+          type: string
+          nullable: true
+        expectedOffHireDate:
+          type: string
+          nullable: true
+      required: [name, category]
+
+    UpdatePlantItemRequest:
+      type: object
+      description: Partial update — every field optional, omit to leave unchanged.
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+          enum: [plant_equipment, materials]
+        quantity:
+          type: string
+          nullable: true
+        unit:
+          type: string
+          nullable: true
+        supplierOwnerText:
+          type: string
+          nullable: true
+        supplierContactId:
+          type: string
+          nullable: true
+        location:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [on_site, on_order, off_hired, depleted]
+        notes:
+          type: string
+          nullable: true
+        onSiteDate:
+          type: string
+          nullable: true
+        expectedOffHireDate:
+          type: string
+          nullable: true
+
+    PlantItemAttachment:
+      type: object
+      properties:
+        id:
+          type: string
+        plantItemId:
+          type: string
+        uploadedBy:
+          type: string
+        uploaderName:
+          type: string
+        name:
+          type: string
+        kind:
+          type: string
+          enum: [delivery_ticket, certificate, test_certificate, photo, other]
+        fileUrl:
+          type: string
+        fileSize:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, plantItemId, uploadedBy, uploaderName, name, kind, fileUrl, fileSize, createdAt]
+
+    CreatePlantItemAttachmentRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        kind:
+          type: string
+          enum: [delivery_ticket, certificate, test_certificate, photo, other]
+        fileUrl:
+          type: string
+        fileSize:
+          type: integer
+      required: [name, kind, fileUrl]
+
+    PlantItemDistribution:
+      type: object
+      properties:
+        id:
+          type: string
+        plantItemId:
+          type: string
+        userId:
+          type: string
+        userName:
+          type: string
+        userRole:
+          type: string
+        status:
+          type: string
+          enum: [pending, viewed, acknowledged]
+        distributedAt:
+          type: string
+          format: date-time
+        viewedAt:
+          type: string
+          format: date-time
+          nullable: true
+        acknowledgedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required: [id, plantItemId, userId, userName, userRole, status, distributedAt]
+
+    PortalPlantItem:
+      type: object
+      description: Gated serialization — never exposes share/audience data.
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+          enum: [plant_equipment, materials]
+        quantity:
+          type: string
+          nullable: true
+        unit:
+          type: string
+          nullable: true
+        supplierOwnerText:
+          type: string
+          nullable: true
+        supplierContactName:
+          type: string
+          nullable: true
+        location:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [on_site, on_order, off_hired, depleted]
+        notes:
+          type: string
+          nullable: true
+        onSiteDate:
+          type: string
+          nullable: true
+        expectedOffHireDate:
+          type: string
+          nullable: true
+        lastUpdatedByName:
+          type: string
+          nullable: true
+        lastUpdatedAt:
+          type: string
+          format: date-time
+          nullable: true
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlantItemAttachment"
+      required: [id, name, category, status]
+
+    UpdatePortalPlantItemRequest:
+      type: object
+      description: Portal members may only update status/location/notes — name/category/supplier/dates stay dashboard-only.
+      properties:
+        status:
+          type: string
+          enum: [on_site, on_order, off_hired, depleted]
+        location:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+
     Permit:
       type: object
       properties:
@@ -2786,7 +3513,49 @@ components:
         takenAt:
           type: string
           format: date-time
+        status:
+          type: string
+          nullable: true
+          description: "Free-text lifecycle status. Issue categories (snag/safety_concern/work_completed-with-status): new | open | in_progress | pending_confirmation | resolved. resolved is the sole terminal status; closureReason distinguishes normal completion from invalid/duplicate."
+        assignedToUserId:
+          type: string
+          nullable: true
+        dueDate:
+          type: string
+          nullable: true
+        closureReason:
+          type: string
+          nullable: true
+          enum: [completed, invalid, duplicate]
+        closureNote:
+          type: string
+          nullable: true
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
       required: [id, projectId, uploadedBy, uploaderName, photoUrl, category, referenceNumber, takenAt]
+
+    UpdatePhotoRequest:
+      type: object
+      description: Partial update; omit a field to leave it unchanged. null clears assignedToUserId/dueDate.
+      properties:
+        status:
+          type: string
+        assignedToUserId:
+          type: string
+          nullable: true
+        dueDate:
+          type: string
+          nullable: true
+        closureReason:
+          type: string
+          nullable: true
+          enum: [completed, invalid, duplicate]
+          description: "invalid/duplicate is PM-only server-side and requires closureNote."
+        closureNote:
+          type: string
+          nullable: true
 
     LogPhotoRequest:
       type: object
@@ -2961,13 +3730,19 @@ components:
     PortalMemberRef:
       type: object
       properties:
+        userId:
+          type: string
         name:
           type: string
         role:
           type: string
         email:
           type: string
-      required: [name, role, email]
+        canLogIssues:
+          type: boolean
+        canUpdatePlantMaterials:
+          type: boolean
+      required: [userId, name, role, email, canLogIssues, canUpdatePlantMaterials]
 
     PortalLoginRequest:
       type: object
@@ -3180,7 +3955,29 @@ components:
           type: boolean
         sharedAt:
           type: string
+        assignedToUserId:
+          type: string
+          description: Present so a member can tell whether an issue is allocated to them ("Mark as done" visibility).
+        reporterName:
+          type: string
+          description: Set only on issues this member reported themselves.
+        closureReason:
+          type: string
+          enum: [completed, invalid, duplicate]
       required: [id, category, referenceNumber]
+
+    CreatePortalSiteIssueRequest:
+      type: object
+      description: Multipart form fields (photo file is separate, see the multipart schema on the path).
+      properties:
+        type:
+          type: string
+          enum: [snag, safety_concern, work_completed]
+        description:
+          type: string
+        zone:
+          type: string
+      required: [type]
 
     PortalDocument:
       type: object
@@ -3558,6 +4355,13 @@ components:
         emailLastSentAt:
           type: string
           description: ISO timestamp of the last invite-email send attempt.
+        memberId:
+          type: string
+          description: project_members.id — present when status is "member"; PATCH .../members/{memberId}/permissions targets this id.
+        canLogIssues:
+          type: boolean
+        canUpdatePlantMaterials:
+          type: boolean
       required: [status]
 
     Person:

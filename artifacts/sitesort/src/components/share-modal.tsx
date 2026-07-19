@@ -39,7 +39,7 @@ function normaliseUrl(url: string) {
 
 // Portal-shareable entity types (things portal members can actually open). Also
 // the set that can be pinned to the Site Board.
-const PORTAL_ENTITY_TYPES = new Set(["document", "photo", "permit"]);
+const PORTAL_ENTITY_TYPES = new Set(["document", "photo", "permit", "plant_item"]);
 
 function methodLabel(method: string) {
   const map: Record<string, string> = {

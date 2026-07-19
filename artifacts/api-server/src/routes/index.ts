@@ -29,6 +29,7 @@ import portalRouter from "./portal";
 import teamActivityRouter from "./team-activity";
 import peopleRouter from "./people";
 import portalSharesRouter from "./portal-shares";
+import plantItemsRouter from "./plant-items";
 
 const router: IRouter = Router();
 
@@ -62,5 +63,6 @@ router.use(portalRouter);
 router.use(teamActivityRouter);
 router.use(peopleRouter);
 router.use(portalSharesRouter);
+router.use(plantItemsRouter);
 
 export default router;

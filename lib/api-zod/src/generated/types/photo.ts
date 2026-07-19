@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PhotoCategory } from "./photoCategory";
+import type { PhotoClosureReason } from "./photoClosureReason";
 
 export interface Photo {
   id: string;
@@ -20,4 +21,11 @@ export interface Photo {
   latitude?: number | null;
   longitude?: number | null;
   takenAt: Date;
+  /** Free-text lifecycle status. Issue categories (snag/safety_concern/work_completed-with-status): new | open | in_progress | pending_confirmation | resolved. resolved is the sole terminal status; closureReason distinguishes normal completion from invalid/duplicate. */
+  status?: string | null;
+  assignedToUserId?: string | null;
+  dueDate?: string | null;
+  closureReason?: PhotoClosureReason;
+  closureNote?: string | null;
+  updatedAt?: Date | null;
 }

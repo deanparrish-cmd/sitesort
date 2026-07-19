@@ -22,6 +22,13 @@ export const photosTable = pgTable("photos", {
   // issue and by when. Nullable; "overdue" is derived (dueDate < today && not resolved).
   assignedToUserId: text("assigned_to_user_id").references(() => usersTable.id),
   dueDate: date("due_date"),
+  // Portal-triage closure detail. "resolved" is the sole terminal status for every
+  // closure path (normal completion, invalid, duplicate) — these two columns
+  // distinguish which. closureNote is required server-side when closureReason is
+  // "invalid" or "duplicate".
+  closureReason: text("closure_reason"),
+  closureNote: text("closure_note"),
+  updatedAt: timestamp("updated_at"),
 });
 
 export const insertPhotoSchema = createInsertSchema(photosTable).omit({ takenAt: true });

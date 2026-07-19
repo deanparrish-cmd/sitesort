@@ -64,6 +64,8 @@ function notifIcon(type: string) {
       return <CreditCard className="w-5 h-5 text-red-500" />;
     case "daily_report":
       return <ClipboardCheck className="w-5 h-5 text-teal-500" />;
+    case "portal_issue_logged":
+      return <AlertTriangle className="w-5 h-5 text-violet-500" />;
     default:
       return <Bell className="w-5 h-5 text-muted-foreground" />;
   }
@@ -83,6 +85,8 @@ function notifBg(type: string) {
       return "bg-red-100";
     case "daily_report":
       return "bg-teal-100";
+    case "portal_issue_logged":
+      return "bg-violet-100";
     default:
       return "bg-muted";
   }
@@ -184,6 +188,17 @@ export default function NotificationsPage() {
         if (res.ok) {
           const doc = await res.json();
           setLocation(`/projects/${doc.projectId}?tab=documents`);
+          return;
+        }
+      } catch { /* fall through */ }
+    }
+
+    if (n.type === "portal_issue_logged" && n.relatedEntityId) {
+      try {
+        const res = await fetch(`/api/photos/${n.relatedEntityId}`, { headers: authHeaders() });
+        if (res.ok) {
+          const photo = await res.json();
+          setLocation(`/projects/${photo.projectId}?tab=issues&issueStatus=new`);
           return;
         }
       } catch { /* fall through */ }

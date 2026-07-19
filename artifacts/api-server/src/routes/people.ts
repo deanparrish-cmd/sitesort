@@ -46,12 +46,19 @@ type PortalStatus = {
   lastActiveAt?: string;
   emailStatus?: string;      // 'sent' | 'failed' (undefined = never attempted)
   emailLastSentAt?: string;
+  memberId?: string;               // project_members.id — needed to PATCH .../permissions
+  canLogIssues?: boolean;
+  canUpdatePlantMaterials?: boolean;
 };
 async function portalStatusFor(personIds: string[], projectId: string): Promise<Map<string, PortalStatus>> {
   const out = new Map<string, PortalStatus>();
   if (personIds.length === 0) return out;
   const [members, invites] = await Promise.all([
-    db.select({ personId: projectMembersTable.personId, role: projectMembersTable.role, lastActiveAt: usersTable.lastActiveAt })
+    db.select({
+      id: projectMembersTable.id, personId: projectMembersTable.personId, role: projectMembersTable.role,
+      lastActiveAt: usersTable.lastActiveAt,
+      canLogIssues: projectMembersTable.canLogIssues, canUpdatePlantMaterials: projectMembersTable.canUpdatePlantMaterials,
+    })
       .from(projectMembersTable)
       .leftJoin(usersTable, eq(projectMembersTable.userId, usersTable.id))
       .where(and(eq(projectMembersTable.projectId, projectId), inArray(projectMembersTable.personId, personIds))),
@@ -70,6 +77,9 @@ async function portalStatusFor(personIds: string[], projectId: string): Promise<
       status: "member", role: m.role,
       lastActiveAt: m.lastActiveAt ? m.lastActiveAt.toISOString() : undefined,
       inviteId: latestInvite.get(m.personId)?.id,
+      memberId: m.id,
+      canLogIssues: m.canLogIssues,
+      canUpdatePlantMaterials: m.canUpdatePlantMaterials,
     });
   }
   for (const [personId, inv] of latestInvite) {

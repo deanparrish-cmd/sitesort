@@ -399,6 +399,16 @@ export const ListProjectMembersResponseItem = zod.object({
   name: zod.string(),
   role: zod.enum(["manager", "worker", "subcontractor"]),
   complianceStatus: zod.enum(["ok", "warning", "hold"]),
+  canLogIssues: zod
+    .boolean()
+    .optional()
+    .describe("Portal write permission — can log a site issue. Default true."),
+  canUpdatePlantMaterials: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Portal write permission — can update Plant & Materials item status\/location\/notes. Default false.",
+    ),
   addedAt: zod.date(),
 });
 export const ListProjectMembersResponse = zod.array(
@@ -429,6 +439,24 @@ export const RemoveProjectMemberParams = zod.object({
 export const RemoveProjectMemberResponse = zod.object({
   success: zod.boolean(),
   removedName: zod.string().optional(),
+});
+
+/**
+ * @summary Update a portal member's write permissions (manager-gated)
+ */
+export const UpdateMemberPermissionsParams = zod.object({
+  projectId: zod.coerce.string(),
+  memberId: zod.coerce.string(),
+});
+
+export const UpdateMemberPermissionsBody = zod.object({
+  canLogIssues: zod.boolean().optional(),
+  canUpdatePlantMaterials: zod.boolean().optional(),
+});
+
+export const UpdateMemberPermissionsResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
 });
 
 /**
@@ -814,6 +842,394 @@ export const ListSubcontractorDocumentRevisionsResponse = zod.array(
 );
 
 /**
+ * @summary List Plant & Materials items for a project
+ */
+export const ListPlantItemsParams = zod.object({
+  projectId: zod.coerce.string(),
+});
+
+export const ListPlantItemsQueryParams = zod.object({
+  category: zod.enum(["plant_equipment", "materials"]).optional(),
+  status: zod.enum(["on_site", "on_order", "off_hired", "depleted"]).optional(),
+});
+
+export const ListPlantItemsResponseItem = zod.object({
+  id: zod.string(),
+  projectId: zod.string(),
+  name: zod.string(),
+  category: zod.enum(["plant_equipment", "materials"]),
+  quantity: zod.string().nullish(),
+  unit: zod.string().nullish(),
+  supplierOwnerText: zod.string().nullish(),
+  supplierContactId: zod.string().nullish(),
+  supplierContactName: zod.string().nullish(),
+  location: zod.string().nullish(),
+  status: zod.enum(["on_site", "on_order", "off_hired", "depleted"]),
+  notes: zod.string().nullish(),
+  onSiteDate: zod.string().nullish(),
+  expectedOffHireDate: zod.string().nullish(),
+  createdBy: zod.string(),
+  lastUpdatedByName: zod
+    .string()
+    .nullish()
+    .describe(
+      'First Surname of the last editor, for the \"last updated by\" line.',
+    ),
+  lastUpdatedAt: zod.date().nullish(),
+  createdAt: zod.date(),
+});
+export const ListPlantItemsResponse = zod.array(ListPlantItemsResponseItem);
+
+/**
+ * @summary Create a Plant & Materials item (manager/site-worker gated)
+ */
+export const CreatePlantItemParams = zod.object({
+  projectId: zod.coerce.string(),
+});
+
+export const CreatePlantItemBody = zod.object({
+  name: zod.string(),
+  category: zod.enum(["plant_equipment", "materials"]),
+  quantity: zod.string().nullish(),
+  unit: zod.string().nullish(),
+  supplierOwnerText: zod.string().nullish(),
+  supplierContactId: zod.string().nullish(),
+  location: zod.string().nullish(),
+  status: zod.enum(["on_site", "on_order", "off_hired", "depleted"]).optional(),
+  notes: zod.string().nullish(),
+  onSiteDate: zod.string().nullish(),
+  expectedOffHireDate: zod.string().nullish(),
+});
+
+/**
+ * @summary Update a Plant & Materials item (manager/site-worker gated)
+ */
+export const UpdatePlantItemParams = zod.object({
+  projectId: zod.coerce.string(),
+  itemId: zod.coerce.string(),
+});
+
+export const UpdatePlantItemBody = zod
+  .object({
+    name: zod.string().optional(),
+    category: zod.enum(["plant_equipment", "materials"]).optional(),
+    quantity: zod.string().nullish(),
+    unit: zod.string().nullish(),
+    supplierOwnerText: zod.string().nullish(),
+    supplierContactId: zod.string().nullish(),
+    location: zod.string().nullish(),
+    status: zod
+      .enum(["on_site", "on_order", "off_hired", "depleted"])
+      .optional(),
+    notes: zod.string().nullish(),
+    onSiteDate: zod.string().nullish(),
+    expectedOffHireDate: zod.string().nullish(),
+  })
+  .describe("Partial update — every field optional, omit to leave unchanged.");
+
+export const UpdatePlantItemResponse = zod.object({
+  id: zod.string(),
+  projectId: zod.string(),
+  name: zod.string(),
+  category: zod.enum(["plant_equipment", "materials"]),
+  quantity: zod.string().nullish(),
+  unit: zod.string().nullish(),
+  supplierOwnerText: zod.string().nullish(),
+  supplierContactId: zod.string().nullish(),
+  supplierContactName: zod.string().nullish(),
+  location: zod.string().nullish(),
+  status: zod.enum(["on_site", "on_order", "off_hired", "depleted"]),
+  notes: zod.string().nullish(),
+  onSiteDate: zod.string().nullish(),
+  expectedOffHireDate: zod.string().nullish(),
+  createdBy: zod.string(),
+  lastUpdatedByName: zod
+    .string()
+    .nullish()
+    .describe(
+      'First Surname of the last editor, for the \"last updated by\" line.',
+    ),
+  lastUpdatedAt: zod.date().nullish(),
+  createdAt: zod.date(),
+});
+
+/**
+ * @summary Delete a Plant & Materials item (manager-gated only)
+ */
+export const DeletePlantItemParams = zod.object({
+  projectId: zod.coerce.string(),
+  itemId: zod.coerce.string(),
+});
+
+export const DeletePlantItemResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * @summary List a plant/material item's documents & photos
+ */
+export const ListPlantItemAttachmentsParams = zod.object({
+  projectId: zod.coerce.string(),
+  itemId: zod.coerce.string(),
+});
+
+export const ListPlantItemAttachmentsResponseItem = zod.object({
+  id: zod.string(),
+  plantItemId: zod.string(),
+  uploadedBy: zod.string(),
+  uploaderName: zod.string(),
+  name: zod.string(),
+  kind: zod.enum([
+    "delivery_ticket",
+    "certificate",
+    "test_certificate",
+    "photo",
+    "other",
+  ]),
+  fileUrl: zod.string(),
+  fileSize: zod.number(),
+  createdAt: zod.date(),
+});
+export const ListPlantItemAttachmentsResponse = zod.array(
+  ListPlantItemAttachmentsResponseItem,
+);
+
+/**
+ * @summary Attach a document/photo to a plant/material item (file already uploaded via /api/upload)
+ */
+export const CreatePlantItemAttachmentParams = zod.object({
+  projectId: zod.coerce.string(),
+  itemId: zod.coerce.string(),
+});
+
+export const CreatePlantItemAttachmentBody = zod.object({
+  name: zod.string(),
+  kind: zod.enum([
+    "delivery_ticket",
+    "certificate",
+    "test_certificate",
+    "photo",
+    "other",
+  ]),
+  fileUrl: zod.string(),
+  fileSize: zod.number().optional(),
+});
+
+/**
+ * @summary Allocate a plant/material item to one or more team members (pending/viewed/acknowledged tracking)
+ */
+export const DistributePlantItemParams = zod.object({
+  projectId: zod.coerce.string(),
+  itemId: zod.coerce.string(),
+});
+
+export const DistributePlantItemBody = zod.object({
+  userIds: zod.array(zod.string()),
+});
+
+export const DistributePlantItemResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * @summary List a plant/material item's allocation tracking (pending/viewed/acknowledged per recipient)
+ */
+export const ListPlantItemDistributionsParams = zod.object({
+  projectId: zod.coerce.string(),
+  itemId: zod.coerce.string(),
+});
+
+export const ListPlantItemDistributionsResponseItem = zod.object({
+  id: zod.string(),
+  plantItemId: zod.string(),
+  userId: zod.string(),
+  userName: zod.string(),
+  userRole: zod.string(),
+  status: zod.enum(["pending", "viewed", "acknowledged"]),
+  distributedAt: zod.date(),
+  viewedAt: zod.date().nullish(),
+  acknowledgedAt: zod.date().nullish(),
+});
+export const ListPlantItemDistributionsResponse = zod.array(
+  ListPlantItemDistributionsResponseItem,
+);
+
+/**
+ * @summary List Plant & Materials items shared with this portal member
+ */
+export const GetPortalPlantMaterialsResponseItem = zod
+  .object({
+    id: zod.string(),
+    name: zod.string(),
+    category: zod.enum(["plant_equipment", "materials"]),
+    quantity: zod.string().nullish(),
+    unit: zod.string().nullish(),
+    supplierOwnerText: zod.string().nullish(),
+    supplierContactName: zod.string().nullish(),
+    location: zod.string().nullish(),
+    status: zod.enum(["on_site", "on_order", "off_hired", "depleted"]),
+    notes: zod.string().nullish(),
+    onSiteDate: zod.string().nullish(),
+    expectedOffHireDate: zod.string().nullish(),
+    lastUpdatedByName: zod.string().nullish(),
+    lastUpdatedAt: zod.date().nullish(),
+    attachments: zod
+      .array(
+        zod.object({
+          id: zod.string(),
+          plantItemId: zod.string(),
+          uploadedBy: zod.string(),
+          uploaderName: zod.string(),
+          name: zod.string(),
+          kind: zod.enum([
+            "delivery_ticket",
+            "certificate",
+            "test_certificate",
+            "photo",
+            "other",
+          ]),
+          fileUrl: zod.string(),
+          fileSize: zod.number(),
+          createdAt: zod.date(),
+        }),
+      )
+      .optional(),
+  })
+  .describe("Gated serialization — never exposes share\/audience data.");
+export const GetPortalPlantMaterialsResponse = zod.array(
+  GetPortalPlantMaterialsResponseItem,
+);
+
+/**
+ * @summary Get a Plant & Materials item detail (gated to shared items)
+ */
+export const GetPortalPlantMaterialItemParams = zod.object({
+  itemId: zod.coerce.string(),
+});
+
+export const GetPortalPlantMaterialItemResponse = zod
+  .object({
+    id: zod.string(),
+    name: zod.string(),
+    category: zod.enum(["plant_equipment", "materials"]),
+    quantity: zod.string().nullish(),
+    unit: zod.string().nullish(),
+    supplierOwnerText: zod.string().nullish(),
+    supplierContactName: zod.string().nullish(),
+    location: zod.string().nullish(),
+    status: zod.enum(["on_site", "on_order", "off_hired", "depleted"]),
+    notes: zod.string().nullish(),
+    onSiteDate: zod.string().nullish(),
+    expectedOffHireDate: zod.string().nullish(),
+    lastUpdatedByName: zod.string().nullish(),
+    lastUpdatedAt: zod.date().nullish(),
+    attachments: zod
+      .array(
+        zod.object({
+          id: zod.string(),
+          plantItemId: zod.string(),
+          uploadedBy: zod.string(),
+          uploaderName: zod.string(),
+          name: zod.string(),
+          kind: zod.enum([
+            "delivery_ticket",
+            "certificate",
+            "test_certificate",
+            "photo",
+            "other",
+          ]),
+          fileUrl: zod.string(),
+          fileSize: zod.number(),
+          createdAt: zod.date(),
+        }),
+      )
+      .optional(),
+  })
+  .describe("Gated serialization — never exposes share\/audience data.");
+
+/**
+ * @summary Update a plant/material item's status, location, or notes (requires can-update-plant-materials permission)
+ */
+export const UpdatePortalPlantMaterialItemParams = zod.object({
+  itemId: zod.coerce.string(),
+});
+
+export const UpdatePortalPlantMaterialItemBody = zod
+  .object({
+    status: zod
+      .enum(["on_site", "on_order", "off_hired", "depleted"])
+      .optional(),
+    location: zod.string().nullish(),
+    notes: zod.string().nullish(),
+  })
+  .describe(
+    "Portal members may only update status\/location\/notes — name\/category\/supplier\/dates stay dashboard-only.",
+  );
+
+export const UpdatePortalPlantMaterialItemResponse = zod
+  .object({
+    id: zod.string(),
+    name: zod.string(),
+    category: zod.enum(["plant_equipment", "materials"]),
+    quantity: zod.string().nullish(),
+    unit: zod.string().nullish(),
+    supplierOwnerText: zod.string().nullish(),
+    supplierContactName: zod.string().nullish(),
+    location: zod.string().nullish(),
+    status: zod.enum(["on_site", "on_order", "off_hired", "depleted"]),
+    notes: zod.string().nullish(),
+    onSiteDate: zod.string().nullish(),
+    expectedOffHireDate: zod.string().nullish(),
+    lastUpdatedByName: zod.string().nullish(),
+    lastUpdatedAt: zod.date().nullish(),
+    attachments: zod
+      .array(
+        zod.object({
+          id: zod.string(),
+          plantItemId: zod.string(),
+          uploadedBy: zod.string(),
+          uploaderName: zod.string(),
+          name: zod.string(),
+          kind: zod.enum([
+            "delivery_ticket",
+            "certificate",
+            "test_certificate",
+            "photo",
+            "other",
+          ]),
+          fileUrl: zod.string(),
+          fileSize: zod.number(),
+          createdAt: zod.date(),
+        }),
+      )
+      .optional(),
+  })
+  .describe("Gated serialization — never exposes share\/audience data.");
+
+/**
+ * @summary Upload a document/photo for a shared plant/material item (multipart; requires can-update-plant-materials permission)
+ */
+export const UploadPortalPlantMaterialAttachmentParams = zod.object({
+  itemId: zod.coerce.string(),
+});
+
+export const UploadPortalPlantMaterialAttachmentBody = zod.object({
+  file: zod.instanceof(File),
+  name: zod.string(),
+  kind: zod
+    .enum([
+      "delivery_ticket",
+      "certificate",
+      "test_certificate",
+      "photo",
+      "other",
+    ])
+    .optional(),
+});
+
+/**
  * @summary List permits for a project
  */
 export const ListPermitsParams = zod.object({
@@ -927,6 +1343,17 @@ export const ListPhotosResponseItem = zod.object({
   latitude: zod.number().nullish(),
   longitude: zod.number().nullish(),
   takenAt: zod.date(),
+  status: zod
+    .string()
+    .nullish()
+    .describe(
+      "Free-text lifecycle status. Issue categories (snag\/safety_concern\/work_completed-with-status): new | open | in_progress | pending_confirmation | resolved. resolved is the sole terminal status; closureReason distinguishes normal completion from invalid\/duplicate.",
+    ),
+  assignedToUserId: zod.string().nullish(),
+  dueDate: zod.string().nullish(),
+  closureReason: zod.enum(["completed", "invalid", "duplicate"]).nullish(),
+  closureNote: zod.string().nullish(),
+  updatedAt: zod.date().nullish(),
 });
 export const ListPhotosResponse = zod.array(ListPhotosResponseItem);
 
@@ -944,6 +1371,56 @@ export const LogPhotoBody = zod.object({
   zone: zod.string().optional(),
   latitude: zod.number().optional(),
   longitude: zod.number().optional(),
+});
+
+/**
+ * @summary Update a photo/issue — status/assignee/due-date, or PM-only close as invalid/duplicate with a reason
+ */
+export const UpdatePhotoParams = zod.object({
+  photoId: zod.coerce.string(),
+});
+
+export const UpdatePhotoBody = zod
+  .object({
+    status: zod.string().optional(),
+    assignedToUserId: zod.string().nullish(),
+    dueDate: zod.string().nullish(),
+    closureReason: zod
+      .enum(["completed", "invalid", "duplicate"])
+      .nullish()
+      .describe(
+        "invalid\/duplicate is PM-only server-side and requires closureNote.",
+      ),
+    closureNote: zod.string().nullish(),
+  })
+  .describe(
+    "Partial update; omit a field to leave it unchanged. null clears assignedToUserId\/dueDate.",
+  );
+
+export const UpdatePhotoResponse = zod.object({
+  id: zod.string(),
+  projectId: zod.string(),
+  uploadedBy: zod.string(),
+  uploaderName: zod.string(),
+  photoUrl: zod.string(),
+  category: zod.enum(["progress", "compliance", "snag", "safety_concern"]),
+  description: zod.string().nullish(),
+  zone: zod.string().nullish(),
+  referenceNumber: zod.string(),
+  latitude: zod.number().nullish(),
+  longitude: zod.number().nullish(),
+  takenAt: zod.date(),
+  status: zod
+    .string()
+    .nullish()
+    .describe(
+      "Free-text lifecycle status. Issue categories (snag\/safety_concern\/work_completed-with-status): new | open | in_progress | pending_confirmation | resolved. resolved is the sole terminal status; closureReason distinguishes normal completion from invalid\/duplicate.",
+    ),
+  assignedToUserId: zod.string().nullish(),
+  dueDate: zod.string().nullish(),
+  closureReason: zod.enum(["completed", "invalid", "duplicate"]).nullish(),
+  closureNote: zod.string().nullish(),
+  updatedAt: zod.date().nullish(),
 });
 
 /**
@@ -1179,9 +1656,12 @@ export const PortalLoginResponse = zod.object({
     .optional(),
   member: zod
     .object({
+      userId: zod.string(),
       name: zod.string(),
       role: zod.string(),
       email: zod.string(),
+      canLogIssues: zod.boolean(),
+      canUpdatePlantMaterials: zod.boolean(),
     })
     .optional(),
   projects: zod
@@ -1247,9 +1727,12 @@ export const AcceptPortalInviteResponse = zod.object({
     .optional(),
   member: zod
     .object({
+      userId: zod.string(),
       name: zod.string(),
       role: zod.string(),
       email: zod.string(),
+      canLogIssues: zod.boolean(),
+      canUpdatePlantMaterials: zod.boolean(),
     })
     .optional(),
   projects: zod
@@ -1277,9 +1760,12 @@ export const GetPortalContextResponse = zod.object({
     progressPercent: zod.number(),
   }),
   member: zod.object({
+    userId: zod.string(),
     name: zod.string(),
     role: zod.string(),
     email: zod.string(),
+    canLogIssues: zod.boolean(),
+    canUpdatePlantMaterials: zod.boolean(),
   }),
   sections: zod.array(zod.string()),
 });
@@ -1356,7 +1842,7 @@ export const GetPortalTeamResponseItem = zod.object({
 export const GetPortalTeamResponse = zod.array(GetPortalTeamResponseItem);
 
 /**
- * @summary Site issues (snags + safety concerns)
+ * @summary Site issues (snags + safety concerns + work-completed reports) — shared items, plus any this member reported or is assigned to
  */
 export const GetPortalSiteIssuesResponseItem = zod.object({
   id: zod.string(),
@@ -1371,10 +1857,66 @@ export const GetPortalSiteIssuesResponseItem = zod.object({
   longitude: zod.string().optional(),
   unseen: zod.boolean().optional(),
   sharedAt: zod.string().optional(),
+  assignedToUserId: zod
+    .string()
+    .optional()
+    .describe(
+      'Present so a member can tell whether an issue is allocated to them (\"Mark as done\" visibility).',
+    ),
+  reporterName: zod
+    .string()
+    .optional()
+    .describe("Set only on issues this member reported themselves."),
+  closureReason: zod.enum(["completed", "invalid", "duplicate"]).optional(),
 });
 export const GetPortalSiteIssuesResponse = zod.array(
   GetPortalSiteIssuesResponseItem,
 );
+
+/**
+ * @summary Log a site issue (Snag / Safety Concern / Work Completed) — requires the can-log-issues permission; no assignee/due-date accepted
+ */
+export const CreatePortalSiteIssueBody = zod.object({
+  photo: zod.instanceof(File).optional(),
+  type: zod.enum(["snag", "safety_concern", "work_completed"]),
+  description: zod.string().optional(),
+  zone: zod.string().optional(),
+});
+
+/**
+ * @summary Mark an issue assigned to this member "Done — awaiting confirmation" (ownership-gated, no body)
+ */
+export const UpdatePortalSiteIssueParams = zod.object({
+  issueId: zod.coerce.string(),
+});
+
+export const UpdatePortalSiteIssueBody = zod.object({}).passthrough();
+
+export const UpdatePortalSiteIssueResponse = zod.object({
+  id: zod.string(),
+  category: zod.string(),
+  description: zod.string().optional(),
+  zone: zod.string().optional(),
+  referenceNumber: zod.string(),
+  status: zod.string().optional(),
+  photoUrl: zod.string().optional(),
+  takenAt: zod.string().optional(),
+  latitude: zod.string().optional(),
+  longitude: zod.string().optional(),
+  unseen: zod.boolean().optional(),
+  sharedAt: zod.string().optional(),
+  assignedToUserId: zod
+    .string()
+    .optional()
+    .describe(
+      'Present so a member can tell whether an issue is allocated to them (\"Mark as done\" visibility).',
+    ),
+  reporterName: zod
+    .string()
+    .optional()
+    .describe("Set only on issues this member reported themselves."),
+  closureReason: zod.enum(["completed", "invalid", "duplicate"]).optional(),
+});
 
 /**
  * @summary Pinned site-board items + upcoming events
@@ -1596,6 +2138,17 @@ export const GetPortalSharedResponse = zod.object({
       longitude: zod.string().optional(),
       unseen: zod.boolean().optional(),
       sharedAt: zod.string().optional(),
+      assignedToUserId: zod
+        .string()
+        .optional()
+        .describe(
+          'Present so a member can tell whether an issue is allocated to them (\"Mark as done\" visibility).',
+        ),
+      reporterName: zod
+        .string()
+        .optional()
+        .describe("Set only on issues this member reported themselves."),
+      closureReason: zod.enum(["completed", "invalid", "duplicate"]).optional(),
     }),
   ),
   permits: zod.array(
@@ -2097,6 +2650,14 @@ export const ListSubcontractorPeopleResponseItem = zod
           .string()
           .optional()
           .describe("ISO timestamp of the last invite-email send attempt."),
+        memberId: zod
+          .string()
+          .optional()
+          .describe(
+            'project_members.id — present when status is \"member\"; PATCH ...\/members\/{memberId}\/permissions targets this id.',
+          ),
+        canLogIssues: zod.boolean().optional(),
+        canUpdatePlantMaterials: zod.boolean().optional(),
       })
       .optional()
       .describe("A person's portal state for one project."),
@@ -2205,6 +2766,14 @@ export const UpdatePersonResponse = zod
           .string()
           .optional()
           .describe("ISO timestamp of the last invite-email send attempt."),
+        memberId: zod
+          .string()
+          .optional()
+          .describe(
+            'project_members.id — present when status is \"member\"; PATCH ...\/members\/{memberId}\/permissions targets this id.',
+          ),
+        canLogIssues: zod.boolean().optional(),
+        canUpdatePlantMaterials: zod.boolean().optional(),
       })
       .optional()
       .describe("A person's portal state for one project."),
@@ -2278,6 +2847,14 @@ export const ListInHousePeopleResponseItem = zod
           .string()
           .optional()
           .describe("ISO timestamp of the last invite-email send attempt."),
+        memberId: zod
+          .string()
+          .optional()
+          .describe(
+            'project_members.id — present when status is \"member\"; PATCH ...\/members\/{memberId}\/permissions targets this id.',
+          ),
+        canLogIssues: zod.boolean().optional(),
+        canUpdatePlantMaterials: zod.boolean().optional(),
       })
       .optional()
       .describe("A person's portal state for one project."),

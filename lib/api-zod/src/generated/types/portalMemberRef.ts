@@ -7,7 +7,10 @@
  */
 
 export interface PortalMemberRef {
+  userId: string;
   name: string;
   role: string;
   email: string;
+  canLogIssues: boolean;
+  canUpdatePlantMaterials: boolean;
 }

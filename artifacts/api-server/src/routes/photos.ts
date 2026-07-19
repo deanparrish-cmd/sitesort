@@ -1,11 +1,13 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { photosTable, usersTable, notificationsTable, projectMembersTable, projectsTable } from "@workspace/db/schema";
-import { eq, and, count, inArray } from "drizzle-orm";
+import { eq, and, count, inArray, isNotNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { sendSafetyAlertEmail } from "../lib/email";
-import { isOverdue } from "../lib/accountability";
+import { isOverdue, issueCategoryFilter } from "../lib/accountability";
+import { logActivity } from "../lib/activity";
+import { enqueuePushForMembers } from "../lib/push-triggers";
 
 const router: IRouter = Router();
 
@@ -39,6 +41,9 @@ function formatPhoto(p: typeof photosTable.$inferSelect, uploaderName: string, p
     assignedToName: assignedToName ?? null,
     dueDate: p.dueDate ?? null,
     overdue: isOverdue(p.dueDate, p.status === "resolved"),
+    closureReason: p.closureReason ?? null,
+    closureNote: p.closureNote ?? null,
+    updatedAt: p.updatedAt ? p.updatedAt.toISOString() : null,
   };
 }
 
@@ -86,6 +91,8 @@ router.get("/photos/:photoId", authenticate, async (req, res) => {
   }
 });
 
+const MANAGER_ROLES = ["admin", "project_manager"];
+
 router.patch("/photos/:photoId", authenticate, async (req, res) => {
   try {
     const rows = await db.select().from(photosTable).where(eq(photosTable.id, req.params.photoId)).limit(1);
@@ -97,17 +104,72 @@ router.patch("/photos/:photoId", authenticate, async (req, res) => {
       .limit(1);
     if (!project[0]) { res.status(403).json({ error: "forbidden" }); return; }
 
-    const { status, assignedToUserId, dueDate } = req.body as { status?: string; assignedToUserId?: string | null; dueDate?: string | null };
+    const { status, assignedToUserId, dueDate, closureReason, closureNote } = req.body as {
+      status?: string; assignedToUserId?: string | null; dueDate?: string | null;
+      closureReason?: string | null; closureNote?: string | null;
+    };
+
+    // "Close as invalid/duplicate" is PM-only, and requires a reason note —
+    // this is the concrete server-side enforcement (the endpoint had no role
+    // gate at all before this).
+    if (closureReason === "invalid" || closureReason === "duplicate") {
+      if (!MANAGER_ROLES.includes(req.user!.role)) {
+        res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can close an issue as invalid/duplicate." });
+        return;
+      }
+      if (!closureNote || !closureNote.trim()) {
+        res.status(400).json({ error: "validation_error", message: "A reason is required to close as invalid/duplicate." });
+        return;
+      }
+    }
+
     const updates: Partial<typeof photosTable.$inferInsert> = {};
-    if (status !== undefined) {
-      updates.status = status;
-      if (status === "resolved") updates.resolvedAt = new Date();
+    const diff: Record<string, { from: unknown; to: unknown }> = {};
+
+    let effectiveStatus = status;
+    // Allocating a freshly-logged portal issue (assignedToUserId newly set,
+    // status not explicitly sent) auto-transitions it out of "new" — the
+    // triage step is "allocate", not a separate manual status change.
+    if (effectiveStatus === undefined && assignedToUserId !== undefined && assignedToUserId && photo.status === "new") {
+      effectiveStatus = "open";
+    }
+    if (effectiveStatus !== undefined && effectiveStatus !== photo.status) {
+      updates.status = effectiveStatus;
+      diff.status = { from: photo.status, to: effectiveStatus };
+      if (effectiveStatus === "resolved") updates.resolvedAt = new Date();
       else updates.resolvedAt = null;
     }
     // null clears the assignment / due date; a value sets it. undefined leaves as-is.
-    if (assignedToUserId !== undefined) updates.assignedToUserId = assignedToUserId || null;
+    if (assignedToUserId !== undefined && (assignedToUserId || null) !== photo.assignedToUserId) {
+      updates.assignedToUserId = assignedToUserId || null;
+      diff.assignedToUserId = { from: photo.assignedToUserId, to: assignedToUserId || null };
+    }
     if (dueDate !== undefined) updates.dueDate = dueDate || null;
-    await db.update(photosTable).set(updates).where(eq(photosTable.id, req.params.photoId));
+    if (closureReason !== undefined) updates.closureReason = closureReason || null;
+    if (closureNote !== undefined) updates.closureNote = closureNote || null;
+
+    if (Object.keys(updates).length > 0) {
+      updates.updatedAt = new Date();
+      await db.update(photosTable).set(updates).where(eq(photosTable.id, req.params.photoId));
+      void logActivity({ userId: req.user!.id, projectId: photo.projectId, companyId: req.user!.companyId, section: "site-issues", action: "update", itemType: "photo", itemId: photo.id, metadata: diff, req });
+
+      // Notify + push a newly-assigned portal member (portal→push is fully
+      // wired; dashboard staff have no push channel, so this only ever
+      // reaches a portal-only assignee).
+      const newAssignee = updates.assignedToUserId;
+      if (newAssignee && newAssignee !== photo.assignedToUserId) {
+        const isPortalMember = await db.select({ id: projectMembersTable.id }).from(projectMembersTable)
+          .where(and(eq(projectMembersTable.projectId, photo.projectId), eq(projectMembersTable.userId, newAssignee), isNotNull(projectMembersTable.personId)))
+          .limit(1);
+        if (isPortalMember.length > 0) {
+          void enqueuePushForMembers([newAssignee], photo.projectId, {
+            kind: "site_issue_assigned", itemType: "photo", itemId: photo.id,
+            title: `Issue assigned to you: ${photo.referenceNumber}`, projectName: project[0].name, deepLink: "/portal/site-issues",
+          });
+        }
+      }
+    }
+
     const updated = await db.select().from(photosTable).where(eq(photosTable.id, req.params.photoId)).limit(1);
     const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, photo.uploadedBy)).limit(1);
     res.json(formatPhoto(updated[0], userRows[0]?.name ?? "Unknown", project[0].name, await nameForUser(updated[0].assignedToUserId)));
@@ -133,7 +195,7 @@ router.get("/issues", authenticate, async (req, res) => {
     const photos = await db.select().from(photosTable)
       .where(and(
         inArray(photosTable.projectId, projectIds),
-        inArray(photosTable.category, ["snag", "safety_concern"]),
+        issueCategoryFilter(),
       ))
       .orderBy(photosTable.takenAt);
 
@@ -222,7 +284,7 @@ router.post("/projects/:projectId/photos", authenticate, async (req, res) => {
 
     const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
     res.status(201).json(formatPhoto(
-      { id, projectId: req.params.projectId, uploadedBy: req.user!.id, photoUrl: photoUrl ?? null, category, description: description ?? null, zone: zone ?? null, referenceNumber: refNum, latitude: latitude ?? null, longitude: longitude ?? null, takenAt: new Date(), status: isIssue ? "open" : null, resolvedAt: null, assignedToUserId: assignedToUserId || null, dueDate: dueDate || null },
+      { id, projectId: req.params.projectId, uploadedBy: req.user!.id, photoUrl: photoUrl ?? null, category, description: description ?? null, zone: zone ?? null, referenceNumber: refNum, latitude: latitude ?? null, longitude: longitude ?? null, takenAt: new Date(), status: isIssue ? "open" : null, resolvedAt: null, assignedToUserId: assignedToUserId || null, dueDate: dueDate || null, closureReason: null, closureNote: null, updatedAt: null },
       userRows[0]?.name ?? "Unknown",
       project[0].name,
       await nameForUser(assignedToUserId),

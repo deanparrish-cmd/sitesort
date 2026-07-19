@@ -6,10 +6,13 @@ import {
   useGetPortalSiteIssues, useGetPortalSiteBoard, useGetPortalHs,
   useGetPortalDrawings, useGetPortalMethodStatements, useGetPortalPermits,
   useGetPortalSafety, useGetPortalGeneral, useGetPortalShared,
-  useGetPortalMyDocuments, useGetPortalUnseen,
+  useGetPortalMyDocuments, useGetPortalUnseen, useGetPortalContext,
+  useGetPortalPlantMaterials, useUpdatePortalPlantMaterialItem,
+  useCreatePortalSiteIssue, useUpdatePortalSiteIssue,
   getGetPortalOverviewQueryKey, getGetPortalSiteIssuesQueryKey,
   getGetPortalGeneralQueryKey, getGetPortalSharedQueryKey,
   getGetPortalMyDocumentsQueryKey, getGetPortalUnseenQueryKey,
+  getGetPortalPlantMaterialsQueryKey,
 } from "@workspace/api-client-react";
 import { QRCodeSVG } from "qrcode.react";
 import { PortalLayout, SECTION_NAV } from "./layout";
@@ -91,6 +94,11 @@ function fmtDate(d?: string | null): string {
   const dt = new Date(d.length <= 10 ? `${d}T00:00:00` : d);
   return isNaN(dt.getTime()) ? "—" : dt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
+function fmtDateTime(d?: string | null): string {
+  if (!d) return "—";
+  const dt = new Date(d);
+  return isNaN(dt.getTime()) ? "—" : dt.toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+}
 
 function Loading() {
   return <div className="flex justify-center py-16"><Spinner className="size-7 text-primary" /></div>;
@@ -122,10 +130,24 @@ const PERMIT_BADGE: Record<string, string> = {
   expired: "bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300",
 };
 const ISSUE_BADGE: Record<string, string> = {
+  new: "bg-violet-100 text-violet-800 dark:bg-violet-950/40 dark:text-violet-300",
   open: "bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300",
   in_progress: "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
+  pending_confirmation: "bg-cyan-100 text-cyan-800 dark:bg-cyan-950/40 dark:text-cyan-300",
   resolved: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
 };
+const PLANT_STATUS_BADGE: Record<string, string> = {
+  on_site: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
+  on_order: "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
+  off_hired: "bg-muted text-muted-foreground",
+  depleted: "bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300",
+};
+const PLANT_STATUS_OPTIONS = [
+  { value: "on_site", label: "On site" },
+  { value: "on_order", label: "On order" },
+  { value: "off_hired", label: "Off-hired" },
+  { value: "depleted", label: "Depleted" },
+];
 function Badge({ label, className }: { label: string; className?: string }) {
   return <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${className ?? "bg-muted text-muted-foreground"}`}>{label}</span>;
 }
@@ -414,36 +436,138 @@ function TeamView() {
   );
 }
 
+const ISSUE_TYPE_LABEL: Record<string, string> = { snag: "Snag", safety_concern: "Safety concern", work_completed: "Work completed" };
+
+// "Log an issue" form — gated on canLogIssues from /portal/me. Mirrors the
+// dashboard form but WITHOUT "Assign to"; server also ignores any assignee/
+// due-date the client might send. Uses the generated multipart mutation
+// (photo is a plain Blob field in the request body — orval builds the
+// FormData), same as MyDocumentsView's upload but without a manual fetch.
+function LogIssueForm({ onLogged }: { onLogged: () => void }) {
+  const { toast } = useToast();
+  const create = useCreatePortalSiteIssue();
+  const [type, setType] = useState<"snag" | "safety_concern" | "work_completed">("snag");
+  const [description, setDescription] = useState("");
+  const [zone, setZone] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await create.mutateAsync({ data: { type, description: description || undefined, zone: zone || undefined, photo: file ?? undefined } });
+      toast({ title: "Issue logged" });
+      setDescription(""); setZone(""); setFile(null);
+      if (fileRef.current) fileRef.current.value = "";
+      onLogged();
+    } catch {
+      toast({ title: "Couldn't log issue", description: "Please try again.", variant: "destructive" });
+    }
+  };
+
+  return (
+    <Card>
+      <form onSubmit={submit} className="space-y-3">
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">Type</label>
+          <select value={type} onChange={e => setType(e.target.value as typeof type)} className="mt-1 w-full min-h-12 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+            <option value="snag">Snag</option>
+            <option value="safety_concern">Safety Concern</option>
+            <option value="work_completed">Work Completed</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">Description</label>
+          <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} placeholder="What's the issue?" className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+        </div>
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">Zone / location</label>
+          <input value={zone} onChange={e => setZone(e.target.value)} placeholder="e.g. Level 2, East wing" className="mt-1 w-full min-h-12 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+        </div>
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">Photo</label>
+          <input ref={fileRef} type="file" accept="image/*" onChange={e => setFile(e.target.files?.[0] ?? null)}
+            className="mt-1 w-full text-sm file:mr-3 file:min-h-10 file:rounded-lg file:border-0 file:bg-primary/10 file:px-4 file:text-sm file:font-medium file:text-primary" />
+        </div>
+        <button type="submit" disabled={create.isPending} className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary min-h-12 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+          <AlertTriangle className="w-4 h-4" /> {create.isPending ? "Logging…" : "Log issue"}
+        </button>
+      </form>
+    </Card>
+  );
+}
+
 function SiteIssuesView() {
   const openOnly = new URLSearchParams(useSearch()).get("status") === "open";
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data: ctx } = useGetPortalContext();
+  const selfUserId = ctx?.member?.userId;
+  const canLogIssues = ctx?.member?.canLogIssues ?? true;
   const { data, isLoading } = useGetPortalSiteIssues({ query: { refetchInterval: PORTAL_LIVE_REFETCH, queryKey: getGetPortalSiteIssuesQueryKey() } });
-  if (isLoading) return <Loading />;
-  if (!data || data.length === 0) return <Empty>Nothing shared with you here yet.</Empty>;
-  const issues = openOnly ? data.filter(i => (i.status ?? "open") !== "resolved") : data;
+  const markDone = useUpdatePortalSiteIssue();
+  const [showForm, setShowForm] = useState(false);
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: getGetPortalSiteIssuesQueryKey() });
+  const doMarkDone = async (issueId: string) => {
+    try {
+      await markDone.mutateAsync({ issueId, data: {} });
+      toast({ title: "Marked done — awaiting PM confirmation" });
+      await invalidate();
+    } catch {
+      toast({ title: "Couldn't update issue", variant: "destructive" });
+    }
+  };
+
+  const issues = data ?? [];
+  const filtered = openOnly ? issues.filter(i => (i.status ?? "open") !== "resolved") : issues;
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
+      {canLogIssues && (
+        showForm ? (
+          <LogIssueForm onLogged={() => { setShowForm(false); void invalidate(); }} />
+        ) : (
+          <button onClick={() => setShowForm(true)} className="w-full inline-flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border min-h-12 text-sm font-semibold text-primary hover:bg-primary/5">
+            <AlertTriangle className="w-4 h-4" /> Log an issue
+          </button>
+        )
+      )}
       {openOnly && <FilterChip label="Open issues only" clearHref="/portal/site-issues" />}
-      {issues.length === 0 ? <Empty>No open issues right now.</Empty> : issues.map(issue => (
-        <Card key={issue.id}>
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-                <span className="font-medium">{issue.category === "safety_concern" ? "Safety concern" : "Snag"}</span>
-                <span className="text-xs text-muted-foreground">#{issue.referenceNumber}</span>
+      {isLoading ? <Loading /> : filtered.length === 0 ? (
+        <Empty>{issues.length === 0 ? "Nothing shared with you here yet." : "No open issues right now."}</Empty>
+      ) : filtered.map(issue => {
+        const isMine = !!selfUserId && issue.assignedToUserId === selfUserId;
+        const canMarkDone = isMine && (issue.status === "open" || issue.status === "in_progress");
+        return (
+          <Card key={issue.id}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                  <span className="font-medium">{ISSUE_TYPE_LABEL[issue.category] ?? issue.category}</span>
+                  <span className="text-xs text-muted-foreground">#{issue.referenceNumber}</span>
+                </div>
+                {issue.description && <p className="text-sm mt-1 break-words">{issue.description}</p>}
+                <p className="text-xs text-muted-foreground mt-1">
+                  {issue.zone ? `${issue.zone} · ` : ""}{fmtDate(issue.takenAt)}
+                  {issue.reporterName ? ` · reported by you` : ""}
+                </p>
               </div>
-              {issue.description && <p className="text-sm mt-1 break-words">{issue.description}</p>}
-              <p className="text-xs text-muted-foreground mt-1">
-                {issue.zone ? `${issue.zone} · ` : ""}{fmtDate(issue.takenAt)}
-              </p>
+              <Badge label={(issue.status ?? "open").replace(/_/g, " ")} className={ISSUE_BADGE[issue.status ?? "open"] ?? "bg-muted text-muted-foreground"} />
             </div>
-            <Badge label={(issue.status ?? "open").replace("_", " ")} className={ISSUE_BADGE[issue.status ?? "open"]} />
-          </div>
-          {issue.photoUrl && (
-            <img src={fileHref(issue.photoUrl)} alt="" className="mt-3 rounded-lg w-full max-h-56 object-cover" loading="lazy" />
-          )}
-        </Card>
-      ))}
+            {issue.photoUrl && (
+              <img src={fileHref(issue.photoUrl)} alt="" className="mt-3 rounded-lg w-full max-h-56 object-cover" loading="lazy" />
+            )}
+            {canMarkDone && (
+              <button onClick={() => doMarkDone(issue.id)} disabled={markDone.isPending}
+                className="mt-3 w-full inline-flex items-center justify-center gap-2 rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 min-h-11 text-sm font-semibold hover:bg-cyan-100 disabled:opacity-50">
+                Mark as done — awaiting confirmation
+              </button>
+            )}
+          </Card>
+        );
+      })}
     </div>
   );
 }
@@ -753,6 +877,143 @@ const MY_DOC_KINDS = [
 
 // "My documents" — a portal member's own self-uploads (insurance, certs) with
 // their manager-review status, plus an upload form. Big touch-friendly controls.
+type PlantItemRow = {
+  id: string; name: string; category: string; quantity?: string | null; unit?: string | null;
+  supplierOwnerText?: string | null; supplierContactName?: string | null; location?: string | null;
+  status: string; notes?: string | null; lastUpdatedByName?: string | null; lastUpdatedAt?: string | null;
+  attachments?: { id: string; name: string; kind: string; fileUrl: string; createdAt: string }[];
+};
+
+// Inline edit panel for one item — only rendered for members with the
+// canUpdatePlantMaterials permission. Status/location/notes only (name/
+// category/supplier/dates stay dashboard-only, per the feature's scope).
+function PlantItemEditPanel({ item, onClose }: { item: PlantItemRow; onClose: () => void }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const update = useUpdatePortalPlantMaterialItem();
+  const [status, setStatus] = useState<"on_site" | "on_order" | "off_hired" | "depleted">(item.status as "on_site" | "on_order" | "off_hired" | "depleted");
+  const [location, setLocation] = useState(item.location ?? "");
+  const [notes, setNotes] = useState(item.notes ?? "");
+  const [file, setFile] = useState<File | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const save = async () => {
+    try {
+      await update.mutateAsync({ itemId: item.id, data: { status, location: location || null, notes: notes || null } });
+      toast({ title: "Saved" });
+      await queryClient.invalidateQueries({ queryKey: getGetPortalPlantMaterialsQueryKey() });
+      onClose();
+    } catch {
+      toast({ title: "Couldn't save", variant: "destructive" });
+    }
+  };
+
+  const uploadPhoto = async () => {
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("name", file.name);
+      form.append("kind", "photo");
+      const res = await fetch(`/api/portal/plant-materials/${item.id}/attachments`, { method: "POST", body: form });
+      if (!res.ok) throw new Error();
+      toast({ title: "Photo added" });
+      setFile(null);
+      if (fileRef.current) fileRef.current.value = "";
+      await queryClient.invalidateQueries({ queryKey: getGetPortalPlantMaterialsQueryKey() });
+    } catch {
+      toast({ title: "Upload failed", variant: "destructive" });
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border/60 space-y-3">
+      <div>
+        <label className="text-xs font-medium text-muted-foreground">Status</label>
+        <select value={status} onChange={e => setStatus(e.target.value as typeof status)} className="mt-1 w-full min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+          {PLANT_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className="text-xs font-medium text-muted-foreground">Location on site</label>
+        <input value={location} onChange={e => setLocation(e.target.value)} className="mt-1 w-full min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+      </div>
+      <div>
+        <label className="text-xs font-medium text-muted-foreground">Notes</label>
+        <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+      </div>
+      <div>
+        <label className="text-xs font-medium text-muted-foreground">Add a photo</label>
+        <div className="mt-1 flex items-center gap-2">
+          <input ref={fileRef} type="file" accept="image/*" onChange={e => setFile(e.target.files?.[0] ?? null)}
+            className="flex-1 text-sm file:mr-3 file:min-h-10 file:rounded-lg file:border-0 file:bg-primary/10 file:px-3 file:text-sm file:font-medium file:text-primary" />
+          <button type="button" onClick={uploadPhoto} disabled={!file || uploadingPhoto}
+            className="shrink-0 min-h-10 px-3 rounded-lg border text-sm font-medium hover:bg-muted disabled:opacity-50">
+            {uploadingPhoto ? "Adding…" : "Add"}
+          </button>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <button onClick={save} disabled={update.isPending} className="flex-1 min-h-11 rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+          {update.isPending ? "Saving…" : "Save changes"}
+        </button>
+        <button onClick={onClose} className="min-h-11 px-4 rounded-xl border text-sm font-medium hover:bg-muted">Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+function PlantMaterialsView() {
+  const { data: ctx } = useGetPortalContext();
+  const canEdit = ctx?.member?.canUpdatePlantMaterials ?? false;
+  const { data, isLoading } = useGetPortalPlantMaterials({ query: { refetchInterval: PORTAL_LIVE_REFETCH, queryKey: getGetPortalPlantMaterialsQueryKey() } });
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  if (isLoading) return <Loading />;
+  if (!data || data.length === 0) return <Empty>Nothing shared with you here yet.</Empty>;
+
+  return (
+    <div className="space-y-3">
+      {(data as PlantItemRow[]).map(item => (
+        <Card key={item.id}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-medium truncate">{item.name}</p>
+              <p className="text-xs text-muted-foreground capitalize">{item.category.replace("_", " ")}{item.location ? ` · ${item.location}` : ""}</p>
+              {item.notes && <p className="text-sm mt-1 break-words">{item.notes}</p>}
+              {item.lastUpdatedByName && (
+                <p className="text-xs text-muted-foreground mt-1">Last updated by {item.lastUpdatedByName}, {fmtDateTime(item.lastUpdatedAt)}</p>
+              )}
+            </div>
+            <Badge label={PLANT_STATUS_OPTIONS.find(o => o.value === item.status)?.label ?? item.status} className={PLANT_STATUS_BADGE[item.status]} />
+          </div>
+          {item.attachments && item.attachments.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {item.attachments.map(a => (
+                <button key={a.id} onClick={() => window.open(fileHref(a.fileUrl), "_blank", "noopener")}
+                  className="inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs hover:bg-muted">
+                  <FileText className="w-3 h-3" /> {a.name}
+                </button>
+              ))}
+            </div>
+          )}
+          {canEdit && (
+            editingId === item.id ? (
+              <PlantItemEditPanel item={item} onClose={() => setEditingId(null)} />
+            ) : (
+              <button onClick={() => setEditingId(item.id)} className="mt-3 text-sm font-medium text-primary hover:underline">Update</button>
+            )
+          )}
+        </Card>
+      ))}
+    </div>
+  );
+}
+
 function MyDocumentsView() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -1033,6 +1294,7 @@ function renderSection(section: string) {
     case "permits": return <PermitsView />;
     case "safety": return <DocListView section="safety" hook={useGetPortalSafety} empty="No safety documents uploaded." />;
     case "general": return <GeneralView />;
+    case "plant-materials": return <PlantMaterialsView />;
     default: return <Empty>Section not found.</Empty>;
   }
 }

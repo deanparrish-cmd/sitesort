@@ -6,12 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertTriangle, Search, Camera, MapPin, CheckCircle2, Clock,
-  ExternalLink, Share2, X, AlertCircle, UserCheck, Calendar,
+  ExternalLink, Share2, X, AlertCircle, UserCheck, Calendar, Ban,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/utils";
 import { ShareModal } from "@/components/share-modal";
 import { OverdueBadge } from "@/components/ui/overdue-badge";
+import { CloseInvalidDialog } from "@/pages/projects/detail/dialogs/close-issue-dialog";
 import { useCapabilities } from "@/hooks/use-capabilities";
 import { useToast } from "@/hooks/use-toast";
 
@@ -21,7 +22,7 @@ type Issue = {
   projectName: string | null;
   uploaderName: string;
   photoUrl: string | null;
-  category: "snag" | "safety_concern";
+  category: "snag" | "safety_concern" | "work_completed";
   description: string | null;
   zone: string | null;
   referenceNumber: string;
@@ -34,6 +35,8 @@ type Issue = {
   assignedToName?: string | null;
   dueDate?: string | null;
   overdue?: boolean;
+  closureReason?: string | null;
+  closureNote?: string | null;
 };
 
 function authHeaders(): Record<string, string> {
@@ -44,17 +47,21 @@ function authHeaders(): Record<string, string> {
 const CATEGORY_LABEL: Record<string, string> = {
   snag: "Snag",
   safety_concern: "Safety Concern",
+  work_completed: "Work Completed",
 };
 
 const CATEGORY_COLOUR: Record<string, string> = {
   snag: "bg-orange-50 border-orange-200 text-orange-700",
   safety_concern: "bg-red-50 border-red-200 text-red-700",
+  work_completed: "bg-teal-50 border-teal-200 text-teal-700",
 };
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
-  open:        { label: "Open",        cls: "bg-amber-50 border-amber-200 text-amber-700" },
-  in_progress: { label: "In Progress", cls: "bg-blue-50 border-blue-200 text-blue-700" },
-  resolved:    { label: "Resolved",    cls: "bg-emerald-50 border-emerald-200 text-emerald-700" },
+  new:                  { label: "New — awaiting triage", cls: "bg-violet-50 border-violet-200 text-violet-700" },
+  open:                 { label: "Open",                  cls: "bg-amber-50 border-amber-200 text-amber-700" },
+  in_progress:          { label: "In Progress",            cls: "bg-blue-50 border-blue-200 text-blue-700" },
+  pending_confirmation: { label: "Pending confirmation",   cls: "bg-cyan-50 border-cyan-200 text-cyan-700" },
+  resolved:             { label: "Resolved",               cls: "bg-emerald-50 border-emerald-200 text-emerald-700" },
 };
 
 export default function IssuesPage() {
@@ -63,20 +70,20 @@ export default function IssuesPage() {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [catFilter, setCatFilter] = useState<"all" | "snag" | "safety_concern">("all");
-  const [statusFilter, setStatusFilter] = useState<"all" | "open" | "in_progress" | "resolved">("all");
+  const [catFilter, setCatFilter] = useState<"all" | "snag" | "safety_concern" | "work_completed">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "new" | "open" | "in_progress" | "pending_confirmation" | "resolved">("all");
   const [viewingIssue, setViewingIssue] = useState<Issue | null>(null);
   const [shareItem, setShareItem] = useState<{ id: string; name: string; fileUrl: string; projectId?: string | null; additionalInfo?: string } | null>(null);
+  const [closingIssueId, setClosingIssueId] = useState<string | null>(null);
 
   function issueDetails(i: Issue) {
-    const STATUS_LABEL: Record<string, string> = { open: "Open", in_progress: "In Progress", resolved: "Resolved" };
     const lines = [
       `Type: ${CATEGORY_LABEL[i.category] ?? i.category}`,
       `Ref: ${i.referenceNumber}`,
       i.description ? `Description: ${i.description}` : null,
       i.zone ? `Zone: ${i.zone}` : null,
       i.projectName ? `Project: ${i.projectName}` : null,
-      `Status: ${STATUS_LABEL[i.status ?? "open"] ?? i.status ?? "Open"}`,
+      `Status: ${STATUS_BADGE[i.status ?? "open"]?.label ?? i.status ?? "Open"}`,
       `Logged: ${new Date(i.takenAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} by ${i.uploaderName}`,
       i.latitude && i.longitude ? `GPS: ${Number(i.latitude).toFixed(5)}, ${Number(i.longitude).toFixed(5)}` : null,
     ].filter(Boolean);
@@ -98,24 +105,33 @@ export default function IssuesPage() {
     const status = params.get("status");
     const type = params.get("type");
     const q = params.get("q");
-    if (status && ["all", "open", "in_progress", "resolved"].includes(status)) setStatusFilter(status as typeof statusFilter);
-    if (type && ["all", "snag", "safety_concern"].includes(type)) setCatFilter(type as typeof catFilter);
+    if (status && ["all", "new", "open", "in_progress", "pending_confirmation", "resolved"].includes(status)) setStatusFilter(status as typeof statusFilter);
+    if (type && ["all", "snag", "safety_concern", "work_completed"].includes(type)) setCatFilter(type as typeof catFilter);
     if (q) setSearch(q);
     if (status || type || q) window.history.replaceState({}, "", "/issues");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const updateStatus = async (issueId: string, status: string) => {
+  const patchIssue = async (issueId: string, patch: Record<string, unknown>, errTitle = "Couldn't update issue") => {
     const res = await fetch(`/api/photos/${issueId}`, {
       method: "PATCH",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify(patch),
     });
-    if (!res.ok) { toast({ title: "Couldn't update status", variant: "destructive" }); return; }
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      toast({ title: errTitle, description: body?.message, variant: "destructive" });
+      return;
+    }
     const updated: Issue = await res.json();
     setIssues(prev => prev.map(i => i.id === issueId ? updated : i));
     setViewingIssue(prev => prev?.id === issueId ? updated : prev);
   };
+
+  const updateStatus = (issueId: string, status: string) => patchIssue(issueId, { status }, "Couldn't update status");
+  const confirmIssueDone = (issueId: string) => patchIssue(issueId, { status: "resolved" }, "Couldn't confirm issue");
+  const closeIssueAsInvalid = (issueId: string, reason: "invalid" | "duplicate", note: string) =>
+    patchIssue(issueId, { status: "resolved", closureReason: reason, closureNote: note }, "Couldn't close issue");
 
   const filtered = issues.filter(i => {
     const matchSearch = !search ||
@@ -129,8 +145,10 @@ export default function IssuesPage() {
     return matchSearch && matchCat && matchStatus;
   }).sort((a, b) => b.takenAt.localeCompare(a.takenAt));
 
+  const newCount = issues.filter(i => i.status === "new").length;
   const openCount = issues.filter(i => !i.status || i.status === "open").length;
   const inProgressCount = issues.filter(i => i.status === "in_progress").length;
+  const pendingConfirmationCount = issues.filter(i => i.status === "pending_confirmation").length;
   const resolvedCount = issues.filter(i => i.status === "resolved").length;
 
   return (
@@ -143,7 +161,11 @@ export default function IssuesPage() {
       />
 
       {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+        <Card className="p-4 border-violet-200 bg-violet-50 dark:bg-violet-950/20 dark:border-violet-900">
+          <p className="text-xs font-medium text-violet-700 mb-1">New</p>
+          <p className="text-2xl font-extrabold text-violet-700">{newCount}</p>
+        </Card>
         <Card className="p-4 border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900">
           <p className="text-xs font-medium text-amber-700 mb-1">Open</p>
           <p className="text-2xl font-extrabold text-amber-700">{openCount}</p>
@@ -151,6 +173,10 @@ export default function IssuesPage() {
         <Card className="p-4 border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-900">
           <p className="text-xs font-medium text-blue-700 mb-1">In Progress</p>
           <p className="text-2xl font-extrabold text-blue-700">{inProgressCount}</p>
+        </Card>
+        <Card className="p-4 border-cyan-200 bg-cyan-50 dark:bg-cyan-950/20 dark:border-cyan-900">
+          <p className="text-xs font-medium text-cyan-700 mb-1">Pending confirmation</p>
+          <p className="text-2xl font-extrabold text-cyan-700">{pendingConfirmationCount}</p>
         </Card>
         <Card className="p-4 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-900">
           <p className="text-xs font-medium text-emerald-700 mb-1">Resolved</p>
@@ -165,16 +191,16 @@ export default function IssuesPage() {
           <Input placeholder="Search issues…" className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <div className="flex flex-wrap gap-2">
-          {(["all", "snag", "safety_concern"] as const).map(f => (
+          {(["all", "snag", "safety_concern", "work_completed"] as const).map(f => (
             <button key={f} onClick={() => setCatFilter(f)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors capitalize ${catFilter === f ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border hover:border-primary/40"}`}>
               {f === "all" ? "All Types" : CATEGORY_LABEL[f]}
             </button>
           ))}
         </div>
         <div className="flex flex-wrap gap-2">
-          {(["all", "open", "in_progress", "resolved"] as const).map(f => (
+          {(["all", "new", "open", "in_progress", "pending_confirmation", "resolved"] as const).map(f => (
             <button key={f} onClick={() => setStatusFilter(f)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${statusFilter === f ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border hover:border-primary/40"}`}>
-              {f === "all" ? "All Statuses" : f === "in_progress" ? "In Progress" : f.charAt(0).toUpperCase() + f.slice(1)}
+              {f === "all" ? "All Statuses" : STATUS_BADGE[f]?.label ?? f}
             </button>
           ))}
         </div>
@@ -249,8 +275,16 @@ export default function IssuesPage() {
 
                   {/* Quick resolve */}
                   {caps.canManageProjects && (
-                    <div className="shrink-0 flex items-center" onClick={e => e.stopPropagation()}>
-                      {issue.status !== "resolved" ? (
+                    <div className="shrink-0 flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                      {issue.status === "pending_confirmation" ? (
+                        <button
+                          onClick={() => confirmIssueDone(issue.id)}
+                          title="Confirm as resolved"
+                          className="p-1.5 rounded-lg text-cyan-600 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                        </button>
+                      ) : issue.status !== "resolved" ? (
                         <button
                           onClick={() => updateStatus(issue.id, "resolved")}
                           title="Mark resolved"
@@ -265,6 +299,15 @@ export default function IssuesPage() {
                           className="p-1.5 rounded-lg text-emerald-600 hover:text-muted-foreground hover:bg-muted transition-colors"
                         >
                           <CheckCircle2 className="w-4 h-4" />
+                        </button>
+                      )}
+                      {issue.status !== "resolved" && (
+                        <button
+                          onClick={() => setClosingIssueId(issue.id)}
+                          title="Close as invalid/duplicate"
+                          className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                        >
+                          <Ban className="w-4 h-4" />
                         </button>
                       )}
                     </div>
@@ -294,7 +337,15 @@ export default function IssuesPage() {
                   <span className="font-mono text-xs text-muted-foreground shrink-0">{viewingIssue.referenceNumber}</span>
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
-                  {caps.canManageProjects && viewingIssue.status !== "resolved" && (
+                  {caps.canManageProjects && viewingIssue.status === "pending_confirmation" && (
+                    <button
+                      onClick={() => confirmIssueDone(viewingIssue.id)}
+                      className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" /><span className="hidden sm:inline">Confirm resolved</span>
+                    </button>
+                  )}
+                  {caps.canManageProjects && viewingIssue.status !== "resolved" && viewingIssue.status !== "pending_confirmation" && (
                     <button
                       onClick={() => updateStatus(viewingIssue.id, "resolved")}
                       className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
@@ -308,6 +359,14 @@ export default function IssuesPage() {
                       className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border border-border bg-muted text-muted-foreground hover:bg-muted/70 transition-colors"
                     >
                       <Clock className="w-3.5 h-3.5" /><span className="hidden sm:inline">Re-open</span>
+                    </button>
+                  )}
+                  {caps.canManageProjects && viewingIssue.status !== "resolved" && (
+                    <button
+                      onClick={() => setClosingIssueId(viewingIssue.id)}
+                      className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border border-border bg-background text-destructive hover:bg-destructive/10 transition-colors"
+                    >
+                      <Ban className="w-3.5 h-3.5" /><span className="hidden sm:inline">Close invalid/duplicate</span>
                     </button>
                   )}
                   {photoUrl && (
@@ -387,6 +446,11 @@ export default function IssuesPage() {
                   {caps.canManageProjects && (
                     <div className="pt-2 space-y-1.5">
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Update Status</p>
+                      {(viewingIssue.status === "new" || viewingIssue.status === "pending_confirmation") && (
+                        <p className="text-xs text-muted-foreground italic">
+                          {viewingIssue.status === "new" ? "Assign to trigger triage, or use the header actions above." : "Awaiting PM confirmation — use \"Confirm resolved\" above."}
+                        </p>
+                      )}
                       {(["open", "in_progress", "resolved"] as const).map(s => (
                         <button
                           key={s}
@@ -436,6 +500,7 @@ export default function IssuesPage() {
         projectId={shareItem?.projectId}
         additionalInfo={shareItem?.additionalInfo}
       />
+      <CloseInvalidDialog photoId={closingIssueId} onClose={() => setClosingIssueId(null)} closeIssueAsInvalid={closeIssueAsInvalid} />
     </SidebarLayout>
   );
 }

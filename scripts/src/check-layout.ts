@@ -138,13 +138,13 @@ function buildRoutes(projectId: string, hasPortal: boolean): RouteSpec[] {
     { path: "/admin", label: "admin", auth: "app" },
   ];
 
-  const tabs = ["overview", "progress", "team", "issues", "qr", "documents", "permits", "closeout", "finances", "checkins", "reports", "teamportal"];
+  const tabs = ["overview", "progress", "team", "issues", "qr", "documents", "plant", "permits", "closeout", "finances", "checkins", "reports", "teamportal"];
   for (const tab of tabs) {
     routes.push({ path: `/projects/${projectId}?tab=${tab}`, label: `project-detail:${tab}`, auth: "app" });
   }
 
   if (hasPortal) {
-    const sections = ["overview", "shared", "settings", "progress", "team", "site-issues", "site-board", "hs", "drawings", "method-statements", "permits", "safety", "general"];
+    const sections = ["overview", "shared", "settings", "progress", "team", "site-issues", "site-board", "hs", "drawings", "method-statements", "permits", "safety", "general", "plant-materials"];
     for (const section of sections) {
       routes.push({ path: `/portal/${section}`, label: `portal:${section}`, auth: "portal" });
     }

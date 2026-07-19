@@ -19,4 +19,9 @@ export {
   CreatePortalInviteParams,
   ListSubcontractorDocumentsParams,
   UploadPortalMyDocumentBody,
+  DistributePlantItemBody,
+  ListPlantItemsParams,
+  UploadPortalPlantMaterialAttachmentBody,
+  CreatePortalSiteIssueBody,
+  UpdatePortalSiteIssueBody,
 } from "./generated/api";

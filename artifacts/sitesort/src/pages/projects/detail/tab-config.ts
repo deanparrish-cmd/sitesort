@@ -12,6 +12,7 @@ export function buildManagementTabs(caps: Caps, openIssueCount: number): TabDef[
     { value: "issues", label: openIssueCount > 0 ? `Site Issues (${openIssueCount})` : "Site Issues" },
     { value: "qr", label: "Site Board" },
     { value: "documents", label: "Documents" },
+    { value: "plant", label: "Plant & Materials" },
     { value: "permits", label: "H&S" },
     ...(caps.canManageProjects ? [{ value: "closeout", label: "Close-out" }] : []),
   ];

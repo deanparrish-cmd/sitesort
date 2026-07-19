@@ -337,7 +337,16 @@ export interface ProjectMember {
   name: string;
   role: ProjectMemberRole;
   complianceStatus: ProjectMemberComplianceStatus;
+  /** Portal write permission — can log a site issue. Default true. */
+  canLogIssues?: boolean;
+  /** Portal write permission — can update Plant & Materials item status/location/notes. Default false. */
+  canUpdatePlantMaterials?: boolean;
   addedAt: string;
+}
+
+export interface UpdateMemberPermissionsRequest {
+  canLogIssues?: boolean;
+  canUpdatePlantMaterials?: boolean;
 }
 
 export type AddMemberRequestRole =
@@ -590,6 +599,233 @@ export interface UpdateSubcontractorDocumentRequest {
   status?: UpdateSubcontractorDocumentRequestStatus;
 }
 
+export type PlantItemCategory =
+  (typeof PlantItemCategory)[keyof typeof PlantItemCategory];
+
+export const PlantItemCategory = {
+  plant_equipment: "plant_equipment",
+  materials: "materials",
+} as const;
+
+export type PlantItemStatus =
+  (typeof PlantItemStatus)[keyof typeof PlantItemStatus];
+
+export const PlantItemStatus = {
+  on_site: "on_site",
+  on_order: "on_order",
+  off_hired: "off_hired",
+  depleted: "depleted",
+} as const;
+
+export interface PlantItem {
+  id: string;
+  projectId: string;
+  name: string;
+  category: PlantItemCategory;
+  quantity?: string | null;
+  unit?: string | null;
+  supplierOwnerText?: string | null;
+  supplierContactId?: string | null;
+  supplierContactName?: string | null;
+  location?: string | null;
+  status: PlantItemStatus;
+  notes?: string | null;
+  onSiteDate?: string | null;
+  expectedOffHireDate?: string | null;
+  createdBy: string;
+  /** First Surname of the last editor, for the "last updated by" line. */
+  lastUpdatedByName?: string | null;
+  lastUpdatedAt?: string | null;
+  createdAt: string;
+}
+
+export type CreatePlantItemRequestCategory =
+  (typeof CreatePlantItemRequestCategory)[keyof typeof CreatePlantItemRequestCategory];
+
+export const CreatePlantItemRequestCategory = {
+  plant_equipment: "plant_equipment",
+  materials: "materials",
+} as const;
+
+export type CreatePlantItemRequestStatus =
+  (typeof CreatePlantItemRequestStatus)[keyof typeof CreatePlantItemRequestStatus];
+
+export const CreatePlantItemRequestStatus = {
+  on_site: "on_site",
+  on_order: "on_order",
+  off_hired: "off_hired",
+  depleted: "depleted",
+} as const;
+
+export interface CreatePlantItemRequest {
+  name: string;
+  category: CreatePlantItemRequestCategory;
+  quantity?: string | null;
+  unit?: string | null;
+  supplierOwnerText?: string | null;
+  supplierContactId?: string | null;
+  location?: string | null;
+  status?: CreatePlantItemRequestStatus;
+  notes?: string | null;
+  onSiteDate?: string | null;
+  expectedOffHireDate?: string | null;
+}
+
+export type UpdatePlantItemRequestCategory =
+  (typeof UpdatePlantItemRequestCategory)[keyof typeof UpdatePlantItemRequestCategory];
+
+export const UpdatePlantItemRequestCategory = {
+  plant_equipment: "plant_equipment",
+  materials: "materials",
+} as const;
+
+export type UpdatePlantItemRequestStatus =
+  (typeof UpdatePlantItemRequestStatus)[keyof typeof UpdatePlantItemRequestStatus];
+
+export const UpdatePlantItemRequestStatus = {
+  on_site: "on_site",
+  on_order: "on_order",
+  off_hired: "off_hired",
+  depleted: "depleted",
+} as const;
+
+/**
+ * Partial update — every field optional, omit to leave unchanged.
+ */
+export interface UpdatePlantItemRequest {
+  name?: string;
+  category?: UpdatePlantItemRequestCategory;
+  quantity?: string | null;
+  unit?: string | null;
+  supplierOwnerText?: string | null;
+  supplierContactId?: string | null;
+  location?: string | null;
+  status?: UpdatePlantItemRequestStatus;
+  notes?: string | null;
+  onSiteDate?: string | null;
+  expectedOffHireDate?: string | null;
+}
+
+export type PlantItemAttachmentKind =
+  (typeof PlantItemAttachmentKind)[keyof typeof PlantItemAttachmentKind];
+
+export const PlantItemAttachmentKind = {
+  delivery_ticket: "delivery_ticket",
+  certificate: "certificate",
+  test_certificate: "test_certificate",
+  photo: "photo",
+  other: "other",
+} as const;
+
+export interface PlantItemAttachment {
+  id: string;
+  plantItemId: string;
+  uploadedBy: string;
+  uploaderName: string;
+  name: string;
+  kind: PlantItemAttachmentKind;
+  fileUrl: string;
+  fileSize: number;
+  createdAt: string;
+}
+
+export type CreatePlantItemAttachmentRequestKind =
+  (typeof CreatePlantItemAttachmentRequestKind)[keyof typeof CreatePlantItemAttachmentRequestKind];
+
+export const CreatePlantItemAttachmentRequestKind = {
+  delivery_ticket: "delivery_ticket",
+  certificate: "certificate",
+  test_certificate: "test_certificate",
+  photo: "photo",
+  other: "other",
+} as const;
+
+export interface CreatePlantItemAttachmentRequest {
+  name: string;
+  kind: CreatePlantItemAttachmentRequestKind;
+  fileUrl: string;
+  fileSize?: number;
+}
+
+export type PlantItemDistributionStatus =
+  (typeof PlantItemDistributionStatus)[keyof typeof PlantItemDistributionStatus];
+
+export const PlantItemDistributionStatus = {
+  pending: "pending",
+  viewed: "viewed",
+  acknowledged: "acknowledged",
+} as const;
+
+export interface PlantItemDistribution {
+  id: string;
+  plantItemId: string;
+  userId: string;
+  userName: string;
+  userRole: string;
+  status: PlantItemDistributionStatus;
+  distributedAt: string;
+  viewedAt?: string | null;
+  acknowledgedAt?: string | null;
+}
+
+export type PortalPlantItemCategory =
+  (typeof PortalPlantItemCategory)[keyof typeof PortalPlantItemCategory];
+
+export const PortalPlantItemCategory = {
+  plant_equipment: "plant_equipment",
+  materials: "materials",
+} as const;
+
+export type PortalPlantItemStatus =
+  (typeof PortalPlantItemStatus)[keyof typeof PortalPlantItemStatus];
+
+export const PortalPlantItemStatus = {
+  on_site: "on_site",
+  on_order: "on_order",
+  off_hired: "off_hired",
+  depleted: "depleted",
+} as const;
+
+/**
+ * Gated serialization — never exposes share/audience data.
+ */
+export interface PortalPlantItem {
+  id: string;
+  name: string;
+  category: PortalPlantItemCategory;
+  quantity?: string | null;
+  unit?: string | null;
+  supplierOwnerText?: string | null;
+  supplierContactName?: string | null;
+  location?: string | null;
+  status: PortalPlantItemStatus;
+  notes?: string | null;
+  onSiteDate?: string | null;
+  expectedOffHireDate?: string | null;
+  lastUpdatedByName?: string | null;
+  lastUpdatedAt?: string | null;
+  attachments?: PlantItemAttachment[];
+}
+
+export type UpdatePortalPlantItemRequestStatus =
+  (typeof UpdatePortalPlantItemRequestStatus)[keyof typeof UpdatePortalPlantItemRequestStatus];
+
+export const UpdatePortalPlantItemRequestStatus = {
+  on_site: "on_site",
+  on_order: "on_order",
+  off_hired: "off_hired",
+  depleted: "depleted",
+} as const;
+
+/**
+ * Portal members may only update status/location/notes — name/category/supplier/dates stay dashboard-only.
+ */
+export interface UpdatePortalPlantItemRequest {
+  status?: UpdatePortalPlantItemRequestStatus;
+  location?: string | null;
+  notes?: string | null;
+}
+
 export type PermitType = (typeof PermitType)[keyof typeof PermitType];
 
 export const PermitType = {
@@ -662,6 +898,16 @@ export const PhotoCategory = {
   safety_concern: "safety_concern",
 } as const;
 
+export type PhotoClosureReason =
+  | (typeof PhotoClosureReason)[keyof typeof PhotoClosureReason]
+  | null;
+
+export const PhotoClosureReason = {
+  completed: "completed",
+  invalid: "invalid",
+  duplicate: "duplicate",
+} as const;
+
 export interface Photo {
   id: string;
   projectId: string;
@@ -675,6 +921,38 @@ export interface Photo {
   latitude?: number | null;
   longitude?: number | null;
   takenAt: string;
+  /** Free-text lifecycle status. Issue categories (snag/safety_concern/work_completed-with-status): new | open | in_progress | pending_confirmation | resolved. resolved is the sole terminal status; closureReason distinguishes normal completion from invalid/duplicate. */
+  status?: string | null;
+  assignedToUserId?: string | null;
+  dueDate?: string | null;
+  closureReason?: PhotoClosureReason;
+  closureNote?: string | null;
+  updatedAt?: string | null;
+}
+
+/**
+ * invalid/duplicate is PM-only server-side and requires closureNote.
+ */
+export type UpdatePhotoRequestClosureReason =
+  | (typeof UpdatePhotoRequestClosureReason)[keyof typeof UpdatePhotoRequestClosureReason]
+  | null;
+
+export const UpdatePhotoRequestClosureReason = {
+  completed: "completed",
+  invalid: "invalid",
+  duplicate: "duplicate",
+} as const;
+
+/**
+ * Partial update; omit a field to leave it unchanged. null clears assignedToUserId/dueDate.
+ */
+export interface UpdatePhotoRequest {
+  status?: string;
+  assignedToUserId?: string | null;
+  dueDate?: string | null;
+  /** invalid/duplicate is PM-only server-side and requires closureNote. */
+  closureReason?: UpdatePhotoRequestClosureReason;
+  closureNote?: string | null;
 }
 
 export type LogPhotoRequestCategory =
@@ -808,9 +1086,12 @@ export interface PortalProjectRef {
 }
 
 export interface PortalMemberRef {
+  userId: string;
   name: string;
   role: string;
   email: string;
+  canLogIssues: boolean;
+  canUpdatePlantMaterials: boolean;
 }
 
 export interface PortalLoginRequest {
@@ -910,6 +1191,15 @@ export interface PortalTeamMember {
   trades?: string[];
 }
 
+export type PortalIssueClosureReason =
+  (typeof PortalIssueClosureReason)[keyof typeof PortalIssueClosureReason];
+
+export const PortalIssueClosureReason = {
+  completed: "completed",
+  invalid: "invalid",
+  duplicate: "duplicate",
+} as const;
+
 export interface PortalIssue {
   id: string;
   category: string;
@@ -923,6 +1213,29 @@ export interface PortalIssue {
   longitude?: string;
   unseen?: boolean;
   sharedAt?: string;
+  /** Present so a member can tell whether an issue is allocated to them ("Mark as done" visibility). */
+  assignedToUserId?: string;
+  /** Set only on issues this member reported themselves. */
+  reporterName?: string;
+  closureReason?: PortalIssueClosureReason;
+}
+
+export type CreatePortalSiteIssueRequestType =
+  (typeof CreatePortalSiteIssueRequestType)[keyof typeof CreatePortalSiteIssueRequestType];
+
+export const CreatePortalSiteIssueRequestType = {
+  snag: "snag",
+  safety_concern: "safety_concern",
+  work_completed: "work_completed",
+} as const;
+
+/**
+ * Multipart form fields (photo file is separate, see the multipart schema on the path).
+ */
+export interface CreatePortalSiteIssueRequest {
+  type: CreatePortalSiteIssueRequestType;
+  description?: string;
+  zone?: string;
 }
 
 /**
@@ -1190,6 +1503,10 @@ export interface PortalStatus {
   emailStatus?: PortalStatusEmailStatus;
   /** ISO timestamp of the last invite-email send attempt. */
   emailLastSentAt?: string;
+  /** project_members.id — present when status is "member"; PATCH .../members/{memberId}/permissions targets this id. */
+  memberId?: string;
+  canLogIssues?: boolean;
+  canUpdatePlantMaterials?: boolean;
 }
 
 export type PersonKind = (typeof PersonKind)[keyof typeof PersonKind];
@@ -1349,9 +1666,71 @@ export type ListSubcontractorDocumentsParams = {
   projectId?: string;
 };
 
+export type ListPlantItemsParams = {
+  category?: ListPlantItemsCategory;
+  status?: ListPlantItemsStatus;
+};
+
+export type ListPlantItemsCategory =
+  (typeof ListPlantItemsCategory)[keyof typeof ListPlantItemsCategory];
+
+export const ListPlantItemsCategory = {
+  plant_equipment: "plant_equipment",
+  materials: "materials",
+} as const;
+
+export type ListPlantItemsStatus =
+  (typeof ListPlantItemsStatus)[keyof typeof ListPlantItemsStatus];
+
+export const ListPlantItemsStatus = {
+  on_site: "on_site",
+  on_order: "on_order",
+  off_hired: "off_hired",
+  depleted: "depleted",
+} as const;
+
+export type DistributePlantItemBody = {
+  userIds: string[];
+};
+
+export type UploadPortalPlantMaterialAttachmentBodyKind =
+  (typeof UploadPortalPlantMaterialAttachmentBodyKind)[keyof typeof UploadPortalPlantMaterialAttachmentBodyKind];
+
+export const UploadPortalPlantMaterialAttachmentBodyKind = {
+  delivery_ticket: "delivery_ticket",
+  certificate: "certificate",
+  test_certificate: "test_certificate",
+  photo: "photo",
+  other: "other",
+} as const;
+
+export type UploadPortalPlantMaterialAttachmentBody = {
+  file: Blob;
+  name: string;
+  kind?: UploadPortalPlantMaterialAttachmentBodyKind;
+};
+
 export type ListPhotosParams = {
   category?: string;
 };
+
+export type CreatePortalSiteIssueBodyType =
+  (typeof CreatePortalSiteIssueBodyType)[keyof typeof CreatePortalSiteIssueBodyType];
+
+export const CreatePortalSiteIssueBodyType = {
+  snag: "snag",
+  safety_concern: "safety_concern",
+  work_completed: "work_completed",
+} as const;
+
+export type CreatePortalSiteIssueBody = {
+  photo?: Blob;
+  type: CreatePortalSiteIssueBodyType;
+  description?: string;
+  zone?: string;
+};
+
+export type UpdatePortalSiteIssueBody = { [key: string]: unknown };
 
 export type UploadPortalMyDocumentBody = {
   file: Blob;

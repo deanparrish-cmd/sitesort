@@ -20,6 +20,7 @@ export const PORTAL_SECTIONS = [
   "permits",
   "safety",
   "general",
+  "plant-materials",
 ] as const;
 
 export type PortalSection = (typeof PORTAL_SECTIONS)[number];
@@ -42,6 +43,7 @@ export const SECTION_LABELS: Record<string, string> = {
   permits: "Permits",
   safety: "Safety",
   general: "General",
+  "plant-materials": "Plant & Materials",
 };
 
 // Append one audit row. Best-effort: auditing must NEVER break the request it is
@@ -55,6 +57,7 @@ export async function logActivity(params: {
   action?: string;
   itemType?: string | null;
   itemId?: string | null;
+  metadata?: Record<string, unknown> | null;
   req?: Request;
 }): Promise<void> {
   try {
@@ -67,6 +70,7 @@ export async function logActivity(params: {
       action: params.action ?? "view",
       itemType: params.itemType ?? null,
       itemId: params.itemId ?? null,
+      metadata: params.metadata ? JSON.stringify(params.metadata) : null,
       userAgent: params.req?.headers["user-agent"]?.slice(0, 512) ?? null,
       ipAddress: params.req?.ip ?? null,
     });
