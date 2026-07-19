@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { Input } from "@/components/ui/input";
-import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronUp, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, PinOff, StickyNote, Send, Loader2, History, Archive, Paperclip } from "lucide-react";
+import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronUp, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, PinOff, StickyNote, Send, Loader2, History, Archive, Paperclip, Ban } from "lucide-react";
 import { OverdueBadge } from "@/components/ui/overdue-badge";
 import { formatDate, formatBytes, cn } from "@/lib/utils";
 import { useDetail } from "../context";
+import { CloseInvalidDialog } from "./close-issue-dialog";
 
 export function PhotoOverlay() {
   const {
@@ -12,9 +14,12 @@ export function PhotoOverlay() {
     setViewingPhoto,
     patchPhoto,
     updatePhotoStatus,
+    confirmIssueDone,
+    closeIssueAsInvalid,
     caps,
     setSharingDoc,
   } = useDetail();
+  const [closingIssueId, setClosingIssueId] = useState<string | null>(null);
 
   return (
     <>
@@ -32,7 +37,14 @@ export function PhotoOverlay() {
           mistake: "bg-rose-50 border-rose-200 text-rose-700",
           work_completed: "bg-teal-50 border-teal-200 text-teal-700",
         };
-        const isIssue = viewingPhoto.category === "snag" || viewingPhoto.category === "safety_concern";
+        const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
+          new: { label: "New — awaiting triage", cls: "bg-violet-50 border-violet-200 text-violet-700" },
+          open: { label: "Open", cls: "bg-amber-50 border-amber-200 text-amber-700" },
+          in_progress: { label: "In Progress", cls: "bg-blue-50 border-blue-200 text-blue-700" },
+          pending_confirmation: { label: "Pending confirmation", cls: "bg-cyan-50 border-cyan-200 text-cyan-700" },
+          resolved: { label: "Resolved", cls: "bg-emerald-50 border-emerald-200 text-emerald-700" },
+        };
+        const isIssue = viewingPhoto.category === "snag" || viewingPhoto.category === "safety_concern" || (viewingPhoto.category === "work_completed" && viewingPhoto.status != null);
         const photoUrl = viewingPhoto.photoUrl?.replace(/^\/uploads\//, "/api/uploads/") ?? null;
         return (
           <div className="fixed inset-0 z-50 flex items-stretch justify-center">
@@ -45,12 +57,20 @@ export function PhotoOverlay() {
                     {CATEGORY_LABELS[viewingPhoto.category] ?? viewingPhoto.category}
                   </span>
                   <span className="font-mono text-xs text-muted-foreground shrink-0">{viewingPhoto.referenceNumber}</span>
-                  {viewingPhoto.status === "open" && <span className="text-xs font-bold px-2 py-0.5 rounded border bg-amber-50 border-amber-200 text-amber-700 shrink-0">Open</span>}
-                  {viewingPhoto.status === "in_progress" && <span className="text-xs font-bold px-2 py-0.5 rounded border bg-blue-50 border-blue-200 text-blue-700 shrink-0">In Progress</span>}
-                  {viewingPhoto.status === "resolved" && <span className="text-xs font-bold px-2 py-0.5 rounded border bg-emerald-50 border-emerald-200 text-emerald-700 shrink-0">Resolved</span>}
+                  {viewingPhoto.status && STATUS_LABELS[viewingPhoto.status] && (
+                    <span className={cn("text-xs font-bold px-2 py-0.5 rounded border shrink-0", STATUS_LABELS[viewingPhoto.status].cls)}>{STATUS_LABELS[viewingPhoto.status].label}</span>
+                  )}
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
-                  {isIssue && caps.canManageProjects && viewingPhoto.status !== "resolved" && (
+                  {isIssue && caps.canManageProjects && viewingPhoto.status === "pending_confirmation" && (
+                    <button
+                      onClick={() => confirmIssueDone(viewingPhoto.id)}
+                      className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" /><span className="hidden sm:inline">Confirm resolved</span>
+                    </button>
+                  )}
+                  {isIssue && caps.canManageProjects && viewingPhoto.status !== "resolved" && viewingPhoto.status !== "pending_confirmation" && (
                     <button
                       onClick={() => updatePhotoStatus(viewingPhoto.id, "resolved")}
                       className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
@@ -66,6 +86,14 @@ export function PhotoOverlay() {
                       <Clock className="w-3.5 h-3.5" /><span className="hidden sm:inline">Re-open</span>
                     </button>
                   )}
+                  {isIssue && caps.canManageProjects && viewingPhoto.status !== "resolved" && (
+                    <button
+                      onClick={() => setClosingIssueId(viewingPhoto.id)}
+                      className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border border-border bg-background text-destructive hover:bg-destructive/10 transition-colors"
+                    >
+                      <Ban className="w-3.5 h-3.5" /><span className="hidden sm:inline">Close invalid/duplicate</span>
+                    </button>
+                  )}
                   {photoUrl && (
                     <button
                       onClick={() => window.open(photoUrl, "_blank", "noopener,noreferrer")}
@@ -77,15 +105,13 @@ export function PhotoOverlay() {
                   {photoUrl && (
                     <button
                       onClick={() => {
-                        const isIssuePhoto = viewingPhoto.category === "snag" || viewingPhoto.category === "safety_concern";
-                        const STATUS_LABEL: Record<string, string> = { open: "Open", in_progress: "In Progress", resolved: "Resolved" };
-                        const info = isIssuePhoto ? [
-                          `Type: ${viewingPhoto.category === "snag" ? "Snag" : "Safety Concern"}`,
+                        const info = isIssue ? [
+                          `Type: ${CATEGORY_LABELS[viewingPhoto.category] ?? viewingPhoto.category}`,
                           `Ref: ${viewingPhoto.referenceNumber}`,
                           viewingPhoto.description ? `Description: ${viewingPhoto.description}` : null,
                           viewingPhoto.zone ? `Zone: ${viewingPhoto.zone}` : null,
                           `Project: ${project.name}`,
-                          `Status: ${STATUS_LABEL[viewingPhoto.status ?? "open"] ?? "Open"}`,
+                          `Status: ${STATUS_LABELS[viewingPhoto.status ?? "open"]?.label ?? "Open"}`,
                           `Logged: ${formatDate(viewingPhoto.takenAt)} by ${viewingPhoto.uploaderName}`,
                           (viewingPhoto.latitude && viewingPhoto.longitude) ? `GPS: ${Number(viewingPhoto.latitude).toFixed(5)}, ${Number(viewingPhoto.longitude).toFixed(5)}` : null,
                         ].filter(Boolean).join("\n") : undefined;
@@ -182,6 +208,11 @@ export function PhotoOverlay() {
                   {isIssue && caps.canManageProjects && (
                     <div className="pt-2 space-y-1.5">
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Update Status</p>
+                      {(viewingPhoto.status === "new" || viewingPhoto.status === "pending_confirmation") && (
+                        <p className="text-xs text-muted-foreground italic">
+                          {viewingPhoto.status === "new" ? "Assign to trigger triage, or use the header actions above." : "Awaiting PM confirmation — use \"Confirm resolved\" above."}
+                        </p>
+                      )}
                       {(["open", "in_progress", "resolved"] as const).map(s => (
                         <button
                           key={s}
@@ -220,6 +251,7 @@ export function PhotoOverlay() {
           </div>
         );
       })()}
+      <CloseInvalidDialog photoId={closingIssueId} onClose={() => setClosingIssueId(null)} closeIssueAsInvalid={closeIssueAsInvalid} />
     </>
   );
 }

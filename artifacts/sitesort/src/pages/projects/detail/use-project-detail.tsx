@@ -33,7 +33,7 @@ return doc.type === "drawing" && doc.revision ? `Rev ${doc.revision}` : `v${doc.
 
 export type PermitItem = { id: string; type: string; description: string; startDate: string; expiryDate: string; dueDate?: string | null; status: string; responsibleUserId?: string; responsibleName?: string; overdue?: boolean; documentUrl?: string | null; archivedAt?: string | null };
 export type InvoiceItem = { id: string; direction: string; counterpartyName: string; description: string; amount: string; currency: string; dueDate: string; status: string; reference?: string | null; attachmentUrl?: string | null };
-export type PhotoItem = { id: string; uploadedBy: string; uploaderName: string; photoUrl: string | null; category: string; description: string | null; zone: string | null; referenceNumber: string; takenAt: string; status: string | null; resolvedAt: string | null; latitude?: number | null; longitude?: number | null; assignedToUserId?: string | null; assignedToName?: string | null; dueDate?: string | null; overdue?: boolean };
+export type PhotoItem = { id: string; uploadedBy: string; uploaderName: string; photoUrl: string | null; category: string; description: string | null; zone: string | null; referenceNumber: string; takenAt: string; status: string | null; resolvedAt: string | null; latitude?: number | null; longitude?: number | null; assignedToUserId?: string | null; assignedToName?: string | null; dueDate?: string | null; overdue?: boolean; closureReason?: string | null; closureNote?: string | null };
 export type MilestoneItem = { id: string; title: string; dueDate: string; completedAt: string | null; order: number };
 export type CheckinItem = { id: string; workerName: string; photoUrl: string; checkedInAt: string; lat: number | null; lng: number | null };
 export type ReportSummary = { id: string; reportDate: string; generatedAt: string; checkinCount: number; documentEventCount: number; photoCount: number; hasManagerReport?: boolean };
@@ -128,7 +128,7 @@ export function useProjectDetailState() {
   const [photoFormKey, setPhotoFormKey] = useState(0);
   const [viewingPhoto, setViewingPhoto] = useState<PhotoItem | null>(null);
   const [issueSearch, setIssueSearch] = useState("");
-  const [issueStatusFilter, setIssueStatusFilter] = useState<"all" | "open" | "in_progress" | "resolved" | "overdue">("all");
+  const [issueStatusFilter, setIssueStatusFilter] = useState<"all" | "new" | "open" | "in_progress" | "pending_confirmation" | "resolved" | "overdue">("all");
   const [activeTab, setActiveTab] = useState(defaultTab);
   const [todayNotes, setTodayNotes] = useState<DailyNote[]>([]);
   const [noteBody, setNoteBody] = useState("");
@@ -169,19 +169,30 @@ export function useProjectDetailState() {
   };
   // PATCH a site issue (status and/or assignment). Shared by the status pickers
   // and the assign-to / due-by controls so all updates refresh state the same way.
-  const patchPhoto = async (photoId: string, patch: { status?: string; assignedToUserId?: string | null; dueDate?: string | null }, errTitle = "Couldn't update issue") => {
+  const patchPhoto = async (photoId: string, patch: { status?: string; assignedToUserId?: string | null; dueDate?: string | null; closureReason?: string | null; closureNote?: string | null }, errTitle = "Couldn't update issue") => {
     const res = await fetch(`/api/photos/${photoId}`, {
       method: "PATCH",
       headers: authHeaders(),
       body: JSON.stringify(patch),
     });
-    if (!res.ok) { toast({ title: errTitle, variant: "destructive" }); return; }
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      toast({ title: errTitle, description: body?.message, variant: "destructive" });
+      return;
+    }
     const updated: PhotoItem = await res.json();
     setPhotos(prev => prev.map(p => p.id === photoId ? updated : p));
     setViewingPhoto(prev => prev?.id === photoId ? updated : prev);
   };
 
   const updatePhotoStatus = (photoId: string, status: string) => patchPhoto(photoId, { status }, "Couldn't update status");
+  // PM confirms an assignee's "pending_confirmation" issue as fully resolved.
+  const confirmIssueDone = (photoId: string) => patchPhoto(photoId, { status: "resolved" }, "Couldn't confirm issue");
+  // PM-only: close a "new"/"open" issue directly without going through triage,
+  // e.g. it was a duplicate report or turned out not to be a real issue.
+  // Server-side enforces the PM role gate + requires a non-empty note.
+  const closeIssueAsInvalid = (photoId: string, reason: "invalid" | "duplicate", note: string) =>
+    patchPhoto(photoId, { status: "resolved", closureReason: reason, closureNote: note }, "Couldn't close issue");
 
   const markInvoiceUnpaid = async (id: string) => {
     if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
@@ -367,7 +378,7 @@ export function useProjectDetailState() {
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
     const st = sp.get("issueStatus");
-    if (st && ["all", "open", "in_progress", "resolved", "overdue"].includes(st)) {
+    if (st && ["all", "new", "open", "in_progress", "pending_confirmation", "resolved", "overdue"].includes(st)) {
       setIssueStatusFilter(st as typeof issueStatusFilter);
     }
     const section = sp.get("section");
@@ -1384,6 +1395,8 @@ tr:last-child td{border-bottom:none}
     invoiceFullUrl,
     patchPhoto,
     updatePhotoStatus,
+    confirmIssueDone,
+    closeIssueAsInvalid,
     markInvoiceUnpaid,
     fetchMilestones,
     fetchPhotos,

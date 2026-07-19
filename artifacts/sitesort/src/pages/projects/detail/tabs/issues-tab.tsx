@@ -1,13 +1,15 @@
+import { useState } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronUp, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, PinOff, StickyNote, Send, Loader2, History, Archive, Paperclip } from "lucide-react";
+import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronUp, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, PinOff, StickyNote, Send, Loader2, History, Archive, Paperclip, Ban } from "lucide-react";
 import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { OverdueBadge } from "@/components/ui/overdue-badge";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDate, formatBytes, cn } from "@/lib/utils";
 import { useDetail } from "../context";
+import { CloseInvalidDialog } from "../dialogs/close-issue-dialog";
 
 export function IssuesTab() {
   const {
@@ -34,27 +36,38 @@ export function IssuesTab() {
     setIssueStatusFilter,
     openTab,
     updatePhotoStatus,
+    confirmIssueDone,
+    closeIssueAsInvalid,
     submitSnagPhoto,
     caps,
   } = useDetail();
+  const [closingIssueId, setClosingIssueId] = useState<string | null>(null);
 
   return (
     <>
         <TabsContent value="issues">
           {(() => {
-            const ISSUE_CATEGORY_LABEL: Record<string, string> = { snag: "Snag", safety_concern: "Safety Concern" };
+            const ISSUE_CATEGORY_LABEL: Record<string, string> = { snag: "Snag", safety_concern: "Safety Concern", work_completed: "Work Completed" };
             const ISSUE_CATEGORY_COLOUR: Record<string, string> = {
               snag: "bg-orange-50 border-orange-200 text-orange-700",
               safety_concern: "bg-red-50 border-red-200 text-red-700",
+              work_completed: "bg-teal-50 border-teal-200 text-teal-700",
             };
             const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
-              open:        { label: "Open",        cls: "bg-amber-50 border-amber-200 text-amber-700" },
-              in_progress: { label: "In Progress", cls: "bg-blue-50 border-blue-200 text-blue-700" },
-              resolved:    { label: "Resolved",    cls: "bg-emerald-50 border-emerald-200 text-emerald-700" },
+              new:                 { label: "New — awaiting triage", cls: "bg-violet-50 border-violet-200 text-violet-700" },
+              open:                { label: "Open",                  cls: "bg-amber-50 border-amber-200 text-amber-700" },
+              in_progress:         { label: "In Progress",            cls: "bg-blue-50 border-blue-200 text-blue-700" },
+              pending_confirmation:{ label: "Pending confirmation",   cls: "bg-cyan-50 border-cyan-200 text-cyan-700" },
+              resolved:            { label: "Resolved",               cls: "bg-emerald-50 border-emerald-200 text-emerald-700" },
             };
-            const issuePhotos = photos.filter(p => p.category === "snag" || p.category === "safety_concern");
+            // Snag/safety_concern always count; work_completed only counts once it
+            // has a status — portal-submitted reports always do, legacy dashboard
+            // progress photos tagged work_completed never do (status stays null).
+            const issuePhotos = photos.filter(p => p.category === "snag" || p.category === "safety_concern" || (p.category === "work_completed" && p.status != null));
+            const newCount = issuePhotos.filter(p => p.status === "new").length;
             const openCount = issuePhotos.filter(p => !p.status || p.status === "open").length;
             const inProgressCount = issuePhotos.filter(p => p.status === "in_progress").length;
+            const pendingConfirmationCount = issuePhotos.filter(p => p.status === "pending_confirmation").length;
             const resolvedCount = issuePhotos.filter(p => p.status === "resolved").length;
             const overdueCount = issuePhotos.filter(p => p.overdue).length;
             const filtered = issuePhotos.filter(p => {
@@ -155,8 +168,10 @@ export function IssuesTab() {
                 {/* Stats */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
                   {([
+                    { key: "new", count: newCount, label: "New", cls: "border-violet-200 bg-violet-50 dark:bg-violet-950/20 dark:border-violet-900 text-violet-700 hover:ring-violet-300" },
                     { key: "open", count: openCount, label: "Open", cls: "border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900 text-amber-700 hover:ring-amber-300" },
                     { key: "in_progress", count: inProgressCount, label: "In Progress", cls: "border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-900 text-blue-700 hover:ring-blue-300" },
+                    { key: "pending_confirmation", count: pendingConfirmationCount, label: "Pending confirmation", cls: "border-cyan-200 bg-cyan-50 dark:bg-cyan-950/20 dark:border-cyan-900 text-cyan-700 hover:ring-cyan-300" },
                     { key: "overdue", count: overdueCount, label: "Overdue", cls: "border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-900 text-red-700 hover:ring-red-300" },
                     { key: "resolved", count: resolvedCount, label: "Resolved", cls: "border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-900 text-emerald-700 hover:ring-emerald-300" },
                   ] as const).map(s => (
@@ -183,9 +198,9 @@ export function IssuesTab() {
                     <Input placeholder="Search issues…" className="pl-9" value={issueSearch} onChange={e => setIssueSearch(e.target.value)} />
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {(["all", "open", "in_progress", "overdue", "resolved"] as const).map(f => (
+                    {(["all", "new", "open", "in_progress", "pending_confirmation", "overdue", "resolved"] as const).map(f => (
                       <button key={f} onClick={() => setIssueStatusFilter(f)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${issueStatusFilter === f ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border hover:border-primary/40"}`}>
-                        {f === "all" ? "All" : f === "in_progress" ? "In Progress" : f.charAt(0).toUpperCase() + f.slice(1)}
+                        {f === "all" ? "All" : f === "in_progress" ? "In Progress" : f === "pending_confirmation" ? "Pending confirmation" : f.charAt(0).toUpperCase() + f.slice(1)}
                       </button>
                     ))}
                   </div>
@@ -232,14 +247,23 @@ export function IssuesTab() {
                               </div>
                             </div>
                             {caps.canManageProjects && (
-                              <div className="shrink-0 flex items-center" onClick={e => e.stopPropagation()}>
-                                {issue.status !== "resolved" ? (
+                              <div className="shrink-0 flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                {issue.status === "pending_confirmation" ? (
+                                  <button onClick={() => confirmIssueDone(issue.id)} title="Confirm as resolved" className="p-1.5 rounded-lg text-cyan-600 hover:text-emerald-600 hover:bg-emerald-50 transition-colors">
+                                    <CheckCircle2 className="w-4 h-4" />
+                                  </button>
+                                ) : issue.status !== "resolved" ? (
                                   <button onClick={() => updatePhotoStatus(issue.id, "resolved")} title="Mark resolved" className="p-1.5 rounded-lg text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50 transition-colors">
                                     <CheckCircle2 className="w-4 h-4" />
                                   </button>
                                 ) : (
                                   <button onClick={() => updatePhotoStatus(issue.id, "open")} title="Re-open" className="p-1.5 rounded-lg text-emerald-600 hover:text-muted-foreground hover:bg-muted transition-colors">
                                     <CheckCircle2 className="w-4 h-4" />
+                                  </button>
+                                )}
+                                {issue.status !== "resolved" && (
+                                  <button onClick={() => setClosingIssueId(issue.id)} title="Close as invalid/duplicate" className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
+                                    <Ban className="w-4 h-4" />
                                   </button>
                                 )}
                               </div>
@@ -254,6 +278,7 @@ export function IssuesTab() {
             );
           })()}
         </TabsContent>
+        <CloseInvalidDialog photoId={closingIssueId} onClose={() => setClosingIssueId(null)} closeIssueAsInvalid={closeIssueAsInvalid} />
     </>
   );
 }

@@ -18,6 +18,9 @@ export const activityLogTable = pgTable("activity_log", {
   action: text("action").notNull().default("view"),
   itemType: text("item_type"),
   itemId: text("item_id"),
+  // Small JSON-stringified diff for write actions, e.g. {"status":{"from":"new","to":"open"}}.
+  // Null for view/blocked rows.
+  metadata: text("metadata"),
   userAgent: text("user_agent"),
   ipAddress: text("ip_address"),
   createdAt: timestamp("created_at").notNull().defaultNow(),

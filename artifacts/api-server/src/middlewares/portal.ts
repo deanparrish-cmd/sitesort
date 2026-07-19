@@ -107,6 +107,44 @@ export async function requirePortalMember(req: Request, res: Response, next: Nex
   }
 }
 
+// Gate for a portal WRITE route. Runs AFTER requirePortalMember (needs
+// req.portalProjectId set). Re-selects the live project_members row and 403s
+// if the requested permission flag is off — enforced server-side so a member
+// without the grant can never write even by calling the endpoint directly.
+export function requirePortalPermission(permission: "canLogIssues" | "canUpdatePlantMaterials") {
+  return async function (req: Request, res: Response, next: NextFunction): Promise<void> {
+    const u = req.user;
+    if (!u || !req.portalProjectId) {
+      res.status(403).json({ error: "forbidden", message: "Portal access required." });
+      return;
+    }
+    try {
+      const rows = await db
+        .select({
+          canLogIssues: projectMembersTable.canLogIssues,
+          canUpdatePlantMaterials: projectMembersTable.canUpdatePlantMaterials,
+        })
+        .from(projectMembersTable)
+        .where(and(
+          eq(projectMembersTable.projectId, req.portalProjectId),
+          eq(projectMembersTable.userId, u.id),
+          isNotNull(projectMembersTable.personId),
+        ))
+        .limit(1);
+
+      if (rows.length === 0 || !rows[0][permission]) {
+        void logActivity({ userId: u.id, projectId: req.portalProjectId, companyId: u.companyId, section: "permission_denied", action: "blocked", req });
+        res.status(403).json({ error: "permission_denied", message: "You don't have permission to do this." });
+        return;
+      }
+      next();
+    } catch (err) {
+      req.log.error({ err }, "requirePortalPermission failed");
+      res.status(500).json({ error: "server_error", message: "Permission check failed." });
+    }
+  };
+}
+
 // Automatic activity audit for portal reads. Mounted once for the whole member
 // router so NO per-page manual logging is needed. Derives the section (and, for
 // document views, the item id) from the URL and appends one "view" row. `/me`

@@ -321,7 +321,78 @@ export async function ensureSchema(): Promise<void> {
       WHERE contact_first_name IS NULL
     `);
 
-    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols + portal_shares + portal_sessions + push_subscriptions + pending_pushes + subcontractor_documents + subcontractors/people.archived_at + people.first_name/last_name + subcontractors.contact_first_name/contact_last_name ready");
+    // Plant & Materials + portal write permissions foundation. Per-project write
+    // grants live on project_members (not people) since a person may be trusted
+    // differently on different jobs — mirrors how role/scheduled_days already
+    // live here. Defaults directly encode the requested ON/can-log-issues,
+    // OFF/can-update-plant-materials defaults, correct for existing-row backfill.
+    await pool.query(`ALTER TABLE project_members ADD COLUMN IF NOT EXISTS can_log_issues boolean NOT NULL DEFAULT true`);
+    await pool.query(`ALTER TABLE project_members ADD COLUMN IF NOT EXISTS can_update_plant_materials boolean NOT NULL DEFAULT false`);
+    // Small JSON diff for write actions (who changed what) — activity_log
+    // previously only ever recorded "view"/"blocked" reads with no diff concept.
+    await pool.query(`ALTER TABLE activity_log ADD COLUMN IF NOT EXISTS metadata text`);
+    // Portal-triage closure detail + audit timestamp on photos (site issues).
+    // "resolved" stays the sole terminal status; closure_reason/closure_note
+    // distinguish normal completion from PM-closed invalid/duplicate.
+    await pool.query(`ALTER TABLE photos ADD COLUMN IF NOT EXISTS closure_reason text`);
+    await pool.query(`ALTER TABLE photos ADD COLUMN IF NOT EXISTS closure_note text`);
+    await pool.query(`ALTER TABLE photos ADD COLUMN IF NOT EXISTS updated_at timestamp`);
+
+    // Plant & Materials — new tables. Flat/append-only attachments (no version
+    // chain, unlike the main document hub); distributions mirror
+    // document_distributions exactly, including its no-cascade FK quirk.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS plant_items (
+        id text PRIMARY KEY,
+        project_id text NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        name text NOT NULL,
+        category text NOT NULL,
+        quantity numeric,
+        unit text,
+        supplier_owner_text text,
+        supplier_contact_id text REFERENCES subcontractors(id),
+        location text,
+        status text NOT NULL DEFAULT 'on_site',
+        notes text,
+        on_site_date date,
+        expected_off_hire_date date,
+        created_by text NOT NULL REFERENCES users(id),
+        last_updated_by text REFERENCES users(id),
+        last_updated_at timestamp,
+        created_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS plant_items_project_idx ON plant_items (project_id)`);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS plant_item_attachments (
+        id text PRIMARY KEY,
+        plant_item_id text NOT NULL REFERENCES plant_items(id) ON DELETE CASCADE,
+        uploaded_by text NOT NULL REFERENCES users(id),
+        name text NOT NULL,
+        kind text NOT NULL,
+        file_url text NOT NULL,
+        file_size integer NOT NULL DEFAULT 0,
+        created_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS plant_item_attachments_item_idx ON plant_item_attachments (plant_item_id)`);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS plant_item_distributions (
+        id text PRIMARY KEY,
+        plant_item_id text NOT NULL REFERENCES plant_items(id),
+        user_id text NOT NULL REFERENCES users(id),
+        status text NOT NULL DEFAULT 'pending',
+        distributed_at timestamp NOT NULL DEFAULT now(),
+        viewed_at timestamp,
+        acknowledged_at timestamp,
+        signed_off_with_pin boolean NOT NULL DEFAULT false,
+        device_info text
+      )
+    `);
+
+    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols + portal_shares + portal_sessions + push_subscriptions + pending_pushes + subcontractor_documents + subcontractors/people.archived_at + people.first_name/last_name + subcontractors.contact_first_name/contact_last_name + project_members write-permission cols + activity_log.metadata + photos closure/updated_at cols + plant_items/plant_item_attachments/plant_item_distributions ready");
   } catch (err) {
     // Don't crash the server — membership lookups fall back to the home company.
     logger.error({ err }, "ensureSchema failed (continuing with home-company fallback)");

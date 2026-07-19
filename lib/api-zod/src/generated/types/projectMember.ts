@@ -17,5 +17,9 @@ export interface ProjectMember {
   name: string;
   role: ProjectMemberRole;
   complianceStatus: ProjectMemberComplianceStatus;
+  /** Portal write permission — can log a site issue. Default true. */
+  canLogIssues?: boolean;
+  /** Portal write permission — can update Plant & Materials item status/location/notes. Default false. */
+  canUpdatePlantMaterials?: boolean;
   addedAt: Date;
 }

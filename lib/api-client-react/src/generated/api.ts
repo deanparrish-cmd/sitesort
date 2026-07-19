@@ -26,9 +26,13 @@ import type {
   ComplianceOverview,
   CreatePermitRequest,
   CreatePersonRequest,
+  CreatePlantItemAttachmentRequest,
+  CreatePlantItemRequest,
+  CreatePortalSiteIssueBody,
   CreateProjectRequest,
   CreateSubcontractorDocumentRequest,
   CreateSubcontractorRequest,
+  DistributePlantItemBody,
   DistributeRequest,
   Distribution,
   Document,
@@ -42,6 +46,7 @@ import type {
   ListDocumentsParams,
   ListInHousePeopleParams,
   ListPhotosParams,
+  ListPlantItemsParams,
   ListSubcontractorDocumentsParams,
   ListSubcontractorPeopleParams,
   ListSubcontractorsParams,
@@ -53,6 +58,9 @@ import type {
   Permit,
   Person,
   Photo,
+  PlantItem,
+  PlantItemAttachment,
+  PlantItemDistribution,
   PortalContext,
   PortalDocument,
   PortalGeneral,
@@ -66,6 +74,7 @@ import type {
   PortalMemberDocument,
   PortalOverview,
   PortalPermit,
+  PortalPlantItem,
   PortalProgress,
   PortalPushKey,
   PortalPushSubscribeRequest,
@@ -93,14 +102,20 @@ import type {
   SubcontractorDocument,
   SuccessResponse,
   UpdateInsuranceRequest,
+  UpdateMemberPermissionsRequest,
   UpdatePermitRequest,
   UpdatePersonRequest,
+  UpdatePhotoRequest,
+  UpdatePlantItemRequest,
+  UpdatePortalPlantItemRequest,
+  UpdatePortalSiteIssueBody,
   UpdateProjectRequest,
   UpdateSubcontractorDocumentRequest,
   UpdateSubcontractorRequest,
   UpdateUserRequest,
   UploadDocumentRequest,
   UploadPortalMyDocumentBody,
+  UploadPortalPlantMaterialAttachmentBody,
   User,
 } from "./api.schemas";
 
@@ -1752,6 +1767,121 @@ export const useRemoveProjectMember = <
 };
 
 /**
+ * @summary Update a portal member's write permissions (manager-gated)
+ */
+export const getUpdateMemberPermissionsUrl = (
+  projectId: string,
+  memberId: string,
+) => {
+  return `/api/projects/${projectId}/members/${memberId}/permissions`;
+};
+
+export const updateMemberPermissions = async (
+  projectId: string,
+  memberId: string,
+  updateMemberPermissionsRequest: UpdateMemberPermissionsRequest,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(
+    getUpdateMemberPermissionsUrl(projectId, memberId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updateMemberPermissionsRequest),
+    },
+  );
+};
+
+export const getUpdateMemberPermissionsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateMemberPermissions>>,
+    TError,
+    {
+      projectId: string;
+      memberId: string;
+      data: BodyType<UpdateMemberPermissionsRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateMemberPermissions>>,
+  TError,
+  {
+    projectId: string;
+    memberId: string;
+    data: BodyType<UpdateMemberPermissionsRequest>;
+  },
+  TContext
+> => {
+  const mutationKey = ["updateMemberPermissions"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateMemberPermissions>>,
+    {
+      projectId: string;
+      memberId: string;
+      data: BodyType<UpdateMemberPermissionsRequest>;
+    }
+  > = (props) => {
+    const { projectId, memberId, data } = props ?? {};
+
+    return updateMemberPermissions(projectId, memberId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateMemberPermissionsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateMemberPermissions>>
+>;
+export type UpdateMemberPermissionsMutationBody =
+  BodyType<UpdateMemberPermissionsRequest>;
+export type UpdateMemberPermissionsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a portal member's write permissions (manager-gated)
+ */
+export const useUpdateMemberPermissions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateMemberPermissions>>,
+    TError,
+    {
+      projectId: string;
+      memberId: string;
+      data: BodyType<UpdateMemberPermissionsRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateMemberPermissions>>,
+  TError,
+  {
+    projectId: string;
+    memberId: string;
+    data: BodyType<UpdateMemberPermissionsRequest>;
+  },
+  TContext
+> => {
+  return useMutation(getUpdateMemberPermissionsMutationOptions(options));
+};
+
+/**
  * @summary Remove a subcontractor firm and all its people from a project in one action (manager-gated)
  */
 export const getRemoveProjectMemberCompanyUrl = (
@@ -3062,6 +3192,1207 @@ export function useListSubcontractorDocumentRevisions<
 }
 
 /**
+ * @summary List Plant & Materials items for a project
+ */
+export const getListPlantItemsUrl = (
+  projectId: string,
+  params?: ListPlantItemsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/projects/${projectId}/plant-items?${stringifiedParams}`
+    : `/api/projects/${projectId}/plant-items`;
+};
+
+export const listPlantItems = async (
+  projectId: string,
+  params?: ListPlantItemsParams,
+  options?: RequestInit,
+): Promise<PlantItem[]> => {
+  return customFetch<PlantItem[]>(getListPlantItemsUrl(projectId, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListPlantItemsQueryKey = (
+  projectId: string,
+  params?: ListPlantItemsParams,
+) => {
+  return [
+    `/api/projects/${projectId}/plant-items`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getListPlantItemsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listPlantItems>>,
+  TError = ErrorType<unknown>,
+>(
+  projectId: string,
+  params?: ListPlantItemsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listPlantItems>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListPlantItemsQueryKey(projectId, params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listPlantItems>>> = ({
+    signal,
+  }) => listPlantItems(projectId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!projectId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listPlantItems>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListPlantItemsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listPlantItems>>
+>;
+export type ListPlantItemsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List Plant & Materials items for a project
+ */
+
+export function useListPlantItems<
+  TData = Awaited<ReturnType<typeof listPlantItems>>,
+  TError = ErrorType<unknown>,
+>(
+  projectId: string,
+  params?: ListPlantItemsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listPlantItems>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListPlantItemsQueryOptions(
+    projectId,
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a Plant & Materials item (manager/site-worker gated)
+ */
+export const getCreatePlantItemUrl = (projectId: string) => {
+  return `/api/projects/${projectId}/plant-items`;
+};
+
+export const createPlantItem = async (
+  projectId: string,
+  createPlantItemRequest: CreatePlantItemRequest,
+  options?: RequestInit,
+): Promise<PlantItem> => {
+  return customFetch<PlantItem>(getCreatePlantItemUrl(projectId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createPlantItemRequest),
+  });
+};
+
+export const getCreatePlantItemMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPlantItem>>,
+    TError,
+    { projectId: string; data: BodyType<CreatePlantItemRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createPlantItem>>,
+  TError,
+  { projectId: string; data: BodyType<CreatePlantItemRequest> },
+  TContext
+> => {
+  const mutationKey = ["createPlantItem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createPlantItem>>,
+    { projectId: string; data: BodyType<CreatePlantItemRequest> }
+  > = (props) => {
+    const { projectId, data } = props ?? {};
+
+    return createPlantItem(projectId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreatePlantItemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createPlantItem>>
+>;
+export type CreatePlantItemMutationBody = BodyType<CreatePlantItemRequest>;
+export type CreatePlantItemMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a Plant & Materials item (manager/site-worker gated)
+ */
+export const useCreatePlantItem = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPlantItem>>,
+    TError,
+    { projectId: string; data: BodyType<CreatePlantItemRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createPlantItem>>,
+  TError,
+  { projectId: string; data: BodyType<CreatePlantItemRequest> },
+  TContext
+> => {
+  return useMutation(getCreatePlantItemMutationOptions(options));
+};
+
+/**
+ * @summary Update a Plant & Materials item (manager/site-worker gated)
+ */
+export const getUpdatePlantItemUrl = (projectId: string, itemId: string) => {
+  return `/api/projects/${projectId}/plant-items/${itemId}`;
+};
+
+export const updatePlantItem = async (
+  projectId: string,
+  itemId: string,
+  updatePlantItemRequest: UpdatePlantItemRequest,
+  options?: RequestInit,
+): Promise<PlantItem> => {
+  return customFetch<PlantItem>(getUpdatePlantItemUrl(projectId, itemId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updatePlantItemRequest),
+  });
+};
+
+export const getUpdatePlantItemMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updatePlantItem>>,
+    TError,
+    {
+      projectId: string;
+      itemId: string;
+      data: BodyType<UpdatePlantItemRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updatePlantItem>>,
+  TError,
+  { projectId: string; itemId: string; data: BodyType<UpdatePlantItemRequest> },
+  TContext
+> => {
+  const mutationKey = ["updatePlantItem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updatePlantItem>>,
+    {
+      projectId: string;
+      itemId: string;
+      data: BodyType<UpdatePlantItemRequest>;
+    }
+  > = (props) => {
+    const { projectId, itemId, data } = props ?? {};
+
+    return updatePlantItem(projectId, itemId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdatePlantItemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updatePlantItem>>
+>;
+export type UpdatePlantItemMutationBody = BodyType<UpdatePlantItemRequest>;
+export type UpdatePlantItemMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a Plant & Materials item (manager/site-worker gated)
+ */
+export const useUpdatePlantItem = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updatePlantItem>>,
+    TError,
+    {
+      projectId: string;
+      itemId: string;
+      data: BodyType<UpdatePlantItemRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updatePlantItem>>,
+  TError,
+  { projectId: string; itemId: string; data: BodyType<UpdatePlantItemRequest> },
+  TContext
+> => {
+  return useMutation(getUpdatePlantItemMutationOptions(options));
+};
+
+/**
+ * @summary Delete a Plant & Materials item (manager-gated only)
+ */
+export const getDeletePlantItemUrl = (projectId: string, itemId: string) => {
+  return `/api/projects/${projectId}/plant-items/${itemId}`;
+};
+
+export const deletePlantItem = async (
+  projectId: string,
+  itemId: string,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(
+    getDeletePlantItemUrl(projectId, itemId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getDeletePlantItemMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deletePlantItem>>,
+    TError,
+    { projectId: string; itemId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deletePlantItem>>,
+  TError,
+  { projectId: string; itemId: string },
+  TContext
+> => {
+  const mutationKey = ["deletePlantItem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deletePlantItem>>,
+    { projectId: string; itemId: string }
+  > = (props) => {
+    const { projectId, itemId } = props ?? {};
+
+    return deletePlantItem(projectId, itemId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeletePlantItemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deletePlantItem>>
+>;
+
+export type DeletePlantItemMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a Plant & Materials item (manager-gated only)
+ */
+export const useDeletePlantItem = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deletePlantItem>>,
+    TError,
+    { projectId: string; itemId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deletePlantItem>>,
+  TError,
+  { projectId: string; itemId: string },
+  TContext
+> => {
+  return useMutation(getDeletePlantItemMutationOptions(options));
+};
+
+/**
+ * @summary List a plant/material item's documents & photos
+ */
+export const getListPlantItemAttachmentsUrl = (
+  projectId: string,
+  itemId: string,
+) => {
+  return `/api/projects/${projectId}/plant-items/${itemId}/attachments`;
+};
+
+export const listPlantItemAttachments = async (
+  projectId: string,
+  itemId: string,
+  options?: RequestInit,
+): Promise<PlantItemAttachment[]> => {
+  return customFetch<PlantItemAttachment[]>(
+    getListPlantItemAttachmentsUrl(projectId, itemId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListPlantItemAttachmentsQueryKey = (
+  projectId: string,
+  itemId: string,
+) => {
+  return [
+    `/api/projects/${projectId}/plant-items/${itemId}/attachments`,
+  ] as const;
+};
+
+export const getListPlantItemAttachmentsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listPlantItemAttachments>>,
+  TError = ErrorType<unknown>,
+>(
+  projectId: string,
+  itemId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listPlantItemAttachments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListPlantItemAttachmentsQueryKey(projectId, itemId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listPlantItemAttachments>>
+  > = ({ signal }) =>
+    listPlantItemAttachments(projectId, itemId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(projectId && itemId),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listPlantItemAttachments>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListPlantItemAttachmentsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listPlantItemAttachments>>
+>;
+export type ListPlantItemAttachmentsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List a plant/material item's documents & photos
+ */
+
+export function useListPlantItemAttachments<
+  TData = Awaited<ReturnType<typeof listPlantItemAttachments>>,
+  TError = ErrorType<unknown>,
+>(
+  projectId: string,
+  itemId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listPlantItemAttachments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListPlantItemAttachmentsQueryOptions(
+    projectId,
+    itemId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Attach a document/photo to a plant/material item (file already uploaded via /api/upload)
+ */
+export const getCreatePlantItemAttachmentUrl = (
+  projectId: string,
+  itemId: string,
+) => {
+  return `/api/projects/${projectId}/plant-items/${itemId}/attachments`;
+};
+
+export const createPlantItemAttachment = async (
+  projectId: string,
+  itemId: string,
+  createPlantItemAttachmentRequest: CreatePlantItemAttachmentRequest,
+  options?: RequestInit,
+): Promise<PlantItemAttachment> => {
+  return customFetch<PlantItemAttachment>(
+    getCreatePlantItemAttachmentUrl(projectId, itemId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(createPlantItemAttachmentRequest),
+    },
+  );
+};
+
+export const getCreatePlantItemAttachmentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPlantItemAttachment>>,
+    TError,
+    {
+      projectId: string;
+      itemId: string;
+      data: BodyType<CreatePlantItemAttachmentRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createPlantItemAttachment>>,
+  TError,
+  {
+    projectId: string;
+    itemId: string;
+    data: BodyType<CreatePlantItemAttachmentRequest>;
+  },
+  TContext
+> => {
+  const mutationKey = ["createPlantItemAttachment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createPlantItemAttachment>>,
+    {
+      projectId: string;
+      itemId: string;
+      data: BodyType<CreatePlantItemAttachmentRequest>;
+    }
+  > = (props) => {
+    const { projectId, itemId, data } = props ?? {};
+
+    return createPlantItemAttachment(projectId, itemId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreatePlantItemAttachmentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createPlantItemAttachment>>
+>;
+export type CreatePlantItemAttachmentMutationBody =
+  BodyType<CreatePlantItemAttachmentRequest>;
+export type CreatePlantItemAttachmentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Attach a document/photo to a plant/material item (file already uploaded via /api/upload)
+ */
+export const useCreatePlantItemAttachment = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPlantItemAttachment>>,
+    TError,
+    {
+      projectId: string;
+      itemId: string;
+      data: BodyType<CreatePlantItemAttachmentRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createPlantItemAttachment>>,
+  TError,
+  {
+    projectId: string;
+    itemId: string;
+    data: BodyType<CreatePlantItemAttachmentRequest>;
+  },
+  TContext
+> => {
+  return useMutation(getCreatePlantItemAttachmentMutationOptions(options));
+};
+
+/**
+ * @summary Allocate a plant/material item to one or more team members (pending/viewed/acknowledged tracking)
+ */
+export const getDistributePlantItemUrl = (
+  projectId: string,
+  itemId: string,
+) => {
+  return `/api/projects/${projectId}/plant-items/${itemId}/distribute`;
+};
+
+export const distributePlantItem = async (
+  projectId: string,
+  itemId: string,
+  distributePlantItemBody: DistributePlantItemBody,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(
+    getDistributePlantItemUrl(projectId, itemId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(distributePlantItemBody),
+    },
+  );
+};
+
+export const getDistributePlantItemMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof distributePlantItem>>,
+    TError,
+    {
+      projectId: string;
+      itemId: string;
+      data: BodyType<DistributePlantItemBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof distributePlantItem>>,
+  TError,
+  {
+    projectId: string;
+    itemId: string;
+    data: BodyType<DistributePlantItemBody>;
+  },
+  TContext
+> => {
+  const mutationKey = ["distributePlantItem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof distributePlantItem>>,
+    {
+      projectId: string;
+      itemId: string;
+      data: BodyType<DistributePlantItemBody>;
+    }
+  > = (props) => {
+    const { projectId, itemId, data } = props ?? {};
+
+    return distributePlantItem(projectId, itemId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DistributePlantItemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof distributePlantItem>>
+>;
+export type DistributePlantItemMutationBody = BodyType<DistributePlantItemBody>;
+export type DistributePlantItemMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Allocate a plant/material item to one or more team members (pending/viewed/acknowledged tracking)
+ */
+export const useDistributePlantItem = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof distributePlantItem>>,
+    TError,
+    {
+      projectId: string;
+      itemId: string;
+      data: BodyType<DistributePlantItemBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof distributePlantItem>>,
+  TError,
+  {
+    projectId: string;
+    itemId: string;
+    data: BodyType<DistributePlantItemBody>;
+  },
+  TContext
+> => {
+  return useMutation(getDistributePlantItemMutationOptions(options));
+};
+
+/**
+ * @summary List a plant/material item's allocation tracking (pending/viewed/acknowledged per recipient)
+ */
+export const getListPlantItemDistributionsUrl = (
+  projectId: string,
+  itemId: string,
+) => {
+  return `/api/projects/${projectId}/plant-items/${itemId}/distributions`;
+};
+
+export const listPlantItemDistributions = async (
+  projectId: string,
+  itemId: string,
+  options?: RequestInit,
+): Promise<PlantItemDistribution[]> => {
+  return customFetch<PlantItemDistribution[]>(
+    getListPlantItemDistributionsUrl(projectId, itemId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListPlantItemDistributionsQueryKey = (
+  projectId: string,
+  itemId: string,
+) => {
+  return [
+    `/api/projects/${projectId}/plant-items/${itemId}/distributions`,
+  ] as const;
+};
+
+export const getListPlantItemDistributionsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listPlantItemDistributions>>,
+  TError = ErrorType<unknown>,
+>(
+  projectId: string,
+  itemId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listPlantItemDistributions>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListPlantItemDistributionsQueryKey(projectId, itemId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listPlantItemDistributions>>
+  > = ({ signal }) =>
+    listPlantItemDistributions(projectId, itemId, {
+      signal,
+      ...requestOptions,
+    });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(projectId && itemId),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listPlantItemDistributions>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListPlantItemDistributionsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listPlantItemDistributions>>
+>;
+export type ListPlantItemDistributionsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List a plant/material item's allocation tracking (pending/viewed/acknowledged per recipient)
+ */
+
+export function useListPlantItemDistributions<
+  TData = Awaited<ReturnType<typeof listPlantItemDistributions>>,
+  TError = ErrorType<unknown>,
+>(
+  projectId: string,
+  itemId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listPlantItemDistributions>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListPlantItemDistributionsQueryOptions(
+    projectId,
+    itemId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List Plant & Materials items shared with this portal member
+ */
+export const getGetPortalPlantMaterialsUrl = () => {
+  return `/api/portal/plant-materials`;
+};
+
+export const getPortalPlantMaterials = async (
+  options?: RequestInit,
+): Promise<PortalPlantItem[]> => {
+  return customFetch<PortalPlantItem[]>(getGetPortalPlantMaterialsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPortalPlantMaterialsQueryKey = () => {
+  return [`/api/portal/plant-materials`] as const;
+};
+
+export const getGetPortalPlantMaterialsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPortalPlantMaterials>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalPlantMaterials>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPortalPlantMaterialsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPortalPlantMaterials>>
+  > = ({ signal }) => getPortalPlantMaterials({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalPlantMaterials>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPortalPlantMaterialsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPortalPlantMaterials>>
+>;
+export type GetPortalPlantMaterialsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List Plant & Materials items shared with this portal member
+ */
+
+export function useGetPortalPlantMaterials<
+  TData = Awaited<ReturnType<typeof getPortalPlantMaterials>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalPlantMaterials>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPortalPlantMaterialsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get a Plant & Materials item detail (gated to shared items)
+ */
+export const getGetPortalPlantMaterialItemUrl = (itemId: string) => {
+  return `/api/portal/plant-materials/${itemId}`;
+};
+
+export const getPortalPlantMaterialItem = async (
+  itemId: string,
+  options?: RequestInit,
+): Promise<PortalPlantItem> => {
+  return customFetch<PortalPlantItem>(
+    getGetPortalPlantMaterialItemUrl(itemId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetPortalPlantMaterialItemQueryKey = (itemId: string) => {
+  return [`/api/portal/plant-materials/${itemId}`] as const;
+};
+
+export const getGetPortalPlantMaterialItemQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPortalPlantMaterialItem>>,
+  TError = ErrorType<unknown>,
+>(
+  itemId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPortalPlantMaterialItem>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPortalPlantMaterialItemQueryKey(itemId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPortalPlantMaterialItem>>
+  > = ({ signal }) =>
+    getPortalPlantMaterialItem(itemId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!itemId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalPlantMaterialItem>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPortalPlantMaterialItemQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPortalPlantMaterialItem>>
+>;
+export type GetPortalPlantMaterialItemQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get a Plant & Materials item detail (gated to shared items)
+ */
+
+export function useGetPortalPlantMaterialItem<
+  TData = Awaited<ReturnType<typeof getPortalPlantMaterialItem>>,
+  TError = ErrorType<unknown>,
+>(
+  itemId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPortalPlantMaterialItem>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPortalPlantMaterialItemQueryOptions(
+    itemId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update a plant/material item's status, location, or notes (requires can-update-plant-materials permission)
+ */
+export const getUpdatePortalPlantMaterialItemUrl = (itemId: string) => {
+  return `/api/portal/plant-materials/${itemId}`;
+};
+
+export const updatePortalPlantMaterialItem = async (
+  itemId: string,
+  updatePortalPlantItemRequest: UpdatePortalPlantItemRequest,
+  options?: RequestInit,
+): Promise<PortalPlantItem> => {
+  return customFetch<PortalPlantItem>(
+    getUpdatePortalPlantMaterialItemUrl(itemId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updatePortalPlantItemRequest),
+    },
+  );
+};
+
+export const getUpdatePortalPlantMaterialItemMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updatePortalPlantMaterialItem>>,
+    TError,
+    { itemId: string; data: BodyType<UpdatePortalPlantItemRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updatePortalPlantMaterialItem>>,
+  TError,
+  { itemId: string; data: BodyType<UpdatePortalPlantItemRequest> },
+  TContext
+> => {
+  const mutationKey = ["updatePortalPlantMaterialItem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updatePortalPlantMaterialItem>>,
+    { itemId: string; data: BodyType<UpdatePortalPlantItemRequest> }
+  > = (props) => {
+    const { itemId, data } = props ?? {};
+
+    return updatePortalPlantMaterialItem(itemId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdatePortalPlantMaterialItemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updatePortalPlantMaterialItem>>
+>;
+export type UpdatePortalPlantMaterialItemMutationBody =
+  BodyType<UpdatePortalPlantItemRequest>;
+export type UpdatePortalPlantMaterialItemMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a plant/material item's status, location, or notes (requires can-update-plant-materials permission)
+ */
+export const useUpdatePortalPlantMaterialItem = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updatePortalPlantMaterialItem>>,
+    TError,
+    { itemId: string; data: BodyType<UpdatePortalPlantItemRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updatePortalPlantMaterialItem>>,
+  TError,
+  { itemId: string; data: BodyType<UpdatePortalPlantItemRequest> },
+  TContext
+> => {
+  return useMutation(getUpdatePortalPlantMaterialItemMutationOptions(options));
+};
+
+/**
+ * @summary Upload a document/photo for a shared plant/material item (multipart; requires can-update-plant-materials permission)
+ */
+export const getUploadPortalPlantMaterialAttachmentUrl = (itemId: string) => {
+  return `/api/portal/plant-materials/${itemId}/attachments`;
+};
+
+export const uploadPortalPlantMaterialAttachment = async (
+  itemId: string,
+  uploadPortalPlantMaterialAttachmentBody: UploadPortalPlantMaterialAttachmentBody,
+  options?: RequestInit,
+): Promise<PlantItemAttachment> => {
+  const formData = new FormData();
+  formData.append(`file`, uploadPortalPlantMaterialAttachmentBody.file);
+  formData.append(`name`, uploadPortalPlantMaterialAttachmentBody.name);
+  if (uploadPortalPlantMaterialAttachmentBody.kind !== undefined) {
+    formData.append(`kind`, uploadPortalPlantMaterialAttachmentBody.kind);
+  }
+
+  return customFetch<PlantItemAttachment>(
+    getUploadPortalPlantMaterialAttachmentUrl(itemId),
+    {
+      ...options,
+      method: "POST",
+      body: formData,
+    },
+  );
+};
+
+export const getUploadPortalPlantMaterialAttachmentMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof uploadPortalPlantMaterialAttachment>>,
+    TError,
+    { itemId: string; data: BodyType<UploadPortalPlantMaterialAttachmentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof uploadPortalPlantMaterialAttachment>>,
+  TError,
+  { itemId: string; data: BodyType<UploadPortalPlantMaterialAttachmentBody> },
+  TContext
+> => {
+  const mutationKey = ["uploadPortalPlantMaterialAttachment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof uploadPortalPlantMaterialAttachment>>,
+    { itemId: string; data: BodyType<UploadPortalPlantMaterialAttachmentBody> }
+  > = (props) => {
+    const { itemId, data } = props ?? {};
+
+    return uploadPortalPlantMaterialAttachment(itemId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UploadPortalPlantMaterialAttachmentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof uploadPortalPlantMaterialAttachment>>
+>;
+export type UploadPortalPlantMaterialAttachmentMutationBody =
+  BodyType<UploadPortalPlantMaterialAttachmentBody>;
+export type UploadPortalPlantMaterialAttachmentMutationError =
+  ErrorType<ErrorResponse>;
+
+/**
+ * @summary Upload a document/photo for a shared plant/material item (multipart; requires can-update-plant-materials permission)
+ */
+export const useUploadPortalPlantMaterialAttachment = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof uploadPortalPlantMaterialAttachment>>,
+    TError,
+    { itemId: string; data: BodyType<UploadPortalPlantMaterialAttachmentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof uploadPortalPlantMaterialAttachment>>,
+  TError,
+  { itemId: string; data: BodyType<UploadPortalPlantMaterialAttachmentBody> },
+  TContext
+> => {
+  return useMutation(
+    getUploadPortalPlantMaterialAttachmentMutationOptions(options),
+  );
+};
+
+/**
  * @summary List permits for a project
  */
 export const getListPermitsUrl = (projectId: string) => {
@@ -3519,6 +4850,93 @@ export const useLogPhoto = <
   TContext
 > => {
   return useMutation(getLogPhotoMutationOptions(options));
+};
+
+/**
+ * @summary Update a photo/issue — status/assignee/due-date, or PM-only close as invalid/duplicate with a reason
+ */
+export const getUpdatePhotoUrl = (photoId: string) => {
+  return `/api/photos/${photoId}`;
+};
+
+export const updatePhoto = async (
+  photoId: string,
+  updatePhotoRequest: UpdatePhotoRequest,
+  options?: RequestInit,
+): Promise<Photo> => {
+  return customFetch<Photo>(getUpdatePhotoUrl(photoId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updatePhotoRequest),
+  });
+};
+
+export const getUpdatePhotoMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updatePhoto>>,
+    TError,
+    { photoId: string; data: BodyType<UpdatePhotoRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updatePhoto>>,
+  TError,
+  { photoId: string; data: BodyType<UpdatePhotoRequest> },
+  TContext
+> => {
+  const mutationKey = ["updatePhoto"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updatePhoto>>,
+    { photoId: string; data: BodyType<UpdatePhotoRequest> }
+  > = (props) => {
+    const { photoId, data } = props ?? {};
+
+    return updatePhoto(photoId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdatePhotoMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updatePhoto>>
+>;
+export type UpdatePhotoMutationBody = BodyType<UpdatePhotoRequest>;
+export type UpdatePhotoMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update a photo/issue — status/assignee/due-date, or PM-only close as invalid/duplicate with a reason
+ */
+export const useUpdatePhoto = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updatePhoto>>,
+    TError,
+    { photoId: string; data: BodyType<UpdatePhotoRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updatePhoto>>,
+  TError,
+  { photoId: string; data: BodyType<UpdatePhotoRequest> },
+  TContext
+> => {
+  return useMutation(getUpdatePhotoMutationOptions(options));
 };
 
 /**
@@ -4812,7 +6230,7 @@ export function useGetPortalTeam<
 }
 
 /**
- * @summary Site issues (snags + safety concerns)
+ * @summary Site issues (snags + safety concerns + work-completed reports) — shared items, plus any this member reported or is assigned to
  */
 export const getGetPortalSiteIssuesUrl = () => {
   return `/api/portal/site-issues`;
@@ -4863,7 +6281,7 @@ export type GetPortalSiteIssuesQueryResult = NonNullable<
 export type GetPortalSiteIssuesQueryError = ErrorType<unknown>;
 
 /**
- * @summary Site issues (snags + safety concerns)
+ * @summary Site issues (snags + safety concerns + work-completed reports) — shared items, plus any this member reported or is assigned to
  */
 
 export function useGetPortalSiteIssues<
@@ -4885,6 +6303,192 @@ export function useGetPortalSiteIssues<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Log a site issue (Snag / Safety Concern / Work Completed) — requires the can-log-issues permission; no assignee/due-date accepted
+ */
+export const getCreatePortalSiteIssueUrl = () => {
+  return `/api/portal/site-issues`;
+};
+
+export const createPortalSiteIssue = async (
+  createPortalSiteIssueBody: CreatePortalSiteIssueBody,
+  options?: RequestInit,
+): Promise<PortalIssue> => {
+  const formData = new FormData();
+  if (createPortalSiteIssueBody.photo !== undefined) {
+    formData.append(`photo`, createPortalSiteIssueBody.photo);
+  }
+  formData.append(`type`, createPortalSiteIssueBody.type);
+  if (createPortalSiteIssueBody.description !== undefined) {
+    formData.append(`description`, createPortalSiteIssueBody.description);
+  }
+  if (createPortalSiteIssueBody.zone !== undefined) {
+    formData.append(`zone`, createPortalSiteIssueBody.zone);
+  }
+
+  return customFetch<PortalIssue>(getCreatePortalSiteIssueUrl(), {
+    ...options,
+    method: "POST",
+    body: formData,
+  });
+};
+
+export const getCreatePortalSiteIssueMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPortalSiteIssue>>,
+    TError,
+    { data: BodyType<CreatePortalSiteIssueBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createPortalSiteIssue>>,
+  TError,
+  { data: BodyType<CreatePortalSiteIssueBody> },
+  TContext
+> => {
+  const mutationKey = ["createPortalSiteIssue"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createPortalSiteIssue>>,
+    { data: BodyType<CreatePortalSiteIssueBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createPortalSiteIssue(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreatePortalSiteIssueMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createPortalSiteIssue>>
+>;
+export type CreatePortalSiteIssueMutationBody =
+  BodyType<CreatePortalSiteIssueBody>;
+export type CreatePortalSiteIssueMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Log a site issue (Snag / Safety Concern / Work Completed) — requires the can-log-issues permission; no assignee/due-date accepted
+ */
+export const useCreatePortalSiteIssue = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPortalSiteIssue>>,
+    TError,
+    { data: BodyType<CreatePortalSiteIssueBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createPortalSiteIssue>>,
+  TError,
+  { data: BodyType<CreatePortalSiteIssueBody> },
+  TContext
+> => {
+  return useMutation(getCreatePortalSiteIssueMutationOptions(options));
+};
+
+/**
+ * @summary Mark an issue assigned to this member "Done — awaiting confirmation" (ownership-gated, no body)
+ */
+export const getUpdatePortalSiteIssueUrl = (issueId: string) => {
+  return `/api/portal/site-issues/${issueId}`;
+};
+
+export const updatePortalSiteIssue = async (
+  issueId: string,
+  updatePortalSiteIssueBody?: UpdatePortalSiteIssueBody,
+  options?: RequestInit,
+): Promise<PortalIssue> => {
+  return customFetch<PortalIssue>(getUpdatePortalSiteIssueUrl(issueId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updatePortalSiteIssueBody),
+  });
+};
+
+export const getUpdatePortalSiteIssueMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updatePortalSiteIssue>>,
+    TError,
+    { issueId: string; data: BodyType<UpdatePortalSiteIssueBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updatePortalSiteIssue>>,
+  TError,
+  { issueId: string; data: BodyType<UpdatePortalSiteIssueBody> },
+  TContext
+> => {
+  const mutationKey = ["updatePortalSiteIssue"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updatePortalSiteIssue>>,
+    { issueId: string; data: BodyType<UpdatePortalSiteIssueBody> }
+  > = (props) => {
+    const { issueId, data } = props ?? {};
+
+    return updatePortalSiteIssue(issueId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdatePortalSiteIssueMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updatePortalSiteIssue>>
+>;
+export type UpdatePortalSiteIssueMutationBody =
+  BodyType<UpdatePortalSiteIssueBody>;
+export type UpdatePortalSiteIssueMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Mark an issue assigned to this member "Done — awaiting confirmation" (ownership-gated, no body)
+ */
+export const useUpdatePortalSiteIssue = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updatePortalSiteIssue>>,
+    TError,
+    { issueId: string; data: BodyType<UpdatePortalSiteIssueBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updatePortalSiteIssue>>,
+  TError,
+  { issueId: string; data: BodyType<UpdatePortalSiteIssueBody> },
+  TContext
+> => {
+  return useMutation(getUpdatePortalSiteIssueMutationOptions(options));
+};
 
 /**
  * @summary Pinned site-board items + upcoming events

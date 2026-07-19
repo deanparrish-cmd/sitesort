@@ -144,6 +144,8 @@ router.get("/projects/:projectId/members", authenticate, async (req, res) => {
         scheduledDays: m.scheduledDays ?? [],
         siteStartTime: m.siteStartTime ?? null,
         siteEndTime: m.siteEndTime ?? null,
+        canLogIssues: m.canLogIssues,
+        canUpdatePlantMaterials: m.canUpdatePlantMaterials,
         addedAt: m.addedAt.toISOString(),
       };
     }));
@@ -305,6 +307,28 @@ router.patch("/projects/:projectId/members/:memberId/schedule", authenticate, as
   } catch (err) {
     req.log.error({ err }, "Update member schedule error");
     res.status(500).json({ error: "server_error", message: "Failed to update schedule" });
+  }
+});
+
+// PATCH /api/projects/:projectId/members/:memberId/permissions — grants a
+// portal member specific WRITE capabilities (log site issues / update plant &
+// materials). Manager-gated: only a PM/admin can change another member's
+// permissions. Enforced server-side on the actual write endpoints via
+// requirePortalPermission — this endpoint only flips the stored flag.
+router.patch("/projects/:projectId/members/:memberId/permissions", authenticate, async (req, res) => {
+  try {
+    if (!requireManager(req, res)) return;
+    const { canLogIssues, canUpdatePlantMaterials } = req.body as { canLogIssues?: boolean; canUpdatePlantMaterials?: boolean };
+    const updates: Partial<typeof projectMembersTable.$inferInsert> = {};
+    if (canLogIssues !== undefined) updates.canLogIssues = canLogIssues;
+    if (canUpdatePlantMaterials !== undefined) updates.canUpdatePlantMaterials = canUpdatePlantMaterials;
+    await db.update(projectMembersTable)
+      .set(updates)
+      .where(and(eq(projectMembersTable.id, req.params.memberId), eq(projectMembersTable.projectId, req.params.projectId)));
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Update member permissions error");
+    res.status(500).json({ error: "server_error", message: "Failed to update permissions" });
   }
 });
 

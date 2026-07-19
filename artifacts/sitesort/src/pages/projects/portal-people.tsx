@@ -2,13 +2,13 @@ import { useState } from "react";
 import {
   useListSubcontractorPeople, useCreateSubcontractorPerson, useDeletePerson,
   useListInHousePeople, useCreateInHousePerson, useCreatePortalInvite, useRevokeProjectInvite,
-  useResendPortalInvite, useUpdatePerson,
+  useResendPortalInvite, useUpdatePerson, useUpdateMemberPermissions,
   getListSubcontractorPeopleQueryKey, getListInHousePeopleQueryKey,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuCheckboxItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
@@ -16,7 +16,11 @@ import {
   RefreshCw, AlertTriangle, CheckCircle2,
 } from "lucide-react";
 
-type PortalStatus = { status: "not_invited" | "invited" | "member"; role?: string; inviteId?: string; lastActiveAt?: string; emailStatus?: "sent" | "failed"; emailLastSentAt?: string };
+type PortalStatus = {
+  status: "not_invited" | "invited" | "member"; role?: string; inviteId?: string; lastActiveAt?: string;
+  emailStatus?: "sent" | "failed"; emailLastSentAt?: string;
+  memberId?: string; canLogIssues?: boolean; canUpdatePlantMaterials?: boolean;
+};
 
 const RESEND_COOLDOWN_MS = 5 * 60 * 1000;
 
@@ -118,6 +122,7 @@ export function PortalInvitePill({
   const createInHouse = useCreateInHousePerson();
   const invite = useCreatePortalInvite();
   const revoke = useRevokeProjectInvite();
+  const updatePermissions = useUpdateMemberPermissions();
 
   const [prompting, setPrompting] = useState(false);
   const [emailInput, setEmailInput] = useState("");
@@ -154,6 +159,11 @@ export function PortalInvitePill({
     try { await revoke.mutateAsync({ projectId, inviteId: portal.inviteId }); refresh(); }
     catch { toast({ variant: "destructive", title: "Could not revoke access" }); }
   };
+  const togglePermission = async (field: "canLogIssues" | "canUpdatePlantMaterials", value: boolean) => {
+    if (!portal.memberId) return;
+    try { await updatePermissions.mutateAsync({ projectId, memberId: portal.memberId, data: { [field]: value } }); refresh(); }
+    catch { toast({ variant: "destructive", title: "Could not update permission" }); }
+  };
 
   if (!canManage) return null;
 
@@ -180,8 +190,25 @@ export function PortalInvitePill({
             <ShieldCheck className="w-3.5 h-3.5" /> Portal member
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-52">
+        <DropdownMenuContent align="end" className="w-64">
           <div className="px-2 py-1.5 text-xs text-muted-foreground">Last active {fmtRelative(portal.lastActiveAt)}</div>
+          <DropdownMenuSeparator />
+          <div className="px-2 py-1 text-[11px] font-medium text-muted-foreground">Portal write permissions</div>
+          <DropdownMenuCheckboxItem
+            checked={portal.canLogIssues ?? true}
+            onSelect={e => e.preventDefault()}
+            onCheckedChange={v => togglePermission("canLogIssues", v)}
+          >
+            Can log site issues
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem
+            checked={portal.canUpdatePlantMaterials ?? false}
+            onSelect={e => e.preventDefault()}
+            onCheckedChange={v => togglePermission("canUpdatePlantMaterials", v)}
+          >
+            Can update plant &amp; materials
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuSeparator />
           <DropdownMenuItem className="gap-2 cursor-pointer text-destructive focus:text-destructive" onClick={doRevoke}><Trash2 className="w-4 h-4" /> Revoke access</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

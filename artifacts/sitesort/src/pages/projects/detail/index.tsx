@@ -11,6 +11,7 @@ import { buildManagementTabs, buildActivityTabs } from "./tab-config";
 import { OverviewTab } from "./tabs/overview-tab";
 import { ProgressTab } from "./tabs/progress-tab";
 import { DocumentsTab } from "./tabs/documents-tab";
+import { PlantTab } from "./tabs/plant-tab";
 import { TeamTab } from "./tabs/team-tab";
 import { IssuesTab } from "./tabs/issues-tab";
 import { ReportsTab } from "./tabs/reports-tab";
@@ -130,6 +131,7 @@ function ProjectDetailInner() {
         <OverviewTab />
         <ProgressTab />
         <DocumentsTab />
+        <PlantTab />
         <TeamTab />
         <IssuesTab />
         <ReportsTab />

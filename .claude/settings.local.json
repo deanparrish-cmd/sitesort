@@ -58,7 +58,19 @@
       "Bash(curl -s -o /dev/null -w \"portal-my-documents: %{http_code}\\\\n\" https://www.sitesort.co.uk/api/portal/my-documents)",
       "Bash(curl -s -o /dev/null -w \"portal-sessions-logout: %{http_code}\\\\n\" -X POST https://www.sitesort.co.uk/api/portal/logout)",
       "Bash(curl -s https://www.sitesort.co.uk/api/health)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(xargs ls -la)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:18299/)",
+      "Bash(curl -s http://localhost:8080/api/health)",
+      "Bash(cp /tmp/claude-1000/-home-runner-workspace/2001e02c-846e-42bf-974f-9daaf2e8f115/scratchpad/plant-check.mjs /home/runner/workspace/.claude/skills/browser-check/plant-check.mjs)",
+      "Bash(node plant-check.mjs)",
+      "Bash(APP_URL=http://localhost:18299 node *)",
+      "Bash(LAYOUT_CHECK_URL=http://localhost:8080 node -e ' *)",
+      "Bash(APP_URL=http://localhost:8080 node plant-check.mjs)",
+      "Bash(APP_URL=http://localhost:8080 node *)",
+      "Bash(node -e ' *)",
+      "Bash(node *)",
+      "Bash(LAYOUT_VIEWPORTS=360,768 pnpm run check:layout)"
     ]
   },
   "hooks": {
