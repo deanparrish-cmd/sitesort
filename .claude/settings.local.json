@@ -90,7 +90,11 @@
       "Bash(git -C /home/runner/workspace status --porcelain .claude/skills/browser-check)",
       "Bash(pkill -f \"node --enable-source-maps ./dist/index.mjs\")",
       "Bash(curl -s \"https://raw.githubusercontent.com/deanparrish-cmd/sitesort/main/artifacts/api-server/src/routes/portal.ts\")",
-      "Bash(curl -s \"https://raw.githubusercontent.com/deanparrish-cmd/sitesort/main/artifacts/sitesort/src/components/ui/dictation-button.tsx\")"
+      "Bash(curl -s \"https://raw.githubusercontent.com/deanparrish-cmd/sitesort/main/artifacts/sitesort/src/components/ui/dictation-button.tsx\")",
+      "Bash(jobs -l)",
+      "Bash(curl -s -m 10 https://www.sitesort.co.uk/api/health)",
+      "Bash(curl -s -m 10 -o /dev/null -w \"%{http_code}\\\\n\" https://www.sitesort.co.uk/api/portal/daily-report)",
+      "Bash(curl -s -m 10 -o /dev/null -w \"%{http_code}\\\\n\" https://www.sitesort.co.uk/api/projects/x/members)"
     ]
   },
   "hooks": {
