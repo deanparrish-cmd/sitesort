@@ -1446,6 +1446,205 @@ export const UpdatePortalDailyReportResponse = zod
   .describe("A past day's site diary — always read-only in the portal.");
 
 /**
+ * @summary Everyone on this project a member can message — no email/phone exposed
+ */
+export const GetPortalMessageParticipantsResponseItem = zod
+  .object({
+    userId: zod.string(),
+    name: zod.string(),
+    companyLabel: zod
+      .string()
+      .describe(
+        '\"Self-employed\", \"In-house\", or the firm\'s company name.',
+      ),
+    role: zod.enum(["manager", "worker", "subcontractor"]),
+  })
+  .describe(
+    "A person a portal member can message — never includes email or phone, regardless of the contact-visibility toggle.",
+  );
+export const GetPortalMessageParticipantsResponse = zod.array(
+  GetPortalMessageParticipantsResponseItem,
+);
+
+/**
+ * @summary The project channel summary + this member's DM conversations
+ */
+export const GetPortalMessagesResponse = zod.object({
+  channel: zod.object({
+    lastMessage: zod.string().nullish(),
+    lastAt: zod.date().nullish(),
+    unread: zod.number(),
+  }),
+  conversations: zod.array(
+    zod.object({
+      otherUserId: zod.string(),
+      name: zod.string(),
+      companyLabel: zod.string(),
+      removedFromProject: zod
+        .boolean()
+        .describe(
+          "The other participant is no longer a member of this project — history remains, attributed.",
+        ),
+      lastMessage: zod.string(),
+      lastAt: zod.date(),
+      unread: zod.number(),
+    }),
+  ),
+});
+
+/**
+ * @summary The project-wide channel thread — visible to every member
+ */
+export const GetPortalChannelThreadQueryParams = zod.object({
+  before: zod.coerce.string().optional(),
+  after: zod.coerce.string().optional(),
+});
+
+export const GetPortalChannelThreadResponse = zod.object({
+  hasMore: zod.boolean(),
+  messages: zod.array(
+    zod
+      .object({
+        id: zod.string(),
+        senderId: zod.string(),
+        senderName: zod.string(),
+        senderRemoved: zod
+          .boolean()
+          .describe(
+            'The sender is no longer a member of this project — show \"(removed from project)\".',
+          ),
+        senderRole: zod
+          .string()
+          .nullish()
+          .describe("Only set on channel messages."),
+        content: zod.string(),
+        reactions: zod.array(
+          zod.object({
+            emoji: zod.string(),
+            count: zod.number(),
+            mine: zod.boolean(),
+          }),
+        ),
+        readAt: zod
+          .date()
+          .nullish()
+          .describe("DMs only — single\/double tick."),
+        createdAt: zod.date(),
+        mine: zod.boolean(),
+      })
+      .describe(
+        "A single DM or channel message, rendered in the portal. Text-only in v1 — no attachments\/invoice\/reply-to.",
+      ),
+  ),
+});
+
+/**
+ * @summary Post to the project channel
+ */
+export const SendPortalChannelMessageBody = zod.object({
+  content: zod.string(),
+});
+
+/**
+ * @summary Toggle an emoji reaction on a channel message
+ */
+export const ReactPortalChannelMessageParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const ReactPortalChannelMessageBody = zod.object({
+  emoji: zod.string(),
+});
+
+export const ReactPortalChannelMessageResponseItem = zod.object({
+  emoji: zod.string(),
+  count: zod.number(),
+  mine: zod.boolean(),
+});
+export const ReactPortalChannelMessageResponse = zod.array(
+  ReactPortalChannelMessageResponseItem,
+);
+
+/**
+ * @summary Thread with another project participant (both must be current members of this project)
+ */
+export const GetPortalDmThreadParams = zod.object({
+  otherUserId: zod.coerce.string(),
+});
+
+export const GetPortalDmThreadQueryParams = zod.object({
+  before: zod.coerce.string().optional(),
+  after: zod.coerce.string().optional(),
+});
+
+export const GetPortalDmThreadResponse = zod.object({
+  hasMore: zod.boolean(),
+  messages: zod.array(
+    zod
+      .object({
+        id: zod.string(),
+        senderId: zod.string(),
+        senderName: zod.string(),
+        senderRemoved: zod
+          .boolean()
+          .describe(
+            'The sender is no longer a member of this project — show \"(removed from project)\".',
+          ),
+        senderRole: zod
+          .string()
+          .nullish()
+          .describe("Only set on channel messages."),
+        content: zod.string(),
+        reactions: zod.array(
+          zod.object({
+            emoji: zod.string(),
+            count: zod.number(),
+            mine: zod.boolean(),
+          }),
+        ),
+        readAt: zod
+          .date()
+          .nullish()
+          .describe("DMs only — single\/double tick."),
+        createdAt: zod.date(),
+        mine: zod.boolean(),
+      })
+      .describe(
+        "A single DM or channel message, rendered in the portal. Text-only in v1 — no attachments\/invoice\/reply-to.",
+      ),
+  ),
+});
+
+/**
+ * @summary Send a DM to another current project participant
+ */
+export const SendPortalDmParams = zod.object({
+  otherUserId: zod.coerce.string(),
+});
+
+export const SendPortalDmBody = zod.object({
+  content: zod.string(),
+});
+
+/**
+ * @summary Toggle an emoji reaction on a DM
+ */
+export const ReactPortalDmParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const ReactPortalDmBody = zod.object({
+  emoji: zod.string(),
+});
+
+export const ReactPortalDmResponseItem = zod.object({
+  emoji: zod.string(),
+  count: zod.number(),
+  mine: zod.boolean(),
+});
+export const ReactPortalDmResponse = zod.array(ReactPortalDmResponseItem);
+
+/**
  * @summary List permits for a project
  */
 export const ListPermitsParams = zod.object({

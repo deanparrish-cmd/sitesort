@@ -17,6 +17,7 @@ import {
   getGetPortalDailyReportQueryKey, getGetPortalDailyReportHistoryQueryKey,
 } from "@workspace/api-client-react";
 import { DictationButton } from "@/components/ui/dictation-button";
+import { MessagesView } from "./messages-view";
 import { QRCodeSVG } from "qrcode.react";
 import { PortalLayout, SECTION_NAV } from "./layout";
 import { portalQueryClient, PORTAL_LIVE_REFETCH } from "./query-client";
@@ -1463,6 +1464,7 @@ function renderSection(section: string) {
     case "general": return <GeneralView />;
     case "plant-materials": return <PlantMaterialsView />;
     case "daily-report": return <DailyReportView />;
+    case "messages": return <MessagesView />;
     default: return <Empty>Section not found.</Empty>;
   }
 }

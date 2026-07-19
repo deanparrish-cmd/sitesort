@@ -41,6 +41,8 @@ import type {
   DocumentDetail,
   ErrorResponse,
   GenerateQrRequest,
+  GetPortalChannelThreadParams,
+  GetPortalDmThreadParams,
   GetProjectActivityParams,
   HealthStatus,
   InsuranceRecord,
@@ -79,6 +81,11 @@ import type {
   PortalLoginRequest,
   PortalLoginResponse,
   PortalMemberDocument,
+  PortalMessage,
+  PortalMessageParticipant,
+  PortalMessageReaction,
+  PortalMessageThread,
+  PortalMessagesSummary,
   PortalOverview,
   PortalPermit,
   PortalPlantItem,
@@ -97,6 +104,7 @@ import type {
   ProjectMember,
   QrCode,
   QrContent,
+  ReactPortalMessageRequest,
   RegisterRequest,
   RegisterResponse,
   RemoveCompanyMembersResponse,
@@ -104,6 +112,7 @@ import type {
   RemoveMemberResponse,
   ResendInviteResponse,
   ReviewMemberDocumentRequest,
+  SendPortalMessageRequest,
   Subcontractor,
   SubcontractorDetail,
   SubcontractorDocument,
@@ -4734,6 +4743,736 @@ export const useUpdatePortalDailyReport = <
   TContext
 > => {
   return useMutation(getUpdatePortalDailyReportMutationOptions(options));
+};
+
+/**
+ * @summary Everyone on this project a member can message — no email/phone exposed
+ */
+export const getGetPortalMessageParticipantsUrl = () => {
+  return `/api/portal/messages/participants`;
+};
+
+export const getPortalMessageParticipants = async (
+  options?: RequestInit,
+): Promise<PortalMessageParticipant[]> => {
+  return customFetch<PortalMessageParticipant[]>(
+    getGetPortalMessageParticipantsUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetPortalMessageParticipantsQueryKey = () => {
+  return [`/api/portal/messages/participants`] as const;
+};
+
+export const getGetPortalMessageParticipantsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPortalMessageParticipants>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalMessageParticipants>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPortalMessageParticipantsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPortalMessageParticipants>>
+  > = ({ signal }) =>
+    getPortalMessageParticipants({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalMessageParticipants>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPortalMessageParticipantsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPortalMessageParticipants>>
+>;
+export type GetPortalMessageParticipantsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Everyone on this project a member can message — no email/phone exposed
+ */
+
+export function useGetPortalMessageParticipants<
+  TData = Awaited<ReturnType<typeof getPortalMessageParticipants>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalMessageParticipants>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPortalMessageParticipantsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary The project channel summary + this member's DM conversations
+ */
+export const getGetPortalMessagesUrl = () => {
+  return `/api/portal/messages`;
+};
+
+export const getPortalMessages = async (
+  options?: RequestInit,
+): Promise<PortalMessagesSummary> => {
+  return customFetch<PortalMessagesSummary>(getGetPortalMessagesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPortalMessagesQueryKey = () => {
+  return [`/api/portal/messages`] as const;
+};
+
+export const getGetPortalMessagesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPortalMessages>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalMessages>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPortalMessagesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPortalMessages>>
+  > = ({ signal }) => getPortalMessages({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalMessages>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPortalMessagesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPortalMessages>>
+>;
+export type GetPortalMessagesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary The project channel summary + this member's DM conversations
+ */
+
+export function useGetPortalMessages<
+  TData = Awaited<ReturnType<typeof getPortalMessages>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalMessages>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPortalMessagesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary The project-wide channel thread — visible to every member
+ */
+export const getGetPortalChannelThreadUrl = (
+  params?: GetPortalChannelThreadParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/portal/messages/channel?${stringifiedParams}`
+    : `/api/portal/messages/channel`;
+};
+
+export const getPortalChannelThread = async (
+  params?: GetPortalChannelThreadParams,
+  options?: RequestInit,
+): Promise<PortalMessageThread> => {
+  return customFetch<PortalMessageThread>(
+    getGetPortalChannelThreadUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetPortalChannelThreadQueryKey = (
+  params?: GetPortalChannelThreadParams,
+) => {
+  return [`/api/portal/messages/channel`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetPortalChannelThreadQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPortalChannelThread>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetPortalChannelThreadParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPortalChannelThread>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPortalChannelThreadQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPortalChannelThread>>
+  > = ({ signal }) =>
+    getPortalChannelThread(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalChannelThread>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPortalChannelThreadQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPortalChannelThread>>
+>;
+export type GetPortalChannelThreadQueryError = ErrorType<unknown>;
+
+/**
+ * @summary The project-wide channel thread — visible to every member
+ */
+
+export function useGetPortalChannelThread<
+  TData = Awaited<ReturnType<typeof getPortalChannelThread>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetPortalChannelThreadParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPortalChannelThread>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPortalChannelThreadQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Post to the project channel
+ */
+export const getSendPortalChannelMessageUrl = () => {
+  return `/api/portal/messages/channel`;
+};
+
+export const sendPortalChannelMessage = async (
+  sendPortalMessageRequest: SendPortalMessageRequest,
+  options?: RequestInit,
+): Promise<PortalMessage> => {
+  return customFetch<PortalMessage>(getSendPortalChannelMessageUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(sendPortalMessageRequest),
+  });
+};
+
+export const getSendPortalChannelMessageMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendPortalChannelMessage>>,
+    TError,
+    { data: BodyType<SendPortalMessageRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof sendPortalChannelMessage>>,
+  TError,
+  { data: BodyType<SendPortalMessageRequest> },
+  TContext
+> => {
+  const mutationKey = ["sendPortalChannelMessage"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof sendPortalChannelMessage>>,
+    { data: BodyType<SendPortalMessageRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return sendPortalChannelMessage(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SendPortalChannelMessageMutationResult = NonNullable<
+  Awaited<ReturnType<typeof sendPortalChannelMessage>>
+>;
+export type SendPortalChannelMessageMutationBody =
+  BodyType<SendPortalMessageRequest>;
+export type SendPortalChannelMessageMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Post to the project channel
+ */
+export const useSendPortalChannelMessage = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendPortalChannelMessage>>,
+    TError,
+    { data: BodyType<SendPortalMessageRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof sendPortalChannelMessage>>,
+  TError,
+  { data: BodyType<SendPortalMessageRequest> },
+  TContext
+> => {
+  return useMutation(getSendPortalChannelMessageMutationOptions(options));
+};
+
+/**
+ * @summary Toggle an emoji reaction on a channel message
+ */
+export const getReactPortalChannelMessageUrl = (id: string) => {
+  return `/api/portal/messages/channel/${id}/react`;
+};
+
+export const reactPortalChannelMessage = async (
+  id: string,
+  reactPortalMessageRequest: ReactPortalMessageRequest,
+  options?: RequestInit,
+): Promise<PortalMessageReaction[]> => {
+  return customFetch<PortalMessageReaction[]>(
+    getReactPortalChannelMessageUrl(id),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(reactPortalMessageRequest),
+    },
+  );
+};
+
+export const getReactPortalChannelMessageMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reactPortalChannelMessage>>,
+    TError,
+    { id: string; data: BodyType<ReactPortalMessageRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reactPortalChannelMessage>>,
+  TError,
+  { id: string; data: BodyType<ReactPortalMessageRequest> },
+  TContext
+> => {
+  const mutationKey = ["reactPortalChannelMessage"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reactPortalChannelMessage>>,
+    { id: string; data: BodyType<ReactPortalMessageRequest> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return reactPortalChannelMessage(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReactPortalChannelMessageMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reactPortalChannelMessage>>
+>;
+export type ReactPortalChannelMessageMutationBody =
+  BodyType<ReactPortalMessageRequest>;
+export type ReactPortalChannelMessageMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Toggle an emoji reaction on a channel message
+ */
+export const useReactPortalChannelMessage = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reactPortalChannelMessage>>,
+    TError,
+    { id: string; data: BodyType<ReactPortalMessageRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof reactPortalChannelMessage>>,
+  TError,
+  { id: string; data: BodyType<ReactPortalMessageRequest> },
+  TContext
+> => {
+  return useMutation(getReactPortalChannelMessageMutationOptions(options));
+};
+
+/**
+ * @summary Thread with another project participant (both must be current members of this project)
+ */
+export const getGetPortalDmThreadUrl = (
+  otherUserId: string,
+  params?: GetPortalDmThreadParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/portal/messages/dm/${otherUserId}?${stringifiedParams}`
+    : `/api/portal/messages/dm/${otherUserId}`;
+};
+
+export const getPortalDmThread = async (
+  otherUserId: string,
+  params?: GetPortalDmThreadParams,
+  options?: RequestInit,
+): Promise<PortalMessageThread> => {
+  return customFetch<PortalMessageThread>(
+    getGetPortalDmThreadUrl(otherUserId, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetPortalDmThreadQueryKey = (
+  otherUserId: string,
+  params?: GetPortalDmThreadParams,
+) => {
+  return [
+    `/api/portal/messages/dm/${otherUserId}`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetPortalDmThreadQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPortalDmThread>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  otherUserId: string,
+  params?: GetPortalDmThreadParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPortalDmThread>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPortalDmThreadQueryKey(otherUserId, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPortalDmThread>>
+  > = ({ signal }) =>
+    getPortalDmThread(otherUserId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!otherUserId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalDmThread>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPortalDmThreadQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPortalDmThread>>
+>;
+export type GetPortalDmThreadQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Thread with another project participant (both must be current members of this project)
+ */
+
+export function useGetPortalDmThread<
+  TData = Awaited<ReturnType<typeof getPortalDmThread>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  otherUserId: string,
+  params?: GetPortalDmThreadParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPortalDmThread>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPortalDmThreadQueryOptions(
+    otherUserId,
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Send a DM to another current project participant
+ */
+export const getSendPortalDmUrl = (otherUserId: string) => {
+  return `/api/portal/messages/dm/${otherUserId}`;
+};
+
+export const sendPortalDm = async (
+  otherUserId: string,
+  sendPortalMessageRequest: SendPortalMessageRequest,
+  options?: RequestInit,
+): Promise<PortalMessage> => {
+  return customFetch<PortalMessage>(getSendPortalDmUrl(otherUserId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(sendPortalMessageRequest),
+  });
+};
+
+export const getSendPortalDmMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendPortalDm>>,
+    TError,
+    { otherUserId: string; data: BodyType<SendPortalMessageRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof sendPortalDm>>,
+  TError,
+  { otherUserId: string; data: BodyType<SendPortalMessageRequest> },
+  TContext
+> => {
+  const mutationKey = ["sendPortalDm"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof sendPortalDm>>,
+    { otherUserId: string; data: BodyType<SendPortalMessageRequest> }
+  > = (props) => {
+    const { otherUserId, data } = props ?? {};
+
+    return sendPortalDm(otherUserId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SendPortalDmMutationResult = NonNullable<
+  Awaited<ReturnType<typeof sendPortalDm>>
+>;
+export type SendPortalDmMutationBody = BodyType<SendPortalMessageRequest>;
+export type SendPortalDmMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Send a DM to another current project participant
+ */
+export const useSendPortalDm = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendPortalDm>>,
+    TError,
+    { otherUserId: string; data: BodyType<SendPortalMessageRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof sendPortalDm>>,
+  TError,
+  { otherUserId: string; data: BodyType<SendPortalMessageRequest> },
+  TContext
+> => {
+  return useMutation(getSendPortalDmMutationOptions(options));
+};
+
+/**
+ * @summary Toggle an emoji reaction on a DM
+ */
+export const getReactPortalDmUrl = (id: string) => {
+  return `/api/portal/messages/${id}/react`;
+};
+
+export const reactPortalDm = async (
+  id: string,
+  reactPortalMessageRequest: ReactPortalMessageRequest,
+  options?: RequestInit,
+): Promise<PortalMessageReaction[]> => {
+  return customFetch<PortalMessageReaction[]>(getReactPortalDmUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(reactPortalMessageRequest),
+  });
+};
+
+export const getReactPortalDmMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reactPortalDm>>,
+    TError,
+    { id: string; data: BodyType<ReactPortalMessageRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reactPortalDm>>,
+  TError,
+  { id: string; data: BodyType<ReactPortalMessageRequest> },
+  TContext
+> => {
+  const mutationKey = ["reactPortalDm"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reactPortalDm>>,
+    { id: string; data: BodyType<ReactPortalMessageRequest> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return reactPortalDm(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReactPortalDmMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reactPortalDm>>
+>;
+export type ReactPortalDmMutationBody = BodyType<ReactPortalMessageRequest>;
+export type ReactPortalDmMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Toggle an emoji reaction on a DM
+ */
+export const useReactPortalDm = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reactPortalDm>>,
+    TError,
+    { id: string; data: BodyType<ReactPortalMessageRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof reactPortalDm>>,
+  TError,
+  { id: string; data: BodyType<ReactPortalMessageRequest> },
+  TContext
+> => {
+  return useMutation(getReactPortalDmMutationOptions(options));
 };
 
 /**

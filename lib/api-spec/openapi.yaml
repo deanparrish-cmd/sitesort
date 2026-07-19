@@ -1222,6 +1222,189 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /portal/messages/participants:
+    get:
+      operationId: getPortalMessageParticipants
+      tags: [portal]
+      summary: Everyone on this project a member can message — no email/phone exposed
+      responses:
+        "200":
+          description: Participants
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PortalMessageParticipant"
+
+  /portal/messages:
+    get:
+      operationId: getPortalMessages
+      tags: [portal]
+      summary: The project channel summary + this member's DM conversations
+      responses:
+        "200":
+          description: Messages summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalMessagesSummary"
+
+  /portal/messages/channel:
+    get:
+      operationId: getPortalChannelThread
+      tags: [portal]
+      summary: The project-wide channel thread — visible to every member
+      parameters:
+        - name: before
+          in: query
+          schema:
+            type: string
+        - name: after
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Channel thread
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalMessageThread"
+    post:
+      operationId: sendPortalChannelMessage
+      tags: [portal]
+      summary: Post to the project channel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendPortalMessageRequest"
+      responses:
+        "201":
+          description: Sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalMessage"
+
+  /portal/messages/channel/{id}/react:
+    post:
+      operationId: reactPortalChannelMessage
+      tags: [portal]
+      summary: Toggle an emoji reaction on a channel message
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReactPortalMessageRequest"
+      responses:
+        "200":
+          description: Updated reactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PortalMessageReaction"
+
+  /portal/messages/dm/{otherUserId}:
+    get:
+      operationId: getPortalDmThread
+      tags: [portal]
+      summary: Thread with another project participant (both must be current members of this project)
+      parameters:
+        - name: otherUserId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: before
+          in: query
+          schema:
+            type: string
+        - name: after
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: DM thread
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalMessageThread"
+        "404":
+          description: Not a current member of this project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: sendPortalDm
+      tags: [portal]
+      summary: Send a DM to another current project participant
+      parameters:
+        - name: otherUserId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendPortalMessageRequest"
+      responses:
+        "201":
+          description: Sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalMessage"
+        "404":
+          description: Not a current member of this project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /portal/messages/{id}/react:
+    post:
+      operationId: reactPortalDm
+      tags: [portal]
+      summary: Toggle an emoji reaction on a DM
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReactPortalMessageRequest"
+      responses:
+        "200":
+          description: Updated reactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PortalMessageReaction"
+
   /projects/{projectId}/permits:
     get:
       operationId: listPermits
@@ -3727,6 +3910,139 @@ components:
       allOf:
         - $ref: "#/components/schemas/ManagerReportFields"
       description: Any subset of fields; omitted fields are left unchanged, empty string clears a field.
+
+    PortalMessageParticipant:
+      type: object
+      description: A person a portal member can message — never includes email or phone, regardless of the contact-visibility toggle.
+      properties:
+        userId:
+          type: string
+        name:
+          type: string
+        companyLabel:
+          type: string
+          description: "\"Self-employed\", \"In-house\", or the firm's company name."
+        role:
+          type: string
+          enum: [manager, worker, subcontractor]
+      required: [userId, name, companyLabel, role]
+
+    PortalConversationSummary:
+      type: object
+      properties:
+        otherUserId:
+          type: string
+        name:
+          type: string
+        companyLabel:
+          type: string
+        removedFromProject:
+          type: boolean
+          description: The other participant is no longer a member of this project — history remains, attributed.
+        lastMessage:
+          type: string
+        lastAt:
+          type: string
+          format: date-time
+        unread:
+          type: integer
+      required: [otherUserId, name, companyLabel, removedFromProject, lastMessage, lastAt, unread]
+
+    PortalChannelSummary:
+      type: object
+      properties:
+        lastMessage:
+          type: string
+          nullable: true
+        lastAt:
+          type: string
+          format: date-time
+          nullable: true
+        unread:
+          type: integer
+      required: [unread]
+
+    PortalMessagesSummary:
+      type: object
+      properties:
+        channel:
+          $ref: "#/components/schemas/PortalChannelSummary"
+        conversations:
+          type: array
+          items:
+            $ref: "#/components/schemas/PortalConversationSummary"
+      required: [channel, conversations]
+
+    PortalMessageReaction:
+      type: object
+      properties:
+        emoji:
+          type: string
+        count:
+          type: integer
+        mine:
+          type: boolean
+      required: [emoji, count, mine]
+
+    PortalMessage:
+      type: object
+      description: A single DM or channel message, rendered in the portal. Text-only in v1 — no attachments/invoice/reply-to.
+      properties:
+        id:
+          type: string
+        senderId:
+          type: string
+        senderName:
+          type: string
+        senderRemoved:
+          type: boolean
+          description: The sender is no longer a member of this project — show "(removed from project)".
+        senderRole:
+          type: string
+          nullable: true
+          description: Only set on channel messages.
+        content:
+          type: string
+        reactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PortalMessageReaction"
+        readAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: DMs only — single/double tick.
+        createdAt:
+          type: string
+          format: date-time
+        mine:
+          type: boolean
+      required: [id, senderId, senderName, senderRemoved, content, reactions, createdAt, mine]
+
+    PortalMessageThread:
+      type: object
+      properties:
+        hasMore:
+          type: boolean
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/PortalMessage"
+      required: [hasMore, messages]
+
+    SendPortalMessageRequest:
+      type: object
+      properties:
+        content:
+          type: string
+      required: [content]
+
+    ReactPortalMessageRequest:
+      type: object
+      properties:
+        emoji:
+          type: string
+      required: [emoji]
 
     Permit:
       type: object

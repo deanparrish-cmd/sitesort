@@ -10,13 +10,14 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, TrendingUp, Users, AlertTriangle, LayoutGrid,
   ShieldCheck, PencilRuler, FileText, FileCheck, HardHat, StickyNote, LogOut, Inbox,
-  Settings, Menu, X, FolderUp, Wrench, ClipboardList,
+  Settings, Menu, X, FolderUp, Wrench, ClipboardList, MessageSquare,
 } from "lucide-react";
 
 // The fixed portal nav — order + labels + icons. `key` matches the URL segment
 // (/portal/:key) AND the server section allowlist.
 export const SECTION_NAV: { key: string; label: string; Icon: typeof LayoutDashboard }[] = [
   { key: "overview", label: "Overview", Icon: LayoutDashboard },
+  { key: "messages", label: "Messages", Icon: MessageSquare },
   { key: "shared", label: "Shared with me", Icon: Inbox },
   { key: "progress", label: "Progress", Icon: TrendingUp },
   { key: "team", label: "Team", Icon: Users },

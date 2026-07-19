@@ -8,9 +8,8 @@ import {
   companyMembersTable,
 } from "@workspace/db/schema";
 import { eq, and, gt, lt, sql, desc, inArray, ne } from "drizzle-orm";
-import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
-import { sendNewMessageEmail } from "../lib/email";
+import { sendChannelMessage, toggleChannelMessageReaction, isAllowedReactionEmoji } from "../lib/messaging";
 
 const router: IRouter = Router();
 
@@ -344,56 +343,16 @@ router.post("/channels/:projectId/messages", authenticate, async (req, res) => {
       .limit(1);
     if (!project[0]) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
 
-    const id = generateId();
-    await db.insert(channelMessagesTable).values({
-      id,
-      projectId,
-      companyId,
-      senderId: userId,
-      content: content?.trim() || "",
-      ...(attachmentType && attachmentId ? { attachmentType, attachmentId } : {}),
-      ...(replyToId ? { replyToId } : {}),
+    const sent = await sendChannelMessage({
+      projectId, companyId, senderId: userId, content: content?.trim() || "",
+      attachmentType, attachmentId, replyToId,
     });
 
-    // Notify other project members
-    const senderRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
-    const senderName = senderRows[0]?.name ?? "Someone";
-    const preview = (content?.trim() ?? "").length > 80 ? content.trim().slice(0, 77) + "…" : (content?.trim() ?? (attachmentType ?? "Attachment"));
-
-    const members = await db.select({ userId: projectMembersTable.userId })
-      .from(projectMembersTable)
-      .where(and(eq(projectMembersTable.projectId, projectId), sql`${projectMembersTable.userId} != ${userId} AND ${projectMembersTable.userId} IS NOT NULL`));
-
-    // Fetch member email prefs in one batch
-    const memberIds = members.map(m => m.userId).filter(Boolean) as string[];
-    const memberUsers = memberIds.length
-      ? await db.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, emailNotifications: usersTable.emailNotifications })
-          .from(usersTable).where(inArray(usersTable.id, memberIds))
-      : [];
-    const memberMap = new Map(memberUsers.map(u => [u.id, u]));
-
-    for (const m of members) {
-      if (!m.userId) continue;
-      await db.insert(notificationsTable).values({
-        id: generateId(),
-        userId: m.userId,
-        type: "new_message",
-        title: `${senderName} in #${project[0].name}`,
-        message: preview,
-        relatedEntityId: projectId,
-        relatedEntityType: "project",
-      });
-      const mu = memberMap.get(m.userId);
-      if (mu?.emailNotifications) {
-        sendNewMessageEmail(mu.email, mu.name, senderName, preview, true, project[0].name).catch(() => {});
-      }
-    }
-
     res.status(201).json({
-      id, projectId, senderId: userId, senderName, senderRole: req.user!.role,
-      content: content?.trim() || "",
+      id: sent.id, projectId, senderId: userId, senderName: sent.senderName, senderRole: req.user!.role,
+      content: sent.content,
       attachmentType: attachmentType ?? null, attachmentId: attachmentId ?? null, attachment: null,
-      editedAt: null, createdAt: new Date().toISOString(), mine: true,
+      editedAt: null, createdAt: sent.createdAt.toISOString(), mine: true,
     });
   } catch (err) {
     req.log.error({ err }, "Send channel message error");
@@ -401,85 +360,32 @@ router.post("/channels/:projectId/messages", authenticate, async (req, res) => {
   }
 });
 
-// PATCH /api/channel-messages/:id — edit own message
-router.patch("/channel-messages/:id", authenticate, async (req, res) => {
-  try {
-    const { content } = req.body;
-    if (!content?.trim()) {
-      res.status(400).json({ error: "validation_error", message: "content is required" });
-      return;
-    }
-    const rows = await db.select().from(channelMessagesTable)
-      .where(and(eq(channelMessagesTable.id, req.params.id), eq(channelMessagesTable.senderId, req.user!.id)))
-      .limit(1);
-    if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Message not found or not yours" }); return; }
-    const now = new Date();
-    await db.update(channelMessagesTable)
-      .set({ content: content.trim(), editedAt: now })
-      .where(eq(channelMessagesTable.id, req.params.id));
-    res.json({ id: req.params.id, content: content.trim(), editedAt: now.toISOString() });
-  } catch (err) {
-    req.log.error({ err }, "Edit channel message error");
-    res.status(500).json({ error: "server_error", message: "Failed to edit message" });
-  }
-});
+// Channel messages are permanent — no PATCH/DELETE. Once a message is posted
+// to a project channel it's part of the record every member (including the
+// Team Portal) reads; a PM editing/deleting their own post after the fact
+// would undermine that. (Deliberate removal — this channel used to support
+// edit/delete like DMs; the Team Portal now reading this same channel changed
+// that trade-off.)
 
-// POST /api/channel-messages/:id/react — toggle a reaction
+// POST /api/channel-messages/:id/react — toggle a reaction. Tenant-scoped: the
+// message must belong to the caller's active company before it can be reacted
+// to, otherwise any authenticated user could react to another company's
+// messages (and read their reaction counts) by guessing ids.
 router.post("/channel-messages/:id/react", authenticate, async (req, res) => {
   try {
     const { emoji } = req.body;
-    const ALLOWED = ["👍", "✅", "👀", "❤️", "😂"];
-    if (!emoji || !ALLOWED.includes(emoji)) {
+    if (!emoji || !isAllowedReactionEmoji(emoji)) {
       res.status(400).json({ error: "validation_error", message: "Invalid emoji" });
       return;
     }
-    const userId = req.user!.id;
-    const channelMessageId = req.params.id;
-
-    // Tenant scoping: the message must belong to the user's active company —
-    // otherwise any authenticated user could react to (and read reaction
-    // counts of) another company's messages by guessing ids.
     const msg = await db.select({ id: channelMessagesTable.id }).from(channelMessagesTable)
-      .where(and(eq(channelMessagesTable.id, channelMessageId), eq(channelMessagesTable.companyId, req.user!.companyId)))
+      .where(and(eq(channelMessagesTable.id, req.params.id), eq(channelMessagesTable.companyId, req.user!.companyId)))
       .limit(1);
     if (!msg[0]) { res.status(404).json({ error: "not_found", message: "Message not found" }); return; }
-
-    const existing = await db.select().from(channelMessageReactionsTable)
-      .where(and(eq(channelMessageReactionsTable.channelMessageId, channelMessageId), eq(channelMessageReactionsTable.userId, userId), eq(channelMessageReactionsTable.emoji, emoji)))
-      .limit(1);
-
-    if (existing[0]) {
-      await db.delete(channelMessageReactionsTable)
-        .where(and(eq(channelMessageReactionsTable.channelMessageId, channelMessageId), eq(channelMessageReactionsTable.userId, userId), eq(channelMessageReactionsTable.emoji, emoji)));
-    } else {
-      await db.insert(channelMessageReactionsTable).values({ id: generateId(), channelMessageId, userId, emoji });
-    }
-
-    const all = await db.select().from(channelMessageReactionsTable).where(eq(channelMessageReactionsTable.channelMessageId, channelMessageId));
-    const grouped = new Map<string, { count: number; mine: boolean }>();
-    for (const r of all) {
-      const g = grouped.get(r.emoji) ?? { count: 0, mine: false };
-      grouped.set(r.emoji, { count: g.count + 1, mine: g.mine || r.userId === userId });
-    }
-    res.json(Array.from(grouped.entries()).map(([e, v]) => ({ emoji: e, ...v })));
+    res.json(await toggleChannelMessageReaction(req.params.id, req.user!.id, emoji));
   } catch (err) {
     req.log.error({ err }, "React to channel message error");
     res.status(500).json({ error: "server_error", message: "Failed to react" });
-  }
-});
-
-// DELETE /api/channel-messages/:id — delete own message
-router.delete("/channel-messages/:id", authenticate, async (req, res) => {
-  try {
-    const rows = await db.select().from(channelMessagesTable)
-      .where(and(eq(channelMessagesTable.id, req.params.id), eq(channelMessagesTable.senderId, req.user!.id)))
-      .limit(1);
-    if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Message not found or not yours" }); return; }
-    await db.delete(channelMessagesTable).where(eq(channelMessagesTable.id, req.params.id));
-    res.json({ success: true });
-  } catch (err) {
-    req.log.error({ err }, "Delete channel message error");
-    res.status(500).json({ error: "server_error", message: "Failed to delete message" });
   }
 });
 

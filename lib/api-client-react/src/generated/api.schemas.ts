@@ -936,6 +936,86 @@ export interface PortalDailyReportHistoryItem {
  */
 export type UpdatePortalDailyReportRequest = ManagerReportFields;
 
+export type PortalMessageParticipantRole =
+  (typeof PortalMessageParticipantRole)[keyof typeof PortalMessageParticipantRole];
+
+export const PortalMessageParticipantRole = {
+  manager: "manager",
+  worker: "worker",
+  subcontractor: "subcontractor",
+} as const;
+
+/**
+ * A person a portal member can message — never includes email or phone, regardless of the contact-visibility toggle.
+ */
+export interface PortalMessageParticipant {
+  userId: string;
+  name: string;
+  /** "Self-employed", "In-house", or the firm's company name. */
+  companyLabel: string;
+  role: PortalMessageParticipantRole;
+}
+
+export interface PortalConversationSummary {
+  otherUserId: string;
+  name: string;
+  companyLabel: string;
+  /** The other participant is no longer a member of this project — history remains, attributed. */
+  removedFromProject: boolean;
+  lastMessage: string;
+  lastAt: string;
+  unread: number;
+}
+
+export interface PortalChannelSummary {
+  lastMessage?: string | null;
+  lastAt?: string | null;
+  unread: number;
+}
+
+export interface PortalMessagesSummary {
+  channel: PortalChannelSummary;
+  conversations: PortalConversationSummary[];
+}
+
+export interface PortalMessageReaction {
+  emoji: string;
+  count: number;
+  mine: boolean;
+}
+
+/**
+ * A single DM or channel message, rendered in the portal. Text-only in v1 — no attachments/invoice/reply-to.
+ */
+export interface PortalMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  /** The sender is no longer a member of this project — show "(removed from project)". */
+  senderRemoved: boolean;
+  /** Only set on channel messages. */
+  senderRole?: string | null;
+  content: string;
+  reactions: PortalMessageReaction[];
+  /** DMs only — single/double tick. */
+  readAt?: string | null;
+  createdAt: string;
+  mine: boolean;
+}
+
+export interface PortalMessageThread {
+  hasMore: boolean;
+  messages: PortalMessage[];
+}
+
+export interface SendPortalMessageRequest {
+  content: string;
+}
+
+export interface ReactPortalMessageRequest {
+  emoji: string;
+}
+
 export type PermitType = (typeof PermitType)[keyof typeof PermitType];
 
 export const PermitType = {
@@ -1884,6 +1964,16 @@ export type UploadPortalPlantMaterialAttachmentBody = {
   file: Blob;
   name: string;
   kind?: UploadPortalPlantMaterialAttachmentBodyKind;
+};
+
+export type GetPortalChannelThreadParams = {
+  before?: string;
+  after?: string;
+};
+
+export type GetPortalDmThreadParams = {
+  before?: string;
+  after?: string;
 };
 
 export type ListPhotosParams = {
