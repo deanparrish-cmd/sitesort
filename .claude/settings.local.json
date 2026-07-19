@@ -70,7 +70,11 @@
       "Bash(APP_URL=http://localhost:8080 node *)",
       "Bash(node -e ' *)",
       "Bash(node *)",
-      "Bash(LAYOUT_VIEWPORTS=360,768 pnpm run check:layout)"
+      "Bash(LAYOUT_VIEWPORTS=360,768 pnpm run check:layout)",
+      "Bash(curl -s \"https://raw.githubusercontent.com/deanparrish-cmd/sitesort/main/artifacts/api-server/src/routes/plant-items.ts\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/deanparrish-cmd/sitesort/main/CLAUDE.md\")",
+      "Bash(curl -s \"https://api.github.com/repos/deanparrish-cmd/sitesort/commits/main\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" https://www.sitesort.co.uk/api/projects)"
     ]
   },
   "hooks": {
