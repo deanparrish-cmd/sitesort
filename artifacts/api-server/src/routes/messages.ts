@@ -1,10 +1,11 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { messagesTable, usersTable, notificationsTable, invoicesTable, documentsTable, photosTable, permitsTable, messageReactionsTable, companyMembersTable } from "@workspace/db/schema";
-import { eq, and, or, desc, lt, gt, sql, inArray } from "drizzle-orm";
+import { messagesTable, usersTable, notificationsTable, invoicesTable, documentsTable, photosTable, permitsTable, messageReactionsTable, companyMembersTable, projectsTable } from "@workspace/db/schema";
+import { eq, and, or, desc, lt, gt, sql, inArray, isNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
-import { sendNewMessageEmail } from "../lib/email";
+import { logActivity } from "../lib/activity";
+import { sendDirectMessage, toggleMessageReaction, isAllowedReactionEmoji } from "../lib/messaging";
 
 const router: IRouter = Router();
 
@@ -52,6 +53,9 @@ router.get("/messages/conversations", authenticate, async (req, res) => {
     const companyId = req.user!.companyId;
     const role = req.user!.role;
     const viewAll = req.query.all === "true" && (role === "admin" || role === "project_manager");
+    // Project oversight: when set, restricts the all-view to one project's
+    // messaging (the PM's new "Project Oversight" tab). Ignored outside viewAll.
+    const oversightProjectId = viewAll ? (req.query.projectId as string | undefined) : undefined;
 
     // Get all messages in company, grouped into conversations
     let rows;
@@ -59,7 +63,9 @@ router.get("/messages/conversations", authenticate, async (req, res) => {
       rows = await db
         .select()
         .from(messagesTable)
-        .where(eq(messagesTable.companyId, companyId))
+        .where(oversightProjectId
+          ? and(eq(messagesTable.companyId, companyId), eq(messagesTable.projectId, oversightProjectId))
+          : eq(messagesTable.companyId, companyId))
         .orderBy(desc(messagesTable.createdAt));
     } else {
       rows = await db
@@ -87,9 +93,19 @@ router.get("/messages/conversations", authenticate, async (req, res) => {
       : [];
     const userMap = Object.fromEntries(userRows.map(u => [u.id, { id: u.id, name: u.name, role: u.role ?? "" }]));
 
+    // Resolve project names for any project-scoped rows (a member on two
+    // projects with the same counterpart must show as two SEPARATE rows here,
+    // not merge — that's the grouping key below).
+    const projectIds = Array.from(new Set(rows.map(r => r.projectId).filter((x): x is string => !!x)));
+    const projectRows = projectIds.length
+      ? await db.select({ id: projectsTable.id, name: projectsTable.name }).from(projectsTable).where(inArray(projectsTable.id, projectIds))
+      : [];
+    const projectNameMap = Object.fromEntries(projectRows.map(p => [p.id, p.name]));
+
     // Group into conversations
     const convMap = new Map<string, {
       otherId: string; otherName: string; otherRole: string;
+      projectId: string | null; projectName: string | null;
       lastMessage: string; lastAt: string; unread: number;
     }>();
 
@@ -98,20 +114,25 @@ router.get("/messages/conversations", authenticate, async (req, res) => {
         ? `${msg.senderId}:${msg.recipientId}`  // unique pair key for all-view
         : msg.senderId === userId ? msg.recipientId : msg.senderId;
 
-      const convKey = viewAll
+      // Fold projectId into the grouping key so a legacy (company-wide) thread
+      // and a project-scoped thread with the SAME counterpart never merge, and
+      // two different projects with the same counterpart show as two rows.
+      const convKey = (viewAll
         ? [msg.senderId, msg.recipientId].sort().join(":")
-        : otherId as string;
+        : otherId as string) + ":" + (msg.projectId ?? "none");
 
       if (!convMap.has(convKey)) {
         const otherUserId = viewAll ? msg.senderId : otherId as string;
         const sender = userMap[msg.senderId];
         const recipient = userMap[msg.recipientId];
         convMap.set(convKey, {
-          otherId: convKey,
+          otherId: viewAll ? `${msg.senderId}:${msg.recipientId}` : otherId as string,
           otherName: viewAll
             ? `${sender?.name ?? "Unknown"} → ${recipient?.name ?? "Unknown"}`
             : userMap[otherId as string]?.name ?? "Unknown",
           otherRole: viewAll ? "" : userMap[otherId as string]?.role ?? "",
+          projectId: msg.projectId ?? null,
+          projectName: msg.projectId ? (projectNameMap[msg.projectId] ?? null) : null,
           lastMessage: messagePreview(msg),
           lastAt: msg.createdAt.toISOString(),
           unread: (!viewAll && isUnreadDmRow(msg, userId, companyId)) ? 1 : 0,
@@ -142,6 +163,12 @@ router.get("/messages/thread/:userId", authenticate, async (req, res) => {
     const before = req.query.before as string | undefined;
     const after = req.query.after as string | undefined;
     const PAGE_SIZE = 50;
+    // Disambiguates a legacy (company-wide) thread from a project-scoped one
+    // with the SAME counterpart — without this, they'd merge into one thread.
+    // Used both for a participant fetching their own project-scoped thread
+    // and for the PM oversight view (isViewAll + projectId together).
+    const queryProjectId = req.query.projectId as string | undefined;
+    const projectClause = queryProjectId ? eq(messagesTable.projectId, queryProjectId) : isNull(messagesTable.projectId);
 
     // Build base conversation filter
     const convFilter = isViewAll
@@ -149,6 +176,7 @@ router.get("/messages/thread/:userId", authenticate, async (req, res) => {
           const [a, b] = other.split(":");
           return and(
             eq(messagesTable.companyId, companyId),
+            projectClause,
             or(
               and(eq(messagesTable.senderId, a), eq(messagesTable.recipientId, b)),
               and(eq(messagesTable.senderId, b), eq(messagesTable.recipientId, a))
@@ -157,11 +185,21 @@ router.get("/messages/thread/:userId", authenticate, async (req, res) => {
         })()
       : and(
           eq(messagesTable.companyId, companyId),
+          projectClause,
           or(
             and(eq(messagesTable.senderId, me), eq(messagesTable.recipientId, other)),
             and(eq(messagesTable.senderId, other), eq(messagesTable.recipientId, me))
           )
         );
+
+    // Oversight audit trail: a PM viewing a conversation they are NOT a
+    // participant in is recorded — "PM access to DMs is itself recorded."
+    if (isViewAll && queryProjectId) {
+      void logActivity({
+        userId: me, projectId: queryProjectId, companyId,
+        section: "messages", action: "view", itemType: "conversation_oversight", itemId: other, req,
+      });
+    }
 
     // Resolve pivot date for cursor
     let pivotDate: Date | undefined;
@@ -299,6 +337,7 @@ router.get("/messages/thread/:userId", authenticate, async (req, res) => {
         senderId: m.senderId,
         senderName: userMap[m.senderId] ?? "Unknown",
         recipientId: m.recipientId,
+        projectId: m.projectId ?? null,
         content: m.content,
         invoiceId: m.invoiceId ?? null,
         invoice: m.invoiceId ? (invoiceMap[m.invoiceId] ?? null) : null,
@@ -330,16 +369,15 @@ router.get("/messages/thread/:userId", authenticate, async (req, res) => {
 // POST /api/messages — send a message
 router.post("/messages", authenticate, async (req, res) => {
   try {
-    const { recipientId, content, invoiceId, attachmentType, attachmentId, replyToId } = req.body;
+    const { recipientId, content, invoiceId, attachmentType, attachmentId, replyToId, projectId } = req.body;
     if (!recipientId || (!content?.trim() && !invoiceId && !attachmentId)) {
       res.status(400).json({ error: "validation_error", message: "recipientId and content, invoiceId, or attachment are required" });
       return;
     }
 
-    // Verify recipient is a member of the active company and fetch email prefs
-    const recipient = await db.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, emailNotifications: usersTable.emailNotifications })
+    // Verify recipient is a member of the active company
+    const recipient = await db.select({ id: usersTable.id })
       .from(companyMembersTable)
-      .innerJoin(usersTable, eq(usersTable.id, companyMembersTable.userId))
       .where(and(eq(companyMembersTable.userId, recipientId), eq(companyMembersTable.companyId, req.user!.companyId)))
       .limit(1);
     if (!recipient[0]) {
@@ -347,40 +385,18 @@ router.post("/messages", authenticate, async (req, res) => {
       return;
     }
 
-    const id = generateId();
-    await db.insert(messagesTable).values({
-      id,
-      companyId: req.user!.companyId,
-      senderId: req.user!.id,
-      recipientId,
-      content: content?.trim() || "",
-      ...(invoiceId ? { invoiceId } : {}),
-      ...(attachmentType && attachmentId ? { attachmentType, attachmentId } : {}),
-      ...(replyToId ? { replyToId } : {}),
+    const sent = await sendDirectMessage({
+      senderId: req.user!.id, recipientId, companyId: req.user!.companyId,
+      projectId: projectId ?? null, content: content?.trim() || "",
+      invoiceId, attachmentType, attachmentId, replyToId,
     });
 
-    // Fetch sender name for the notification
-    const senderRows = await db.select({ name: usersTable.name })
-      .from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
-    const senderName = senderRows[0]?.name ?? "Someone";
-    const preview = content?.trim().length > 80 ? content.trim().slice(0, 77) + "…" : content?.trim() ?? "";
-
-    await db.insert(notificationsTable).values({
-      id: generateId(),
-      userId: recipientId,
-      type: "new_message",
-      title: `New message from ${senderName}`,
-      message: preview,
-      relatedEntityId: req.user!.id,
-      relatedEntityType: "user",
+    res.status(201).json({
+      id: sent.id, recipientId, projectId: projectId ?? null, content: sent.content,
+      invoiceId: invoiceId ?? null, invoice: null,
+      attachmentType: attachmentType ?? null, attachmentId: attachmentId ?? null, attachment: null,
+      readAt: null, createdAt: sent.createdAt.toISOString(), mine: true,
     });
-
-    // Email notification if opted in
-    if (recipient[0].emailNotifications) {
-      sendNewMessageEmail(recipient[0].email, recipient[0].name, senderName, preview, false, "").catch(() => {});
-    }
-
-    res.status(201).json({ id, recipientId, content: content?.trim() || "", invoiceId: invoiceId ?? null, invoice: null, attachmentType: attachmentType ?? null, attachmentId: attachmentId ?? null, attachment: null, readAt: null, createdAt: new Date().toISOString(), mine: true });
   } catch (err) {
     req.log.error({ err }, "Send message error");
     res.status(500).json({ error: "server_error", message: "Failed to send message" });
@@ -437,7 +453,9 @@ router.post("/messages/broadcast", authenticate, async (req, res) => {
   }
 });
 
-// PATCH /api/messages/:id — edit own message
+// PATCH /api/messages/:id — edit own message. Project-scoped DMs are
+// permanent (Team Portal messaging is a record, not a draft) — only a legacy
+// company-wide DM (projectId null) can still be edited.
 router.patch("/messages/:id", authenticate, async (req, res) => {
   try {
     const { content } = req.body;
@@ -446,10 +464,10 @@ router.patch("/messages/:id", authenticate, async (req, res) => {
       return;
     }
     const rows = await db.select().from(messagesTable)
-      .where(and(eq(messagesTable.id, req.params.id), eq(messagesTable.senderId, req.user!.id)))
+      .where(and(eq(messagesTable.id, req.params.id), eq(messagesTable.senderId, req.user!.id), isNull(messagesTable.projectId)))
       .limit(1);
     if (!rows[0]) {
-      res.status(404).json({ error: "not_found", message: "Message not found or not yours" });
+      res.status(404).json({ error: "not_found", message: "Message not found, not yours, or permanent" });
       return;
     }
     const now = new Date();
@@ -463,14 +481,14 @@ router.patch("/messages/:id", authenticate, async (req, res) => {
   }
 });
 
-// DELETE /api/messages/:id — delete own message
+// DELETE /api/messages/:id — delete own message. Same permanence rule as PATCH.
 router.delete("/messages/:id", authenticate, async (req, res) => {
   try {
     const rows = await db.select().from(messagesTable)
-      .where(and(eq(messagesTable.id, req.params.id), eq(messagesTable.senderId, req.user!.id)))
+      .where(and(eq(messagesTable.id, req.params.id), eq(messagesTable.senderId, req.user!.id), isNull(messagesTable.projectId)))
       .limit(1);
     if (!rows[0]) {
-      res.status(404).json({ error: "not_found", message: "Message not found or not yours" });
+      res.status(404).json({ error: "not_found", message: "Message not found, not yours, or permanent" });
       return;
     }
     await db.delete(messagesTable).where(eq(messagesTable.id, req.params.id));
@@ -485,32 +503,11 @@ router.delete("/messages/:id", authenticate, async (req, res) => {
 router.post("/messages/:id/react", authenticate, async (req, res) => {
   try {
     const { emoji } = req.body;
-    const ALLOWED = ["👍", "✅", "👀", "❤️", "😂"];
-    if (!emoji || !ALLOWED.includes(emoji)) {
+    if (!emoji || !isAllowedReactionEmoji(emoji)) {
       res.status(400).json({ error: "validation_error", message: "Invalid emoji" });
       return;
     }
-    const userId = req.user!.id;
-    const messageId = req.params.id;
-
-    const existing = await db.select().from(messageReactionsTable)
-      .where(and(eq(messageReactionsTable.messageId, messageId), eq(messageReactionsTable.userId, userId), eq(messageReactionsTable.emoji, emoji)))
-      .limit(1);
-
-    if (existing[0]) {
-      await db.delete(messageReactionsTable)
-        .where(and(eq(messageReactionsTable.messageId, messageId), eq(messageReactionsTable.userId, userId), eq(messageReactionsTable.emoji, emoji)));
-    } else {
-      await db.insert(messageReactionsTable).values({ id: generateId(), messageId, userId, emoji });
-    }
-
-    const all = await db.select().from(messageReactionsTable).where(eq(messageReactionsTable.messageId, messageId));
-    const grouped = new Map<string, { count: number; mine: boolean }>();
-    for (const r of all) {
-      const g = grouped.get(r.emoji) ?? { count: 0, mine: false };
-      grouped.set(r.emoji, { count: g.count + 1, mine: g.mine || r.userId === userId });
-    }
-    res.json(Array.from(grouped.entries()).map(([e, v]) => ({ emoji: e, ...v })));
+    res.json(await toggleMessageReaction(req.params.id, req.user!.id, emoji));
   } catch (err) {
     req.log.error({ err }, "React to message error");
     res.status(500).json({ error: "server_error", message: "Failed to react" });
@@ -549,6 +546,12 @@ router.get("/messages/search", authenticate, async (req, res) => {
       : [];
     const userMap = Object.fromEntries(userRows.map(u => [u.id, u.name]));
 
+    const projectIds = Array.from(new Set(rows.map(r => r.projectId).filter((x): x is string => !!x)));
+    const projectRows = projectIds.length
+      ? await db.select({ id: projectsTable.id, name: projectsTable.name }).from(projectsTable).where(inArray(projectsTable.id, projectIds))
+      : [];
+    const projectNameMap = Object.fromEntries(projectRows.map(p => [p.id, p.name]));
+
     res.json(rows.map(m => ({
       id: m.id,
       content: m.content,
@@ -558,6 +561,8 @@ router.get("/messages/search", authenticate, async (req, res) => {
       recipientName: userMap[m.recipientId] ?? "Unknown",
       otherId: m.senderId === userId ? m.recipientId : m.senderId,
       otherName: m.senderId === userId ? (userMap[m.recipientId] ?? "Unknown") : (userMap[m.senderId] ?? "Unknown"),
+      projectId: m.projectId ?? null,
+      projectName: m.projectId ? (projectNameMap[m.projectId] ?? null) : null,
       createdAt: m.createdAt.toISOString(),
       mine: m.senderId === userId,
     })));

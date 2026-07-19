@@ -9,8 +9,9 @@ import {
   portalSharesTable, documentDistributionsTable, companiesTable, qrCodesTable,
   portalMemberDocumentsTable, notificationsTable, companyMembersTable,
   plantItemsTable, plantItemAttachmentsTable, personCertificationsTable, dailyReportsTable,
+  messagesTable, channelMessagesTable,
 } from "@workspace/db/schema";
-import { and, eq, inArray, isNull, isNotNull, desc, asc, gte, lt, count, max, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, isNotNull, desc, asc, gte, lt, count, max, or, ne } from "drizzle-orm";
 import { buildSiteBoardPayload } from "../lib/site-board";
 import { generateId } from "../lib/id";
 import { logActivity } from "../lib/activity";
@@ -38,7 +39,8 @@ const router: IRouter = Router();
 // The middleware chain every read-only member endpoint runs: verify the portal
 // token → enforce the server-side session (sliding 30d / 12h inactivity / revoke)
 // → re-check membership → auto-log the view. No per-page manual logging anywhere.
-const portalGuards = [authenticate, requirePortalSession, requirePortalMember, autoLogPortalActivity];
+// Exported so routes/portal-messages.ts uses this SAME chain, not a second copy.
+export const portalGuards = [authenticate, requirePortalSession, requirePortalMember, autoLogPortalActivity];
 
 // Only the token HASH is ever stored, so a DB leak can't be replayed.
 function hashToken(raw: string): string {
@@ -229,6 +231,18 @@ async function computeUnseen(userId: string, projectId: string): Promise<{ count
   // Site updates (daily notes) drive Overview + General badges.
   const notes = await db.select({ createdAt: dailyNotesTable.createdAt }).from(dailyNotesTable).where(eq(dailyNotesTable.projectId, projectId));
   for (const n of notes) { if (isAfter(n.createdAt, lv("overview"))) bump("overview"); if (isAfter(n.createdAt, lv("general"))) bump("general"); }
+
+  // Messages: unseen = DMs received (not sent by me) + channel posts not
+  // authored by me, newer than my last view of the Messages section. Not fed
+  // into the "shared" aggregate — messages aren't gated/shared content.
+  const [dmRows, channelRows] = await Promise.all([
+    db.select({ createdAt: messagesTable.createdAt }).from(messagesTable)
+      .where(and(eq(messagesTable.projectId, projectId), eq(messagesTable.recipientId, userId))),
+    db.select({ createdAt: channelMessagesTable.createdAt }).from(channelMessagesTable)
+      .where(and(eq(channelMessagesTable.projectId, projectId), ne(channelMessagesTable.senderId, userId))),
+  ]);
+  for (const m of dmRows) if (isAfter(m.createdAt, lv("messages"))) bump("messages");
+  for (const m of channelRows) if (isAfter(m.createdAt, lv("messages"))) bump("messages");
 
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   return { counts, total };

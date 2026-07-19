@@ -103,7 +103,8 @@
       "Bash(curl -s -X DELETE https://www.sitesort.co.uk/api/projects/__TRACKED_VAR__/portal-invites/__TRACKED_VAR__ -H 'Authorization: Bearer __CMDSUB_OUTPUT__')",
       "Bash(curl -s -X POST https://www.sitesort.co.uk/api/projects/__TRACKED_VAR__/invites/__TRACKED_VAR__/revoke -H 'Authorization: Bearer __CMDSUB_OUTPUT__')",
       "Bash(curl -s -X DELETE https://www.sitesort.co.uk/api/people/__TRACKED_VAR__ -H 'Authorization: Bearer __CMDSUB_OUTPUT__')",
-      "Bash(grep *)"
+      "Bash(grep *)",
+      "Bash(xargs cat)"
     ]
   },
   "hooks": {

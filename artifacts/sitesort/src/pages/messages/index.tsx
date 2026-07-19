@@ -16,9 +16,20 @@ type Conversation = {
   otherId: string;
   otherName: string;
   otherRole: string;
+  projectId: string | null;
+  projectName: string | null;
   lastMessage: string;
   lastAt: string;
   unread: number;
+  // Client-only, set only on the ACTIVE conversation: in oversight (viewAll)
+  // mode, `otherId` is a "senderId:recipientId" pair. If the current user is
+  // one of the two, `isMine` is set and `otherId` is rewritten to the OTHER
+  // person's plain id so the normal (non-viewAll) thread endpoint can be used
+  // and replying is enabled — "reading is universal, joining is explicit".
+  // `listId` preserves the original row identity for the active-row highlight
+  // and React key, since `otherId` above gets rewritten.
+  isMine?: boolean;
+  listId?: string;
 };
 
 type InvoiceAttachment = {
@@ -39,7 +50,7 @@ type PermitAttachment = { id: string; type: string; description: string; expiryD
 
 type Reaction = { emoji: string; count: number; mine: boolean };
 type ReplyTo = { id: string; senderName: string; content: string; attachmentType?: string | null };
-type DmSearchResult = { id: string; content: string; senderName: string; otherId: string; otherName: string; createdAt: string; mine: boolean };
+type DmSearchResult = { id: string; content: string; senderName: string; otherId: string; otherName: string; projectId: string | null; projectName: string | null; createdAt: string; mine: boolean };
 type ChannelSearchResult = { id: string; content: string; senderName: string; projectId: string; projectName: string; createdAt: string; mine: boolean };
 
 type Message = {
@@ -47,6 +58,7 @@ type Message = {
   senderId: string;
   senderName: string;
   recipientId: string;
+  projectId?: string | null;
   content: string;
   invoiceId?: string | null;
   invoice?: InvoiceAttachment | null;
@@ -161,6 +173,11 @@ export default function MessagesPage() {
   const isManager = me?.role === "admin" || me?.role === "project_manager";
 
   const [viewAll, setViewAll] = useState(false);
+  // Project Oversight: when set, the existing company-wide "View All" mode is
+  // additionally filtered to one project's messaging (channel visibility is
+  // already project-scoped, so this only affects the DM list/thread queries).
+  const [viewAllProjects, setViewAllProjects] = useState<{ id: string; name: string }[]>([]);
+  const [viewAllProjectId, setViewAllProjectId] = useState("");
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConv, setActiveConv] = useState<Conversation | null>(null);
   const [thread, setThread] = useState<Message[]>([]);
@@ -252,14 +269,21 @@ export default function MessagesPage() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchConversations = useCallback(async () => {
-    const r = await fetch(`/api/messages/conversations${viewAll ? "?all=true" : ""}`, { headers: authHeaders() });
+    const params = new URLSearchParams();
+    if (viewAll) { params.set("all", "true"); if (viewAllProjectId) params.set("projectId", viewAllProjectId); }
+    const qs = params.toString();
+    const r = await fetch(`/api/messages/conversations${qs ? `?${qs}` : ""}`, { headers: authHeaders() });
     if (r.ok) setConversations(await r.json());
-  }, [viewAll]);
+  }, [viewAll, viewAllProjectId]);
 
   const fetchThread = useCallback(async (conv: Conversation) => {
     setLoadingThread(true);
-    const params = viewAll ? "?all=true" : "";
-    const r = await fetch(`/api/messages/thread/${conv.otherId}${params}`, { headers: authHeaders() });
+    const oversightRead = viewAll && !conv.isMine;
+    const tParams = new URLSearchParams();
+    if (oversightRead) tParams.set("all", "true");
+    if (conv.projectId) tParams.set("projectId", conv.projectId);
+    const qs = tParams.toString();
+    const r = await fetch(`/api/messages/thread/${conv.otherId}${qs ? `?${qs}` : ""}`, { headers: authHeaders() });
     if (r.ok) {
       const data = await r.json();
       setThread(data.messages ?? data);
@@ -268,10 +292,11 @@ export default function MessagesPage() {
       // Reflect that immediately so both counts update together without a
       // refresh: clear this conversation's unread pill locally (mirrors what
       // fetchChannelThread already does for channels) and tell the sidebar to
-      // re-fetch its badge. Skipped in viewAll (oversight) mode, which never
-      // marks messages read.
-      if (!viewAll) {
-        setConversations(prev => prev.map(c => c.otherId === conv.otherId ? { ...c, unread: 0 } : c));
+      // re-fetch its badge. Skipped for a true oversight (non-participant)
+      // read, which never marks messages read.
+      if (!oversightRead) {
+        const listKey = conv.listId ?? conv.otherId;
+        setConversations(prev => prev.map(c => c.otherId === listKey ? { ...c, unread: 0 } : c));
         notifyMessagesRead();
       }
     }
@@ -304,7 +329,8 @@ export default function MessagesPage() {
     if (container) scrollAnchorRef.current = container.scrollHeight;
     skipScrollRef.current = true;
     const params = new URLSearchParams({ before: firstId });
-    if (viewAll) params.set("all", "true");
+    if (viewAll && !activeConv.isMine) params.set("all", "true");
+    if (activeConv.projectId) params.set("projectId", activeConv.projectId);
     const r = await fetch(`/api/messages/thread/${activeConv.otherId}?${params}`, { headers: authHeaders() });
     if (r.ok) {
       const data = await r.json();
@@ -354,7 +380,8 @@ export default function MessagesPage() {
       const lastId = threadRef.current[threadRef.current.length - 1]?.id;
       if (!lastId) return;
       const params = new URLSearchParams({ after: lastId });
-      if (viewAll) params.set("all", "true");
+      if (viewAll && !conv.isMine) params.set("all", "true");
+      if (conv.projectId) params.set("projectId", conv.projectId);
       const r = await fetch(`/api/messages/thread/${conv.otherId}?${params}`, { headers: authHeaders() });
       if (r.ok) {
         const data = await r.json();
@@ -470,7 +497,7 @@ export default function MessagesPage() {
     setPendingTo(null);
     if (match) {
       setNewChatOpen(false);
-      setActiveConv({ otherId: match.id, otherName: match.name, otherRole: match.role, lastMessage: "", lastAt: new Date().toISOString(), unread: 0 });
+      setActiveConv({ otherId: match.id, otherName: match.name, otherRole: match.role, projectId: null, projectName: null, lastMessage: "", lastAt: new Date().toISOString(), unread: 0 });
       setThread([]);
     } else {
       setNewChatOpen(true);
@@ -479,7 +506,10 @@ export default function MessagesPage() {
 
   async function sendMessage() {
     if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
-    if ((!draft.trim() && !attachedInvoice && !attachedItem) || !activeConv || sending || viewAll) return;
+    // Sending is blocked in pure oversight mode (viewAll on a conversation the
+    // PM isn't part of) — but allowed when the PM opened one of THEIR OWN
+    // conversations from the oversight list (isMine).
+    if ((!draft.trim() && !attachedInvoice && !attachedItem) || !activeConv || sending || (viewAll && !activeConv.isMine)) return;
     setSending(true);
     const r = await fetch("/api/messages", {
       method: "POST",
@@ -487,6 +517,7 @@ export default function MessagesPage() {
       body: JSON.stringify({
         recipientId: activeConv.otherId,
         content: draft.trim(),
+        ...(activeConv.projectId ? { projectId: activeConv.projectId } : {}),
         ...(attachedInvoice ? { invoiceId: attachedInvoice.id } : {}),
         ...(attachedItem ? { attachmentType: attachedItem.type, attachmentId: attachedItem.data.id } : {}),
         ...(replyingTo ? { replyToId: replyingTo.id } : {}),
@@ -526,30 +557,6 @@ export default function MessagesPage() {
       fetchChannels();
     }
     setSending(false);
-  }
-
-  async function saveChannelEdit(id: string) {
-    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
-    if (!editDraft.trim()) return;
-    const r = await fetch(`/api/channel-messages/${id}`, {
-      method: "PATCH",
-      headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ content: editDraft.trim() }),
-    });
-    if (r.ok) {
-      const data = await r.json();
-      setChannelThread(prev => prev.map(m => m.id === id ? { ...m, content: data.content, editedAt: data.editedAt } : m));
-      setEditingId(null);
-    }
-  }
-
-  async function deleteChannelMessage(id: string) {
-    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
-    const r = await fetch(`/api/channel-messages/${id}`, { method: "DELETE", headers: authHeaders() });
-    if (r.ok) {
-      setChannelThread(prev => prev.filter(m => m.id !== id));
-      setConfirmDeleteId(null);
-    }
   }
 
   function startEdit(msg: Message) {
@@ -729,6 +736,8 @@ export default function MessagesPage() {
       otherId: user.id,
       otherName: user.name,
       otherRole: user.role,
+      projectId: null,
+      projectName: null,
       lastMessage: "",
       lastAt: new Date().toISOString(),
       unread: 0,
@@ -736,6 +745,12 @@ export default function MessagesPage() {
     setActiveConv(conv);
     setThread([]);
   }
+
+  // A genuinely read-only oversight view: viewAll is on AND the currently
+  // open conversation is one the PM is NOT a participant in. When the PM
+  // opened one of their OWN conversations from the oversight list (isMine),
+  // it renders and behaves exactly like a normal DM thread.
+  const oversightReadOnly = viewAll && !activeConv?.isMine;
 
   return (
     <SidebarLayout>
@@ -748,7 +763,15 @@ export default function MessagesPage() {
             <Button
               variant={viewAll ? "default" : "outline"}
               size="sm"
-              onClick={() => { setViewAll(v => !v); setActiveConv(null); setThread([]); }}
+              onClick={() => {
+                setViewAll(v => !v); setActiveConv(null); setThread([]); setViewAllProjectId("");
+                if (viewAllProjects.length === 0) {
+                  fetch("/api/projects", { headers: authHeaders() })
+                    .then(r => r.ok ? r.json() : [])
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    .then((all: any[]) => setViewAllProjects(all.filter((p: any) => p.status === "active")));
+                }
+              }}
               className="gap-2"
             >
               <Eye className="w-4 h-4" />
@@ -766,7 +789,7 @@ export default function MessagesPage() {
             <div className="p-3 border-b bg-muted/30 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-sm">
-                  {viewAll ? "All Company Chats" : "Conversations"}
+                  {viewAll ? "Project Oversight" : "Conversations"}
                 </span>
                 {!viewAll && (
                   <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => setNewChatOpen(true)}>
@@ -774,6 +797,21 @@ export default function MessagesPage() {
                   </Button>
                 )}
               </div>
+              {viewAll && (
+                <div className="space-y-1">
+                  <select
+                    value={viewAllProjectId}
+                    onChange={e => { setViewAllProjectId(e.target.value); setActiveConv(null); setThread([]); }}
+                    className="w-full text-xs rounded-lg border bg-background px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    <option value="">All projects (channels + DMs)</option>
+                    {viewAllProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                  <p className="text-[10px] text-muted-foreground px-0.5">
+                    Read-only oversight — reading a conversation you're not part of is logged. You can only reply where you're a participant.
+                  </p>
+                </div>
+              )}
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                 <input
@@ -946,7 +984,7 @@ export default function MessagesPage() {
                               key={r.id}
                               onClick={() => {
                                 setSearchQuery("");
-                                const conv: Conversation = { otherId: r.otherId, otherName: r.otherName, otherRole: "", lastMessage: r.content, lastAt: r.createdAt, unread: 0 };
+                                const conv: Conversation = { otherId: r.otherId, otherName: r.otherName, otherRole: "", projectId: r.projectId, projectName: r.projectName, lastMessage: r.content, lastAt: r.createdAt, unread: 0 };
                                 setActiveConv(conv);
                                 setActiveChannel(null);
                                 setDmHasMore(false);
@@ -1015,14 +1053,18 @@ export default function MessagesPage() {
                 )
               ) : null}
 
-              {/* Project channels */}
-              {!searchQuery && !viewAll && channels.length > 0 && (
+              {/* Project channels — in oversight (viewAll) mode, only shown once a
+                  specific project is selected (a PM/admin already sees every
+                  project's channel in normal mode, so this is just a
+                  convenience — one project's full record, channel + DMs, in
+                  one place). */}
+              {!searchQuery && (!viewAll || viewAllProjectId) && (viewAll ? channels.filter(ch => ch.projectId === viewAllProjectId) : channels).length > 0 && (
                 <>
                   <div className="px-4 py-2 bg-muted/20 flex items-center gap-1.5">
                     <Hash className="w-3 h-3 text-muted-foreground" />
-                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Project Channels</span>
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Project Channel</span>
                   </div>
-                  {channels.map(ch => (
+                  {(viewAll ? channels.filter(ch => ch.projectId === viewAllProjectId) : channels).map(ch => (
                     <button key={ch.projectId} onClick={() => { setActiveChannel(ch); setActiveConv(null); setChannelHasMore(false); setQuickReplyOpen(false); }}
                       className={cn(
                         "w-full text-left px-4 py-3 hover:bg-muted/50 transition-colors",
@@ -1061,10 +1103,26 @@ export default function MessagesPage() {
                 <div className="px-4 py-3 text-xs text-muted-foreground">No direct messages yet.</div>
               ) : !searchQuery ? (
                 conversations.map(conv => (
-                  <button key={conv.otherId} onClick={() => { setActiveConv(conv); setQuickReplyOpen(false); }}
+                  <button key={conv.otherId} onClick={() => {
+                    // In oversight (viewAll) mode, otherId is a "senderId:recipientId"
+                    // pair — if the current user is one of the two, open it as THEIR
+                    // OWN conversation (normal thread endpoint, compose bar enabled)
+                    // instead of the read-only pair view.
+                    if (viewAll && me) {
+                      const pair = conv.otherId.split(":");
+                      if (pair.includes(me.id)) {
+                        const other = pair.find(id => id !== me.id)!;
+                        setActiveConv({ ...conv, otherId: other, isMine: true, listId: conv.otherId });
+                        setQuickReplyOpen(false);
+                        return;
+                      }
+                    }
+                    setActiveConv({ ...conv, isMine: false, listId: conv.otherId });
+                    setQuickReplyOpen(false);
+                  }}
                     className={cn(
                       "w-full text-left px-4 py-3 hover:bg-muted/50 transition-colors",
-                      activeConv?.otherId === conv.otherId && "bg-muted"
+                      (activeConv?.listId ?? activeConv?.otherId) === conv.otherId && "bg-muted"
                     )}>
                     <div className="flex items-start gap-3">
                       <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center text-[11px] font-bold text-primary shrink-0">
@@ -1075,11 +1133,18 @@ export default function MessagesPage() {
                           <p className="font-semibold text-sm truncate">{conv.otherName}</p>
                           <span className="text-[10px] text-muted-foreground shrink-0">{timeLabel(conv.lastAt)}</span>
                         </div>
-                        {conv.otherRole && (
-                          <span className={cn("text-[9px] px-1.5 py-0.5 rounded font-semibold capitalize", ROLE_COLOURS[conv.otherRole] ?? "bg-muted text-muted-foreground")}>
-                            {conv.otherRole.replace(/_/g, " ")}
-                          </span>
-                        )}
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {conv.otherRole && (
+                            <span className={cn("text-[9px] px-1.5 py-0.5 rounded font-semibold capitalize", ROLE_COLOURS[conv.otherRole] ?? "bg-muted text-muted-foreground")}>
+                              {conv.otherRole.replace(/_/g, " ")}
+                            </span>
+                          )}
+                          {conv.projectName && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 truncate max-w-[8rem]">
+                              {conv.projectName}
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs text-muted-foreground truncate mt-0.5">{conv.lastMessage}</p>
                       </div>
                       {conv.unread > 0 && (
@@ -1109,7 +1174,7 @@ export default function MessagesPage() {
                     <p className="text-[10px] text-muted-foreground capitalize truncate">{activeConv.otherRole.replace(/_/g, " ")}</p>
                   )}
                 </div>
-                {viewAll && (
+                {oversightReadOnly && (
                   <Badge variant="outline" className="ml-auto text-[10px] text-orange-600 border-orange-300 bg-orange-50">
                     <Eye className="w-3 h-3 mr-1" /> Manager View
                   </Badge>
@@ -1142,12 +1207,12 @@ export default function MessagesPage() {
                   </div>
                 ) : (
                   thread.map(msg => (
-                    <div key={msg.id} className={cn("flex gap-2 group", msg.mine && !viewAll ? "flex-row-reverse" : "flex-row")}>
+                    <div key={msg.id} className={cn("flex gap-2 group", msg.mine && !oversightReadOnly ? "flex-row-reverse" : "flex-row")}>
                       <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-[9px] font-bold text-primary shrink-0 mt-1">
                         {msg.senderName.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
                       </div>
-                      <div className={cn("max-w-[70%]", msg.mine && !viewAll ? "items-end" : "items-start", "flex flex-col gap-0.5")}>
-                        {viewAll && (
+                      <div className={cn("max-w-[70%]", msg.mine && !oversightReadOnly ? "items-end" : "items-start", "flex flex-col gap-0.5")}>
+                        {oversightReadOnly && (
                           <span className="text-[10px] text-muted-foreground px-1">{msg.senderName}</span>
                         )}
                         {editingId === msg.id ? (
@@ -1179,7 +1244,7 @@ export default function MessagesPage() {
                             {msg.replyTo && (
                               <div className={cn(
                                 "flex items-start gap-2 px-2.5 py-1.5 rounded-xl border-l-2 border-primary/50 text-xs bg-muted/60 max-w-full",
-                                msg.mine && !viewAll ? "rounded-tr-sm" : "rounded-tl-sm"
+                                msg.mine && !oversightReadOnly ? "rounded-tr-sm" : "rounded-tl-sm"
                               )}>
                                 <CornerUpLeft className="w-3 h-3 text-primary/60 shrink-0 mt-0.5" />
                                 <div className="min-w-0">
@@ -1194,7 +1259,7 @@ export default function MessagesPage() {
                             {msg.invoice && (
                               <div className={cn(
                                 "rounded-2xl border text-xs overflow-hidden min-w-[220px]",
-                                msg.mine && !viewAll ? "rounded-tr-sm border-primary/20 bg-primary/5" : "rounded-tl-sm border-border bg-card"
+                                msg.mine && !oversightReadOnly ? "rounded-tr-sm border-primary/20 bg-primary/5" : "rounded-tl-sm border-border bg-card"
                               )}>
                                 <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/40">
                                   <Receipt className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
@@ -1234,7 +1299,7 @@ export default function MessagesPage() {
                               return (
                                 <div className={cn(
                                   "rounded-2xl border text-xs overflow-hidden min-w-[220px]",
-                                  msg.mine && !viewAll ? "rounded-tr-sm border-primary/20 bg-primary/5" : "rounded-tl-sm border-border bg-card"
+                                  msg.mine && !oversightReadOnly ? "rounded-tr-sm border-primary/20 bg-primary/5" : "rounded-tl-sm border-border bg-card"
                                 )}>
                                   <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/40">
                                     <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
@@ -1261,7 +1326,7 @@ export default function MessagesPage() {
                               return (
                                 <div className={cn(
                                   "rounded-2xl border text-xs overflow-hidden min-w-[220px] max-w-[260px]",
-                                  msg.mine && !viewAll ? "rounded-tr-sm border-primary/20 bg-primary/5" : "rounded-tl-sm border-border bg-card"
+                                  msg.mine && !oversightReadOnly ? "rounded-tr-sm border-primary/20 bg-primary/5" : "rounded-tl-sm border-border bg-card"
                                 )}>
                                   {photo.photoUrl && (
                                     <img
@@ -1293,7 +1358,7 @@ export default function MessagesPage() {
                               return (
                                 <div className={cn(
                                   "rounded-2xl border text-xs overflow-hidden min-w-[220px]",
-                                  msg.mine && !viewAll ? "rounded-tr-sm border-primary/20 bg-primary/5" : "rounded-tl-sm border-border bg-card"
+                                  msg.mine && !oversightReadOnly ? "rounded-tr-sm border-primary/20 bg-primary/5" : "rounded-tl-sm border-border bg-card"
                                 )}>
                                   <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/40">
                                     <FileCheck className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
@@ -1321,7 +1386,7 @@ export default function MessagesPage() {
                             {(msg.content || (!msg.invoice && !msg.attachmentType)) && (
                               <div className={cn(
                                 "px-3 py-2 rounded-2xl text-sm leading-relaxed break-words",
-                                msg.mine && !viewAll
+                                msg.mine && !oversightReadOnly
                                   ? "bg-primary text-primary-foreground rounded-tr-sm"
                                   : "bg-muted rounded-tl-sm"
                               )}>
@@ -1333,7 +1398,7 @@ export default function MessagesPage() {
                         )}
                         {/* Reactions row */}
                         {((msg.reactions && msg.reactions.length > 0) || emojiPickerId === msg.id) && (
-                          <div className={cn("flex flex-wrap gap-1 px-1", msg.mine && !viewAll ? "justify-end" : "justify-start")}>
+                          <div className={cn("flex flex-wrap gap-1 px-1", msg.mine && !oversightReadOnly ? "justify-end" : "justify-start")}>
                             {(msg.reactions ?? []).map(r => (
                               <button
                                 key={r.emoji}
@@ -1358,14 +1423,14 @@ export default function MessagesPage() {
                             )}
                           </div>
                         )}
-                        <div className={cn("flex items-center gap-1 px-1", msg.mine && !viewAll ? "flex-row-reverse" : "flex-row")}>
+                        <div className={cn("flex items-center gap-1 px-1", msg.mine && !oversightReadOnly ? "flex-row-reverse" : "flex-row")}>
                           <span className="text-[10px] text-muted-foreground cursor-default" title={fullTimestamp(msg.createdAt)}>{timeLabel(msg.createdAt)}</span>
-                          {msg.mine && !viewAll && (
+                          {msg.mine && !oversightReadOnly && (
                             msg.readAt
                               ? <CheckCheck className="w-3.5 h-3.5 text-primary" />
                               : <Check className="w-3.5 h-3.5 text-muted-foreground/40" />
                           )}
-                          {!viewAll && editingId !== msg.id && confirmDeleteId !== msg.id && (
+                          {!oversightReadOnly && editingId !== msg.id && confirmDeleteId !== msg.id && (
                             <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex gap-0.5">
                               <button
                                 onClick={() => { setReplyingTo({ id: msg.id, senderName: msg.senderName, content: msg.content, attachmentType: msg.attachmentType }); setEmojiPickerId(null); }}
@@ -1382,7 +1447,11 @@ export default function MessagesPage() {
                                 className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
                                 title={`Save to ${activeConv?.otherName ?? "contact"}'s notes`}
                               ><StickyNote className="w-3 h-3" /></button>
-                              {msg.mine && (
+                              {/* Project-scoped DMs are permanent — no edit/delete
+                                  (matches the server, which 404s these for a
+                                  message with a projectId; legacy company-wide
+                                  DMs are unaffected). */}
+                              {msg.mine && !msg.projectId && (
                                 <>
                                   <button
                                     onClick={() => startEdit(msg)}
@@ -1411,7 +1480,7 @@ export default function MessagesPage() {
               </div>
 
               {/* Input */}
-              {!viewAll ? (
+              {!oversightReadOnly ? (
                 <div className="p-3 border-t bg-muted/20 space-y-2">
                   {/* Reply-to preview */}
                   {replyingTo && (
@@ -1707,24 +1776,7 @@ export default function MessagesPage() {
                         <span className="text-[10px] text-muted-foreground px-1">{msg.senderName}
                           {msg.senderRole && <span className={cn("ml-1.5 px-1 py-0.5 rounded text-[9px] font-semibold capitalize", ROLE_COLOURS[msg.senderRole] ?? "")}>{msg.senderRole.replace(/_/g, " ")}</span>}
                         </span>
-                        {editingId === msg.id ? (
-                          <div className="flex flex-col gap-1 min-w-[180px]">
-                            <input value={editDraft} onChange={e => setEditDraft(e.target.value)}
-                              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveChannelEdit(msg.id); } if (e.key === "Escape") setEditingId(null); }}
-                              className="px-3 py-2 rounded-2xl text-sm bg-primary text-primary-foreground outline outline-2 outline-white/40 w-full" autoFocus />
-                            <div className="flex gap-2 justify-end px-1">
-                              <button onClick={() => setEditingId(null)} className="text-[10px] text-muted-foreground hover:text-foreground">Cancel</button>
-                              <button onClick={() => saveChannelEdit(msg.id)} className="text-[10px] text-primary font-semibold hover:underline">Save</button>
-                            </div>
-                          </div>
-                        ) : confirmDeleteId === msg.id ? (
-                          <div className="px-3 py-2 rounded-2xl text-sm bg-red-100 text-red-700 flex items-center gap-2">
-                            <span>Delete?</span>
-                            <button onClick={() => deleteChannelMessage(msg.id)} className="font-semibold hover:underline">Yes</button>
-                            <button onClick={() => setConfirmDeleteId(null)} className="text-muted-foreground hover:underline">No</button>
-                          </div>
-                        ) : (
-                          <div className="flex flex-col gap-1.5">
+                        <div className="flex flex-col gap-1.5">
                             {/* Reply quote */}
                             {msg.replyTo && (
                               <div className={cn(
@@ -1797,11 +1849,10 @@ export default function MessagesPage() {
                             })()}
                             {(msg.content || !msg.attachmentType) && (
                               <div className={cn("px-3 py-2 rounded-2xl text-sm leading-relaxed break-words", msg.mine ? "bg-primary text-primary-foreground rounded-tr-sm" : "bg-muted rounded-tl-sm")}>
-                                {msg.content}{msg.editedAt && <span className="text-[9px] opacity-50 ml-1.5">(edited)</span>}
+                                {msg.content}
                               </div>
                             )}
-                          </div>
-                        )}
+                        </div>
                         {/* Reactions row */}
                         {((msg.reactions && msg.reactions.length > 0) || emojiPickerId === msg.id) && (
                           <div className={cn("flex flex-wrap gap-1 px-1", msg.mine ? "justify-end" : "justify-start")}>
@@ -1831,26 +1882,19 @@ export default function MessagesPage() {
                         )}
                         <div className={cn("flex items-center gap-1 px-1", msg.mine ? "flex-row-reverse" : "flex-row")}>
                           <span className="text-[10px] text-muted-foreground cursor-default" title={fullTimestamp(msg.createdAt)}>{timeLabel(msg.createdAt)}</span>
-                          {editingId !== msg.id && confirmDeleteId !== msg.id && (
-                            <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex gap-0.5">
-                              <button
-                                onClick={() => { setReplyingTo({ id: msg.id, senderName: msg.senderName, content: msg.content, attachmentType: msg.attachmentType }); setEmojiPickerId(null); }}
-                                className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-                                title="Reply"
-                              ><CornerUpLeft className="w-3 h-3" /></button>
-                              <button
-                                onClick={() => setEmojiPickerId(id => id === msg.id ? null : msg.id)}
-                                className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground text-sm"
-                                title="React"
-                              >😊</button>
-                              {msg.mine && (
-                                <>
-                                  <button onClick={() => { setEditingId(msg.id); setEditDraft(msg.content); setConfirmDeleteId(null); }} className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground" title="Edit"><Pencil className="w-3 h-3" /></button>
-                                  <button onClick={() => setConfirmDeleteId(msg.id)} className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-red-500" title="Delete"><Trash2 className="w-3 h-3" /></button>
-                                </>
-                              )}
-                            </div>
-                          )}
+                          {/* Channel messages are permanent — no edit/delete, just reply/react. */}
+                          <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex gap-0.5">
+                            <button
+                              onClick={() => { setReplyingTo({ id: msg.id, senderName: msg.senderName, content: msg.content, attachmentType: msg.attachmentType }); setEmojiPickerId(null); }}
+                              className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                              title="Reply"
+                            ><CornerUpLeft className="w-3 h-3" /></button>
+                            <button
+                              onClick={() => setEmojiPickerId(id => id === msg.id ? null : msg.id)}
+                              className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground text-sm"
+                              title="React"
+                            >😊</button>
+                          </div>
                         </div>
                       </div>
                     </div>

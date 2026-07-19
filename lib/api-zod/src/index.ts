@@ -24,4 +24,5 @@ export {
   UploadPortalPlantMaterialAttachmentBody,
   CreatePortalSiteIssueBody,
   UpdatePortalSiteIssueBody,
+  GetPortalDmThreadParams,
 } from "./generated/api";
