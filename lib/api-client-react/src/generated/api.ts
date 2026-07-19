@@ -67,6 +67,8 @@ import type {
   PlantItemAttachment,
   PlantItemDistribution,
   PortalContext,
+  PortalDailyReport,
+  PortalDailyReportHistoryItem,
   PortalDocument,
   PortalGeneral,
   PortalHs,
@@ -112,6 +114,7 @@ import type {
   UpdatePersonRequest,
   UpdatePhotoRequest,
   UpdatePlantItemRequest,
+  UpdatePortalDailyReportRequest,
   UpdatePortalPlantItemRequest,
   UpdatePortalSiteIssueBody,
   UpdateProjectRequest,
@@ -4485,6 +4488,252 @@ export const useUploadPortalPlantMaterialAttachment = <
   return useMutation(
     getUploadPortalPlantMaterialAttachmentMutationOptions(options),
   );
+};
+
+/**
+ * @summary Today's site diary — always visible; canEdit reflects permission AND the lock window
+ */
+export const getGetPortalDailyReportUrl = () => {
+  return `/api/portal/daily-report`;
+};
+
+export const getPortalDailyReport = async (
+  options?: RequestInit,
+): Promise<PortalDailyReport> => {
+  return customFetch<PortalDailyReport>(getGetPortalDailyReportUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPortalDailyReportQueryKey = () => {
+  return [`/api/portal/daily-report`] as const;
+};
+
+export const getGetPortalDailyReportQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPortalDailyReport>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalDailyReport>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPortalDailyReportQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPortalDailyReport>>
+  > = ({ signal }) => getPortalDailyReport({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalDailyReport>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPortalDailyReportQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPortalDailyReport>>
+>;
+export type GetPortalDailyReportQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Today's site diary — always visible; canEdit reflects permission AND the lock window
+ */
+
+export function useGetPortalDailyReport<
+  TData = Awaited<ReturnType<typeof getPortalDailyReport>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalDailyReport>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPortalDailyReportQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Past days with a site diary entry (last 14), newest first, always read-only
+ */
+export const getGetPortalDailyReportHistoryUrl = () => {
+  return `/api/portal/daily-report/history`;
+};
+
+export const getPortalDailyReportHistory = async (
+  options?: RequestInit,
+): Promise<PortalDailyReportHistoryItem[]> => {
+  return customFetch<PortalDailyReportHistoryItem[]>(
+    getGetPortalDailyReportHistoryUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetPortalDailyReportHistoryQueryKey = () => {
+  return [`/api/portal/daily-report/history`] as const;
+};
+
+export const getGetPortalDailyReportHistoryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPortalDailyReportHistory>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalDailyReportHistory>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPortalDailyReportHistoryQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPortalDailyReportHistory>>
+  > = ({ signal }) =>
+    getPortalDailyReportHistory({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalDailyReportHistory>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPortalDailyReportHistoryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPortalDailyReportHistory>>
+>;
+export type GetPortalDailyReportHistoryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Past days with a site diary entry (last 14), newest first, always read-only
+ */
+
+export function useGetPortalDailyReportHistory<
+  TData = Awaited<ReturnType<typeof getPortalDailyReportHistory>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalDailyReportHistory>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPortalDailyReportHistoryQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Amend a day's site diary (requires can-edit-daily-report permission; 403 if locked)
+ */
+export const getUpdatePortalDailyReportUrl = (date: string) => {
+  return `/api/portal/daily-report/${date}`;
+};
+
+export const updatePortalDailyReport = async (
+  date: string,
+  updatePortalDailyReportRequest: UpdatePortalDailyReportRequest,
+  options?: RequestInit,
+): Promise<PortalDailyReportHistoryItem> => {
+  return customFetch<PortalDailyReportHistoryItem>(
+    getUpdatePortalDailyReportUrl(date),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updatePortalDailyReportRequest),
+    },
+  );
+};
+
+export const getUpdatePortalDailyReportMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updatePortalDailyReport>>,
+    TError,
+    { date: string; data: BodyType<UpdatePortalDailyReportRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updatePortalDailyReport>>,
+  TError,
+  { date: string; data: BodyType<UpdatePortalDailyReportRequest> },
+  TContext
+> => {
+  const mutationKey = ["updatePortalDailyReport"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updatePortalDailyReport>>,
+    { date: string; data: BodyType<UpdatePortalDailyReportRequest> }
+  > = (props) => {
+    const { date, data } = props ?? {};
+
+    return updatePortalDailyReport(date, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdatePortalDailyReportMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updatePortalDailyReport>>
+>;
+export type UpdatePortalDailyReportMutationBody =
+  BodyType<UpdatePortalDailyReportRequest>;
+export type UpdatePortalDailyReportMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Amend a day's site diary (requires can-edit-daily-report permission; 403 if locked)
+ */
+export const useUpdatePortalDailyReport = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updatePortalDailyReport>>,
+    TError,
+    { date: string; data: BodyType<UpdatePortalDailyReportRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updatePortalDailyReport>>,
+  TError,
+  { date: string; data: BodyType<UpdatePortalDailyReportRequest> },
+  TContext
+> => {
+  return useMutation(getUpdatePortalDailyReportMutationOptions(options));
 };
 
 /**

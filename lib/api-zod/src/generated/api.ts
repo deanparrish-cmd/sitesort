@@ -442,6 +442,12 @@ export const ListProjectMembersResponseItem = zod.object({
     .describe(
       "Portal write permission — can update Plant & Materials item status\/location\/notes. Default false.",
     ),
+  canEditDailyReport: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Portal write permission — can author\/amend the project's daily site report. Default false.",
+    ),
   addedAt: zod.date(),
 });
 export const ListProjectMembersResponse = zod.array(
@@ -485,6 +491,7 @@ export const UpdateMemberPermissionsParams = zod.object({
 export const UpdateMemberPermissionsBody = zod.object({
   canLogIssues: zod.boolean().optional(),
   canUpdatePlantMaterials: zod.boolean().optional(),
+  canEditDailyReport: zod.boolean().optional(),
 });
 
 export const UpdateMemberPermissionsResponse = zod.object({
@@ -970,6 +977,7 @@ export const ListPlantItemsResponseItem = zod.object({
       'First Surname of the last editor, for the \"last updated by\" line.',
     ),
   lastUpdatedAt: zod.date().nullish(),
+  attachmentCount: zod.number(),
   createdAt: zod.date(),
 });
 export const ListPlantItemsResponse = zod.array(ListPlantItemsResponseItem);
@@ -1044,6 +1052,7 @@ export const UpdatePlantItemResponse = zod.object({
       'First Surname of the last editor, for the \"last updated by\" line.',
     ),
   lastUpdatedAt: zod.date().nullish(),
+  attachmentCount: zod.number(),
   createdAt: zod.date(),
 });
 
@@ -1322,6 +1331,119 @@ export const UploadPortalPlantMaterialAttachmentBody = zod.object({
     ])
     .optional(),
 });
+
+/**
+ * @summary Today's site diary — always visible; canEdit reflects permission AND the lock window
+ */
+export const GetPortalDailyReportResponse = zod
+  .object({
+    reportDate: zod.string(),
+    managerReport: zod
+      .object({
+        weather: zod.string().optional(),
+        labourOnSite: zod.string().optional(),
+        plantEquipment: zod.string().optional(),
+        workCompleted: zod.string().optional(),
+        delaysIssues: zod.string().optional(),
+        deliveries: zod.string().optional(),
+        hsNotes: zod.string().optional(),
+      })
+      .describe(
+        'The structured \"site diary\" — every field optional\/free text.',
+      )
+      .nullish(),
+    contributors: zod.array(
+      zod.object({
+        userId: zod.string(),
+        name: zod.string(),
+      }),
+    ),
+    locked: zod.boolean(),
+    canEdit: zod.boolean(),
+  })
+  .describe(
+    "Today's site diary — always visible to every portal member; canEdit reflects the caller's permission AND the lock window.",
+  );
+
+/**
+ * @summary Past days with a site diary entry (last 14), newest first, always read-only
+ */
+export const GetPortalDailyReportHistoryResponseItem = zod
+  .object({
+    reportDate: zod.string(),
+    managerReport: zod
+      .object({
+        weather: zod.string().optional(),
+        labourOnSite: zod.string().optional(),
+        plantEquipment: zod.string().optional(),
+        workCompleted: zod.string().optional(),
+        delaysIssues: zod.string().optional(),
+        deliveries: zod.string().optional(),
+        hsNotes: zod.string().optional(),
+      })
+      .describe(
+        'The structured \"site diary\" — every field optional\/free text.',
+      )
+      .nullish(),
+    contributors: zod.array(
+      zod.object({
+        userId: zod.string(),
+        name: zod.string(),
+      }),
+    ),
+  })
+  .describe("A past day's site diary — always read-only in the portal.");
+export const GetPortalDailyReportHistoryResponse = zod.array(
+  GetPortalDailyReportHistoryResponseItem,
+);
+
+/**
+ * @summary Amend a day's site diary (requires can-edit-daily-report permission; 403 if locked)
+ */
+export const UpdatePortalDailyReportParams = zod.object({
+  date: zod.coerce.string().describe("YYYY-MM-DD"),
+});
+
+export const UpdatePortalDailyReportBody = zod
+  .object({
+    weather: zod.string().optional(),
+    labourOnSite: zod.string().optional(),
+    plantEquipment: zod.string().optional(),
+    workCompleted: zod.string().optional(),
+    delaysIssues: zod.string().optional(),
+    deliveries: zod.string().optional(),
+    hsNotes: zod.string().optional(),
+  })
+  .describe('The structured \"site diary\" — every field optional\/free text.')
+  .describe(
+    "Any subset of fields; omitted fields are left unchanged, empty string clears a field.",
+  );
+
+export const UpdatePortalDailyReportResponse = zod
+  .object({
+    reportDate: zod.string(),
+    managerReport: zod
+      .object({
+        weather: zod.string().optional(),
+        labourOnSite: zod.string().optional(),
+        plantEquipment: zod.string().optional(),
+        workCompleted: zod.string().optional(),
+        delaysIssues: zod.string().optional(),
+        deliveries: zod.string().optional(),
+        hsNotes: zod.string().optional(),
+      })
+      .describe(
+        'The structured \"site diary\" — every field optional\/free text.',
+      )
+      .nullish(),
+    contributors: zod.array(
+      zod.object({
+        userId: zod.string(),
+        name: zod.string(),
+      }),
+    ),
+  })
+  .describe("A past day's site diary — always read-only in the portal.");
 
 /**
  * @summary List permits for a project
@@ -1756,6 +1878,7 @@ export const PortalLoginResponse = zod.object({
       email: zod.string(),
       canLogIssues: zod.boolean(),
       canUpdatePlantMaterials: zod.boolean(),
+      canEditDailyReport: zod.boolean(),
     })
     .optional(),
   projects: zod
@@ -1827,6 +1950,7 @@ export const AcceptPortalInviteResponse = zod.object({
       email: zod.string(),
       canLogIssues: zod.boolean(),
       canUpdatePlantMaterials: zod.boolean(),
+      canEditDailyReport: zod.boolean(),
     })
     .optional(),
   projects: zod
@@ -1860,6 +1984,7 @@ export const GetPortalContextResponse = zod.object({
     email: zod.string(),
     canLogIssues: zod.boolean(),
     canUpdatePlantMaterials: zod.boolean(),
+    canEditDailyReport: zod.boolean(),
   }),
   sections: zod.array(zod.string()),
 });

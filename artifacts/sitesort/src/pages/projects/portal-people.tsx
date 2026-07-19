@@ -18,7 +18,7 @@ import {
 type PortalStatus = {
   status: "not_invited" | "invited" | "member"; role?: string; inviteId?: string; lastActiveAt?: string;
   emailStatus?: "sent" | "failed"; emailLastSentAt?: string;
-  memberId?: string; canLogIssues?: boolean; canUpdatePlantMaterials?: boolean;
+  memberId?: string; canLogIssues?: boolean; canUpdatePlantMaterials?: boolean; canEditDailyReport?: boolean;
 };
 
 const RESEND_COOLDOWN_MS = 5 * 60 * 1000;
@@ -162,7 +162,7 @@ export function PortalInvitePill({
     try { await revoke.mutateAsync({ projectId, inviteId: portal.inviteId }); refresh(); }
     catch { toast({ variant: "destructive", title: "Could not revoke access" }); }
   };
-  const togglePermission = async (field: "canLogIssues" | "canUpdatePlantMaterials", value: boolean) => {
+  const togglePermission = async (field: "canLogIssues" | "canUpdatePlantMaterials" | "canEditDailyReport", value: boolean) => {
     if (!portal.memberId) return;
     try { await updatePermissions.mutateAsync({ projectId, memberId: portal.memberId, data: { [field]: value } }); refresh(); }
     catch { toast({ variant: "destructive", title: "Could not update permission" }); }
@@ -210,6 +210,13 @@ export function PortalInvitePill({
             onCheckedChange={v => togglePermission("canUpdatePlantMaterials", v)}
           >
             Can update plant &amp; materials
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem
+            checked={portal.canEditDailyReport ?? false}
+            onSelect={e => e.preventDefault()}
+            onCheckedChange={v => togglePermission("canEditDailyReport", v)}
+          >
+            Can edit daily site report
           </DropdownMenuCheckboxItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem className="gap-2 cursor-pointer text-destructive focus:text-destructive" onClick={doRevoke}><Trash2 className="w-4 h-4" /> Revoke access</DropdownMenuItem>

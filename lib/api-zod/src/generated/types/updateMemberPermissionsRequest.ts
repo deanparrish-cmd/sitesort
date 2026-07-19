@@ -9,4 +9,5 @@
 export interface UpdateMemberPermissionsRequest {
   canLogIssues?: boolean;
   canUpdatePlantMaterials?: boolean;
+  canEditDailyReport?: boolean;
 }

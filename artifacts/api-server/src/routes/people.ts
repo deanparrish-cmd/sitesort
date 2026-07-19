@@ -49,6 +49,7 @@ type PortalStatus = {
   memberId?: string;               // project_members.id — needed to PATCH .../permissions
   canLogIssues?: boolean;
   canUpdatePlantMaterials?: boolean;
+  canEditDailyReport?: boolean;
 };
 async function portalStatusFor(personIds: string[], projectId: string): Promise<Map<string, PortalStatus>> {
   const out = new Map<string, PortalStatus>();
@@ -58,6 +59,7 @@ async function portalStatusFor(personIds: string[], projectId: string): Promise<
       id: projectMembersTable.id, personId: projectMembersTable.personId, role: projectMembersTable.role,
       userId: projectMembersTable.userId, lastActiveAt: usersTable.lastActiveAt,
       canLogIssues: projectMembersTable.canLogIssues, canUpdatePlantMaterials: projectMembersTable.canUpdatePlantMaterials,
+      canEditDailyReport: projectMembersTable.canEditDailyReport,
     })
       .from(projectMembersTable)
       .leftJoin(usersTable, eq(projectMembersTable.userId, usersTable.id))
@@ -88,6 +90,7 @@ async function portalStatusFor(personIds: string[], projectId: string): Promise<
         memberId: m.id,
         canLogIssues: m.canLogIssues,
         canUpdatePlantMaterials: m.canUpdatePlantMaterials,
+        canEditDailyReport: m.canEditDailyReport,
       });
     }
   }

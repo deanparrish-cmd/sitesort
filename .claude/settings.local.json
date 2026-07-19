@@ -74,7 +74,21 @@
       "Bash(curl -s \"https://raw.githubusercontent.com/deanparrish-cmd/sitesort/main/artifacts/api-server/src/routes/plant-items.ts\")",
       "Bash(curl -s \"https://raw.githubusercontent.com/deanparrish-cmd/sitesort/main/CLAUDE.md\")",
       "Bash(curl -s \"https://api.github.com/repos/deanparrish-cmd/sitesort/commits/main\")",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" https://www.sitesort.co.uk/api/projects)"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" https://www.sitesort.co.uk/api/projects)",
+      "Bash(kill 377)",
+      "Bash(curl -s localhost:8080/api/health)",
+      "Bash(curl -s -m 3 localhost:8080/api/health)",
+      "Bash(curl -s localhost:8080/api/projects/__TRACKED_VAR__/members -H 'Authorization: Bearer __CMDSUB_OUTPUT__')",
+      "Bash(curl -s -X PATCH localhost:8080/api/projects/__TRACKED_VAR__/members/__TRACKED_VAR__/permissions -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -H 'Content-Type: application/json' -d '{\"canEditDailyReport\":true}')",
+      "Bash(curl -s localhost:8080/api/projects/__TRACKED_VAR__/in-house-people -H 'Authorization: Bearer __CMDSUB_OUTPUT__')",
+      "Bash(curl -s -m 5 localhost:8080/api/health)",
+      "Bash(curl -s -m 2 localhost:8080/api/health)",
+      "Bash(curl -s -X PATCH localhost:8080/api/projects/__TRACKED_VAR__/members/__TRACKED_VAR__/permissions -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -H 'Content-Type: application/json' -d '{\"canEditDailyReport\":false}')",
+      "Bash(curl -s -X PATCH localhost:8080/api/projects/__TRACKED_VAR__/daily-reports/__TRACKED_VAR__ -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -H 'Content-Type: application/json' -d '{\"weather\":\"\",\"workCompleted\":\"\"}')",
+      "Bash(curl -s 'localhost:8080/api/projects/__TRACKED_VAR__/daily-reports?from=__TRACKED_VAR__&to=__TRACKED_VAR__' -H 'Authorization: Bearer __CMDSUB_OUTPUT__')",
+      "Bash(rm -f /home/runner/workspace/.claude/skills/browser-check/daily-report-check.mjs /home/runner/workspace/.claude/skills/browser-check/daily-report-readonly-check.mjs)",
+      "Bash(git -C /home/runner/workspace status --porcelain .claude/skills/browser-check)",
+      "Bash(pkill -f \"node --enable-source-maps ./dist/index.mjs\")"
     ]
   },
   "hooks": {

@@ -11,11 +11,15 @@ import {
   notificationsTable,
   dailyReportsTable,
   dailyNotesTable,
+  activityLogTable,
   type DailyReportData,
+  type ManagerReport,
 } from "@workspace/db/schema";
-import { and, eq, gte, lt, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, eq, gte, lt, inArray, isNotNull, sql, desc } from "drizzle-orm";
+import type { Request } from "express";
 import { generateId } from "./id";
 import { logger } from "./logger";
+import { logActivity } from "./activity";
 
 const REPORT_TZ = "Europe/London";
 const REPORT_HOUR = 18; // 6pm — "end of day"
@@ -55,7 +59,7 @@ function tzOffsetMs(date: Date, tz: string): number {
 }
 
 // YYYY-MM-DD calendar date in REPORT_TZ for the given instant.
-function londonDateStr(date: Date): string {
+export function londonDateStr(date: Date): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: REPORT_TZ,
     year: "numeric",
@@ -429,4 +433,120 @@ export function scheduleDailyReports(): void {
     }, msUntilNextLondonReportHour(new Date()));
   };
   scheduleNext();
+}
+
+// --- Manager report (site diary) — shared by the dashboard AND portal write
+// paths, so both edit the SAME record through the SAME diff/attribution logic
+// (Feature: Daily Report in the portal). -----------------------------------
+
+// The structured "site diary" fields a manager/worker/portal member can author.
+// Kept in this fixed order so the frontend form and any export render consistently.
+export const MANAGER_REPORT_FIELDS = [
+  "weather", "labourOnSite", "plantEquipment", "workCompleted", "delaysIssues", "deliveries", "hsNotes",
+] as const;
+const MANAGER_FIELD_MAX = 5000;
+
+// Trim/cap each provided field; drop empties. Returns null if nothing usable was
+// supplied (so an all-blank submit doesn't create a hollow report row).
+export function sanitizeManagerReport(body: unknown): ManagerReport | null {
+  if (!body || typeof body !== "object") return null;
+  const src = body as Record<string, unknown>;
+  const out: ManagerReport = {};
+  for (const key of MANAGER_REPORT_FIELDS) {
+    const raw = src[key];
+    if (typeof raw !== "string") continue;
+    const val = raw.trim().slice(0, MANAGER_FIELD_MAX);
+    if (val) out[key] = val;
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+// A stored managerReport counts as "present" only if it has at least one non-empty field.
+export function hasManagerContent(mr: ManagerReport | null | undefined): boolean {
+  return !!mr && MANAGER_REPORT_FIELDS.some((k) => typeof mr[k] === "string" && mr[k]!.trim().length > 0);
+}
+
+// A report locks for portal editing at day-end + 24h grace (reportDate + 2
+// calendar days, midnight Europe/London) — dashboard staff are never subject
+// to this, only the portal write path checks it.
+export function isReportLocked(reportDate: string, now: Date = new Date()): boolean {
+  const lockAt = londonWallClockUtc(addDaysStr(reportDate, 2), 0);
+  return now.getTime() >= lockAt.getTime();
+}
+
+// Upsert the manager report for a project/date, diffing against the prior
+// value and writing ONE activity_log row covering every field that changed
+// (who, which field(s), when) — used by both the dashboard PATCH route and
+// the portal PATCH route so they write through the exact same path.
+export async function upsertManagerReport(params: {
+  projectId: string;
+  companyId: string;
+  date: string;
+  userId: string;
+  patch: unknown;
+  req?: Request;
+}): Promise<{ id: string; managerReport: ManagerReport | null } | { error: "empty" }> {
+  const { projectId, companyId, date, userId, patch, req } = params;
+  const managerReport = sanitizeManagerReport(patch);
+
+  const existing = await db.select({ id: dailyReportsTable.id, managerReport: dailyReportsTable.managerReport })
+    .from(dailyReportsTable)
+    .where(and(eq(dailyReportsTable.projectId, projectId), eq(dailyReportsTable.reportDate, date)))
+    .limit(1);
+  const before = existing[0]?.managerReport ?? null;
+
+  const now = new Date();
+
+  if (managerReport === null) {
+    if (!existing[0]) return { error: "empty" };
+    const diff: Record<string, { from: unknown; to: unknown }> = {};
+    for (const key of MANAGER_REPORT_FIELDS) if (before?.[key]) diff[key] = { from: before[key], to: null };
+    await db.update(dailyReportsTable)
+      .set({ managerReport: null, authoredBy: userId, authoredAt: now })
+      .where(eq(dailyReportsTable.id, existing[0].id));
+    if (Object.keys(diff).length > 0) {
+      void logActivity({ userId, projectId, companyId, section: "daily-report", action: "update", itemType: "daily_report", itemId: existing[0].id, metadata: diff, req });
+    }
+    return { id: existing[0].id, managerReport: null };
+  }
+
+  const diff: Record<string, { from: unknown; to: unknown }> = {};
+  for (const key of MANAGER_REPORT_FIELDS) {
+    const from = before?.[key] ?? null;
+    const to = managerReport[key] ?? null;
+    if (from !== to) diff[key] = { from, to };
+  }
+
+  const id = generateId();
+  const upserted = await db.insert(dailyReportsTable)
+    .values({ id, projectId, reportDate: date, data: EMPTY_REPORT_DATA, managerReport, authoredBy: userId, authoredAt: now })
+    .onConflictDoUpdate({
+      target: [dailyReportsTable.projectId, dailyReportsTable.reportDate],
+      set: { managerReport, authoredBy: userId, authoredAt: now },
+    })
+    .returning({ id: dailyReportsTable.id });
+
+  const reportId = upserted[0]!.id;
+  if (Object.keys(diff).length > 0) {
+    void logActivity({ userId, projectId, companyId, section: "daily-report", action: "update", itemType: "daily_report", itemId: reportId, metadata: diff, req });
+  }
+  return { id: reportId, managerReport };
+}
+
+// Distinct contributors (name + userId) from the activity log for one report,
+// newest-edit-first — powers "the report shows contributor names".
+export async function contributorsForReport(reportId: string): Promise<{ userId: string; name: string }[]> {
+  const rows = await db.select({ userId: activityLogTable.userId, name: usersTable.name, createdAt: activityLogTable.createdAt })
+    .from(activityLogTable)
+    .innerJoin(usersTable, eq(usersTable.id, activityLogTable.userId))
+    .where(and(eq(activityLogTable.itemType, "daily_report"), eq(activityLogTable.itemId, reportId)))
+    .orderBy(desc(activityLogTable.createdAt));
+  const seen = new Set<string>();
+  const out: { userId: string; name: string }[] = [];
+  for (const r of rows) {
+    if (seen.has(r.userId)) continue;
+    seen.add(r.userId);
+    out.push({ userId: r.userId, name: r.name });
+  }
+  return out;
 }

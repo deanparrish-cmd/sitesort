@@ -144,7 +144,7 @@ function buildRoutes(projectId: string, hasPortal: boolean): RouteSpec[] {
   }
 
   if (hasPortal) {
-    const sections = ["overview", "shared", "settings", "progress", "team", "site-issues", "site-board", "hs", "drawings", "method-statements", "permits", "safety", "general", "plant-materials"];
+    const sections = ["overview", "shared", "settings", "progress", "team", "site-issues", "site-board", "hs", "drawings", "method-statements", "permits", "safety", "general", "plant-materials", "daily-report"];
     for (const section of sections) {
       routes.push({ path: `/portal/${section}`, label: `portal:${section}`, auth: "portal" });
     }

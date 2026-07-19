@@ -3,16 +3,17 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { FileDropZone } from "@/components/ui/file-drop-zone";
-import { Send } from "lucide-react";
+import { Send, ExternalLink, X, FileText } from "lucide-react";
 import { formatBytes } from "@/lib/utils";
 import {
   useCreatePlantItem, useUpdatePlantItem, useCreatePlantItemAttachment, useDistributePlantItem,
-  useListSubcontractors, useListProjectMembers,
+  useListSubcontractors, useListProjectMembers, useListPlantItemAttachments,
   getListPlantItemsQueryKey, getListPlantItemAttachmentsQueryKey, getListProjectMembersQueryKey, getListSubcontractorsQueryKey,
   type PlantItem, type PlantItemCategory, type PlantItemStatus, type CreatePlantItemAttachmentRequestKind,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { openDocument } from "@/lib/documents";
 
 const CATEGORY_OPTIONS: { value: PlantItemCategory; label: string }[] = [
   { value: "plant_equipment", label: "Plant / Equipment" },
@@ -75,6 +76,10 @@ export function PlantItemDialogs({
   const [attachName, setAttachName] = useState("");
   const [attachKind, setAttachKind] = useState<CreatePlantItemAttachmentRequestKind>("delivery_ticket");
   const [attachFile, setAttachFile] = useState<{ url: string; size: number } | null>(null);
+  // Queued locally while creating a new item (no itemId to attach against yet) —
+  // flushed to the attachment endpoint right after the item is created. Mirrors
+  // the certification-repeater pattern used for self-employed contacts.
+  const [pendingAttachments, setPendingAttachments] = useState<{ name: string; kind: CreatePlantItemAttachmentRequestKind; fileUrl: string; fileSize: number }[]>([]);
   const [allocateSelected, setAllocateSelected] = useState<Set<string>>(new Set());
 
   const create = useCreatePlantItem();
@@ -83,11 +88,15 @@ export function PlantItemDialogs({
   const distribute = useDistributePlantItem();
   const { data: subcontractors } = useListSubcontractors(undefined, { query: { enabled: !!editingItem, queryKey: getListSubcontractorsQueryKey() } });
   const { data: members } = useListProjectMembers(projectId, { query: { enabled: !!allocatingItem, queryKey: getListProjectMembersQueryKey(projectId) } });
+  const existingItemId = editingItem && editingItem !== "new" ? editingItem.id : undefined;
+  const { data: existingAttachments } = useListPlantItemAttachments(projectId, existingItemId ?? "", {
+    query: { enabled: !!existingItemId, queryKey: getListPlantItemAttachmentsQueryKey(projectId, existingItemId ?? "") },
+  });
 
   useEffect(() => {
     if (editingItem === "new") setForm(BLANK);
     else if (editingItem) setForm(toForm(editingItem));
-    setAttachName(""); setAttachKind("delivery_ticket"); setAttachFile(null);
+    setAttachName(""); setAttachKind("delivery_ticket"); setAttachFile(null); setPendingAttachments([]);
   }, [editingItem]);
 
   useEffect(() => { setAllocateSelected(new Set()); }, [allocatingItem]);
@@ -111,7 +120,14 @@ export function PlantItemDialogs({
     };
     try {
       if (editingItem === "new") {
-        await create.mutateAsync({ projectId, data });
+        const created = await create.mutateAsync({ projectId, data });
+        // Flush anything queued in the attachment mini-form during creation —
+        // there was no item id to attach against until now.
+        for (const att of pendingAttachments) {
+          await createAttachment.mutateAsync({ projectId, itemId: created.id, data: att }).catch(() => {
+            toast({ title: `Couldn't attach ${att.name}`, variant: "destructive" });
+          });
+        }
         toast({ title: "Item added" });
       } else if (editingItem) {
         await update.mutateAsync({ projectId, itemId: editingItem.id, data });
@@ -125,7 +141,14 @@ export function PlantItemDialogs({
   };
 
   const addAttachment = async () => {
-    if (editingItem === "new" || !editingItem || !attachFile || !attachName.trim()) return;
+    if (!attachFile || !attachName.trim()) return;
+    if (editingItem === "new") {
+      // No item id yet — queue locally, flushed on final "Add item" submit.
+      setPendingAttachments(prev => [...prev, { name: attachName.trim(), kind: attachKind, fileUrl: attachFile.url, fileSize: attachFile.size }]);
+      setAttachName(""); setAttachFile(null);
+      return;
+    }
+    if (!editingItem) return;
     try {
       await createAttachment.mutateAsync({
         projectId, itemId: editingItem.id,
@@ -227,9 +250,44 @@ export function PlantItemDialogs({
             <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={3} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" />
           </div>
 
-          {editingItem && editingItem !== "new" && (
+          {editingItem && (
             <div className="pt-2 border-t border-border/60">
-              <label className="text-xs font-medium text-muted-foreground">Add a document or photo</label>
+              <label className="text-xs font-medium text-muted-foreground">Documents & photos</label>
+
+              {/* Existing attachments (edit mode — the item already has an id) */}
+              {existingItemId && existingAttachments && existingAttachments.length > 0 && (
+                <div className="mt-1.5 space-y-1.5">
+                  {existingAttachments.map(a => (
+                    <div key={a.id} className="flex items-center justify-between gap-2 text-xs bg-muted/50 rounded-lg px-3 py-2">
+                      <button type="button" onClick={() => openDocument(a.fileUrl, a.name)} className="flex items-center gap-1.5 min-w-0 hover:text-primary transition-colors">
+                        <FileText className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">{a.name}</span>
+                        <span className="text-muted-foreground shrink-0">· {ATTACHMENT_KINDS.find(k => k.value === a.kind)?.label ?? a.kind}</span>
+                      </button>
+                      <ExternalLink className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Queued attachments (new-item mode — no id to attach against yet) */}
+              {editingItem === "new" && pendingAttachments.length > 0 && (
+                <div className="mt-1.5 space-y-1.5">
+                  {pendingAttachments.map((a, i) => (
+                    <div key={i} className="flex items-center justify-between gap-2 text-xs bg-muted/50 rounded-lg px-3 py-2">
+                      <span className="flex items-center gap-1.5 min-w-0">
+                        <FileText className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">{a.name}</span>
+                        <span className="text-muted-foreground shrink-0">· {ATTACHMENT_KINDS.find(k => k.value === a.kind)?.label ?? a.kind}</span>
+                      </span>
+                      <button type="button" onClick={() => setPendingAttachments(prev => prev.filter((_, idx) => idx !== i))} className="text-muted-foreground hover:text-destructive shrink-0">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="mt-1.5 grid grid-cols-2 gap-2">
                 <Input value={attachName} onChange={e => setAttachName(e.target.value)} placeholder="Name (e.g. Delivery ticket 12/07)" className="col-span-2" />
                 <select value={attachKind} onChange={e => setAttachKind(e.target.value as CreatePlantItemAttachmentRequestKind)} className="h-9 rounded-lg border border-input bg-background px-2 text-sm col-span-2">
@@ -247,7 +305,7 @@ export function PlantItemDialogs({
                 )}
               </div>
               <Button type="button" size="sm" className="mt-2" disabled={!attachFile || !attachName.trim()} isLoading={createAttachment.isPending} onClick={addAttachment}>
-                Attach
+                {editingItem === "new" ? "Queue attachment" : "Attach"}
               </Button>
             </div>
           )}

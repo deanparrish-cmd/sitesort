@@ -8,9 +8,9 @@ import {
   qrBoardPinsTable, calendarEventsTable, subcontractorsTable, peopleTable,
   portalSharesTable, documentDistributionsTable, companiesTable, qrCodesTable,
   portalMemberDocumentsTable, notificationsTable, companyMembersTable,
-  plantItemsTable, plantItemAttachmentsTable, personCertificationsTable,
+  plantItemsTable, plantItemAttachmentsTable, personCertificationsTable, dailyReportsTable,
 } from "@workspace/db/schema";
-import { and, eq, inArray, isNull, isNotNull, desc, asc, gte, count, max, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, isNotNull, desc, asc, gte, lt, count, max, or } from "drizzle-orm";
 import { buildSiteBoardPayload } from "../lib/site-board";
 import { generateId } from "../lib/id";
 import { logActivity } from "../lib/activity";
@@ -27,6 +27,7 @@ import { PORTAL_SECTIONS } from "../lib/activity";
 import { PortalLoginBody, AcceptPortalInviteBody } from "@workspace/api-zod";
 import { getBucket, objectKey } from "../lib/gcs";
 import { memberUploadSingle, saveMemberUpload } from "../lib/portal-upload";
+import { isReportLocked, upsertManagerReport, contributorsForReport, hasManagerContent, londonDateStr } from "../lib/daily-reports";
 import { createRequire } from "module";
 import type { Archiver, ArchiverOptions } from "archiver";
 const nodeRequire = createRequire(import.meta.url);
@@ -476,6 +477,7 @@ router.get("/portal/me", ...portalGuards, async (req, res) => {
   const permRow = await db.select({
     canLogIssues: projectMembersTable.canLogIssues,
     canUpdatePlantMaterials: projectMembersTable.canUpdatePlantMaterials,
+    canEditDailyReport: projectMembersTable.canEditDailyReport,
   }).from(projectMembersTable)
     .where(and(eq(projectMembersTable.projectId, pid), eq(projectMembersTable.userId, req.user!.id)))
     .limit(1);
@@ -488,6 +490,7 @@ router.get("/portal/me", ...portalGuards, async (req, res) => {
       email: req.user!.email,
       canLogIssues: permRow[0]?.canLogIssues ?? true,
       canUpdatePlantMaterials: permRow[0]?.canUpdatePlantMaterials ?? false,
+      canEditDailyReport: permRow[0]?.canEditDailyReport ?? false,
     },
     sections: PORTAL_SECTIONS,
   });
@@ -1139,6 +1142,82 @@ router.post("/portal/plant-materials/:itemId/attachments", authenticate, require
   } catch (err) {
     req.log.error({ err }, "Portal plant item attachment upload error");
     res.status(500).json({ error: "server_error", message: "Failed to upload attachment" });
+  }
+});
+
+// ---- Daily Report (structural section — visible to every portal member,
+// like Team/Progress, not portal_shares-gated. WRITE behind
+// requirePortalPermission("canEditDailyReport") AND the lock window: a report
+// locks day-end + 24h grace; only the dashboard can amend a locked day.
+// Dashboard and portal share upsertManagerReport (lib/daily-reports.ts) so
+// they edit the exact same record — no forking. ----
+
+const HISTORY_LIMIT = 14;
+
+// GET /api/portal/daily-report — today's report (always visible).
+router.get("/portal/daily-report", ...portalGuards, async (req, res) => {
+  try {
+    const pid = req.portalProjectId!;
+    const date = londonDateStr(new Date());
+    const rows = await db.select().from(dailyReportsTable)
+      .where(and(eq(dailyReportsTable.projectId, pid), eq(dailyReportsTable.reportDate, date))).limit(1);
+    const report = rows[0];
+    const permRow = await db.select({ canEditDailyReport: projectMembersTable.canEditDailyReport })
+      .from(projectMembersTable)
+      .where(and(eq(projectMembersTable.projectId, pid), eq(projectMembersTable.userId, req.user!.id)))
+      .limit(1);
+    const locked = isReportLocked(date);
+    res.json({
+      reportDate: date,
+      managerReport: report && hasManagerContent(report.managerReport) ? report.managerReport : null,
+      contributors: report ? await contributorsForReport(report.id) : [],
+      locked,
+      canEdit: (permRow[0]?.canEditDailyReport ?? false) && !locked,
+    });
+  } catch (err) {
+    req.log.error({ err }, "Portal get daily report error");
+    res.status(500).json({ error: "server_error", message: "Failed to load report" });
+  }
+});
+
+// GET /api/portal/daily-report/history — last HISTORY_LIMIT past days that
+// have a site diary entry, newest first. Always read-only.
+router.get("/portal/daily-report/history", ...portalGuards, async (req, res) => {
+  try {
+    const pid = req.portalProjectId!;
+    const today = londonDateStr(new Date());
+    const rows = await db.select().from(dailyReportsTable)
+      .where(and(eq(dailyReportsTable.projectId, pid), lt(dailyReportsTable.reportDate, today)))
+      .orderBy(desc(dailyReportsTable.reportDate))
+      .limit(HISTORY_LIMIT);
+    const withContent = rows.filter(r => hasManagerContent(r.managerReport));
+    res.json(await Promise.all(withContent.map(async r => ({
+      reportDate: r.reportDate,
+      managerReport: r.managerReport,
+      contributors: await contributorsForReport(r.id),
+    }))));
+  } catch (err) {
+    req.log.error({ err }, "Portal daily report history error");
+    res.status(500).json({ error: "server_error", message: "Failed to load history" });
+  }
+});
+
+// PATCH /api/portal/daily-report/:date — amend today's (or, within the grace
+// window, yesterday's) site diary. 403 distinctly for "no permission" vs
+// "locked" so the frontend can explain which applies.
+router.patch("/portal/daily-report/:date", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canEditDailyReport"), async (req, res) => {
+  const pid = req.portalProjectId!;
+  const date = req.params.date;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { res.status(400).json({ error: "validation_error", message: "date must be YYYY-MM-DD" }); return; }
+  if (date > londonDateStr(new Date())) { res.status(400).json({ error: "validation_error", message: "Cannot edit a future date" }); return; }
+  if (isReportLocked(date)) { res.status(403).json({ error: "locked", message: "This day's report is locked — ask your project manager to amend it from the dashboard." }); return; }
+  try {
+    const result = await upsertManagerReport({ projectId: pid, companyId: req.user!.companyId, date, userId: req.user!.id, patch: req.body, req });
+    if ("error" in result) { res.status(400).json({ error: "validation_error", message: "Enter at least one field" }); return; }
+    res.json({ reportDate: date, managerReport: result.managerReport, contributors: await contributorsForReport(result.id) });
+  } catch (err) {
+    req.log.error({ err }, "Portal update daily report error");
+    res.status(500).json({ error: "server_error", message: "Failed to save report" });
   }
 });
 

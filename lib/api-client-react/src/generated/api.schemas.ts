@@ -371,12 +371,15 @@ export interface ProjectMember {
   canLogIssues?: boolean;
   /** Portal write permission — can update Plant & Materials item status/location/notes. Default false. */
   canUpdatePlantMaterials?: boolean;
+  /** Portal write permission — can author/amend the project's daily site report. Default false. */
+  canEditDailyReport?: boolean;
   addedAt: string;
 }
 
 export interface UpdateMemberPermissionsRequest {
   canLogIssues?: boolean;
   canUpdatePlantMaterials?: boolean;
+  canEditDailyReport?: boolean;
 }
 
 export type AddMemberRequestRole =
@@ -699,6 +702,7 @@ export interface PlantItem {
   /** First Surname of the last editor, for the "last updated by" line. */
   lastUpdatedByName?: string | null;
   lastUpdatedAt?: string | null;
+  attachmentCount: number;
   createdAt: string;
 }
 
@@ -888,6 +892,49 @@ export interface UpdatePortalPlantItemRequest {
   location?: string | null;
   notes?: string | null;
 }
+
+export interface DailyReportContributor {
+  userId: string;
+  name: string;
+}
+
+/**
+ * The structured "site diary" — every field optional/free text.
+ */
+export interface ManagerReportFields {
+  weather?: string;
+  labourOnSite?: string;
+  plantEquipment?: string;
+  workCompleted?: string;
+  delaysIssues?: string;
+  deliveries?: string;
+  hsNotes?: string;
+}
+
+/**
+ * Today's site diary — always visible to every portal member; canEdit reflects the caller's permission AND the lock window.
+ */
+export interface PortalDailyReport {
+  reportDate: string;
+  managerReport?: ManagerReportFields | null;
+  contributors: DailyReportContributor[];
+  locked: boolean;
+  canEdit: boolean;
+}
+
+/**
+ * A past day's site diary — always read-only in the portal.
+ */
+export interface PortalDailyReportHistoryItem {
+  reportDate: string;
+  managerReport?: ManagerReportFields | null;
+  contributors: DailyReportContributor[];
+}
+
+/**
+ * Any subset of fields; omitted fields are left unchanged, empty string clears a field.
+ */
+export type UpdatePortalDailyReportRequest = ManagerReportFields;
 
 export type PermitType = (typeof PermitType)[keyof typeof PermitType];
 
@@ -1155,6 +1202,7 @@ export interface PortalMemberRef {
   email: string;
   canLogIssues: boolean;
   canUpdatePlantMaterials: boolean;
+  canEditDailyReport: boolean;
 }
 
 export interface PortalLoginRequest {

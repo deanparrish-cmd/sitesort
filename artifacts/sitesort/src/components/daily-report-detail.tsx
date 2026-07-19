@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -8,8 +8,9 @@ import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import {
   Users, FileText, Upload, Pencil, ShieldCheck, Eye, Camera,
-  ClipboardCheck, ClipboardList, Mic, Square, PencilLine, Plus,
+  ClipboardCheck, ClipboardList, PencilLine, Plus,
 } from "lucide-react";
+import { DictationButton } from "@/components/ui/dictation-button";
 
 // Shared by the Daily Reports hub (/daily-reports) and the project-detail
 // "Daily Reports" tab: renders the immutable auto snapshot plus the editable
@@ -70,56 +71,6 @@ function authHeaders(): Record<string, string> {
 
 function hasManagerContent(mr: ManagerReport | null | undefined): boolean {
   return !!mr && DIARY_FIELDS.some((f) => (mr[f.key] ?? "").toString().trim().length > 0);
-}
-
-// Web Speech API dictation. Renders nothing when the browser has no support
-// (e.g. Firefox), so the field stays usable by typing.
-function DictationButton({ onTranscript }: { onTranscript: (text: string) => void }) {
-  const [listening, setListening] = useState(false);
-  const recRef = useRef<any>(null);
-  const SR = typeof window !== "undefined"
-    ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)
-    : null;
-
-  useEffect(() => () => { try { recRef.current?.stop(); } catch { /* noop */ } }, []);
-
-  if (!SR) return null;
-
-  const toggle = () => {
-    if (listening) { try { recRef.current?.stop(); } catch { /* noop */ } return; }
-    const rec = new SR();
-    rec.lang = "en-GB";
-    rec.interimResults = false;
-    rec.continuous = true;
-    rec.onresult = (e: any) => {
-      let final = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) final += e.results[i][0].transcript;
-      }
-      if (final.trim()) onTranscript(final.trim());
-    };
-    rec.onend = () => setListening(false);
-    rec.onerror = () => setListening(false);
-    recRef.current = rec;
-    try { rec.start(); setListening(true); } catch { setListening(false); }
-  };
-
-  return (
-    <button
-      type="button"
-      onClick={toggle}
-      title={listening ? "Stop dictation" : "Dictate"}
-      aria-pressed={listening}
-      className={cn(
-        "shrink-0 h-9 w-9 flex items-center justify-center rounded-lg border transition-colors",
-        listening
-          ? "bg-red-50 border-red-300 text-red-600 animate-pulse dark:bg-red-950/30"
-          : "bg-background border-border text-muted-foreground hover:text-primary hover:border-primary/40",
-      )}
-    >
-      {listening ? <Square className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-    </button>
-  );
 }
 
 export function DailyReportDetail({

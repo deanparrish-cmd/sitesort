@@ -4,7 +4,7 @@ import {
   plantItemsTable, plantItemAttachmentsTable, plantItemDistributionsTable,
   projectsTable, usersTable, subcontractorsTable, notificationsTable,
 } from "@workspace/db/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { logActivity } from "../lib/activity";
@@ -41,12 +41,22 @@ type ItemRow = typeof plantItemsTable.$inferSelect;
 async function serializeItems(items: ItemRow[]) {
   const updaterIds = [...new Set(items.map(i => i.lastUpdatedBy).filter((x): x is string => !!x))];
   const supplierIds = [...new Set(items.map(i => i.supplierContactId).filter((x): x is string => !!x))];
-  const [updaters, suppliers] = await Promise.all([
+  const itemIds = items.map(i => i.id);
+  const [updaters, suppliers, attachmentCounts] = await Promise.all([
     updaterIds.length ? db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(inArray(usersTable.id, updaterIds)) : Promise.resolve([]),
     supplierIds.length ? db.select({ id: subcontractorsTable.id, name: subcontractorsTable.companyName }).from(subcontractorsTable).where(inArray(subcontractorsTable.id, supplierIds)) : Promise.resolve([]),
+    // One grouped count query (not N+1) so the list row can show "attachments
+    // visible wherever the item is" without a per-item fetch.
+    itemIds.length
+      ? db.select({ plantItemId: plantItemAttachmentsTable.plantItemId, count: sql<number>`count(*)::int` })
+          .from(plantItemAttachmentsTable)
+          .where(inArray(plantItemAttachmentsTable.plantItemId, itemIds))
+          .groupBy(plantItemAttachmentsTable.plantItemId)
+      : Promise.resolve([]),
   ]);
   const updaterName = new Map(updaters.map(u => [u.id, u.name]));
   const supplierName = new Map(suppliers.map(s => [s.id, s.name]));
+  const attachmentCount = new Map(attachmentCounts.map(a => [a.plantItemId, a.count]));
   return items.map(i => ({
     id: i.id,
     projectId: i.projectId,
@@ -65,6 +75,7 @@ async function serializeItems(items: ItemRow[]) {
     createdBy: i.createdBy,
     lastUpdatedByName: i.lastUpdatedBy ? (updaterName.get(i.lastUpdatedBy) ?? null) : null,
     lastUpdatedAt: i.lastUpdatedAt ? i.lastUpdatedAt.toISOString() : null,
+    attachmentCount: attachmentCount.get(i.id) ?? 0,
     createdAt: i.createdAt.toISOString(),
   }));
 }
