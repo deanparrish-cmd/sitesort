@@ -94,7 +94,16 @@
       "Bash(jobs -l)",
       "Bash(curl -s -m 10 https://www.sitesort.co.uk/api/health)",
       "Bash(curl -s -m 10 -o /dev/null -w \"%{http_code}\\\\n\" https://www.sitesort.co.uk/api/portal/daily-report)",
-      "Bash(curl -s -m 10 -o /dev/null -w \"%{http_code}\\\\n\" https://www.sitesort.co.uk/api/projects/x/members)"
+      "Bash(curl -s -m 10 -o /dev/null -w \"%{http_code}\\\\n\" https://www.sitesort.co.uk/api/projects/x/members)",
+      "Bash(curl -s https://www.sitesort.co.uk/api/projects/__TRACKED_VAR__/members -H 'Authorization: Bearer __CMDSUB_OUTPUT__')",
+      "Bash(curl -s https://www.sitesort.co.uk/api/projects/__TRACKED_VAR__/in-house-people -H 'Authorization: Bearer __CMDSUB_OUTPUT__')",
+      "Bash(curl -s -X PATCH https://www.sitesort.co.uk/api/projects/__TRACKED_VAR__/members/__TRACKED_VAR__/permissions -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -H 'Content-Type: application/json' -d '{\"canEditDailyReport\":true}')",
+      "Bash(curl -s -X PATCH https://www.sitesort.co.uk/api/projects/__TRACKED_VAR__/members/__TRACKED_VAR__/permissions -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -H 'Content-Type: application/json' -d '{\"canEditDailyReport\":false}')",
+      "Bash(curl -s -X PATCH https://www.sitesort.co.uk/api/projects/__TRACKED_VAR__/daily-reports/__TRACKED_VAR__ -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -H 'Content-Type: application/json' -d '{\"weather\":\"\",\"workCompleted\":\"\"}')",
+      "Bash(curl -s -X DELETE https://www.sitesort.co.uk/api/projects/__TRACKED_VAR__/portal-invites/__TRACKED_VAR__ -H 'Authorization: Bearer __CMDSUB_OUTPUT__')",
+      "Bash(curl -s -X POST https://www.sitesort.co.uk/api/projects/__TRACKED_VAR__/invites/__TRACKED_VAR__/revoke -H 'Authorization: Bearer __CMDSUB_OUTPUT__')",
+      "Bash(curl -s -X DELETE https://www.sitesort.co.uk/api/people/__TRACKED_VAR__ -H 'Authorization: Bearer __CMDSUB_OUTPUT__')",
+      "Bash(grep *)"
     ]
   },
   "hooks": {
