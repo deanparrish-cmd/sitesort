@@ -10,6 +10,19 @@ type Props = {
 
 type State = { error: Error | null };
 
+// A stale bundle (open in a tab across a deploy) fails to fetch a lazy
+// route's chunk by its now-replaced hashed filename — see App.tsx's
+// lazyWithRetry, which already auto-reloads once for this. This is a
+// second line of defense for any throw that gets here anyway (e.g. a
+// route that isn't lazy-loaded, or the reload flag already having been
+// spent this session): "Try again" can't fix a broken module reference by
+// clearing component state, so detect the shape and force a hard reload
+// instead of re-rendering the same crashed tree.
+function isChunkLoadError(error: Error): boolean {
+  const msg = error.message || "";
+  return /Failed to fetch dynamically imported module|Loading chunk|Failed to load module script|error loading dynamically imported module/i.test(msg);
+}
+
 export class ErrorBoundary extends Component<Props, State> {
   state: State = { error: null };
 
@@ -28,6 +41,10 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   handleRetry = () => {
+    if (this.state.error && isChunkLoadError(this.state.error)) {
+      window.location.reload();
+      return;
+    }
     this.setState({ error: null });
   };
 

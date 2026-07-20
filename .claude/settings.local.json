@@ -136,7 +136,23 @@
       "Bash(curl -s -X DELETE __TRACKED_VAR__/api/portal-users/ba7f591f-b88e-4234-b390-ffd05859a09b -H 'Authorization: Bearer __TRACKED_VAR__')",
       "Bash(ps -o pid,etime,cmd -p 51483)",
       "Bash(ps -p 69938 -o pid,cmd)",
-      "Bash(pkill -9 -f \"dist/index.mjs\")"
+      "Bash(pkill -9 -f \"dist/index.mjs\")",
+      "Bash(PROJECT_ID=__CMDSUB_OUTPUT__ PERSON_NAME='Crash TestUser' node ./invite-crash-repro.mjs)",
+      "Bash(PROJECT_ID=__CMDSUB_OUTPUT__ PERSON_NAME='Crash2 TestUser' node ./invite-crash-repro.mjs)",
+      "Bash(PROJECT_ID=__CMDSUB_OUTPUT__ PERSON_NAME='Crash Sub Co' node ./invite-crash-repro.mjs)",
+      "Bash(PROJECT_ID=__CMDSUB_OUTPUT__ PERSON_NAME='Crash2 TestUser' node ./invite-crash-repro2.mjs)",
+      "Bash(PROJECT_ID=__CMDSUB_OUTPUT__ PERSON_NAME='Crash4 Sub Co' TYPED_EMAIL=crash4-different@example.com node ./invite-crash-repro3.mjs)",
+      "Bash(PROJECT_ID=__CMDSUB_OUTPUT__ PERSON_NAME='Crash4 TestUser' TYPED_EMAIL=crash4-different@example.com node ./invite-crash-repro3.mjs)",
+      "Bash(:)",
+      "Bash(PROJECT_ID=__CMDSUB_OUTPUT__ PERSON_NAME='Amy Parrish' node ./invite-crash-mobile.mjs)",
+      "Read(//nix/store/**)",
+      "Bash(INVITE_TOKEN=__CMDSUB_OUTPUT__ node ./accept-crash-repro.mjs)",
+      "Bash(INVITE_TOKEN=__CMDSUB_OUTPUT__ node ./stale-chunk-repro.mjs)",
+      "Bash(INVITE_TOKEN=__CMDSUB_OUTPUT__ node ./used-invite-check.mjs)",
+      "Bash(curl -s http://localhost:8080/api/portal-users/orphaned -H 'Authorization: Bearer __TRACKED_VAR__')",
+      "Bash(curl -s -X DELETE http://localhost:8080/api/portal-users/9a58cb3e-a944-49b3-b1e5-d3ebb6159fc1 -H 'Authorization: Bearer __TRACKED_VAR__' -w ' -> %{http_code}\\\\n')",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080/api/health --max-time 2)",
+      "Bash(echo \" \\(health check exit: $?\\)\")"
     ]
   },
   "hooks": {
