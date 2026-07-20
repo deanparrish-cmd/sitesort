@@ -115,7 +115,12 @@
       "Bash(curl -s \"https://raw.githubusercontent.com/deanparrish-cmd/sitesort/main/artifacts/sitesort/src/pages/projects/detail/tabs/team-tab.tsx\")",
       "Bash(python3 -c ' *)",
       "Bash(kill 13440)",
-      "Bash(PORT=8080 NODE_ENV=development nohup node --enable-source-maps ./dist/index.mjs)"
+      "Bash(PORT=8080 NODE_ENV=development nohup node --enable-source-maps ./dist/index.mjs)",
+      "Bash(curl -s \"https://raw.githubusercontent.com/deanparrish-cmd/sitesort/main/artifacts/api-server/src/routes/subcontractors.ts\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/deanparrish-cmd/sitesort/main/lib/api-spec/openapi.yaml\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" https://www.sitesort.co.uk/api/health)",
+      "Bash(curl -s -X POST https://www.sitesort.co.uk/api/auth/login -H \"Content-Type: application/json\" -d '{\"email\":\"paul@acme.com\",\"password\":\"password123\"}')",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('token' in d, d.get\\('user',{}\\).get\\('companyId'\\)\\)\")"
     ]
   },
   "hooks": {
