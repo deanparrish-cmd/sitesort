@@ -870,6 +870,23 @@ router.delete("/admin/companies/:id", authenticate, requireAdmin, async (req, re
   }
 });
 
+// DELETE /api/admin/photos/:photoId — genuine, unrecoverable hard delete.
+// Distinct from the manager-facing DELETE /photos/:photoId (which only
+// archives): this is for clearing real test/mistake data that has no audit
+// value, explicitly admin-gated and explicitly destructive (no soft-delete
+// semantics, no restore). No other table has a foreign key onto photos.id.
+router.delete("/admin/photos/:photoId", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const rows = await db.select({ id: photosTable.id }).from(photosTable).where(eq(photosTable.id, req.params.photoId)).limit(1);
+    if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Photo not found" }); return; }
+    await db.delete(photosTable).where(eq(photosTable.id, req.params.photoId));
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Admin delete photo error");
+    res.status(500).json({ error: "server_error", message: "Failed to delete photo" });
+  }
+});
+
 router.get("/admin/export/activity", authenticate, requireAdmin, async (req, res) => {
   try {
     const docs = await db.select({

@@ -1758,6 +1758,12 @@ export const ListPhotosParams = zod.object({
 
 export const ListPhotosQueryParams = zod.object({
   category: zod.coerce.string().optional(),
+  archived: zod.coerce
+    .string()
+    .optional()
+    .describe(
+      '\"true\" to list only archived (soft-deleted) issues; default excludes them.',
+    ),
 });
 
 export const ListPhotosResponseItem = zod.object({
@@ -1765,7 +1771,12 @@ export const ListPhotosResponseItem = zod.object({
   projectId: zod.string(),
   uploadedBy: zod.string(),
   uploaderName: zod.string(),
-  photoUrl: zod.string(),
+  photoUrl: zod
+    .string()
+    .nullish()
+    .describe(
+      "Null once the photo has been individually removed (photoRemovedAt set) — the underlying file\/URL is retained, just hidden from normal reads.",
+    ),
   category: zod.enum(["progress", "compliance", "snag", "safety_concern"]),
   description: zod.string().nullish(),
   zone: zod.string().nullish(),
@@ -1784,6 +1795,20 @@ export const ListPhotosResponseItem = zod.object({
   closureReason: zod.enum(["completed", "invalid", "duplicate"]).nullish(),
   closureNote: zod.string().nullish(),
   updatedAt: zod.date().nullish(),
+  archivedAt: zod
+    .date()
+    .nullish()
+    .describe(
+      "Set when a manager archives (soft-deletes) this issue. Archived issues are excluded from normal list reads by default — see the archived query param.",
+    ),
+  archivedByName: zod.string().nullish(),
+  archiveReason: zod.string().nullish(),
+  photoRemovedAt: zod
+    .date()
+    .nullish()
+    .describe(
+      "Set when a manager removes just the attached photo, leaving the issue record intact.",
+    ),
 });
 export const ListPhotosResponse = zod.array(ListPhotosResponseItem);
 
@@ -1832,7 +1857,12 @@ export const UpdatePhotoResponse = zod.object({
   projectId: zod.string(),
   uploadedBy: zod.string(),
   uploaderName: zod.string(),
-  photoUrl: zod.string(),
+  photoUrl: zod
+    .string()
+    .nullish()
+    .describe(
+      "Null once the photo has been individually removed (photoRemovedAt set) — the underlying file\/URL is retained, just hidden from normal reads.",
+    ),
   category: zod.enum(["progress", "compliance", "snag", "safety_concern"]),
   description: zod.string().nullish(),
   zone: zod.string().nullish(),
@@ -1851,6 +1881,193 @@ export const UpdatePhotoResponse = zod.object({
   closureReason: zod.enum(["completed", "invalid", "duplicate"]).nullish(),
   closureNote: zod.string().nullish(),
   updatedAt: zod.date().nullish(),
+  archivedAt: zod
+    .date()
+    .nullish()
+    .describe(
+      "Set when a manager archives (soft-deletes) this issue. Archived issues are excluded from normal list reads by default — see the archived query param.",
+    ),
+  archivedByName: zod.string().nullish(),
+  archiveReason: zod.string().nullish(),
+  photoRemovedAt: zod
+    .date()
+    .nullish()
+    .describe(
+      "Set when a manager removes just the attached photo, leaving the issue record intact.",
+    ),
+});
+
+/**
+ * @summary Archive (soft-delete) a site issue. Manager-only; the row is retained for audit, not removed.
+ */
+export const ArchivePhotoParams = zod.object({
+  photoId: zod.coerce.string(),
+});
+
+export const ArchivePhotoBody = zod
+  .object({
+    reason: zod.string().optional(),
+  })
+  .describe("Optional reason recorded on archive.");
+
+export const ArchivePhotoResponse = zod.object({
+  id: zod.string(),
+  projectId: zod.string(),
+  uploadedBy: zod.string(),
+  uploaderName: zod.string(),
+  photoUrl: zod
+    .string()
+    .nullish()
+    .describe(
+      "Null once the photo has been individually removed (photoRemovedAt set) — the underlying file\/URL is retained, just hidden from normal reads.",
+    ),
+  category: zod.enum(["progress", "compliance", "snag", "safety_concern"]),
+  description: zod.string().nullish(),
+  zone: zod.string().nullish(),
+  referenceNumber: zod.string(),
+  latitude: zod.number().nullish(),
+  longitude: zod.number().nullish(),
+  takenAt: zod.date(),
+  status: zod
+    .string()
+    .nullish()
+    .describe(
+      "Free-text lifecycle status. Issue categories (snag\/safety_concern\/work_completed-with-status): new | open | in_progress | pending_confirmation | resolved. resolved is the sole terminal status; closureReason distinguishes normal completion from invalid\/duplicate.",
+    ),
+  assignedToUserId: zod.string().nullish(),
+  dueDate: zod.string().nullish(),
+  closureReason: zod.enum(["completed", "invalid", "duplicate"]).nullish(),
+  closureNote: zod.string().nullish(),
+  updatedAt: zod.date().nullish(),
+  archivedAt: zod
+    .date()
+    .nullish()
+    .describe(
+      "Set when a manager archives (soft-deletes) this issue. Archived issues are excluded from normal list reads by default — see the archived query param.",
+    ),
+  archivedByName: zod.string().nullish(),
+  archiveReason: zod.string().nullish(),
+  photoRemovedAt: zod
+    .date()
+    .nullish()
+    .describe(
+      "Set when a manager removes just the attached photo, leaving the issue record intact.",
+    ),
+});
+
+/**
+ * @summary Un-archive a previously archived site issue. Manager-only.
+ */
+export const RestorePhotoParams = zod.object({
+  photoId: zod.coerce.string(),
+});
+
+export const RestorePhotoResponse = zod.object({
+  id: zod.string(),
+  projectId: zod.string(),
+  uploadedBy: zod.string(),
+  uploaderName: zod.string(),
+  photoUrl: zod
+    .string()
+    .nullish()
+    .describe(
+      "Null once the photo has been individually removed (photoRemovedAt set) — the underlying file\/URL is retained, just hidden from normal reads.",
+    ),
+  category: zod.enum(["progress", "compliance", "snag", "safety_concern"]),
+  description: zod.string().nullish(),
+  zone: zod.string().nullish(),
+  referenceNumber: zod.string(),
+  latitude: zod.number().nullish(),
+  longitude: zod.number().nullish(),
+  takenAt: zod.date(),
+  status: zod
+    .string()
+    .nullish()
+    .describe(
+      "Free-text lifecycle status. Issue categories (snag\/safety_concern\/work_completed-with-status): new | open | in_progress | pending_confirmation | resolved. resolved is the sole terminal status; closureReason distinguishes normal completion from invalid\/duplicate.",
+    ),
+  assignedToUserId: zod.string().nullish(),
+  dueDate: zod.string().nullish(),
+  closureReason: zod.enum(["completed", "invalid", "duplicate"]).nullish(),
+  closureNote: zod.string().nullish(),
+  updatedAt: zod.date().nullish(),
+  archivedAt: zod
+    .date()
+    .nullish()
+    .describe(
+      "Set when a manager archives (soft-deletes) this issue. Archived issues are excluded from normal list reads by default — see the archived query param.",
+    ),
+  archivedByName: zod.string().nullish(),
+  archiveReason: zod.string().nullish(),
+  photoRemovedAt: zod
+    .date()
+    .nullish()
+    .describe(
+      "Set when a manager removes just the attached photo, leaving the issue record intact.",
+    ),
+});
+
+/**
+ * @summary Remove just the attached image from an issue (manager-only). Soft — the underlying file/URL is retained, only hidden from reads.
+ */
+export const RemovePhotoAttachmentParams = zod.object({
+  photoId: zod.coerce.string(),
+});
+
+export const RemovePhotoAttachmentResponse = zod.object({
+  id: zod.string(),
+  projectId: zod.string(),
+  uploadedBy: zod.string(),
+  uploaderName: zod.string(),
+  photoUrl: zod
+    .string()
+    .nullish()
+    .describe(
+      "Null once the photo has been individually removed (photoRemovedAt set) — the underlying file\/URL is retained, just hidden from normal reads.",
+    ),
+  category: zod.enum(["progress", "compliance", "snag", "safety_concern"]),
+  description: zod.string().nullish(),
+  zone: zod.string().nullish(),
+  referenceNumber: zod.string(),
+  latitude: zod.number().nullish(),
+  longitude: zod.number().nullish(),
+  takenAt: zod.date(),
+  status: zod
+    .string()
+    .nullish()
+    .describe(
+      "Free-text lifecycle status. Issue categories (snag\/safety_concern\/work_completed-with-status): new | open | in_progress | pending_confirmation | resolved. resolved is the sole terminal status; closureReason distinguishes normal completion from invalid\/duplicate.",
+    ),
+  assignedToUserId: zod.string().nullish(),
+  dueDate: zod.string().nullish(),
+  closureReason: zod.enum(["completed", "invalid", "duplicate"]).nullish(),
+  closureNote: zod.string().nullish(),
+  updatedAt: zod.date().nullish(),
+  archivedAt: zod
+    .date()
+    .nullish()
+    .describe(
+      "Set when a manager archives (soft-deletes) this issue. Archived issues are excluded from normal list reads by default — see the archived query param.",
+    ),
+  archivedByName: zod.string().nullish(),
+  archiveReason: zod.string().nullish(),
+  photoRemovedAt: zod
+    .date()
+    .nullish()
+    .describe(
+      "Set when a manager removes just the attached photo, leaving the issue record intact.",
+    ),
+});
+
+/**
+ * @summary Genuinely and permanently delete a photo/site-issue row. Admin-only — for clearing test/mistake data with no audit value. Not a soft delete; see DELETE /photos/{photoId} for the manager-facing archive.
+ */
+export const AdminDeletePhotoParams = zod.object({
+  photoId: zod.coerce.string(),
+});
+
+export const AdminDeletePhotoResponse = zod.object({
+  success: zod.boolean().optional(),
 });
 
 /**

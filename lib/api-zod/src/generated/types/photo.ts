@@ -13,7 +13,8 @@ export interface Photo {
   projectId: string;
   uploadedBy: string;
   uploaderName: string;
-  photoUrl: string;
+  /** Null once the photo has been individually removed (photoRemovedAt set) — the underlying file/URL is retained, just hidden from normal reads. */
+  photoUrl?: string | null;
   category: PhotoCategory;
   description?: string | null;
   zone?: string | null;
@@ -28,4 +29,10 @@ export interface Photo {
   closureReason?: PhotoClosureReason;
   closureNote?: string | null;
   updatedAt?: Date | null;
+  /** Set when a manager archives (soft-deletes) this issue. Archived issues are excluded from normal list reads by default — see the archived query param. */
+  archivedAt?: Date | null;
+  archivedByName?: string | null;
+  archiveReason?: string | null;
+  /** Set when a manager removes just the attached photo, leaving the issue record intact. */
+  photoRemovedAt?: Date | null;
 }

@@ -8,4 +8,8 @@
 
 export type ListPhotosParams = {
   category?: string;
+  /**
+   * "true" to list only archived (soft-deleted) issues; default excludes them.
+   */
+  archived?: string;
 };

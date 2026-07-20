@@ -466,7 +466,18 @@ export async function ensureSchema(): Promise<void> {
     // portal" possible on the same messages table.
     await pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS project_id text REFERENCES projects(id)`);
 
-    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols + portal_shares + portal_sessions + push_subscriptions + pending_pushes + subcontractor_documents + subcontractors/people.archived_at + people.first_name/last_name + subcontractors.contact_first_name/contact_last_name + project_members write-permission cols + activity_log.metadata + photos closure/updated_at cols + plant_items/plant_item_attachments/plant_item_distributions + people.is_primary_contact + person_certifications + primary-contact/project_members backfill + project_members.can_edit_daily_report + messages.project_id ready");
+    // Site issue archive (soft-delete) + individual photo removal. Both retain
+    // the underlying row/file — archived issues stay auditable via a filter,
+    // a removed photo's URL is never erased from the DB, only hidden from
+    // normal reads. Genuine destructive delete is a separate admin-only route,
+    // not modeled here.
+    await pool.query(`ALTER TABLE photos ADD COLUMN IF NOT EXISTS archived_at timestamp`);
+    await pool.query(`ALTER TABLE photos ADD COLUMN IF NOT EXISTS archived_by text REFERENCES users(id)`);
+    await pool.query(`ALTER TABLE photos ADD COLUMN IF NOT EXISTS archive_reason text`);
+    await pool.query(`ALTER TABLE photos ADD COLUMN IF NOT EXISTS photo_removed_at timestamp`);
+    await pool.query(`ALTER TABLE photos ADD COLUMN IF NOT EXISTS photo_removed_by text REFERENCES users(id)`);
+
+    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols + portal_shares + portal_sessions + push_subscriptions + pending_pushes + subcontractor_documents + subcontractors/people.archived_at + people.first_name/last_name + subcontractors.contact_first_name/contact_last_name + project_members write-permission cols + activity_log.metadata + photos closure/updated_at cols + plant_items/plant_item_attachments/plant_item_distributions + people.is_primary_contact + person_certifications + primary-contact/project_members backfill + project_members.can_edit_daily_report + messages.project_id + photos archive/photo-removal cols ready");
   } catch (err) {
     // Don't crash the server — membership lookups fall back to the home company.
     logger.error({ err }, "ensureSchema failed (continuing with home-company fallback)");

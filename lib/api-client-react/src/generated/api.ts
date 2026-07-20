@@ -22,6 +22,8 @@ import type {
   AddInsuranceRequest,
   AddMemberRequest,
   AddProjectMemberPersonRequest,
+  AdminDeletePhoto200,
+  ArchivePhotoRequest,
   AuditLogEntry,
   AuthResponse,
   ComplianceOverview,
@@ -6020,6 +6022,345 @@ export const useUpdatePhoto = <
   TContext
 > => {
   return useMutation(getUpdatePhotoMutationOptions(options));
+};
+
+/**
+ * @summary Archive (soft-delete) a site issue. Manager-only; the row is retained for audit, not removed.
+ */
+export const getArchivePhotoUrl = (photoId: string) => {
+  return `/api/photos/${photoId}`;
+};
+
+export const archivePhoto = async (
+  photoId: string,
+  archivePhotoRequest?: ArchivePhotoRequest,
+  options?: RequestInit,
+): Promise<Photo> => {
+  return customFetch<Photo>(getArchivePhotoUrl(photoId), {
+    ...options,
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(archivePhotoRequest),
+  });
+};
+
+export const getArchivePhotoMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof archivePhoto>>,
+    TError,
+    { photoId: string; data: BodyType<ArchivePhotoRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof archivePhoto>>,
+  TError,
+  { photoId: string; data: BodyType<ArchivePhotoRequest> },
+  TContext
+> => {
+  const mutationKey = ["archivePhoto"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof archivePhoto>>,
+    { photoId: string; data: BodyType<ArchivePhotoRequest> }
+  > = (props) => {
+    const { photoId, data } = props ?? {};
+
+    return archivePhoto(photoId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ArchivePhotoMutationResult = NonNullable<
+  Awaited<ReturnType<typeof archivePhoto>>
+>;
+export type ArchivePhotoMutationBody = BodyType<ArchivePhotoRequest>;
+export type ArchivePhotoMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Archive (soft-delete) a site issue. Manager-only; the row is retained for audit, not removed.
+ */
+export const useArchivePhoto = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof archivePhoto>>,
+    TError,
+    { photoId: string; data: BodyType<ArchivePhotoRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof archivePhoto>>,
+  TError,
+  { photoId: string; data: BodyType<ArchivePhotoRequest> },
+  TContext
+> => {
+  return useMutation(getArchivePhotoMutationOptions(options));
+};
+
+/**
+ * @summary Un-archive a previously archived site issue. Manager-only.
+ */
+export const getRestorePhotoUrl = (photoId: string) => {
+  return `/api/photos/${photoId}/restore`;
+};
+
+export const restorePhoto = async (
+  photoId: string,
+  options?: RequestInit,
+): Promise<Photo> => {
+  return customFetch<Photo>(getRestorePhotoUrl(photoId), {
+    ...options,
+    method: "PATCH",
+  });
+};
+
+export const getRestorePhotoMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof restorePhoto>>,
+    TError,
+    { photoId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof restorePhoto>>,
+  TError,
+  { photoId: string },
+  TContext
+> => {
+  const mutationKey = ["restorePhoto"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof restorePhoto>>,
+    { photoId: string }
+  > = (props) => {
+    const { photoId } = props ?? {};
+
+    return restorePhoto(photoId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RestorePhotoMutationResult = NonNullable<
+  Awaited<ReturnType<typeof restorePhoto>>
+>;
+
+export type RestorePhotoMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Un-archive a previously archived site issue. Manager-only.
+ */
+export const useRestorePhoto = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof restorePhoto>>,
+    TError,
+    { photoId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof restorePhoto>>,
+  TError,
+  { photoId: string },
+  TContext
+> => {
+  return useMutation(getRestorePhotoMutationOptions(options));
+};
+
+/**
+ * @summary Remove just the attached image from an issue (manager-only). Soft — the underlying file/URL is retained, only hidden from reads.
+ */
+export const getRemovePhotoAttachmentUrl = (photoId: string) => {
+  return `/api/photos/${photoId}/photo`;
+};
+
+export const removePhotoAttachment = async (
+  photoId: string,
+  options?: RequestInit,
+): Promise<Photo> => {
+  return customFetch<Photo>(getRemovePhotoAttachmentUrl(photoId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getRemovePhotoAttachmentMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removePhotoAttachment>>,
+    TError,
+    { photoId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof removePhotoAttachment>>,
+  TError,
+  { photoId: string },
+  TContext
+> => {
+  const mutationKey = ["removePhotoAttachment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof removePhotoAttachment>>,
+    { photoId: string }
+  > = (props) => {
+    const { photoId } = props ?? {};
+
+    return removePhotoAttachment(photoId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RemovePhotoAttachmentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof removePhotoAttachment>>
+>;
+
+export type RemovePhotoAttachmentMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Remove just the attached image from an issue (manager-only). Soft — the underlying file/URL is retained, only hidden from reads.
+ */
+export const useRemovePhotoAttachment = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removePhotoAttachment>>,
+    TError,
+    { photoId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof removePhotoAttachment>>,
+  TError,
+  { photoId: string },
+  TContext
+> => {
+  return useMutation(getRemovePhotoAttachmentMutationOptions(options));
+};
+
+/**
+ * @summary Genuinely and permanently delete a photo/site-issue row. Admin-only — for clearing test/mistake data with no audit value. Not a soft delete; see DELETE /photos/{photoId} for the manager-facing archive.
+ */
+export const getAdminDeletePhotoUrl = (photoId: string) => {
+  return `/api/admin/photos/${photoId}`;
+};
+
+export const adminDeletePhoto = async (
+  photoId: string,
+  options?: RequestInit,
+): Promise<AdminDeletePhoto200> => {
+  return customFetch<AdminDeletePhoto200>(getAdminDeletePhotoUrl(photoId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getAdminDeletePhotoMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminDeletePhoto>>,
+    TError,
+    { photoId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adminDeletePhoto>>,
+  TError,
+  { photoId: string },
+  TContext
+> => {
+  const mutationKey = ["adminDeletePhoto"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adminDeletePhoto>>,
+    { photoId: string }
+  > = (props) => {
+    const { photoId } = props ?? {};
+
+    return adminDeletePhoto(photoId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdminDeletePhotoMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adminDeletePhoto>>
+>;
+
+export type AdminDeletePhotoMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Genuinely and permanently delete a photo/site-issue row. Admin-only — for clearing test/mistake data with no audit value. Not a soft delete; see DELETE /photos/{photoId} for the manager-facing archive.
+ */
+export const useAdminDeletePhoto = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminDeletePhoto>>,
+    TError,
+    { photoId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adminDeletePhoto>>,
+  TError,
+  { photoId: string },
+  TContext
+> => {
+  return useMutation(getAdminDeletePhotoMutationOptions(options));
 };
 
 /**

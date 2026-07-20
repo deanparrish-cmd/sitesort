@@ -1489,6 +1489,11 @@ paths:
           in: query
           schema:
             type: string
+        - name: archived
+          in: query
+          description: "\"true\" to list only archived (soft-deleted) issues; default excludes them."
+          schema:
+            type: string
       responses:
         "200":
           description: List of photos
@@ -1548,6 +1553,125 @@ paths:
                 $ref: "#/components/schemas/Photo"
         "403":
           description: Forbidden (e.g. non-PM attempting invalid/duplicate closure)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: archivePhoto
+      tags: [photos]
+      summary: Archive (soft-delete) a site issue. Manager-only; the row is retained for audit, not removed.
+      parameters:
+        - name: photoId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchivePhotoRequest"
+      responses:
+        "200":
+          description: Issue archived
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Photo"
+        "403":
+          description: Forbidden (not a manager)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /photos/{photoId}/restore:
+    patch:
+      operationId: restorePhoto
+      tags: [photos]
+      summary: Un-archive a previously archived site issue. Manager-only.
+      parameters:
+        - name: photoId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Issue restored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Photo"
+        "403":
+          description: Forbidden (not a manager)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /photos/{photoId}/photo:
+    delete:
+      operationId: removePhotoAttachment
+      tags: [photos]
+      summary: Remove just the attached image from an issue (manager-only). Soft — the underlying file/URL is retained, only hidden from reads.
+      parameters:
+        - name: photoId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Photo removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Photo"
+        "400":
+          description: No photo to remove
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden (not a manager)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/photos/{photoId}:
+    delete:
+      operationId: adminDeletePhoto
+      tags: [admin]
+      summary: Genuinely and permanently delete a photo/site-issue row. Admin-only — for clearing test/mistake data with no audit value. Not a soft delete; see DELETE /photos/{photoId} for the manager-facing archive.
+      parameters:
+        - name: photoId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Photo permanently deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        "403":
+          description: Forbidden (not an admin)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Photo not found
           content:
             application/json:
               schema:
@@ -4146,6 +4270,8 @@ components:
           type: string
         photoUrl:
           type: string
+          nullable: true
+          description: "Null once the photo has been individually removed (photoRemovedAt set) — the underlying file/URL is retained, just hidden from normal reads."
         category:
           type: string
           enum: [progress, compliance, snag, safety_concern]
@@ -4187,7 +4313,30 @@ components:
           type: string
           format: date-time
           nullable: true
-      required: [id, projectId, uploadedBy, uploaderName, photoUrl, category, referenceNumber, takenAt]
+        archivedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: "Set when a manager archives (soft-deletes) this issue. Archived issues are excluded from normal list reads by default — see the archived query param."
+        archivedByName:
+          type: string
+          nullable: true
+        archiveReason:
+          type: string
+          nullable: true
+        photoRemovedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: "Set when a manager removes just the attached photo, leaving the issue record intact."
+      required: [id, projectId, uploadedBy, uploaderName, category, referenceNumber, takenAt]
+
+    ArchivePhotoRequest:
+      type: object
+      description: Optional reason recorded on archive.
+      properties:
+        reason:
+          type: string
 
     UpdatePhotoRequest:
       type: object

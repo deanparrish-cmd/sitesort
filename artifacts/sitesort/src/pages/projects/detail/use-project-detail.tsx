@@ -33,7 +33,7 @@ return doc.type === "drawing" && doc.revision ? `Rev ${doc.revision}` : `v${doc.
 
 export type PermitItem = { id: string; type: string; description: string; startDate: string; expiryDate: string; dueDate?: string | null; status: string; responsibleUserId?: string; responsibleName?: string; overdue?: boolean; documentUrl?: string | null; archivedAt?: string | null };
 export type InvoiceItem = { id: string; direction: string; counterpartyName: string; description: string; amount: string; currency: string; dueDate: string; status: string; reference?: string | null; attachmentUrl?: string | null };
-export type PhotoItem = { id: string; uploadedBy: string; uploaderName: string; photoUrl: string | null; category: string; description: string | null; zone: string | null; referenceNumber: string; takenAt: string; status: string | null; resolvedAt: string | null; latitude?: number | null; longitude?: number | null; assignedToUserId?: string | null; assignedToName?: string | null; dueDate?: string | null; overdue?: boolean; closureReason?: string | null; closureNote?: string | null };
+export type PhotoItem = { id: string; uploadedBy: string; uploaderName: string; photoUrl: string | null; category: string; description: string | null; zone: string | null; referenceNumber: string; takenAt: string; status: string | null; resolvedAt: string | null; latitude?: number | null; longitude?: number | null; assignedToUserId?: string | null; assignedToName?: string | null; dueDate?: string | null; overdue?: boolean; closureReason?: string | null; closureNote?: string | null; archivedAt?: string | null; archivedByName?: string | null; archiveReason?: string | null; photoRemovedAt?: string | null };
 export type MilestoneItem = { id: string; title: string; dueDate: string; completedAt: string | null; order: number };
 export type CheckinItem = { id: string; workerName: string; photoUrl: string; checkedInAt: string; lat: number | null; lng: number | null };
 export type ReportSummary = { id: string; reportDate: string; generatedAt: string; checkinCount: number; documentEventCount: number; photoCount: number; hasManagerReport?: boolean };
@@ -109,6 +109,10 @@ export function useProjectDetailState() {
 
   const [projectInvoices, setProjectInvoices] = useState<InvoiceItem[]>([]);
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
+  const [archivedPhotos, setArchivedPhotos] = useState<PhotoItem[]>([]);
+  const [showArchivedIssues, setShowArchivedIssues] = useState(false);
+  const [archivedIssuesLoading, setArchivedIssuesLoading] = useState(false);
+  const [archivedIssuesLoaded, setArchivedIssuesLoaded] = useState(false);
   const [milestones, setMilestones] = useState<MilestoneItem[]>([]);
   const [checkins, setCheckins] = useState<CheckinItem[]>([]);
   const [reports, setReports] = useState<ReportSummary[]>([]);
@@ -222,6 +226,71 @@ export function useProjectDetailState() {
           }
         }
       });
+  };
+
+  // Lazily loaded on first toggle to "Archived" — no need to fetch a company's
+  // whole archive history on every normal page load.
+  const fetchArchivedPhotos = () => {
+    setArchivedIssuesLoading(true);
+    fetch(`/api/projects/${projectId}/photos?archived=true`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : [])
+      .then((list: PhotoItem[]) => { setArchivedPhotos(list); setArchivedIssuesLoaded(true); })
+      .finally(() => setArchivedIssuesLoading(false));
+  };
+  const toggleArchivedIssues = () => {
+    setShowArchivedIssues(v => {
+      const next = !v;
+      if (next && !archivedIssuesLoaded) fetchArchivedPhotos();
+      return next;
+    });
+  };
+
+  // Archive (soft-delete) a site issue — manager-only server-side. Drops it
+  // out of the active list; refetch the archived list too if it's in view so
+  // the toggle stays consistent without a full page reload.
+  const archiveIssue = async (photoId: string, reason?: string) => {
+    const res = await fetch(`/api/photos/${photoId}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+      body: JSON.stringify({ reason: reason?.trim() || undefined }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      toast({ title: "Couldn't archive issue", description: body?.message, variant: "destructive" });
+      return;
+    }
+    const archived: PhotoItem = await res.json();
+    setPhotos(prev => prev.filter(p => p.id !== photoId));
+    setViewingPhoto(prev => prev?.id === photoId ? null : prev);
+    if (archivedIssuesLoaded) setArchivedPhotos(prev => [archived, ...prev]);
+    toast({ title: "Issue archived", description: "Moved to Archived — still viewable there." });
+  };
+
+  const restoreIssue = async (photoId: string) => {
+    const res = await fetch(`/api/photos/${photoId}/restore`, { method: "PATCH", headers: authHeaders() });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      toast({ title: "Couldn't restore issue", description: body?.message, variant: "destructive" });
+      return;
+    }
+    const restored: PhotoItem = await res.json();
+    setArchivedPhotos(prev => prev.filter(p => p.id !== photoId));
+    setPhotos(prev => [restored, ...prev]);
+    toast({ title: "Issue restored" });
+  };
+
+  const removeIssuePhoto = async (photoId: string) => {
+    const res = await fetch(`/api/photos/${photoId}/photo`, { method: "DELETE", headers: authHeaders() });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      toast({ title: "Couldn't remove photo", description: body?.message, variant: "destructive" });
+      return;
+    }
+    const updated: PhotoItem = await res.json();
+    setPhotos(prev => prev.map(p => p.id === photoId ? updated : p));
+    setArchivedPhotos(prev => prev.map(p => p.id === photoId ? updated : p));
+    setViewingPhoto(prev => prev?.id === photoId ? updated : prev);
+    toast({ title: "Photo removed" });
   };
 
   const fetchReports = () => {
@@ -1336,6 +1405,13 @@ tr:last-child td{border-bottom:none}
     setProjectInvoices,
     photos,
     setPhotos,
+    archivedPhotos,
+    showArchivedIssues,
+    archivedIssuesLoading,
+    toggleArchivedIssues,
+    archiveIssue,
+    restoreIssue,
+    removeIssuePhoto,
     milestones,
     setMilestones,
     checkins,
