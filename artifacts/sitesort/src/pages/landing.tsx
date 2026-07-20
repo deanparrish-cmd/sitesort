@@ -308,7 +308,7 @@ export default function LandingPage() {
                 )}
                 <div className="w-16 h-16 rounded-xl overflow-hidden flex items-center justify-center mb-4 ring-1 ring-primary/30">
                   <img
-                    src={`${import.meta.env.BASE_URL}images/${plan.image}?v=4`}
+                    src={`${import.meta.env.BASE_URL}images/${plan.image}?v=5`}
                     alt={`SiteSort ${plan.name}`}
                     className="w-full h-full object-cover"
                   />
