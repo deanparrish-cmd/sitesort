@@ -5,6 +5,7 @@ import { OverdueBadge } from "@/components/ui/overdue-badge";
 import { formatDate, formatBytes, cn } from "@/lib/utils";
 import { useDetail } from "../context";
 import { CloseInvalidDialog } from "./close-issue-dialog";
+import { ArchiveIssueDialog } from "./archive-issue-dialog";
 
 export function PhotoOverlay() {
   const {
@@ -16,10 +17,14 @@ export function PhotoOverlay() {
     updatePhotoStatus,
     confirmIssueDone,
     closeIssueAsInvalid,
+    archiveIssue,
+    restoreIssue,
+    removeIssuePhoto,
     caps,
     setSharingDoc,
   } = useDetail();
   const [closingIssueId, setClosingIssueId] = useState<string | null>(null);
+  const [archivingIssueId, setArchivingIssueId] = useState<string | null>(null);
 
   return (
     <>
@@ -92,6 +97,30 @@ export function PhotoOverlay() {
                       className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border border-border bg-background text-destructive hover:bg-destructive/10 transition-colors"
                     >
                       <Ban className="w-3.5 h-3.5" /><span className="hidden sm:inline">Close invalid/duplicate</span>
+                    </button>
+                  )}
+                  {isIssue && caps.canManageProjects && !viewingPhoto.archivedAt && (
+                    <button
+                      onClick={() => setArchivingIssueId(viewingPhoto.id)}
+                      className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border border-border bg-background text-destructive hover:bg-destructive/10 transition-colors"
+                    >
+                      <Archive className="w-3.5 h-3.5" /><span className="hidden sm:inline">Archive</span>
+                    </button>
+                  )}
+                  {isIssue && caps.canManageProjects && viewingPhoto.archivedAt && (
+                    <button
+                      onClick={() => restoreIssue(viewingPhoto.id)}
+                      className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border bg-background hover:bg-muted transition-colors"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" /><span className="hidden sm:inline">Restore</span>
+                    </button>
+                  )}
+                  {isIssue && photoUrl && caps.canManageProjects && (
+                    <button
+                      onClick={() => removeIssuePhoto(viewingPhoto.id)}
+                      className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border border-border bg-background text-destructive hover:bg-destructive/10 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /><span className="hidden sm:inline">Remove photo</span>
                     </button>
                   )}
                   {photoUrl && (
@@ -205,6 +234,13 @@ export function PhotoOverlay() {
                       <p className="text-sm">{formatDate(viewingPhoto.resolvedAt)}</p>
                     </div>
                   )}
+                  {viewingPhoto.archivedAt && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Archived</p>
+                      <p className="text-sm">{formatDate(viewingPhoto.archivedAt)}{viewingPhoto.archivedByName ? ` by ${viewingPhoto.archivedByName}` : ""}</p>
+                      {viewingPhoto.archiveReason && <p className="text-xs text-muted-foreground italic mt-0.5 break-words">"{viewingPhoto.archiveReason}"</p>}
+                    </div>
+                  )}
                   {isIssue && caps.canManageProjects && (
                     <div className="pt-2 space-y-1.5">
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Update Status</p>
@@ -252,6 +288,7 @@ export function PhotoOverlay() {
         );
       })()}
       <CloseInvalidDialog photoId={closingIssueId} onClose={() => setClosingIssueId(null)} closeIssueAsInvalid={closeIssueAsInvalid} />
+      <ArchiveIssueDialog photoId={archivingIssueId} onClose={() => setArchivingIssueId(null)} archiveIssue={archiveIssue} />
     </>
   );
 }

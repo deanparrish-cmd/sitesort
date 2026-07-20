@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { photosTable, usersTable, notificationsTable, projectMembersTable, projectsTable } from "@workspace/db/schema";
-import { eq, and, count, inArray, isNotNull } from "drizzle-orm";
+import { eq, and, count, inArray, isNotNull, isNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { sendSafetyAlertEmail } from "../lib/email";
@@ -18,14 +18,17 @@ async function nameForUser(userId: string | null | undefined): Promise<string | 
   return rows[0]?.name ?? null;
 }
 
-function formatPhoto(p: typeof photosTable.$inferSelect, uploaderName: string, projectName?: string, assignedToName?: string | null) {
+function formatPhoto(p: typeof photosTable.$inferSelect, uploaderName: string, projectName?: string, assignedToName?: string | null, archivedByName?: string | null) {
   return {
     id: p.id,
     projectId: p.projectId,
     projectName: projectName ?? null,
     uploadedBy: p.uploadedBy,
     uploaderName,
-    photoUrl: p.photoUrl,
+    // Hidden once the photo has been individually removed (photoRemovedAt
+    // set) — the raw URL stays in the DB (retained, not destroyed), this is
+    // just what's exposed to normal reads.
+    photoUrl: p.photoRemovedAt ? null : p.photoUrl,
     category: p.category,
     description: p.description ?? null,
     zone: p.zone ?? null,
@@ -44,6 +47,12 @@ function formatPhoto(p: typeof photosTable.$inferSelect, uploaderName: string, p
     closureReason: p.closureReason ?? null,
     closureNote: p.closureNote ?? null,
     updatedAt: p.updatedAt ? p.updatedAt.toISOString() : null,
+    // Soft-delete (manager-only). Archived issues are excluded from normal
+    // list reads by default — see the `archived=true` query param.
+    archivedAt: p.archivedAt ? p.archivedAt.toISOString() : null,
+    archivedByName: archivedByName ?? null,
+    archiveReason: p.archiveReason ?? null,
+    photoRemovedAt: p.photoRemovedAt ? p.photoRemovedAt.toISOString() : null,
   };
 }
 
@@ -57,14 +66,17 @@ router.get("/projects/:projectId/photos", authenticate, async (req, res) => {
       return;
     }
 
-    const { category } = req.query as { category?: string };
+    const { category, archived } = req.query as { category?: string; archived?: string };
     const conditions = [eq(photosTable.projectId, req.params.projectId)];
     if (category) conditions.push(eq(photosTable.category, category));
+    // Default: active only (mirrors people.ts's `?archived=true` convention) —
+    // archived issues stay in the DB and out of the normal list/counts.
+    conditions.push(archived === "true" ? isNotNull(photosTable.archivedAt) : isNull(photosTable.archivedAt));
 
     const photos = await db.select().from(photosTable).where(and(...conditions)).orderBy(photosTable.takenAt);
     const result = await Promise.all(photos.map(async (p) => {
       const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, p.uploadedBy)).limit(1);
-      return formatPhoto(p, userRows[0]?.name ?? "Unknown", project[0].name, await nameForUser(p.assignedToUserId));
+      return formatPhoto(p, userRows[0]?.name ?? "Unknown", project[0].name, await nameForUser(p.assignedToUserId), await nameForUser(p.archivedBy));
     }));
     res.json(result);
   } catch (err) {
@@ -84,7 +96,7 @@ router.get("/photos/:photoId", authenticate, async (req, res) => {
       .limit(1);
     if (!project[0]) { res.status(404).json({ error: "not_found", message: "Photo not found" }); return; }
     const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, photo.uploadedBy)).limit(1);
-    res.json(formatPhoto(photo, userRows[0]?.name ?? "Unknown", project[0].name, await nameForUser(photo.assignedToUserId)));
+    res.json(formatPhoto(photo, userRows[0]?.name ?? "Unknown", project[0].name, await nameForUser(photo.assignedToUserId), await nameForUser(photo.archivedBy)));
   } catch (err) {
     req.log.error({ err }, "Get photo error");
     res.status(500).json({ error: "server_error", message: "Failed to get photo" });
@@ -172,10 +184,107 @@ router.patch("/photos/:photoId", authenticate, async (req, res) => {
 
     const updated = await db.select().from(photosTable).where(eq(photosTable.id, req.params.photoId)).limit(1);
     const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, photo.uploadedBy)).limit(1);
-    res.json(formatPhoto(updated[0], userRows[0]?.name ?? "Unknown", project[0].name, await nameForUser(updated[0].assignedToUserId)));
+    res.json(formatPhoto(updated[0], userRows[0]?.name ?? "Unknown", project[0].name, await nameForUser(updated[0].assignedToUserId), await nameForUser(updated[0].archivedBy)));
   } catch (err) {
     req.log.error({ err }, "Update photo error");
     res.status(500).json({ error: "server_error", message: "Failed to update photo" });
+  }
+});
+
+// DELETE /api/photos/:photoId — soft-delete (archive) a site issue. Manager-
+// only; portal members never reach this route at all (portal.ts has no
+// equivalent). Retains the row for audit — see /admin/photos/:photoId in
+// admin.ts for the genuine, admin-only hard delete.
+router.delete("/photos/:photoId", authenticate, async (req, res) => {
+  try {
+    if (!MANAGER_ROLES.includes(req.user!.role)) {
+      res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can archive an issue." });
+      return;
+    }
+    const rows = await db.select().from(photosTable).where(eq(photosTable.id, req.params.photoId)).limit(1);
+    if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Photo not found" }); return; }
+    const photo = rows[0];
+    const project = await db.select({ id: projectsTable.id, name: projectsTable.name })
+      .from(projectsTable)
+      .where(and(eq(projectsTable.id, photo.projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!project[0]) { res.status(403).json({ error: "forbidden" }); return; }
+
+    const { reason } = req.body as { reason?: string };
+    await db.update(photosTable)
+      .set({ archivedAt: new Date(), archivedBy: req.user!.id, archiveReason: reason?.trim() || null, updatedAt: new Date() })
+      .where(eq(photosTable.id, req.params.photoId));
+    void logActivity({ userId: req.user!.id, projectId: photo.projectId, companyId: req.user!.companyId, section: "site-issues", action: "delete", itemType: "photo", itemId: photo.id, metadata: { archiveReason: { from: null, to: reason?.trim() || null } }, req });
+
+    const updated = await db.select().from(photosTable).where(eq(photosTable.id, req.params.photoId)).limit(1);
+    const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, photo.uploadedBy)).limit(1);
+    res.json(formatPhoto(updated[0], userRows[0]?.name ?? "Unknown", project[0].name, await nameForUser(updated[0].assignedToUserId), await nameForUser(updated[0].archivedBy)));
+  } catch (err) {
+    req.log.error({ err }, "Archive photo error");
+    res.status(500).json({ error: "server_error", message: "Failed to archive issue" });
+  }
+});
+
+// PATCH /api/photos/:photoId/restore — un-archive (manager-only).
+router.patch("/photos/:photoId/restore", authenticate, async (req, res) => {
+  try {
+    if (!MANAGER_ROLES.includes(req.user!.role)) {
+      res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can restore an issue." });
+      return;
+    }
+    const rows = await db.select().from(photosTable).where(eq(photosTable.id, req.params.photoId)).limit(1);
+    if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Photo not found" }); return; }
+    const photo = rows[0];
+    const project = await db.select({ id: projectsTable.id, name: projectsTable.name })
+      .from(projectsTable)
+      .where(and(eq(projectsTable.id, photo.projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!project[0]) { res.status(403).json({ error: "forbidden" }); return; }
+
+    await db.update(photosTable)
+      .set({ archivedAt: null, archivedBy: null, archiveReason: null, updatedAt: new Date() })
+      .where(eq(photosTable.id, req.params.photoId));
+    void logActivity({ userId: req.user!.id, projectId: photo.projectId, companyId: req.user!.companyId, section: "site-issues", action: "restore", itemType: "photo", itemId: photo.id, req });
+
+    const updated = await db.select().from(photosTable).where(eq(photosTable.id, req.params.photoId)).limit(1);
+    const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, photo.uploadedBy)).limit(1);
+    res.json(formatPhoto(updated[0], userRows[0]?.name ?? "Unknown", project[0].name, await nameForUser(updated[0].assignedToUserId), await nameForUser(updated[0].archivedBy)));
+  } catch (err) {
+    req.log.error({ err }, "Restore photo error");
+    res.status(500).json({ error: "server_error", message: "Failed to restore issue" });
+  }
+});
+
+// DELETE /api/photos/:photoId/photo — remove just the attached image, manager-
+// only. Soft: photoUrl is left in the DB untouched, only hidden from reads
+// (formatPhoto), so it can't corrupt the issue's own history.
+router.delete("/photos/:photoId/photo", authenticate, async (req, res) => {
+  try {
+    if (!MANAGER_ROLES.includes(req.user!.role)) {
+      res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can remove a photo." });
+      return;
+    }
+    const rows = await db.select().from(photosTable).where(eq(photosTable.id, req.params.photoId)).limit(1);
+    if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Photo not found" }); return; }
+    const photo = rows[0];
+    const project = await db.select({ id: projectsTable.id, name: projectsTable.name })
+      .from(projectsTable)
+      .where(and(eq(projectsTable.id, photo.projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!project[0]) { res.status(403).json({ error: "forbidden" }); return; }
+    if (!photo.photoUrl || photo.photoRemovedAt) { res.status(400).json({ error: "validation_error", message: "No photo to remove." }); return; }
+
+    await db.update(photosTable)
+      .set({ photoRemovedAt: new Date(), photoRemovedBy: req.user!.id, updatedAt: new Date() })
+      .where(eq(photosTable.id, req.params.photoId));
+    void logActivity({ userId: req.user!.id, projectId: photo.projectId, companyId: req.user!.companyId, section: "site-issues", action: "delete", itemType: "photo_attachment", itemId: photo.id, req });
+
+    const updated = await db.select().from(photosTable).where(eq(photosTable.id, req.params.photoId)).limit(1);
+    const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, photo.uploadedBy)).limit(1);
+    res.json(formatPhoto(updated[0], userRows[0]?.name ?? "Unknown", project[0].name, await nameForUser(updated[0].assignedToUserId), await nameForUser(updated[0].archivedBy)));
+  } catch (err) {
+    req.log.error({ err }, "Remove photo error");
+    res.status(500).json({ error: "server_error", message: "Failed to remove photo" });
   }
 });
 
@@ -192,16 +301,18 @@ router.get("/issues", authenticate, async (req, res) => {
     const projectNameMap: Record<string, string> = {};
     for (const p of companyProjects) projectNameMap[p.id] = p.name;
 
+    const { archived } = req.query as { archived?: string };
     const photos = await db.select().from(photosTable)
       .where(and(
         inArray(photosTable.projectId, projectIds),
         issueCategoryFilter(),
+        archived === "true" ? isNotNull(photosTable.archivedAt) : isNull(photosTable.archivedAt),
       ))
       .orderBy(photosTable.takenAt);
 
     const result = await Promise.all(photos.map(async (p) => {
       const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, p.uploadedBy)).limit(1);
-      return formatPhoto(p, userRows[0]?.name ?? "Unknown", projectNameMap[p.projectId], await nameForUser(p.assignedToUserId));
+      return formatPhoto(p, userRows[0]?.name ?? "Unknown", projectNameMap[p.projectId], await nameForUser(p.assignedToUserId), await nameForUser(p.archivedBy));
     }));
 
     res.json(result);
@@ -284,10 +395,11 @@ router.post("/projects/:projectId/photos", authenticate, async (req, res) => {
 
     const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
     res.status(201).json(formatPhoto(
-      { id, projectId: req.params.projectId, uploadedBy: req.user!.id, photoUrl: photoUrl ?? null, category, description: description ?? null, zone: zone ?? null, referenceNumber: refNum, latitude: latitude ?? null, longitude: longitude ?? null, takenAt: new Date(), status: isIssue ? "open" : null, resolvedAt: null, assignedToUserId: assignedToUserId || null, dueDate: dueDate || null, closureReason: null, closureNote: null, updatedAt: null },
+      { id, projectId: req.params.projectId, uploadedBy: req.user!.id, photoUrl: photoUrl ?? null, category, description: description ?? null, zone: zone ?? null, referenceNumber: refNum, latitude: latitude ?? null, longitude: longitude ?? null, takenAt: new Date(), status: isIssue ? "open" : null, resolvedAt: null, assignedToUserId: assignedToUserId || null, dueDate: dueDate || null, closureReason: null, closureNote: null, updatedAt: null, archivedAt: null, archivedBy: null, archiveReason: null, photoRemovedAt: null, photoRemovedBy: null },
       userRows[0]?.name ?? "Unknown",
       project[0].name,
       await nameForUser(assignedToUserId),
+      null,
     ));
   } catch (err) {
     req.log.error({ err }, "Log photo error");

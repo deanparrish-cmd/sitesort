@@ -16,6 +16,8 @@ export * from "./addMemberRequest";
 export * from "./addMemberRequestRole";
 export * from "./addProjectMemberPersonRequest";
 export * from "./addProjectMemberPersonRequestRole";
+export * from "./adminDeletePhoto200";
+export * from "./archivePhotoRequest";
 export * from "./auditLogEntry";
 export * from "./authResponse";
 export * from "./complianceOverview";

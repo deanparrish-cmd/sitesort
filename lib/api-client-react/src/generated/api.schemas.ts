@@ -1119,7 +1119,8 @@ export interface Photo {
   projectId: string;
   uploadedBy: string;
   uploaderName: string;
-  photoUrl: string;
+  /** Null once the photo has been individually removed (photoRemovedAt set) — the underlying file/URL is retained, just hidden from normal reads. */
+  photoUrl?: string | null;
   category: PhotoCategory;
   description?: string | null;
   zone?: string | null;
@@ -1134,6 +1135,19 @@ export interface Photo {
   closureReason?: PhotoClosureReason;
   closureNote?: string | null;
   updatedAt?: string | null;
+  /** Set when a manager archives (soft-deletes) this issue. Archived issues are excluded from normal list reads by default — see the archived query param. */
+  archivedAt?: string | null;
+  archivedByName?: string | null;
+  archiveReason?: string | null;
+  /** Set when a manager removes just the attached photo, leaving the issue record intact. */
+  photoRemovedAt?: string | null;
+}
+
+/**
+ * Optional reason recorded on archive.
+ */
+export interface ArchivePhotoRequest {
+  reason?: string;
 }
 
 /**
@@ -2006,6 +2020,14 @@ export type GetPortalDmThreadParams = {
 
 export type ListPhotosParams = {
   category?: string;
+  /**
+   * "true" to list only archived (soft-deleted) issues; default excludes them.
+   */
+  archived?: string;
+};
+
+export type AdminDeletePhoto200 = {
+  success?: boolean;
 };
 
 export type CreatePortalSiteIssueBodyType =

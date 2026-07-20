@@ -10,11 +10,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { formatDate, formatBytes, cn } from "@/lib/utils";
 import { useDetail } from "../context";
 import { CloseInvalidDialog } from "../dialogs/close-issue-dialog";
+import { ArchiveIssueDialog } from "../dialogs/archive-issue-dialog";
 
 export function IssuesTab() {
   const {
     members,
     photos,
+    archivedPhotos,
+    showArchivedIssues,
+    archivedIssuesLoading,
+    toggleArchivedIssues,
+    archiveIssue,
+    restoreIssue,
     photoUploadUrl,
     setPhotoUploadUrl,
     photoTag,
@@ -42,6 +49,7 @@ export function IssuesTab() {
     caps,
   } = useDetail();
   const [closingIssueId, setClosingIssueId] = useState<string | null>(null);
+  const [archivingIssueId, setArchivingIssueId] = useState<string | null>(null);
 
   return (
     <>
@@ -91,11 +99,67 @@ export function IssuesTab() {
             };
             return (
               <div>
-                <div className="flex items-center gap-2 mb-5">
+                <div className="flex items-center gap-2 mb-5 flex-wrap">
                   <AlertTriangle className="w-5 h-5 text-amber-500" />
                   <h3 className="font-bold text-lg">Site Issues</h3>
                   <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{issuePhotos.length}</span>
+                  {caps.canManageProjects && (
+                    <button
+                      type="button"
+                      onClick={toggleArchivedIssues}
+                      className={cn(
+                        "ml-auto inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors",
+                        showArchivedIssues ? "bg-primary/10 border-primary text-primary" : "bg-card text-muted-foreground border-border hover:border-primary/40",
+                      )}
+                    >
+                      <Archive className="w-3.5 h-3.5" />
+                      {showArchivedIssues ? "Hide archived" : `Archived${archivedPhotos.length ? ` (${archivedPhotos.length})` : ""}`}
+                    </button>
+                  )}
                 </div>
+                {showArchivedIssues ? (
+                  <Card className="overflow-hidden">
+                    {archivedIssuesLoading ? (
+                      <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
+                    ) : archivedPhotos.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+                        <Archive className="w-10 h-10 text-muted-foreground/30 mb-3" />
+                        <p className="font-semibold text-muted-foreground">No archived issues</p>
+                      </div>
+                    ) : (
+                      <div className="divide-y">
+                        {archivedPhotos.map(issue => (
+                          <div key={issue.id} className="flex gap-4 p-4">
+                            <div className="w-20 h-16 rounded-lg overflow-hidden bg-muted shrink-0">
+                              {issue.photoUrl ? (
+                                <img src={issue.photoUrl.replace(/^\/uploads\//, "/api/uploads/")} alt={issue.description ?? issue.category} className="w-full h-full object-cover opacity-60" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center"><Camera className="w-5 h-5 text-muted-foreground/40" /></div>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${ISSUE_CATEGORY_COLOUR[issue.category] ?? ""}`}>{ISSUE_CATEGORY_LABEL[issue.category] ?? issue.category}</span>
+                                <span className="text-[10px] font-mono text-muted-foreground">{issue.referenceNumber}</span>
+                              </div>
+                              {issue.description && <p className="text-sm font-medium truncate">{issue.description}</p>}
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Archived {issue.archivedAt ? formatDate(issue.archivedAt) : ""}{issue.archivedByName ? ` by ${issue.archivedByName}` : ""}
+                              </p>
+                              {issue.archiveReason && <p className="text-xs text-muted-foreground italic mt-0.5 break-words">"{issue.archiveReason}"</p>}
+                            </div>
+                            <div className="shrink-0 flex items-center">
+                              <button onClick={() => restoreIssue(issue.id)} title="Restore" className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors">
+                                <RefreshCw className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </Card>
+                ) : (
+                <>
                 {/* Log new issue */}
                 {caps.canLogPhoto && (
                   <Card className="mb-5">
@@ -266,6 +330,9 @@ export function IssuesTab() {
                                     <Ban className="w-4 h-4" />
                                   </button>
                                 )}
+                                <button onClick={() => setArchivingIssueId(issue.id)} title="Archive" className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
+                                  <Archive className="w-4 h-4" />
+                                </button>
                               </div>
                             )}
                           </div>
@@ -274,11 +341,14 @@ export function IssuesTab() {
                     </div>
                   )}
                 </Card>
+                </>
+                )}
               </div>
             );
           })()}
         </TabsContent>
         <CloseInvalidDialog photoId={closingIssueId} onClose={() => setClosingIssueId(null)} closeIssueAsInvalid={closeIssueAsInvalid} />
+        <ArchiveIssueDialog photoId={archivingIssueId} onClose={() => setArchivingIssueId(null)} archiveIssue={archiveIssue} />
     </>
   );
 }

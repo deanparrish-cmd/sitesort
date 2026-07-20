@@ -303,6 +303,40 @@ export default function AdminDashboard() {
     setDeletingCompanyId(null);
   }
 
+  // Danger zone: genuine, unrecoverable delete for a single photo/site-issue
+  // row — for clearing real test/mistake data that has no audit value. The
+  // manager-facing archive (in each project's Issues tab) is a soft delete;
+  // this is the one place that actually removes the row.
+  const [dangerPhotoId, setDangerPhotoId] = useState("");
+  const [dangerPhotoConfirming, setDangerPhotoConfirming] = useState(false);
+  const [dangerPhotoDeleting, setDangerPhotoDeleting] = useState(false);
+  const [dangerPhotoResult, setDangerPhotoResult] = useState<{ ok: boolean; message: string } | null>(null);
+  async function deletePhotoHard() {
+    const id = dangerPhotoId.trim();
+    if (!id) return;
+    setDangerPhotoDeleting(true);
+    setDangerPhotoResult(null);
+    const token = localStorage.getItem("sitesort_token");
+    try {
+      const res = await fetch(`/api/admin/photos/${id}`, {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        setDangerPhotoResult({ ok: true, message: `Deleted ${id}.` });
+        setDangerPhotoId("");
+      } else {
+        const body = await res.json().catch(() => null);
+        setDangerPhotoResult({ ok: false, message: body?.message ?? `Failed (${res.status}).` });
+      }
+    } catch {
+      setDangerPhotoResult({ ok: false, message: "Request failed." });
+    } finally {
+      setDangerPhotoDeleting(false);
+      setDangerPhotoConfirming(false);
+    }
+  }
+
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activitySearch, setActivitySearch] = useState("");
 
@@ -1137,6 +1171,55 @@ export default function AdminDashboard() {
               <Download className="w-4 h-4" />
               Export Activity CSV
             </button>
+          </div>
+        </section>
+
+        {/* ── Danger Zone ── */}
+        <section>
+          <SectionTitle icon={Trash2} title="Danger Zone" sub="Genuine, unrecoverable deletes — for real test/mistake data with no audit value" />
+          <div className="rounded-xl border border-red-900/50 bg-red-950/10 p-4 space-y-3">
+            <div>
+              <p className="text-sm font-semibold text-gray-200">Permanently delete a photo / site issue</p>
+              <p className="text-xs text-gray-500 mt-0.5">Not the same as archiving from a project's Issues tab (which is reversible). This actually removes the row — find the id from the issue detail's URL or a share link.</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                value={dangerPhotoId}
+                onChange={e => { setDangerPhotoId(e.target.value); setDangerPhotoResult(null); }}
+                placeholder="photo id"
+                className="flex-1 min-w-[220px] px-3 py-2 rounded-lg bg-gray-900 border border-gray-800 text-sm text-gray-200 placeholder:text-gray-600 focus:outline-none focus:border-red-700"
+              />
+              {dangerPhotoConfirming ? (
+                <>
+                  <button
+                    onClick={deletePhotoHard}
+                    disabled={dangerPhotoDeleting}
+                    className="px-3 py-2 rounded-lg text-xs font-semibold bg-red-600 hover:bg-red-500 text-white transition-colors disabled:opacity-50 inline-flex items-center gap-1.5"
+                  >
+                    {dangerPhotoDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                    Confirm permanent delete
+                  </button>
+                  <button
+                    onClick={() => setDangerPhotoConfirming(false)}
+                    className="px-3 py-2 rounded-lg text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setDangerPhotoConfirming(true)}
+                  disabled={!dangerPhotoId.trim()}
+                  className="px-3 py-2 rounded-lg text-xs font-semibold bg-gray-800 hover:bg-red-900/40 hover:text-red-400 text-gray-300 transition-colors disabled:opacity-30 inline-flex items-center gap-1.5"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Delete permanently
+                </button>
+              )}
+            </div>
+            {dangerPhotoResult && (
+              <p className={`text-xs font-medium ${dangerPhotoResult.ok ? "text-emerald-400" : "text-red-400"}`}>{dangerPhotoResult.message}</p>
+            )}
           </div>
         </section>
 

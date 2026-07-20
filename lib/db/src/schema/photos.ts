@@ -29,6 +29,18 @@ export const photosTable = pgTable("photos", {
   closureReason: text("closure_reason"),
   closureNote: text("closure_note"),
   updatedAt: timestamp("updated_at"),
+  // Soft-delete for site issues (manager-only). Archived issues drop out of
+  // normal lists/counts but remain in the record — auditable via an
+  // "Archived" filter, never actually removed here (see the separate
+  // admin-only hard-delete for genuine test/mistake data).
+  archivedAt: timestamp("archived_at"),
+  archivedBy: text("archived_by").references(() => usersTable.id),
+  archiveReason: text("archive_reason"),
+  // Removing just the attached photo (not the whole issue) is also soft —
+  // photoUrl is left untouched in the DB, only hidden from normal reads once
+  // photoRemovedAt is set, so the record can't be silently corrupted.
+  photoRemovedAt: timestamp("photo_removed_at"),
+  photoRemovedBy: text("photo_removed_by").references(() => usersTable.id),
 });
 
 export const insertPhotoSchema = createInsertSchema(photosTable).omit({ takenAt: true });
