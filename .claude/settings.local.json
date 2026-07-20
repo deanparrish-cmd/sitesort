@@ -129,7 +129,11 @@
       "Bash(PORTAL_TOKEN=__CMDSUB_OUTPUT__ node ./portal-nav-check.mjs)",
       "Bash(curl -s http://localhost:8080/api/projects/__TRACKED_VAR__/documents -H 'Authorization: Bearer __TRACKED_VAR__')",
       "Bash(rm -f /home/runner/workspace/.claude/skills/browser-check/portal-nav-check.mjs)",
-      "Bash(curl -s -o /dev/null -w \"post-kill health check: %{http_code}\\\\n\" http://localhost:8080/api/health --max-time 2)"
+      "Bash(curl -s -o /dev/null -w \"post-kill health check: %{http_code}\\\\n\" http://localhost:8080/api/health --max-time 2)",
+      "Bash(curl -s __TRACKED_VAR__/api/people -H 'Authorization: Bearer __TRACKED_VAR__')",
+      "Bash(curl -s -X POST https://www.sitesort.co.uk/api/portal/login -H 'Content-Type: application/json' -d '{\"email\":\"prodperm-test-user@example.com\",\"password\":\"testpass123\"}')",
+      "Bash(curl -s __TRACKED_VAR__/api/portal-users/orphaned -H 'Authorization: Bearer __TRACKED_VAR__')",
+      "Bash(curl -s -X DELETE __TRACKED_VAR__/api/portal-users/ba7f591f-b88e-4234-b390-ffd05859a09b -H 'Authorization: Bearer __TRACKED_VAR__')"
     ]
   },
   "hooks": {
