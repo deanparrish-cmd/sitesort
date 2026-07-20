@@ -133,7 +133,10 @@
       "Bash(curl -s __TRACKED_VAR__/api/people -H 'Authorization: Bearer __TRACKED_VAR__')",
       "Bash(curl -s -X POST https://www.sitesort.co.uk/api/portal/login -H 'Content-Type: application/json' -d '{\"email\":\"prodperm-test-user@example.com\",\"password\":\"testpass123\"}')",
       "Bash(curl -s __TRACKED_VAR__/api/portal-users/orphaned -H 'Authorization: Bearer __TRACKED_VAR__')",
-      "Bash(curl -s -X DELETE __TRACKED_VAR__/api/portal-users/ba7f591f-b88e-4234-b390-ffd05859a09b -H 'Authorization: Bearer __TRACKED_VAR__')"
+      "Bash(curl -s -X DELETE __TRACKED_VAR__/api/portal-users/ba7f591f-b88e-4234-b390-ffd05859a09b -H 'Authorization: Bearer __TRACKED_VAR__')",
+      "Bash(ps -o pid,etime,cmd -p 51483)",
+      "Bash(ps -p 69938 -o pid,cmd)",
+      "Bash(pkill -9 -f \"dist/index.mjs\")"
     ]
   },
   "hooks": {
