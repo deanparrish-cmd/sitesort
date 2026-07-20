@@ -24,6 +24,7 @@ import { PortalPushSubscribeBody, PortalPushUnsubscribeBody } from "@workspace/a
 import { isLockedOut, recordFailedAttempt, clearAttempts } from "../lib/login-attempts";
 import { expiryStatus } from "../lib/expiry";
 import { issueCategoryFilter } from "../lib/accountability";
+import { canonicalPersonName } from "../lib/person-name";
 import { PORTAL_SECTIONS } from "../lib/activity";
 import { PortalLoginBody, AcceptPortalInviteBody } from "@workspace/api-zod";
 import { getBucket, objectKey } from "../lib/gcs";
@@ -757,9 +758,13 @@ router.get("/portal/team", ...portalGuards, async (req, res) => {
       const sub = person.subcontractorId ? subById.get(person.subcontractorId) : undefined;
       const user = m.userId ? userById.get(m.userId) : undefined;
       const contact = showsContact(person.showContactInPortal, m.role);
+      // person.name/lastName can be a stale copy-on-write mirror of the
+      // subcontractor's own contact fields (see lib/person-name.ts) — resolve
+      // the canonical value the same way the Team tab does.
+      const canonical = canonicalPersonName(person, sub);
       return {
-        name: person.name,
-        sortKey: surnameOf(person.name, person.lastName),
+        name: canonical.name,
+        sortKey: surnameOf(canonical.name, canonical.lastName),
         company: sub ? (sub.contactType === "self_employed" ? "Self-employed" : sub.companyName) : ourCompany,
         jobTitle: person.roleTitle ?? undefined,
         role: m.role,

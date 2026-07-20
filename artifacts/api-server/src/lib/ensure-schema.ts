@@ -440,6 +440,46 @@ export async function ensureSchema(): Promise<void> {
       WHERE NOT EXISTS (SELECT 1 FROM people p WHERE p.subcontractor_id = s.id AND p.is_primary_contact = true)
     `);
 
+    // Self-heal: subcontractors.ts/people.ts mirror a primary contact's name
+    // bidirectionally on every EDIT (copy-on-write), but that mirror is
+    // conditional (matches on is_primary_contact) and can miss — leaving the
+    // people row's first_name/last_name/name stale even though the Contacts
+    // directory (which reads/writes subcontructors.contact_* directly) shows
+    // the correct value. Found via a real case: a contact correctly edited to
+    // "Amy Parrish" in Contacts still showed the old company-derived name on
+    // the Team tab and failed portal-invite's surname check. Every boot,
+    // subcontractors.contact_first_name/contact_last_name/contact_name wins —
+    // only touches rows that actually differ, only when the source isn't blank.
+    const nameDrift = await pool.query(`
+      SELECT s.company_name, p.name AS stale_name, s.contact_name AS correct_name
+      FROM people p JOIN subcontractors s ON p.subcontractor_id = s.id
+      WHERE p.is_primary_contact = true
+        AND s.contact_first_name IS NOT NULL AND s.contact_first_name <> ''
+        AND s.contact_last_name IS NOT NULL AND s.contact_last_name <> ''
+        AND (p.first_name IS DISTINCT FROM s.contact_first_name
+          OR p.last_name IS DISTINCT FROM s.contact_last_name
+          OR p.name IS DISTINCT FROM s.contact_name)
+    `);
+    if (nameDrift.rows.length > 0) {
+      logger.info({ drift: nameDrift.rows }, `ensureSchema: correcting ${nameDrift.rows.length} drifted primary-contact name(s) (Team tab/portal-invite was reading a stale copy — see lib/person-name.ts)`);
+    }
+    await pool.query(`
+      UPDATE people p
+      SET first_name = s.contact_first_name,
+          last_name = s.contact_last_name,
+          name = s.contact_name,
+          email = COALESCE(s.contact_email, p.email),
+          phone = COALESCE(s.contact_phone, p.phone)
+      FROM subcontractors s
+      WHERE p.subcontractor_id = s.id
+        AND p.is_primary_contact = true
+        AND s.contact_first_name IS NOT NULL AND s.contact_first_name <> ''
+        AND s.contact_last_name IS NOT NULL AND s.contact_last_name <> ''
+        AND (p.first_name IS DISTINCT FROM s.contact_first_name
+          OR p.last_name IS DISTINCT FROM s.contact_last_name
+          OR p.name IS DISTINCT FROM s.contact_name)
+    `);
+
     // Backfill 2: every legacy "whole firm" project_members row (subcontractor_id
     // set, person_id null) gets its firm's primary contact linked in place, so
     // it renders as a real person card immediately instead of a bare company
@@ -477,7 +517,7 @@ export async function ensureSchema(): Promise<void> {
     await pool.query(`ALTER TABLE photos ADD COLUMN IF NOT EXISTS photo_removed_at timestamp`);
     await pool.query(`ALTER TABLE photos ADD COLUMN IF NOT EXISTS photo_removed_by text REFERENCES users(id)`);
 
-    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols + portal_shares + portal_sessions + push_subscriptions + pending_pushes + subcontractor_documents + subcontractors/people.archived_at + people.first_name/last_name + subcontractors.contact_first_name/contact_last_name + project_members write-permission cols + activity_log.metadata + photos closure/updated_at cols + plant_items/plant_item_attachments/plant_item_distributions + people.is_primary_contact + person_certifications + primary-contact/project_members backfill + project_members.can_edit_daily_report + messages.project_id + photos archive/photo-removal cols ready");
+    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols + portal_shares + portal_sessions + push_subscriptions + pending_pushes + subcontractor_documents + subcontractors/people.archived_at + people.first_name/last_name + subcontractors.contact_first_name/contact_last_name + project_members write-permission cols + activity_log.metadata + photos closure/updated_at cols + plant_items/plant_item_attachments/plant_item_distributions + people.is_primary_contact + person_certifications + primary-contact/project_members backfill + project_members.can_edit_daily_report + messages.project_id + photos archive/photo-removal cols + primary-contact name self-heal ready");
   } catch (err) {
     // Don't crash the server — membership lookups fall back to the home company.
     logger.error({ err }, "ensureSchema failed (continuing with home-company fallback)");

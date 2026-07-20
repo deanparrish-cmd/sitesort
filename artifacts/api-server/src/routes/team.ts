@@ -6,6 +6,7 @@ import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { expiryStatus } from "../lib/expiry";
 import { revokePortalSessionsForMember } from "../lib/portal-sessions";
+import { canonicalPersonName } from "../lib/person-name";
 
 const router: IRouter = Router();
 
@@ -106,17 +107,23 @@ router.get("/projects/:projectId/members", authenticate, async (req, res) => {
         // Person-first: every card sourced from a real `people` row, whether or
         // not they've accepted a portal invite yet (Feature: person-first cards).
         const personRows = await db.select({
-          name: peopleTable.name, email: peopleTable.email, phone: peopleTable.phone,
+          name: peopleTable.name, firstName: peopleTable.firstName, lastName: peopleTable.lastName,
+          email: peopleTable.email, phone: peopleTable.phone,
           roleTitle: peopleTable.roleTitle, isPrimaryContact: peopleTable.isPrimaryContact,
           subcontractorId: peopleTable.subcontractorId,
           companyName: subcontractorsTable.companyName, contactType: subcontractorsTable.contactType,
+          contactFirstName: subcontractorsTable.contactFirstName, contactLastName: subcontractorsTable.contactLastName,
+          contactName: subcontractorsTable.contactName,
           trades: subcontractorsTable.trades, avatarUrl: subcontractorsTable.avatarUrl,
         })
           .from(peopleTable)
           .leftJoin(subcontractorsTable, eq(peopleTable.subcontractorId, subcontractorsTable.id))
           .where(eq(peopleTable.id, m.personId)).limit(1);
         const p = personRows[0];
-        name = p?.name ?? "Unknown";
+        // Never trust people.name blindly for a subcontractor-linked contact —
+        // it's a copy-on-write mirror of subcontractors.contactName that can
+        // drift (see lib/person-name.ts). Resolve the canonical name instead.
+        name = p ? canonicalPersonName(p, p.subcontractorId ? p : null).name : "Unknown";
         email = p?.email ?? null;
         phone = p?.phone ?? null;
         roleTitle = p?.roleTitle ?? null;
@@ -160,7 +167,10 @@ router.get("/projects/:projectId/members", authenticate, async (req, res) => {
           trades: subcontractorsTable.trades,
           avatarUrl: subcontractorsTable.avatarUrl,
         }).from(subcontractorsTable).where(eq(subcontractorsTable.id, m.subcontractorId)).limit(1);
-        name = subRows[0]?.companyName ?? "Unknown";
+        // Person, never company, is the display name — a "whole firm" row here
+        // means no specific contact was linked, not that the firm's name IS the
+        // contact's name (that was the exact bug: this used to read companyName).
+        name = subRows[0]?.contactName?.trim() || subRows[0]?.companyName || "Unknown";
         contactName = subRows[0]?.contactName ?? null;
         companyName = subRows[0]?.companyName ?? null;
         contactType = subRows[0]?.contactType ?? null;

@@ -12,6 +12,7 @@ import { authenticate } from "../middlewares/auth";
 import { sendProjectInviteEmail } from "../lib/invite-email";
 import { CreateSubcontractorPersonBody, CreatePortalInviteBody, UpdatePersonBody } from "@workspace/api-zod";
 import { activeProjectsForPerson, hasAnyHistoricalFootprint } from "../lib/contact-removal";
+import { canonicalPersonName } from "../lib/person-name";
 
 const router: IRouter = Router();
 
@@ -473,7 +474,15 @@ router.post("/projects/:projectId/portal-invites", authenticate, async (req, res
       .where(and(eq(peopleTable.id, input.personId), eq(peopleTable.companyId, req.user!.companyId))).limit(1);
     const person = personRows[0];
     if (!person) { res.status(404).json({ error: "not_found", message: "Person not found" }); return; }
-    if (!person.lastName?.trim()) {
+    // Don't trust people.lastName alone — for a subcontractor-linked contact it
+    // can be a stale copy-on-write mirror of subcontractors.contactLastName
+    // (see lib/person-name.ts) even when the canonical Contacts record has a
+    // real surname. Resolve the same way the Team tab now does.
+    const subForName = person.subcontractorId
+      ? (await db.select({ contactFirstName: subcontractorsTable.contactFirstName, contactLastName: subcontractorsTable.contactLastName, contactName: subcontractorsTable.contactName })
+          .from(subcontractorsTable).where(eq(subcontractorsTable.id, person.subcontractorId)).limit(1))[0]
+      : null;
+    if (!canonicalPersonName(person, subForName).lastName?.trim()) {
       res.status(400).json({ error: "validation_error", message: "Add a surname for this person before sending a portal invite." });
       return;
     }
