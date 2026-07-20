@@ -9,28 +9,31 @@ import { markPortalSession, disablePush } from "@/lib/portal-push";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, TrendingUp, Users, AlertTriangle, LayoutGrid,
-  ShieldCheck, PencilRuler, FileText, FileCheck, HardHat, StickyNote, LogOut, Inbox,
+  LogOut, Inbox, HardHat,
   Settings, Menu, X, FolderUp, Wrench, ClipboardList, MessageSquare,
 } from "lucide-react";
 
 // The fixed portal nav — order + labels + icons. `key` matches the URL segment
 // (/portal/:key) AND the server section allowlist.
-export const SECTION_NAV: { key: string; label: string; Icon: typeof LayoutDashboard }[] = [
+//
+// Minimal-portal redesign: H&S/Drawings/Method Statements/Permits/Safety/
+// General were retired as standalone tabs — that content now surfaces only
+// inside "Shared with me" (with a category filter), since it was always just
+// a differently-sliced view of the same shared documents/permits. Site
+// Issues, Plant & Materials, and Daily Report are marked `permission` below:
+// PortalLayout filters them out entirely (not greyed — absent) unless the PM
+// has granted the matching flag on that member's project_members row. Every
+// other entry here is always visible to every portal member.
+export const SECTION_NAV: { key: string; label: string; Icon: typeof LayoutDashboard; permission?: "canLogIssues" | "canUpdatePlantMaterials" | "canEditDailyReport" }[] = [
   { key: "overview", label: "Overview", Icon: LayoutDashboard },
   { key: "messages", label: "Messages", Icon: MessageSquare },
   { key: "shared", label: "Shared with me", Icon: Inbox },
   { key: "progress", label: "Progress", Icon: TrendingUp },
   { key: "team", label: "Team", Icon: Users },
-  { key: "site-issues", label: "Site Issues", Icon: AlertTriangle },
+  { key: "site-issues", label: "Site Issues", Icon: AlertTriangle, permission: "canLogIssues" },
   { key: "site-board", label: "Site Board", Icon: LayoutGrid },
-  { key: "hs", label: "H&S", Icon: ShieldCheck },
-  { key: "drawings", label: "Drawings", Icon: PencilRuler },
-  { key: "method-statements", label: "Method Statements", Icon: FileText },
-  { key: "permits", label: "Permits", Icon: FileCheck },
-  { key: "safety", label: "Safety", Icon: HardHat },
-  { key: "general", label: "General", Icon: StickyNote },
-  { key: "plant-materials", label: "Plant & Materials", Icon: Wrench },
-  { key: "daily-report", label: "Daily Report", Icon: ClipboardList },
+  { key: "plant-materials", label: "Plant & Materials", Icon: Wrench, permission: "canUpdatePlantMaterials" },
+  { key: "daily-report", label: "Daily Report", Icon: ClipboardList, permission: "canEditDailyReport" },
   { key: "my-documents", label: "My documents", Icon: FolderUp },
   { key: "settings", label: "Settings", Icon: Settings },
 ];
@@ -101,6 +104,10 @@ export function PortalLayout({ active, children }: { active: string; children: R
 
   const logoSrc = `${import.meta.env.BASE_URL}images/logo.webp?v=5`;
   const initial = (data?.member.name ?? "?").charAt(0).toUpperCase();
+  // Minimal-portal redesign: a permission-tagged entry is entirely absent (not
+  // greyed) from the nav until the PM grants it on this member's project_members
+  // row. No member data yet → show nothing gated rather than flash it briefly.
+  const visibleNav = SECTION_NAV.filter(s => !s.permission || !!data?.member[s.permission]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row">
@@ -139,7 +146,7 @@ export function PortalLayout({ active, children }: { active: string; children: R
 
         <nav className="flex-1 px-4 py-6 overflow-y-auto">
           <div className="space-y-1">
-            {SECTION_NAV.map(({ key, label, Icon }) => {
+            {visibleNav.map(({ key, label, Icon }) => {
               const isActive = key === active;
               const badge = counts[key] ?? 0;
               return (

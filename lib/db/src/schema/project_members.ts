@@ -20,10 +20,14 @@ export const projectMembersTable = pgTable("project_members", {
   scheduledDays: text("scheduled_days").array().default([]),
   siteStartTime: time("site_start_time"),
   siteEndTime: time("site_end_time"),
-  // Portal write permissions (per-project grants — a person may be trusted
-  // differently on different jobs). Enforced server-side by
-  // requirePortalPermission, not just hidden in the UI.
-  canLogIssues: boolean("can_log_issues").notNull().default(true),
+  // Portal section access grants (per-project — a person may be trusted
+  // differently on different jobs). Each flag is BOTH a visibility gate (the
+  // matching nav section is entirely absent without it) and a write gate for
+  // that section. Enforced server-side by requirePortalPermission on both the
+  // read and write endpoints, not just hidden in the UI. Default false — a
+  // brand-new portal member starts minimal (Overview/Site Board/Shared with
+  // me/Messages/Team only) until the PM grants a section.
+  canLogIssues: boolean("can_log_issues").notNull().default(false),
   canUpdatePlantMaterials: boolean("can_update_plant_materials").notNull().default(false),
   canEditDailyReport: boolean("can_edit_daily_report").notNull().default(false),
   addedAt: timestamp("added_at").notNull().defaultNow(),

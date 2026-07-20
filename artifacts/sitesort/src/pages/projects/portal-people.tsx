@@ -196,27 +196,27 @@ export function PortalInvitePill({
         <DropdownMenuContent align="end" className="w-64">
           <div className="px-2 py-1.5 text-xs text-muted-foreground">Last active {fmtRelative(portal.lastActiveAt)}</div>
           <DropdownMenuSeparator />
-          <div className="px-2 py-1 text-[11px] font-medium text-muted-foreground">Portal write permissions</div>
+          <div className="px-2 py-1 text-[11px] font-medium text-muted-foreground">Portal access — off by default; ticking adds the section to their portal</div>
           <DropdownMenuCheckboxItem
-            checked={portal.canLogIssues ?? true}
+            checked={portal.canLogIssues ?? false}
             onSelect={e => e.preventDefault()}
             onCheckedChange={v => togglePermission("canLogIssues", v)}
           >
-            Can log site issues
+            Site Issues
           </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem
             checked={portal.canUpdatePlantMaterials ?? false}
             onSelect={e => e.preventDefault()}
             onCheckedChange={v => togglePermission("canUpdatePlantMaterials", v)}
           >
-            Can update plant &amp; materials
+            Plant &amp; Materials
           </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem
             checked={portal.canEditDailyReport ?? false}
             onSelect={e => e.preventDefault()}
             onCheckedChange={v => togglePermission("canEditDailyReport", v)}
           >
-            Can edit daily site report
+            Daily Report
           </DropdownMenuCheckboxItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem className="gap-2 cursor-pointer text-destructive focus:text-destructive" onClick={doRevoke}><Trash2 className="w-4 h-4" /> Revoke access</DropdownMenuItem>

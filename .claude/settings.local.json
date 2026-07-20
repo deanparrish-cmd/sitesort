@@ -120,7 +120,16 @@
       "Bash(curl -s \"https://raw.githubusercontent.com/deanparrish-cmd/sitesort/main/lib/api-spec/openapi.yaml\")",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" https://www.sitesort.co.uk/api/health)",
       "Bash(curl -s -X POST https://www.sitesort.co.uk/api/auth/login -H \"Content-Type: application/json\" -d '{\"email\":\"paul@acme.com\",\"password\":\"password123\"}')",
-      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('token' in d, d.get\\('user',{}\\).get\\('companyId'\\)\\)\")"
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('token' in d, d.get\\('user',{}\\).get\\('companyId'\\)\\)\")",
+      "Bash(curl -s http://localhost:8080/api/portal/me -H 'Authorization: Bearer __TRACKED_VAR__')",
+      "Bash(curl -s -X POST http://localhost:8080/api/portal/site-issues -H 'Authorization: Bearer __TRACKED_VAR__' -F type=snag -F 'description=PERMISSION TEST snag - safe to delete' -F 'zone=Test zone')",
+      "Bash(curl -s http://localhost:8080/api/issues -H 'Authorization: Bearer __TRACKED_VAR__')",
+      "Bash(PORTAL_TOKEN=__CMDSUB_OUTPUT__ node /tmp/claude-1000/-home-runner-workspace/33b03f88-4416-4bde-b76d-029c8c66b222/scratchpad/portal-nav-check.mjs)",
+      "Bash(cp /tmp/claude-1000/-home-runner-workspace/33b03f88-4416-4bde-b76d-029c8c66b222/scratchpad/portal-nav-check.mjs /home/runner/workspace/.claude/skills/browser-check/portal-nav-check.mjs)",
+      "Bash(PORTAL_TOKEN=__CMDSUB_OUTPUT__ node ./portal-nav-check.mjs)",
+      "Bash(curl -s http://localhost:8080/api/projects/__TRACKED_VAR__/documents -H 'Authorization: Bearer __TRACKED_VAR__')",
+      "Bash(rm -f /home/runner/workspace/.claude/skills/browser-check/portal-nav-check.mjs)",
+      "Bash(curl -s -o /dev/null -w \"post-kill health check: %{http_code}\\\\n\" http://localhost:8080/api/health --max-time 2)"
     ]
   },
   "hooks": {

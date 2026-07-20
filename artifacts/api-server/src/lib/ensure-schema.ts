@@ -321,13 +321,18 @@ export async function ensureSchema(): Promise<void> {
       WHERE contact_first_name IS NULL
     `);
 
-    // Plant & Materials + portal write permissions foundation. Per-project write
+    // Plant & Materials + portal section-access grants foundation. Per-project
     // grants live on project_members (not people) since a person may be trusted
     // differently on different jobs — mirrors how role/scheduled_days already
-    // live here. Defaults directly encode the requested ON/can-log-issues,
-    // OFF/can-update-plant-materials defaults, correct for existing-row backfill.
-    await pool.query(`ALTER TABLE project_members ADD COLUMN IF NOT EXISTS can_log_issues boolean NOT NULL DEFAULT true`);
+    // live here.
+    await pool.query(`ALTER TABLE project_members ADD COLUMN IF NOT EXISTS can_log_issues boolean NOT NULL DEFAULT false`);
     await pool.query(`ALTER TABLE project_members ADD COLUMN IF NOT EXISTS can_update_plant_materials boolean NOT NULL DEFAULT false`);
+    // can_log_issues originally defaulted to true; the minimal-portal redesign
+    // flips the default to false going forward. ADD COLUMN IF NOT EXISTS above is
+    // a no-op on a DB where the column already exists (prod), so the default must
+    // be changed explicitly here too. Existing rows keep their stored value —
+    // this only changes what NEW project_members rows get.
+    await pool.query(`ALTER TABLE project_members ALTER COLUMN can_log_issues SET DEFAULT false`);
     // Small JSON diff for write actions (who changed what) — activity_log
     // previously only ever recorded "view"/"blocked" reads with no diff concept.
     await pool.query(`ALTER TABLE activity_log ADD COLUMN IF NOT EXISTS metadata text`);
