@@ -8,6 +8,7 @@
 import type { UpdateUserRequestRole } from "./updateUserRequestRole";
 
 export interface UpdateUserRequest {
+  /** Must be a first name + surname (2+ characters each) — enforced server-side, not just minLength. */
   name?: string;
   role?: UpdateUserRequestRole;
   phone?: string;

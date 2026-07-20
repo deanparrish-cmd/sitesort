@@ -9,15 +9,22 @@ import type { UpdateSubcontractorRequestContactType } from "./updateSubcontracto
 
 export interface UpdateSubcontractorRequest {
   companyName?: string;
-  /** @minLength 2 */
+  /**
+   * Must be a real 2+ character name after trimming whitespace.
+   * @minLength 2
+   */
   contactFirstName?: string;
-  /** @minLength 2 */
+  /**
+   * Must be a real 2+ character name after trimming whitespace.
+   * @minLength 2
+   */
   contactLastName?: string;
   contactEmail?: string;
   contactPhone?: string;
   contactType?: UpdateSubcontractorRequestContactType;
   trades?: string[];
   notes?: string;
-  reliabilityRating?: number;
+  /** null clears a previously-set rating — the edit form sends null when the field is left empty. */
+  reliabilityRating?: number | null;
   paymentHold?: boolean;
 }

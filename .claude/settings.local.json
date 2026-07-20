@@ -110,7 +110,12 @@
       "Bash(PORT=8080 pnpm --filter @workspace/sitesort run build)",
       "Bash(PORT=18299 BASE_PATH=/ pnpm --filter @workspace/sitesort run build)",
       "Bash(kill 370)",
-      "Bash(curl -s -X POST http://localhost:8080/api/auth/register -H \"Content-Type: application/json\" -d '{\"companyName\":\"NameTest Co\",\"adminName\":\"Solo\",\"email\":\"nametest-reg@example.com\",\"password\":\"password123\",\"companySize\":\"1-10\"}')"
+      "Bash(curl -s -X POST http://localhost:8080/api/auth/register -H \"Content-Type: application/json\" -d '{\"companyName\":\"NameTest Co\",\"adminName\":\"Solo\",\"email\":\"nametest-reg@example.com\",\"password\":\"password123\",\"companySize\":\"1-10\"}')",
+      "Bash(curl -s \"https://raw.githubusercontent.com/deanparrish-cmd/sitesort/main/artifacts/api-server/src/lib/name-validation.ts\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/deanparrish-cmd/sitesort/main/artifacts/sitesort/src/pages/projects/detail/tabs/team-tab.tsx\")",
+      "Bash(python3 -c ' *)",
+      "Bash(kill 13440)",
+      "Bash(PORT=8080 NODE_ENV=development nohup node --enable-source-maps ./dist/index.mjs)"
     ]
   },
   "hooks": {

@@ -250,8 +250,15 @@ router.post("/subcontractors/:subcontractorId/people", authenticate, async (req,
     const parsed = CreateSubcontractorPersonBody.safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ error: "validation_error", message: "A first name, surname (2+ chars each) and valid email are required." }); return; }
     const input = parsed.data as CreatePersonInput;
+    // The Zod minLength above checks the RAW value, so e.g. "  " (whitespace-only)
+    // slips through — trim first, then re-check, so a name that's empty once
+    // trimmed is caught with a clear message instead of silently stored blank.
     const firstName = input.firstName.trim();
     const lastName = input.lastName.trim();
+    if (firstName.length < 2 || lastName.length < 2) {
+      res.status(400).json({ error: "validation_error", message: "First name and surname must be at least 2 real characters each (whitespace doesn't count)." });
+      return;
+    }
     const name = `${firstName} ${lastName}`.trim();
     const email = input.email.trim().toLowerCase();
 
@@ -340,6 +347,14 @@ router.patch("/people/:personId", authenticate, async (req, res) => {
       res.status(400).json({ error: "validation_error", message: "Provide both first name and surname together." });
       return;
     }
+    // The Zod minLength above checks the RAW value, so e.g. "  " (whitespace-only)
+    // slips through — trim first, then re-check, so a name that's empty once
+    // trimmed is caught with a clear message instead of silently stored blank.
+    if (firstName !== undefined && lastName !== undefined
+      && (firstName.trim().length < 2 || lastName.trim().length < 2)) {
+      res.status(400).json({ error: "validation_error", message: "First name and surname must be at least 2 real characters each (whitespace doesn't count)." });
+      return;
+    }
     const patch: Record<string, unknown> = {};
     if (showContactInPortal !== undefined) patch.showContactInPortal = showContactInPortal === null ? null : !!showContactInPortal;
     if (roleTitle !== undefined) patch.roleTitle = (roleTitle ?? "").toString().trim() || null;
@@ -409,8 +424,15 @@ router.post("/projects/:projectId/in-house-people", authenticate, async (req, re
     const parsed = CreateSubcontractorPersonBody.safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ error: "validation_error", message: "A first name, surname (2+ chars each) and valid email are required." }); return; }
     const input = parsed.data as CreatePersonInput;
+    // The Zod minLength above checks the RAW value, so e.g. "  " (whitespace-only)
+    // slips through — trim first, then re-check, so a name that's empty once
+    // trimmed is caught with a clear message instead of silently stored blank.
     const firstName = input.firstName.trim();
     const lastName = input.lastName.trim();
+    if (firstName.length < 2 || lastName.length < 2) {
+      res.status(400).json({ error: "validation_error", message: "First name and surname must be at least 2 real characters each (whitespace doesn't count)." });
+      return;
+    }
     const name = `${firstName} ${lastName}`.trim();
     const email = input.email.trim().toLowerCase();
     const companyId = req.user!.companyId;

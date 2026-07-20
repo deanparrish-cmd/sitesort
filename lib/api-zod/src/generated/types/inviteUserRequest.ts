@@ -9,6 +9,7 @@ import type { InviteUserRequestRole } from "./inviteUserRequestRole";
 
 export interface InviteUserRequest {
   email: string;
+  /** Must be a first name + surname (2+ characters each) — enforced server-side, not just minLength. */
   name: string;
   role: InviteUserRequestRole;
   phone?: string;

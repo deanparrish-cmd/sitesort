@@ -3385,9 +3385,11 @@ components:
         contactFirstName:
           type: string
           minLength: 2
+          description: "Must be a real 2+ character name after trimming whitespace."
         contactLastName:
           type: string
           minLength: 2
+          description: "Must be a real 2+ character name after trimming whitespace."
         contactEmail:
           type: string
           format: email
@@ -3413,9 +3415,11 @@ components:
         contactFirstName:
           type: string
           minLength: 2
+          description: "Must be a real 2+ character name after trimming whitespace."
         contactLastName:
           type: string
           minLength: 2
+          description: "Must be a real 2+ character name after trimming whitespace."
         contactEmail:
           type: string
         contactPhone:
@@ -3431,6 +3435,8 @@ components:
           type: string
         reliabilityRating:
           type: number
+          nullable: true
+          description: "null clears a previously-set rating — the edit form sends null when the field is left empty."
         paymentHold:
           type: boolean
 
@@ -5085,9 +5091,11 @@ components:
         firstName:
           type: string
           minLength: 2
+          description: "Must be a real 2+ character name after trimming whitespace."
         lastName:
           type: string
           minLength: 2
+          description: "Must be a real 2+ character name after trimming whitespace."
         email:
           type: string
           format: email
@@ -5104,9 +5112,11 @@ components:
         firstName:
           type: string
           minLength: 2
+          description: "Must be a real 2+ character name after trimming whitespace."
         lastName:
           type: string
           minLength: 2
+          description: "Must be a real 2+ character name after trimming whitespace."
         showContactInPortal:
           type: boolean
           nullable: true

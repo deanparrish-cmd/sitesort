@@ -100,8 +100,15 @@ router.post("/subcontractors", authenticate, async (req, res) => {
     const parsed = CreateSubcontractorBody.safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ error: "validation_error", message: "A first name and surname (2+ chars each) and contactEmail are required" }); return; }
     const { contactFirstName, contactLastName, contactEmail, contactPhone, contactType, trades, notes } = parsed.data;
+    // The Zod minLength above checks the RAW value, so e.g. "  " (whitespace-only)
+    // slips through — trim first, then re-check, so a name that's empty once
+    // trimmed is caught with a clear message instead of silently stored blank.
     const firstName = contactFirstName.trim();
     const lastName = contactLastName.trim();
+    if (firstName.length < 2 || lastName.length < 2) {
+      res.status(400).json({ error: "validation_error", message: "First name and surname must be at least 2 real characters each (whitespace doesn't count)." });
+      return;
+    }
     const contactName = `${firstName} ${lastName}`.trim();
     const type = contactType ?? "subcontractor";
     // Self-employed: the person IS the entity — companyName is optional client-side;
@@ -206,6 +213,14 @@ router.patch("/subcontractors/:subcontractorId", authenticate, async (req, res) 
     // out of sync with the parts.
     if ((contactFirstName !== undefined) !== (contactLastName !== undefined)) {
       res.status(400).json({ error: "validation_error", message: "Provide both first name and surname together." });
+      return;
+    }
+    // The Zod minLength above checks the RAW value, so e.g. "  " (whitespace-only)
+    // slips through — trim first, then re-check, so a name that's empty once
+    // trimmed is caught with a clear message instead of silently stored blank.
+    if (contactFirstName !== undefined && contactLastName !== undefined
+      && (contactFirstName.trim().length < 2 || contactLastName.trim().length < 2)) {
+      res.status(400).json({ error: "validation_error", message: "First name and surname must be at least 2 real characters each (whitespace doesn't count)." });
       return;
     }
     const updates: Record<string, unknown> = {};

@@ -7,9 +7,15 @@
  */
 
 export interface CreatePersonRequest {
-  /** @minLength 2 */
+  /**
+   * Must be a real 2+ character name after trimming whitespace.
+   * @minLength 2
+   */
   firstName: string;
-  /** @minLength 2 */
+  /**
+   * Must be a real 2+ character name after trimming whitespace.
+   * @minLength 2
+   */
   lastName: string;
   email: string;
   phone?: string;
