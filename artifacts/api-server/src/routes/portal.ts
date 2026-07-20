@@ -193,40 +193,53 @@ const isAfter = (d: Date | null | undefined, since: Date | undefined): boolean =
 // whose share/create time is newer than the member's last view of that section.
 async function computeUnseen(userId: string, projectId: string): Promise<{ counts: Record<string, number>; total: number }> {
   const viewer = await resolveViewer(userId, projectId);
-  const [docMap, photoMap, permitMap, plantMap, lastView] = await Promise.all([
+  const [docMap, photoMap, permitMap, plantMap, lastView, permRow] = await Promise.all([
     visibleShareMap(projectId, "document", viewer),
     visibleShareMap(projectId, "photo", viewer),
     visibleShareMap(projectId, "permit", viewer),
     visibleShareMap(projectId, "plant_item", viewer),
     lastViewedBySection(userId, projectId),
+    db.select({
+      canLogIssues: projectMembersTable.canLogIssues,
+      canUpdatePlantMaterials: projectMembersTable.canUpdatePlantMaterials,
+    }).from(projectMembersTable)
+      .where(and(eq(projectMembersTable.projectId, projectId), eq(projectMembersTable.userId, userId))).limit(1),
   ]);
+  const canLogIssues = permRow[0]?.canLogIssues ?? false;
+  const canUpdatePlantMaterials = permRow[0]?.canUpdatePlantMaterials ?? false;
   const lv = (s: string) => lastView.get(s);
   const counts: Record<string, number> = {};
   const bump = (s: string, n = 1) => { if (n) counts[s] = (counts[s] ?? 0) + n; };
 
-  // Gated documents, by type → their section; plus the aggregate "shared".
+  // Gated documents, by type → their (retired) section keys — harmless now that
+  // no nav item reads them, kept only for the aggregate "shared" bump below.
   const docIds = [...docMap.keys()];
   const docs = docIds.length
     ? await db.select({ id: documentsTable.id, type: documentsTable.type }).from(documentsTable)
         .where(and(eq(documentsTable.projectId, projectId), inArray(documentsTable.id, docIds), inArray(documentsTable.status, ["current", "superseded"])))
     : [];
-  const sectionForType = (t: string) => t === "drawing" ? "drawings" : t === "method_statement" ? "method-statements" : t === "general" ? "general" : null;
   let sharedCount = 0;
   for (const d of docs) {
     const at = docMap.get(d.id);
     if (isAfter(at, lv("shared"))) sharedCount++;
-    const sec = sectionForType(d.type);
-    if (sec && isAfter(at, lv(sec))) bump(sec);
   }
-  for (const at of photoMap.values()) { if (isAfter(at, lv("shared"))) sharedCount++; if (isAfter(at, lv("site-issues"))) bump("site-issues"); }
-  for (const at of permitMap.values()) { if (isAfter(at, lv("shared"))) sharedCount++; if (isAfter(at, lv("permits"))) bump("permits"); }
-  for (const at of plantMap.values()) { if (isAfter(at, lv("shared"))) sharedCount++; if (isAfter(at, lv("plant-materials"))) bump("plant-materials"); }
-  bump("shared", sharedCount);
+  // Site issues and plant items only count toward "Shared with me" (and never
+  // leak a count at all) when the viewer actually has that section's grant —
+  // otherwise the nav badge itself would tip off gated content they can't open.
+  if (canLogIssues) {
+    for (const at of photoMap.values()) { if (isAfter(at, lv("shared"))) sharedCount++; if (isAfter(at, lv("site-issues"))) bump("site-issues"); }
+  }
+  for (const at of permitMap.values()) { if (isAfter(at, lv("shared"))) sharedCount++; }
+  if (canUpdatePlantMaterials) {
+    for (const at of plantMap.values()) { if (isAfter(at, lv("shared"))) sharedCount++; if (isAfter(at, lv("plant-materials"))) bump("plant-materials"); }
+  }
 
-  // Safety docs are always visible (never gated) → new ones are unseen too.
+  // Safety docs are always visible (never gated) → new ones count toward
+  // "Shared with me" too, since that's now the only place they surface.
   const safetyDocs = await db.select({ createdAt: documentsTable.createdAt }).from(documentsTable)
     .where(and(eq(documentsTable.projectId, projectId), eq(documentsTable.type, "safety"), eq(documentsTable.status, "current")));
-  for (const s of safetyDocs) if (isAfter(s.createdAt, lv("safety"))) bump("safety");
+  for (const s of safetyDocs) if (isAfter(s.createdAt, lv("shared"))) sharedCount++;
+  bump("shared", sharedCount);
 
   // Site updates (daily notes) drive Overview + General badges.
   const notes = await db.select({ createdAt: dailyNotesTable.createdAt }).from(dailyNotesTable).where(eq(dailyNotesTable.projectId, projectId));
@@ -502,7 +515,7 @@ router.get("/portal/me", ...portalGuards, async (req, res) => {
       name: urow[0]?.name ?? "",
       role: req.portalMemberRole ?? "worker",
       email: req.user!.email,
-      canLogIssues: permRow[0]?.canLogIssues ?? true,
+      canLogIssues: permRow[0]?.canLogIssues ?? false,
       canUpdatePlantMaterials: permRow[0]?.canUpdatePlantMaterials ?? false,
       canEditDailyReport: permRow[0]?.canEditDailyReport ?? false,
     },
@@ -585,10 +598,19 @@ router.get("/portal/overview", ...portalGuards, async (req, res) => {
   if (!proj) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
   // The Open Issues + Active Permits stats deep-link into GATED sections, so their
   // counts must only include what this member is allowed to see (shared items).
+  // Open Issues additionally requires the canLogIssues section grant — with no
+  // grant the count is forced to 0 server-side, not just hidden client-side,
+  // since the raw number would otherwise leak the section's existence.
   const viewer = await resolveViewer(req.user!.id, pid);
-  const [photoVisible, permitVisible] = await Promise.all([visibleIds(pid, "photo", viewer), visibleIds(pid, "permit", viewer)]);
+  const [photoVisible, permitVisible, permRow] = await Promise.all([
+    visibleIds(pid, "photo", viewer),
+    visibleIds(pid, "permit", viewer),
+    db.select({ canLogIssues: projectMembersTable.canLogIssues }).from(projectMembersTable)
+      .where(and(eq(projectMembersTable.projectId, pid), eq(projectMembersTable.userId, req.user!.id))).limit(1),
+  ]);
+  const canLogIssues = permRow[0]?.canLogIssues ?? false;
   const [openIssueRows, permitRows, milestonesRows, teamRows, notes] = await Promise.all([
-    photoVisible.size ? db.select({ id: photosTable.id }).from(photosTable).where(and(
+    canLogIssues && photoVisible.size ? db.select({ id: photosTable.id }).from(photosTable).where(and(
       eq(photosTable.projectId, pid),
       issueCategoryFilter(),
       inArray(photosTable.status, ["open", "in_progress", "new", "pending_confirmation"]),
@@ -625,23 +647,37 @@ router.get("/portal/overview", ...portalGuards, async (req, res) => {
 });
 
 // GET /api/portal/shared — everything shared with this member across types
-// (the "Shared with me" landing). Safety docs are included as always-available.
+// (the "Shared with me" landing — now the ONLY place drawings/method
+// statements/permits/safety/general documents surface; the old standalone
+// nav tabs for those were retired in favour of a category filter here).
+// Safety docs are always included (never gated). Site issues ("photos") are
+// additionally gated on canLogIssues — that flag now governs the whole Site
+// Issues section, including whether it can leak through this aggregate view.
 router.get("/portal/shared", ...portalGuards, async (req, res) => {
   const pid = req.portalProjectId!;
   const viewer = await resolveViewer(req.user!.id, pid);
-  const [docMap, photoMap, permitMap, lastView] = await Promise.all([
+  const [docMap, photoMap, permitMap, lastView, permRow] = await Promise.all([
     visibleShareMap(pid, "document", viewer),
     visibleShareMap(pid, "photo", viewer),
     visibleShareMap(pid, "permit", viewer),
     lastViewedBySection(req.user!.id, pid),
+    db.select({ canLogIssues: projectMembersTable.canLogIssues }).from(projectMembersTable)
+      .where(and(eq(projectMembersTable.projectId, pid), eq(projectMembersTable.userId, req.user!.id))).limit(1),
   ]);
+  const canLogIssues = permRow[0]?.canLogIssues ?? false;
   const seenBefore = lastView.get("shared");
-  const docIds = [...docMap.keys()], photoIds = [...photoMap.keys()], permitIds = [...permitMap.keys()];
-  const [docs, photos, permits] = await Promise.all([
+  const docIds = [...docMap.keys()], photoIds = canLogIssues ? [...photoMap.keys()] : [], permitIds = [...permitMap.keys()];
+  const [gatedDocs, safetyDocs, photos, permits] = await Promise.all([
     docIds.length ? db.select().from(documentsTable).where(and(eq(documentsTable.projectId, pid), inArray(documentsTable.id, docIds), inArray(documentsTable.status, ["current", "superseded"]))) : Promise.resolve([]),
+    db.select().from(documentsTable).where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, "safety"), eq(documentsTable.status, "current"))),
     photoIds.length ? db.select().from(photosTable).where(and(eq(photosTable.projectId, pid), inArray(photosTable.id, photoIds))) : Promise.resolve([]),
     permitIds.length ? db.select().from(permitsTable).where(and(eq(permitsTable.projectId, pid), isNull(permitsTable.archivedAt), inArray(permitsTable.id, permitIds))) : Promise.resolve([]),
   ]);
+  // Safety docs bypass portal_shares entirely, so they have no entry in docMap —
+  // fold their own createdAt in as a synthetic "shared at" for ordering/unseen.
+  const docMapWithSafety = new Map(docMap);
+  for (const d of safetyDocs) if (!docMapWithSafety.has(d.id)) docMapWithSafety.set(d.id, d.createdAt);
+  const docs = [...gatedDocs, ...safetyDocs.filter(d => !docMap.has(d.id))];
   // Annotate each item with when it was shared + whether it's unseen, and order
   // NEWEST-shared first so fresh content is at the top with the unseen highlight.
   const annotate = <T extends { id: string }>(rows: T[], serialize: (r: T) => any, map: Map<string, Date>) =>
@@ -650,7 +686,7 @@ router.get("/portal/shared", ...portalGuards, async (req, res) => {
       .sort((a, b) => b._at - a._at)
       .map(({ _at, ...rest }) => rest);
   res.json({
-    documents: annotate(docs, serializeDoc, docMap),
+    documents: annotate(docs, serializeDoc, docMapWithSafety),
     photos: annotate(photos, serializeIssue, photoMap),
     permits: annotate(permits, serializePermit, permitMap),
   });
@@ -745,11 +781,13 @@ router.get("/portal/team", ...portalGuards, async (req, res) => {
   res.json(result);
 });
 
-// GET /api/portal/site-issues — GATED to shared photos, PLUS an issue this
-// member reported or is assigned to (they must always see their own status,
-// even without an explicit share) — this never leaks who ELSE it's shared
-// with, only the reporter's own name on their own reports.
-router.get("/portal/site-issues", ...portalGuards, async (req, res) => {
+// GET /api/portal/site-issues — the whole section is gated on canLogIssues
+// (minimal-portal redesign: no grant = the section doesn't exist for this
+// member, not just read-only). Within a granted member's view: shared photos,
+// PLUS an issue this member reported or is assigned to (they must always see
+// their own status, even without an explicit share) — this never leaks who
+// ELSE it's shared with, only the reporter's own name on their own reports.
+router.get("/portal/site-issues", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canLogIssues"), autoLogPortalActivity, async (req, res) => {
   const pid = req.portalProjectId!;
   const viewer = await resolveViewer(req.user!.id, pid);
   const sharedIds = await visibleIds(pid, "photo", viewer);
@@ -1064,8 +1102,9 @@ async function serializePortalPlantItem(item: typeof plantItemsTable.$inferSelec
   };
 }
 
-// GET /api/portal/plant-materials — GATED to shared items.
-router.get("/portal/plant-materials", ...portalGuards, async (req, res) => {
+// GET /api/portal/plant-materials — section gated on canUpdatePlantMaterials
+// (minimal-portal redesign), items within it further gated to shared items.
+router.get("/portal/plant-materials", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canUpdatePlantMaterials"), autoLogPortalActivity, async (req, res) => {
   const pid = req.portalProjectId!;
   const viewer = await resolveViewer(req.user!.id, pid);
   const ids = await visibleIds(pid, "plant_item", viewer);
@@ -1077,7 +1116,7 @@ router.get("/portal/plant-materials", ...portalGuards, async (req, res) => {
 });
 
 // GET /api/portal/plant-materials/:itemId
-router.get("/portal/plant-materials/:itemId", ...portalGuards, async (req, res) => {
+router.get("/portal/plant-materials/:itemId", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canUpdatePlantMaterials"), autoLogPortalActivity, async (req, res) => {
   const pid = req.portalProjectId!;
   const rows = await db.select().from(plantItemsTable)
     .where(and(eq(plantItemsTable.id, req.params.itemId), eq(plantItemsTable.projectId, pid))).limit(1);
@@ -1159,17 +1198,19 @@ router.post("/portal/plant-materials/:itemId/attachments", authenticate, require
   }
 });
 
-// ---- Daily Report (structural section — visible to every portal member,
-// like Team/Progress, not portal_shares-gated. WRITE behind
-// requirePortalPermission("canEditDailyReport") AND the lock window: a report
-// locks day-end + 24h grace; only the dashboard can amend a locked day.
-// Dashboard and portal share upsertManagerReport (lib/daily-reports.ts) so
-// they edit the exact same record — no forking. ----
+// ---- Daily Report — section gated on canEditDailyReport (minimal-portal
+// redesign: this flag now doubles as visibility, not just write). Previously
+// this was a structural section visible to every portal member like Team/
+// Progress; that default was deliberately reversed per a later design pass.
+// WRITE additionally requires the lock window: a report locks day-end + 24h
+// grace; only the dashboard can amend a locked day. Dashboard and portal
+// share upsertManagerReport (lib/daily-reports.ts) so they edit the exact
+// same record — no forking. ----
 
 const HISTORY_LIMIT = 14;
 
-// GET /api/portal/daily-report — today's report (always visible).
-router.get("/portal/daily-report", ...portalGuards, async (req, res) => {
+// GET /api/portal/daily-report — today's report, section-gated.
+router.get("/portal/daily-report", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canEditDailyReport"), autoLogPortalActivity, async (req, res) => {
   try {
     const pid = req.portalProjectId!;
     const date = londonDateStr(new Date());
@@ -1195,8 +1236,9 @@ router.get("/portal/daily-report", ...portalGuards, async (req, res) => {
 });
 
 // GET /api/portal/daily-report/history — last HISTORY_LIMIT past days that
-// have a site diary entry, newest first. Always read-only.
-router.get("/portal/daily-report/history", ...portalGuards, async (req, res) => {
+// have a site diary entry, newest first. Section-gated like the rest of Daily
+// Report; always read-only within the section.
+router.get("/portal/daily-report/history", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canEditDailyReport"), autoLogPortalActivity, async (req, res) => {
   try {
     const pid = req.portalProjectId!;
     const today = londonDateStr(new Date());

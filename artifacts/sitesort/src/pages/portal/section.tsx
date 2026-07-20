@@ -3,9 +3,8 @@ import { useRoute, useSearch, Link } from "wouter";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import {
   useGetPortalOverview, useGetPortalProgress, useGetPortalTeam,
-  useGetPortalSiteIssues, useGetPortalSiteBoard, useGetPortalHs,
-  useGetPortalDrawings, useGetPortalMethodStatements, useGetPortalPermits,
-  useGetPortalSafety, useGetPortalGeneral, useGetPortalShared,
+  useGetPortalSiteIssues, useGetPortalSiteBoard,
+  useGetPortalGeneral, useGetPortalShared,
   useGetPortalMyDocuments, useGetPortalUnseen, useGetPortalContext,
   useGetPortalPlantMaterials, useUpdatePortalPlantMaterialItem,
   useCreatePortalSiteIssue, useUpdatePortalSiteIssue,
@@ -288,10 +287,15 @@ const SECTION_LABEL: Record<string, string> = Object.fromEntries(SECTION_NAV.map
 function WhatsNewCard() {
   // Reuse the same unseen data the nav badges use (polled + focus-refetched).
   const { data } = useGetPortalUnseen({ query: { refetchInterval: 60_000, queryKey: getGetPortalUnseenQueryKey() } });
+  const { data: ctx } = useGetPortalContext();
   const counts = (data?.counts ?? {}) as Record<string, number>;
-  // Don't list Overview itself (you're already here); order follows the nav.
+  // Don't list Overview itself (you're already here); skip a permission-gated
+  // section this member doesn't have — its nav link is gone, so a stray count
+  // (belt-and-braces; the server itself stops counting these) must never
+  // render a dead/forbidden link. Order follows the nav.
   const entries = SECTION_NAV
     .filter(s => s.key !== "overview" && (counts[s.key] ?? 0) > 0)
+    .filter(s => !s.permission || !!ctx?.member[s.permission])
     .map(s => ({ key: s.key, label: SECTION_LABEL[s.key] ?? s.key, count: counts[s.key], Icon: s.Icon }));
   if (entries.length === 0) return null;
   return (
@@ -319,12 +323,18 @@ function WhatsNewCard() {
 function OverviewView() {
   // Site updates are time-sensitive → poll while visible.
   const { data, isLoading } = useGetPortalOverview({ query: { refetchInterval: PORTAL_LIVE_REFETCH, queryKey: getGetPortalOverviewQueryKey() } });
+  const { data: ctx } = useGetPortalContext();
   if (isLoading) return <Loading />;
   if (!data) return <Empty>Nothing to show yet.</Empty>;
   const stats = [
-    { label: "Open issues", value: data.stats.openIssues, href: "/portal/site-issues?status=open", Icon: AlertTriangle },
+    // Open issues deep-links into the (permission-gated) Site Issues section —
+    // showing the count at all would tip off gated content, so drop the whole
+    // card when this member has no grant, same "absent, not greyed" rule as the nav.
+    ...(ctx?.member.canLogIssues ? [{ label: "Open issues", value: data.stats.openIssues, href: "/portal/site-issues?status=open", Icon: AlertTriangle }] : []),
     { label: "Milestones left", value: data.stats.upcomingMilestones, href: "/portal/progress", Icon: TrendingUp },
-    { label: "Active permits", value: data.stats.activePermits, href: "/portal/permits?status=active", Icon: FileCheck },
+    // Permits no longer has its own nav tab — deep-links into "Shared with me"
+    // pre-filtered to the Permits category instead.
+    { label: "Active permits", value: data.stats.activePermits, href: "/portal/shared?category=permits", Icon: FileCheck },
     { label: "Team size", value: data.stats.teamSize, href: "/portal/team", Icon: Users },
   ];
   return (
@@ -524,7 +534,7 @@ function SiteIssuesView() {
   const queryClient = useQueryClient();
   const { data: ctx } = useGetPortalContext();
   const selfUserId = ctx?.member?.userId;
-  const canLogIssues = ctx?.member?.canLogIssues ?? true;
+  const canLogIssues = ctx?.member?.canLogIssues ?? false;
   const { data, isLoading } = useGetPortalSiteIssues({ query: { refetchInterval: PORTAL_LIVE_REFETCH, queryKey: getGetPortalSiteIssuesQueryKey() } });
   const markDone = useUpdatePortalSiteIssue();
   const [showForm, setShowForm] = useState(false);
@@ -731,102 +741,6 @@ function SiteBoardView() {
   );
 }
 
-function HsView() {
-  const { data, isLoading } = useGetPortalHs();
-  if (isLoading) return <Loading />;
-  if (!data) return <Empty>Nothing to show yet.</Empty>;
-  return (
-    <div className="space-y-5">
-      <div>
-        <SectionTitle>Method statements</SectionTitle>
-        {data.methodStatements.length === 0 ? <Empty>None uploaded.</Empty> : <Card>{data.methodStatements.map(d => <DocRow key={d.id} doc={d} section="method-statements" />)}</Card>}
-      </div>
-      <div>
-        <SectionTitle>Safety documents</SectionTitle>
-        {data.safety.length === 0 ? <Empty>None uploaded.</Empty> : <Card>{data.safety.map(d => <DocRow key={d.id} doc={d} section="safety" />)}</Card>}
-      </div>
-      <div>
-        <SectionTitle>Permits</SectionTitle>
-        {data.permits.length === 0 ? <Empty>None active.</Empty> : <Card>{data.permits.map(p => <PermitRow key={p.id} p={p} />)}</Card>}
-      </div>
-    </div>
-  );
-}
-
-function DocListView({ section, hook, empty, live, downloadAll }: { section: string; hook: any; empty: string; live?: boolean; downloadAll?: boolean }) {
-  const { toast } = useToast();
-  const [downloading, setDownloading] = useState(false);
-  const { data, isLoading } = hook(live ? { query: { refetchInterval: PORTAL_LIVE_REFETCH } } : undefined);
-  if (isLoading) return <Loading />;
-  if (!data || data.length === 0) return <Empty>{empty}</Empty>;
-  const grabAll = async () => {
-    setDownloading(true);
-    try {
-      await downloadAuthed("/api/portal/drawings/download-all", "drawings.zip");
-    } catch {
-      toast({ title: "Download failed", description: "Please try again.", variant: "destructive" });
-    } finally {
-      setDownloading(false);
-    }
-  };
-  return (
-    <div className="space-y-3">
-      {downloadAll && (
-        <button
-          onClick={() => void grabAll()}
-          disabled={downloading}
-          className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 min-h-12 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-        >
-          <Download className="w-4 h-4" /> {downloading ? "Preparing…" : "Download all"}
-        </button>
-      )}
-      <Card>{data.map((d: any) => <DocRow key={d.id} doc={d} section={section} />)}</Card>
-    </div>
-  );
-}
-
-function PermitsView() {
-  const activeOnly = new URLSearchParams(useSearch()).get("status") === "active";
-  const { data, isLoading } = useGetPortalPermits();
-  if (isLoading) return <Loading />;
-  if (!data || data.length === 0) return <Empty>Nothing shared with you here yet.</Empty>;
-  const permits = activeOnly ? data.filter(p => p.status === "active") : data;
-  return (
-    <div className="space-y-2">
-      {activeOnly && <FilterChip label="Active permits only" clearHref="/portal/permits" />}
-      {permits.length === 0 ? <Empty>No active permits right now.</Empty> : <Card>{permits.map(p => <PermitRow key={p.id} p={p} />)}</Card>}
-    </div>
-  );
-}
-
-function GeneralView() {
-  // Site notes are time-sensitive → poll while visible.
-  const { data, isLoading } = useGetPortalGeneral({ query: { refetchInterval: PORTAL_LIVE_REFETCH, queryKey: getGetPortalGeneralQueryKey() } });
-  if (isLoading) return <Loading />;
-  if (!data) return <Empty>Nothing to show yet.</Empty>;
-  return (
-    <div className="space-y-5">
-      <div>
-        <SectionTitle>General documents</SectionTitle>
-        {data.documents.length === 0 ? <Empty>Nothing shared with you here yet.</Empty> : <Card>{data.documents.map(d => <DocRow key={d.id} doc={d} section="general" />)}</Card>}
-      </div>
-      <div>
-        <SectionTitle>Site notes</SectionTitle>
-        {data.notes.length === 0 ? <Empty>No notes posted.</Empty> : (
-          <div className="space-y-3">
-            {data.notes.map(n => (
-              <Card key={n.id}>
-                <p className="text-sm whitespace-pre-wrap break-words">{n.body}</p>
-                <p className="text-xs text-muted-foreground mt-2">{n.authorName} · {fmtDate(n.noteDate)}</p>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // Map a document's type to its portal section so opening it from the aggregate
 // "Shared with me" view still hits the per-item endpoint that logs the view +
 // registers it in distribution tracking.
@@ -837,8 +751,46 @@ function docTypeSection(type?: string): string {
   return "general";
 }
 
+// "Shared with me" now doubles as the home for what used to be six separate
+// nav tabs (H&S/Drawings/Method Statements/Permits/Safety/General) — they were
+// always just a differently-sliced view of the same shared documents/permits,
+// so retiring them and adding a category filter here keeps the same browsing
+// power with one less layer of nav. "H&S" is a convenience bundle (method
+// statements + safety + permits together), not a real document type.
+type SharedCategory = "all" | "drawings" | "hs" | "permits" | "method-statements" | "safety" | "general";
+const SHARED_CATEGORIES: { key: SharedCategory; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "drawings", label: "Drawings" },
+  { key: "hs", label: "H&S" },
+  { key: "permits", label: "Permits" },
+  { key: "method-statements", label: "Method Statements" },
+  { key: "safety", label: "Safety" },
+  { key: "general", label: "General" },
+];
+function docMatchesCategory(doc: any, cat: SharedCategory): boolean {
+  if (cat === "all") return true;
+  if (cat === "drawings") return doc.type === "drawing";
+  if (cat === "method-statements") return doc.type === "method_statement";
+  if (cat === "safety") return doc.type === "safety";
+  if (cat === "general") return doc.type === "general";
+  if (cat === "hs") return doc.type === "method_statement" || doc.type === "safety";
+  return false;
+}
+const CATEGORY_SHOWS_PERMITS = new Set<SharedCategory>(["all", "permits", "hs"]);
+
 function SharedView() {
+  const initial = new URLSearchParams(useSearch()).get("category") as SharedCategory | null;
+  const [category, setCategory] = useState<SharedCategory>(
+    initial && SHARED_CATEGORIES.some(c => c.key === initial) ? initial : "all",
+  );
   const { data, isLoading } = useGetPortalShared({ query: { refetchInterval: PORTAL_LIVE_REFETCH, queryKey: getGetPortalSharedQueryKey() } });
+  // Site notes lived on the old (now-retired) General tab alongside general
+  // documents — they're project-wide announcements, not gated/shared content,
+  // so they don't come back from /portal/shared. Pulled in here separately so
+  // retiring that tab doesn't also remove access to the full notes history
+  // (Overview only ever shows the latest 5).
+  const { data: generalData } = useGetPortalGeneral({ query: { refetchInterval: PORTAL_LIVE_REFETCH, queryKey: getGetPortalGeneralQueryKey() } });
+  const notes = generalData?.notes ?? [];
   // "New" highlights are STICKY for the visit: capture the unseen ids on first
   // load and keep highlighting them, so a background refetch (which sees the
   // section as now-viewed → unseen:false) doesn't make the highlight flicker away
@@ -849,17 +801,38 @@ function SharedView() {
   }
   const isNew = (id: string) => unseenIds.current?.has(id) ?? false;
   if (isLoading) return <Loading />;
-  const empty = !data || (!data.documents.length && !data.photos.length && !data.permits.length);
+  const empty = !data || (!data.documents.length && !data.photos.length && !data.permits.length && !notes.length);
   if (empty) return <Empty>Nothing has been shared with you yet. Your project manager will share drawings, documents and updates here.</Empty>;
+
+  const filteredDocs = data!.documents.filter(d => docMatchesCategory(d, category));
+  const showPermits = CATEGORY_SHOWS_PERMITS.has(category) && data!.permits.length > 0;
+  const showPhotos = category === "all" && data!.photos.length > 0;
+  const showNotes = (category === "all" || category === "general") && notes.length > 0;
+  const nothingInCategory = category !== "all" && filteredDocs.length === 0 && !showPermits && !(category === "general" && showNotes);
+
   return (
     <div className="space-y-5">
-      {data!.documents.length > 0 && (
-        <div><SectionTitle>Documents</SectionTitle><Card>{data!.documents.map(d => <DocRow key={d.id} doc={d} section={docTypeSection(d.type)} unseen={isNew(d.id)} />)}</Card></div>
+      <div className="flex flex-wrap gap-1.5">
+        {SHARED_CATEGORIES.map(c => (
+          <button
+            key={c.key}
+            onClick={() => setCategory(c.key)}
+            className={cn(
+              "px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors",
+              category === c.key ? "bg-primary text-primary-foreground border-primary" : "bg-background text-muted-foreground border-border hover:bg-muted",
+            )}
+          >
+            {c.label}
+          </button>
+        ))}
+      </div>
+      {filteredDocs.length > 0 && (
+        <div><SectionTitle>Documents</SectionTitle><Card>{filteredDocs.map(d => <DocRow key={d.id} doc={d} section={docTypeSection(d.type)} unseen={isNew(d.id)} />)}</Card></div>
       )}
-      {data!.permits.length > 0 && (
+      {showPermits && (
         <div><SectionTitle>Permits</SectionTitle><Card>{data!.permits.map(p => <PermitRow key={p.id} p={p} unseen={isNew(p.id)} />)}</Card></div>
       )}
-      {data!.photos.length > 0 && (
+      {showPhotos && (
         <div><SectionTitle>Site issues</SectionTitle><div className="space-y-3">
           {data!.photos.map(issue => (
             <Card key={issue.id} className={cn(isNew(issue.id) && "ring-1 ring-primary/40")}>
@@ -881,6 +854,17 @@ function SharedView() {
           ))}
         </div></div>
       )}
+      {showNotes && (
+        <div><SectionTitle>Site notes</SectionTitle><div className="space-y-3">
+          {notes.map(n => (
+            <Card key={n.id}>
+              <p className="text-sm whitespace-pre-wrap break-words">{n.body}</p>
+              <p className="text-xs text-muted-foreground mt-2">{n.authorName} · {fmtDate(n.noteDate)}</p>
+            </Card>
+          ))}
+        </div></div>
+      )}
+      {nothingInCategory && <Empty>Nothing in this category yet.</Empty>}
     </div>
   );
 }
@@ -1446,7 +1430,21 @@ function SettingsView() {
   );
 }
 
+// Sections whose nav entry is only ever shown when the matching permission is
+// granted (see layout.tsx's SECTION_NAV `permission` field). Guarded again
+// here so a direct URL visit (nav can't stop that) can't render the real view
+// while its own data fetch 403s underneath — same "absent, not greyed"
+// contract as the nav, reached by any path.
+const SECTION_PERMISSION: Record<string, "canLogIssues" | "canUpdatePlantMaterials" | "canEditDailyReport"> = {
+  "site-issues": "canLogIssues",
+  "plant-materials": "canUpdatePlantMaterials",
+  "daily-report": "canEditDailyReport",
+};
+
 function renderSection(section: string) {
+  const { data: ctx } = useGetPortalContext();
+  const required = SECTION_PERMISSION[section];
+  if (required && ctx && !ctx.member[required]) return <Empty>Section not found.</Empty>;
   switch (section) {
     case "overview": return <OverviewView />;
     case "shared": return <SharedView />;
@@ -1456,12 +1454,6 @@ function renderSection(section: string) {
     case "team": return <TeamView />;
     case "site-issues": return <SiteIssuesView />;
     case "site-board": return <SiteBoardView />;
-    case "hs": return <HsView />;
-    case "drawings": return <DocListView section="drawings" hook={useGetPortalDrawings} empty="Nothing shared with you here yet." live downloadAll />;
-    case "method-statements": return <DocListView section="method-statements" hook={useGetPortalMethodStatements} empty="Nothing shared with you here yet." />;
-    case "permits": return <PermitsView />;
-    case "safety": return <DocListView section="safety" hook={useGetPortalSafety} empty="No safety documents uploaded." />;
-    case "general": return <GeneralView />;
     case "plant-materials": return <PlantMaterialsView />;
     case "daily-report": return <DailyReportView />;
     case "messages": return <MessagesView />;
