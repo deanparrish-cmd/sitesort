@@ -15,6 +15,7 @@ import {
   sendPasswordResetEmail,
   sendWelcomeEmail,
 } from "../lib/email";
+import { parseFullPersonName } from "../lib/name-validation";
 
 const router: IRouter = Router();
 
@@ -33,11 +34,19 @@ function resendThrottled(email: string): boolean {
 
 router.post("/auth/register", async (req, res) => {
   try {
-    const { companyName, adminName, email: rawEmail, password, companySize } = req.body;
-    if (!companyName || !adminName || !rawEmail || !password) {
+    const { companyName, email: rawEmail, password, companySize } = req.body;
+    if (!companyName || !req.body.adminName || !rawEmail || !password) {
       res.status(400).json({ error: "validation_error", message: "All fields are required" });
       return;
     }
+    // companyName is a free-text org name (no first+surname shape required); only
+    // adminName — an actual person — is held to it.
+    const nameParsed = parseFullPersonName(req.body.adminName);
+    if (!nameParsed.success) {
+      res.status(400).json({ error: "validation_error", message: nameParsed.message });
+      return;
+    }
+    const adminName = nameParsed.data;
     const email = String(rawEmail).trim().toLowerCase();
 
     const existing = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
@@ -557,11 +566,17 @@ router.get("/auth/invite/:token", async (req, res) => {
 // POST /api/auth/invite/:token/accept — public: register via invite link
 router.post("/auth/invite/:token/accept", async (req, res) => {
   try {
-    const { name, password } = req.body;
-    if (!name?.trim() || !password) {
+    const { password } = req.body;
+    if (!req.body.name?.trim() || !password) {
       res.status(400).json({ error: "validation_error", message: "Name and password are required" });
       return;
     }
+    const nameParsed = parseFullPersonName(req.body.name);
+    if (!nameParsed.success) {
+      res.status(400).json({ error: "validation_error", message: nameParsed.message });
+      return;
+    }
+    const name = nameParsed.data;
     if (password.length < 8) {
       res.status(400).json({ error: "validation_error", message: "Password must be at least 8 characters" });
       return;

@@ -7,6 +7,7 @@ import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { sendInvitationEmail } from "../lib/email";
 import { addMembership, membershipRole } from "../lib/memberships";
+import { parseFullPersonName } from "../lib/name-validation";
 
 const router: IRouter = Router();
 
@@ -37,11 +38,17 @@ router.get("/users", authenticate, async (req, res) => {
 
 router.post("/users", authenticate, async (req, res) => {
   try {
-    const { email, name, role, phone } = req.body;
-    if (!email || !name || !role) {
+    const { email, role, phone } = req.body;
+    if (!email || !role) {
       res.status(400).json({ error: "validation_error", message: "email, name, role required" });
       return;
     }
+    const nameParsed = parseFullPersonName(req.body.name);
+    if (!nameParsed.success) {
+      res.status(400).json({ error: "validation_error", message: nameParsed.message });
+      return;
+    }
+    const name = nameParsed.data;
 
     const companyRow = await db.select({ name: companiesTable.name }).from(companiesTable).where(eq(companiesTable.id, req.user!.companyId)).limit(1);
     const companyName = companyRow[0]?.name ?? "your company";
@@ -103,6 +110,13 @@ router.post("/users", authenticate, async (req, res) => {
 router.patch("/users/:userId", authenticate, async (req, res) => {
   try {
     const { name, role, phone } = req.body;
+    if (name !== undefined) {
+      const nameParsed = parseFullPersonName(name);
+      if (!nameParsed.success) {
+        res.status(400).json({ error: "validation_error", message: nameParsed.message });
+        return;
+      }
+    }
 
     // Target must be a member of the active company.
     const currentRole = await membershipRole(req.params.userId, req.user!.companyId);
@@ -116,7 +130,7 @@ router.patch("/users/:userId", authenticate, async (req, res) => {
     // Name/phone are identity (global) → only editable from the user's HOME company,
     // so company B can't rename a member whose home is company A.
     const idUpdates: Record<string, unknown> = {};
-    if (name !== undefined) idUpdates.name = name;
+    if (name !== undefined) idUpdates.name = name.trim();
     if (phone !== undefined) idUpdates.phone = phone;
     if (Object.keys(idUpdates).length > 0) {
       await db.update(usersTable).set(idUpdates).where(and(eq(usersTable.id, req.params.userId), eq(usersTable.companyId, req.user!.companyId)));

@@ -14,6 +14,13 @@ import {
 import { cn } from "@/lib/utils";
 import { useCapabilities } from "@/hooks/use-capabilities";
 
+// Mirrors the server-side rule in artifacts/api-server/src/lib/name-validation.ts —
+// first name + surname, 2+ characters each.
+const FULL_NAME_PATTERN = /^\S{2,}(?:\s+\S{2,})+$/;
+function isFullName(value: string): boolean {
+  return FULL_NAME_PATTERN.test(value.trim());
+}
+
 type TeamMember = {
   id: string;
   name: string;
@@ -164,7 +171,7 @@ export default function TeamPage() {
   }
 
   async function addMember() {
-    if (!addName.trim() || !addEmail.trim()) { setAddError("Name and email are required."); return; }
+    if (!isFullName(addName) || !addEmail.trim()) { setAddError("Enter a first name and surname (2+ characters each), plus an email."); return; }
     setAddSubmitting(true);
     setAddError("");
     const res = await fetch("/api/users", {
@@ -374,6 +381,9 @@ export default function TeamPage() {
             <div>
               <label className="text-sm font-medium mb-1.5 block">Full name <span className="text-destructive">*</span></label>
               <Input value={addName} onChange={e => setAddName(e.target.value)} placeholder="e.g. Jane Smith" />
+              {addName.trim().length > 0 && !isFullName(addName) && (
+                <p className="text-xs text-muted-foreground mt-1">Enter a first name and surname (2+ characters each).</p>
+              )}
             </div>
             <div>
               <label className="text-sm font-medium mb-1.5 block">Email <span className="text-destructive">*</span></label>
@@ -429,7 +439,7 @@ export default function TeamPage() {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
-          <Button variant="accent" onClick={addMember} disabled={addSubmitting || !addName.trim() || !addEmail.trim()}>
+          <Button variant="accent" onClick={addMember} disabled={addSubmitting || !isFullName(addName) || !addEmail.trim()}>
             {addSubmitting ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Sending invite…</> : <><UserPlus className="w-3.5 h-3.5 mr-1.5" />Add & Invite</>}
           </Button>
         </DialogFooter>
