@@ -19,7 +19,11 @@ export const HealthCheckResponse = zod.object({
  */
 export const RegisterBody = zod.object({
   companyName: zod.string(),
-  adminName: zod.string(),
+  adminName: zod
+    .string()
+    .describe(
+      "Must be a first name + surname (2+ characters each) — enforced server-side, not just minLength.",
+    ),
   email: zod.string().email(),
   password: zod.string(),
   companySize: zod.enum(["1-10", "11-50", "51-200", "201+"]),
@@ -581,8 +585,12 @@ export const CreateSubcontractorBody = zod.object({
   companyName: zod.string().optional(),
   contactFirstName: zod
     .string()
-    .min(createSubcontractorBodyContactFirstNameMin),
-  contactLastName: zod.string().min(createSubcontractorBodyContactLastNameMin),
+    .min(createSubcontractorBodyContactFirstNameMin)
+    .describe("Must be a real 2+ character name after trimming whitespace."),
+  contactLastName: zod
+    .string()
+    .min(createSubcontractorBodyContactLastNameMin)
+    .describe("Must be a real 2+ character name after trimming whitespace."),
   contactEmail: zod.string().email(),
   contactPhone: zod.string().optional(),
   contactType: zod
@@ -682,11 +690,13 @@ export const UpdateSubcontractorBody = zod.object({
   contactFirstName: zod
     .string()
     .min(updateSubcontractorBodyContactFirstNameMin)
-    .optional(),
+    .optional()
+    .describe("Must be a real 2+ character name after trimming whitespace."),
   contactLastName: zod
     .string()
     .min(updateSubcontractorBodyContactLastNameMin)
-    .optional(),
+    .optional()
+    .describe("Must be a real 2+ character name after trimming whitespace."),
   contactEmail: zod.string().optional(),
   contactPhone: zod.string().optional(),
   contactType: zod
@@ -701,7 +711,12 @@ export const UpdateSubcontractorBody = zod.object({
     .optional(),
   trades: zod.array(zod.string()).optional(),
   notes: zod.string().optional(),
-  reliabilityRating: zod.number().optional(),
+  reliabilityRating: zod
+    .number()
+    .nullish()
+    .describe(
+      "null clears a previously-set rating — the edit form sends null when the field is left empty.",
+    ),
   paymentHold: zod.boolean().optional(),
 });
 
@@ -1940,7 +1955,11 @@ export const ListUsersResponse = zod.array(ListUsersResponseItem);
  */
 export const InviteUserBody = zod.object({
   email: zod.string().email(),
-  name: zod.string(),
+  name: zod
+    .string()
+    .describe(
+      "Must be a first name + surname (2+ characters each) — enforced server-side, not just minLength.",
+    ),
   role: zod.enum(["admin", "project_manager", "site_worker", "subcontractor"]),
   phone: zod.string().optional(),
 });
@@ -1953,7 +1972,12 @@ export const UpdateUserParams = zod.object({
 });
 
 export const UpdateUserBody = zod.object({
-  name: zod.string().optional(),
+  name: zod
+    .string()
+    .optional()
+    .describe(
+      "Must be a first name + surname (2+ characters each) — enforced server-side, not just minLength.",
+    ),
   role: zod
     .enum(["admin", "project_manager", "site_worker", "subcontractor"])
     .optional(),
@@ -3131,8 +3155,14 @@ export const createSubcontractorPersonBodyFirstNameMin = 2;
 export const createSubcontractorPersonBodyLastNameMin = 2;
 
 export const CreateSubcontractorPersonBody = zod.object({
-  firstName: zod.string().min(createSubcontractorPersonBodyFirstNameMin),
-  lastName: zod.string().min(createSubcontractorPersonBodyLastNameMin),
+  firstName: zod
+    .string()
+    .min(createSubcontractorPersonBodyFirstNameMin)
+    .describe("Must be a real 2+ character name after trimming whitespace."),
+  lastName: zod
+    .string()
+    .min(createSubcontractorPersonBodyLastNameMin)
+    .describe("Must be a real 2+ character name after trimming whitespace."),
   email: zod.string().email(),
   phone: zod.string().optional(),
   roleTitle: zod.string().optional(),
@@ -3168,8 +3198,16 @@ export const updatePersonBodyLastNameMin = 2;
 
 export const UpdatePersonBody = zod
   .object({
-    firstName: zod.string().min(updatePersonBodyFirstNameMin).optional(),
-    lastName: zod.string().min(updatePersonBodyLastNameMin).optional(),
+    firstName: zod
+      .string()
+      .min(updatePersonBodyFirstNameMin)
+      .optional()
+      .describe("Must be a real 2+ character name after trimming whitespace."),
+    lastName: zod
+      .string()
+      .min(updatePersonBodyLastNameMin)
+      .optional()
+      .describe("Must be a real 2+ character name after trimming whitespace."),
     showContactInPortal: zod.boolean().nullish(),
     roleTitle: zod.string().nullish(),
   })
@@ -3522,8 +3560,14 @@ export const createInHousePersonBodyFirstNameMin = 2;
 export const createInHousePersonBodyLastNameMin = 2;
 
 export const CreateInHousePersonBody = zod.object({
-  firstName: zod.string().min(createInHousePersonBodyFirstNameMin),
-  lastName: zod.string().min(createInHousePersonBodyLastNameMin),
+  firstName: zod
+    .string()
+    .min(createInHousePersonBodyFirstNameMin)
+    .describe("Must be a real 2+ character name after trimming whitespace."),
+  lastName: zod
+    .string()
+    .min(createInHousePersonBodyLastNameMin)
+    .describe("Must be a real 2+ character name after trimming whitespace."),
   email: zod.string().email(),
   phone: zod.string().optional(),
   roleTitle: zod.string().optional(),

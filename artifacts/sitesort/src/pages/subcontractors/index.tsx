@@ -241,6 +241,15 @@ function apiFetch(path: string, options?: RequestInit) {
   });
 }
 
+// Mirrors the server-side rule (artifacts/api-server/src/routes/subcontractors.ts):
+// trim first, THEN check length — a raw react-hook-form minLength check on an
+// untrimmed value lets whitespace-only input through and can't tell a real
+// 2-letter name like "Jo" from padded junk.
+const NAME_TOO_SHORT_MESSAGE = "At least 2 real characters (whitespace doesn't count)";
+function validateContactName(value: string): true | string {
+  return value.trim().length >= 2 || NAME_TOO_SHORT_MESSAGE;
+}
+
 type AddFormData = {
   companyName: string;
   contactFirstName: string;
@@ -385,7 +394,7 @@ export default function SubcontractorsPage() {
   }
 
   const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<AddFormData>({ defaultValues: { contactType: "subcontractor" } });
-  const { register: editReg, handleSubmit: editSubmit, reset: editReset, watch: editWatch } = useForm<EditFormData>({ defaultValues: { contactType: "subcontractor" } });
+  const { register: editReg, handleSubmit: editSubmit, reset: editReset, watch: editWatch, formState: { errors: editErrors } } = useForm<EditFormData>({ defaultValues: { contactType: "subcontractor" } });
   const addContactType = watch("contactType") as ContactType;
   const editContactType = editWatch("contactType") as ContactType;
 
@@ -596,7 +605,7 @@ export default function SubcontractorsPage() {
     const trades = data.contactType === "subcontractor" ? selectedTradesAdd : [];
     const res = await apiFetch("/api/subcontractors", {
       method: "POST",
-      body: JSON.stringify({ ...data, trades }),
+      body: JSON.stringify({ ...data, contactFirstName: data.contactFirstName.trim(), contactLastName: data.contactLastName.trim(), trades }),
     });
     if (res.ok) {
       const created = await res.json();
@@ -641,6 +650,8 @@ export default function SubcontractorsPage() {
       method: "PATCH",
       body: JSON.stringify({
         ...data,
+        contactFirstName: data.contactFirstName.trim(),
+        contactLastName: data.contactLastName.trim(),
         trades: data.contactType === "subcontractor" ? selectedTradesEdit : [],
         reliabilityRating: data.reliabilityRating ? Number(data.reliabilityRating) : null,
         paymentHold: data.paymentHold,
@@ -1021,13 +1032,13 @@ export default function SubcontractorsPage() {
             )}
             <div>
               <label className="text-sm font-medium mb-1.5 block">First Name</label>
-              <Input placeholder="John" {...register("contactFirstName", { required: true, minLength: 2 })} />
-              {errors.contactFirstName && <p className="text-xs text-destructive mt-1">At least 2 characters</p>}
+              <Input placeholder="John" {...register("contactFirstName", { required: true, validate: validateContactName })} />
+              {errors.contactFirstName && <p className="text-xs text-destructive mt-1">{errors.contactFirstName.message || NAME_TOO_SHORT_MESSAGE}</p>}
             </div>
             <div>
               <label className="text-sm font-medium mb-1.5 block">Surname</label>
-              <Input placeholder="Smith" {...register("contactLastName", { required: true, minLength: 2 })} />
-              {errors.contactLastName && <p className="text-xs text-destructive mt-1">At least 2 characters</p>}
+              <Input placeholder="Smith" {...register("contactLastName", { required: true, validate: validateContactName })} />
+              {errors.contactLastName && <p className="text-xs text-destructive mt-1">{errors.contactLastName.message || NAME_TOO_SHORT_MESSAGE}</p>}
             </div>
             <div>
               <label className="text-sm font-medium mb-1.5 block">Phone</label>
@@ -1225,11 +1236,13 @@ export default function SubcontractorsPage() {
             )}
             <div>
               <label className="text-sm font-medium mb-1.5 block">First Name</label>
-              <Input {...editReg("contactFirstName", { required: true, minLength: 2 })} />
+              <Input {...editReg("contactFirstName", { required: true, validate: validateContactName })} />
+              {editErrors.contactFirstName && <p className="text-xs text-destructive mt-1">{editErrors.contactFirstName.message || NAME_TOO_SHORT_MESSAGE}</p>}
             </div>
             <div>
               <label className="text-sm font-medium mb-1.5 block">Surname</label>
-              <Input {...editReg("contactLastName", { required: true, minLength: 2 })} />
+              <Input {...editReg("contactLastName", { required: true, validate: validateContactName })} />
+              {editErrors.contactLastName && <p className="text-xs text-destructive mt-1">{editErrors.contactLastName.message || NAME_TOO_SHORT_MESSAGE}</p>}
             </div>
             <div>
               <label className="text-sm font-medium mb-1.5 block">Phone</label>

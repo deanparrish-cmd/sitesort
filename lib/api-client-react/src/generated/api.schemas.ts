@@ -47,6 +47,7 @@ export const RegisterRequestCompanySize = {
 
 export interface RegisterRequest {
   companyName: string;
+  /** Must be a first name + surname (2+ characters each) — enforced server-side, not just minLength. */
   adminName: string;
   email: string;
   password: string;
@@ -102,6 +103,7 @@ export const InviteUserRequestRole = {
 
 export interface InviteUserRequest {
   email: string;
+  /** Must be a first name + surname (2+ characters each) — enforced server-side, not just minLength. */
   name: string;
   role: InviteUserRequestRole;
   phone?: string;
@@ -118,6 +120,7 @@ export const UpdateUserRequestRole = {
 } as const;
 
 export interface UpdateUserRequest {
+  /** Must be a first name + surname (2+ characters each) — enforced server-side, not just minLength. */
   name?: string;
   role?: UpdateUserRequestRole;
   phone?: string;
@@ -511,9 +514,15 @@ export const CreateSubcontractorRequestContactType = {
 
 export interface CreateSubcontractorRequest {
   companyName?: string;
-  /** @minLength 2 */
+  /**
+   * Must be a real 2+ character name after trimming whitespace.
+   * @minLength 2
+   */
   contactFirstName: string;
-  /** @minLength 2 */
+  /**
+   * Must be a real 2+ character name after trimming whitespace.
+   * @minLength 2
+   */
   contactLastName: string;
   contactEmail: string;
   contactPhone?: string;
@@ -537,16 +546,23 @@ export const UpdateSubcontractorRequestContactType = {
 
 export interface UpdateSubcontractorRequest {
   companyName?: string;
-  /** @minLength 2 */
+  /**
+   * Must be a real 2+ character name after trimming whitespace.
+   * @minLength 2
+   */
   contactFirstName?: string;
-  /** @minLength 2 */
+  /**
+   * Must be a real 2+ character name after trimming whitespace.
+   * @minLength 2
+   */
   contactLastName?: string;
   contactEmail?: string;
   contactPhone?: string;
   contactType?: UpdateSubcontractorRequestContactType;
   trades?: string[];
   notes?: string;
-  reliabilityRating?: number;
+  /** null clears a previously-set rating — the edit form sends null when the field is left empty. */
+  reliabilityRating?: number | null;
   paymentHold?: boolean;
 }
 
@@ -1764,9 +1780,15 @@ export interface Person {
 }
 
 export interface CreatePersonRequest {
-  /** @minLength 2 */
+  /**
+   * Must be a real 2+ character name after trimming whitespace.
+   * @minLength 2
+   */
   firstName: string;
-  /** @minLength 2 */
+  /**
+   * Must be a real 2+ character name after trimming whitespace.
+   * @minLength 2
+   */
   lastName: string;
   email: string;
   phone?: string;
@@ -1777,9 +1799,15 @@ export interface CreatePersonRequest {
  * Partial update; omit a field to leave it unchanged. showContactInPortal null = reset to role default.
  */
 export interface UpdatePersonRequest {
-  /** @minLength 2 */
+  /**
+   * Must be a real 2+ character name after trimming whitespace.
+   * @minLength 2
+   */
   firstName?: string;
-  /** @minLength 2 */
+  /**
+   * Must be a real 2+ character name after trimming whitespace.
+   * @minLength 2
+   */
   lastName?: string;
   showContactInPortal?: boolean | null;
   roleTitle?: string | null;

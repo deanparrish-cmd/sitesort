@@ -9,6 +9,7 @@ import type { RegisterRequestCompanySize } from "./registerRequestCompanySize";
 
 export interface RegisterRequest {
   companyName: string;
+  /** Must be a first name + surname (2+ characters each) — enforced server-side, not just minLength. */
   adminName: string;
   email: string;
   password: string;

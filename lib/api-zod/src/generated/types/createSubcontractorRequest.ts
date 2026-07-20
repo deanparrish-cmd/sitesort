@@ -9,9 +9,15 @@ import type { CreateSubcontractorRequestContactType } from "./createSubcontracto
 
 export interface CreateSubcontractorRequest {
   companyName?: string;
-  /** @minLength 2 */
+  /**
+   * Must be a real 2+ character name after trimming whitespace.
+   * @minLength 2
+   */
   contactFirstName: string;
-  /** @minLength 2 */
+  /**
+   * Must be a real 2+ character name after trimming whitespace.
+   * @minLength 2
+   */
   contactLastName: string;
   contactEmail: string;
   contactPhone?: string;
