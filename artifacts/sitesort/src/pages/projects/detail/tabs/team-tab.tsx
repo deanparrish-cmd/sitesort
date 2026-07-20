@@ -16,6 +16,17 @@ function companyLabel(member: any): string {
   return member.contactType === "self_employed" ? "Self-employed" : (member.companyName ?? "");
 }
 
+// Bad legacy contact data can leave a subcontractor's company name identical to
+// its primary contact's own display name (the company name was typed into the
+// contact-name field years ago, before contacts were person-first) — showing
+// both back-to-back on a card reads as a duplicated line. Drop the redundant
+// company segment and keep just the job title, if any.
+function companySubline(member: any): string {
+  const company = companyLabel(member);
+  const isRedundant = !!company && company.trim().toLowerCase() === (member.name ?? "").trim().toLowerCase();
+  return [isRedundant ? null : company, member.roleTitle].filter(Boolean).join(" · ");
+}
+
 function complianceBadge(status: string) {
   return status === "ok"
     ? <Badge variant="success" className="text-[10px]"><UserCheck className="w-3 h-3 mr-1"/>Compliant</Badge>
@@ -178,8 +189,8 @@ export function TeamTab() {
             </label>
             <div className="min-w-0">
               <p className="font-bold text-base leading-tight break-words">{member.name}</p>
-              {isSubcontractor && opts.showCompanyInline && (
-                <p className="text-xs text-muted-foreground break-words">{companyLabel(member)}{member.roleTitle ? ` · ${member.roleTitle}` : ""}</p>
+              {isSubcontractor && opts.showCompanyInline && companySubline(member) && (
+                <p className="text-xs text-muted-foreground break-words">{companySubline(member)}</p>
               )}
               {isSubcontractor && !opts.showCompanyInline && member.roleTitle && (
                 <p className="text-xs text-muted-foreground break-words">{member.roleTitle}</p>

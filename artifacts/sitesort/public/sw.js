@@ -6,7 +6,7 @@
 // shell + its current asset hashes when online); immutable /assets/* build files
 // are cache-first (fast, and safe because their filename hash changes on rebuild);
 // everything else same-origin is network-first with a cache fallback.
-const CACHE = "sitesort-portal-v2";
+const CACHE = "sitesort-portal-v3";
 const SHELL = ["/index.html", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {

@@ -33,9 +33,15 @@ const PLANS = {
 
 type PlanId = keyof typeof PLANS;
 
+// Mirrors the server-side rule in artifacts/api-server/src/lib/name-validation.ts —
+// first name + surname, 2+ characters each. companyName is a free-text org name
+// and isn't held to this shape.
+const FULL_NAME_PATTERN = /^\S{2,}(?:\s+\S{2,})+$/;
+const fullNameField = z.string().trim().regex(FULL_NAME_PATTERN, "Enter a first name and surname (2+ characters each)");
+
 const registerSchema = z.object({
   companyName: z.string().min(2, "Company name is required"),
-  adminName: z.string().min(2, "Your name is required"),
+  adminName: fullNameField,
   email: z.string().email("Please enter a valid email"),
   password: z.string().min(8, "Password must be at least 8 characters"),
   confirmPassword: z.string().min(1, "Please confirm your password"),
@@ -46,7 +52,7 @@ const registerSchema = z.object({
 });
 
 const inviteSchema = z.object({
-  name: z.string().min(2, "Your name is required"),
+  name: fullNameField,
   password: z.string().min(8, "Password must be at least 8 characters"),
 });
 

@@ -104,7 +104,13 @@
       "Bash(curl -s -X POST https://www.sitesort.co.uk/api/projects/__TRACKED_VAR__/invites/__TRACKED_VAR__/revoke -H 'Authorization: Bearer __CMDSUB_OUTPUT__')",
       "Bash(curl -s -X DELETE https://www.sitesort.co.uk/api/people/__TRACKED_VAR__ -H 'Authorization: Bearer __CMDSUB_OUTPUT__')",
       "Bash(grep *)",
-      "Bash(xargs cat)"
+      "Bash(xargs cat)",
+      "Bash(awk '{print length, NR}' /home/runner/workspace/CLAUDE.md)",
+      "Bash(git log *)",
+      "Bash(PORT=8080 pnpm --filter @workspace/sitesort run build)",
+      "Bash(PORT=18299 BASE_PATH=/ pnpm --filter @workspace/sitesort run build)",
+      "Bash(kill 370)",
+      "Bash(curl -s -X POST http://localhost:8080/api/auth/register -H \"Content-Type: application/json\" -d '{\"companyName\":\"NameTest Co\",\"adminName\":\"Solo\",\"email\":\"nametest-reg@example.com\",\"password\":\"password123\",\"companySize\":\"1-10\"}')"
     ]
   },
   "hooks": {

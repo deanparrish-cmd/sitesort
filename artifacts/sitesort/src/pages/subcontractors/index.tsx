@@ -41,6 +41,15 @@ function companyLabel(sub: { companyName: string; contactType?: ContactType }): 
   return sub.contactType === "self_employed" ? "Self-employed" : sub.companyName;
 }
 
+// Bad legacy contact data can leave a subcontractor's company name identical to
+// its own contact name (the company name was typed into the contact-name field
+// years ago, before contacts were person-first) — showing both back-to-back
+// reads as a duplicated line, so hide the redundant company subheading too.
+function showCompanySubline(sub: { companyName: string; contactName: string; contactType?: ContactType }): boolean {
+  return sub.contactType !== "self_employed"
+    && sub.companyName.trim().toLowerCase() !== sub.contactName.trim().toLowerCase();
+}
+
 const CONTACT_TYPE_GROUP_LABELS: Record<string, string> = {
   merchant: "Merchants",
   supplier: "Suppliers",
@@ -816,7 +825,7 @@ export default function SubcontractorsPage() {
                                 <Badge variant="warning" className="text-[10px] shrink-0">Surname missing</Badge>
                               )}
                             </div>
-                            {sub.contactType !== "self_employed" && (
+                            {showCompanySubline(sub) && (
                               <p className="text-xs text-muted-foreground truncate">{sub.companyName}</p>
                             )}
                             <div className="flex flex-col gap-0.5 mt-0.5">

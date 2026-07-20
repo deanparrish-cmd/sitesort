@@ -96,11 +96,6 @@ export default function LandingPage() {
       <main id="top" className="pt-32 pb-16 lg:pt-44 lg:pb-28 overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="text-center max-w-3xl mx-auto slide-up">
-            <img
-              src={builtForBeam}
-              alt="Built for UK construction SMEs"
-              className="mx-auto w-full max-w-xl md:max-w-2xl h-auto mb-10 drop-shadow-xl"
-            />
             <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold text-primary tracking-tight mb-8 leading-tight">
               Control the chaos of <br className="hidden sm:block" />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-800 to-orange-400">site information.</span>
@@ -132,7 +127,12 @@ export default function LandingPage() {
           </div>
 
           {/* Hero Image */}
-          <div className="mt-16 lg:mt-20 relative mx-auto max-w-5xl fade-in" style={{ animationDelay: "0.2s", animationFillMode: "both" }}>
+          <img
+            src={builtForBeam}
+            alt="Built for UK construction SMEs"
+            className="mx-auto w-full max-w-md sm:max-w-lg md:max-w-xl h-auto mt-14 lg:mt-16 drop-shadow-xl"
+          />
+          <div className="mt-8 sm:mt-10 relative mx-auto max-w-5xl fade-in" style={{ animationDelay: "0.2s", animationFillMode: "both" }}>
             <div className="absolute -inset-1 bg-gradient-to-r from-accent/30 to-primary/30 rounded-2xl blur-2xl opacity-50"></div>
             <img
               src={`${import.meta.env.BASE_URL}images/construction-hero.webp`}
@@ -308,7 +308,7 @@ export default function LandingPage() {
                 )}
                 <div className="w-16 h-16 rounded-xl overflow-hidden flex items-center justify-center mb-4 ring-1 ring-primary/30">
                   <img
-                    src={`${import.meta.env.BASE_URL}images/${plan.image}?v=4`}
+                    src={`${import.meta.env.BASE_URL}images/${plan.image}?v=5`}
                     alt={`SiteSort ${plan.name}`}
                     className="w-full h-full object-cover"
                   />
