@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, type ComponentType, Suspense } from "react";
 import { Switch, Route, Redirect, Router as WouterRouter, useLocation } from "wouter";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -11,34 +11,72 @@ import { SubscriptionProvider } from "@/contexts/subscription";
 // NotFound stays eager (tiny) so 404s render instantly without a Suspense flash.
 import NotFound from "@/pages/not-found";
 
+// A route's chunk is fetched by an exact hashed filename embedded in the bundle
+// the browser already has loaded. If a deploy happens while that bundle is
+// sitting in a tab (the browser never re-fetches JS on its own — only on a
+// real navigation), the old hash no longer exists on the server: a client-side
+// route change (e.g. redirecting into the portal right after a successful
+// invite-accept) then throws "Failed to fetch dynamically imported module",
+// uncaught, straight past any component-level try/catch into the error
+// boundary — even though the action that triggered the navigation succeeded.
+// A plain reload fixes this (fresh index.html → current chunk hashes), so do
+// that automatically, once, instead of showing a dead end. The sessionStorage
+// flag stops a genuinely broken/missing chunk from reload-looping forever;
+// it's cleared on the next successful chunk load so a later real deploy can
+// still trigger one more auto-reload.
+const CHUNK_RELOAD_FLAG = "sitesort_chunk_reload_attempted";
+function lazyWithRetry<T extends { default: ComponentType<any> }>(factory: () => Promise<T>) {
+  return lazy(() =>
+    factory()
+      .then((mod) => {
+        try { sessionStorage.removeItem(CHUNK_RELOAD_FLAG); } catch { /* private mode etc. */ }
+        return mod;
+      })
+      .catch((err) => {
+        let alreadyReloaded = false;
+        try { alreadyReloaded = sessionStorage.getItem(CHUNK_RELOAD_FLAG) === "1"; } catch { /* noop */ }
+        if (!alreadyReloaded) {
+          try { sessionStorage.setItem(CHUNK_RELOAD_FLAG, "1"); } catch { /* noop */ }
+          window.location.reload();
+          // The reload is already underway — never resolve so nothing else runs.
+          return new Promise<T>(() => {});
+        }
+        throw err;
+      }),
+  );
+}
+
 // Pages — lazy-loaded so each route ships as its own chunk (code splitting).
-const LandingPage = lazy(() => import("@/pages/landing"));
-const Login = lazy(() => import("@/pages/auth/login"));
-const Register = lazy(() => import("@/pages/auth/register"));
-const VerifyEmail = lazy(() => import("@/pages/auth/verify-email"));
-const ForgotPassword = lazy(() => import("@/pages/auth/forgot-password"));
-const ResetPassword = lazy(() => import("@/pages/auth/reset-password"));
-const Dashboard = lazy(() => import("@/pages/dashboard"));
-const ProjectsList = lazy(() => import("@/pages/projects"));
-const ProjectDetail = lazy(() => import("@/pages/projects/detail"));
-const QrPage = lazy(() => import("@/pages/qr"));
-const SiteBoard = lazy(() => import("@/pages/site-board"));
-const AdminDashboard = lazy(() => import("@/pages/admin"));
-const InvoicesPage = lazy(() => import("@/pages/invoices"));
-const SubcontractorsPage = lazy(() => import("@/pages/subcontractors"));
-const CompliancePage = lazy(() => import("@/pages/compliance"));
-const TeamPage = lazy(() => import("@/pages/team"));
-const MessagesPage = lazy(() => import("@/pages/messages"));
-const NotificationsPage = lazy(() => import("@/pages/notifications"));
-const SettingsPage = lazy(() => import("@/pages/settings"));
-const IssuesPage = lazy(() => import("@/pages/issues"));
-const CheckinsPage = lazy(() => import("@/pages/checkins"));
-const DailyReportsPage = lazy(() => import("@/pages/daily-reports"));
+const LandingPage = lazyWithRetry(() => import("@/pages/landing"));
+const Login = lazyWithRetry(() => import("@/pages/auth/login"));
+const Register = lazyWithRetry(() => import("@/pages/auth/register"));
+const VerifyEmail = lazyWithRetry(() => import("@/pages/auth/verify-email"));
+const ForgotPassword = lazyWithRetry(() => import("@/pages/auth/forgot-password"));
+const ResetPassword = lazyWithRetry(() => import("@/pages/auth/reset-password"));
+const Dashboard = lazyWithRetry(() => import("@/pages/dashboard"));
+const ProjectsList = lazyWithRetry(() => import("@/pages/projects"));
+const ProjectDetail = lazyWithRetry(() => import("@/pages/projects/detail"));
+const QrPage = lazyWithRetry(() => import("@/pages/qr"));
+const SiteBoard = lazyWithRetry(() => import("@/pages/site-board"));
+const AdminDashboard = lazyWithRetry(() => import("@/pages/admin"));
+const InvoicesPage = lazyWithRetry(() => import("@/pages/invoices"));
+const SubcontractorsPage = lazyWithRetry(() => import("@/pages/subcontractors"));
+const CompliancePage = lazyWithRetry(() => import("@/pages/compliance"));
+const TeamPage = lazyWithRetry(() => import("@/pages/team"));
+const MessagesPage = lazyWithRetry(() => import("@/pages/messages"));
+const NotificationsPage = lazyWithRetry(() => import("@/pages/notifications"));
+const SettingsPage = lazyWithRetry(() => import("@/pages/settings"));
+const IssuesPage = lazyWithRetry(() => import("@/pages/issues"));
+const CheckinsPage = lazyWithRetry(() => import("@/pages/checkins"));
+const DailyReportsPage = lazyWithRetry(() => import("@/pages/daily-reports"));
 
 // Team Portal — separate member-facing app section (own login + stripped shell).
-const PortalLogin = lazy(() => import("@/pages/portal/login"));
-const PortalAccept = lazy(() => import("@/pages/portal/accept"));
-const PortalSection = lazy(() => import("@/pages/portal/section"));
+// This is exactly the route pair where the bug was found: accept a fresh
+// invite (its own chunk, loaded once) then land on /portal/:section (a
+// DIFFERENT chunk, fetched for the first time by that client-side redirect).
+const PortalLogin = lazyWithRetry(() => import("@/pages/portal/login"));
+const PortalAccept = lazyWithRetry(() => import("@/pages/portal/accept"));
+const PortalSection = lazyWithRetry(() => import("@/pages/portal/section"));
 
 // Set up the fetch interceptor for auth
 setupApiInterceptor();
