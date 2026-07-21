@@ -153,6 +153,9 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     { name: "Projects", href: "/projects", icon: Building2, badge: 0 },
     // Daily Reports hub — internal staff only (subcontractors are 403'd by the API).
     ...(isInternal ? [{ name: "Daily Reports", href: "/daily-reports", icon: ClipboardList, badge: 0 }] : []),
+    // Company-wide snags & safety concerns triage queue — internal staff only
+    // (the /api/issues endpoint is company-scoped; portal members use their portal).
+    ...(isInternal ? [{ name: "Site Issues", href: "/issues", icon: AlertTriangle, badge: 0 }] : []),
     { name: "Contacts", href: "/subcontractors", icon: Users, badge: 0 },
     { name: "In House Team", href: "/team", icon: Users, badge: 0 },
     { name: "Messages", href: "/messages", icon: MessageSquare, badge: unreadMsgCount },
