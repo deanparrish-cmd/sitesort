@@ -152,7 +152,17 @@
       "Bash(curl -s http://localhost:8080/api/portal-users/orphaned -H 'Authorization: Bearer __TRACKED_VAR__')",
       "Bash(curl -s -X DELETE http://localhost:8080/api/portal-users/9a58cb3e-a944-49b3-b1e5-d3ebb6159fc1 -H 'Authorization: Bearer __TRACKED_VAR__' -w ' -> %{http_code}\\\\n')",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080/api/health --max-time 2)",
-      "Bash(echo \" \\(health check exit: $?\\)\")"
+      "Bash(echo \" \\(health check exit: $?\\)\")",
+      "Bash(awk '/^## Features Built/{f=1} /^## Uploads/{f=0} f' /home/runner/workspace/CLAUDE.md)",
+      "Bash(awk '/^## Session Log/{f=1} f' /home/runner/workspace/CLAUDE.md)",
+      "Bash(awk '/^## Key Architecture Notes/{f=1} /^## Session Log/{f=0} f' /home/runner/workspace/CLAUDE.md)",
+      "Skill(run)",
+      "Bash(PORT=8080 nohup node dist/index.mjs)",
+      "Bash(echo \"started pid $!\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8080/)",
+      "Bash(curl -s http://localhost:8080/)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8080/api/health --max-time 3)",
+      "Read(//tmp/**)"
     ]
   },
   "hooks": {
