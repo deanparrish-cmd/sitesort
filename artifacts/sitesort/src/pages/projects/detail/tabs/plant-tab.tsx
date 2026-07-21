@@ -3,7 +3,7 @@ import { TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { ListRow, Pill } from "@/components/ui/list-row";
-import { Plus, Share2, Send, Pencil, Trash2, FileText } from "lucide-react";
+import { Plus, Send, Pencil, Trash2, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDetail } from "../context";
 import { PlantItemDialogs } from "../dialogs/plant-dialogs";
@@ -39,7 +39,7 @@ function fmtUpdated(iso?: string | null): string {
 }
 
 export function PlantTab() {
-  const { projectId, caps, setSharingDoc } = useDetail();
+  const { projectId, caps } = useDetail();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [category, setCategory] = useState<string>("all");
@@ -134,14 +134,6 @@ export function PlantTab() {
                     </button>
                     <button type="button" onClick={() => setAllocatingItem(item)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-xs font-medium text-foreground hover:bg-muted transition-colors" title="Allocate">
                       <Send className="w-3.5 h-3.5" />Allocate
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSharingDoc({ type: "plant_item", id: item.id, name: item.name, version: null, fileUrl: "" } as any)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-xs font-medium text-foreground hover:bg-muted transition-colors"
-                      title="Share to Team Portal"
-                    >
-                      <Share2 className="w-3.5 h-3.5" />Share
                     </button>
                   </>
                 )}

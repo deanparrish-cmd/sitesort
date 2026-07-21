@@ -1214,6 +1214,38 @@ export const GetPortalPlantMaterialsResponseItem = zod
         }),
       )
       .optional(),
+    lifecycleStatus: zod
+      .enum(["draft", "submitted"])
+      .optional()
+      .describe(
+        "'draft' means this member has a pending edit not yet submitted — the status\/location\/notes fields above stay the last-submitted values until they do.",
+      ),
+    draft: zod
+      .object({
+        status: zod.string().nullish(),
+        location: zod.string().nullish(),
+        notes: zod.string().nullish(),
+        updatedByName: zod.string().nullish(),
+        updatedAt: zod.date().optional(),
+      })
+      .nullish()
+      .describe(
+        "The member's pending, not-yet-submitted edit — reopen and keep editing before submitting.",
+      ),
+    submissionNotes: zod
+      .array(
+        zod
+          .object({
+            id: zod.string(),
+            authorName: zod.string(),
+            body: zod.string(),
+            createdAt: zod.date(),
+          })
+          .describe(
+            "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+          ),
+      )
+      .optional(),
   })
   .describe("Gated serialization — never exposes share\/audience data.");
 export const GetPortalPlantMaterialsResponse = zod.array(
@@ -1264,11 +1296,43 @@ export const GetPortalPlantMaterialItemResponse = zod
         }),
       )
       .optional(),
+    lifecycleStatus: zod
+      .enum(["draft", "submitted"])
+      .optional()
+      .describe(
+        "'draft' means this member has a pending edit not yet submitted — the status\/location\/notes fields above stay the last-submitted values until they do.",
+      ),
+    draft: zod
+      .object({
+        status: zod.string().nullish(),
+        location: zod.string().nullish(),
+        notes: zod.string().nullish(),
+        updatedByName: zod.string().nullish(),
+        updatedAt: zod.date().optional(),
+      })
+      .nullish()
+      .describe(
+        "The member's pending, not-yet-submitted edit — reopen and keep editing before submitting.",
+      ),
+    submissionNotes: zod
+      .array(
+        zod
+          .object({
+            id: zod.string(),
+            authorName: zod.string(),
+            body: zod.string(),
+            createdAt: zod.date(),
+          })
+          .describe(
+            "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+          ),
+      )
+      .optional(),
   })
   .describe("Gated serialization — never exposes share\/audience data.");
 
 /**
- * @summary Update a plant/material item's status, location, or notes (requires can-update-plant-materials permission)
+ * @summary SAVE (draft only) a proposed status/location/notes change — writes to the member's pending draft, never the live/submitted values
  */
 export const UpdatePortalPlantMaterialItemParams = zod.object({
   itemId: zod.coerce.string(),
@@ -1323,8 +1387,130 @@ export const UpdatePortalPlantMaterialItemResponse = zod
         }),
       )
       .optional(),
+    lifecycleStatus: zod
+      .enum(["draft", "submitted"])
+      .optional()
+      .describe(
+        "'draft' means this member has a pending edit not yet submitted — the status\/location\/notes fields above stay the last-submitted values until they do.",
+      ),
+    draft: zod
+      .object({
+        status: zod.string().nullish(),
+        location: zod.string().nullish(),
+        notes: zod.string().nullish(),
+        updatedByName: zod.string().nullish(),
+        updatedAt: zod.date().optional(),
+      })
+      .nullish()
+      .describe(
+        "The member's pending, not-yet-submitted edit — reopen and keep editing before submitting.",
+      ),
+    submissionNotes: zod
+      .array(
+        zod
+          .object({
+            id: zod.string(),
+            authorName: zod.string(),
+            body: zod.string(),
+            createdAt: zod.date(),
+          })
+          .describe(
+            "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+          ),
+      )
+      .optional(),
   })
   .describe("Gated serialization — never exposes share\/audience data.");
+
+/**
+ * @summary Submit the pending draft — copies it onto the live status/location/notes (what the PM sees) with attribution, then clears the draft
+ */
+export const SubmitPortalPlantMaterialItemParams = zod.object({
+  itemId: zod.coerce.string(),
+});
+
+export const SubmitPortalPlantMaterialItemResponse = zod
+  .object({
+    id: zod.string(),
+    name: zod.string(),
+    category: zod.enum(["plant_equipment", "materials"]),
+    quantity: zod.string().nullish(),
+    unit: zod.string().nullish(),
+    supplierOwnerText: zod.string().nullish(),
+    supplierContactName: zod.string().nullish(),
+    location: zod.string().nullish(),
+    status: zod.enum(["on_site", "on_order", "off_hired", "depleted"]),
+    notes: zod.string().nullish(),
+    onSiteDate: zod.string().nullish(),
+    expectedOffHireDate: zod.string().nullish(),
+    lastUpdatedByName: zod.string().nullish(),
+    lastUpdatedAt: zod.date().nullish(),
+    attachments: zod
+      .array(
+        zod.object({
+          id: zod.string(),
+          plantItemId: zod.string(),
+          uploadedBy: zod.string(),
+          uploaderName: zod.string(),
+          name: zod.string(),
+          kind: zod.enum([
+            "delivery_ticket",
+            "certificate",
+            "test_certificate",
+            "photo",
+            "other",
+          ]),
+          fileUrl: zod.string(),
+          fileSize: zod.number(),
+          createdAt: zod.date(),
+        }),
+      )
+      .optional(),
+    lifecycleStatus: zod
+      .enum(["draft", "submitted"])
+      .optional()
+      .describe(
+        "'draft' means this member has a pending edit not yet submitted — the status\/location\/notes fields above stay the last-submitted values until they do.",
+      ),
+    draft: zod
+      .object({
+        status: zod.string().nullish(),
+        location: zod.string().nullish(),
+        notes: zod.string().nullish(),
+        updatedByName: zod.string().nullish(),
+        updatedAt: zod.date().optional(),
+      })
+      .nullish()
+      .describe(
+        "The member's pending, not-yet-submitted edit — reopen and keep editing before submitting.",
+      ),
+    submissionNotes: zod
+      .array(
+        zod
+          .object({
+            id: zod.string(),
+            authorName: zod.string(),
+            body: zod.string(),
+            createdAt: zod.date(),
+          })
+          .describe(
+            "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+          ),
+      )
+      .optional(),
+  })
+  .describe("Gated serialization — never exposes share\/audience data.");
+
+/**
+ * @summary Add a timestamped note to a plant item (append-only)
+ */
+export const AddPortalPlantMaterialNoteParams = zod.object({
+  itemId: zod.coerce.string(),
+});
+
+export const AddPortalPlantMaterialNoteBody = zod.object({
+  body: zod.string(),
+});
 
 /**
  * @summary Upload a document/photo for a shared plant/material item (multipart; requires can-update-plant-materials permission)
@@ -1375,6 +1561,23 @@ export const GetPortalDailyReportResponse = zod
     ),
     locked: zod.boolean(),
     canEdit: zod.boolean(),
+    lifecycleStatus: zod.enum(["draft", "submitted"]).optional(),
+    submittedAt: zod.date().nullish(),
+    submittedByName: zod.string().nullish(),
+    submissionNotes: zod
+      .array(
+        zod
+          .object({
+            id: zod.string(),
+            authorName: zod.string(),
+            body: zod.string(),
+            createdAt: zod.date(),
+          })
+          .describe(
+            "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+          ),
+      )
+      .optional(),
   })
   .describe(
     "Today's site diary — always visible to every portal member; canEdit reflects the caller's permission AND the lock window.",
@@ -1406,6 +1609,23 @@ export const GetPortalDailyReportHistoryResponseItem = zod
         name: zod.string(),
       }),
     ),
+    lifecycleStatus: zod.enum(["draft", "submitted"]).optional(),
+    submittedAt: zod.date().nullish(),
+    submittedByName: zod.string().nullish(),
+    submissionNotes: zod
+      .array(
+        zod
+          .object({
+            id: zod.string(),
+            authorName: zod.string(),
+            body: zod.string(),
+            createdAt: zod.date(),
+          })
+          .describe(
+            "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+          ),
+      )
+      .optional(),
   })
   .describe("A past day's site diary — always read-only in the portal.");
 export const GetPortalDailyReportHistoryResponse = zod.array(
@@ -1457,8 +1677,86 @@ export const UpdatePortalDailyReportResponse = zod
         name: zod.string(),
       }),
     ),
+    lifecycleStatus: zod.enum(["draft", "submitted"]).optional(),
+    submittedAt: zod.date().nullish(),
+    submittedByName: zod.string().nullish(),
+    submissionNotes: zod
+      .array(
+        zod
+          .object({
+            id: zod.string(),
+            authorName: zod.string(),
+            body: zod.string(),
+            createdAt: zod.date(),
+          })
+          .describe(
+            "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+          ),
+      )
+      .optional(),
   })
   .describe("A past day's site diary — always read-only in the portal.");
+
+/**
+ * @summary Submit today's site diary to the PM — locks the narrative (further changes go through notes)
+ */
+export const SubmitPortalDailyReportParams = zod.object({
+  date: zod.coerce.string().describe("YYYY-MM-DD"),
+});
+
+export const SubmitPortalDailyReportResponse = zod
+  .object({
+    reportDate: zod.string(),
+    managerReport: zod
+      .object({
+        weather: zod.string().optional(),
+        labourOnSite: zod.string().optional(),
+        plantEquipment: zod.string().optional(),
+        workCompleted: zod.string().optional(),
+        delaysIssues: zod.string().optional(),
+        deliveries: zod.string().optional(),
+        hsNotes: zod.string().optional(),
+      })
+      .describe(
+        'The structured \"site diary\" — every field optional\/free text.',
+      )
+      .nullish(),
+    contributors: zod.array(
+      zod.object({
+        userId: zod.string(),
+        name: zod.string(),
+      }),
+    ),
+    lifecycleStatus: zod.enum(["draft", "submitted"]).optional(),
+    submittedAt: zod.date().nullish(),
+    submittedByName: zod.string().nullish(),
+    submissionNotes: zod
+      .array(
+        zod
+          .object({
+            id: zod.string(),
+            authorName: zod.string(),
+            body: zod.string(),
+            createdAt: zod.date(),
+          })
+          .describe(
+            "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+          ),
+      )
+      .optional(),
+  })
+  .describe("A past day's site diary — always read-only in the portal.");
+
+/**
+ * @summary Add a timestamped note to a submitted report (append-only)
+ */
+export const AddPortalDailyReportNoteParams = zod.object({
+  date: zod.coerce.string().describe("YYYY-MM-DD"),
+});
+
+export const AddPortalDailyReportNoteBody = zod.object({
+  body: zod.string(),
+});
 
 /**
  * @summary Everyone on this project a member can message — no email/phone exposed
@@ -1809,6 +2107,28 @@ export const ListPhotosResponseItem = zod.object({
     .describe(
       "Set when a manager removes just the attached photo, leaving the issue record intact.",
     ),
+  submittedAt: zod
+    .date()
+    .nullish()
+    .describe(
+      "Portal save-vs-submit lifecycle. Null = still a draft with its reporter, absent from the PM's triage queue. Dashboard-created issues are always submitted immediately.",
+    ),
+  submittedByName: zod.string().nullish(),
+  lifecycleStatus: zod.enum(["draft", "submitted"]).optional(),
+  notes: zod
+    .array(
+      zod
+        .object({
+          id: zod.string(),
+          authorName: zod.string(),
+          body: zod.string(),
+          createdAt: zod.date(),
+        })
+        .describe(
+          "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+        ),
+    )
+    .optional(),
 });
 export const ListPhotosResponse = zod.array(ListPhotosResponseItem);
 
@@ -1895,6 +2215,28 @@ export const UpdatePhotoResponse = zod.object({
     .describe(
       "Set when a manager removes just the attached photo, leaving the issue record intact.",
     ),
+  submittedAt: zod
+    .date()
+    .nullish()
+    .describe(
+      "Portal save-vs-submit lifecycle. Null = still a draft with its reporter, absent from the PM's triage queue. Dashboard-created issues are always submitted immediately.",
+    ),
+  submittedByName: zod.string().nullish(),
+  lifecycleStatus: zod.enum(["draft", "submitted"]).optional(),
+  notes: zod
+    .array(
+      zod
+        .object({
+          id: zod.string(),
+          authorName: zod.string(),
+          body: zod.string(),
+          createdAt: zod.date(),
+        })
+        .describe(
+          "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+        ),
+    )
+    .optional(),
 });
 
 /**
@@ -1953,6 +2295,28 @@ export const ArchivePhotoResponse = zod.object({
     .describe(
       "Set when a manager removes just the attached photo, leaving the issue record intact.",
     ),
+  submittedAt: zod
+    .date()
+    .nullish()
+    .describe(
+      "Portal save-vs-submit lifecycle. Null = still a draft with its reporter, absent from the PM's triage queue. Dashboard-created issues are always submitted immediately.",
+    ),
+  submittedByName: zod.string().nullish(),
+  lifecycleStatus: zod.enum(["draft", "submitted"]).optional(),
+  notes: zod
+    .array(
+      zod
+        .object({
+          id: zod.string(),
+          authorName: zod.string(),
+          body: zod.string(),
+          createdAt: zod.date(),
+        })
+        .describe(
+          "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+        ),
+    )
+    .optional(),
 });
 
 /**
@@ -2005,6 +2369,28 @@ export const RestorePhotoResponse = zod.object({
     .describe(
       "Set when a manager removes just the attached photo, leaving the issue record intact.",
     ),
+  submittedAt: zod
+    .date()
+    .nullish()
+    .describe(
+      "Portal save-vs-submit lifecycle. Null = still a draft with its reporter, absent from the PM's triage queue. Dashboard-created issues are always submitted immediately.",
+    ),
+  submittedByName: zod.string().nullish(),
+  lifecycleStatus: zod.enum(["draft", "submitted"]).optional(),
+  notes: zod
+    .array(
+      zod
+        .object({
+          id: zod.string(),
+          authorName: zod.string(),
+          body: zod.string(),
+          createdAt: zod.date(),
+        })
+        .describe(
+          "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+        ),
+    )
+    .optional(),
 });
 
 /**
@@ -2057,6 +2443,28 @@ export const RemovePhotoAttachmentResponse = zod.object({
     .describe(
       "Set when a manager removes just the attached photo, leaving the issue record intact.",
     ),
+  submittedAt: zod
+    .date()
+    .nullish()
+    .describe(
+      "Portal save-vs-submit lifecycle. Null = still a draft with its reporter, absent from the PM's triage queue. Dashboard-created issues are always submitted immediately.",
+    ),
+  submittedByName: zod.string().nullish(),
+  lifecycleStatus: zod.enum(["draft", "submitted"]).optional(),
+  notes: zod
+    .array(
+      zod
+        .object({
+          id: zod.string(),
+          authorName: zod.string(),
+          body: zod.string(),
+          createdAt: zod.date(),
+        })
+        .describe(
+          "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+        ),
+    )
+    .optional(),
 });
 
 /**
@@ -2536,6 +2944,23 @@ export const GetPortalSiteIssuesResponseItem = zod.object({
     .optional()
     .describe("Set only on issues this member reported themselves."),
   closureReason: zod.enum(["completed", "invalid", "duplicate"]).optional(),
+  submittedAt: zod.date().nullish(),
+  submittedByName: zod.string().nullish(),
+  lifecycleStatus: zod.enum(["draft", "submitted"]).optional(),
+  notes: zod
+    .array(
+      zod
+        .object({
+          id: zod.string(),
+          authorName: zod.string(),
+          body: zod.string(),
+          createdAt: zod.date(),
+        })
+        .describe(
+          "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+        ),
+    )
+    .optional(),
 });
 export const GetPortalSiteIssuesResponse = zod.array(
   GetPortalSiteIssuesResponseItem,
@@ -2584,6 +3009,140 @@ export const UpdatePortalSiteIssueResponse = zod.object({
     .optional()
     .describe("Set only on issues this member reported themselves."),
   closureReason: zod.enum(["completed", "invalid", "duplicate"]).optional(),
+  submittedAt: zod.date().nullish(),
+  submittedByName: zod.string().nullish(),
+  lifecycleStatus: zod.enum(["draft", "submitted"]).optional(),
+  notes: zod
+    .array(
+      zod
+        .object({
+          id: zod.string(),
+          authorName: zod.string(),
+          body: zod.string(),
+          createdAt: zod.date(),
+        })
+        .describe(
+          "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+        ),
+    )
+    .optional(),
+});
+
+/**
+ * @summary Full edit of a draft issue's own fields (reporter-only, only while still a draft — 403 once submitted)
+ */
+export const EditPortalSiteIssueDraftParams = zod.object({
+  issueId: zod.coerce.string(),
+});
+
+export const EditPortalSiteIssueDraftBody = zod.object({
+  type: zod.enum(["snag", "safety_concern", "work_completed"]).optional(),
+  description: zod.string().optional(),
+  zone: zod.string().optional(),
+});
+
+export const EditPortalSiteIssueDraftResponse = zod.object({
+  id: zod.string(),
+  category: zod.string(),
+  description: zod.string().optional(),
+  zone: zod.string().optional(),
+  referenceNumber: zod.string(),
+  status: zod.string().optional(),
+  photoUrl: zod.string().optional(),
+  takenAt: zod.string().optional(),
+  latitude: zod.string().optional(),
+  longitude: zod.string().optional(),
+  unseen: zod.boolean().optional(),
+  sharedAt: zod.string().optional(),
+  assignedToUserId: zod
+    .string()
+    .optional()
+    .describe(
+      'Present so a member can tell whether an issue is allocated to them (\"Mark as done\" visibility).',
+    ),
+  reporterName: zod
+    .string()
+    .optional()
+    .describe("Set only on issues this member reported themselves."),
+  closureReason: zod.enum(["completed", "invalid", "duplicate"]).optional(),
+  submittedAt: zod.date().nullish(),
+  submittedByName: zod.string().nullish(),
+  lifecycleStatus: zod.enum(["draft", "submitted"]).optional(),
+  notes: zod
+    .array(
+      zod
+        .object({
+          id: zod.string(),
+          authorName: zod.string(),
+          body: zod.string(),
+          createdAt: zod.date(),
+        })
+        .describe(
+          "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+        ),
+    )
+    .optional(),
+});
+
+/**
+ * @summary Submit a draft issue to the PM (reporter-only) — locks the original fields, adds it to the PM's triage queue
+ */
+export const SubmitPortalSiteIssueParams = zod.object({
+  issueId: zod.coerce.string(),
+});
+
+export const SubmitPortalSiteIssueResponse = zod.object({
+  id: zod.string(),
+  category: zod.string(),
+  description: zod.string().optional(),
+  zone: zod.string().optional(),
+  referenceNumber: zod.string(),
+  status: zod.string().optional(),
+  photoUrl: zod.string().optional(),
+  takenAt: zod.string().optional(),
+  latitude: zod.string().optional(),
+  longitude: zod.string().optional(),
+  unseen: zod.boolean().optional(),
+  sharedAt: zod.string().optional(),
+  assignedToUserId: zod
+    .string()
+    .optional()
+    .describe(
+      'Present so a member can tell whether an issue is allocated to them (\"Mark as done\" visibility).',
+    ),
+  reporterName: zod
+    .string()
+    .optional()
+    .describe("Set only on issues this member reported themselves."),
+  closureReason: zod.enum(["completed", "invalid", "duplicate"]).optional(),
+  submittedAt: zod.date().nullish(),
+  submittedByName: zod.string().nullish(),
+  lifecycleStatus: zod.enum(["draft", "submitted"]).optional(),
+  notes: zod
+    .array(
+      zod
+        .object({
+          id: zod.string(),
+          authorName: zod.string(),
+          body: zod.string(),
+          createdAt: zod.date(),
+        })
+        .describe(
+          "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+        ),
+    )
+    .optional(),
+});
+
+/**
+ * @summary Add a timestamped note to a submitted issue (append-only — never edits the original)
+ */
+export const AddPortalSiteIssueNoteParams = zod.object({
+  issueId: zod.coerce.string(),
+});
+
+export const AddPortalSiteIssueNoteBody = zod.object({
+  body: zod.string(),
 });
 
 /**
@@ -2817,6 +3376,23 @@ export const GetPortalSharedResponse = zod.object({
         .optional()
         .describe("Set only on issues this member reported themselves."),
       closureReason: zod.enum(["completed", "invalid", "duplicate"]).optional(),
+      submittedAt: zod.date().nullish(),
+      submittedByName: zod.string().nullish(),
+      lifecycleStatus: zod.enum(["draft", "submitted"]).optional(),
+      notes: zod
+        .array(
+          zod
+            .object({
+              id: zod.string(),
+              authorName: zod.string(),
+              body: zod.string(),
+              createdAt: zod.date(),
+            })
+            .describe(
+              "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+            ),
+        )
+        .optional(),
     }),
   ),
   permits: zod.array(

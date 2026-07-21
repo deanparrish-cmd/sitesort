@@ -43,3 +43,4 @@ export * from "./plant_items";
 export * from "./plant_item_attachments";
 export * from "./plant_item_distributions";
 export * from "./person_certifications";
+export * from "./portal_submission_notes";

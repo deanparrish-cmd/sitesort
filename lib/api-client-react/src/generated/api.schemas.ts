@@ -870,6 +870,38 @@ export const PortalPlantItemStatus = {
 } as const;
 
 /**
+ * 'draft' means this member has a pending edit not yet submitted — the status/location/notes fields above stay the last-submitted values until they do.
+ */
+export type PortalPlantItemLifecycleStatus =
+  (typeof PortalPlantItemLifecycleStatus)[keyof typeof PortalPlantItemLifecycleStatus];
+
+export const PortalPlantItemLifecycleStatus = {
+  draft: "draft",
+  submitted: "submitted",
+} as const;
+
+/**
+ * The member's pending, not-yet-submitted edit — reopen and keep editing before submitting.
+ */
+export type PortalPlantItemDraft = {
+  status?: string | null;
+  location?: string | null;
+  notes?: string | null;
+  updatedByName?: string | null;
+  updatedAt?: string;
+} | null;
+
+/**
+ * One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.
+ */
+export interface PortalSubmissionNote {
+  id: string;
+  authorName: string;
+  body: string;
+  createdAt: string;
+}
+
+/**
  * Gated serialization — never exposes share/audience data.
  */
 export interface PortalPlantItem {
@@ -888,6 +920,11 @@ export interface PortalPlantItem {
   lastUpdatedByName?: string | null;
   lastUpdatedAt?: string | null;
   attachments?: PlantItemAttachment[];
+  /** 'draft' means this member has a pending edit not yet submitted — the status/location/notes fields above stay the last-submitted values until they do. */
+  lifecycleStatus?: PortalPlantItemLifecycleStatus;
+  /** The member's pending, not-yet-submitted edit — reopen and keep editing before submitting. */
+  draft?: PortalPlantItemDraft;
+  submissionNotes?: PortalSubmissionNote[];
 }
 
 export type UpdatePortalPlantItemRequestStatus =
@@ -927,6 +964,14 @@ export interface ManagerReportFields {
   hsNotes?: string;
 }
 
+export type PortalDailyReportLifecycleStatus =
+  (typeof PortalDailyReportLifecycleStatus)[keyof typeof PortalDailyReportLifecycleStatus];
+
+export const PortalDailyReportLifecycleStatus = {
+  draft: "draft",
+  submitted: "submitted",
+} as const;
+
 /**
  * Today's site diary — always visible to every portal member; canEdit reflects the caller's permission AND the lock window.
  */
@@ -936,7 +981,19 @@ export interface PortalDailyReport {
   contributors: DailyReportContributor[];
   locked: boolean;
   canEdit: boolean;
+  lifecycleStatus?: PortalDailyReportLifecycleStatus;
+  submittedAt?: string | null;
+  submittedByName?: string | null;
+  submissionNotes?: PortalSubmissionNote[];
 }
+
+export type PortalDailyReportHistoryItemLifecycleStatus =
+  (typeof PortalDailyReportHistoryItemLifecycleStatus)[keyof typeof PortalDailyReportHistoryItemLifecycleStatus];
+
+export const PortalDailyReportHistoryItemLifecycleStatus = {
+  draft: "draft",
+  submitted: "submitted",
+} as const;
 
 /**
  * A past day's site diary — always read-only in the portal.
@@ -945,6 +1002,10 @@ export interface PortalDailyReportHistoryItem {
   reportDate: string;
   managerReport?: ManagerReportFields | null;
   contributors: DailyReportContributor[];
+  lifecycleStatus?: PortalDailyReportHistoryItemLifecycleStatus;
+  submittedAt?: string | null;
+  submittedByName?: string | null;
+  submissionNotes?: PortalSubmissionNote[];
 }
 
 /**
@@ -1114,6 +1175,14 @@ export const PhotoClosureReason = {
   duplicate: "duplicate",
 } as const;
 
+export type PhotoLifecycleStatus =
+  (typeof PhotoLifecycleStatus)[keyof typeof PhotoLifecycleStatus];
+
+export const PhotoLifecycleStatus = {
+  draft: "draft",
+  submitted: "submitted",
+} as const;
+
 export interface Photo {
   id: string;
   projectId: string;
@@ -1141,6 +1210,15 @@ export interface Photo {
   archiveReason?: string | null;
   /** Set when a manager removes just the attached photo, leaving the issue record intact. */
   photoRemovedAt?: string | null;
+  /** Portal save-vs-submit lifecycle. Null = still a draft with its reporter, absent from the PM's triage queue. Dashboard-created issues are always submitted immediately. */
+  submittedAt?: string | null;
+  submittedByName?: string | null;
+  lifecycleStatus?: PhotoLifecycleStatus;
+  notes?: PortalSubmissionNote[];
+}
+
+export interface AddPortalSubmissionNoteRequest {
+  body: string;
 }
 
 /**
@@ -1437,6 +1515,14 @@ export const PortalIssueClosureReason = {
   duplicate: "duplicate",
 } as const;
 
+export type PortalIssueLifecycleStatus =
+  (typeof PortalIssueLifecycleStatus)[keyof typeof PortalIssueLifecycleStatus];
+
+export const PortalIssueLifecycleStatus = {
+  draft: "draft",
+  submitted: "submitted",
+} as const;
+
 export interface PortalIssue {
   id: string;
   category: string;
@@ -1455,6 +1541,10 @@ export interface PortalIssue {
   /** Set only on issues this member reported themselves. */
   reporterName?: string;
   closureReason?: PortalIssueClosureReason;
+  submittedAt?: string | null;
+  submittedByName?: string | null;
+  lifecycleStatus?: PortalIssueLifecycleStatus;
+  notes?: PortalSubmissionNote[];
 }
 
 export type CreatePortalSiteIssueRequestType =
@@ -2047,6 +2137,21 @@ export type CreatePortalSiteIssueBody = {
 };
 
 export type UpdatePortalSiteIssueBody = { [key: string]: unknown };
+
+export type EditPortalSiteIssueDraftBodyType =
+  (typeof EditPortalSiteIssueDraftBodyType)[keyof typeof EditPortalSiteIssueDraftBodyType];
+
+export const EditPortalSiteIssueDraftBodyType = {
+  snag: "snag",
+  safety_concern: "safety_concern",
+  work_completed: "work_completed",
+} as const;
+
+export type EditPortalSiteIssueDraftBody = {
+  type?: EditPortalSiteIssueDraftBodyType;
+  description?: string;
+  zone?: string;
+};
 
 export type UploadPortalMyDocumentBody = {
   file: Blob;

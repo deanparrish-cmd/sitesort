@@ -7,8 +7,11 @@ import {
   useGetPortalGeneral, useGetPortalShared,
   useGetPortalMyDocuments, useGetPortalUnseen, useGetPortalContext,
   useGetPortalPlantMaterials, useUpdatePortalPlantMaterialItem,
+  useSubmitPortalPlantMaterialItem, useAddPortalPlantMaterialNote,
   useCreatePortalSiteIssue, useUpdatePortalSiteIssue,
+  useEditPortalSiteIssueDraft, useSubmitPortalSiteIssue, useAddPortalSiteIssueNote,
   useGetPortalDailyReport, useGetPortalDailyReportHistory, useUpdatePortalDailyReport,
+  useSubmitPortalDailyReport, useAddPortalDailyReportNote,
   getGetPortalOverviewQueryKey, getGetPortalSiteIssuesQueryKey,
   getGetPortalGeneralQueryKey, getGetPortalSharedQueryKey,
   getGetPortalMyDocumentsQueryKey, getGetPortalUnseenQueryKey,
@@ -153,6 +156,57 @@ const PLANT_STATUS_OPTIONS = [
 ];
 function Badge({ label, className }: { label: string; className?: string }) {
   return <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${className ?? "bg-muted text-muted-foreground"}`}>{label}</span>;
+}
+
+// ── Save-vs-submit lifecycle (shared by Site Issues, Plant & Materials, Daily
+// Reports): a "Draft" is saved to the member but not yet visible to the PM;
+// "Submit to PM" locks the original and puts it in front of them. After
+// submit, further changes are append-only notes — never a rewrite.
+function fmtRelativeShort(iso?: string | null): string {
+  if (!iso) return "";
+  const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.round(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+function LifecycleBadge({ status, submittedAt, submittedByName }: { status: "draft" | "submitted"; submittedAt?: string | null; submittedByName?: string | null }) {
+  if (status === "submitted") {
+    return <Badge label={`Submitted${submittedByName ? ` by ${submittedByName}` : ""}${submittedAt ? ` · ${fmtRelativeShort(submittedAt)}` : ""}`} className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300" />;
+  }
+  return <Badge label="Draft — not yet sent" className="bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300" />;
+}
+type SubmissionNoteItem = { id: string; authorName: string; body: string; createdAt: string };
+function SubmissionNotesThread({ notes, onAdd, adding }: { notes: SubmissionNoteItem[]; onAdd: (body: string) => Promise<void>; adding?: boolean }) {
+  const [draft, setDraft] = useState("");
+  return (
+    <div className="space-y-2 mt-3 pt-3 border-t border-border/50">
+      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Notes</p>
+      {notes.length === 0 && <p className="text-xs text-muted-foreground">No notes yet — the original above is locked; add updates here instead.</p>}
+      {notes.map(n => (
+        <div key={n.id} className="rounded-lg bg-muted/30 p-2">
+          <p className="text-sm whitespace-pre-wrap break-words">{n.body}</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">{n.authorName} · {fmtRelativeShort(n.createdAt)}</p>
+        </div>
+      ))}
+      <div className="flex gap-2">
+        <input
+          value={draft} onChange={e => setDraft(e.target.value)} placeholder="Add a note…"
+          onKeyDown={e => { if (e.key === "Enter" && draft.trim() && !adding) { void onAdd(draft.trim()).then(() => setDraft("")); } }}
+          className="flex-1 min-h-9 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+        />
+        <DictationButton onTranscript={t => setDraft(d => (d.trim() ? d.trimEnd() + " " : "") + t)} />
+        <button
+          disabled={!draft.trim() || adding}
+          onClick={() => { void onAdd(draft.trim()).then(() => setDraft("")); }}
+          className="px-3 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
+        >Add</button>
+      </div>
+    </div>
+  );
 }
 
 // Small "New" pill for unseen (newly-shared) items in "Shared with me".
@@ -484,7 +538,7 @@ function LogIssueForm({ onLogged }: { onLogged: () => void }) {
     e.preventDefault();
     try {
       await create.mutateAsync({ data: { type, description: description || undefined, zone: zone || undefined, photo: file ?? undefined } });
-      toast({ title: "Issue logged" });
+      toast({ title: "Saved as draft", description: "Submit it when you're ready — your PM won't see it until then." });
       setDescription(""); setZone(""); setFile(null);
       if (fileRef.current) fileRef.current.value = "";
       onLogged();
@@ -513,7 +567,10 @@ function LogIssueForm({ onLogged }: { onLogged: () => void }) {
         </div>
         <div>
           <label className="text-xs font-medium text-muted-foreground">Zone / location</label>
-          <input value={zone} onChange={e => setZone(e.target.value)} placeholder="e.g. Level 2, East wing" className="mt-1 w-full min-h-12 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+          <div className="mt-1 flex items-center gap-2">
+            <input value={zone} onChange={e => setZone(e.target.value)} placeholder="e.g. Level 2, East wing" className="flex-1 min-h-12 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+            <DictationButton onTranscript={t => setZone(z => (z.trim() ? z.trimEnd() + " " : "") + t)} />
+          </div>
         </div>
         <div>
           <label className="text-xs font-medium text-muted-foreground">Photo</label>
@@ -528,6 +585,59 @@ function LogIssueForm({ onLogged }: { onLogged: () => void }) {
   );
 }
 
+// Edit panel for a reporter's own DRAFT issue — full edit of type/description/
+// zone while un-submitted. Locked out server-side once submitted.
+function IssueDraftEditPanel({ issue, onDone }: { issue: { id: string; category: string; description?: string; zone?: string }; onDone: () => void }) {
+  const { toast } = useToast();
+  const edit = useEditPortalSiteIssueDraft();
+  const [type, setType] = useState<"snag" | "safety_concern" | "work_completed">((issue.category as "snag" | "safety_concern" | "work_completed") ?? "snag");
+  const [description, setDescription] = useState(issue.description ?? "");
+  const [zone, setZone] = useState(issue.zone ?? "");
+
+  const save = async () => {
+    try {
+      await edit.mutateAsync({ issueId: issue.id, data: { type, description: description || undefined, zone: zone || undefined } });
+      toast({ title: "Draft updated" });
+      onDone();
+    } catch {
+      toast({ title: "Couldn't update draft", variant: "destructive" });
+    }
+  };
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border/60 space-y-3">
+      <div>
+        <label className="text-xs font-medium text-muted-foreground">Type</label>
+        <select value={type} onChange={e => setType(e.target.value as typeof type)} className="mt-1 w-full min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+          <option value="snag">Snag</option>
+          <option value="safety_concern">Safety Concern</option>
+          <option value="work_completed">Work Completed</option>
+        </select>
+      </div>
+      <div>
+        <label className="text-xs font-medium text-muted-foreground">Description</label>
+        <div className="mt-1 flex items-start gap-2">
+          <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+          <DictationButton onTranscript={t => setDescription(d => (d.trim() ? d.trimEnd() + " " : "") + t)} />
+        </div>
+      </div>
+      <div>
+        <label className="text-xs font-medium text-muted-foreground">Zone / location</label>
+        <div className="mt-1 flex items-center gap-2">
+          <input value={zone} onChange={e => setZone(e.target.value)} className="flex-1 min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+          <DictationButton onTranscript={t => setZone(z => (z.trim() ? z.trimEnd() + " " : "") + t)} />
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <button onClick={save} disabled={edit.isPending} className="flex-1 min-h-11 rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+          {edit.isPending ? "Saving…" : "Save draft"}
+        </button>
+        <button onClick={onDone} className="min-h-11 px-4 rounded-xl border text-sm font-medium hover:bg-muted">Cancel</button>
+      </div>
+    </div>
+  );
+}
+
 function SiteIssuesView() {
   const openOnly = new URLSearchParams(useSearch()).get("status") === "open";
   const { toast } = useToast();
@@ -537,9 +647,21 @@ function SiteIssuesView() {
   const canLogIssues = ctx?.member?.canLogIssues ?? false;
   const { data, isLoading } = useGetPortalSiteIssues({ query: { refetchInterval: PORTAL_LIVE_REFETCH, queryKey: getGetPortalSiteIssuesQueryKey() } });
   const markDone = useUpdatePortalSiteIssue();
+  const submitIssue = useSubmitPortalSiteIssue();
+  const addIssueNote = useAddPortalSiteIssueNote();
   const [showForm, setShowForm] = useState(false);
+  const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: getGetPortalSiteIssuesQueryKey() });
+  const doSubmit = async (issueId: string) => {
+    try {
+      await submitIssue.mutateAsync({ issueId });
+      toast({ title: "Submitted to your PM", description: "The original is now locked — add updates as notes." });
+      await invalidate();
+    } catch {
+      toast({ title: "Couldn't submit", variant: "destructive" });
+    }
+  };
   const doMarkDone = async (issueId: string) => {
     try {
       await markDone.mutateAsync({ issueId, data: {} });
@@ -570,6 +692,9 @@ function SiteIssuesView() {
       ) : filtered.map(issue => {
         const isMine = !!selfUserId && issue.assignedToUserId === selfUserId;
         const canMarkDone = isMine && (issue.status === "open" || issue.status === "in_progress");
+        // reporterName is only serialized on issues the viewer reported themselves.
+        const reportedByMe = !!issue.reporterName;
+        const isDraft = issue.lifecycleStatus === "draft";
         return (
           <Card key={issue.id}>
             <div className="flex items-start justify-between gap-3">
@@ -578,17 +703,46 @@ function SiteIssuesView() {
                   <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
                   <span className="font-medium">{ISSUE_TYPE_LABEL[issue.category] ?? issue.category}</span>
                   <span className="text-xs text-muted-foreground">#{issue.referenceNumber}</span>
+                  {reportedByMe && <LifecycleBadge status={isDraft ? "draft" : "submitted"} submittedAt={issue.submittedAt} />}
                 </div>
                 {issue.description && <p className="text-sm mt-1 break-words">{issue.description}</p>}
                 <p className="text-xs text-muted-foreground mt-1">
                   {issue.zone ? `${issue.zone} · ` : ""}{fmtDate(issue.takenAt)}
-                  {issue.reporterName ? ` · reported by you` : ""}
+                  {reportedByMe ? ` · reported by you` : ""}
                 </p>
               </div>
               <Badge label={(issue.status ?? "open").replace(/_/g, " ")} className={ISSUE_BADGE[issue.status ?? "open"] ?? "bg-muted text-muted-foreground"} />
             </div>
             {issue.photoUrl && (
               <img src={fileHref(issue.photoUrl)} alt="" className="mt-3 rounded-lg w-full max-h-56 object-cover" loading="lazy" />
+            )}
+            {reportedByMe && isDraft && (
+              editingDraftId === issue.id ? (
+                <IssueDraftEditPanel issue={issue} onDone={() => { setEditingDraftId(null); void invalidate(); }} />
+              ) : (
+                <div className="mt-3 flex gap-2">
+                  <button onClick={() => doSubmit(issue.id)} disabled={submitIssue.isPending}
+                    className="flex-1 min-h-11 rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+                    {submitIssue.isPending ? "Submitting…" : "Submit to PM"}
+                  </button>
+                  <button onClick={() => setEditingDraftId(issue.id)}
+                    className="min-h-11 px-4 rounded-xl border text-sm font-medium hover:bg-muted">Edit draft</button>
+                </div>
+              )
+            )}
+            {reportedByMe && !isDraft && (
+              <SubmissionNotesThread
+                notes={issue.notes ?? []}
+                adding={addIssueNote.isPending}
+                onAdd={async (body) => {
+                  try {
+                    await addIssueNote.mutateAsync({ issueId: issue.id, data: { body } });
+                    await invalidate();
+                  } catch {
+                    toast({ title: "Couldn't add note", variant: "destructive" });
+                  }
+                }}
+              />
             )}
             {canMarkDone && (
               <button onClick={() => doMarkDone(issue.id)} disabled={markDone.isPending}
@@ -887,6 +1041,9 @@ type PlantItemRow = {
   supplierOwnerText?: string | null; supplierContactName?: string | null; location?: string | null;
   status: string; notes?: string | null; lastUpdatedByName?: string | null; lastUpdatedAt?: string | null;
   attachments?: { id: string; name: string; kind: string; fileUrl: string; createdAt: string }[];
+  lifecycleStatus?: "draft" | "submitted";
+  draft?: { status?: string | null; location?: string | null; notes?: string | null; updatedByName?: string | null; updatedAt: string } | null;
+  submissionNotes?: SubmissionNoteItem[];
 };
 
 // Inline edit panel for one item — only rendered for members with the
@@ -896,9 +1053,11 @@ function PlantItemEditPanel({ item, onClose }: { item: PlantItemRow; onClose: ()
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const update = useUpdatePortalPlantMaterialItem();
-  const [status, setStatus] = useState<"on_site" | "on_order" | "off_hired" | "depleted">(item.status as "on_site" | "on_order" | "off_hired" | "depleted");
-  const [location, setLocation] = useState(item.location ?? "");
-  const [notes, setNotes] = useState(item.notes ?? "");
+  // Prefill from a pending draft if one exists — reopening a draft continues
+  // it rather than starting again from the live values.
+  const [status, setStatus] = useState<"on_site" | "on_order" | "off_hired" | "depleted">((item.draft?.status ?? item.status) as "on_site" | "on_order" | "off_hired" | "depleted");
+  const [location, setLocation] = useState(item.draft ? (item.draft.location ?? "") : (item.location ?? ""));
+  const [notes, setNotes] = useState(item.draft ? (item.draft.notes ?? "") : (item.notes ?? ""));
   const [file, setFile] = useState<File | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -906,7 +1065,7 @@ function PlantItemEditPanel({ item, onClose }: { item: PlantItemRow; onClose: ()
   const save = async () => {
     try {
       await update.mutateAsync({ itemId: item.id, data: { status, location: location || null, notes: notes || null } });
-      toast({ title: "Saved" });
+      toast({ title: "Saved as draft", description: "Submit it when you're ready — your PM won't see the change until then." });
       await queryClient.invalidateQueries({ queryKey: getGetPortalPlantMaterialsQueryKey() });
       onClose();
     } catch {
@@ -945,7 +1104,10 @@ function PlantItemEditPanel({ item, onClose }: { item: PlantItemRow; onClose: ()
       </div>
       <div>
         <label className="text-xs font-medium text-muted-foreground">Location on site</label>
-        <input value={location} onChange={e => setLocation(e.target.value)} className="mt-1 w-full min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+        <div className="mt-1 flex items-center gap-2">
+          <input value={location} onChange={e => setLocation(e.target.value)} className="flex-1 min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+          <DictationButton onTranscript={t => setLocation(l => (l.trim() ? l.trimEnd() + " " : "") + t)} />
+        </div>
       </div>
       <div>
         <label className="text-xs font-medium text-muted-foreground">Notes</label>
@@ -976,10 +1138,25 @@ function PlantItemEditPanel({ item, onClose }: { item: PlantItemRow; onClose: ()
 }
 
 function PlantMaterialsView() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { data: ctx } = useGetPortalContext();
   const canEdit = ctx?.member?.canUpdatePlantMaterials ?? false;
   const { data, isLoading } = useGetPortalPlantMaterials({ query: { refetchInterval: PORTAL_LIVE_REFETCH, queryKey: getGetPortalPlantMaterialsQueryKey() } });
+  const submitItem = useSubmitPortalPlantMaterialItem();
+  const addItemNote = useAddPortalPlantMaterialNote();
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: getGetPortalPlantMaterialsQueryKey() });
+  const doSubmit = async (itemId: string) => {
+    try {
+      await submitItem.mutateAsync({ itemId });
+      toast({ title: "Submitted to your PM", description: "The item has been updated with your changes." });
+      await invalidate();
+    } catch {
+      toast({ title: "Couldn't submit", variant: "destructive" });
+    }
+  };
 
   if (isLoading) return <Loading />;
   if (!data || data.length === 0) return <Empty>Nothing shared with you here yet.</Empty>;
@@ -1009,12 +1186,48 @@ function PlantMaterialsView() {
               ))}
             </div>
           )}
+          {canEdit && item.draft && editingId !== item.id && (
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30 p-3 space-y-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <LifecycleBadge status="draft" />
+                <span className="text-xs text-muted-foreground">
+                  {item.draft.updatedByName ? `by ${item.draft.updatedByName} · ` : ""}{fmtRelativeShort(item.draft.updatedAt)}
+                </span>
+              </div>
+              <p className="text-sm break-words">
+                {PLANT_STATUS_OPTIONS.find(o => o.value === item.draft?.status)?.label ?? item.draft.status}
+                {item.draft.location ? ` · ${item.draft.location}` : ""}
+                {item.draft.notes ? ` — ${item.draft.notes}` : ""}
+              </p>
+              <div className="flex gap-2">
+                <button onClick={() => doSubmit(item.id)} disabled={submitItem.isPending}
+                  className="flex-1 min-h-11 rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+                  {submitItem.isPending ? "Submitting…" : "Submit to PM"}
+                </button>
+                <button onClick={() => setEditingId(item.id)} className="min-h-11 px-4 rounded-xl border text-sm font-medium hover:bg-muted">Edit draft</button>
+              </div>
+            </div>
+          )}
           {canEdit && (
             editingId === item.id ? (
               <PlantItemEditPanel item={item} onClose={() => setEditingId(null)} />
-            ) : (
+            ) : !item.draft ? (
               <button onClick={() => setEditingId(item.id)} className="mt-3 text-sm font-medium text-primary hover:underline">Update</button>
-            )
+            ) : null
+          )}
+          {canEdit && (
+            <SubmissionNotesThread
+              notes={item.submissionNotes ?? []}
+              adding={addItemNote.isPending}
+              onAdd={async (body) => {
+                try {
+                  await addItemNote.mutateAsync({ itemId: item.id, data: { body } });
+                  await invalidate();
+                } catch {
+                  toast({ title: "Couldn't add note", variant: "destructive" });
+                }
+              }}
+            />
           )}
         </Card>
       ))}
@@ -1048,11 +1261,18 @@ function DailyReportView() {
   const { data: today, isLoading } = useGetPortalDailyReport({ query: { refetchInterval: PORTAL_LIVE_REFETCH, queryKey: getGetPortalDailyReportQueryKey() } });
   const { data: history } = useGetPortalDailyReportHistory({ query: { queryKey: getGetPortalDailyReportHistoryQueryKey() } });
   const update = useUpdatePortalDailyReport();
+  const submitReport = useSubmitPortalDailyReport();
+  const addReportNote = useAddPortalDailyReportNote();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<ManagerReportFields>({});
   const [showHistory, setShowHistory] = useState(false);
 
-  useEffect(() => { if (today) setForm(today.managerReport ?? {}); }, [today]);
+  // Only resync from the polled server data while NOT actively editing — the
+  // 60s live refetch was silently overwriting in-progress typing/dictation
+  // with the last-saved server state whenever a poll landed mid-edit (Fix:
+  // dictation "not working" on the portal Daily Report — it wasn't the mic,
+  // it was this effect discarding the just-dictated text on the next poll).
+  useEffect(() => { if (today && !editing) setForm(today.managerReport ?? {}); }, [today, editing]);
 
   if (isLoading) return <Loading />;
   if (!today) return <Empty>Couldn't load today's report.</Empty>;
@@ -1075,13 +1295,28 @@ function DailyReportView() {
 
   const hasContent = (mr: ManagerReportFields | null | undefined) => !!mr && DIARY_FIELDS.some(f => (mr[f.key] ?? "").trim().length > 0);
   const present = hasContent(today.managerReport);
+  const isSubmitted = !!today.submittedAt;
+
+  const doSubmitReport = async () => {
+    try {
+      await submitReport.mutateAsync({ date: today.reportDate });
+      toast({ title: "Submitted to your PM", description: "Today's report is now locked — add updates as notes." });
+      setEditing(false);
+      await queryClient.invalidateQueries({ queryKey: getGetPortalDailyReportQueryKey() });
+    } catch {
+      toast({ title: "Couldn't submit", variant: "destructive" });
+    }
+  };
 
   return (
     <div className="space-y-4">
       <Card>
         <div className="flex items-center justify-between gap-2 mb-1">
           <p className="font-semibold">{fmtReportDate(today.reportDate)}</p>
-          {today.locked && <Badge label="Locked" className="bg-muted text-muted-foreground" />}
+          <div className="flex items-center gap-1.5">
+            {present && <LifecycleBadge status={isSubmitted ? "submitted" : "draft"} submittedAt={today.submittedAt} submittedByName={today.submittedByName} />}
+            {today.locked && <Badge label="Locked" className="bg-muted text-muted-foreground" />}
+          </div>
         </div>
         {today.contributors.length > 0 && (
           <p className="text-xs text-muted-foreground mb-3">
@@ -1102,7 +1337,7 @@ function DailyReportView() {
                     <input value={form[f.key] ?? ""} onChange={e => setField(f.key, e.target.value)} placeholder={f.placeholder}
                       className="flex-1 min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
                   )}
-                  {f.multiline && <DictationButton onTranscript={t => appendField(f.key, t)} />}
+                  <DictationButton onTranscript={t => appendField(f.key, t)} />
                 </div>
               </div>
             ))}
@@ -1121,8 +1356,28 @@ function DailyReportView() {
                 <p className="text-sm whitespace-pre-wrap break-words">{today.managerReport?.[f.key]}</p>
               </div>
             ))}
-            {today.canEdit && (
-              <button onClick={() => setEditing(true)} className="text-sm font-medium text-primary hover:underline">Edit</button>
+            {today.canEdit && !isSubmitted && (
+              <div className="flex gap-2 pt-1">
+                <button onClick={doSubmitReport} disabled={submitReport.isPending}
+                  className="flex-1 min-h-11 rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+                  {submitReport.isPending ? "Submitting…" : "Submit to PM"}
+                </button>
+                <button onClick={() => setEditing(true)} className="min-h-11 px-4 rounded-xl border text-sm font-medium hover:bg-muted">Edit</button>
+              </div>
+            )}
+            {isSubmitted && (
+              <SubmissionNotesThread
+                notes={today.submissionNotes ?? []}
+                adding={addReportNote.isPending}
+                onAdd={async (body) => {
+                  try {
+                    await addReportNote.mutateAsync({ date: today.reportDate, data: { body } });
+                    await queryClient.invalidateQueries({ queryKey: getGetPortalDailyReportQueryKey() });
+                  } catch {
+                    toast({ title: "Couldn't add note", variant: "destructive" });
+                  }
+                }}
+              />
             )}
           </div>
         ) : today.canEdit ? (

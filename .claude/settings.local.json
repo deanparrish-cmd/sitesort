@@ -172,7 +172,12 @@
       "Bash(kill 15927)",
       "Bash(awk '/^82\\\\./{print length\\($0\\)}' /home/runner/workspace/CLAUDE.md)",
       "Bash(awk '/^81\\\\./{print length\\($0\\)}' /home/runner/workspace/CLAUDE.md)",
-      "Bash(awk '/^80\\\\./{print length\\($0\\)}' /home/runner/workspace/CLAUDE.md)"
+      "Bash(awk '/^80\\\\./{print length\\($0\\)}' /home/runner/workspace/CLAUDE.md)",
+      "Bash(git status *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/api/health)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5000/api/health)",
+      "Bash(echo \"rc=$?\")",
+      "Bash(python3 -)"
     ]
   },
   "hooks": {

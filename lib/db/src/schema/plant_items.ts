@@ -29,6 +29,15 @@ export const plantItemsTable = pgTable("plant_items", {
   lastUpdatedBy: text("last_updated_by").references(() => usersTable.id),
   lastUpdatedAt: timestamp("last_updated_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  // Draft/submit lifecycle for a portal member's proposed edit (Feature: portal
+  // save-vs-submit). A member's status/location/notes change lands here first —
+  // the live columns above (and the PM's view) are untouched until they submit,
+  // at which point the draft is copied onto the live columns and cleared.
+  portalDraftStatus: text("portal_draft_status"),
+  portalDraftLocation: text("portal_draft_location"),
+  portalDraftNotes: text("portal_draft_notes"),
+  portalDraftUpdatedBy: text("portal_draft_updated_by").references(() => usersTable.id),
+  portalDraftUpdatedAt: timestamp("portal_draft_updated_at"),
 }, (t) => ({
   projectIdx: index("plant_items_project_idx").on(t.projectId),
 }));

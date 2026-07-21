@@ -30,6 +30,7 @@ import { PortalLoginBody, AcceptPortalInviteBody } from "@workspace/api-zod";
 import { getBucket, objectKey } from "../lib/gcs";
 import { memberUploadSingle, saveMemberUpload } from "../lib/portal-upload";
 import { isReportLocked, upsertManagerReport, contributorsForReport, hasManagerContent, londonDateStr } from "../lib/daily-reports";
+import { notesFor, addNote } from "../lib/portal-submission-notes";
 import { createRequire } from "module";
 import type { Archiver, ArchiverOptions } from "archiver";
 const nodeRequire = createRequire(import.meta.url);
@@ -89,7 +90,9 @@ function serializePermit(p: typeof permitsTable.$inferSelect) {
     status: expiryStatus(p.expiryDate), documentUrl: p.documentUrl ?? undefined,
   };
 }
-function serializeIssue(p: typeof photosTable.$inferSelect, reporterName?: string | null) {
+async function serializeIssue(p: typeof photosTable.$inferSelect, reporterName?: string | null) {
+  const submittedByName = p.submittedBy ? await nameForPortalUser(p.submittedBy) : undefined;
+  const notes = await notesFor("site_issue", p.id);
   return {
     id: p.id, category: p.category, description: p.description ?? undefined,
     zone: p.zone ?? undefined, referenceNumber: p.referenceNumber,
@@ -101,7 +104,16 @@ function serializeIssue(p: typeof photosTable.$inferSelect, reporterName?: strin
     assignedToUserId: p.assignedToUserId ?? undefined,
     reporterName: reporterName ?? undefined,
     closureReason: p.closureReason ?? undefined,
+    // Portal save-vs-submit lifecycle (Feature).
+    submittedAt: p.submittedAt ? p.submittedAt.toISOString() : undefined,
+    submittedByName,
+    lifecycleStatus: p.submittedAt ? "submitted" : "draft",
+    notes,
   };
+}
+async function nameForPortalUser(userId: string): Promise<string | undefined> {
+  const rows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+  return rows[0]?.name ?? undefined;
 }
 
 async function computeProgress(projectId: string): Promise<number> {
@@ -194,11 +206,10 @@ const isAfter = (d: Date | null | undefined, since: Date | undefined): boolean =
 // whose share/create time is newer than the member's last view of that section.
 async function computeUnseen(userId: string, projectId: string): Promise<{ counts: Record<string, number>; total: number }> {
   const viewer = await resolveViewer(userId, projectId);
-  const [docMap, photoMap, permitMap, plantMap, lastView, permRow] = await Promise.all([
+  const [docMap, photoMap, permitMap, lastView, permRow] = await Promise.all([
     visibleShareMap(projectId, "document", viewer),
     visibleShareMap(projectId, "photo", viewer),
     visibleShareMap(projectId, "permit", viewer),
-    visibleShareMap(projectId, "plant_item", viewer),
     lastViewedBySection(userId, projectId),
     db.select({
       canLogIssues: projectMembersTable.canLogIssues,
@@ -224,15 +235,23 @@ async function computeUnseen(userId: string, projectId: string): Promise<{ count
     const at = docMap.get(d.id);
     if (isAfter(at, lv("shared"))) sharedCount++;
   }
-  // Site issues and plant items only count toward "Shared with me" (and never
-  // leak a count at all) when the viewer actually has that section's grant —
-  // otherwise the nav badge itself would tip off gated content they can't open.
+  // Site issues only count toward "Shared with me" (and never leak a count at
+  // all) when the viewer actually has that section's grant — otherwise the nav
+  // badge itself would tip off gated content they can't open.
   if (canLogIssues) {
     for (const at of photoMap.values()) { if (isAfter(at, lv("shared"))) sharedCount++; if (isAfter(at, lv("site-issues"))) bump("site-issues"); }
   }
   for (const at of permitMap.values()) { if (isAfter(at, lv("shared"))) sharedCount++; }
+  // Plant & Materials is its own gated section, not a shared-document type
+  // (see the sharing-bug fix above) — its badge counts every project plant
+  // item's latest activity, not a portal_shares timestamp.
   if (canUpdatePlantMaterials) {
-    for (const at of plantMap.values()) { if (isAfter(at, lv("shared"))) sharedCount++; if (isAfter(at, lv("plant-materials"))) bump("plant-materials"); }
+    const plantItems = await db.select({ createdAt: plantItemsTable.createdAt, lastUpdatedAt: plantItemsTable.lastUpdatedAt })
+      .from(plantItemsTable).where(eq(plantItemsTable.projectId, projectId));
+    for (const p of plantItems) {
+      const at = p.lastUpdatedAt ?? p.createdAt;
+      if (isAfter(at, lv("plant-materials"))) bump("plant-materials");
+    }
   }
 
   // Safety docs are always visible (never gated) → new ones count toward
@@ -810,16 +829,19 @@ router.get("/portal/site-issues", authenticate, requirePortalSession, requirePor
       eq(photosTable.projectId, pid),
       issueCategoryFilter(),
       or(
-        sharedIds.size ? inArray(photosTable.id, [...sharedIds]) : undefined,
+        // Shared / assigned issues from OTHERS only ever show once submitted —
+        // a draft is private to its reporter until they choose to submit it.
+        sharedIds.size ? and(inArray(photosTable.id, [...sharedIds]), isNotNull(photosTable.submittedAt)) : undefined,
+        and(eq(photosTable.assignedToUserId, req.user!.id), isNotNull(photosTable.submittedAt)),
+        // The reporter always sees their own, draft or submitted.
         eq(photosTable.uploadedBy, req.user!.id),
-        eq(photosTable.assignedToUserId, req.user!.id),
       ),
     ))
     .orderBy(desc(photosTable.takenAt));
   const reporterIds = [...new Set(rows.filter(r => r.uploadedBy === req.user!.id).map(r => r.uploadedBy))];
   const reporters = reporterIds.length ? await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(inArray(usersTable.id, reporterIds)) : [];
   const reporterName = new Map(reporters.map(u => [u.id, u.name]));
-  res.json(rows.map(r => serializeIssue(r, r.uploadedBy === req.user!.id ? (reporterName.get(r.uploadedBy) ?? null) : null)));
+  res.json(await Promise.all(rows.map(r => serializeIssue(r, r.uploadedBy === req.user!.id ? (reporterName.get(r.uploadedBy) ?? null) : null))));
 });
 
 // POST /api/portal/site-issues — a portal member (with canLogIssues) logs a
@@ -845,15 +867,73 @@ router.post("/portal/site-issues", authenticate, requirePortalSession, requirePo
     const [{ total }] = await db.select({ total: count() }).from(photosTable);
     const referenceNumber = `PHOTO-${String(total + 1).padStart(4, "0")}`;
     const id = generateId();
+    // Saved as a DRAFT — submittedAt/submittedBy left null. The PM isn't
+    // notified and the issue doesn't appear in their triage queue until the
+    // reporter explicitly submits it (see POST .../submit below).
     await db.insert(photosTable).values({
       id, projectId: pid, uploadedBy: req.user!.id, photoUrl, category, description, zone,
       referenceNumber, status: "new", assignedToUserId: null, dueDate: null,
     });
 
-    // In-app notification only (bell) — dashboard/staff users have no push
-    // channel today, only portal members do. Mirrors the exact manager-loop
-    // pattern already used for dashboard-created snags/safety concerns
-    // (project_members.role === "manager"), the closest existing analog.
+    void logActivity({ userId: req.user!.id, projectId: pid, companyId: req.user!.companyId, section: "site-issues", action: "create", itemType: "photo", itemId: id, req });
+
+    const created = (await db.select().from(photosTable).where(eq(photosTable.id, id)).limit(1))[0];
+    const reporter = (await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1))[0];
+    res.status(201).json(await serializeIssue(created, reporter?.name ?? null));
+  } catch (err) {
+    req.log.error({ err }, "Portal log site issue error");
+    res.status(500).json({ error: "server_error", message: "Failed to log issue" });
+  }
+});
+
+// PATCH /api/portal/site-issues/:issueId/edit — full edit of a draft's own
+// fields (reporter-only, only while status is still "draft"). Once submitted,
+// the original fields lock — further changes go through the notes endpoint.
+router.patch("/portal/site-issues/:issueId/edit", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canLogIssues"), async (req, res) => {
+  const pid = req.portalProjectId!;
+  try {
+    const rows = await db.select().from(photosTable)
+      .where(and(eq(photosTable.id, req.params.issueId), eq(photosTable.projectId, pid))).limit(1);
+    if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Issue not found" }); return; }
+    const issue = rows[0];
+    if (issue.uploadedBy !== req.user!.id) { res.status(403).json({ error: "forbidden", message: "Only the reporter can edit this issue." }); return; }
+    if (issue.submittedAt) { res.status(403).json({ error: "forbidden", message: "This issue has already been submitted — add a note instead." }); return; }
+
+    const { type, description, zone } = req.body as { type?: string; description?: string; zone?: string };
+    const updates: Partial<typeof photosTable.$inferInsert> = {};
+    if (type !== undefined && ["snag", "safety_concern", "work_completed"].includes(type)) updates.category = type;
+    if (description !== undefined) updates.description = description.trim() || null;
+    if (zone !== undefined) updates.zone = zone.trim() || null;
+    if (Object.keys(updates).length > 0) {
+      await db.update(photosTable).set(updates).where(eq(photosTable.id, req.params.issueId));
+    }
+
+    const updated = (await db.select().from(photosTable).where(eq(photosTable.id, req.params.issueId)).limit(1))[0];
+    const reporter = (await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, updated.uploadedBy)).limit(1))[0];
+    res.json(await serializeIssue(updated, reporter?.name ?? null));
+  } catch (err) {
+    req.log.error({ err }, "Portal edit draft issue error");
+    res.status(500).json({ error: "server_error", message: "Failed to update draft" });
+  }
+});
+
+// POST /api/portal/site-issues/:issueId/submit — reporter-only. Locks the
+// original fields and puts the issue in front of the PM for the first time
+// (notification + triage queue) — mirrors the create-time notify logic that
+// used to fire immediately, now deferred until the reporter is actually ready.
+router.post("/portal/site-issues/:issueId/submit", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canLogIssues"), async (req, res) => {
+  const pid = req.portalProjectId!;
+  try {
+    const rows = await db.select().from(photosTable)
+      .where(and(eq(photosTable.id, req.params.issueId), eq(photosTable.projectId, pid))).limit(1);
+    if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Issue not found" }); return; }
+    const issue = rows[0];
+    if (issue.uploadedBy !== req.user!.id) { res.status(403).json({ error: "forbidden", message: "Only the reporter can submit this issue." }); return; }
+    if (issue.submittedAt) { res.status(403).json({ error: "forbidden", message: "Already submitted." }); return; }
+
+    await db.update(photosTable).set({ submittedAt: new Date(), submittedBy: req.user!.id }).where(eq(photosTable.id, req.params.issueId));
+    void logActivity({ userId: req.user!.id, projectId: pid, companyId: req.user!.companyId, section: "site-issues", action: "update", itemType: "photo", itemId: issue.id, metadata: { submitted: { from: false, to: true } }, req });
+
     const proj = (await db.select({ name: projectsTable.name }).from(projectsTable).where(eq(projectsTable.id, pid)).limit(1))[0];
     const reporter = (await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1))[0];
     const managers = await db.select({ userId: projectMembersTable.userId }).from(projectMembersTable)
@@ -862,19 +942,50 @@ router.post("/portal/site-issues", authenticate, requirePortalSession, requirePo
       if (!m.userId) continue;
       await db.insert(notificationsTable).values({
         id: generateId(), userId: m.userId, type: "portal_issue_logged",
-        title: `New — awaiting triage: ${referenceNumber}`,
-        message: `${reporter?.name ?? "A member"} logged a ${category.replace("_", " ")} at ${proj?.name ?? "your project"}.`,
-        relatedEntityId: id, relatedEntityType: "photo", read: false,
+        title: `New — awaiting triage: ${issue.referenceNumber}`,
+        message: `${reporter?.name ?? "A member"} logged a ${issue.category.replace("_", " ")} at ${proj?.name ?? "your project"}.`,
+        relatedEntityId: issue.id, relatedEntityType: "photo", read: false,
       });
     }
 
-    void logActivity({ userId: req.user!.id, projectId: pid, companyId: req.user!.companyId, section: "site-issues", action: "create", itemType: "photo", itemId: id, req });
-
-    const created = (await db.select().from(photosTable).where(eq(photosTable.id, id)).limit(1))[0];
-    res.status(201).json(serializeIssue(created, reporter?.name ?? null));
+    const updated = (await db.select().from(photosTable).where(eq(photosTable.id, req.params.issueId)).limit(1))[0];
+    res.json(await serializeIssue(updated, reporter?.name ?? null));
   } catch (err) {
-    req.log.error({ err }, "Portal log site issue error");
-    res.status(500).json({ error: "server_error", message: "Failed to log issue" });
+    req.log.error({ err }, "Portal submit issue error");
+    res.status(500).json({ error: "server_error", message: "Failed to submit issue" });
+  }
+});
+
+// POST /api/portal/site-issues/:issueId/notes — append-only addition on a
+// submitted issue. Available to the reporter and any manager; never edits
+// the original fields.
+router.post("/portal/site-issues/:issueId/notes", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canLogIssues"), async (req, res) => {
+  const pid = req.portalProjectId!;
+  try {
+    const rows = await db.select().from(photosTable)
+      .where(and(eq(photosTable.id, req.params.issueId), eq(photosTable.projectId, pid))).limit(1);
+    if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Issue not found" }); return; }
+    const issue = rows[0];
+    if (!issue.submittedAt) { res.status(400).json({ error: "validation_error", message: "Submit this issue before adding notes." }); return; }
+    // Same visibility rule as the list read: the reporter, the assignee, or
+    // anyone it's been shared to may add a note — never someone who can't see
+    // the issue at all.
+    if (issue.uploadedBy !== req.user!.id && issue.assignedToUserId !== req.user!.id) {
+      const viewer = await resolveViewer(req.user!.id, pid);
+      const sharedIds = await visibleIds(pid, "photo", viewer);
+      if (!sharedIds.has(issue.id)) { res.status(403).json({ error: "forbidden", message: "You don't have access to this issue." }); return; }
+    }
+    const { body } = req.body as { body?: string };
+    if (!body || !body.trim()) { res.status(400).json({ error: "validation_error", message: "A note body is required." }); return; }
+
+    await addNote({ itemType: "site_issue", itemId: issue.id, projectId: pid, authorId: req.user!.id, body: body.trim() });
+    void logActivity({ userId: req.user!.id, projectId: pid, companyId: req.user!.companyId, section: "site-issues", action: "update", itemType: "photo", itemId: issue.id, req });
+
+    const reporter = (await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, issue.uploadedBy)).limit(1))[0];
+    res.status(201).json(await serializeIssue(issue, reporter?.name ?? null));
+  } catch (err) {
+    req.log.error({ err }, "Portal add issue note error");
+    res.status(500).json({ error: "server_error", message: "Failed to add note" });
   }
 });
 
@@ -901,7 +1012,7 @@ router.patch("/portal/site-issues/:issueId", authenticate, requirePortalSession,
     void logActivity({ userId: req.user!.id, projectId: pid, companyId: req.user!.companyId, section: "site-issues", action: "update", itemType: "photo", itemId: issue.id, metadata: { status: { from: issue.status, to: "pending_confirmation" } }, req });
 
     const updated = (await db.select().from(photosTable).where(eq(photosTable.id, req.params.issueId)).limit(1))[0];
-    res.json(serializeIssue(updated));
+    res.json(await serializeIssue(updated));
   } catch (err) {
     req.log.error({ err }, "Portal mark issue done error");
     res.status(500).json({ error: "server_error", message: "Failed to update issue" });
@@ -1086,18 +1197,24 @@ router.get("/portal/permits", ...portalGuards, async (req, res) => {
   res.json(rows.map(serializePermit));
 });
 
-// ---- Plant & Materials (GATED like documents; portal write is behind
-// requirePortalPermission("canUpdatePlantMaterials"), the portal's first
-// write capability) ----
+// ---- Plant & Materials ----
+// Fix: this is NOT a shared-documents section — it was wrongly gated behind
+// visibleIds/portal_shares (the same mechanism as documents/photos/permits),
+// so a member with canUpdatePlantMaterials but no explicit per-item share saw
+// an empty "nothing shared with you" list. The permission alone now grants
+// the WHOLE project plant list — no separate sharing step.
 async function serializePortalPlantItem(item: typeof plantItemsTable.$inferSelect): Promise<Record<string, unknown>> {
-  const [updater, supplier, attachments] = await Promise.all([
+  const [updater, supplier, attachments, draftUpdater, submissionNotes] = await Promise.all([
     item.lastUpdatedBy ? db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, item.lastUpdatedBy)).limit(1) : Promise.resolve([]),
     item.supplierContactId ? db.select({ name: subcontractorsTable.companyName }).from(subcontractorsTable).where(eq(subcontractorsTable.id, item.supplierContactId)).limit(1) : Promise.resolve([]),
     db.select().from(plantItemAttachmentsTable).where(eq(plantItemAttachmentsTable.plantItemId, item.id)),
+    item.portalDraftUpdatedBy ? db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, item.portalDraftUpdatedBy)).limit(1) : Promise.resolve([]),
+    notesFor("plant_item", item.id),
   ]);
   const uploaderIds = [...new Set(attachments.map(a => a.uploadedBy))];
   const uploaders = uploaderIds.length ? await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(inArray(usersTable.id, uploaderIds)) : [];
   const uploaderName = new Map(uploaders.map(u => [u.id, u.name]));
+  const hasDraft = !!item.portalDraftUpdatedAt;
   return {
     id: item.id, name: item.name, category: item.category,
     quantity: item.quantity ?? null, unit: item.unit ?? null,
@@ -1113,18 +1230,25 @@ async function serializePortalPlantItem(item: typeof plantItemsTable.$inferSelec
       name: a.name, kind: a.kind, fileUrl: a.fileUrl, fileSize: a.fileSize,
       createdAt: a.createdAt.toISOString(),
     })),
+    // Portal save-vs-submit lifecycle (Feature). A pending draft edit — visible
+    // so the member can reopen and keep editing before submitting — never
+    // touches the live status/location/notes above until submitted.
+    lifecycleStatus: hasDraft ? "draft" : "submitted",
+    draft: hasDraft ? {
+      status: item.portalDraftStatus, location: item.portalDraftLocation, notes: item.portalDraftNotes,
+      updatedByName: draftUpdater[0]?.name ?? null,
+      updatedAt: item.portalDraftUpdatedAt!.toISOString(),
+    } : null,
+    submissionNotes,
   };
 }
 
-// GET /api/portal/plant-materials — section gated on canUpdatePlantMaterials
-// (minimal-portal redesign), items within it further gated to shared items.
+// GET /api/portal/plant-materials — the whole project's plant list, gated
+// purely on the canUpdatePlantMaterials permission (see fix note above).
 router.get("/portal/plant-materials", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canUpdatePlantMaterials"), autoLogPortalActivity, async (req, res) => {
   const pid = req.portalProjectId!;
-  const viewer = await resolveViewer(req.user!.id, pid);
-  const ids = await visibleIds(pid, "plant_item", viewer);
-  if (ids.size === 0) { res.json([]); return; }
   const rows = await db.select().from(plantItemsTable)
-    .where(and(eq(plantItemsTable.projectId, pid), inArray(plantItemsTable.id, [...ids])))
+    .where(eq(plantItemsTable.projectId, pid))
     .orderBy(asc(plantItemsTable.name));
   res.json(await Promise.all(rows.map(serializePortalPlantItem)));
 });
@@ -1135,51 +1259,103 @@ router.get("/portal/plant-materials/:itemId", authenticate, requirePortalSession
   const rows = await db.select().from(plantItemsTable)
     .where(and(eq(plantItemsTable.id, req.params.itemId), eq(plantItemsTable.projectId, pid))).limit(1);
   if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Item not found" }); return; }
-  const viewer = await resolveViewer(req.user!.id, pid);
-  const ids = await visibleIds(pid, "plant_item", viewer);
-  if (!ids.has(rows[0].id)) { res.status(404).json({ error: "not_found", message: "Item not found" }); return; }
   res.json(await serializePortalPlantItem(rows[0]));
 });
 
-// PATCH /api/portal/plant-materials/:itemId — the portal's first WRITE
-// endpoint. Restricted to status/location/notes only (name/category/supplier/
-// dates stay dashboard-only, per the feature's confirmed scope). The
-// permission flag alone doesn't unlock an item not shared to this viewer —
-// both checks apply.
+// PATCH /api/portal/plant-materials/:itemId — SAVE (draft only). Writes to the
+// portal_draft_* shadow columns, never the live status/location/notes — the PM
+// (and the dashboard's own view) sees nothing change until the member submits.
 router.patch("/portal/plant-materials/:itemId", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canUpdatePlantMaterials"), async (req, res) => {
   const pid = req.portalProjectId!;
   try {
     const rows = await db.select().from(plantItemsTable)
       .where(and(eq(plantItemsTable.id, req.params.itemId), eq(plantItemsTable.projectId, pid))).limit(1);
     if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Item not found" }); return; }
-    const viewer = await resolveViewer(req.user!.id, pid);
-    const ids = await visibleIds(pid, "plant_item", viewer);
-    if (!ids.has(rows[0].id)) { res.status(404).json({ error: "not_found", message: "Item not found" }); return; }
+    const item = rows[0];
 
     const { status, location, notes } = req.body as { status?: string; location?: string | null; notes?: string | null };
-    const updates: Partial<typeof plantItemsTable.$inferInsert> = {};
-    const diff: Record<string, { from: unknown; to: unknown }> = {};
-    if (status !== undefined && status !== rows[0].status) { updates.status = status; diff.status = { from: rows[0].status, to: status }; }
-    if (location !== undefined && location !== rows[0].location) { updates.location = location; diff.location = { from: rows[0].location, to: location }; }
-    if (notes !== undefined && notes !== rows[0].notes) { updates.notes = notes; diff.notes = { from: rows[0].notes, to: notes }; }
+    await db.update(plantItemsTable).set({
+      portalDraftStatus: status !== undefined ? status : (item.portalDraftStatus ?? item.status),
+      portalDraftLocation: location !== undefined ? location : (item.portalDraftLocation ?? item.location),
+      portalDraftNotes: notes !== undefined ? notes : (item.portalDraftNotes ?? item.notes),
+      portalDraftUpdatedBy: req.user!.id,
+      portalDraftUpdatedAt: new Date(),
+    }).where(eq(plantItemsTable.id, req.params.itemId));
 
-    if (Object.keys(updates).length > 0) {
-      updates.lastUpdatedBy = req.user!.id;
-      updates.lastUpdatedAt = new Date();
-      await db.update(plantItemsTable).set(updates).where(eq(plantItemsTable.id, req.params.itemId));
+    const updated = await db.select().from(plantItemsTable).where(eq(plantItemsTable.id, req.params.itemId)).limit(1);
+    res.json(await serializePortalPlantItem(updated[0]));
+  } catch (err) {
+    req.log.error({ err }, "Portal save plant item draft error");
+    res.status(500).json({ error: "server_error", message: "Failed to save draft" });
+  }
+});
+
+// POST /api/portal/plant-materials/:itemId/submit — copies the pending draft
+// onto the live status/location/notes (what the PM and dashboard actually
+// see), stamps lastUpdatedBy/lastUpdatedAt for attribution, and clears the
+// draft. 400 if there's nothing staged to submit.
+router.post("/portal/plant-materials/:itemId/submit", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canUpdatePlantMaterials"), async (req, res) => {
+  const pid = req.portalProjectId!;
+  try {
+    const rows = await db.select().from(plantItemsTable)
+      .where(and(eq(plantItemsTable.id, req.params.itemId), eq(plantItemsTable.projectId, pid))).limit(1);
+    if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Item not found" }); return; }
+    const item = rows[0];
+    if (!item.portalDraftUpdatedAt) { res.status(400).json({ error: "validation_error", message: "No draft to submit." }); return; }
+
+    const diff: Record<string, { from: unknown; to: unknown }> = {};
+    if (item.portalDraftStatus !== item.status) diff.status = { from: item.status, to: item.portalDraftStatus };
+    if (item.portalDraftLocation !== item.location) diff.location = { from: item.location, to: item.portalDraftLocation };
+    if (item.portalDraftNotes !== item.notes) diff.notes = { from: item.notes, to: item.portalDraftNotes };
+
+    await db.update(plantItemsTable).set({
+      status: item.portalDraftStatus ?? item.status,
+      location: item.portalDraftLocation,
+      notes: item.portalDraftNotes,
+      lastUpdatedBy: req.user!.id,
+      lastUpdatedAt: new Date(),
+      portalDraftStatus: null, portalDraftLocation: null, portalDraftNotes: null,
+      portalDraftUpdatedBy: null, portalDraftUpdatedAt: null,
+    }).where(eq(plantItemsTable.id, req.params.itemId));
+    if (Object.keys(diff).length > 0) {
       void logActivity({ userId: req.user!.id, projectId: pid, companyId: req.user!.companyId, section: "plant-materials", action: "update", itemType: "plant_item", itemId: req.params.itemId, metadata: diff, req });
     }
 
     const updated = await db.select().from(plantItemsTable).where(eq(plantItemsTable.id, req.params.itemId)).limit(1);
     res.json(await serializePortalPlantItem(updated[0]));
   } catch (err) {
-    req.log.error({ err }, "Portal update plant item error");
-    res.status(500).json({ error: "server_error", message: "Failed to update item" });
+    req.log.error({ err }, "Portal submit plant item error");
+    res.status(500).json({ error: "server_error", message: "Failed to submit" });
+  }
+});
+
+// POST /api/portal/plant-materials/:itemId/notes — append-only addition,
+// independent of the draft/submit flow above (works any time, not gated on a
+// prior submit, since a plant item is never "unsubmitted" as a whole — it's a
+// persistent PM-owned record members annotate over time).
+router.post("/portal/plant-materials/:itemId/notes", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canUpdatePlantMaterials"), async (req, res) => {
+  const pid = req.portalProjectId!;
+  try {
+    const rows = await db.select().from(plantItemsTable)
+      .where(and(eq(plantItemsTable.id, req.params.itemId), eq(plantItemsTable.projectId, pid))).limit(1);
+    if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Item not found" }); return; }
+    const { body } = req.body as { body?: string };
+    if (!body || !body.trim()) { res.status(400).json({ error: "validation_error", message: "A note body is required." }); return; }
+
+    await addNote({ itemType: "plant_item", itemId: req.params.itemId, projectId: pid, authorId: req.user!.id, body: body.trim() });
+    void logActivity({ userId: req.user!.id, projectId: pid, companyId: req.user!.companyId, section: "plant-materials", action: "update", itemType: "plant_item", itemId: req.params.itemId, req });
+
+    const updated = await db.select().from(plantItemsTable).where(eq(plantItemsTable.id, req.params.itemId)).limit(1);
+    res.status(201).json(await serializePortalPlantItem(updated[0]));
+  } catch (err) {
+    req.log.error({ err }, "Portal add plant item note error");
+    res.status(500).json({ error: "server_error", message: "Failed to add note" });
   }
 });
 
 // POST /api/portal/plant-materials/:itemId/attachments — add a photo/document
-// to a shared item. Same permission + visibility gate as the PATCH above.
+// to a plant item. Gated purely on the canUpdatePlantMaterials permission
+// (see the sharing-bug fix note above serializePortalPlantItem).
 router.post("/portal/plant-materials/:itemId/attachments", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canUpdatePlantMaterials"), memberUploadSingle("file"), async (req, res) => {
   const pid = req.portalProjectId!;
   if (!req.file) { res.status(400).json({ error: "validation_error", message: "No file provided" }); return; }
@@ -1191,9 +1367,6 @@ router.post("/portal/plant-materials/:itemId/attachments", authenticate, require
     const rows = await db.select({ id: plantItemsTable.id }).from(plantItemsTable)
       .where(and(eq(plantItemsTable.id, req.params.itemId), eq(plantItemsTable.projectId, pid))).limit(1);
     if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Item not found" }); return; }
-    const viewer = await resolveViewer(req.user!.id, pid);
-    const ids = await visibleIds(pid, "plant_item", viewer);
-    if (!ids.has(rows[0].id)) { res.status(404).json({ error: "not_found", message: "Item not found" }); return; }
 
     const { fileUrl, fileSize } = await saveMemberUpload(req.file, req.user!.id, req.user!.companyId);
     const id = generateId();
@@ -1236,12 +1409,19 @@ router.get("/portal/daily-report", authenticate, requirePortalSession, requirePo
       .where(and(eq(projectMembersTable.projectId, pid), eq(projectMembersTable.userId, req.user!.id)))
       .limit(1);
     const locked = isReportLocked(date);
+    const submittedAt = report?.submittedAt ?? null;
     res.json({
       reportDate: date,
       managerReport: report && hasManagerContent(report.managerReport) ? report.managerReport : null,
       contributors: report ? await contributorsForReport(report.id) : [],
       locked,
-      canEdit: (permRow[0]?.canEditDailyReport ?? false) && !locked,
+      // Once submitted, direct edits are blocked (append-only notes instead) —
+      // separate from (and checked in addition to) the date-lock window above.
+      canEdit: (permRow[0]?.canEditDailyReport ?? false) && !locked && !submittedAt,
+      submittedAt: submittedAt ? submittedAt.toISOString() : null,
+      submittedByName: report?.submittedBy ? await nameForPortalUser(report.submittedBy) : null,
+      lifecycleStatus: submittedAt ? "submitted" : "draft",
+      submissionNotes: report ? await notesFor("daily_report", report.id) : [],
     });
   } catch (err) {
     req.log.error({ err }, "Portal get daily report error");
@@ -1265,6 +1445,9 @@ router.get("/portal/daily-report/history", authenticate, requirePortalSession, r
       reportDate: r.reportDate,
       managerReport: r.managerReport,
       contributors: await contributorsForReport(r.id),
+      lifecycleStatus: r.submittedAt ? "submitted" : "draft",
+      submittedAt: r.submittedAt ? r.submittedAt.toISOString() : null,
+      submittedByName: r.submittedBy ? await nameForPortalUser(r.submittedBy) : null,
     }))));
   } catch (err) {
     req.log.error({ err }, "Portal daily report history error");
@@ -1272,9 +1455,11 @@ router.get("/portal/daily-report/history", authenticate, requirePortalSession, r
   }
 });
 
-// PATCH /api/portal/daily-report/:date — amend today's (or, within the grace
-// window, yesterday's) site diary. 403 distinctly for "no permission" vs
-// "locked" so the frontend can explain which applies.
+// PATCH /api/portal/daily-report/:date — SAVE (draft only). Amends today's (or,
+// within the grace window, yesterday's) site diary. 403 distinctly for "no
+// permission" vs "locked" vs "already submitted" so the frontend can explain
+// which applies — once submitted, further changes go through the notes
+// endpoint instead of rewriting the original.
 router.patch("/portal/daily-report/:date", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canEditDailyReport"), async (req, res) => {
   const pid = req.portalProjectId!;
   const date = req.params.date;
@@ -1282,12 +1467,74 @@ router.patch("/portal/daily-report/:date", authenticate, requirePortalSession, r
   if (date > londonDateStr(new Date())) { res.status(400).json({ error: "validation_error", message: "Cannot edit a future date" }); return; }
   if (isReportLocked(date)) { res.status(403).json({ error: "locked", message: "This day's report is locked — ask your project manager to amend it from the dashboard." }); return; }
   try {
+    const existing = await db.select({ submittedAt: dailyReportsTable.submittedAt }).from(dailyReportsTable)
+      .where(and(eq(dailyReportsTable.projectId, pid), eq(dailyReportsTable.reportDate, date))).limit(1);
+    if (existing[0]?.submittedAt) { res.status(403).json({ error: "submitted", message: "This report has already been submitted — add a note instead." }); return; }
     const result = await upsertManagerReport({ projectId: pid, companyId: req.user!.companyId, date, userId: req.user!.id, patch: req.body, req });
     if ("error" in result) { res.status(400).json({ error: "validation_error", message: "Enter at least one field" }); return; }
-    res.json({ reportDate: date, managerReport: result.managerReport, contributors: await contributorsForReport(result.id) });
+    res.json({ reportDate: date, managerReport: result.managerReport, contributors: await contributorsForReport(result.id), lifecycleStatus: "draft", submittedAt: null, submittedByName: null, submissionNotes: await notesFor("daily_report", result.id) });
   } catch (err) {
     req.log.error({ err }, "Portal update daily report error");
     res.status(500).json({ error: "server_error", message: "Failed to save report" });
+  }
+});
+
+// POST /api/portal/daily-report/:date/submit — locks today's site diary and
+// surfaces it in the PM's report view for the first time. Requires actual
+// content (an empty report has nothing to submit) and the same lock-window
+// check as the PATCH above.
+router.post("/portal/daily-report/:date/submit", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canEditDailyReport"), async (req, res) => {
+  const pid = req.portalProjectId!;
+  const date = req.params.date;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { res.status(400).json({ error: "validation_error", message: "date must be YYYY-MM-DD" }); return; }
+  if (isReportLocked(date)) { res.status(403).json({ error: "locked", message: "This day's report is locked." }); return; }
+  try {
+    const rows = await db.select().from(dailyReportsTable)
+      .where(and(eq(dailyReportsTable.projectId, pid), eq(dailyReportsTable.reportDate, date))).limit(1);
+    const report = rows[0];
+    if (!report || !hasManagerContent(report.managerReport)) { res.status(400).json({ error: "validation_error", message: "Add some content before submitting." }); return; }
+    if (report.submittedAt) { res.status(403).json({ error: "forbidden", message: "Already submitted." }); return; }
+
+    await db.update(dailyReportsTable).set({ submittedAt: new Date(), submittedBy: req.user!.id }).where(eq(dailyReportsTable.id, report.id));
+    void logActivity({ userId: req.user!.id, projectId: pid, companyId: req.user!.companyId, section: "daily-reports", action: "update", itemType: "daily_report", itemId: report.id, metadata: { submitted: { from: false, to: true } }, req });
+
+    const submittedByName = await nameForPortalUser(req.user!.id);
+    res.json({
+      reportDate: date, managerReport: report.managerReport, contributors: await contributorsForReport(report.id),
+      lifecycleStatus: "submitted", submittedAt: new Date().toISOString(), submittedByName,
+      submissionNotes: await notesFor("daily_report", report.id),
+    });
+  } catch (err) {
+    req.log.error({ err }, "Portal submit daily report error");
+    res.status(500).json({ error: "server_error", message: "Failed to submit report" });
+  }
+});
+
+// POST /api/portal/daily-report/:date/notes — append-only addition on a
+// submitted report. Available to the reporter/any contributor and the PM;
+// never rewrites the original managerReport fields.
+router.post("/portal/daily-report/:date/notes", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canEditDailyReport"), async (req, res) => {
+  const pid = req.portalProjectId!;
+  const date = req.params.date;
+  try {
+    const rows = await db.select().from(dailyReportsTable)
+      .where(and(eq(dailyReportsTable.projectId, pid), eq(dailyReportsTable.reportDate, date))).limit(1);
+    const report = rows[0];
+    if (!report || !report.submittedAt) { res.status(400).json({ error: "validation_error", message: "Submit this report before adding notes." }); return; }
+    const { body } = req.body as { body?: string };
+    if (!body || !body.trim()) { res.status(400).json({ error: "validation_error", message: "A note body is required." }); return; }
+
+    await addNote({ itemType: "daily_report", itemId: report.id, projectId: pid, authorId: req.user!.id, body: body.trim() });
+    void logActivity({ userId: req.user!.id, projectId: pid, companyId: req.user!.companyId, section: "daily-reports", action: "update", itemType: "daily_report", itemId: report.id, req });
+
+    res.status(201).json({
+      reportDate: date, managerReport: report.managerReport, contributors: await contributorsForReport(report.id),
+      lifecycleStatus: "submitted", submittedAt: report.submittedAt.toISOString(), submittedByName: report.submittedBy ? await nameForPortalUser(report.submittedBy) : null,
+      submissionNotes: await notesFor("daily_report", report.id),
+    });
+  } catch (err) {
+    req.log.error({ err }, "Portal add daily report note error");
+    res.status(500).json({ error: "server_error", message: "Failed to add note" });
   }
 });
 

@@ -1,13 +1,14 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { photosTable, usersTable, notificationsTable, projectMembersTable, projectsTable } from "@workspace/db/schema";
-import { eq, and, count, inArray, isNotNull, isNull } from "drizzle-orm";
+import { eq, and, or, count, inArray, isNotNull, isNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { sendSafetyAlertEmail } from "../lib/email";
 import { isOverdue, issueCategoryFilter } from "../lib/accountability";
 import { logActivity } from "../lib/activity";
 import { enqueuePushForMembers } from "../lib/push-triggers";
+import { notesFor, addNote } from "../lib/portal-submission-notes";
 
 const router: IRouter = Router();
 
@@ -18,7 +19,9 @@ async function nameForUser(userId: string | null | undefined): Promise<string | 
   return rows[0]?.name ?? null;
 }
 
-function formatPhoto(p: typeof photosTable.$inferSelect, uploaderName: string, projectName?: string, assignedToName?: string | null, archivedByName?: string | null) {
+async function formatPhoto(p: typeof photosTable.$inferSelect, uploaderName: string, projectName?: string, assignedToName?: string | null, archivedByName?: string | null) {
+  const submittedByName = await nameForUser(p.submittedBy);
+  const notes = await notesFor("site_issue", p.id);
   return {
     id: p.id,
     projectId: p.projectId,
@@ -53,6 +56,12 @@ function formatPhoto(p: typeof photosTable.$inferSelect, uploaderName: string, p
     archivedByName: archivedByName ?? null,
     archiveReason: p.archiveReason ?? null,
     photoRemovedAt: p.photoRemovedAt ? p.photoRemovedAt.toISOString() : null,
+    // Portal save-vs-submit lifecycle (Feature). Dashboard-created photos are
+    // always submitted immediately — only portal-reported issues can be drafts.
+    submittedAt: p.submittedAt ? p.submittedAt.toISOString() : null,
+    submittedByName,
+    lifecycleStatus: p.submittedAt ? "submitted" : "draft",
+    notes,
   };
 }
 
@@ -72,11 +81,17 @@ router.get("/projects/:projectId/photos", authenticate, async (req, res) => {
     // Default: active only (mirrors people.ts's `?archived=true` convention) —
     // archived issues stay in the DB and out of the normal list/counts.
     conditions.push(archived === "true" ? isNotNull(photosTable.archivedAt) : isNull(photosTable.archivedAt));
+    // Portal save-vs-submit lifecycle: a member's un-submitted DRAFT stays with
+    // the member. Dashboard viewers only see it once submitted — except the
+    // author themselves (an in-house member browsing the dashboard may see
+    // their own drafts). Dashboard-created photos are stamped submitted_at at
+    // creation, so this only ever hides portal drafts.
+    conditions.push(or(isNotNull(photosTable.submittedAt), eq(photosTable.uploadedBy, req.user!.id))!);
 
     const photos = await db.select().from(photosTable).where(and(...conditions)).orderBy(photosTable.takenAt);
     const result = await Promise.all(photos.map(async (p) => {
       const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, p.uploadedBy)).limit(1);
-      return formatPhoto(p, userRows[0]?.name ?? "Unknown", project[0].name, await nameForUser(p.assignedToUserId), await nameForUser(p.archivedBy));
+      return await formatPhoto(p, userRows[0]?.name ?? "Unknown", project[0].name, await nameForUser(p.assignedToUserId), await nameForUser(p.archivedBy));
     }));
     res.json(result);
   } catch (err) {
@@ -95,8 +110,13 @@ router.get("/photos/:photoId", authenticate, async (req, res) => {
       .where(and(eq(projectsTable.id, photo.projectId), eq(projectsTable.companyId, req.user!.companyId)))
       .limit(1);
     if (!project[0]) { res.status(404).json({ error: "not_found", message: "Photo not found" }); return; }
+    // A portal member's un-submitted draft stays private to its author.
+    if (!photo.submittedAt && photo.uploadedBy !== req.user!.id) {
+      res.status(404).json({ error: "not_found", message: "Photo not found" });
+      return;
+    }
     const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, photo.uploadedBy)).limit(1);
-    res.json(formatPhoto(photo, userRows[0]?.name ?? "Unknown", project[0].name, await nameForUser(photo.assignedToUserId), await nameForUser(photo.archivedBy)));
+    res.json(await formatPhoto(photo, userRows[0]?.name ?? "Unknown", project[0].name, await nameForUser(photo.assignedToUserId), await nameForUser(photo.archivedBy)));
   } catch (err) {
     req.log.error({ err }, "Get photo error");
     res.status(500).json({ error: "server_error", message: "Failed to get photo" });
@@ -184,7 +204,7 @@ router.patch("/photos/:photoId", authenticate, async (req, res) => {
 
     const updated = await db.select().from(photosTable).where(eq(photosTable.id, req.params.photoId)).limit(1);
     const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, photo.uploadedBy)).limit(1);
-    res.json(formatPhoto(updated[0], userRows[0]?.name ?? "Unknown", project[0].name, await nameForUser(updated[0].assignedToUserId), await nameForUser(updated[0].archivedBy)));
+    res.json(await formatPhoto(updated[0], userRows[0]?.name ?? "Unknown", project[0].name, await nameForUser(updated[0].assignedToUserId), await nameForUser(updated[0].archivedBy)));
   } catch (err) {
     req.log.error({ err }, "Update photo error");
     res.status(500).json({ error: "server_error", message: "Failed to update photo" });
@@ -218,7 +238,7 @@ router.delete("/photos/:photoId", authenticate, async (req, res) => {
 
     const updated = await db.select().from(photosTable).where(eq(photosTable.id, req.params.photoId)).limit(1);
     const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, photo.uploadedBy)).limit(1);
-    res.json(formatPhoto(updated[0], userRows[0]?.name ?? "Unknown", project[0].name, await nameForUser(updated[0].assignedToUserId), await nameForUser(updated[0].archivedBy)));
+    res.json(await formatPhoto(updated[0], userRows[0]?.name ?? "Unknown", project[0].name, await nameForUser(updated[0].assignedToUserId), await nameForUser(updated[0].archivedBy)));
   } catch (err) {
     req.log.error({ err }, "Archive photo error");
     res.status(500).json({ error: "server_error", message: "Failed to archive issue" });
@@ -248,7 +268,7 @@ router.patch("/photos/:photoId/restore", authenticate, async (req, res) => {
 
     const updated = await db.select().from(photosTable).where(eq(photosTable.id, req.params.photoId)).limit(1);
     const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, photo.uploadedBy)).limit(1);
-    res.json(formatPhoto(updated[0], userRows[0]?.name ?? "Unknown", project[0].name, await nameForUser(updated[0].assignedToUserId), await nameForUser(updated[0].archivedBy)));
+    res.json(await formatPhoto(updated[0], userRows[0]?.name ?? "Unknown", project[0].name, await nameForUser(updated[0].assignedToUserId), await nameForUser(updated[0].archivedBy)));
   } catch (err) {
     req.log.error({ err }, "Restore photo error");
     res.status(500).json({ error: "server_error", message: "Failed to restore issue" });
@@ -281,7 +301,7 @@ router.delete("/photos/:photoId/photo", authenticate, async (req, res) => {
 
     const updated = await db.select().from(photosTable).where(eq(photosTable.id, req.params.photoId)).limit(1);
     const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, photo.uploadedBy)).limit(1);
-    res.json(formatPhoto(updated[0], userRows[0]?.name ?? "Unknown", project[0].name, await nameForUser(updated[0].assignedToUserId), await nameForUser(updated[0].archivedBy)));
+    res.json(await formatPhoto(updated[0], userRows[0]?.name ?? "Unknown", project[0].name, await nameForUser(updated[0].assignedToUserId), await nameForUser(updated[0].archivedBy)));
   } catch (err) {
     req.log.error({ err }, "Remove photo error");
     res.status(500).json({ error: "server_error", message: "Failed to remove photo" });
@@ -307,12 +327,15 @@ router.get("/issues", authenticate, async (req, res) => {
         inArray(photosTable.projectId, projectIds),
         issueCategoryFilter(),
         archived === "true" ? isNotNull(photosTable.archivedAt) : isNull(photosTable.archivedAt),
+        // A portal member's draft (not yet submitted) never appears in the PM
+        // triage queue — this is the whole point of save-vs-submit.
+        isNotNull(photosTable.submittedAt),
       ))
       .orderBy(photosTable.takenAt);
 
     const result = await Promise.all(photos.map(async (p) => {
       const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, p.uploadedBy)).limit(1);
-      return formatPhoto(p, userRows[0]?.name ?? "Unknown", projectNameMap[p.projectId], await nameForUser(p.assignedToUserId), await nameForUser(p.archivedBy));
+      return await formatPhoto(p, userRows[0]?.name ?? "Unknown", projectNameMap[p.projectId], await nameForUser(p.assignedToUserId), await nameForUser(p.archivedBy));
     }));
 
     res.json(result);
@@ -363,6 +386,10 @@ router.post("/projects/:projectId/photos", authenticate, async (req, res) => {
       status: isIssue ? "open" : null,
       assignedToUserId: assignedToUserId || null,
       dueDate: dueDate || null,
+      // Dashboard-created photos have always been immediately visible to the
+      // PM (they ARE the PM) — no draft step, unlike a portal-reported issue.
+      submittedAt: new Date(),
+      submittedBy: req.user!.id,
     });
 
     if (isIssue) {
@@ -394,8 +421,8 @@ router.post("/projects/:projectId/photos", authenticate, async (req, res) => {
     }
 
     const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
-    res.status(201).json(formatPhoto(
-      { id, projectId: req.params.projectId, uploadedBy: req.user!.id, photoUrl: photoUrl ?? null, category, description: description ?? null, zone: zone ?? null, referenceNumber: refNum, latitude: latitude ?? null, longitude: longitude ?? null, takenAt: new Date(), status: isIssue ? "open" : null, resolvedAt: null, assignedToUserId: assignedToUserId || null, dueDate: dueDate || null, closureReason: null, closureNote: null, updatedAt: null, archivedAt: null, archivedBy: null, archiveReason: null, photoRemovedAt: null, photoRemovedBy: null },
+    res.status(201).json(await formatPhoto(
+      { id, projectId: req.params.projectId, uploadedBy: req.user!.id, photoUrl: photoUrl ?? null, category, description: description ?? null, zone: zone ?? null, referenceNumber: refNum, latitude: latitude ?? null, longitude: longitude ?? null, takenAt: new Date(), status: isIssue ? "open" : null, resolvedAt: null, assignedToUserId: assignedToUserId || null, dueDate: dueDate || null, closureReason: null, closureNote: null, updatedAt: null, archivedAt: null, archivedBy: null, archiveReason: null, photoRemovedAt: null, photoRemovedBy: null, submittedAt: new Date(), submittedBy: req.user!.id },
       userRows[0]?.name ?? "Unknown",
       project[0].name,
       await nameForUser(assignedToUserId),
@@ -404,6 +431,33 @@ router.post("/projects/:projectId/photos", authenticate, async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Log photo error");
     res.status(500).json({ error: "server_error", message: "Failed to log photo" });
+  }
+});
+
+// POST /api/photos/:photoId/notes — PM-side append-only note (the dashboard
+// counterpart of the portal's POST /portal/site-issues/:issueId/notes).
+// Requires the issue to already be submitted — same rule as the portal side.
+router.post("/photos/:photoId/notes", authenticate, async (req, res) => {
+  try {
+    const rows = await db.select().from(photosTable).where(eq(photosTable.id, req.params.photoId)).limit(1);
+    if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Photo not found" }); return; }
+    const photo = rows[0];
+    const project = await db.select({ id: projectsTable.id, name: projectsTable.name })
+      .from(projectsTable)
+      .where(and(eq(projectsTable.id, photo.projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!project[0]) { res.status(403).json({ error: "forbidden" }); return; }
+    if (!photo.submittedAt) { res.status(400).json({ error: "validation_error", message: "This issue hasn't been submitted yet." }); return; }
+    const { body } = req.body as { body?: string };
+    if (!body || !body.trim()) { res.status(400).json({ error: "validation_error", message: "A note body is required." }); return; }
+
+    await addNote({ itemType: "site_issue", itemId: photo.id, projectId: photo.projectId, authorId: req.user!.id, body: body.trim() });
+
+    const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, photo.uploadedBy)).limit(1);
+    res.status(201).json(await formatPhoto(photo, userRows[0]?.name ?? "Unknown", project[0].name, await nameForUser(photo.assignedToUserId), await nameForUser(photo.archivedBy)));
+  } catch (err) {
+    req.log.error({ err }, "Add issue note error");
+    res.status(500).json({ error: "server_error", message: "Failed to add note" });
   }
 });
 

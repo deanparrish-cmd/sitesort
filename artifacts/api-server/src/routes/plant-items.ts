@@ -9,6 +9,7 @@ import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { logActivity } from "../lib/activity";
 import { CreatePlantItemBody, UpdatePlantItemBody, CreatePlantItemAttachmentBody } from "@workspace/api-zod";
+import { notesFor, addNote } from "../lib/portal-submission-notes";
 
 const router: IRouter = Router();
 
@@ -57,6 +58,10 @@ async function serializeItems(items: ItemRow[]) {
   const updaterName = new Map(updaters.map(u => [u.id, u.name]));
   const supplierName = new Map(suppliers.map(s => [s.id, s.name]));
   const attachmentCount = new Map(attachmentCounts.map(a => [a.plantItemId, a.count]));
+  const draftUpdaterIds = [...new Set(items.map(i => i.portalDraftUpdatedBy).filter((x): x is string => !!x))];
+  const draftUpdaters = draftUpdaterIds.length ? await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(inArray(usersTable.id, draftUpdaterIds)) : [];
+  const draftUpdaterName = new Map(draftUpdaters.map(u => [u.id, u.name]));
+  const submissionNotesByItem = new Map(await Promise.all(items.map(async i => [i.id, await notesFor("plant_item", i.id)] as const)));
   return items.map(i => ({
     id: i.id,
     projectId: i.projectId,
@@ -77,6 +82,15 @@ async function serializeItems(items: ItemRow[]) {
     lastUpdatedAt: i.lastUpdatedAt ? i.lastUpdatedAt.toISOString() : null,
     attachmentCount: attachmentCount.get(i.id) ?? 0,
     createdAt: i.createdAt.toISOString(),
+    // A portal member's pending (not-yet-submitted) proposed change — visible
+    // to the PM so they know an edit is in flight, but the fields above (the
+    // live/submitted values) are untouched until the member submits it.
+    pendingPortalDraft: i.portalDraftUpdatedAt ? {
+      status: i.portalDraftStatus, location: i.portalDraftLocation, notes: i.portalDraftNotes,
+      updatedByName: i.portalDraftUpdatedBy ? (draftUpdaterName.get(i.portalDraftUpdatedBy) ?? null) : null,
+      updatedAt: i.portalDraftUpdatedAt.toISOString(),
+    } : null,
+    submissionNotes: submissionNotesByItem.get(i.id) ?? [],
   }));
 }
 
@@ -178,6 +192,30 @@ router.patch("/projects/:projectId/plant-items/:itemId", authenticate, async (re
   } catch (err) {
     req.log.error({ err }, "Update plant item error");
     res.status(500).json({ error: "server_error", message: "Failed to update item" });
+  }
+});
+
+// POST /api/projects/:projectId/plant-items/:itemId/notes — PM-side
+// append-only note (the dashboard counterpart of the portal's
+// POST /portal/plant-materials/:itemId/notes).
+router.post("/projects/:projectId/plant-items/:itemId/notes", authenticate, async (req, res) => {
+  try {
+    if (!requireInternal(req, res)) return;
+    const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
+    if (!project) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+    const existing = await db.select({ id: plantItemsTable.id }).from(plantItemsTable)
+      .where(and(eq(plantItemsTable.id, req.params.itemId), eq(plantItemsTable.projectId, project.id))).limit(1);
+    if (!existing[0]) { res.status(404).json({ error: "not_found", message: "Item not found" }); return; }
+    const { body } = req.body as { body?: string };
+    if (!body || !body.trim()) { res.status(400).json({ error: "validation_error", message: "A note body is required." }); return; }
+
+    await addNote({ itemType: "plant_item", itemId: req.params.itemId, projectId: project.id, authorId: req.user!.id, body: body.trim() });
+
+    const updated = await db.select().from(plantItemsTable).where(eq(plantItemsTable.id, req.params.itemId)).limit(1);
+    res.status(201).json((await serializeItems(updated))[0]);
+  } catch (err) {
+    req.log.error({ err }, "Add plant item note error");
+    res.status(500).json({ error: "server_error", message: "Failed to add note" });
   }
 });
 

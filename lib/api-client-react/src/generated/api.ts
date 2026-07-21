@@ -21,6 +21,7 @@ import type {
   AcknowledgeRequest,
   AddInsuranceRequest,
   AddMemberRequest,
+  AddPortalSubmissionNoteRequest,
   AddProjectMemberPersonRequest,
   AdminDeletePhoto200,
   ArchivePhotoRequest,
@@ -41,6 +42,7 @@ import type {
   Distribution,
   Document,
   DocumentDetail,
+  EditPortalSiteIssueDraftBody,
   ErrorResponse,
   GenerateQrRequest,
   GetPortalChannelThreadParams,
@@ -4311,7 +4313,7 @@ export function useGetPortalPlantMaterialItem<
 }
 
 /**
- * @summary Update a plant/material item's status, location, or notes (requires can-update-plant-materials permission)
+ * @summary SAVE (draft only) a proposed status/location/notes change — writes to the member's pending draft, never the live/submitted values
  */
 export const getUpdatePortalPlantMaterialItemUrl = (itemId: string) => {
   return `/api/portal/plant-materials/${itemId}`;
@@ -4379,7 +4381,7 @@ export type UpdatePortalPlantMaterialItemMutationBody =
 export type UpdatePortalPlantMaterialItemMutationError = ErrorType<unknown>;
 
 /**
- * @summary Update a plant/material item's status, location, or notes (requires can-update-plant-materials permission)
+ * @summary SAVE (draft only) a proposed status/location/notes change — writes to the member's pending draft, never the live/submitted values
  */
 export const useUpdatePortalPlantMaterialItem = <
   TError = ErrorType<unknown>,
@@ -4399,6 +4401,185 @@ export const useUpdatePortalPlantMaterialItem = <
   TContext
 > => {
   return useMutation(getUpdatePortalPlantMaterialItemMutationOptions(options));
+};
+
+/**
+ * @summary Submit the pending draft — copies it onto the live status/location/notes (what the PM sees) with attribution, then clears the draft
+ */
+export const getSubmitPortalPlantMaterialItemUrl = (itemId: string) => {
+  return `/api/portal/plant-materials/${itemId}/submit`;
+};
+
+export const submitPortalPlantMaterialItem = async (
+  itemId: string,
+  options?: RequestInit,
+): Promise<PortalPlantItem> => {
+  return customFetch<PortalPlantItem>(
+    getSubmitPortalPlantMaterialItemUrl(itemId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getSubmitPortalPlantMaterialItemMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitPortalPlantMaterialItem>>,
+    TError,
+    { itemId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof submitPortalPlantMaterialItem>>,
+  TError,
+  { itemId: string },
+  TContext
+> => {
+  const mutationKey = ["submitPortalPlantMaterialItem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof submitPortalPlantMaterialItem>>,
+    { itemId: string }
+  > = (props) => {
+    const { itemId } = props ?? {};
+
+    return submitPortalPlantMaterialItem(itemId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SubmitPortalPlantMaterialItemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof submitPortalPlantMaterialItem>>
+>;
+
+export type SubmitPortalPlantMaterialItemMutationError =
+  ErrorType<ErrorResponse>;
+
+/**
+ * @summary Submit the pending draft — copies it onto the live status/location/notes (what the PM sees) with attribution, then clears the draft
+ */
+export const useSubmitPortalPlantMaterialItem = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitPortalPlantMaterialItem>>,
+    TError,
+    { itemId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof submitPortalPlantMaterialItem>>,
+  TError,
+  { itemId: string },
+  TContext
+> => {
+  return useMutation(getSubmitPortalPlantMaterialItemMutationOptions(options));
+};
+
+/**
+ * @summary Add a timestamped note to a plant item (append-only)
+ */
+export const getAddPortalPlantMaterialNoteUrl = (itemId: string) => {
+  return `/api/portal/plant-materials/${itemId}/notes`;
+};
+
+export const addPortalPlantMaterialNote = async (
+  itemId: string,
+  addPortalSubmissionNoteRequest: AddPortalSubmissionNoteRequest,
+  options?: RequestInit,
+): Promise<PortalPlantItem> => {
+  return customFetch<PortalPlantItem>(
+    getAddPortalPlantMaterialNoteUrl(itemId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(addPortalSubmissionNoteRequest),
+    },
+  );
+};
+
+export const getAddPortalPlantMaterialNoteMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addPortalPlantMaterialNote>>,
+    TError,
+    { itemId: string; data: BodyType<AddPortalSubmissionNoteRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addPortalPlantMaterialNote>>,
+  TError,
+  { itemId: string; data: BodyType<AddPortalSubmissionNoteRequest> },
+  TContext
+> => {
+  const mutationKey = ["addPortalPlantMaterialNote"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addPortalPlantMaterialNote>>,
+    { itemId: string; data: BodyType<AddPortalSubmissionNoteRequest> }
+  > = (props) => {
+    const { itemId, data } = props ?? {};
+
+    return addPortalPlantMaterialNote(itemId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AddPortalPlantMaterialNoteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addPortalPlantMaterialNote>>
+>;
+export type AddPortalPlantMaterialNoteMutationBody =
+  BodyType<AddPortalSubmissionNoteRequest>;
+export type AddPortalPlantMaterialNoteMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Add a timestamped note to a plant item (append-only)
+ */
+export const useAddPortalPlantMaterialNote = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addPortalPlantMaterialNote>>,
+    TError,
+    { itemId: string; data: BodyType<AddPortalSubmissionNoteRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof addPortalPlantMaterialNote>>,
+  TError,
+  { itemId: string; data: BodyType<AddPortalSubmissionNoteRequest> },
+  TContext
+> => {
+  return useMutation(getAddPortalPlantMaterialNoteMutationOptions(options));
 };
 
 /**
@@ -4745,6 +4926,184 @@ export const useUpdatePortalDailyReport = <
   TContext
 > => {
   return useMutation(getUpdatePortalDailyReportMutationOptions(options));
+};
+
+/**
+ * @summary Submit today's site diary to the PM — locks the narrative (further changes go through notes)
+ */
+export const getSubmitPortalDailyReportUrl = (date: string) => {
+  return `/api/portal/daily-report/${date}/submit`;
+};
+
+export const submitPortalDailyReport = async (
+  date: string,
+  options?: RequestInit,
+): Promise<PortalDailyReportHistoryItem> => {
+  return customFetch<PortalDailyReportHistoryItem>(
+    getSubmitPortalDailyReportUrl(date),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getSubmitPortalDailyReportMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitPortalDailyReport>>,
+    TError,
+    { date: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof submitPortalDailyReport>>,
+  TError,
+  { date: string },
+  TContext
+> => {
+  const mutationKey = ["submitPortalDailyReport"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof submitPortalDailyReport>>,
+    { date: string }
+  > = (props) => {
+    const { date } = props ?? {};
+
+    return submitPortalDailyReport(date, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SubmitPortalDailyReportMutationResult = NonNullable<
+  Awaited<ReturnType<typeof submitPortalDailyReport>>
+>;
+
+export type SubmitPortalDailyReportMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Submit today's site diary to the PM — locks the narrative (further changes go through notes)
+ */
+export const useSubmitPortalDailyReport = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitPortalDailyReport>>,
+    TError,
+    { date: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof submitPortalDailyReport>>,
+  TError,
+  { date: string },
+  TContext
+> => {
+  return useMutation(getSubmitPortalDailyReportMutationOptions(options));
+};
+
+/**
+ * @summary Add a timestamped note to a submitted report (append-only)
+ */
+export const getAddPortalDailyReportNoteUrl = (date: string) => {
+  return `/api/portal/daily-report/${date}/notes`;
+};
+
+export const addPortalDailyReportNote = async (
+  date: string,
+  addPortalSubmissionNoteRequest: AddPortalSubmissionNoteRequest,
+  options?: RequestInit,
+): Promise<PortalDailyReportHistoryItem> => {
+  return customFetch<PortalDailyReportHistoryItem>(
+    getAddPortalDailyReportNoteUrl(date),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(addPortalSubmissionNoteRequest),
+    },
+  );
+};
+
+export const getAddPortalDailyReportNoteMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addPortalDailyReportNote>>,
+    TError,
+    { date: string; data: BodyType<AddPortalSubmissionNoteRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addPortalDailyReportNote>>,
+  TError,
+  { date: string; data: BodyType<AddPortalSubmissionNoteRequest> },
+  TContext
+> => {
+  const mutationKey = ["addPortalDailyReportNote"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addPortalDailyReportNote>>,
+    { date: string; data: BodyType<AddPortalSubmissionNoteRequest> }
+  > = (props) => {
+    const { date, data } = props ?? {};
+
+    return addPortalDailyReportNote(date, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AddPortalDailyReportNoteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addPortalDailyReportNote>>
+>;
+export type AddPortalDailyReportNoteMutationBody =
+  BodyType<AddPortalSubmissionNoteRequest>;
+export type AddPortalDailyReportNoteMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Add a timestamped note to a submitted report (append-only)
+ */
+export const useAddPortalDailyReportNote = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addPortalDailyReportNote>>,
+    TError,
+    { date: string; data: BodyType<AddPortalSubmissionNoteRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof addPortalDailyReportNote>>,
+  TError,
+  { date: string; data: BodyType<AddPortalSubmissionNoteRequest> },
+  TContext
+> => {
+  return useMutation(getAddPortalDailyReportNoteMutationOptions(options));
 };
 
 /**
@@ -7912,6 +8271,266 @@ export const useUpdatePortalSiteIssue = <
   TContext
 > => {
   return useMutation(getUpdatePortalSiteIssueMutationOptions(options));
+};
+
+/**
+ * @summary Full edit of a draft issue's own fields (reporter-only, only while still a draft — 403 once submitted)
+ */
+export const getEditPortalSiteIssueDraftUrl = (issueId: string) => {
+  return `/api/portal/site-issues/${issueId}/edit`;
+};
+
+export const editPortalSiteIssueDraft = async (
+  issueId: string,
+  editPortalSiteIssueDraftBody: EditPortalSiteIssueDraftBody,
+  options?: RequestInit,
+): Promise<PortalIssue> => {
+  return customFetch<PortalIssue>(getEditPortalSiteIssueDraftUrl(issueId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(editPortalSiteIssueDraftBody),
+  });
+};
+
+export const getEditPortalSiteIssueDraftMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof editPortalSiteIssueDraft>>,
+    TError,
+    { issueId: string; data: BodyType<EditPortalSiteIssueDraftBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof editPortalSiteIssueDraft>>,
+  TError,
+  { issueId: string; data: BodyType<EditPortalSiteIssueDraftBody> },
+  TContext
+> => {
+  const mutationKey = ["editPortalSiteIssueDraft"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof editPortalSiteIssueDraft>>,
+    { issueId: string; data: BodyType<EditPortalSiteIssueDraftBody> }
+  > = (props) => {
+    const { issueId, data } = props ?? {};
+
+    return editPortalSiteIssueDraft(issueId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type EditPortalSiteIssueDraftMutationResult = NonNullable<
+  Awaited<ReturnType<typeof editPortalSiteIssueDraft>>
+>;
+export type EditPortalSiteIssueDraftMutationBody =
+  BodyType<EditPortalSiteIssueDraftBody>;
+export type EditPortalSiteIssueDraftMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Full edit of a draft issue's own fields (reporter-only, only while still a draft — 403 once submitted)
+ */
+export const useEditPortalSiteIssueDraft = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof editPortalSiteIssueDraft>>,
+    TError,
+    { issueId: string; data: BodyType<EditPortalSiteIssueDraftBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof editPortalSiteIssueDraft>>,
+  TError,
+  { issueId: string; data: BodyType<EditPortalSiteIssueDraftBody> },
+  TContext
+> => {
+  return useMutation(getEditPortalSiteIssueDraftMutationOptions(options));
+};
+
+/**
+ * @summary Submit a draft issue to the PM (reporter-only) — locks the original fields, adds it to the PM's triage queue
+ */
+export const getSubmitPortalSiteIssueUrl = (issueId: string) => {
+  return `/api/portal/site-issues/${issueId}/submit`;
+};
+
+export const submitPortalSiteIssue = async (
+  issueId: string,
+  options?: RequestInit,
+): Promise<PortalIssue> => {
+  return customFetch<PortalIssue>(getSubmitPortalSiteIssueUrl(issueId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getSubmitPortalSiteIssueMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitPortalSiteIssue>>,
+    TError,
+    { issueId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof submitPortalSiteIssue>>,
+  TError,
+  { issueId: string },
+  TContext
+> => {
+  const mutationKey = ["submitPortalSiteIssue"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof submitPortalSiteIssue>>,
+    { issueId: string }
+  > = (props) => {
+    const { issueId } = props ?? {};
+
+    return submitPortalSiteIssue(issueId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SubmitPortalSiteIssueMutationResult = NonNullable<
+  Awaited<ReturnType<typeof submitPortalSiteIssue>>
+>;
+
+export type SubmitPortalSiteIssueMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Submit a draft issue to the PM (reporter-only) — locks the original fields, adds it to the PM's triage queue
+ */
+export const useSubmitPortalSiteIssue = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitPortalSiteIssue>>,
+    TError,
+    { issueId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof submitPortalSiteIssue>>,
+  TError,
+  { issueId: string },
+  TContext
+> => {
+  return useMutation(getSubmitPortalSiteIssueMutationOptions(options));
+};
+
+/**
+ * @summary Add a timestamped note to a submitted issue (append-only — never edits the original)
+ */
+export const getAddPortalSiteIssueNoteUrl = (issueId: string) => {
+  return `/api/portal/site-issues/${issueId}/notes`;
+};
+
+export const addPortalSiteIssueNote = async (
+  issueId: string,
+  addPortalSubmissionNoteRequest: AddPortalSubmissionNoteRequest,
+  options?: RequestInit,
+): Promise<PortalIssue> => {
+  return customFetch<PortalIssue>(getAddPortalSiteIssueNoteUrl(issueId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(addPortalSubmissionNoteRequest),
+  });
+};
+
+export const getAddPortalSiteIssueNoteMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addPortalSiteIssueNote>>,
+    TError,
+    { issueId: string; data: BodyType<AddPortalSubmissionNoteRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addPortalSiteIssueNote>>,
+  TError,
+  { issueId: string; data: BodyType<AddPortalSubmissionNoteRequest> },
+  TContext
+> => {
+  const mutationKey = ["addPortalSiteIssueNote"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addPortalSiteIssueNote>>,
+    { issueId: string; data: BodyType<AddPortalSubmissionNoteRequest> }
+  > = (props) => {
+    const { issueId, data } = props ?? {};
+
+    return addPortalSiteIssueNote(issueId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AddPortalSiteIssueNoteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addPortalSiteIssueNote>>
+>;
+export type AddPortalSiteIssueNoteMutationBody =
+  BodyType<AddPortalSubmissionNoteRequest>;
+export type AddPortalSiteIssueNoteMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Add a timestamped note to a submitted issue (append-only — never edits the original)
+ */
+export const useAddPortalSiteIssueNote = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addPortalSiteIssueNote>>,
+    TError,
+    { issueId: string; data: BodyType<AddPortalSubmissionNoteRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof addPortalSiteIssueNote>>,
+  TError,
+  { issueId: string; data: BodyType<AddPortalSubmissionNoteRequest> },
+  TContext
+> => {
+  return useMutation(getAddPortalSiteIssueNoteMutationOptions(options));
 };
 
 /**

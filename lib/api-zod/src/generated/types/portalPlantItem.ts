@@ -7,7 +7,10 @@
  */
 import type { PlantItemAttachment } from "./plantItemAttachment";
 import type { PortalPlantItemCategory } from "./portalPlantItemCategory";
+import type { PortalPlantItemDraft } from "./portalPlantItemDraft";
+import type { PortalPlantItemLifecycleStatus } from "./portalPlantItemLifecycleStatus";
 import type { PortalPlantItemStatus } from "./portalPlantItemStatus";
+import type { PortalSubmissionNote } from "./portalSubmissionNote";
 
 /**
  * Gated serialization — never exposes share/audience data.
@@ -28,4 +31,9 @@ export interface PortalPlantItem {
   lastUpdatedByName?: string | null;
   lastUpdatedAt?: Date | null;
   attachments?: PlantItemAttachment[];
+  /** 'draft' means this member has a pending edit not yet submitted — the status/location/notes fields above stay the last-submitted values until they do. */
+  lifecycleStatus?: PortalPlantItemLifecycleStatus;
+  /** The member's pending, not-yet-submitted edit — reopen and keep editing before submitting. */
+  draft?: PortalPlantItemDraft;
+  submissionNotes?: PortalSubmissionNote[];
 }
