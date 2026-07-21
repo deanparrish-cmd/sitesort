@@ -9,3 +9,4 @@
 - [SiteSort invoice-project ownership](sitesort-invoice-project-ownership.md) — projectId is the single source of truth for where an invoice shows; move sets it, mark-unpaid clears it; gate share on attachment, mutations on capability.
 - [Subcontractor notes](subcontractor-notes-history.md) — two concepts: static blurb vs append-only timestamped reminders log; tenant-scope log APIs.
 - [Giant component splits](giant-component-split.md) — safe recipe: single state hook + context provider + verbatim JSX slices; SiteSort detail page uses this (detail/ dir).
+- [e2e fixture roles](e2e-fixture-roles.md) — dashboard JWT role comes from company_members.role; fixtures must use admin/project_manager/site_worker or authz 403s fake a bug.
