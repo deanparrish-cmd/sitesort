@@ -183,7 +183,8 @@
       "Bash(kill 84039 84038)",
       "Bash(pkill -f \"node artifacts/api-server/dist/index.js\")",
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(d[0]['id'], d[0]['name']\\)\")",
-      "Bash(LAYOUT_VIEWPORTS=360,768 timeout 300 pnpm run check:layout)"
+      "Bash(LAYOUT_VIEWPORTS=360,768 timeout 300 pnpm run check:layout)",
+      "Bash(curl *)"
     ]
   },
   "hooks": {
