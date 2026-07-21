@@ -104,8 +104,10 @@ This link expires in 24 hours. If you didn't create a SiteSort account, you can 
   });
 }
 
-export async function sendPasswordResetEmail(to: string, name: string, token: string) {
-  const link = `${APP_URL}/reset-password?token=${token}`;
+export async function sendPasswordResetEmail(to: string, name: string, token: string, context: "app" | "portal" = "app") {
+  const link = context === "portal"
+    ? `${APP_URL}/portal/reset-password?token=${token}`
+    : `${APP_URL}/reset-password?token=${token}`;
   const greeting = firstName(name);
   return send({
     to,
@@ -124,6 +126,34 @@ Hi ${greeting},
 We received a request to reset the password on your SiteSort account. Use the link below to choose a new password.
 
 Reset your password:
+${link}
+
+This link expires in 1 hour. If you didn't request this, your account is safe — just ignore this email.`),
+  });
+}
+
+// Forgot sign-off PIN (locked-out path — a signed-in user resets it in-app
+// with their password instead). Same token backbone as password resets.
+export async function sendPinResetEmail(to: string, name: string, token: string, context: "app" | "portal" = "app") {
+  const link = `${APP_URL}/reset-pin?token=${token}${context === "portal" ? "&context=portal" : ""}`;
+  const greeting = firstName(name);
+  return send({
+    to,
+    subject: "Reset your SiteSort sign-off PIN",
+    html: layout(`
+      ${h("Sign-off PIN reset requested")}
+      ${p(`Hi ${greeting},`)}
+      ${p("We received a request to reset the 4-digit sign-off PIN on your SiteSort account. Click the button below to choose a new PIN.")}
+      ${btn(link, "Reset PIN")}
+      ${muted(`This link expires in 1 hour. If you didn't request this, your account is safe — just ignore this email.<br>Button not working? Copy and paste this link:<br><a href="${link}" style="color:#ea580c;word-break:break-all;">${link}</a>`)}
+    `),
+    text: textLayout(`Sign-off PIN reset requested
+
+Hi ${greeting},
+
+We received a request to reset the 4-digit sign-off PIN on your SiteSort account. Use the link below to choose a new PIN.
+
+Reset your PIN:
 ${link}
 
 This link expires in 1 hour. If you didn't request this, your account is safe — just ignore this email.`),

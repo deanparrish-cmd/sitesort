@@ -109,6 +109,66 @@ export const SetSignOffPinResponse = zod.object({
 });
 
 /**
+ * Always returns the same generic success whether or not the email is registered. Rate-limited per email and per IP. The emailed link is single-use, hashed at rest, and expires in 60 minutes.
+ * @summary Request a password reset email (main account)
+ */
+export const ForgotPasswordBody = zod.object({
+  email: zod.string(),
+});
+
+export const ForgotPasswordResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * Consumes the single-use token. On success all existing sessions for the account are invalidated (dashboard tokens and portal sessions).
+ * @summary Set a new password using an emailed reset token
+ */
+export const ResetPasswordBody = zod.object({
+  token: zod.string(),
+  password: zod.string().describe("Minimum 8 characters."),
+});
+
+export const ResetPasswordResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * Same shared backbone as password resets — generic response, rate-limited, hashed single-use 60-minute token. A signed-in user should instead reset the PIN in-app with their password.
+ * @summary Request a sign-off PIN reset email (locked-out path)
+ */
+export const ForgotPinBody = zod.object({
+  email: zod.string(),
+  context: zod
+    .enum(["app", "portal"])
+    .optional()
+    .describe(
+      "Which reset page the emailed link should target. Defaults to app.",
+    ),
+});
+
+export const ForgotPinResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * Consumes the single-use token; the new 4-digit PIN is stored hashed and the reset is recorded in the PIN audit log.
+ * @summary Set a new sign-off PIN using an emailed reset token
+ */
+export const ResetPinBody = zod.object({
+  token: zod.string(),
+  pin: zod.string().describe("Exactly 4 digits."),
+});
+
+export const ResetPinResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
  * @summary List all projects for the company
  */
 export const ListProjectsResponseItem = zod.object({
@@ -2800,6 +2860,33 @@ export const PortalLoginResponse = zod.object({
       }),
     )
     .optional(),
+});
+
+/**
+ * Same shared backbone as the main-app reset (a portal member is the same account underneath); the emailed link targets the portal reset page. Generic response — never reveals whether the email is registered. Rate-limited per email and per IP.
+ * @summary Request a portal-member password reset email
+ */
+export const PortalForgotPasswordBody = zod.object({
+  email: zod.string(),
+});
+
+export const PortalForgotPasswordResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * Consumes the single-use token. On success all existing sessions for the account are invalidated (portal sessions revoked, dashboard tokens rejected).
+ * @summary Set a new portal-member password using an emailed reset token
+ */
+export const PortalResetPasswordBody = zod.object({
+  token: zod.string(),
+  password: zod.string().describe("Minimum 8 characters."),
+});
+
+export const PortalResetPasswordResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
 });
 
 /**

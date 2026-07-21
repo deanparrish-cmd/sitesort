@@ -17,6 +17,8 @@ import {
 } from "../lib/email";
 import { parseFullPersonName } from "../lib/name-validation";
 import { setUserPin } from "../lib/pin";
+import { requestCredentialReset, consumeCredentialResetToken } from "../lib/credential-reset";
+import { completePasswordReset, completePinReset } from "../lib/credential-reset-complete";
 
 const router: IRouter = Router();
 
@@ -326,28 +328,14 @@ router.post("/auth/forgot-password", async (req, res) => {
       res.status(400).json({ error: "validation_error", message: "Email required" });
       return;
     }
-    const email = String(rawEmail).trim().toLowerCase();
-
-    const users = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
-    // Always return success to prevent email enumeration
-    if (users.length === 0) {
-      res.json({ success: true });
+    const { limited } = await requestCredentialReset({
+      email: String(rawEmail), kind: "password", context: "app", req,
+    });
+    if (limited) {
+      res.status(429).json({ error: "rate_limited", message: "Too many reset requests. Please try again later." });
       return;
     }
-
-    const user = users[0];
-    const resetToken = randomBytes(32).toString("hex");
-    const resetExpiry = new Date(Date.now() + 60 * 60 * 1000);
-
-    await db.update(usersTable).set({
-      passwordResetToken: resetToken,
-      passwordResetExpiry: resetExpiry,
-    }).where(eq(usersTable.id, user.id));
-
-    sendPasswordResetEmail(user.email, user.name, resetToken).catch(err =>
-      req.log.error({ err }, "Failed to send password reset email"),
-    );
-
+    // Identical response whether or not the account exists — no enumeration.
     res.json({ success: true });
   } catch (err) {
     req.log.error({ err }, "Forgot password error");
@@ -362,44 +350,82 @@ router.post("/auth/reset-password", async (req, res) => {
       res.status(400).json({ error: "validation_error", message: "Token and password required" });
       return;
     }
-    if (password.length < 8) {
+    if (String(password).length < 8) {
       res.status(400).json({ error: "validation_error", message: "Password must be at least 8 characters" });
       return;
     }
 
-    const users = await db.select().from(usersTable)
-      .where(eq(usersTable.passwordResetToken, token))
-      .limit(1);
-
-    if (users.length === 0) {
-      res.status(400).json({ error: "invalid_token", message: "Invalid or expired reset link" });
+    const consumed = await consumeCredentialResetToken(String(token), "password");
+    if (!consumed.ok) {
+      if (consumed.reason === "expired") {
+        res.status(400).json({ error: "token_expired", message: "This reset link has expired. Please request a new one." });
+      } else {
+        res.status(400).json({ error: "invalid_token", message: "This reset link is invalid or has already been used. Please request a new one." });
+      }
       return;
     }
 
-    const user = users[0];
-    if (user.passwordResetExpiry && user.passwordResetExpiry < new Date()) {
-      res.status(400).json({ error: "token_expired", message: "Reset link has expired" });
-      return;
-    }
-
-    const passwordHash = await bcrypt.hash(password, 10);
-    await db.update(usersTable).set({
-      passwordHash,
-      passwordResetToken: null,
-      passwordResetExpiry: null,
-      emailVerified: true,
-      emailVerificationToken: null,
-      emailVerificationExpiry: null,
-    }).where(eq(usersTable.id, user.id));
-
-    await clearAttempts(user.email).catch((err) =>
-      req.log.error({ err }, "Failed to clear login attempts after reset"),
-    );
-
+    await completePasswordReset(consumed.userId, String(password), req);
     res.json({ success: true });
   } catch (err) {
     req.log.error({ err }, "Reset password error");
     res.status(500).json({ error: "server_error", message: "Failed to reset password" });
+  }
+});
+
+// Forgot sign-off PIN — the locked-out path (email token). A signed-in user
+// resets their PIN in-app with their account password via POST /auth/pin.
+router.post("/auth/forgot-pin", async (req, res) => {
+  try {
+    const { email: rawEmail, context } = req.body ?? {};
+    if (!rawEmail) {
+      res.status(400).json({ error: "validation_error", message: "Email required" });
+      return;
+    }
+    const { limited } = await requestCredentialReset({
+      email: String(rawEmail),
+      kind: "pin",
+      context: context === "portal" ? "portal" : "app",
+      req,
+    });
+    if (limited) {
+      res.status(429).json({ error: "rate_limited", message: "Too many reset requests. Please try again later." });
+      return;
+    }
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Forgot PIN error");
+    res.status(500).json({ error: "server_error", message: "Failed to process request" });
+  }
+});
+
+router.post("/auth/reset-pin", async (req, res) => {
+  try {
+    const { token, pin } = req.body ?? {};
+    if (!token || !pin) {
+      res.status(400).json({ error: "validation_error", message: "Token and PIN required" });
+      return;
+    }
+    if (!/^\d{4}$/.test(String(pin))) {
+      res.status(400).json({ error: "validation_error", message: "PIN must be exactly 4 digits" });
+      return;
+    }
+
+    const consumed = await consumeCredentialResetToken(String(token), "pin");
+    if (!consumed.ok) {
+      if (consumed.reason === "expired") {
+        res.status(400).json({ error: "token_expired", message: "This reset link has expired. Please request a new one." });
+      } else {
+        res.status(400).json({ error: "invalid_token", message: "This reset link is invalid or has already been used. Please request a new one." });
+      }
+      return;
+    }
+
+    await completePinReset(consumed.userId, String(pin), req);
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Reset PIN error");
+    res.status(500).json({ error: "server_error", message: "Failed to reset PIN" });
   }
 });
 

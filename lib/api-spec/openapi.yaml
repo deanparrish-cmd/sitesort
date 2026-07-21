@@ -163,6 +163,114 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /auth/forgot-password:
+    post:
+      operationId: forgotPassword
+      tags: [auth]
+      security: []
+      summary: Request a password reset email (main account)
+      description: Always returns the same generic success whether or not the email is registered. Rate-limited per email and per IP. The emailed link is single-use, hashed at rest, and expires in 60 minutes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotCredentialRequest"
+      responses:
+        "200":
+          description: Generic acknowledgement (no account enumeration)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "429":
+          description: Too many reset requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/reset-password:
+    post:
+      operationId: resetPassword
+      tags: [auth]
+      security: []
+      summary: Set a new password using an emailed reset token
+      description: Consumes the single-use token. On success all existing sessions for the account are invalidated (dashboard tokens and portal sessions).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordRequest"
+      responses:
+        "200":
+          description: Password reset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Invalid, used, or expired token (error is invalid_token or token_expired)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/forgot-pin:
+    post:
+      operationId: forgotPin
+      tags: [auth]
+      security: []
+      summary: Request a sign-off PIN reset email (locked-out path)
+      description: Same shared backbone as password resets — generic response, rate-limited, hashed single-use 60-minute token. A signed-in user should instead reset the PIN in-app with their password.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPinRequest"
+      responses:
+        "200":
+          description: Generic acknowledgement (no account enumeration)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "429":
+          description: Too many reset requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/reset-pin:
+    post:
+      operationId: resetPin
+      tags: [auth]
+      security: []
+      summary: Set a new sign-off PIN using an emailed reset token
+      description: Consumes the single-use token; the new 4-digit PIN is stored hashed and the reset is recorded in the PIN audit log.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPinRequest"
+      responses:
+        "200":
+          description: PIN reset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Invalid, used, or expired token (error is invalid_token or token_expired)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /projects:
     get:
       operationId: listProjects
@@ -2000,6 +2108,60 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /portal/forgot-password:
+    post:
+      operationId: portalForgotPassword
+      tags: [portal]
+      security: []
+      summary: Request a portal-member password reset email
+      description: Same shared backbone as the main-app reset (a portal member is the same account underneath); the emailed link targets the portal reset page. Generic response — never reveals whether the email is registered. Rate-limited per email and per IP.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotCredentialRequest"
+      responses:
+        "200":
+          description: Generic acknowledgement (no account enumeration)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "429":
+          description: Too many reset requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /portal/reset-password:
+    post:
+      operationId: portalResetPassword
+      tags: [portal]
+      security: []
+      summary: Set a new portal-member password using an emailed reset token
+      description: Consumes the single-use token. On success all existing sessions for the account are invalidated (portal sessions revoked, dashboard tokens rejected).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordRequest"
+      responses:
+        "200":
+          description: Password reset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Invalid, used, or expired token (error is invalid_token or token_expired)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /portal/invite/{token}:
     get:
       operationId: getPortalInvite
@@ -3577,6 +3739,44 @@ components:
           type: string
           description: Exactly 4 digits.
       required: [currentPassword, pin]
+
+    ForgotCredentialRequest:
+      type: object
+      properties:
+        email:
+          type: string
+      required: [email]
+
+    ForgotPinRequest:
+      type: object
+      properties:
+        email:
+          type: string
+        context:
+          type: string
+          enum: [app, portal]
+          description: Which reset page the emailed link should target. Defaults to app.
+      required: [email]
+
+    ResetPasswordRequest:
+      type: object
+      properties:
+        token:
+          type: string
+        password:
+          type: string
+          description: Minimum 8 characters.
+      required: [token, password]
+
+    ResetPinRequest:
+      type: object
+      properties:
+        token:
+          type: string
+        pin:
+          type: string
+          description: Exactly 4 digits.
+      required: [token, pin]
 
     DistributeRequest:
       type: object

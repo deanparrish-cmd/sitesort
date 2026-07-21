@@ -31,6 +31,10 @@ export const usersTable = pgTable("users", {
   emailVerificationExpiry: timestamp("email_verification_expiry"),
   passwordResetToken: text("password_reset_token"),
   passwordResetExpiry: timestamp("password_reset_expiry"),
+  // Dashboard JWTs issued before this instant are rejected by `authenticate`.
+  // Set to now() on password reset so a compromised account can't stay logged
+  // in elsewhere (portal sessions are revoked separately via portal_sessions).
+  sessionsInvalidBefore: timestamp("sessions_invalid_before"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   lastActiveAt: timestamp("last_active_at"),
 });

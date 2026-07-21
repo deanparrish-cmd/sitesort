@@ -37,6 +37,15 @@ export function useSignOffFlow({ hasPin, acknowledgeUrl, setPinUrl, authHeaders,
     setTarget(doc);
   };
 
+  // "Forgot PIN?" — signed-in path: switch the dialog to set-a-new-PIN mode,
+  // re-verified with the account password (server-side via setPinUrl). A user
+  // locked out of the account entirely uses the emailed reset link instead.
+  const forgotPin = () => {
+    setError(null);
+    setPin("");
+    setSetPinMode(true);
+  };
+
   const close = () => {
     setTarget(null);
     setError(null);
@@ -105,7 +114,7 @@ export function useSignOffFlow({ hasPin, acknowledgeUrl, setPinUrl, authHeaders,
   };
 
   return {
-    target, open, close,
+    target, open, close, forgotPin,
     pin, setPin,
     setPinMode,
     password, setPassword,

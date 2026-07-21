@@ -389,6 +389,13 @@ function SignOffPinCard({ flow }: { flow: ReturnType<typeof useSignOffFlow> }) {
             placeholder="••••"
             className="mt-1 w-full min-h-11 rounded-xl border border-border bg-background px-3 text-sm tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-primary/40"
           />
+          <button
+            type="button"
+            onClick={flow.forgotPin}
+            className="mt-2 text-xs text-primary hover:underline"
+          >
+            Forgot your PIN? Reset it with your password
+          </button>
         </div>
       )}
       {flow.error && <p className="mt-2 text-xs text-destructive">{flow.error}</p>}

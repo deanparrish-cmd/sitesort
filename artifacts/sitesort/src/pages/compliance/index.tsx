@@ -1034,6 +1034,13 @@ export default function CompliancePage() {
                   placeholder="••••"
                   autoFocus
                 />
+                <button
+                  type="button"
+                  onClick={signOff.forgotPin}
+                  className="text-xs text-primary hover:underline"
+                >
+                  Forgot your PIN? Reset it with your password
+                </button>
               </div>
             )}
 

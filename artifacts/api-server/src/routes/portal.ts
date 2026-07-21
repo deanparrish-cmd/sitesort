@@ -33,6 +33,8 @@ import { isReportLocked, upsertManagerReport, contributorsForReport, hasManagerC
 import { notesFor, addNote } from "../lib/portal-submission-notes";
 import { isPinLockedOut, recordFailedPinAttempt, clearPinAttempts } from "../lib/pin-attempts";
 import { setUserPin } from "../lib/pin";
+import { requestCredentialReset, consumeCredentialResetToken } from "../lib/credential-reset";
+import { completePasswordReset } from "../lib/credential-reset-complete";
 import { createRequire } from "module";
 import type { Archiver, ArchiverOptions } from "archiver";
 const nodeRequire = createRequire(import.meta.url);
@@ -413,6 +415,62 @@ router.post("/portal/login", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Portal login error");
     res.status(500).json({ error: "server_error", message: "Login failed" });
+  }
+});
+
+// POST /api/portal/forgot-password — public. Same shared reset backbone as the
+// main app (a portal member is the same users row underneath); "portal" context
+// only changes the email's link target and copy. Generic response — never
+// reveals whether the email is registered.
+router.post("/portal/forgot-password", async (req, res) => {
+  try {
+    const { email: rawEmail } = req.body ?? {};
+    if (!rawEmail) {
+      res.status(400).json({ error: "validation_error", message: "Email required" });
+      return;
+    }
+    const { limited } = await requestCredentialReset({
+      email: String(rawEmail), kind: "password", context: "portal", req,
+    });
+    if (limited) {
+      res.status(429).json({ error: "rate_limited", message: "Too many reset requests. Please try again later." });
+      return;
+    }
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Portal forgot password error");
+    res.status(500).json({ error: "server_error", message: "Failed to process request" });
+  }
+});
+
+// POST /api/portal/reset-password — public. Consumes a single-use token and
+// sets the new password; all existing sessions (portal + dashboard) are
+// invalidated by completePasswordReset.
+router.post("/portal/reset-password", async (req, res) => {
+  try {
+    const { token, password } = req.body ?? {};
+    if (!token || !password) {
+      res.status(400).json({ error: "validation_error", message: "Token and password required" });
+      return;
+    }
+    if (String(password).length < 8) {
+      res.status(400).json({ error: "validation_error", message: "Password must be at least 8 characters" });
+      return;
+    }
+    const consumed = await consumeCredentialResetToken(String(token), "password");
+    if (!consumed.ok) {
+      if (consumed.reason === "expired") {
+        res.status(400).json({ error: "token_expired", message: "This reset link has expired. Please request a new one." });
+      } else {
+        res.status(400).json({ error: "invalid_token", message: "This reset link is invalid or has already been used. Please request a new one." });
+      }
+      return;
+    }
+    await completePasswordReset(consumed.userId, String(password), req);
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Portal reset password error");
+    res.status(500).json({ error: "server_error", message: "Failed to reset password" });
   }
 });
 

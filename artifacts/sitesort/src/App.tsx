@@ -53,6 +53,10 @@ const Register = lazyWithRetry(() => import("@/pages/auth/register"));
 const VerifyEmail = lazyWithRetry(() => import("@/pages/auth/verify-email"));
 const ForgotPassword = lazyWithRetry(() => import("@/pages/auth/forgot-password"));
 const ResetPassword = lazyWithRetry(() => import("@/pages/auth/reset-password"));
+const ForgotPin = lazyWithRetry(() => import("@/pages/auth/forgot-pin"));
+const ResetPin = lazyWithRetry(() => import("@/pages/auth/reset-pin"));
+const PortalForgotPassword = lazyWithRetry(() => import("@/pages/portal/forgot-password"));
+const PortalResetPassword = lazyWithRetry(() => import("@/pages/portal/reset-password"));
 const Dashboard = lazyWithRetry(() => import("@/pages/dashboard"));
 const ProjectsList = lazyWithRetry(() => import("@/pages/projects"));
 const ProjectDetail = lazyWithRetry(() => import("@/pages/projects/detail"));
@@ -112,6 +116,8 @@ function Router() {
       <Route path="/verify-email" component={VerifyEmail} />
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password" component={ResetPassword} />
+      <Route path="/forgot-pin" component={ForgotPin} />
+      <Route path="/reset-pin" component={ResetPin} />
 
       {/* Authenticated Routes */}
       <Route path="/dashboard" component={Dashboard} />
@@ -138,6 +144,8 @@ function Router() {
       {/* Team Portal (member-facing). Login/accept must precede /portal/:section. */}
       <Route path="/portal/login" component={PortalLogin} />
       <Route path="/portal/accept/:token" component={PortalAccept} />
+      <Route path="/portal/forgot-password" component={PortalForgotPassword} />
+      <Route path="/portal/reset-password" component={PortalResetPassword} />
       <Route path="/portal" ><Redirect to="/portal/overview" /></Route>
       <Route path="/portal/:section" component={PortalSection} />
 

@@ -44,6 +44,8 @@ import type {
   DocumentDetail,
   EditPortalSiteIssueDraftBody,
   ErrorResponse,
+  ForgotCredentialRequest,
+  ForgotPinRequest,
   GenerateQrRequest,
   GetPortalChannelThreadParams,
   GetPortalDmThreadParams,
@@ -115,6 +117,8 @@ import type {
   RemoveContactResponse,
   RemoveMemberResponse,
   ResendInviteResponse,
+  ResetPasswordRequest,
+  ResetPinRequest,
   ReviewMemberDocumentRequest,
   SendPortalMessageRequest,
   SetPinRequest,
@@ -626,6 +630,354 @@ export const useSetSignOffPin = <
   TContext
 > => {
   return useMutation(getSetSignOffPinMutationOptions(options));
+};
+
+/**
+ * Always returns the same generic success whether or not the email is registered. Rate-limited per email and per IP. The emailed link is single-use, hashed at rest, and expires in 60 minutes.
+ * @summary Request a password reset email (main account)
+ */
+export const getForgotPasswordUrl = () => {
+  return `/api/auth/forgot-password`;
+};
+
+export const forgotPassword = async (
+  forgotCredentialRequest: ForgotCredentialRequest,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getForgotPasswordUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(forgotCredentialRequest),
+  });
+};
+
+export const getForgotPasswordMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof forgotPassword>>,
+    TError,
+    { data: BodyType<ForgotCredentialRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof forgotPassword>>,
+  TError,
+  { data: BodyType<ForgotCredentialRequest> },
+  TContext
+> => {
+  const mutationKey = ["forgotPassword"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof forgotPassword>>,
+    { data: BodyType<ForgotCredentialRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return forgotPassword(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ForgotPasswordMutationResult = NonNullable<
+  Awaited<ReturnType<typeof forgotPassword>>
+>;
+export type ForgotPasswordMutationBody = BodyType<ForgotCredentialRequest>;
+export type ForgotPasswordMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Request a password reset email (main account)
+ */
+export const useForgotPassword = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof forgotPassword>>,
+    TError,
+    { data: BodyType<ForgotCredentialRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof forgotPassword>>,
+  TError,
+  { data: BodyType<ForgotCredentialRequest> },
+  TContext
+> => {
+  return useMutation(getForgotPasswordMutationOptions(options));
+};
+
+/**
+ * Consumes the single-use token. On success all existing sessions for the account are invalidated (dashboard tokens and portal sessions).
+ * @summary Set a new password using an emailed reset token
+ */
+export const getResetPasswordUrl = () => {
+  return `/api/auth/reset-password`;
+};
+
+export const resetPassword = async (
+  resetPasswordRequest: ResetPasswordRequest,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getResetPasswordUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(resetPasswordRequest),
+  });
+};
+
+export const getResetPasswordMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resetPassword>>,
+    TError,
+    { data: BodyType<ResetPasswordRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof resetPassword>>,
+  TError,
+  { data: BodyType<ResetPasswordRequest> },
+  TContext
+> => {
+  const mutationKey = ["resetPassword"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof resetPassword>>,
+    { data: BodyType<ResetPasswordRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return resetPassword(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ResetPasswordMutationResult = NonNullable<
+  Awaited<ReturnType<typeof resetPassword>>
+>;
+export type ResetPasswordMutationBody = BodyType<ResetPasswordRequest>;
+export type ResetPasswordMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Set a new password using an emailed reset token
+ */
+export const useResetPassword = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resetPassword>>,
+    TError,
+    { data: BodyType<ResetPasswordRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof resetPassword>>,
+  TError,
+  { data: BodyType<ResetPasswordRequest> },
+  TContext
+> => {
+  return useMutation(getResetPasswordMutationOptions(options));
+};
+
+/**
+ * Same shared backbone as password resets — generic response, rate-limited, hashed single-use 60-minute token. A signed-in user should instead reset the PIN in-app with their password.
+ * @summary Request a sign-off PIN reset email (locked-out path)
+ */
+export const getForgotPinUrl = () => {
+  return `/api/auth/forgot-pin`;
+};
+
+export const forgotPin = async (
+  forgotPinRequest: ForgotPinRequest,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getForgotPinUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(forgotPinRequest),
+  });
+};
+
+export const getForgotPinMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof forgotPin>>,
+    TError,
+    { data: BodyType<ForgotPinRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof forgotPin>>,
+  TError,
+  { data: BodyType<ForgotPinRequest> },
+  TContext
+> => {
+  const mutationKey = ["forgotPin"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof forgotPin>>,
+    { data: BodyType<ForgotPinRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return forgotPin(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ForgotPinMutationResult = NonNullable<
+  Awaited<ReturnType<typeof forgotPin>>
+>;
+export type ForgotPinMutationBody = BodyType<ForgotPinRequest>;
+export type ForgotPinMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Request a sign-off PIN reset email (locked-out path)
+ */
+export const useForgotPin = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof forgotPin>>,
+    TError,
+    { data: BodyType<ForgotPinRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof forgotPin>>,
+  TError,
+  { data: BodyType<ForgotPinRequest> },
+  TContext
+> => {
+  return useMutation(getForgotPinMutationOptions(options));
+};
+
+/**
+ * Consumes the single-use token; the new 4-digit PIN is stored hashed and the reset is recorded in the PIN audit log.
+ * @summary Set a new sign-off PIN using an emailed reset token
+ */
+export const getResetPinUrl = () => {
+  return `/api/auth/reset-pin`;
+};
+
+export const resetPin = async (
+  resetPinRequest: ResetPinRequest,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getResetPinUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(resetPinRequest),
+  });
+};
+
+export const getResetPinMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resetPin>>,
+    TError,
+    { data: BodyType<ResetPinRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof resetPin>>,
+  TError,
+  { data: BodyType<ResetPinRequest> },
+  TContext
+> => {
+  const mutationKey = ["resetPin"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof resetPin>>,
+    { data: BodyType<ResetPinRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return resetPin(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ResetPinMutationResult = NonNullable<
+  Awaited<ReturnType<typeof resetPin>>
+>;
+export type ResetPinMutationBody = BodyType<ResetPinRequest>;
+export type ResetPinMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Set a new sign-off PIN using an emailed reset token
+ */
+export const useResetPin = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resetPin>>,
+    TError,
+    { data: BodyType<ResetPinRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof resetPin>>,
+  TError,
+  { data: BodyType<ResetPinRequest> },
+  TContext
+> => {
+  return useMutation(getResetPinMutationOptions(options));
 };
 
 /**
@@ -7624,6 +7976,181 @@ export const usePortalLogin = <
   TContext
 > => {
   return useMutation(getPortalLoginMutationOptions(options));
+};
+
+/**
+ * Same shared backbone as the main-app reset (a portal member is the same account underneath); the emailed link targets the portal reset page. Generic response — never reveals whether the email is registered. Rate-limited per email and per IP.
+ * @summary Request a portal-member password reset email
+ */
+export const getPortalForgotPasswordUrl = () => {
+  return `/api/portal/forgot-password`;
+};
+
+export const portalForgotPassword = async (
+  forgotCredentialRequest: ForgotCredentialRequest,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getPortalForgotPasswordUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(forgotCredentialRequest),
+  });
+};
+
+export const getPortalForgotPasswordMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof portalForgotPassword>>,
+    TError,
+    { data: BodyType<ForgotCredentialRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof portalForgotPassword>>,
+  TError,
+  { data: BodyType<ForgotCredentialRequest> },
+  TContext
+> => {
+  const mutationKey = ["portalForgotPassword"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof portalForgotPassword>>,
+    { data: BodyType<ForgotCredentialRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return portalForgotPassword(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PortalForgotPasswordMutationResult = NonNullable<
+  Awaited<ReturnType<typeof portalForgotPassword>>
+>;
+export type PortalForgotPasswordMutationBody =
+  BodyType<ForgotCredentialRequest>;
+export type PortalForgotPasswordMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Request a portal-member password reset email
+ */
+export const usePortalForgotPassword = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof portalForgotPassword>>,
+    TError,
+    { data: BodyType<ForgotCredentialRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof portalForgotPassword>>,
+  TError,
+  { data: BodyType<ForgotCredentialRequest> },
+  TContext
+> => {
+  return useMutation(getPortalForgotPasswordMutationOptions(options));
+};
+
+/**
+ * Consumes the single-use token. On success all existing sessions for the account are invalidated (portal sessions revoked, dashboard tokens rejected).
+ * @summary Set a new portal-member password using an emailed reset token
+ */
+export const getPortalResetPasswordUrl = () => {
+  return `/api/portal/reset-password`;
+};
+
+export const portalResetPassword = async (
+  resetPasswordRequest: ResetPasswordRequest,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getPortalResetPasswordUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(resetPasswordRequest),
+  });
+};
+
+export const getPortalResetPasswordMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof portalResetPassword>>,
+    TError,
+    { data: BodyType<ResetPasswordRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof portalResetPassword>>,
+  TError,
+  { data: BodyType<ResetPasswordRequest> },
+  TContext
+> => {
+  const mutationKey = ["portalResetPassword"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof portalResetPassword>>,
+    { data: BodyType<ResetPasswordRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return portalResetPassword(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PortalResetPasswordMutationResult = NonNullable<
+  Awaited<ReturnType<typeof portalResetPassword>>
+>;
+export type PortalResetPasswordMutationBody = BodyType<ResetPasswordRequest>;
+export type PortalResetPasswordMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Set a new portal-member password using an emailed reset token
+ */
+export const usePortalResetPassword = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof portalResetPassword>>,
+    TError,
+    { data: BodyType<ResetPasswordRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof portalResetPassword>>,
+  TError,
+  { data: BodyType<ResetPasswordRequest> },
+  TContext
+> => {
+  return useMutation(getPortalResetPasswordMutationOptions(options));
 };
 
 /**

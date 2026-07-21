@@ -16,3 +16,4 @@ To run an api-server lib function (e.g. `generateDailyReportForProject`) standal
 **Why:** verifying collation/DB logic end-to-end needed the real function against the real DB; HTTP + JWT was a dead end in the sandbox. Counts/content can also just be spot-checked with `executeSql`.
 
 - Dashboard JWTs are signed with claims { id, companyId, role } — auth middleware reads payload.id, not userId; a hand-minted token with userId "works" for authz-by-role but drops audit rows (activity_log.user_id NOT NULL).
+- Ad-hoc Node scripts needing the `pg` driver must be run from `lib/db/` (only workspace package that installs pg); scripts in /tmp or artifacts/api-server fail module resolution.

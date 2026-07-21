@@ -302,6 +302,39 @@ export interface SetPinRequest {
   pin: string;
 }
 
+export interface ForgotCredentialRequest {
+  email: string;
+}
+
+/**
+ * Which reset page the emailed link should target. Defaults to app.
+ */
+export type ForgotPinRequestContext =
+  (typeof ForgotPinRequestContext)[keyof typeof ForgotPinRequestContext];
+
+export const ForgotPinRequestContext = {
+  app: "app",
+  portal: "portal",
+} as const;
+
+export interface ForgotPinRequest {
+  email: string;
+  /** Which reset page the emailed link should target. Defaults to app. */
+  context?: ForgotPinRequestContext;
+}
+
+export interface ResetPasswordRequest {
+  token: string;
+  /** Minimum 8 characters. */
+  password: string;
+}
+
+export interface ResetPinRequest {
+  token: string;
+  /** Exactly 4 digits. */
+  pin: string;
+}
+
 export interface DistributeRequest {
   userIds: string[];
 }
