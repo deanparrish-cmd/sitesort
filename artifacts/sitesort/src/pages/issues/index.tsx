@@ -7,12 +7,14 @@ import { Badge } from "@/components/ui/badge";
 import {
   AlertTriangle, Search, Camera, MapPin, CheckCircle2, Clock,
   ExternalLink, Share2, X, AlertCircle, UserCheck, Calendar, Ban,
+  Archive, RefreshCw, Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/utils";
 import { ShareModal } from "@/components/share-modal";
 import { OverdueBadge } from "@/components/ui/overdue-badge";
 import { CloseInvalidDialog } from "@/pages/projects/detail/dialogs/close-issue-dialog";
+import { ArchiveIssueDialog } from "@/pages/projects/detail/dialogs/archive-issue-dialog";
 import { useCapabilities } from "@/hooks/use-capabilities";
 import { useToast } from "@/hooks/use-toast";
 
@@ -37,6 +39,9 @@ type Issue = {
   overdue?: boolean;
   closureReason?: string | null;
   closureNote?: string | null;
+  archivedAt?: string | null;
+  archivedByName?: string | null;
+  archiveReason?: string | null;
 };
 
 function authHeaders(): Record<string, string> {
@@ -75,6 +80,8 @@ export default function IssuesPage() {
   const [viewingIssue, setViewingIssue] = useState<Issue | null>(null);
   const [shareItem, setShareItem] = useState<{ id: string; name: string; fileUrl: string; projectId?: string | null; additionalInfo?: string } | null>(null);
   const [closingIssueId, setClosingIssueId] = useState<string | null>(null);
+  const [archivingIssueId, setArchivingIssueId] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
 
   function issueDetails(i: Issue) {
     const lines = [
@@ -92,10 +99,10 @@ export default function IssuesPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await fetch("/api/issues", { headers: authHeaders() });
+    const res = await fetch(`/api/issues${showArchived ? "?archived=true" : ""}`, { headers: authHeaders() });
     if (res.ok) setIssues(await res.json());
     setLoading(false);
-  }, []);
+  }, [showArchived]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -129,6 +136,48 @@ export default function IssuesPage() {
   };
 
   const updateStatus = (issueId: string, status: string) => patchIssue(issueId, { status }, "Couldn't update status");
+
+  const archiveIssue = async (issueId: string, reason?: string) => {
+    const res = await fetch(`/api/photos/${issueId}`, {
+      method: "DELETE",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ reason }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      toast({ title: "Couldn't archive issue", description: body?.message, variant: "destructive" });
+      return;
+    }
+    setIssues(prev => prev.filter(i => i.id !== issueId));
+    setViewingIssue(prev => (prev?.id === issueId ? null : prev));
+    toast({ title: "Issue archived", description: "Find it under the Archived filter." });
+  };
+
+  const restoreIssue = async (issueId: string) => {
+    const res = await fetch(`/api/photos/${issueId}/restore`, { method: "PATCH", headers: authHeaders() });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      toast({ title: "Couldn't restore issue", description: body?.message, variant: "destructive" });
+      return;
+    }
+    setIssues(prev => prev.filter(i => i.id !== issueId));
+    setViewingIssue(prev => (prev?.id === issueId ? null : prev));
+    toast({ title: "Issue restored" });
+  };
+
+  const removeIssuePhoto = async (issueId: string) => {
+    if (!confirm("Remove the photo from this issue? The issue itself is kept.")) return;
+    const res = await fetch(`/api/photos/${issueId}/photo`, { method: "DELETE", headers: authHeaders() });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      toast({ title: "Couldn't remove photo", description: body?.message, variant: "destructive" });
+      return;
+    }
+    const updated: Issue = await res.json();
+    setIssues(prev => prev.map(i => (i.id === issueId ? updated : i)));
+    setViewingIssue(prev => (prev?.id === issueId ? updated : prev));
+    toast({ title: "Photo removed" });
+  };
   const confirmIssueDone = (issueId: string) => patchIssue(issueId, { status: "resolved" }, "Couldn't confirm issue");
   const closeIssueAsInvalid = (issueId: string, reason: "invalid" | "duplicate", note: string) =>
     patchIssue(issueId, { status: "resolved", closureReason: reason, closureNote: note }, "Couldn't close issue");
@@ -203,6 +252,14 @@ export default function IssuesPage() {
               {f === "all" ? "All Statuses" : STATUS_BADGE[f]?.label ?? f}
             </button>
           ))}
+          {caps.canManageProjects && (
+            <button
+              onClick={() => setShowArchived(v => !v)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors inline-flex items-center gap-1.5 ${showArchived ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border hover:border-primary/40"}`}
+            >
+              <Archive className="w-3.5 h-3.5" />Archived
+            </button>
+          )}
         </div>
       </div>
 
@@ -369,6 +426,30 @@ export default function IssuesPage() {
                       <Ban className="w-3.5 h-3.5" /><span className="hidden sm:inline">Close invalid/duplicate</span>
                     </button>
                   )}
+                  {caps.canManageProjects && !viewingIssue.archivedAt && (
+                    <button
+                      onClick={() => setArchivingIssueId(viewingIssue.id)}
+                      className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border border-border bg-background text-destructive hover:bg-destructive/10 transition-colors"
+                    >
+                      <Archive className="w-3.5 h-3.5" /><span className="hidden sm:inline">Archive</span>
+                    </button>
+                  )}
+                  {caps.canManageProjects && viewingIssue.archivedAt && (
+                    <button
+                      onClick={() => restoreIssue(viewingIssue.id)}
+                      className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border bg-background hover:bg-muted transition-colors"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" /><span className="hidden sm:inline">Restore</span>
+                    </button>
+                  )}
+                  {caps.canManageProjects && photoUrl && (
+                    <button
+                      onClick={() => removeIssuePhoto(viewingIssue.id)}
+                      className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border border-border bg-background text-destructive hover:bg-destructive/10 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /><span className="hidden sm:inline">Remove photo</span>
+                    </button>
+                  )}
                   {photoUrl && (
                     <button
                       onClick={() => window.open(photoUrl, "_blank", "noopener,noreferrer")}
@@ -443,6 +524,13 @@ export default function IssuesPage() {
                       <p className="text-sm">{formatDate(viewingIssue.resolvedAt)}</p>
                     </div>
                   )}
+                  {viewingIssue.archivedAt && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Archived</p>
+                      <p className="text-sm">{formatDate(viewingIssue.archivedAt)}{viewingIssue.archivedByName ? ` by ${viewingIssue.archivedByName}` : ""}</p>
+                      {viewingIssue.archiveReason && <p className="text-xs text-muted-foreground italic mt-0.5 break-words">"{viewingIssue.archiveReason}"</p>}
+                    </div>
+                  )}
                   {caps.canManageProjects && (
                     <div className="pt-2 space-y-1.5">
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Update Status</p>
@@ -501,6 +589,7 @@ export default function IssuesPage() {
         additionalInfo={shareItem?.additionalInfo}
       />
       <CloseInvalidDialog photoId={closingIssueId} onClose={() => setClosingIssueId(null)} closeIssueAsInvalid={closeIssueAsInvalid} />
+      <ArchiveIssueDialog photoId={archivingIssueId} onClose={() => setArchivingIssueId(null)} archiveIssue={archiveIssue} />
     </SidebarLayout>
   );
 }

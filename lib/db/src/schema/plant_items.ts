@@ -38,6 +38,12 @@ export const plantItemsTable = pgTable("plant_items", {
   portalDraftNotes: text("portal_draft_notes"),
   portalDraftUpdatedBy: text("portal_draft_updated_by").references(() => usersTable.id),
   portalDraftUpdatedAt: timestamp("portal_draft_updated_at"),
+  // Soft-delete (archive) — mirrors photos.ts's archive pattern so PMs get the
+  // same Archive/Restore actions on items received from the portal. Archived
+  // items are hidden from default lists but retained for audit.
+  archivedAt: timestamp("archived_at"),
+  archivedBy: text("archived_by").references(() => usersTable.id),
+  archiveReason: text("archive_reason"),
 }, (t) => ({
   projectIdx: index("plant_items_project_idx").on(t.projectId),
 }));

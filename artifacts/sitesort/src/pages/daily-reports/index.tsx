@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
-  ClipboardList, FileText, ChevronRight, RefreshCw, CalendarDays, Plus, PencilLine, X,
+  ClipboardList, FileText, ChevronRight, RefreshCw, CalendarDays, Plus, PencilLine, X, Share2,
 } from "lucide-react";
+import { ShareModal } from "@/components/share-modal";
 import { formatDate } from "@/lib/utils";
 import { useCapabilities } from "@/hooks/use-capabilities";
 import { DailyReportDetail, type DailyReportDetailData } from "@/components/daily-report-detail";
@@ -56,6 +57,7 @@ export default function DailyReportsPage() {
   const [reportLoading, setReportLoading] = useState(false);
   const [initialEditing, setInitialEditing] = useState(false);
 
+  const [shareOpen, setShareOpen] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
   const [newProject, setNewProject] = useState("");
   const [newDate, setNewDate] = useState(londonToday());
@@ -114,6 +116,17 @@ export default function DailyReportsPage() {
       authorName: null,
       authoredAt: null,
     });
+  };
+
+  const reportShareText = (rep: DailyReportDetailData) => {
+    const lines = [
+      `Daily site report — ${formatDate(rep.reportDate)}`,
+      `Project: ${rep.projectName}`,
+      `${rep.checkinCount} check-in${rep.checkinCount === 1 ? "" : "s"} · ${rep.documentEventCount} document update${rep.documentEventCount === 1 ? "" : "s"} · ${rep.photoCount} site photo${rep.photoCount === 1 ? "" : "s"}`,
+      rep.managerReport ? "Includes a site diary entry." : "",
+      "Full report available in SiteSort.",
+    ].filter(Boolean);
+    return lines.join("\n");
   };
 
   const cutoff = (() => {
@@ -241,6 +254,13 @@ export default function DailyReportsPage() {
         <DialogHeader>
           <DialogTitle>{openReport ? `Daily site report — ${formatDate(openReport.reportDate)}` : "Loading report…"}</DialogTitle>
         </DialogHeader>
+        {openReport && openReport.id && (
+          <div className="flex justify-end -mt-1 mb-1">
+            <Button variant="outline" size="sm" onClick={() => setShareOpen(true)}>
+              <Share2 className="w-3.5 h-3.5 mr-1.5" />Share
+            </Button>
+          </div>
+        )}
         {reportLoading && !openReport ? (
           <div className="py-10 flex justify-center"><RefreshCw className="w-6 h-6 text-muted-foreground animate-spin" /></div>
         ) : openReport ? (
@@ -255,6 +275,18 @@ export default function DailyReportsPage() {
           />
         ) : null}
       </Dialog>
+
+      {openReport && openReport.id && (
+        <ShareModal
+          open={shareOpen}
+          onClose={() => setShareOpen(false)}
+          entityType="daily_report"
+          entityId={openReport.id}
+          entityName={`Daily site report — ${formatDate(openReport.reportDate)} (${openReport.projectName})`}
+          projectId={openReport.projectId}
+          shareText={reportShareText(openReport)}
+        />
+      )}
 
       {/* New site diary picker */}
       <Dialog open={newOpen} onOpenChange={setNewOpen}>

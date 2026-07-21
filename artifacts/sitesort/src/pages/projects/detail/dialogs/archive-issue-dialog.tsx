@@ -7,9 +7,11 @@ import { Textarea } from "@/components/ui/textarea";
 // tab list and the photo detail overlay. Reason is optional, unlike close-as-
 // invalid/duplicate; archiving is reversible via Restore, so there's no
 // business need to force one.
-export function ArchiveIssueDialog({ photoId, onClose, archiveIssue }: {
+export function ArchiveIssueDialog({ photoId, onClose, archiveIssue, itemLabel = "issue" }: {
   photoId: string | null; onClose: () => void;
   archiveIssue: (photoId: string, reason?: string) => Promise<void>;
+  // Reused beyond issues (e.g. plant & materials) — label just changes the copy.
+  itemLabel?: string;
 }) {
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -21,14 +23,14 @@ export function ArchiveIssueDialog({ photoId, onClose, archiveIssue }: {
   };
   return (
     <Dialog open={!!photoId} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogHeader><DialogTitle>Archive this issue?</DialogTitle></DialogHeader>
+      <DialogHeader><DialogTitle>Archive this {itemLabel}?</DialogTitle></DialogHeader>
       <div className="space-y-3">
         <p className="text-sm text-muted-foreground">It's removed from the active list and counts, but stays on record — viewable under Archived, and can be restored any time.</p>
         <Textarea value={reason} onChange={e => setReason(e.target.value)} placeholder="Reason (optional)" rows={3} />
       </div>
       <DialogFooter>
         <Button variant="ghost" onClick={onClose}>Cancel</Button>
-        <Button variant="destructive" onClick={submit} isLoading={submitting}>Archive issue</Button>
+        <Button variant="destructive" onClick={submit} isLoading={submitting}>Archive {itemLabel}</Button>
       </DialogFooter>
     </Dialog>
   );

@@ -1248,7 +1248,7 @@ async function serializePortalPlantItem(item: typeof plantItemsTable.$inferSelec
 router.get("/portal/plant-materials", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canUpdatePlantMaterials"), autoLogPortalActivity, async (req, res) => {
   const pid = req.portalProjectId!;
   const rows = await db.select().from(plantItemsTable)
-    .where(eq(plantItemsTable.projectId, pid))
+    .where(and(eq(plantItemsTable.projectId, pid), isNull(plantItemsTable.archivedAt)))
     .orderBy(asc(plantItemsTable.name));
   res.json(await Promise.all(rows.map(serializePortalPlantItem)));
 });
@@ -1257,7 +1257,7 @@ router.get("/portal/plant-materials", authenticate, requirePortalSession, requir
 router.get("/portal/plant-materials/:itemId", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canUpdatePlantMaterials"), autoLogPortalActivity, async (req, res) => {
   const pid = req.portalProjectId!;
   const rows = await db.select().from(plantItemsTable)
-    .where(and(eq(plantItemsTable.id, req.params.itemId), eq(plantItemsTable.projectId, pid))).limit(1);
+    .where(and(eq(plantItemsTable.id, req.params.itemId), eq(plantItemsTable.projectId, pid), isNull(plantItemsTable.archivedAt))).limit(1);
   if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Item not found" }); return; }
   res.json(await serializePortalPlantItem(rows[0]));
 });
@@ -1334,7 +1334,7 @@ router.patch("/portal/plant-materials/:itemId", authenticate, requirePortalSessi
   const pid = req.portalProjectId!;
   try {
     const rows = await db.select().from(plantItemsTable)
-      .where(and(eq(plantItemsTable.id, req.params.itemId), eq(plantItemsTable.projectId, pid))).limit(1);
+      .where(and(eq(plantItemsTable.id, req.params.itemId), eq(plantItemsTable.projectId, pid), isNull(plantItemsTable.archivedAt))).limit(1);
     if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Item not found" }); return; }
     const item = rows[0];
 
@@ -1363,7 +1363,7 @@ router.post("/portal/plant-materials/:itemId/submit", authenticate, requirePorta
   const pid = req.portalProjectId!;
   try {
     const rows = await db.select().from(plantItemsTable)
-      .where(and(eq(plantItemsTable.id, req.params.itemId), eq(plantItemsTable.projectId, pid))).limit(1);
+      .where(and(eq(plantItemsTable.id, req.params.itemId), eq(plantItemsTable.projectId, pid), isNull(plantItemsTable.archivedAt))).limit(1);
     if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Item not found" }); return; }
     const item = rows[0];
     if (!item.portalDraftUpdatedAt) { res.status(400).json({ error: "validation_error", message: "No draft to submit." }); return; }
@@ -1402,7 +1402,7 @@ router.post("/portal/plant-materials/:itemId/notes", authenticate, requirePortal
   const pid = req.portalProjectId!;
   try {
     const rows = await db.select().from(plantItemsTable)
-      .where(and(eq(plantItemsTable.id, req.params.itemId), eq(plantItemsTable.projectId, pid))).limit(1);
+      .where(and(eq(plantItemsTable.id, req.params.itemId), eq(plantItemsTable.projectId, pid), isNull(plantItemsTable.archivedAt))).limit(1);
     if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Item not found" }); return; }
     const { body } = req.body as { body?: string };
     if (!body || !body.trim()) { res.status(400).json({ error: "validation_error", message: "A note body is required." }); return; }
@@ -1430,7 +1430,7 @@ router.post("/portal/plant-materials/:itemId/attachments", authenticate, require
 
   try {
     const rows = await db.select({ id: plantItemsTable.id }).from(plantItemsTable)
-      .where(and(eq(plantItemsTable.id, req.params.itemId), eq(plantItemsTable.projectId, pid))).limit(1);
+      .where(and(eq(plantItemsTable.id, req.params.itemId), eq(plantItemsTable.projectId, pid), isNull(plantItemsTable.archivedAt))).limit(1);
     if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Item not found" }); return; }
 
     const { fileUrl, fileSize } = await saveMemberUpload(req.file, req.user!.id, req.user!.companyId);
