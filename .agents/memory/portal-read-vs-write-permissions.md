@@ -1,9 +1,9 @@
 ---
-name: Portal read vs write permission model
-description: Site Issues / Plant & Materials / Daily Report are read-for-all-members, write-by-grant
+name: Portal permission & submission-privacy model
+description: How Site Issues / Plant & Materials / Daily Report are gated and whose content a member can see
 ---
-Rule: every portal member can VIEW Site Issues, Plant & Materials, and Daily Report (nav entries always shown, GET routes only require portal session + membership). The per-member permission flags (canLogIssues, canUpdatePlantMaterials, canEditDailyReport) gate ONLY the write endpoints and the edit affordances in the views.
+Rule (current, replaces the older read-for-all model): the per-member flags (canLogIssues, canUpdatePlantMaterials, canEditDailyReport) gate BOTH section visibility (nav entry absent without the grant) and writes. On top of that, content is submission-private: a member only sees plant/material items they created or that were distributed to them (plant_item_distributions), and only daily-report days they contributed to (contributorsForReport via activity_log). The PM's dashboard entries are invisible in the portal until shared, including in the /portal/unseen badge counts.
 
-**Why:** gating reads on the edit flags made submitted items vanish for the submitter ("can't reopen to view what I sent") — user explicitly wanted read-only reopen for everyone.
+**Why:** the earlier read-for-all default let subcontractor contacts see the PM's private plant log and site diary — user explicitly reversed it ("only visible to the person submitting it and the PM, until the PM shares").
 
-**How to apply:** when adding a portal section, don't add a `permission` field to its nav entry or a client-side section guard for viewing; keep permission middleware on writes only.
+**How to apply:** any new portal read path (lists, detail, badges, exports) for these sections must apply the same visibility predicate — including metadata like counts, or it leaks existence of private entries. Daily-report writes must reject non-contributors on content-bearing days (blind-overwrite + leak-via-save).
