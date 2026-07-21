@@ -13,3 +13,4 @@
 - [Portal dictation STT](portal-dictation-stt.md) — never Web Speech API (silent fail in iOS standalone PWA); always MediaRecorder + server transcription via shared DictationButton.
 - [Portal read/write permissions](portal-read-vs-write-permissions.md) — Site Issues/Plant/Daily Report are read-for-all-members; permission flags gate writes only. Don't add nav/view guards on reads.
 - [Tenant delete cascade](tenant-delete-cascade.md) — delete-company must track the full FK graph; scrub (not delete) cross-tenant users; drizzle ANY() needs `{a,b}`::text[] literals.
+- [Site-board check-in matching](site-board-checkin-matching.md) — QR check-in must cover all 3 project_members link types (user_id, subcontractor_id, person_id); sub-linked people need valid insurance.

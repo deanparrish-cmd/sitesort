@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db } from "@workspace/db";
-import { qrCodesTable, qrBoardPinsTable, documentsTable, projectsTable, projectMembersTable, usersTable, permitsTable, photosTable, invoicesTable, siteCheckinsTable, subcontractorsTable, insuranceRecordsTable, calendarEventsTable, companyMembersTable, notificationsTable } from "@workspace/db/schema";
+import { qrCodesTable, qrBoardPinsTable, documentsTable, projectsTable, projectMembersTable, usersTable, permitsTable, photosTable, invoicesTable, siteCheckinsTable, subcontractorsTable, insuranceRecordsTable, calendarEventsTable, companyMembersTable, notificationsTable, peopleTable } from "@workspace/db/schema";
 import { eq, and, or, desc, asc, inArray, isNull, gte } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
@@ -296,27 +296,61 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
         c.companyName.toLowerCase() === companyLower
       );
 
+      // 3) Team contacts (people) added to this project via project_members.person_id
+      //    — e.g. a subcontractor's individual workers invited to the portal.
+      //    Matched on the person's name; if they belong to a subcontractor, the
+      //    typed company name must match that subcontractor's company name and
+      //    the same insurance rule applies.
+      let insuranceSubId: string | null = matched?.id ?? null;
+      let isRegistered = !!matched;
       if (!matched) {
+        const projectPeople = await db
+          .select({
+            personName: peopleTable.name,
+            subId: peopleTable.subcontractorId,
+            subCompanyName: subcontractorsTable.companyName,
+          })
+          .from(projectMembersTable)
+          .innerJoin(peopleTable, eq(peopleTable.id, projectMembersTable.personId))
+          .leftJoin(subcontractorsTable, eq(subcontractorsTable.id, peopleTable.subcontractorId))
+          .where(and(
+            eq(projectMembersTable.projectId, qr.projectId),
+            isNull(peopleTable.archivedAt),
+          ));
+
+        const matchedPerson = projectPeople.find(p =>
+          p.personName.trim().toLowerCase() === nameLower &&
+          (p.subCompanyName ? p.subCompanyName.trim().toLowerCase() === companyLower : true)
+        );
+        if (matchedPerson) {
+          isRegistered = true;
+          insuranceSubId = matchedPerson.subId ?? null;
+        }
+      }
+
+      if (!isRegistered) {
         await notifyBlockedCheckin(qr.projectId, workerName.trim(), companyName.trim(), "not_registered");
         res.status(403).json({ error: "check_in_blocked", reason: "not_registered" });
         return;
       }
 
-      const today = new Date().toISOString().split("T")[0];
-      const validInsurance = await db
-        .select({ id: insuranceRecordsTable.id })
-        .from(insuranceRecordsTable)
-        .where(and(
-          eq(insuranceRecordsTable.subcontractorId, matched.id),
-          isNull(insuranceRecordsTable.archivedAt),
-          gte(insuranceRecordsTable.expiryDate, today),
-        ))
-        .limit(1);
+      if (insuranceSubId) {
+        const today = new Date().toISOString().split("T")[0];
+        const validInsurance = await db
+          .select({ id: insuranceRecordsTable.id })
+          .from(insuranceRecordsTable)
+          .where(and(
+            eq(insuranceRecordsTable.subcontractorId, insuranceSubId),
+            isNull(insuranceRecordsTable.archivedAt),
+            gte(insuranceRecordsTable.expiryDate, today),
+          ))
+          .limit(1);
 
-      if (validInsurance.length === 0) {
-        await notifyBlockedCheckin(qr.projectId, workerName.trim(), companyName.trim(), "no_valid_insurance");
-        res.status(403).json({ error: "check_in_blocked", reason: "no_valid_insurance" });
-        return;
+        if (validInsurance.length === 0) {
+          await notifyBlockedCheckin(qr.projectId, workerName.trim(), companyName.trim(), "no_valid_insurance");
+          res.status(403).json({ error: "check_in_blocked", reason: "no_valid_insurance" });
+          return;
+        }
       }
     }
 
