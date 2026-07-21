@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from "react";
-import { useRoute, useSearch, Link } from "wouter";
+import { useRoute, useSearch, useLocation, Link } from "wouter";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import {
-  useGetPortalOverview, useGetPortalProgress, useGetPortalTeam,
+  useGetPortalOverview, useGetPortalTeam,
   useGetPortalSiteIssues, useGetPortalSiteBoard,
   useGetPortalGeneral, useGetPortalShared,
   useGetPortalMyDocuments, useGetPortalUnseen, useGetPortalContext,
@@ -26,8 +26,8 @@ import { portalQueryClient, PORTAL_LIVE_REFETCH } from "./query-client";
 import { Spinner } from "@/components/ui/spinner";
 import { LinkRow } from "@/components/ui/link-row";
 import {
-  ExternalLink, MapPin, Calendar, CheckCircle2, Circle, Phone, Mail,
-  FileText, AlertTriangle, StickyNote, Download, TrendingUp, FileCheck, Users,
+  ExternalLink, MapPin, Calendar, Phone, Mail,
+  FileText, AlertTriangle, StickyNote, Download, FileCheck,
   QrCode, Copy, Building2, ShieldCheck, X, Sparkles, UploadCloud, Share, Plus,
 } from "lucide-react";
 import { isCadFile, cadBadgeLabel, downloadFile } from "@/lib/documents";
@@ -374,6 +374,11 @@ function WhatsNewCard() {
   );
 }
 
+// Overview content — embedded on the Home landing page (no standalone nav tab
+// any more). The address/progress card moved into Home's project header, and
+// the Milestones/Team-size stat rows were retired along with their standalone
+// sections; what remains is the What's-New card, the two deep-link stats that
+// still have live destinations, and recent site updates.
 function OverviewView() {
   // Site updates are time-sensitive → poll while visible.
   const { data, isLoading } = useGetPortalOverview({ query: { refetchInterval: PORTAL_LIVE_REFETCH, queryKey: getGetPortalOverviewQueryKey() } });
@@ -385,24 +390,13 @@ function OverviewView() {
     // showing the count at all would tip off gated content, so drop the whole
     // card when this member has no grant, same "absent, not greyed" rule as the nav.
     ...(ctx?.member.canLogIssues ? [{ label: "Open issues", value: data.stats.openIssues, href: "/portal/site-issues?status=open", Icon: AlertTriangle }] : []),
-    { label: "Milestones left", value: data.stats.upcomingMilestones, href: "/portal/progress", Icon: TrendingUp },
     // Permits no longer has its own nav tab — deep-links into "Shared with me"
     // pre-filtered to the Permits category instead.
     { label: "Active permits", value: data.stats.activePermits, href: "/portal/shared?category=permits", Icon: FileCheck },
-    { label: "Team size", value: data.stats.teamSize, href: "/portal/team", Icon: Users },
   ];
   return (
     <div className="space-y-5">
       <WhatsNewCard />
-      <Card>
-        <p className="text-sm text-muted-foreground">{data.project.address}</p>
-        <div className="flex items-center gap-2 mt-3">
-          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-            <div className="h-full bg-emerald-500" style={{ width: `${data.project.progressPercent}%` }} />
-          </div>
-          <span className="text-sm font-bold">{data.project.progressPercent}%</span>
-        </div>
-      </Card>
       {/* Each stat is a whole-row tap target (shared LinkRow) into its section, pre-filtered. */}
       <div className="space-y-2">
         {stats.map(s => (
@@ -433,35 +427,68 @@ function OverviewView() {
   );
 }
 
-function ProgressView() {
-  const { data, isLoading } = useGetPortalProgress();
-  if (isLoading) return <Loading />;
-  if (!data) return <Empty>Nothing to show yet.</Empty>;
+// Portal home — the single landing page (simplified-portal redesign). One
+// scrollable page: project identity (name, address, dates, site manager
+// contact), then Team, Overview and Site Board, replacing what used to be
+// four separate nav tabs. Old /portal/team, /portal/progress and
+// /portal/site-board deep links all land here too.
+function HomeView() {
+  const { data: ctx } = useGetPortalContext();
+  const { data: board, isLoading } = useGetPortalSiteBoard();
+  if (isLoading && !ctx) return <Loading />;
+  const project = ctx?.project;
+  const sm = board?.siteManager;
+  const dates = project?.startDate || project?.targetEndDate
+    ? [project?.startDate ? fmtDate(project.startDate) : "TBC", project?.targetEndDate ? fmtDate(project.targetEndDate) : "TBC"].join(" – ")
+    : null;
   return (
-    <div className="space-y-5">
-      <Card>
-        <div className="flex items-center gap-2">
-          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-            <div className="h-full bg-emerald-500" style={{ width: `${data.progressPercent}%` }} />
-          </div>
-          <span className="text-sm font-bold">{data.progressPercent}%</span>
-        </div>
-      </Card>
-      {data.milestones.length === 0 ? <Empty>No milestones set for this project yet.</Empty> : (
+    <div className="space-y-8">
+      {/* Project header — name, address, dates, progress + site manager contact */}
+      <div className="space-y-3">
         <Card>
-          {data.milestones.map(m => (
-            <div key={m.id} className="flex items-start gap-3 py-2.5 border-b border-border/60 last:border-0">
-              {m.completedAt
-                ? <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-                : <Circle className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />}
-              <div className="min-w-0">
-                <p className={`font-medium ${m.completedAt ? "line-through text-muted-foreground" : ""}`}>{m.title}</p>
-                <p className="text-xs text-muted-foreground">Due {fmtDate(m.dueDate)}</p>
+          <h2 className="text-lg font-display font-bold truncate">{project?.name}</h2>
+          {project?.address && (
+            <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+              <MapPin className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{project.address}</span>
+            </p>
+          )}
+          {dates && (
+            <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+              <Calendar className="w-3.5 h-3.5 shrink-0" /><span>{dates}</span>
+            </p>
+          )}
+          {typeof project?.progressPercent === "number" && (
+            <div className="flex items-center gap-2 mt-3">
+              <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                <div className="h-full bg-emerald-500" style={{ width: `${project.progressPercent}%` }} />
               </div>
+              <span className="text-sm font-bold">{project.progressPercent}%</span>
             </div>
-          ))}
+          )}
         </Card>
-      )}
+        {sm && (
+          <Card>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Site manager</p>
+            <p className="font-medium truncate mt-1">{sm.name}</p>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 min-w-0">
+              {sm.phone && <a href={`tel:${sm.phone}`} className="inline-flex items-center gap-1 text-xs text-primary font-medium"><Phone className="w-3 h-3" /> {sm.phone}</a>}
+              {sm.email && <a href={`mailto:${sm.email}`} className="inline-flex items-center gap-1 text-xs text-primary font-medium min-w-0 max-w-full"><Mail className="w-3 h-3 shrink-0" /><span className="truncate">{sm.email}</span></a>}
+            </div>
+          </Card>
+        )}
+      </div>
+      <div>
+        <SectionTitle>Team</SectionTitle>
+        <TeamView />
+      </div>
+      <div>
+        <SectionTitle>Overview</SectionTitle>
+        <OverviewView />
+      </div>
+      <div>
+        <SectionTitle>Site board</SectionTitle>
+        <SiteBoardView embedded />
+      </div>
     </div>
   );
 }
@@ -759,7 +786,9 @@ function SiteIssuesView() {
 
 // Full Site Board — same content as the public scanned view (single source), plus
 // the board's own QR so anyone on site can rescan/share it.
-function SiteBoardView() {
+// `embedded` — rendered inside the Home landing page, where the project card
+// and site manager contact already appear at the top, so skip them here.
+function SiteBoardView({ embedded }: { embedded?: boolean }) {
   const { data, isLoading } = useGetPortalSiteBoard();
   if (isLoading) return <Loading />;
   if (!data) return <Empty>Site board unavailable.</Empty>;
@@ -771,12 +800,14 @@ function SiteBoardView() {
   const permitBadge = (s?: string) => s === "expired" ? "bg-rose-100 text-rose-800" : s === "expiring_soon" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800";
   return (
     <div className="space-y-5">
-      {/* Project */}
-      <Card>
-        <h2 className="text-lg font-display font-bold truncate">{data.project.name}</h2>
-        <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1"><MapPin className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{data.project.address}</span></p>
-        <span className="inline-block mt-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-muted capitalize">{data.project.status}</span>
-      </Card>
+      {/* Project (skipped when embedded — Home shows it at the top) */}
+      {!embedded && (
+        <Card>
+          <h2 className="text-lg font-display font-bold truncate">{data.project.name}</h2>
+          <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1"><MapPin className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{data.project.address}</span></p>
+          <span className="inline-block mt-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-muted capitalize">{data.project.status}</span>
+        </Card>
+      )}
 
       {/* Site board QR */}
       {siteUrl && (
@@ -791,8 +822,8 @@ function SiteBoardView() {
         </Card>
       )}
 
-      {/* Site manager */}
-      {data.siteManager && (
+      {/* Site manager (skipped when embedded — Home shows the contact card up top) */}
+      {!embedded && data.siteManager && (
         <div>
           <SectionTitle>Site manager</SectionTitle>
           <Card>
@@ -1701,14 +1732,17 @@ function renderSection(section: string) {
   const required = SECTION_PERMISSION[section];
   if (required && ctx && !ctx.member[required]) return <Empty>Section not found.</Empty>;
   switch (section) {
-    case "overview": return <OverviewView />;
+    // Simplified-portal redesign: Overview/Team/Progress/Site Board no longer
+    // have their own tabs — all their old deep links land on the Home page.
+    case "overview":
+    case "progress":
+    case "team":
+    case "site-board":
+      return <HomeView />;
     case "shared": return <SharedView />;
     case "my-documents": return <MyDocumentsView />;
     case "settings": return <SettingsView />;
-    case "progress": return <ProgressView />;
-    case "team": return <TeamView />;
     case "site-issues": return <SiteIssuesView />;
-    case "site-board": return <SiteBoardView />;
     case "plant-materials": return <PlantMaterialsView />;
     case "daily-report": return <DailyReportView />;
     case "messages": return <MessagesView />;
@@ -1716,9 +1750,19 @@ function renderSection(section: string) {
   }
 }
 
+// Legacy section URLs from the old multi-tab portal all show the Home page now.
+// Canonicalize them to "overview" so nav highlighting, unseen counts, and the
+// server's per-section activity/last-viewed tracking all agree on one key.
+const LEGACY_HOME_SECTIONS = new Set(["team", "progress", "site-board"]);
+
 export default function PortalSectionPage() {
   const [, params] = useRoute("/portal/:section");
-  const section = params?.section ?? "overview";
+  const rawSection = params?.section ?? "overview";
+  const section = LEGACY_HOME_SECTIONS.has(rawSection) ? "overview" : rawSection;
+  const [, navigate] = useLocation();
+  useEffect(() => {
+    if (LEGACY_HOME_SECTIONS.has(rawSection)) navigate("/portal/overview", { replace: true });
+  }, [rawSection, navigate]);
   // Portal pages run on their own QueryClient (fresh-on-focus/mount + polling)
   // so a long-lived member session never shows stale content.
   return (

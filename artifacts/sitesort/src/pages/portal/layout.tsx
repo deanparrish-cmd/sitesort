@@ -8,7 +8,7 @@ import { PortalNotifyPrompt } from "@/components/portal-notify-prompt";
 import { markPortalSession, disablePush } from "@/lib/portal-push";
 import { cn } from "@/lib/utils";
 import {
-  LayoutDashboard, TrendingUp, Users, AlertTriangle, LayoutGrid,
+  Home, AlertTriangle,
   LogOut, Inbox, HardHat,
   Settings, Menu, X, FolderUp, Wrench, ClipboardList, MessageSquare,
 } from "lucide-react";
@@ -24,18 +24,20 @@ import {
 // PortalLayout filters them out entirely (not greyed — absent) unless the PM
 // has granted the matching flag on that member's project_members row. Every
 // other entry here is always visible to every portal member.
-export const SECTION_NAV: { key: string; label: string; Icon: typeof LayoutDashboard; permission?: "canLogIssues" | "canUpdatePlantMaterials" | "canEditDailyReport" }[] = [
-  { key: "overview", label: "Overview", Icon: LayoutDashboard },
+// Simplified-portal redesign (2 pages): "Home" is the single landing page
+// (project details + site manager contact + Team + Overview + Site Board all
+// on one scrollable page — Overview/Progress/Team/Site Board tabs retired,
+// their old URLs land on Home). The rest of the menu is the member's own
+// workspace, with the permission-gated work sections at the BOTTOM.
+export const SECTION_NAV: { key: string; label: string; Icon: typeof Home; permission?: "canLogIssues" | "canUpdatePlantMaterials" | "canEditDailyReport" }[] = [
+  { key: "overview", label: "Home", Icon: Home },
   { key: "messages", label: "Messages", Icon: MessageSquare },
   { key: "shared", label: "Shared with me", Icon: Inbox },
-  { key: "progress", label: "Progress", Icon: TrendingUp },
-  { key: "team", label: "Team", Icon: Users },
-  { key: "site-issues", label: "Site Issues", Icon: AlertTriangle, permission: "canLogIssues" },
-  { key: "site-board", label: "Site Board", Icon: LayoutGrid },
-  { key: "plant-materials", label: "Plant & Materials", Icon: Wrench, permission: "canUpdatePlantMaterials" },
-  { key: "daily-report", label: "Daily Report", Icon: ClipboardList, permission: "canEditDailyReport" },
   { key: "my-documents", label: "My documents", Icon: FolderUp },
   { key: "settings", label: "Settings", Icon: Settings },
+  { key: "site-issues", label: "Site Issues", Icon: AlertTriangle, permission: "canLogIssues" },
+  { key: "plant-materials", label: "Plant & Materials", Icon: Wrench, permission: "canUpdatePlantMaterials" },
+  { key: "daily-report", label: "Daily Report", Icon: ClipboardList, permission: "canEditDailyReport" },
 ];
 
 export function portalLogout(setLocation: (to: string) => void) {
