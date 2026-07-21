@@ -14,4 +14,6 @@ export interface PortalMemberRef {
   canLogIssues: boolean;
   canUpdatePlantMaterials: boolean;
   canEditDailyReport: boolean;
+  /** Whether this member has already set their sign-off PIN. */
+  hasPin: boolean;
 }

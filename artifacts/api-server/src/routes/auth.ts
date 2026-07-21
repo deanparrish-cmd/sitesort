@@ -16,6 +16,7 @@ import {
   sendWelcomeEmail,
 } from "../lib/email";
 import { parseFullPersonName } from "../lib/name-validation";
+import { setUserPin } from "../lib/pin";
 
 const router: IRouter = Router();
 
@@ -470,30 +471,12 @@ router.post("/auth/change-password", authenticate, async (req, res) => {
 // for a signed-in user who has forgotten their PIN).
 router.post("/auth/pin", authenticate, async (req, res) => {
   try {
-    const { currentPassword, pin } = req.body;
-    if (!currentPassword || !pin) {
-      res.status(400).json({ error: "validation_error", message: "currentPassword and pin are required" });
+    const { currentPassword, pin } = req.body ?? {};
+    const result = await setUserPin(req.user!.id, currentPassword, pin, req);
+    if (!result.ok) {
+      res.status(result.status).json({ error: result.error, message: result.message });
       return;
     }
-    if (!/^\d{4}$/.test(String(pin))) {
-      res.status(400).json({ error: "validation_error", message: "PIN must be exactly 4 digits" });
-      return;
-    }
-
-    const users = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
-    if (users.length === 0) {
-      res.status(404).json({ error: "not_found", message: "User not found" });
-      return;
-    }
-    const user = users[0];
-    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
-    if (!valid) {
-      res.status(401).json({ error: "invalid_credentials", message: "Current password is incorrect" });
-      return;
-    }
-
-    const pinHash = await bcrypt.hash(String(pin), 10);
-    await db.update(usersTable).set({ pinHash }).where(eq(usersTable.id, user.id));
     res.json({ success: true });
   } catch (err) {
     req.log.error({ err }, "Set PIN error");

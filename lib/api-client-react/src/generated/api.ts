@@ -117,6 +117,7 @@ import type {
   ResendInviteResponse,
   ReviewMemberDocumentRequest,
   SendPortalMessageRequest,
+  SetPinRequest,
   Subcontractor,
   SubcontractorDetail,
   SubcontractorDocument,
@@ -539,6 +540,93 @@ export function useGetMe<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Requires the account password as re-verification — also the "forgot PIN" path for a signed-in user. Every call is logged (set vs reset), never the PIN itself.
+ * @summary Set, update, or reset the current user's sign-off PIN
+ */
+export const getSetSignOffPinUrl = () => {
+  return `/api/auth/pin`;
+};
+
+export const setSignOffPin = async (
+  setPinRequest: SetPinRequest,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getSetSignOffPinUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(setPinRequest),
+  });
+};
+
+export const getSetSignOffPinMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setSignOffPin>>,
+    TError,
+    { data: BodyType<SetPinRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setSignOffPin>>,
+  TError,
+  { data: BodyType<SetPinRequest> },
+  TContext
+> => {
+  const mutationKey = ["setSignOffPin"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setSignOffPin>>,
+    { data: BodyType<SetPinRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return setSignOffPin(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetSignOffPinMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setSignOffPin>>
+>;
+export type SetSignOffPinMutationBody = BodyType<SetPinRequest>;
+export type SetSignOffPinMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Set, update, or reset the current user's sign-off PIN
+ */
+export const useSetSignOffPin = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setSignOffPin>>,
+    TError,
+    { data: BodyType<SetPinRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setSignOffPin>>,
+  TError,
+  { data: BodyType<SetPinRequest> },
+  TContext
+> => {
+  return useMutation(getSetSignOffPinMutationOptions(options));
+};
 
 /**
  * @summary List all projects for the company
@@ -7788,6 +7876,93 @@ export function useGetPortalContext<
 }
 
 /**
+ * Requires the account password as re-verification — also the "forgot PIN" path. Every call is logged (set vs reset), never the PIN itself.
+ * @summary Set, update, or reset the signed-in member's sign-off PIN
+ */
+export const getSetPortalPinUrl = () => {
+  return `/api/portal/pin`;
+};
+
+export const setPortalPin = async (
+  setPinRequest: SetPinRequest,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getSetPortalPinUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(setPinRequest),
+  });
+};
+
+export const getSetPortalPinMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setPortalPin>>,
+    TError,
+    { data: BodyType<SetPinRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setPortalPin>>,
+  TError,
+  { data: BodyType<SetPinRequest> },
+  TContext
+> => {
+  const mutationKey = ["setPortalPin"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setPortalPin>>,
+    { data: BodyType<SetPinRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return setPortalPin(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetPortalPinMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setPortalPin>>
+>;
+export type SetPortalPinMutationBody = BodyType<SetPinRequest>;
+export type SetPortalPinMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Set, update, or reset the signed-in member's sign-off PIN
+ */
+export const useSetPortalPin = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setPortalPin>>,
+    TError,
+    { data: BodyType<SetPinRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setPortalPin>>,
+  TError,
+  { data: BodyType<SetPinRequest> },
+  TContext
+> => {
+  return useMutation(getSetPortalPinMutationOptions(options));
+};
+
+/**
  * @summary Portal overview (summary stats + recent notes)
  */
 export const getGetPortalOverviewUrl = () => {
@@ -9087,6 +9262,181 @@ export function useDownloadPortalDocument<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Record that this member opened a document (pending → viewed)
+ */
+export const getViewPortalDocumentUrl = (documentId: string) => {
+  return `/api/portal/documents/${documentId}/view`;
+};
+
+export const viewPortalDocument = async (
+  documentId: string,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getViewPortalDocumentUrl(documentId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getViewPortalDocumentMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof viewPortalDocument>>,
+    TError,
+    { documentId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof viewPortalDocument>>,
+  TError,
+  { documentId: string },
+  TContext
+> => {
+  const mutationKey = ["viewPortalDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof viewPortalDocument>>,
+    { documentId: string }
+  > = (props) => {
+    const { documentId } = props ?? {};
+
+    return viewPortalDocument(documentId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ViewPortalDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof viewPortalDocument>>
+>;
+
+export type ViewPortalDocumentMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Record that this member opened a document (pending → viewed)
+ */
+export const useViewPortalDocument = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof viewPortalDocument>>,
+    TError,
+    { documentId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof viewPortalDocument>>,
+  TError,
+  { documentId: string },
+  TContext
+> => {
+  return useMutation(getViewPortalDocumentMutationOptions(options));
+};
+
+/**
+ * @summary Sign off a document shared with this member (PIN-confirmed)
+ */
+export const getAcknowledgePortalDocumentUrl = (documentId: string) => {
+  return `/api/portal/documents/${documentId}/acknowledge`;
+};
+
+export const acknowledgePortalDocument = async (
+  documentId: string,
+  acknowledgeRequest: AcknowledgeRequest,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(
+    getAcknowledgePortalDocumentUrl(documentId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(acknowledgeRequest),
+    },
+  );
+};
+
+export const getAcknowledgePortalDocumentMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof acknowledgePortalDocument>>,
+    TError,
+    { documentId: string; data: BodyType<AcknowledgeRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof acknowledgePortalDocument>>,
+  TError,
+  { documentId: string; data: BodyType<AcknowledgeRequest> },
+  TContext
+> => {
+  const mutationKey = ["acknowledgePortalDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof acknowledgePortalDocument>>,
+    { documentId: string; data: BodyType<AcknowledgeRequest> }
+  > = (props) => {
+    const { documentId, data } = props ?? {};
+
+    return acknowledgePortalDocument(documentId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AcknowledgePortalDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof acknowledgePortalDocument>>
+>;
+export type AcknowledgePortalDocumentMutationBody =
+  BodyType<AcknowledgeRequest>;
+export type AcknowledgePortalDocumentMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Sign off a document shared with this member (PIN-confirmed)
+ */
+export const useAcknowledgePortalDocument = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof acknowledgePortalDocument>>,
+    TError,
+    { documentId: string; data: BodyType<AcknowledgeRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof acknowledgePortalDocument>>,
+  TError,
+  { documentId: string; data: BodyType<AcknowledgeRequest> },
+  TContext
+> => {
+  return useMutation(getAcknowledgePortalDocumentMutationOptions(options));
+};
 
 /**
  * @summary The signed-in member's own uploaded documents (newest first)

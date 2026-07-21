@@ -9,7 +9,7 @@ import {
   portalSharesTable, documentDistributionsTable, companiesTable, qrCodesTable,
   portalMemberDocumentsTable, notificationsTable, companyMembersTable,
   plantItemsTable, plantItemAttachmentsTable, personCertificationsTable, dailyReportsTable,
-  messagesTable, channelMessagesTable,
+  messagesTable, channelMessagesTable, acknowledgmentAuditTable,
 } from "@workspace/db/schema";
 import { and, eq, inArray, isNull, isNotNull, desc, asc, gte, lt, count, max, or, ne } from "drizzle-orm";
 import { buildSiteBoardPayload } from "../lib/site-board";
@@ -31,6 +31,8 @@ import { getBucket, objectKey } from "../lib/gcs";
 import { memberUploadSingle, saveMemberUpload } from "../lib/portal-upload";
 import { isReportLocked, upsertManagerReport, contributorsForReport, hasManagerContent, londonDateStr } from "../lib/daily-reports";
 import { notesFor, addNote } from "../lib/portal-submission-notes";
+import { isPinLockedOut, recordFailedPinAttempt, clearPinAttempts } from "../lib/pin-attempts";
+import { setUserPin } from "../lib/pin";
 import { createRequire } from "module";
 import type { Archiver, ArchiverOptions } from "archiver";
 const nodeRequire = createRequire(import.meta.url);
@@ -81,7 +83,27 @@ function serializeDoc(d: typeof documentsTable.$inferSelect) {
     id: d.id, name: d.name, type: d.type, version: d.version,
     revision: d.revision ?? undefined, fileUrl: d.fileUrl, fileSize: d.fileSize,
     status: d.status, createdAt: d.createdAt.toISOString(),
+    requiresAcknowledgment: d.requiresAcknowledgment,
   };
+}
+// This viewer's own sign-off status for a batch of documents — merged onto
+// serializeDoc's output wherever a member might need to sign off (the PIN
+// gate itself is re-checked server-side regardless of what the client saw).
+async function myDocStatuses(userId: string, docIds: string[]): Promise<Map<string, { status: string; acknowledgedAt: Date | null }>> {
+  if (docIds.length === 0) return new Map();
+  const rows = await db.select({
+    documentId: documentDistributionsTable.documentId,
+    status: documentDistributionsTable.status,
+    acknowledgedAt: documentDistributionsTable.acknowledgedAt,
+  }).from(documentDistributionsTable)
+    .where(and(inArray(documentDistributionsTable.documentId, docIds), eq(documentDistributionsTable.userId, userId)));
+  return new Map(rows.map(r => [r.documentId, { status: r.status, acknowledgedAt: r.acknowledgedAt }]));
+}
+function withMyStatus<T extends { id: string }>(rows: T[], statuses: Map<string, { status: string; acknowledgedAt: Date | null }>): (T & { myStatus: string | null; mySignedOffAt: string | null })[] {
+  return rows.map(r => {
+    const mine = statuses.get(r.id);
+    return { ...r, myStatus: mine?.status ?? null, mySignedOffAt: mine?.acknowledgedAt?.toISOString() ?? null };
+  });
 }
 function serializePermit(p: typeof permitsTable.$inferSelect) {
   return {
@@ -167,6 +189,16 @@ async function visibleIds(projectId: string, itemType: string, viewer: Viewer): 
     else if (s.audienceType === "trade" && s.trade && (viewer.trades.includes(s.trade) || (viewer.isSiteStaff && s.trade === SITE_STAFF))) set.add(s.itemId);
   }
   return set;
+}
+
+// Safety docs bypass sharing entirely (always visible); everything else is
+// gated on an explicit portal_shares rule. Used by the doc-scoped write routes
+// (view/acknowledge) that don't go through docListHandler/docDetailHandler.
+async function isDocVisibleToViewer(pid: string, userId: string, doc: { id: string; type: string }): Promise<boolean> {
+  if (doc.type === "safety") return true;
+  const viewer = await resolveViewer(userId, pid);
+  const ids = await visibleIds(pid, "document", viewer);
+  return ids.has(doc.id);
 }
 
 // Like visibleIds, but maps each visible item to the MOST RECENT matching share
@@ -529,7 +561,7 @@ router.get("/portal/me", ...portalGuards, async (req, res) => {
   const pid = req.portalProjectId!;
   const proj = await loadProject(pid);
   if (!proj) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
-  const urow = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
+  const urow = await db.select({ name: usersTable.name, pinHash: usersTable.pinHash }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
   const permRow = await db.select({
     canLogIssues: projectMembersTable.canLogIssues,
     canUpdatePlantMaterials: projectMembersTable.canUpdatePlantMaterials,
@@ -547,9 +579,28 @@ router.get("/portal/me", ...portalGuards, async (req, res) => {
       canLogIssues: permRow[0]?.canLogIssues ?? false,
       canUpdatePlantMaterials: permRow[0]?.canUpdatePlantMaterials ?? false,
       canEditDailyReport: permRow[0]?.canEditDailyReport ?? false,
+      hasPin: !!urow[0]?.pinHash,
     },
     sections: PORTAL_SECTIONS,
   });
+});
+
+// POST /api/portal/pin — set/update/reset the signed-in member's sign-off PIN.
+// Same password-reverification + audit-log pattern as /auth/pin (dashboard);
+// portal members are usersTable rows too, so the underlying logic is identical.
+router.post("/portal/pin", ...portalGuards, async (req, res) => {
+  try {
+    const { currentPassword, pin } = req.body ?? {};
+    const result = await setUserPin(req.user!.id, currentPassword, pin, req);
+    if (!result.ok) {
+      res.status(result.status).json({ error: result.error, message: result.message });
+      return;
+    }
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Portal set PIN error");
+    res.status(500).json({ error: "server_error", message: "Failed to set PIN" });
+  }
 });
 
 // POST /api/portal/logout — end THIS session server-side (revoked, not just a
@@ -659,7 +710,7 @@ router.get("/portal/overview", ...portalGuards, async (req, res) => {
     }).from(dailyNotesTable)
       .leftJoin(usersTable, eq(dailyNotesTable.authorId, usersTable.id))
       .where(eq(dailyNotesTable.projectId, pid))
-      .orderBy(desc(dailyNotesTable.createdAt)).limit(5),
+      .orderBy(desc(dailyNotesTable.createdAt)).limit(10),
   ]);
   const progressPercent = milestonesRows.length === 0 ? 0 : Math.round(milestonesRows.filter(m => m.completedAt !== null).length / milestonesRows.length * 100);
   const activePermits = (permitRows as { expiryDate: string }[]).filter(p => expiryStatus(p.expiryDate) === "active").length;
@@ -707,6 +758,7 @@ router.get("/portal/shared", ...portalGuards, async (req, res) => {
   const docMapWithSafety = new Map(docMap);
   for (const d of safetyDocs) if (!docMapWithSafety.has(d.id)) docMapWithSafety.set(d.id, d.createdAt);
   const docs = [...gatedDocs, ...safetyDocs.filter(d => !docMap.has(d.id))];
+  const myStatuses = await myDocStatuses(req.user!.id, docs.map(d => d.id));
   // Annotate each item with when it was shared + whether it's unseen, and order
   // NEWEST-shared first so fresh content is at the top with the unseen highlight.
   const annotate = <T extends { id: string }>(rows: T[], serialize: (r: T) => any, map: Map<string, Date>) =>
@@ -715,7 +767,7 @@ router.get("/portal/shared", ...portalGuards, async (req, res) => {
       .sort((a, b) => b._at - a._at)
       .map(({ _at, ...rest }) => rest);
   res.json({
-    documents: annotate(docs, serializeDoc, docMapWithSafety),
+    documents: withMyStatus(annotate(docs, serializeDoc, docMapWithSafety), myStatuses),
     photos: annotate(photos, serializeIssue, photoMap),
     permits: annotate(permits, serializePermit, permitMap),
   });
@@ -1056,7 +1108,8 @@ function docListHandler(type: string) {
       const rows = await db.select().from(documentsTable)
         .where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, type), eq(documentsTable.status, "current")))
         .orderBy(asc(documentsTable.name));
-      res.json(rows.map(serializeDoc));
+      const myStatuses = await myDocStatuses(req.user!.id, rows.map(r => r.id));
+      res.json(withMyStatus(rows.map(serializeDoc), myStatuses));
       return;
     }
     const viewer = await resolveViewer(req.user!.id, pid);
@@ -1065,7 +1118,8 @@ function docListHandler(type: string) {
     const rows = await db.select().from(documentsTable)
       .where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, type), inArray(documentsTable.id, [...ids]), inArray(documentsTable.status, ["current", "superseded"])))
       .orderBy(asc(documentsTable.name));
-    res.json(rows.map(serializeDoc));
+    const myStatuses = await myDocStatuses(req.user!.id, rows.map(r => r.id));
+    res.json(withMyStatus(rows.map(serializeDoc), myStatuses));
   };
 }
 function docDetailHandler(type: string) {
@@ -1082,7 +1136,8 @@ function docDetailHandler(type: string) {
       if (!ids.has(rows[0].id)) { res.status(404).json({ error: "not_found", message: "Document not found" }); return; }
       await recordDocView(rows[0].id, req.user!.id);
     }
-    const payload: Record<string, unknown> = serializeDoc(rows[0]);
+    const myStatuses = await myDocStatuses(req.user!.id, [rows[0].id]);
+    const payload: Record<string, unknown> = withMyStatus([serializeDoc(rows[0])], myStatuses)[0];
     // If this doc has been superseded, point the member at its live replacement
     // so they can jump straight to the current version.
     if (rows[0].status === "superseded") {
@@ -1176,6 +1231,103 @@ router.get("/portal/documents/:documentId/download", ...portalGuards, async (req
   res.setHeader("Content-Type", "application/octet-stream");
   res.setHeader("Content-Disposition", `attachment; filename="${downloadName}"`);
   stream.pipe(res);
+});
+
+// POST /api/portal/documents/:documentId/view — record that this member opened
+// a document (pending → viewed). Fired from the client on "Open", separate from
+// sign-off: viewing never needs a PIN, only signing off does.
+router.post("/portal/documents/:documentId/view", ...portalGuards, async (req, res) => {
+  const pid = req.portalProjectId!;
+  const rows = await db.select({ id: documentsTable.id, type: documentsTable.type }).from(documentsTable)
+    .where(and(eq(documentsTable.id, req.params.documentId), eq(documentsTable.projectId, pid)))
+    .limit(1);
+  if (!rows[0] || !(await isDocVisibleToViewer(pid, req.user!.id, rows[0]))) {
+    res.status(404).json({ error: "not_found", message: "Document not found" });
+    return;
+  }
+  await recordDocView(rows[0].id, req.user!.id);
+  res.json({ success: true });
+});
+
+// POST /api/portal/documents/:documentId/acknowledge — PIN-confirmed sign-off,
+// the portal twin of POST /documents/:documentId/acknowledge (dashboard). A
+// portal member's "distribution" is implicit in what's shared with them (no
+// separate distribute step), so this upserts the row rather than requiring one
+// to already exist — same rate-limited PIN check, same append-only audit row.
+router.post("/portal/documents/:documentId/acknowledge", ...portalGuards, async (req, res) => {
+  const pid = req.portalProjectId!;
+  try {
+    const { pin } = req.body as { pin?: string };
+    const rows = await db.select().from(documentsTable)
+      .where(and(eq(documentsTable.id, req.params.documentId), eq(documentsTable.projectId, pid)))
+      .limit(1);
+    if (!rows[0] || !(await isDocVisibleToViewer(pid, req.user!.id, rows[0]))) {
+      res.status(404).json({ error: "not_found", message: "Document not found" });
+      return;
+    }
+    const doc = rows[0];
+    if (!doc.requiresAcknowledgment) {
+      res.status(400).json({ error: "validation_error", message: "This document does not require sign-off." });
+      return;
+    }
+
+    if (await isPinLockedOut(req.user!.id)) {
+      res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
+      return;
+    }
+    const userRows = await db.select({ pinHash: usersTable.pinHash, name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
+    const pinHash = userRows[0]?.pinHash ?? null;
+    if (!pinHash) {
+      res.status(400).json({ error: "pin_not_set", message: "You need to set a sign-off PIN before signing off documents." });
+      return;
+    }
+    if (!pin || !/^\d{4}$/.test(String(pin))) {
+      res.status(400).json({ error: "validation_error", message: "A 4-digit PIN is required to sign off this document." });
+      return;
+    }
+    const valid = await bcrypt.compare(String(pin), pinHash);
+    if (!valid) {
+      const { locked, remaining } = await recordFailedPinAttempt(req.user!.id);
+      if (locked) res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
+      else res.status(401).json({ error: "invalid_pin", message: "Incorrect PIN", attemptsRemaining: remaining });
+      return;
+    }
+    await clearPinAttempts(req.user!.id);
+
+    const existing = await db.select().from(documentDistributionsTable)
+      .where(and(eq(documentDistributionsTable.documentId, doc.id), eq(documentDistributionsTable.userId, req.user!.id)))
+      .limit(1);
+
+    await db.transaction(async (tx) => {
+      if (existing[0]) {
+        await tx.update(documentDistributionsTable)
+          .set({ status: "acknowledged", acknowledgedAt: new Date(), viewedAt: existing[0].viewedAt ?? new Date(), signedOffWithPin: true })
+          .where(eq(documentDistributionsTable.id, existing[0].id));
+      } else {
+        await tx.insert(documentDistributionsTable).values({
+          id: generateId(), documentId: doc.id, userId: req.user!.id,
+          status: "acknowledged", viewedAt: new Date(), acknowledgedAt: new Date(), signedOffWithPin: true,
+        });
+      }
+      await tx.insert(acknowledgmentAuditTable).values({
+        id: generateId(),
+        documentId: doc.id,
+        documentVersion: doc.version,
+        userId: req.user!.id,
+        userName: userRows[0]?.name ?? "Unknown",
+        userRole: req.portalMemberRole ?? "portal_member",
+        action: "acknowledged",
+        signedOffWithPin: true,
+        ipAddress: req.ip ?? null,
+        userAgent: req.headers["user-agent"] ?? null,
+      });
+    });
+
+    res.json({ success: true, message: "Document acknowledged" });
+  } catch (err) {
+    req.log.error({ err }, "Portal acknowledge document error");
+    res.status(500).json({ error: "server_error", message: "Failed to sign off document" });
+  }
 });
 
 // GET /api/portal/method-statements (+ /:documentId)

@@ -3,7 +3,8 @@ import { useRoute, useSearch, useLocation, Link } from "wouter";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import {
   useGetPortalOverview, useGetPortalTeam,
-  useGetPortalSiteIssues, useGetPortalSiteBoard,
+  useGetPortalSiteIssues, useGetPortalSiteBoard, useGetPortalPermits,
+  getGetPortalPermitsQueryKey,
   useGetPortalGeneral, useGetPortalShared,
   useGetPortalMyDocuments, useGetPortalUnseen, useGetPortalContext,
   useGetPortalPlantMaterials, useUpdatePortalPlantMaterialItem,
@@ -17,6 +18,7 @@ import {
   getGetPortalMyDocumentsQueryKey, getGetPortalUnseenQueryKey,
   getGetPortalPlantMaterialsQueryKey,
   getGetPortalDailyReportQueryKey, getGetPortalDailyReportHistoryQueryKey,
+  getGetPortalContextQueryKey,
 } from "@workspace/api-client-react";
 import { DictationButton } from "@/components/ui/dictation-button";
 import { MessagesView } from "./messages-view";
@@ -29,6 +31,7 @@ import {
   ExternalLink, MapPin, Calendar, Phone, Mail,
   FileText, AlertTriangle, StickyNote, Download, FileCheck,
   QrCode, Copy, Building2, ShieldCheck, X, Sparkles, UploadCloud, Share, Plus,
+  ChevronDown, ChevronRight, Users, FileSignature, CheckCircle2,
 } from "lucide-react";
 import { isCadFile, cadBadgeLabel, downloadFile } from "@/lib/documents";
 import { useToast } from "@/hooks/use-toast";
@@ -39,6 +42,7 @@ import {
   iosNeedsInstall, isIOS,
 } from "@/lib/portal-push";
 import { Bell, BellOff } from "lucide-react";
+import { useSignOffFlow } from "@/hooks/use-sign-off-flow";
 
 // Portal-authed binary download: the app's global fetch interceptor attaches the
 // portal bearer token to /api/portal/* requests, so a plain <a href> (which does
@@ -221,12 +225,13 @@ function NewPill() {
 type SupersededBy = { id: string; name: string; version: number; revision?: string };
 type FreshDocFull = { status?: string; supersededBy?: SupersededBy } | null;
 
-function DocRow({ doc, section, unseen }: { doc: any; section: string; unseen?: boolean }) {
+function DocRow({ doc, section, unseen, signOff }: { doc: any; section: string; unseen?: boolean; signOff: ReturnType<typeof useSignOffFlow> }) {
   const { toast } = useToast();
   const clickable = section === "drawings" || section === "method-statements";
   const cad = cadBadgeLabel(doc.fileUrl, doc.name);
   const [supersededNow, setSupersededNow] = useState(doc.status === "superseded");
   const [downloading, setDownloading] = useState(false);
+  const active = signOff.target?.id === doc.id;
 
   // Open the live replacement of a superseded document: fetch its detail for the
   // freshest fileUrl, then open/download it.
@@ -243,6 +248,9 @@ function DocRow({ doc, section, unseen }: { doc: any; section: string; unseen?: 
 
   const open = () => {
     openDocFile(doc);
+    // Log the view for every doc type (not just drawings/method-statements) —
+    // opening never needs a PIN, only signing off does. Fire-and-forget.
+    void fetch(`/api/portal/documents/${doc.id}/view`, { method: "POST" });
     if (!clickable) return;
     // Confirm current status at open (not from the cached list row).
     void fetchFreshDoc(section, doc.id).then(({ ok, doc: fresh }: { ok: boolean; doc: FreshDocFull }) => {
@@ -284,40 +292,117 @@ function DocRow({ doc, section, unseen }: { doc: any; section: string; unseen?: 
     }
   };
 
+  const needsSignOff = doc.requiresAcknowledgment && doc.myStatus !== "acknowledged";
+  const signedOff = doc.requiresAcknowledgment && doc.myStatus === "acknowledged";
+
   return (
-    <div className={cn("flex items-center justify-between gap-3 py-2.5 border-b border-border/60 last:border-0", unseen && "-mx-4 px-4 bg-primary/5")}>
-      <div className="min-w-0">
-        <p className="font-medium truncate flex items-center gap-1.5">
-          {unseen && <NewPill />}
-          <span className="truncate">{doc.name}</span>
-          {supersededNow && (
-            <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 px-1.5 py-0.5 rounded">Superseded</span>
-          )}
-        </p>
-        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-          <span>{doc.revision ? `Rev ${doc.revision}` : `v${doc.version}`} · {fmtDate(doc.createdAt)}</span>
-          {cad && <span className="font-mono bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 px-1.5 py-0.5 rounded text-[10px] font-bold">{cad}</span>}
-        </p>
-      </div>
-      <div className="shrink-0 flex items-center gap-1">
-        <button
-          onClick={open}
-          className="inline-flex items-center gap-1 rounded-lg px-3 min-h-11 text-sm text-primary font-medium hover:bg-primary/10"
-        >
-          {cad ? <><Download className="w-4 h-4" /> Download</> : <><ExternalLink className="w-4 h-4" /> View</>}
-        </button>
-        {!cad && (
+    <div className={cn("border-b border-border/60 last:border-0", unseen && "-mx-4 px-4 bg-primary/5")}>
+      <div className="flex items-center justify-between gap-3 py-2.5">
+        <div className="min-w-0">
+          <p className="font-medium truncate flex items-center gap-1.5">
+            {unseen && <NewPill />}
+            <span className="truncate">{doc.name}</span>
+            {supersededNow && (
+              <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 px-1.5 py-0.5 rounded">Superseded</span>
+            )}
+          </p>
+          <p className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
+            <span>{doc.revision ? `Rev ${doc.revision}` : `v${doc.version}`} · {fmtDate(doc.createdAt)}</span>
+            {cad && <span className="font-mono bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 px-1.5 py-0.5 rounded text-[10px] font-bold">{cad}</span>}
+            {signedOff && (
+              <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
+                <CheckCircle2 className="w-3 h-3" /> Signed off {doc.mySignedOffAt ? fmtDate(doc.mySignedOffAt) : ""}
+              </span>
+            )}
+          </p>
+        </div>
+        <div className="shrink-0 flex items-center gap-1">
           <button
-            onClick={() => void download()}
-            disabled={downloading}
-            aria-label={`Download ${doc.name}`}
-            className="inline-flex items-center justify-center rounded-lg px-3 min-h-11 text-sm text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+            onClick={open}
+            className="inline-flex items-center gap-1 rounded-lg px-3 min-h-11 text-sm text-primary font-medium hover:bg-primary/10"
           >
-            <Download className="w-4 h-4" />
+            {cad ? <><Download className="w-4 h-4" /> Download</> : <><ExternalLink className="w-4 h-4" /> View</>}
           </button>
-        )}
+          {!cad && (
+            <button
+              onClick={() => void download()}
+              disabled={downloading}
+              aria-label={`Download ${doc.name}`}
+              className="inline-flex items-center justify-center rounded-lg px-3 min-h-11 text-sm text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+          )}
+          {needsSignOff && !active && (
+            <button
+              onClick={() => signOff.open({ id: doc.id, name: doc.name })}
+              className="inline-flex items-center gap-1 rounded-lg px-3 min-h-11 text-sm text-primary font-semibold hover:bg-primary/10"
+            >
+              <FileSignature className="w-4 h-4" /> Sign off
+            </button>
+          )}
+        </div>
       </div>
+      {active && (
+        <div className="pb-3">
+          <SignOffPinCard flow={signOff} />
+        </div>
+      )}
     </div>
+  );
+}
+
+// Inline (no modal) PIN entry for a portal sign-off — mobile-first, matches the
+// rest of the portal's "expand in place" pattern (e.g. AddPlantItemForm) rather
+// than the dashboard's dialog-based flow.
+function SignOffPinCard({ flow }: { flow: ReturnType<typeof useSignOffFlow> }) {
+  if (!flow.target) return null;
+  return (
+    <Card className="border-primary/30 bg-primary/5">
+      {flow.setPinMode ? (
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">Set a 4-digit sign-off PIN to continue — you'll use it to confirm future sign-offs.</p>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Account password</label>
+            <input
+              type="password" autoComplete="current-password" value={flow.password} onChange={e => flow.setPassword(e.target.value)}
+              placeholder="Confirm it's you"
+              className="mt-1 w-full min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Choose a 4-digit PIN</label>
+            <input
+              type="password" inputMode="numeric" value={flow.newPin} onChange={e => flow.setNewPin(flow.onlyDigits(e.target.value))}
+              placeholder="••••"
+              className="mt-1 w-full min-h-11 rounded-xl border border-border bg-background px-3 text-sm tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </div>
+        </div>
+      ) : (
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">Enter your 4-digit PIN</label>
+          <input
+            type="password" inputMode="numeric" autoFocus value={flow.pin}
+            onChange={e => flow.setPin(flow.onlyDigits(e.target.value))}
+            onKeyDown={e => { if (e.key === "Enter") void flow.submit(); }}
+            placeholder="••••"
+            className="mt-1 w-full min-h-11 rounded-xl border border-border bg-background px-3 text-sm tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-primary/40"
+          />
+        </div>
+      )}
+      {flow.error && <p className="mt-2 text-xs text-destructive">{flow.error}</p>}
+      <div className="flex gap-2 mt-3">
+        <button
+          onClick={() => void flow.submit()}
+          disabled={flow.submitting}
+          className="flex-1 min-h-11 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50"
+        >
+          {flow.submitting ? "Signing off…" : flow.setPinMode ? "Set PIN & sign off" : "Sign off"}
+        </button>
+        <button onClick={flow.close} className="min-h-11 px-4 rounded-xl border text-sm font-medium hover:bg-muted">Cancel</button>
+      </div>
+    </Card>
   );
 }
 function PermitRow({ p, unseen }: { p: any; unseen?: boolean }) {
@@ -334,163 +419,133 @@ function PermitRow({ p, unseen }: { p: any; unseen?: boolean }) {
 
 // ---------- section views ----------
 
-// Human labels for the "New since your last visit" card — keyed by section key
-// (from SECTION_NAV, minus non-content sections that never carry unseen counts).
-const SECTION_LABEL: Record<string, string> = Object.fromEntries(SECTION_NAV.map(s => [s.key, s.label]));
-
-function WhatsNewCard() {
-  // Reuse the same unseen data the nav badges use (polled + focus-refetched).
-  const { data } = useGetPortalUnseen({ query: { refetchInterval: 60_000, queryKey: getGetPortalUnseenQueryKey() } });
-  const { data: ctx } = useGetPortalContext();
-  const counts = (data?.counts ?? {}) as Record<string, number>;
-  // Don't list Overview itself (you're already here); skip a permission-gated
-  // section this member doesn't have — its nav link is gone, so a stray count
-  // (belt-and-braces; the server itself stops counting these) must never
-  // render a dead/forbidden link. Order follows the nav.
-  const entries = SECTION_NAV
-    .filter(s => s.key !== "overview" && (counts[s.key] ?? 0) > 0)
-    .filter(s => !s.permission || !!ctx?.member[s.permission])
-    .map(s => ({ key: s.key, label: SECTION_LABEL[s.key] ?? s.key, count: counts[s.key], Icon: s.Icon }));
-  if (entries.length === 0) return null;
+// One site update, rendered identically in "Site Updates" and "Past Updates".
+function UpdateCard({ n }: { n: { id: string; body: string; noteDate: string; authorName: string } }) {
   return (
-    <div>
-      <div className="flex items-center gap-2 mb-3">
-        <Sparkles className="w-5 h-5 text-primary" />
-        <h2 className="text-lg font-display font-bold">New since your last visit</h2>
-      </div>
-      <div className="space-y-2">
-        {entries.map(e => (
-          <LinkRow
-            key={e.key}
-            href={`/portal/${e.key}`}
-            icon={<e.Icon className="w-5 h-5 text-primary" />}
-            label={e.label}
-            detail={<span className="min-w-[1.5rem] h-6 px-1.5 rounded-full text-xs font-bold flex items-center justify-center bg-primary text-primary-foreground">{e.count > 99 ? "99+" : e.count}</span>}
-            ariaLabel={`${e.label}: ${e.count} new`}
-          />
-        ))}
-      </div>
-    </div>
+    <Card>
+      <p className="text-sm whitespace-pre-wrap break-words">{n.body}</p>
+      <p className="text-xs text-muted-foreground mt-2">{n.authorName} · {fmtDate(n.noteDate)}</p>
+    </Card>
   );
 }
 
-// Overview content — embedded on the Home landing page (no standalone nav tab
-// any more). The address/progress card moved into Home's project header, and
-// the Milestones/Team-size stat rows were retired along with their standalone
-// sections; what remains is the What's-New card, the two deep-link stats that
-// still have live destinations, and recent site updates.
-function OverviewView() {
-  // Site updates are time-sensitive → poll while visible.
-  const { data, isLoading } = useGetPortalOverview({ query: { refetchInterval: PORTAL_LIVE_REFETCH, queryKey: getGetPortalOverviewQueryKey() } });
-  const { data: ctx } = useGetPortalContext();
-  if (isLoading) return <Loading />;
-  if (!data) return <Empty>Nothing to show yet.</Empty>;
-  const stats = [
-    // Open issues deep-links into the (permission-gated) Site Issues section —
-    // showing the count at all would tip off gated content, so drop the whole
-    // card when this member has no grant, same "absent, not greyed" rule as the nav.
-    ...(ctx?.member.canLogIssues ? [{ label: "Open issues", value: data.stats.openIssues, href: "/portal/site-issues?status=open", Icon: AlertTriangle }] : []),
-    // Permits no longer has its own nav tab — deep-links into "Shared with me"
-    // pre-filtered to the Permits category instead.
-    { label: "Active permits", value: data.stats.activePermits, href: "/portal/shared?category=permits", Icon: FileCheck },
-  ];
-  return (
-    <div className="space-y-5">
-      <WhatsNewCard />
-      {/* Each stat is a whole-row tap target (shared LinkRow) into its section, pre-filtered. */}
-      <div className="space-y-2">
-        {stats.map(s => (
-          <LinkRow
-            key={s.label}
-            href={s.href}
-            icon={<s.Icon className="w-5 h-5 text-primary" />}
-            label={s.label}
-            detail={<span className="text-lg font-bold text-foreground">{s.value}</span>}
-            ariaLabel={`${s.label}: ${s.value}`}
-          />
-        ))}
-      </div>
-      <div>
-        <SectionTitle>Recent site updates</SectionTitle>
-        {data.recentNotes.length === 0 ? <Empty>No site updates posted yet.</Empty> : (
-          <div className="space-y-3">
-            {data.recentNotes.map(n => (
-              <Card key={n.id}>
-                <p className="text-sm whitespace-pre-wrap break-words">{n.body}</p>
-                <p className="text-xs text-muted-foreground mt-2">{n.authorName} · {fmtDate(n.noteDate)}</p>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// Portal home — the single landing page (simplified-portal redesign). One
-// scrollable page: project identity (name, address, dates, site manager
-// contact), then Team, Overview and Site Board, replacing what used to be
-// four separate nav tabs. Old /portal/team, /portal/progress and
-// /portal/site-board deep links all land here too.
+// Portal home — 5-box redesign. Exactly five glanceable boxes: 1) Project info,
+// 2) Site manager, 3) Site Updates (the latest update only), 4) Past Updates
+// (older ones), 5) Team (collapsible). Everything else lives elsewhere: Site
+// Board + member-shared Permits moved to the second page (/portal/more, linked
+// prominently below the boxes AND in the nav); permission-gated work sections,
+// Messages and Shared with me are unchanged nav destinations. Old /portal/team
+// and /portal/progress deep links land here.
 function HomeView() {
   const { data: ctx } = useGetPortalContext();
-  const { data: board, isLoading } = useGetPortalSiteBoard();
+  const { data: board } = useGetPortalSiteBoard();
+  // Site updates are time-sensitive → poll while visible.
+  const { data: overview, isLoading } = useGetPortalOverview({ query: { refetchInterval: PORTAL_LIVE_REFETCH, queryKey: getGetPortalOverviewQueryKey() } });
+  const [teamOpen, setTeamOpen] = useState(false);
   if (isLoading && !ctx) return <Loading />;
   const project = ctx?.project;
   const sm = board?.siteManager;
+  const notes = overview?.recentNotes ?? [];
+  const latest = notes[0];
+  const past = notes.slice(1);
   const dates = project?.startDate || project?.targetEndDate
     ? [project?.startDate ? fmtDate(project.startDate) : "TBC", project?.targetEndDate ? fmtDate(project.targetEndDate) : "TBC"].join(" – ")
     : null;
   return (
-    <div className="space-y-8">
-      {/* Project header — name, address, dates, progress + site manager contact */}
-      <div className="space-y-3">
+    <div className="space-y-6">
+      {/* Box 1 — Project info */}
+      <Card>
+        <h2 className="text-lg font-display font-bold truncate">{project?.name}</h2>
+        {project?.address && (
+          <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+            <MapPin className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{project.address}</span>
+          </p>
+        )}
+        {dates && (
+          <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+            <Calendar className="w-3.5 h-3.5 shrink-0" /><span>{dates}</span>
+          </p>
+        )}
+        {typeof project?.progressPercent === "number" && (
+          <div className="flex items-center gap-2 mt-3">
+            <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+              <div className="h-full bg-emerald-500" style={{ width: `${project.progressPercent}%` }} />
+            </div>
+            <span className="text-sm font-bold">{project.progressPercent}%</span>
+          </div>
+        )}
+      </Card>
+
+      {/* Box 2 — Site manager */}
+      {sm && (
         <Card>
-          <h2 className="text-lg font-display font-bold truncate">{project?.name}</h2>
-          {project?.address && (
-            <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
-              <MapPin className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{project.address}</span>
-            </p>
-          )}
-          {dates && (
-            <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
-              <Calendar className="w-3.5 h-3.5 shrink-0" /><span>{dates}</span>
-            </p>
-          )}
-          {typeof project?.progressPercent === "number" && (
-            <div className="flex items-center gap-2 mt-3">
-              <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                <div className="h-full bg-emerald-500" style={{ width: `${project.progressPercent}%` }} />
-              </div>
-              <span className="text-sm font-bold">{project.progressPercent}%</span>
-            </div>
-          )}
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Site manager</p>
+          <p className="font-medium truncate mt-1">{sm.name}</p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 min-w-0">
+            {sm.phone && <a href={`tel:${sm.phone}`} className="inline-flex items-center gap-1 text-xs text-primary font-medium"><Phone className="w-3 h-3" /> {sm.phone}</a>}
+            {sm.email && <a href={`mailto:${sm.email}`} className="inline-flex items-center gap-1 text-xs text-primary font-medium min-w-0 max-w-full"><Mail className="w-3 h-3 shrink-0" /><span className="truncate">{sm.email}</span></a>}
+          </div>
         </Card>
-        {sm && (
-          <Card>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Site manager</p>
-            <p className="font-medium truncate mt-1">{sm.name}</p>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 min-w-0">
-              {sm.phone && <a href={`tel:${sm.phone}`} className="inline-flex items-center gap-1 text-xs text-primary font-medium"><Phone className="w-3 h-3" /> {sm.phone}</a>}
-              {sm.email && <a href={`mailto:${sm.email}`} className="inline-flex items-center gap-1 text-xs text-primary font-medium min-w-0 max-w-full"><Mail className="w-3 h-3 shrink-0" /><span className="truncate">{sm.email}</span></a>}
-            </div>
-          </Card>
+      )}
+
+      {/* Box 3 — Site Updates (latest only) */}
+      <div>
+        <SectionTitle>Site updates</SectionTitle>
+        {latest ? <UpdateCard n={latest} /> : <Empty>No site updates posted yet.</Empty>}
+      </div>
+
+      {/* Box 4 — Past Updates */}
+      <div>
+        <SectionTitle>Past updates</SectionTitle>
+        {past.length === 0 ? <Empty>No earlier updates yet.</Empty> : (
+          <div className="space-y-3">{past.map(n => <UpdateCard key={n.id} n={n} />)}</div>
         )}
       </div>
+
+      {/* Box 5 — Team (collapsible, collapsed by default = glanceable home) */}
       <div>
-        <SectionTitle>Team</SectionTitle>
-        <TeamView />
+        <button
+          onClick={() => setTeamOpen(o => !o)}
+          aria-expanded={teamOpen}
+          className="w-full flex items-center justify-between gap-3 bg-card border rounded-xl px-4 py-3 hover:bg-muted/50 transition-colors"
+        >
+          <span className="flex items-center gap-2 font-display font-bold"><Users className="w-5 h-5 text-primary" /> Team</span>
+          <ChevronDown className={cn("w-5 h-5 text-muted-foreground transition-transform", teamOpen && "rotate-180")} />
+        </button>
+        {teamOpen && <div className="mt-3"><TeamView /></div>}
       </div>
-      <div>
-        <SectionTitle>Overview</SectionTitle>
-        <OverviewView />
-      </div>
-      <div>
-        <SectionTitle>Site board</SectionTitle>
-        <SiteBoardView embedded />
+
+      {/* One-tap routes into the workspace menu's Site Board + Permits pages */}
+      <div className="space-y-2">
+        <LinkRow
+          href="/portal/site-board"
+          icon={<QrCode className="w-5 h-5 text-primary" />}
+          label="Site Board"
+          detail={<ChevronRight className="w-5 h-5 text-muted-foreground" />}
+          ariaLabel="Site Board"
+        />
+        <LinkRow
+          href="/portal/permits"
+          icon={<FileCheck className="w-5 h-5 text-primary" />}
+          label="Permits"
+          detail={<ChevronRight className="w-5 h-5 text-muted-foreground" />}
+          ariaLabel="Permits"
+        />
       </div>
     </div>
   );
+}
+
+// Permits page (workspace menu) — the permits shared with THIS member. Comes
+// from GET /api/portal/permits, which is server-gated to what has been shared
+// with the member (visibleIds), same mechanism as "Shared with me". NOTE:
+// navigation only — the PUBLIC QR board (/site/:token, no login) is a
+// separate route and untouched.
+function PermitsView() {
+  const { data: permits, isLoading } = useGetPortalPermits({ query: { queryKey: getGetPortalPermitsQueryKey() } });
+  if (isLoading) return <Loading />;
+  if (!permits || permits.length === 0) return <Empty>No permits have been shared with you yet.</Empty>;
+  return <Card>{permits.map((p: any) => <PermitRow key={p.id} p={p} />)}</Card>;
 }
 
 function TeamView() {
@@ -964,11 +1019,21 @@ function docMatchesCategory(doc: any, cat: SharedCategory): boolean {
 const CATEGORY_SHOWS_PERMITS = new Set<SharedCategory>(["all", "permits", "hs"]);
 
 function SharedView() {
+  const queryClient = useQueryClient();
   const initial = new URLSearchParams(useSearch()).get("category") as SharedCategory | null;
   const [category, setCategory] = useState<SharedCategory>(
     initial && SHARED_CATEGORIES.some(c => c.key === initial) ? initial : "all",
   );
   const { data, isLoading } = useGetPortalShared({ query: { refetchInterval: PORTAL_LIVE_REFETCH, queryKey: getGetPortalSharedQueryKey() } });
+  const { data: ctx } = useGetPortalContext();
+  const hasPin = !!ctx?.member.hasPin;
+  const signOff = useSignOffFlow({
+    hasPin,
+    acknowledgeUrl: id => `/api/portal/documents/${id}/acknowledge`,
+    setPinUrl: "/api/portal/pin",
+    onSigned: () => queryClient.invalidateQueries({ queryKey: getGetPortalSharedQueryKey() }),
+    onPinSet: () => queryClient.invalidateQueries({ queryKey: getGetPortalContextQueryKey() }),
+  });
   // Site notes lived on the old (now-retired) General tab alongside general
   // documents — they're project-wide announcements, not gated/shared content,
   // so they don't come back from /portal/shared. Pulled in here separately so
@@ -1012,7 +1077,7 @@ function SharedView() {
         ))}
       </div>
       {filteredDocs.length > 0 && (
-        <div><SectionTitle>Documents</SectionTitle><Card>{filteredDocs.map(d => <DocRow key={d.id} doc={d} section={docTypeSection(d.type)} unseen={isNew(d.id)} />)}</Card></div>
+        <div><SectionTitle>Documents</SectionTitle><Card>{filteredDocs.map(d => <DocRow key={d.id} doc={d} section={docTypeSection(d.type)} unseen={isNew(d.id)} signOff={signOff} />)}</Card></div>
       )}
       {showPermits && (
         <div><SectionTitle>Permits</SectionTitle><Card>{data!.permits.map(p => <PermitRow key={p.id} p={p} unseen={isNew(p.id)} />)}</Card></div>
@@ -1818,7 +1883,99 @@ function SettingsView() {
           )}
         </Card>
       </div>
+      <PortalPinSection />
       <AddToHomeScreenCard />
+    </div>
+  );
+}
+
+// Sign-off PIN setup/reset — same password-reverification pattern as the
+// dashboard's Settings PIN section (POST /api/auth/pin), just against the
+// portal-scoped twin (POST /api/portal/pin). This form doubles as "forgot PIN":
+// there's no separate reset flow, re-entering the account password IS the reset.
+function PortalPinSection() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data: ctx } = useGetPortalContext();
+  const hasPin = !!ctx?.member.hasPin;
+  const [password, setPassword] = useState("");
+  const [pin, setPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const onlyDigits = (v: string) => v.replace(/\D/g, "").slice(0, 4);
+
+  const save = async () => {
+    setStatus(null);
+    if (!password) { setStatus({ type: "error", text: "Enter your account password." }); return; }
+    if (!/^\d{4}$/.test(pin)) { setStatus({ type: "error", text: "PIN must be exactly 4 digits." }); return; }
+    if (pin !== confirmPin) { setStatus({ type: "error", text: "PINs do not match." }); return; }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/portal/pin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword: password, pin }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setStatus({ type: "error", text: data.message ?? "Could not save your PIN." }); return; }
+      setStatus({ type: "success", text: hasPin ? "Sign-off PIN updated." : "Sign-off PIN set." });
+      toast({ title: hasPin ? "PIN updated" : "PIN set" });
+      setPassword(""); setPin(""); setConfirmPin("");
+      queryClient.invalidateQueries({ queryKey: getGetPortalContextQueryKey() });
+    } catch {
+      setStatus({ type: "error", text: "Network error. Please try again." });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div>
+      <SectionTitle>Sign-off PIN</SectionTitle>
+      <Card>
+        <p className="text-sm text-muted-foreground mb-3">
+          {hasPin
+            ? "Used to confirm document sign-offs. Forgotten it? Enter your account password and choose a new one below."
+            : "Set a 4-digit PIN — you'll use it to sign off documents shared with you."}
+        </p>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Account password</label>
+            <input
+              type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)}
+              placeholder="Confirm it's you"
+              className="mt-1 w-full min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">{hasPin ? "New PIN" : "Choose PIN"}</label>
+              <input
+                type="password" inputMode="numeric" value={pin} onChange={e => setPin(onlyDigits(e.target.value))}
+                placeholder="••••"
+                className="mt-1 w-full min-h-11 rounded-xl border border-border bg-background px-3 text-sm tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Confirm PIN</label>
+              <input
+                type="password" inputMode="numeric" value={confirmPin} onChange={e => setConfirmPin(onlyDigits(e.target.value))}
+                placeholder="••••"
+                className="mt-1 w-full min-h-11 rounded-xl border border-border bg-background px-3 text-sm tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+          </div>
+          {status && <p className={cn("text-xs", status.type === "error" ? "text-destructive" : "text-emerald-600 dark:text-emerald-400")}>{status.text}</p>}
+          <button
+            onClick={() => void save()}
+            disabled={saving}
+            className="w-full min-h-11 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50"
+          >
+            {saving ? "Saving…" : hasPin ? "Update PIN" : "Set PIN"}
+          </button>
+        </div>
+      </Card>
     </div>
   );
 }
@@ -1839,13 +1996,14 @@ function renderSection(section: string) {
   const required = SECTION_PERMISSION[section];
   if (required && ctx && !ctx.member[required]) return <Empty>Section not found.</Empty>;
   switch (section) {
-    // Simplified-portal redesign: Overview/Team/Progress/Site Board no longer
-    // have their own tabs — all their old deep links land on the Home page.
+    // 5-box-home redesign: Overview/Team/Progress deep links land on Home;
+    // Site Board and Permits are their own workspace-menu pages again.
     case "overview":
     case "progress":
     case "team":
-    case "site-board":
       return <HomeView />;
+    case "site-board": return <SiteBoardView />;
+    case "permits": return <PermitsView />;
     case "shared": return <SharedView />;
     case "my-documents": return <MyDocumentsView />;
     case "settings": return <SettingsView />;
@@ -1857,18 +2015,20 @@ function renderSection(section: string) {
   }
 }
 
-// Legacy section URLs from the old multi-tab portal all show the Home page now.
-// Canonicalize them to "overview" so nav highlighting, unseen counts, and the
-// server's per-section activity/last-viewed tracking all agree on one key.
-const LEGACY_HOME_SECTIONS = new Set(["team", "progress", "site-board"]);
+// Legacy section URLs from the old multi-tab portal: team/progress show the
+// Home page. Site Board and Permits are real sections again. "more" was a
+// short-lived alias for Site Board — canonicalize so nav highlighting, unseen
+// counts, and the server's per-section tracking all agree on one key.
+const LEGACY_HOME_SECTIONS = new Set(["team", "progress"]);
 
 export default function PortalSectionPage() {
   const [, params] = useRoute("/portal/:section");
   const rawSection = params?.section ?? "overview";
-  const section = LEGACY_HOME_SECTIONS.has(rawSection) ? "overview" : rawSection;
+  const section = LEGACY_HOME_SECTIONS.has(rawSection) ? "overview" : rawSection === "more" ? "site-board" : rawSection;
   const [, navigate] = useLocation();
   useEffect(() => {
     if (LEGACY_HOME_SECTIONS.has(rawSection)) navigate("/portal/overview", { replace: true });
+    else if (rawSection === "more") navigate("/portal/site-board", { replace: true });
   }, [rawSection, navigate]);
   // Portal pages run on their own QueryClient (fresh-on-focus/mount + polling)
   // so a long-lived member session never shows stale content.

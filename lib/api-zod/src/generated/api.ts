@@ -95,6 +95,20 @@ export const GetMeResponse = zod.object({
 });
 
 /**
+ * Requires the account password as re-verification — also the "forgot PIN" path for a signed-in user. Every call is logged (set vs reset), never the PIN itself.
+ * @summary Set, update, or reset the current user's sign-off PIN
+ */
+export const SetSignOffPinBody = zod.object({
+  currentPassword: zod.string(),
+  pin: zod.string().describe("Exactly 4 digits."),
+});
+
+export const SetSignOffPinResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
  * @summary List all projects for the company
  */
 export const ListProjectsResponseItem = zod.object({
@@ -2520,6 +2534,28 @@ export const GetComplianceOverviewResponse = zod.object({
       projectId: zod.string(),
       projectName: zod.string(),
       pendingCount: zod.number(),
+      fileUrl: zod.string().nullish(),
+      version: zod.number(),
+      revision: zod.string().nullish(),
+      myStatus: zod
+        .enum(["pending", "viewed", "acknowledged"])
+        .nullish()
+        .describe(
+          "The requesting user's own sign-off status for this document, or null if they aren't a recipient (pure PM oversight).",
+        ),
+      recipients: zod
+        .array(
+          zod.object({
+            userId: zod.string(),
+            name: zod.string(),
+            status: zod.enum(["pending", "viewed", "acknowledged"]),
+            viewedAt: zod.date().nullish(),
+            acknowledgedAt: zod.date().nullish(),
+          }),
+        )
+        .describe(
+          'Every recipient of this document — so \"N pending\" resolves to named people, not just a count.',
+        ),
     }),
   ),
 });
@@ -2751,6 +2787,9 @@ export const PortalLoginResponse = zod.object({
       canLogIssues: zod.boolean(),
       canUpdatePlantMaterials: zod.boolean(),
       canEditDailyReport: zod.boolean(),
+      hasPin: zod
+        .boolean()
+        .describe("Whether this member has already set their sign-off PIN."),
     })
     .optional(),
   projects: zod
@@ -2823,6 +2862,9 @@ export const AcceptPortalInviteResponse = zod.object({
       canLogIssues: zod.boolean(),
       canUpdatePlantMaterials: zod.boolean(),
       canEditDailyReport: zod.boolean(),
+      hasPin: zod
+        .boolean()
+        .describe("Whether this member has already set their sign-off PIN."),
     })
     .optional(),
   projects: zod
@@ -2857,8 +2899,25 @@ export const GetPortalContextResponse = zod.object({
     canLogIssues: zod.boolean(),
     canUpdatePlantMaterials: zod.boolean(),
     canEditDailyReport: zod.boolean(),
+    hasPin: zod
+      .boolean()
+      .describe("Whether this member has already set their sign-off PIN."),
   }),
   sections: zod.array(zod.string()),
+});
+
+/**
+ * Requires the account password as re-verification — also the "forgot PIN" path. Every call is logged (set vs reset), never the PIN itself.
+ * @summary Set, update, or reset the signed-in member's sign-off PIN
+ */
+export const SetPortalPinBody = zod.object({
+  currentPassword: zod.string(),
+  pin: zod.string().describe("Exactly 4 digits."),
+});
+
+export const SetPortalPinResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
 });
 
 /**
@@ -3282,6 +3341,20 @@ export const GetPortalHsResponse = zod.object({
         .describe(
           "Set when this document is superseded — points at the live replacement.",
         ),
+      requiresAcknowledgment: zod
+        .boolean()
+        .optional()
+        .describe("Whether this document needs a PIN sign-off."),
+      myStatus: zod
+        .enum(["pending", "viewed", "acknowledged"])
+        .nullish()
+        .describe(
+          "This viewer's own sign-off status for the document, or null if they have no distribution record yet.",
+        ),
+      mySignedOffAt: zod
+        .date()
+        .nullish()
+        .describe("When this viewer signed it off, if they have."),
     }),
   ),
   safety: zod.array(
@@ -3318,6 +3391,20 @@ export const GetPortalHsResponse = zod.object({
         .describe(
           "Set when this document is superseded — points at the live replacement.",
         ),
+      requiresAcknowledgment: zod
+        .boolean()
+        .optional()
+        .describe("Whether this document needs a PIN sign-off."),
+      myStatus: zod
+        .enum(["pending", "viewed", "acknowledged"])
+        .nullish()
+        .describe(
+          "This viewer's own sign-off status for the document, or null if they have no distribution record yet.",
+        ),
+      mySignedOffAt: zod
+        .date()
+        .nullish()
+        .describe("When this viewer signed it off, if they have."),
     }),
   ),
   permits: zod.array(
@@ -3373,6 +3460,20 @@ export const GetPortalSharedResponse = zod.object({
         .describe(
           "Set when this document is superseded — points at the live replacement.",
         ),
+      requiresAcknowledgment: zod
+        .boolean()
+        .optional()
+        .describe("Whether this document needs a PIN sign-off."),
+      myStatus: zod
+        .enum(["pending", "viewed", "acknowledged"])
+        .nullish()
+        .describe(
+          "This viewer's own sign-off status for the document, or null if they have no distribution record yet.",
+        ),
+      mySignedOffAt: zod
+        .date()
+        .nullish()
+        .describe("When this viewer signed it off, if they have."),
     }),
   ),
   photos: zod.array(
@@ -3470,6 +3571,20 @@ export const GetPortalDrawingsResponseItem = zod.object({
     .describe(
       "Set when this document is superseded — points at the live replacement.",
     ),
+  requiresAcknowledgment: zod
+    .boolean()
+    .optional()
+    .describe("Whether this document needs a PIN sign-off."),
+  myStatus: zod
+    .enum(["pending", "viewed", "acknowledged"])
+    .nullish()
+    .describe(
+      "This viewer's own sign-off status for the document, or null if they have no distribution record yet.",
+    ),
+  mySignedOffAt: zod
+    .date()
+    .nullish()
+    .describe("When this viewer signed it off, if they have."),
 });
 export const GetPortalDrawingsResponse = zod.array(
   GetPortalDrawingsResponseItem,
@@ -3515,6 +3630,20 @@ export const GetPortalDrawingResponse = zod.object({
     .describe(
       "Set when this document is superseded — points at the live replacement.",
     ),
+  requiresAcknowledgment: zod
+    .boolean()
+    .optional()
+    .describe("Whether this document needs a PIN sign-off."),
+  myStatus: zod
+    .enum(["pending", "viewed", "acknowledged"])
+    .nullish()
+    .describe(
+      "This viewer's own sign-off status for the document, or null if they have no distribution record yet.",
+    ),
+  mySignedOffAt: zod
+    .date()
+    .nullish()
+    .describe("When this viewer signed it off, if they have."),
 });
 
 /**
@@ -3522,6 +3651,36 @@ export const GetPortalDrawingResponse = zod.object({
  */
 export const DownloadPortalDocumentParams = zod.object({
   documentId: zod.coerce.string(),
+});
+
+/**
+ * @summary Record that this member opened a document (pending → viewed)
+ */
+export const ViewPortalDocumentParams = zod.object({
+  documentId: zod.coerce.string(),
+});
+
+export const ViewPortalDocumentResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * @summary Sign off a document shared with this member (PIN-confirmed)
+ */
+export const AcknowledgePortalDocumentParams = zod.object({
+  documentId: zod.coerce.string(),
+});
+
+export const AcknowledgePortalDocumentBody = zod.object({
+  pin: zod.string().nullish(),
+  latitude: zod.number().nullish(),
+  longitude: zod.number().nullish(),
+});
+
+export const AcknowledgePortalDocumentResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
 });
 
 /**
@@ -3628,6 +3787,20 @@ export const GetPortalMethodStatementsResponseItem = zod.object({
     .describe(
       "Set when this document is superseded — points at the live replacement.",
     ),
+  requiresAcknowledgment: zod
+    .boolean()
+    .optional()
+    .describe("Whether this document needs a PIN sign-off."),
+  myStatus: zod
+    .enum(["pending", "viewed", "acknowledged"])
+    .nullish()
+    .describe(
+      "This viewer's own sign-off status for the document, or null if they have no distribution record yet.",
+    ),
+  mySignedOffAt: zod
+    .date()
+    .nullish()
+    .describe("When this viewer signed it off, if they have."),
 });
 export const GetPortalMethodStatementsResponse = zod.array(
   GetPortalMethodStatementsResponseItem,
@@ -3673,6 +3846,20 @@ export const GetPortalMethodStatementResponse = zod.object({
     .describe(
       "Set when this document is superseded — points at the live replacement.",
     ),
+  requiresAcknowledgment: zod
+    .boolean()
+    .optional()
+    .describe("Whether this document needs a PIN sign-off."),
+  myStatus: zod
+    .enum(["pending", "viewed", "acknowledged"])
+    .nullish()
+    .describe(
+      "This viewer's own sign-off status for the document, or null if they have no distribution record yet.",
+    ),
+  mySignedOffAt: zod
+    .date()
+    .nullish()
+    .describe("When this viewer signed it off, if they have."),
 });
 
 /**
@@ -3727,6 +3914,20 @@ export const GetPortalSafetyResponseItem = zod.object({
     .describe(
       "Set when this document is superseded — points at the live replacement.",
     ),
+  requiresAcknowledgment: zod
+    .boolean()
+    .optional()
+    .describe("Whether this document needs a PIN sign-off."),
+  myStatus: zod
+    .enum(["pending", "viewed", "acknowledged"])
+    .nullish()
+    .describe(
+      "This viewer's own sign-off status for the document, or null if they have no distribution record yet.",
+    ),
+  mySignedOffAt: zod
+    .date()
+    .nullish()
+    .describe("When this viewer signed it off, if they have."),
 });
 export const GetPortalSafetyResponse = zod.array(GetPortalSafetyResponseItem);
 
@@ -3768,6 +3969,20 @@ export const GetPortalGeneralResponse = zod.object({
         .describe(
           "Set when this document is superseded — points at the live replacement.",
         ),
+      requiresAcknowledgment: zod
+        .boolean()
+        .optional()
+        .describe("Whether this document needs a PIN sign-off."),
+      myStatus: zod
+        .enum(["pending", "viewed", "acknowledged"])
+        .nullish()
+        .describe(
+          "This viewer's own sign-off status for the document, or null if they have no distribution record yet.",
+        ),
+      mySignedOffAt: zod
+        .date()
+        .nullish()
+        .describe("When this viewer signed it off, if they have."),
     }),
   ),
   notes: zod.array(

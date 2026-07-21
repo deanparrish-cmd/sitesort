@@ -296,6 +296,12 @@ export interface AcknowledgeRequest {
   longitude?: number | null;
 }
 
+export interface SetPinRequest {
+  currentPassword: string;
+  /** Exactly 4 digits. */
+  pin: string;
+}
+
 export interface DistributeRequest {
   userIds: string[];
 }
@@ -1309,12 +1315,49 @@ export interface ExpiringPermitItem {
   status: ExpiringPermitItemStatus;
 }
 
+/**
+ * The requesting user's own sign-off status for this document, or null if they aren't a recipient (pure PM oversight).
+ */
+export type PendingAcknowledgmentItemMyStatus =
+  | (typeof PendingAcknowledgmentItemMyStatus)[keyof typeof PendingAcknowledgmentItemMyStatus]
+  | null;
+
+export const PendingAcknowledgmentItemMyStatus = {
+  pending: "pending",
+  viewed: "viewed",
+  acknowledged: "acknowledged",
+} as const;
+
+export type AckRecipientStatus =
+  (typeof AckRecipientStatus)[keyof typeof AckRecipientStatus];
+
+export const AckRecipientStatus = {
+  pending: "pending",
+  viewed: "viewed",
+  acknowledged: "acknowledged",
+} as const;
+
+export interface AckRecipient {
+  userId: string;
+  name: string;
+  status: AckRecipientStatus;
+  viewedAt?: string | null;
+  acknowledgedAt?: string | null;
+}
+
 export interface PendingAcknowledgmentItem {
   documentId: string;
   documentName: string;
   projectId: string;
   projectName: string;
   pendingCount: number;
+  fileUrl?: string | null;
+  version: number;
+  revision?: string | null;
+  /** The requesting user's own sign-off status for this document, or null if they aren't a recipient (pure PM oversight). */
+  myStatus?: PendingAcknowledgmentItemMyStatus;
+  /** Every recipient of this document — so "N pending" resolves to named people, not just a count. */
+  recipients: AckRecipient[];
 }
 
 export interface ComplianceOverview {
@@ -1393,6 +1436,8 @@ export interface PortalMemberRef {
   canLogIssues: boolean;
   canUpdatePlantMaterials: boolean;
   canEditDailyReport: boolean;
+  /** Whether this member has already set their sign-off PIN. */
+  hasPin: boolean;
 }
 
 export interface PortalLoginRequest {
@@ -1577,6 +1622,19 @@ export type PortalDocumentSupersededBy = {
   revision?: string;
 };
 
+/**
+ * This viewer's own sign-off status for the document, or null if they have no distribution record yet.
+ */
+export type PortalDocumentMyStatus =
+  | (typeof PortalDocumentMyStatus)[keyof typeof PortalDocumentMyStatus]
+  | null;
+
+export const PortalDocumentMyStatus = {
+  pending: "pending",
+  viewed: "viewed",
+  acknowledged: "acknowledged",
+} as const;
+
 export interface PortalDocument {
   id: string;
   name: string;
@@ -1593,6 +1651,12 @@ export interface PortalDocument {
   sharedAt?: string;
   /** Set when this document is superseded — points at the live replacement. */
   supersededBy?: PortalDocumentSupersededBy;
+  /** Whether this document needs a PIN sign-off. */
+  requiresAcknowledgment?: boolean;
+  /** This viewer's own sign-off status for the document, or null if they have no distribution record yet. */
+  myStatus?: PortalDocumentMyStatus;
+  /** When this viewer signed it off, if they have. */
+  mySignedOffAt?: string | null;
 }
 
 export interface PortalMemberDocument {

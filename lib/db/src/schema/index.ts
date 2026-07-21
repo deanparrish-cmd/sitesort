@@ -13,6 +13,7 @@ export * from "./activity_log";
 export * from "./documents";
 export * from "./document_distributions";
 export * from "./acknowledgment_audit";
+export * from "./pin_audit_log";
 export * from "./insurance_records";
 export * from "./permits";
 export * from "./photos";

@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import {
   Home, AlertTriangle,
   LogOut, Inbox, HardHat,
-  Settings, Menu, X, FolderUp, Wrench, ClipboardList, MessageSquare,
+  Settings, Menu, X, FolderUp, Wrench, ClipboardList, MessageSquare, QrCode, FileCheck,
 } from "lucide-react";
 
 // The fixed portal nav — order + labels + icons. `key` matches the URL segment
@@ -31,6 +31,11 @@ import {
 // workspace, with the permission-gated work sections at the BOTTOM.
 export const SECTION_NAV: { key: string; label: string; Icon: typeof Home; permission?: "canLogIssues" | "canUpdatePlantMaterials" | "canEditDailyReport" }[] = [
   { key: "overview", label: "Home", Icon: Home },
+  // 5-box-home redesign: Site Board + member-shared Permits moved off Home
+  // into the existing "page 2" workspace menu (alongside Messages/Shared) —
+  // one tap from Home via the menu AND via link rows at the bottom of Home.
+  { key: "site-board", label: "Site Board", Icon: QrCode },
+  { key: "permits", label: "Permits", Icon: FileCheck },
   { key: "messages", label: "Messages", Icon: MessageSquare },
   { key: "shared", label: "Shared with me", Icon: Inbox },
   { key: "my-documents", label: "My documents", Icon: FolderUp },

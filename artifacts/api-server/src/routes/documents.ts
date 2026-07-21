@@ -10,9 +10,6 @@ import { enqueuePushForMembers, acceptedPortalMemberUserIds } from "../lib/push-
 import { removedFromProjectUserIds } from "../lib/project-membership";
 import { isPinLockedOut, recordFailedPinAttempt, clearPinAttempts } from "../lib/pin-attempts";
 
-// Document types that require a PIN to sign off (critical compliance documents).
-const PIN_REQUIRED_TYPES = ["drawing", "method_statement", "safety"];
-
 const APP_URL = process.env.APP_URL ?? `https://${process.env.REPLIT_DEV_DOMAIN ?? "www.sitesort.co.uk"}`;
 
 // A per-distribution tracked open link. When the recipient clicks it from their
@@ -360,8 +357,7 @@ router.post("/documents/:documentId/acknowledge", authenticate, async (req, res)
   try {
     const { pin } = req.body ?? {};
 
-    // Load the document (and verify tenant access) to determine whether it is a
-    // critical type that requires PIN-confirmed sign-off.
+    // Load the document and verify tenant access.
     const docs = await db.select({ id: documentsTable.id, type: documentsTable.type, projectId: documentsTable.projectId, version: documentsTable.version })
       .from(documentsTable).where(eq(documentsTable.id, req.params.documentId)).limit(1);
     if (!docs[0]) {
@@ -385,40 +381,38 @@ router.post("/documents/:documentId/acknowledge", authenticate, async (req, res)
       return;
     }
 
-    const requiresPin = PIN_REQUIRED_TYPES.includes(docs[0].type);
-
-    if (requiresPin) {
-      // Rate-limit PIN attempts per user.
-      if (await isPinLockedOut(req.user!.id)) {
-        res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
-        return;
-      }
-
-      const users = await db.select({ pinHash: usersTable.pinHash }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
-      const pinHash = users[0]?.pinHash ?? null;
-      if (!pinHash) {
-        res.status(400).json({ error: "pin_not_set", message: "You need to set a sign-off PIN before signing off critical documents." });
-        return;
-      }
-
-      if (!pin || !/^\d{4}$/.test(String(pin))) {
-        res.status(400).json({ error: "validation_error", message: "A 4-digit PIN is required to sign off this document." });
-        return;
-      }
-
-      const valid = await bcrypt.compare(String(pin), pinHash);
-      if (!valid) {
-        const { locked, remaining } = await recordFailedPinAttempt(req.user!.id);
-        if (locked) {
-          res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
-        } else {
-          res.status(401).json({ error: "invalid_pin", message: "Incorrect PIN", attemptsRemaining: remaining });
-        }
-        return;
-      }
-
-      await clearPinAttempts(req.user!.id);
+    // Every sign-off is PIN-confirmed — that's what makes it an attributable
+    // signature, not just a click. Rate-limited per user (5 wrong attempts locks
+    // out for 15 minutes) so a PIN can't be brute-forced.
+    if (await isPinLockedOut(req.user!.id)) {
+      res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
+      return;
     }
+
+    const users = await db.select({ pinHash: usersTable.pinHash }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
+    const pinHash = users[0]?.pinHash ?? null;
+    if (!pinHash) {
+      res.status(400).json({ error: "pin_not_set", message: "You need to set a sign-off PIN before signing off documents." });
+      return;
+    }
+
+    if (!pin || !/^\d{4}$/.test(String(pin))) {
+      res.status(400).json({ error: "validation_error", message: "A 4-digit PIN is required to sign off this document." });
+      return;
+    }
+
+    const valid = await bcrypt.compare(String(pin), pinHash);
+    if (!valid) {
+      const { locked, remaining } = await recordFailedPinAttempt(req.user!.id);
+      if (locked) {
+        res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
+      } else {
+        res.status(401).json({ error: "invalid_pin", message: "Incorrect PIN", attemptsRemaining: remaining });
+      }
+      return;
+    }
+
+    await clearPinAttempts(req.user!.id);
 
     // Snapshot the actor's name/role so the audit record survives later user changes.
     const actorRows = await db.select({ name: usersTable.name, role: usersTable.role })
@@ -428,7 +422,7 @@ router.post("/documents/:documentId/acknowledge", authenticate, async (req, res)
     // either both the sign-off and its append-only audit record persist, or neither does.
     await db.transaction(async (tx) => {
       await tx.update(documentDistributionsTable)
-        .set({ status: "acknowledged", acknowledgedAt: new Date(), viewedAt: distRecord[0].viewedAt ?? new Date(), signedOffWithPin: requiresPin })
+        .set({ status: "acknowledged", acknowledgedAt: new Date(), viewedAt: distRecord[0].viewedAt ?? new Date(), signedOffWithPin: true })
         .where(eq(documentDistributionsTable.id, distRecord[0].id));
 
       await tx.insert(acknowledgmentAuditTable).values({
@@ -439,7 +433,7 @@ router.post("/documents/:documentId/acknowledge", authenticate, async (req, res)
         userName: actorRows[0]?.name ?? "Unknown",
         userRole: actorRows[0]?.role ?? req.user!.role,
         action: "acknowledged",
-        signedOffWithPin: requiresPin,
+        signedOffWithPin: true,
         ipAddress: req.ip ?? null,
         userAgent: req.headers["user-agent"] ?? null,
       });

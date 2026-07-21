@@ -494,7 +494,6 @@ export function useProjectDetailState() {
   const { data: me } = useGetMe();
   const caps = useCapabilities();
   const hasPin = !!(me as { hasPin?: boolean } | undefined)?.hasPin;
-  const PIN_REQUIRED_TYPES = ["drawing", "method_statement", "safety"];
   type SignOffDoc = { id: string; name: string; type: string };
   const [signOffDoc, setSignOffDoc] = useState<SignOffDoc | null>(null);
   const [signOffPin, setSignOffPin] = useState("");
@@ -503,7 +502,8 @@ export function useProjectDetailState() {
   const [setPinMode, setSetPinMode] = useState(false);
   const [setPinPassword, setSetPinPassword] = useState("");
   const [setPinValue, setSetPinValue] = useState("");
-  const signOffNeedsPin = !!signOffDoc && PIN_REQUIRED_TYPES.includes(signOffDoc.type);
+  // Every sign-off is PIN-confirmed — that's what makes it an attributable signature.
+  const signOffNeedsPin = !!signOffDoc;
   const onlyDigits = (v: string) => v.replace(/\D/g, "").slice(0, 4);
 
   // Immutable acknowledgment audit trail — admins & project managers only.
@@ -521,7 +521,7 @@ export function useProjectDetailState() {
     setSignOffPin("");
     setSetPinPassword("");
     setSetPinValue("");
-    setSetPinMode(PIN_REQUIRED_TYPES.includes(doc.type) && !hasPin);
+    setSetPinMode(!hasPin);
     setSignOffDoc(doc);
   };
 
@@ -536,24 +536,21 @@ export function useProjectDetailState() {
 
   const submitSignOff = async () => {
     if (!signOffDoc) return;
-    const needsPin = PIN_REQUIRED_TYPES.includes(signOffDoc.type);
     setSignOffError(null);
 
     let pinToUse: string | undefined;
-    if (needsPin) {
-      if (setPinMode) {
-        if (!setPinPassword) { setSignOffError("Enter your account password to set a PIN."); return; }
-        if (!/^\d{4}$/.test(setPinValue)) { setSignOffError("PIN must be exactly 4 digits."); return; }
-        pinToUse = setPinValue;
-      } else {
-        if (!/^\d{4}$/.test(signOffPin)) { setSignOffError("Enter your 4-digit PIN."); return; }
-        pinToUse = signOffPin;
-      }
+    if (setPinMode) {
+      if (!setPinPassword) { setSignOffError("Enter your account password to set a PIN."); return; }
+      if (!/^\d{4}$/.test(setPinValue)) { setSignOffError("PIN must be exactly 4 digits."); return; }
+      pinToUse = setPinValue;
+    } else {
+      if (!/^\d{4}$/.test(signOffPin)) { setSignOffError("Enter your 4-digit PIN."); return; }
+      pinToUse = signOffPin;
     }
 
     setSignOffSubmitting(true);
     try {
-      if (needsPin && setPinMode) {
+      if (setPinMode) {
         const pinRes = await fetch("/api/auth/pin", {
           method: "POST",
           headers: authHeaders(),
@@ -1529,7 +1526,6 @@ tr:last-child td{border-bottom:none}
     me,
     caps,
     hasPin,
-    PIN_REQUIRED_TYPES,
     signOffDoc,
     setSignOffDoc,
     signOffPin,

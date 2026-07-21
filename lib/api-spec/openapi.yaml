@@ -137,6 +137,32 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /auth/pin:
+    post:
+      operationId: setSignOffPin
+      tags: [auth]
+      summary: Set, update, or reset the current user's sign-off PIN
+      description: Requires the account password as re-verification — also the "forgot PIN" path for a signed-in user. Every call is logged (set vs reset), never the PIN itself.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetPinRequest"
+      responses:
+        "200":
+          description: PIN set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          description: Current password is incorrect
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /projects:
     get:
       operationId: listProjects
@@ -2044,6 +2070,32 @@ paths:
               schema:
                 $ref: "#/components/schemas/PortalContext"
 
+  /portal/pin:
+    post:
+      operationId: setPortalPin
+      tags: [portal]
+      summary: Set, update, or reset the signed-in member's sign-off PIN
+      description: Requires the account password as re-verification — also the "forgot PIN" path. Every call is logged (set vs reset), never the PIN itself.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetPinRequest"
+      responses:
+        "200":
+          description: PIN set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          description: Current password is incorrect
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /portal/overview:
     get:
       operationId: getPortalOverview
@@ -2375,6 +2427,74 @@ paths:
                 format: binary
         "404":
           description: Document not found or file unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /portal/documents/{documentId}/view:
+    post:
+      operationId: viewPortalDocument
+      tags: [portal]
+      summary: Record that this member opened a document (pending → viewed)
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: View recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          description: Document not found or not shared with this member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /portal/documents/{documentId}/acknowledge:
+    post:
+      operationId: acknowledgePortalDocument
+      tags: [portal]
+      summary: Sign off a document shared with this member (PIN-confirmed)
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcknowledgeRequest"
+      responses:
+        "200":
+          description: Sign-off recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Validation error, or no PIN set yet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Incorrect PIN
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Too many incorrect PIN attempts
           content:
             application/json:
               schema:
@@ -3447,6 +3567,16 @@ components:
           type: number
           nullable: true
       required: []
+
+    SetPinRequest:
+      type: object
+      properties:
+        currentPassword:
+          type: string
+        pin:
+          type: string
+          description: Exactly 4 digits.
+      required: [currentPassword, pin]
 
     DistributeRequest:
       type: object
@@ -4742,7 +4872,45 @@ components:
           type: string
         pendingCount:
           type: integer
-      required: [documentId, documentName, projectId, projectName, pendingCount]
+        fileUrl:
+          type: string
+          nullable: true
+        version:
+          type: integer
+        revision:
+          type: string
+          nullable: true
+        myStatus:
+          type: string
+          enum: [pending, viewed, acknowledged]
+          nullable: true
+          description: The requesting user's own sign-off status for this document, or null if they aren't a recipient (pure PM oversight).
+        recipients:
+          type: array
+          description: Every recipient of this document — so "N pending" resolves to named people, not just a count.
+          items:
+            $ref: "#/components/schemas/AckRecipient"
+      required: [documentId, documentName, projectId, projectName, pendingCount, version, recipients]
+
+    AckRecipient:
+      type: object
+      properties:
+        userId:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+          enum: [pending, viewed, acknowledged]
+        viewedAt:
+          type: string
+          format: date-time
+          nullable: true
+        acknowledgedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required: [userId, name, status]
 
     Notification:
       type: object
@@ -4845,7 +5013,10 @@ components:
           type: boolean
         canEditDailyReport:
           type: boolean
-      required: [userId, name, role, email, canLogIssues, canUpdatePlantMaterials, canEditDailyReport]
+        hasPin:
+          type: boolean
+          description: Whether this member has already set their sign-off PIN.
+      required: [userId, name, role, email, canLogIssues, canUpdatePlantMaterials, canEditDailyReport, hasPin]
 
     PortalLoginRequest:
       type: object
@@ -5149,6 +5320,19 @@ components:
             revision:
               type: string
           required: [id, name, version]
+        requiresAcknowledgment:
+          type: boolean
+          description: Whether this document needs a PIN sign-off.
+        myStatus:
+          type: string
+          enum: [pending, viewed, acknowledged]
+          nullable: true
+          description: This viewer's own sign-off status for the document, or null if they have no distribution record yet.
+        mySignedOffAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When this viewer signed it off, if they have.
       required: [id, name, type, version, fileUrl, status]
 
     PortalMemberDocument:
