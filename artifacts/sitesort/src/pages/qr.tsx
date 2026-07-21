@@ -1,10 +1,11 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { QrCode, Download, Printer, Plus, RefreshCw, Building2, MapPin } from "lucide-react";
+import { QrCode, Download, Printer, Building2, MapPin, ExternalLink } from "lucide-react";
+import { Link } from "wouter";
 import { QRCodeSVG } from "qrcode.react";
 import { useListProjects } from "@workspace/api-client-react";
 
@@ -14,43 +15,35 @@ function buildSiteUrl(token: string): string {
   return `${window.location.origin}${BASE}/site/${token}`;
 }
 
+// Read-only mirror of the QR code created inside the project's QR tab.
+// This page never generates codes itself — if a project has no site-board QR
+// yet, we point at the project (single source of truth for creation).
 function ProjectQrCard({ project }: { project: any }) {
   const [qrData, setQrData] = useState<{ token: string; siteUrl: string } | null>(null);
-  const [loading, setLoading] = useState(false);
   const [fetched, setFetched] = useState(false);
   const svgRef = useRef<HTMLDivElement>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const token = localStorage.getItem("sitesort_token");
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (token) headers["Authorization"] = `Bearer ${token}`;
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = localStorage.getItem("sitesort_token");
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      const existing = await fetch(`/api/projects/${project.id}/qr-codes`, { headers }).then(r => r.json());
-      if (Array.isArray(existing) && existing.length > 0) {
-        const qr = existing.find((q: any) => q.category === "site_board") ?? existing[0];
-        setQrData({ token: qr.token, siteUrl: buildSiteUrl(qr.token) });
-        setFetched(true);
-        return;
+        const existing = await fetch(`/api/projects/${project.id}/qr-codes`, { headers }).then(r => r.json());
+        if (cancelled) return;
+        if (Array.isArray(existing) && existing.length > 0) {
+          const qr = existing.find((q: any) => q.category === "site_board") ?? existing[0];
+          setQrData({ token: qr.token, siteUrl: buildSiteUrl(qr.token) });
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (!cancelled) setFetched(true);
       }
-
-      const res = await fetch(`/api/projects/${project.id}/qr-codes`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ categories: ["site_board"] }),
-      });
-      const created = await res.json();
-      if (Array.isArray(created) && created.length > 0) {
-        const qr = created[0];
-        setQrData({ token: qr.token, siteUrl: buildSiteUrl(qr.token) });
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-      setFetched(true);
-    }
+    })();
+    return () => { cancelled = true; };
   }, [project.id]);
 
   const downloadSvg = () => {
@@ -108,16 +101,8 @@ function ProjectQrCard({ project }: { project: any }) {
       </CardHeader>
       <CardContent className="flex-1 flex flex-col items-center gap-4">
         {!fetched ? (
-          <div className="flex-1 flex flex-col items-center justify-center py-6 gap-3 w-full">
-            <div className="w-24 h-24 rounded-xl bg-muted flex items-center justify-center opacity-40">
-              <QrCode className="w-10 h-10 text-muted-foreground" />
-            </div>
-            <p className="text-sm text-muted-foreground text-center">
-              Generate a QR code for the<br />site information board
-            </p>
-            <Button onClick={load} disabled={loading} size="sm">
-              {loading ? <><RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />Generating…</> : <><Plus className="w-3.5 h-3.5 mr-1.5" />Generate QR Code</>}
-            </Button>
+          <div className="flex-1 flex items-center justify-center py-10 w-full">
+            <div className="w-24 h-24 rounded-xl bg-muted animate-pulse" />
           </div>
         ) : qrData ? (
           <>
@@ -142,7 +127,19 @@ function ProjectQrCard({ project }: { project: any }) {
             </div>
           </>
         ) : (
-          <p className="text-sm text-destructive py-4">Failed to generate QR code</p>
+          <div className="flex-1 flex flex-col items-center justify-center py-6 gap-3 w-full">
+            <div className="w-24 h-24 rounded-xl bg-muted flex items-center justify-center opacity-40">
+              <QrCode className="w-10 h-10 text-muted-foreground" />
+            </div>
+            <p className="text-sm text-muted-foreground text-center">
+              No QR code created for this<br />project yet
+            </p>
+            <Link href={`/projects/${project.id}?tab=qr`}>
+              <Button size="sm" variant="outline">
+                <ExternalLink className="w-3.5 h-3.5 mr-1.5" /> Create it in the project
+              </Button>
+            </Link>
+          </div>
         )}
       </CardContent>
     </Card>
@@ -159,7 +156,7 @@ export default function QrPage() {
       <PageHeader
         className="mb-8"
         title="QR Code Site Boards"
-        description="Generate a QR code for each project. Print and post it on site — workers can scan it to view live site information without needing an account."
+        description="The QR codes created in each project, all in one place. Print and post them on site — workers can scan to view live site information without needing an account."
       />
 
       {isLoading ? (
@@ -170,7 +167,7 @@ export default function QrPage() {
         <Card className="p-12 text-center border-dashed border-2">
           <Building2 className="w-12 h-12 mx-auto text-muted-foreground mb-4 opacity-40" />
           <h3 className="text-lg font-bold">No active projects</h3>
-          <p className="text-muted-foreground">Create a project first, then generate its QR code here.</p>
+          <p className="text-muted-foreground">Create a project first — its QR code will show here once created in the project.</p>
         </Card>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
