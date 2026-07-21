@@ -20,10 +20,9 @@ import {
 // General were retired as standalone tabs — that content now surfaces only
 // inside "Shared with me" (with a category filter), since it was always just
 // a differently-sliced view of the same shared documents/permits. Site
-// Issues, Plant & Materials, and Daily Report are marked `permission` below:
-// PortalLayout filters them out entirely (not greyed — absent) unless the PM
-// has granted the matching flag on that member's project_members row. Every
-// other entry here is always visible to every portal member.
+// Issues, Plant & Materials, and Daily Report are visible to EVERY member as
+// read-only sections (members can always reopen and view items); the
+// project_members permission flags only gate the write actions inside them.
 // Simplified-portal redesign (2 pages): "Home" is the single landing page
 // (project details + site manager contact + Team + Overview + Site Board all
 // on one scrollable page — Overview/Progress/Team/Site Board tabs retired,
@@ -40,9 +39,9 @@ export const SECTION_NAV: { key: string; label: string; Icon: typeof Home; permi
   { key: "shared", label: "Shared with me", Icon: Inbox },
   { key: "my-documents", label: "My documents", Icon: FolderUp },
   { key: "settings", label: "Settings", Icon: Settings },
-  { key: "site-issues", label: "Site Issues", Icon: AlertTriangle, permission: "canLogIssues" },
-  { key: "plant-materials", label: "Plant & Materials", Icon: Wrench, permission: "canUpdatePlantMaterials" },
-  { key: "daily-report", label: "Daily Report", Icon: ClipboardList, permission: "canEditDailyReport" },
+  { key: "site-issues", label: "Site Issues", Icon: AlertTriangle },
+  { key: "plant-materials", label: "Plant & Materials", Icon: Wrench },
+  { key: "daily-report", label: "Daily Report", Icon: ClipboardList },
 ];
 
 export function portalLogout(setLocation: (to: string) => void) {

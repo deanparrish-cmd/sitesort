@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import multer from "multer";
 import { createHash } from "crypto";
 import bcrypt from "bcryptjs";
 import { db } from "@workspace/db";
@@ -34,6 +35,7 @@ import { notesFor, addNote } from "../lib/portal-submission-notes";
 import { isPinLockedOut, recordFailedPinAttempt, clearPinAttempts } from "../lib/pin-attempts";
 import { setUserPin } from "../lib/pin";
 import { requestCredentialReset, consumeCredentialResetToken } from "../lib/credential-reset";
+import { transcribeAudio } from "../lib/transcribe";
 import { completePasswordReset } from "../lib/credential-reset-complete";
 import { createRequire } from "module";
 import type { Archiver, ArchiverOptions } from "archiver";
@@ -924,13 +926,31 @@ router.get("/portal/team", ...portalGuards, async (req, res) => {
   res.json(result);
 });
 
-// GET /api/portal/site-issues — the whole section is gated on canLogIssues
-// (minimal-portal redesign: no grant = the section doesn't exist for this
-// member, not just read-only). Within a granted member's view: shared photos,
-// PLUS an issue this member reported or is assigned to (they must always see
-// their own status, even without an explicit share) — this never leaks who
-// ELSE it's shared with, only the reporter's own name on their own reports.
-router.get("/portal/site-issues", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canLogIssues"), autoLogPortalActivity, async (req, res) => {
+// Portal dictation: speech-to-text for the mic buttons across the portal
+// (Daily Report, Site Issues, Plant & Materials, notes, messages). Gated on a
+// portal session only — dictation is an input aid, not a data-access surface.
+const transcribeUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+router.post("/portal/transcribe", authenticate, requirePortalSession, requirePortalMember, transcribeUpload.single("audio"), async (req, res) => {
+  try {
+    if (!req.file) {
+      res.status(400).json({ error: "validation_error", message: "No audio file provided" });
+      return;
+    }
+    const transcript = await transcribeAudio(req.file.buffer, req.file.mimetype);
+    res.json({ transcript });
+  } catch (err: any) {
+    req.log.error({ err }, "Portal transcription error");
+    res.status(500).json({ error: "server_error", message: "Transcription failed" });
+  }
+});
+
+// GET /api/portal/site-issues — READ is open to every portal member (members
+// can always reopen and view issues); canLogIssues only gates the write
+// endpoints below. Within a member's view: shared photos, PLUS an issue this
+// member reported or is assigned to (they must always see their own status,
+// even without an explicit share) — this never leaks who ELSE it's shared
+// with, only the reporter's own name on their own reports.
+router.get("/portal/site-issues", authenticate, requirePortalSession, requirePortalMember, autoLogPortalActivity, async (req, res) => {
   const pid = req.portalProjectId!;
   const viewer = await resolveViewer(req.user!.id, pid);
   const sharedIds = await visibleIds(pid, "photo", viewer);
@@ -1455,7 +1475,7 @@ async function serializePortalPlantItem(item: typeof plantItemsTable.$inferSelec
 
 // GET /api/portal/plant-materials — the whole project's plant list, gated
 // purely on the canUpdatePlantMaterials permission (see fix note above).
-router.get("/portal/plant-materials", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canUpdatePlantMaterials"), autoLogPortalActivity, async (req, res) => {
+router.get("/portal/plant-materials", authenticate, requirePortalSession, requirePortalMember, autoLogPortalActivity, async (req, res) => {
   const pid = req.portalProjectId!;
   const rows = await db.select().from(plantItemsTable)
     .where(and(eq(plantItemsTable.projectId, pid), isNull(plantItemsTable.archivedAt)))
@@ -1464,7 +1484,7 @@ router.get("/portal/plant-materials", authenticate, requirePortalSession, requir
 });
 
 // GET /api/portal/plant-materials/:itemId
-router.get("/portal/plant-materials/:itemId", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canUpdatePlantMaterials"), autoLogPortalActivity, async (req, res) => {
+router.get("/portal/plant-materials/:itemId", authenticate, requirePortalSession, requirePortalMember, autoLogPortalActivity, async (req, res) => {
   const pid = req.portalProjectId!;
   const rows = await db.select().from(plantItemsTable)
     .where(and(eq(plantItemsTable.id, req.params.itemId), eq(plantItemsTable.projectId, pid), isNull(plantItemsTable.archivedAt))).limit(1);
@@ -1672,7 +1692,7 @@ router.post("/portal/plant-materials/:itemId/attachments", authenticate, require
 const HISTORY_LIMIT = 14;
 
 // GET /api/portal/daily-report — today's report, section-gated.
-router.get("/portal/daily-report", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canEditDailyReport"), autoLogPortalActivity, async (req, res) => {
+router.get("/portal/daily-report", authenticate, requirePortalSession, requirePortalMember, autoLogPortalActivity, async (req, res) => {
   try {
     const pid = req.portalProjectId!;
     const date = londonDateStr(new Date());
@@ -1707,7 +1727,7 @@ router.get("/portal/daily-report", authenticate, requirePortalSession, requirePo
 // GET /api/portal/daily-report/history — last HISTORY_LIMIT past days that
 // have a site diary entry, newest first. Section-gated like the rest of Daily
 // Report; always read-only within the section.
-router.get("/portal/daily-report/history", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canEditDailyReport"), autoLogPortalActivity, async (req, res) => {
+router.get("/portal/daily-report/history", authenticate, requirePortalSession, requirePortalMember, autoLogPortalActivity, async (req, res) => {
   try {
     const pid = req.portalProjectId!;
     const today = londonDateStr(new Date());

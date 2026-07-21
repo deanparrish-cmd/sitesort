@@ -85,7 +85,7 @@ function Composer({ onSend, sending }: { onSend: (content: string) => void; send
         rows={1} placeholder="Message…"
         className="flex-1 min-h-11 max-h-32 rounded-xl border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/40"
       />
-      <DictationButton onTranscript={t => setValue(v => (v.trim() ? v.trimEnd() + " " : "") + t)} />
+      <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setValue(v => (v.trim() ? v.trimEnd() + " " : "") + t)} />
       <button onClick={submit} disabled={sending || !value.trim()} title="Send"
         className="shrink-0 h-11 w-11 flex items-center justify-center rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
         <Send className="w-4 h-4" />

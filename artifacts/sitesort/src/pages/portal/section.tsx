@@ -26,12 +26,11 @@ import { QRCodeSVG } from "qrcode.react";
 import { PortalLayout, SECTION_NAV } from "./layout";
 import { portalQueryClient, PORTAL_LIVE_REFETCH } from "./query-client";
 import { Spinner } from "@/components/ui/spinner";
-import { LinkRow } from "@/components/ui/link-row";
 import {
   ExternalLink, MapPin, Calendar, Phone, Mail,
-  FileText, AlertTriangle, StickyNote, Download, FileCheck,
+  FileText, AlertTriangle, StickyNote, Download,
   QrCode, Copy, Building2, ShieldCheck, X, Sparkles, UploadCloud, Share, Plus,
-  ChevronDown, ChevronRight, Users, FileSignature, CheckCircle2,
+  ChevronDown, Users, FileSignature, CheckCircle2,
 } from "lucide-react";
 import { isCadFile, cadBadgeLabel, downloadFile } from "@/lib/documents";
 import { useToast } from "@/hooks/use-toast";
@@ -202,7 +201,7 @@ function SubmissionNotesThread({ notes, onAdd, adding }: { notes: SubmissionNote
           onKeyDown={e => { if (e.key === "Enter" && draft.trim() && !adding) { void onAdd(draft.trim()).then(() => setDraft("")); } }}
           className="flex-1 min-h-9 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
-        <DictationButton onTranscript={t => setDraft(d => (d.trim() ? d.trimEnd() + " " : "") + t)} />
+        <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setDraft(d => (d.trim() ? d.trimEnd() + " " : "") + t)} />
         <button
           disabled={!draft.trim() || adding}
           onClick={() => { void onAdd(draft.trim()).then(() => setDraft("")); }}
@@ -449,6 +448,7 @@ function HomeView() {
   // Site updates are time-sensitive → poll while visible.
   const { data: overview, isLoading } = useGetPortalOverview({ query: { refetchInterval: PORTAL_LIVE_REFETCH, queryKey: getGetPortalOverviewQueryKey() } });
   const [teamOpen, setTeamOpen] = useState(false);
+  const [pastOpen, setPastOpen] = useState(false);
   if (isLoading && !ctx) return <Loading />;
   const project = ctx?.project;
   const sm = board?.siteManager;
@@ -495,17 +495,36 @@ function HomeView() {
         </Card>
       )}
 
-      {/* Box 3 — Site Updates (latest only) */}
-      <div>
-        <SectionTitle>Site updates</SectionTitle>
-        {latest ? <UpdateCard n={latest} /> : <Empty>No site updates posted yet.</Empty>}
-      </div>
+      {/* Box 3 — Site Updates (latest only) — the title lives INSIDE the card
+          (like Box 2's "Site manager") so the box reads as one unit. */}
+      <Card>
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Site updates</p>
+        {latest ? (
+          <>
+            <p className="text-sm whitespace-pre-wrap break-words">{latest.body}</p>
+            <p className="text-xs text-muted-foreground mt-2">{latest.authorName} · {fmtDate(latest.noteDate)}</p>
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">No site updates posted yet.</p>
+        )}
+      </Card>
 
-      {/* Box 4 — Past Updates */}
+      {/* Box 4 — Past Updates (collapsible, identical pattern to Team below) */}
       <div>
-        <SectionTitle>Past updates</SectionTitle>
-        {past.length === 0 ? <Empty>No earlier updates yet.</Empty> : (
-          <div className="space-y-3">{past.map(n => <UpdateCard key={n.id} n={n} />)}</div>
+        <button
+          onClick={() => setPastOpen(o => !o)}
+          aria-expanded={pastOpen}
+          className="w-full flex items-center justify-between gap-3 bg-card border rounded-xl px-4 py-3 hover:bg-muted/50 transition-colors"
+        >
+          <span className="flex items-center gap-2 font-display font-bold"><StickyNote className="w-5 h-5 text-primary" /> Past updates</span>
+          <ChevronDown className={cn("w-5 h-5 text-muted-foreground transition-transform", pastOpen && "rotate-180")} />
+        </button>
+        {pastOpen && (
+          <div className="mt-3">
+            {past.length === 0 ? <Empty>No earlier updates yet.</Empty> : (
+              <div className="space-y-3">{past.map(n => <UpdateCard key={n.id} n={n} />)}</div>
+            )}
+          </div>
         )}
       </div>
 
@@ -522,23 +541,8 @@ function HomeView() {
         {teamOpen && <div className="mt-3"><TeamView /></div>}
       </div>
 
-      {/* One-tap routes into the workspace menu's Site Board + Permits pages */}
-      <div className="space-y-2">
-        <LinkRow
-          href="/portal/site-board"
-          icon={<QrCode className="w-5 h-5 text-primary" />}
-          label="Site Board"
-          detail={<ChevronRight className="w-5 h-5 text-muted-foreground" />}
-          ariaLabel="Site Board"
-        />
-        <LinkRow
-          href="/portal/permits"
-          icon={<FileCheck className="w-5 h-5 text-primary" />}
-          label="Permits"
-          detail={<ChevronRight className="w-5 h-5 text-muted-foreground" />}
-          ariaLabel="Permits"
-        />
-      </div>
+      {/* Site Board + Permits are reachable from the workspace menu only —
+          removed from Home to keep page 1 to the five glanceable boxes. */}
     </div>
   );
 }
@@ -651,14 +655,14 @@ function LogIssueForm({ onLogged }: { onLogged: () => void }) {
           <label className="text-xs font-medium text-muted-foreground">Description</label>
           <div className="mt-1 flex items-start gap-2">
             <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} placeholder="What's the issue?" className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
-            <DictationButton onTranscript={t => setDescription(d => (d.trim() ? d.trimEnd() + " " : "") + t)} />
+            <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setDescription(d => (d.trim() ? d.trimEnd() + " " : "") + t)} />
           </div>
         </div>
         <div>
           <label className="text-xs font-medium text-muted-foreground">Zone / location</label>
           <div className="mt-1 flex items-center gap-2">
             <input value={zone} onChange={e => setZone(e.target.value)} placeholder="e.g. Level 2, East wing" className="flex-1 min-h-12 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
-            <DictationButton onTranscript={t => setZone(z => (z.trim() ? z.trimEnd() + " " : "") + t)} />
+            <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setZone(z => (z.trim() ? z.trimEnd() + " " : "") + t)} />
           </div>
         </div>
         <div>
@@ -707,14 +711,14 @@ function IssueDraftEditPanel({ issue, onDone }: { issue: { id: string; category:
         <label className="text-xs font-medium text-muted-foreground">Description</label>
         <div className="mt-1 flex items-start gap-2">
           <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
-          <DictationButton onTranscript={t => setDescription(d => (d.trim() ? d.trimEnd() + " " : "") + t)} />
+          <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setDescription(d => (d.trim() ? d.trimEnd() + " " : "") + t)} />
         </div>
       </div>
       <div>
         <label className="text-xs font-medium text-muted-foreground">Zone / location</label>
         <div className="mt-1 flex items-center gap-2">
           <input value={zone} onChange={e => setZone(e.target.value)} className="flex-1 min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
-          <DictationButton onTranscript={t => setZone(z => (z.trim() ? z.trimEnd() + " " : "") + t)} />
+          <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setZone(z => (z.trim() ? z.trimEnd() + " " : "") + t)} />
         </div>
       </div>
       <div className="flex gap-2">
@@ -1209,14 +1213,14 @@ function PlantItemEditPanel({ item, onClose }: { item: PlantItemRow; onClose: ()
         <label className="text-xs font-medium text-muted-foreground">Location on site</label>
         <div className="mt-1 flex items-center gap-2">
           <input value={location} onChange={e => setLocation(e.target.value)} className="flex-1 min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
-          <DictationButton onTranscript={t => setLocation(l => (l.trim() ? l.trimEnd() + " " : "") + t)} />
+          <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setLocation(l => (l.trim() ? l.trimEnd() + " " : "") + t)} />
         </div>
       </div>
       <div>
         <label className="text-xs font-medium text-muted-foreground">Notes</label>
         <div className="mt-1 flex items-start gap-2">
           <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
-          <DictationButton onTranscript={t => setNotes(n => (n.trim() ? n.trimEnd() + " " : "") + t)} />
+          <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setNotes(n => (n.trim() ? n.trimEnd() + " " : "") + t)} />
         </div>
       </div>
       <div>
@@ -1283,7 +1287,7 @@ function AddPlantItemForm({ onDone }: { onDone: () => void }) {
           <div className="mt-1 flex items-center gap-2">
             <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Excavator, Cement bags"
               className="flex-1 min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
-            <DictationButton onTranscript={t => setName(n => (n.trim() ? n.trimEnd() + " " : "") + t)} />
+            <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setName(n => (n.trim() ? n.trimEnd() + " " : "") + t)} />
           </div>
         </div>
         <div>
@@ -1310,7 +1314,7 @@ function AddPlantItemForm({ onDone }: { onDone: () => void }) {
           <div className="mt-1 flex items-center gap-2">
             <input value={location} onChange={e => setLocation(e.target.value)}
               className="flex-1 min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
-            <DictationButton onTranscript={t => setLocation(l => (l.trim() ? l.trimEnd() + " " : "") + t)} />
+            <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setLocation(l => (l.trim() ? l.trimEnd() + " " : "") + t)} />
           </div>
         </div>
         <div>
@@ -1318,7 +1322,7 @@ function AddPlantItemForm({ onDone }: { onDone: () => void }) {
           <div className="mt-1 flex items-start gap-2">
             <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
               className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
-            <DictationButton onTranscript={t => setNotes(n => (n.trim() ? n.trimEnd() + " " : "") + t)} />
+            <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setNotes(n => (n.trim() ? n.trimEnd() + " " : "") + t)} />
           </div>
         </div>
         <div className="flex gap-2">
@@ -1547,7 +1551,7 @@ function DailyReportView() {
                     <input value={form[f.key] ?? ""} onChange={e => setField(f.key, e.target.value)} placeholder={f.placeholder}
                       className="flex-1 min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
                   )}
-                  <DictationButton onTranscript={t => appendField(f.key, t)} />
+                  <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => appendField(f.key, t)} />
                 </div>
               </div>
             ))}
@@ -1987,21 +1991,11 @@ function PortalPinSection() {
   );
 }
 
-// Sections whose nav entry is only ever shown when the matching permission is
-// granted (see layout.tsx's SECTION_NAV `permission` field). Guarded again
-// here so a direct URL visit (nav can't stop that) can't render the real view
-// while its own data fetch 403s underneath — same "absent, not greyed"
-// contract as the nav, reached by any path.
-const SECTION_PERMISSION: Record<string, "canLogIssues" | "canUpdatePlantMaterials" | "canEditDailyReport"> = {
-  "site-issues": "canLogIssues",
-  "plant-materials": "canUpdatePlantMaterials",
-  "daily-report": "canEditDailyReport",
-};
-
+// Site Issues / Plant & Materials / Daily Report are viewable by EVERY portal
+// member (read-only reopen of existing items); the per-member permission
+// flags only gate the write affordances inside each view (checked there and
+// again on the server's write endpoints).
 function renderSection(section: string) {
-  const { data: ctx } = useGetPortalContext();
-  const required = SECTION_PERMISSION[section];
-  if (required && ctx && !ctx.member[required]) return <Empty>Section not found.</Empty>;
   switch (section) {
     // 5-box-home redesign: Overview/Team/Progress deep links land on Home;
     // Site Board and Permits are their own workspace-menu pages again.
