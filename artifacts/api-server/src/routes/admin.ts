@@ -28,13 +28,20 @@ import {
 import { eq, gte, lt, and, desc, sql, count, isNotNull, inArray } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
 
-const ADMIN_EMAILS = ["dean.parrish@me.com", "amy-parrish@hotmail.co.uk"];
-
 const router: IRouter = Router();
 
-function requireAdmin(_req: Request, res: Response, next: NextFunction): void {
-  const req = _req as Request & { user?: { email: string } };
-  if (!req.user?.email || !ADMIN_EMAILS.includes(req.user.email)) {
+// Platform Admin — SiteSort's OWN internal-staff flag (users.platformAdmin),
+// completely separate from `role` (a customer's admin/pm/worker role WITHIN
+// their own company — a customer who is "admin" of their own account must
+// never pass this). Checked fresh from the DB on every request rather than
+// trusted from the JWT, so revoking a staff member's access via the Admin
+// section itself (see /admin/users below) takes effect immediately, not just
+// at their next login.
+async function requireAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const userId = (req as Request & { user?: { id?: string } }).user?.id;
+  if (!userId) { res.status(403).json({ error: "forbidden", message: "Admin access required" }); return; }
+  const rows = await db.select({ platformAdmin: usersTable.platformAdmin }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+  if (!rows[0]?.platformAdmin) {
     res.status(403).json({ error: "forbidden", message: "Admin access required" });
     return;
   }
@@ -920,6 +927,55 @@ router.get("/admin/export/activity", authenticate, requireAdmin, async (req, res
   } catch (err) {
     req.log.error({ err }, "Admin export activity error");
     res.status(500).json({ error: "server_error", message: "Export failed" });
+  }
+});
+
+// GET /api/admin/users?q= — search users by name/email, for the platform-admin
+// grant/revoke picker. Always returns each match's current platformAdmin flag.
+router.get("/admin/users", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const q = String(req.query.q ?? "").trim().toLowerCase();
+    const rows = await db.select({
+      id: usersTable.id, name: usersTable.name, email: usersTable.email,
+      role: usersTable.role, companyId: usersTable.companyId, platformAdmin: usersTable.platformAdmin,
+      portalOnly: usersTable.portalOnly,
+    })
+      .from(usersTable)
+      .where(q ? sql`(lower(${usersTable.name}) like ${`%${q}%`} or lower(${usersTable.email}) like ${`%${q}%`})` : sql`true`)
+      .orderBy(desc(usersTable.platformAdmin), usersTable.name)
+      .limit(50);
+    res.json(rows);
+  } catch (err) {
+    req.log.error({ err }, "Admin list users error");
+    res.status(500).json({ error: "server_error", message: "Failed to list users" });
+  }
+});
+
+// PATCH /api/admin/users/:id/platform-admin — grant or revoke SiteSort staff
+// access. Self-revoke is blocked so a platform admin can never accidentally
+// lock themselves (and, if they're the only one, everyone) out.
+router.patch("/admin/users/:id/platform-admin", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { platformAdmin } = req.body as { platformAdmin?: boolean };
+    if (typeof platformAdmin !== "boolean") {
+      res.status(400).json({ error: "validation_error", message: "platformAdmin must be a boolean" });
+      return;
+    }
+    const targetId = req.params.id;
+    const callerId = (req as Request & { user?: { id?: string } }).user?.id;
+    if (!platformAdmin && targetId === callerId) {
+      res.status(400).json({ error: "validation_error", message: "You can't revoke your own admin access." });
+      return;
+    }
+    const rows = await db.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email })
+      .from(usersTable).where(eq(usersTable.id, targetId)).limit(1);
+    if (!rows[0]) { res.status(404).json({ error: "not_found", message: "User not found" }); return; }
+
+    await db.update(usersTable).set({ platformAdmin }).where(eq(usersTable.id, targetId));
+    res.json({ id: rows[0].id, name: rows[0].name, email: rows[0].email, platformAdmin });
+  } catch (err) {
+    req.log.error({ err }, "Admin toggle platform-admin error");
+    res.status(500).json({ error: "server_error", message: "Failed to update admin access" });
   }
 });
 

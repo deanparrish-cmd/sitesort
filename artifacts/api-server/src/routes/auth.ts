@@ -228,7 +228,7 @@ router.get("/auth/me", authenticate, async (req, res) => {
     // companyId/role reflect the ACTIVE company (from the token), not the home
     // company row — so a switched user sees the right context.
     const memberships = await getMemberships(user.id);
-    res.json({ id: user.id, companyId: req.user!.companyId, email: user.email, name: user.name, role: req.user!.role, phone: user.phone ?? null, avatarUrl: user.avatarUrl ?? null, hasPin: !!user.pinHash, emailNotifications: user.emailNotifications, memberships, createdAt: user.createdAt.toISOString(), lastActiveAt: user.lastActiveAt?.toISOString() ?? null });
+    res.json({ id: user.id, companyId: req.user!.companyId, email: user.email, name: user.name, role: req.user!.role, phone: user.phone ?? null, avatarUrl: user.avatarUrl ?? null, hasPin: !!user.pinHash, emailNotifications: user.emailNotifications, memberships, createdAt: user.createdAt.toISOString(), lastActiveAt: user.lastActiveAt?.toISOString() ?? null, platformAdmin: user.platformAdmin });
   } catch (err) {
     req.log.error({ err }, "Get me error");
     res.status(500).json({ error: "server_error", message: "Failed to get user" });

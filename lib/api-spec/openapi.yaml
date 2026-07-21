@@ -3211,6 +3211,9 @@ components:
           nullable: true
         hasPin:
           type: boolean
+        platformAdmin:
+          type: boolean
+          description: "SiteSort's own internal-staff flag — distinct from `role` (a customer's role within their own company). Only true for SiteSort staff; gates the platform Admin section."
       required: [id, companyId, email, name, role, createdAt]
 
     InviteUserRequest:

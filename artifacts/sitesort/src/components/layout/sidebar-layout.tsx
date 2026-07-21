@@ -168,7 +168,10 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     // still exist (deep-linkable) but are no longer surfaced here.
     { name: "Invoices", href: "/invoices", icon: Receipt, badge: 0 },
     { name: "QR Codes", href: "/qr", icon: QrCode, badge: 0 },
-    ...(user?.role === "admin"
+    // Platform Admin (SiteSort's own staff) — distinct from a customer's
+    // company-level "admin" role. A customer who is admin of their own
+    // account must never see this; only users.platformAdmin === true.
+    ...(user?.platformAdmin
       ? [{ name: "Admin", href: "/admin", icon: ShieldAlert, badge: 0 }]
       : []),
     { name: "Settings", href: "/settings", icon: Settings, badge: 0 },

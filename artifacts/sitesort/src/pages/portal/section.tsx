@@ -1168,6 +1168,99 @@ function PlantItemEditPanel({ item, onClose }: { item: PlantItemRow; onClose: ()
   );
 }
 
+// Log a brand-new plant/material item from site — only rendered for members
+// with the canUpdatePlantMaterials permission. Creation is live immediately
+// (the PM is notified); the save-vs-submit draft flow applies only to edits.
+function AddPlantItemForm({ onDone }: { onDone: () => void }) {
+  const { toast } = useToast();
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState<"plant_equipment" | "materials">("plant_equipment");
+  const [itemStatus, setItemStatus] = useState<"on_site" | "on_order" | "off_hired" | "depleted">("on_site");
+  const [location, setLocation] = useState("");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const create = async () => {
+    if (!name.trim()) { toast({ title: "Give the item a name", variant: "destructive" }); return; }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/portal/plant-materials", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), category, status: itemStatus, location: location.trim() || null, notes: notes.trim() || null }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null) as { message?: string } | null;
+        throw new Error(body?.message || "");
+      }
+      toast({ title: "Item logged", description: "Your PM has been notified." });
+      onDone();
+    } catch (e) {
+      toast({ title: "Couldn't log the item", description: e instanceof Error && e.message ? e.message : undefined, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card>
+      <p className="font-medium mb-3">Log a new item</p>
+      <div className="space-y-3">
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">Name</label>
+          <div className="mt-1 flex items-center gap-2">
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Excavator, Cement bags"
+              className="flex-1 min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+            <DictationButton onTranscript={t => setName(n => (n.trim() ? n.trimEnd() + " " : "") + t)} />
+          </div>
+        </div>
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">Type</label>
+          <div className="mt-1 flex gap-2">
+            {([["plant_equipment", "Plant / equipment"], ["materials", "Materials"]] as const).map(([val, label]) => (
+              <button key={val} type="button" onClick={() => setCategory(val)}
+                className={cn("flex-1 min-h-11 rounded-xl border text-sm font-medium",
+                  category === val ? "bg-primary text-primary-foreground border-primary" : "bg-background text-muted-foreground border-border hover:bg-muted")}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">Status</label>
+          <select value={itemStatus} onChange={e => setItemStatus(e.target.value as typeof itemStatus)}
+            className="mt-1 w-full min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+            {PLANT_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">Location on site</label>
+          <div className="mt-1 flex items-center gap-2">
+            <input value={location} onChange={e => setLocation(e.target.value)}
+              className="flex-1 min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+            <DictationButton onTranscript={t => setLocation(l => (l.trim() ? l.trimEnd() + " " : "") + t)} />
+          </div>
+        </div>
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">Notes</label>
+          <div className="mt-1 flex items-start gap-2">
+            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
+              className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+            <DictationButton onTranscript={t => setNotes(n => (n.trim() ? n.trimEnd() + " " : "") + t)} />
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={create} disabled={saving}
+            className="flex-1 min-h-11 rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+            {saving ? "Logging…" : "Log item"}
+          </button>
+          <button onClick={onDone} className="min-h-11 px-4 rounded-xl border text-sm font-medium hover:bg-muted">Cancel</button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 function PlantMaterialsView() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -1177,6 +1270,7 @@ function PlantMaterialsView() {
   const submitItem = useSubmitPortalPlantMaterialItem();
   const addItemNote = useAddPortalPlantMaterialNote();
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: getGetPortalPlantMaterialsQueryKey() });
   const doSubmit = async (itemId: string) => {
@@ -1190,11 +1284,24 @@ function PlantMaterialsView() {
   };
 
   if (isLoading) return <Loading />;
-  if (!data || data.length === 0) return <Empty>Nothing shared with you here yet.</Empty>;
+
+  const items = (data ?? []) as PlantItemRow[];
+  if (items.length === 0 && !canEdit) return <Empty>Nothing shared with you here yet.</Empty>;
 
   return (
     <div className="space-y-3">
-      {(data as PlantItemRow[]).map(item => (
+      {canEdit && (
+        adding ? (
+          <AddPlantItemForm onDone={async () => { setAdding(false); await invalidate(); }} />
+        ) : (
+          <button onClick={() => setAdding(true)}
+            className="w-full min-h-11 rounded-xl border border-dashed border-primary/50 text-sm font-semibold text-primary hover:bg-primary/5">
+            + Log a new item
+          </button>
+        )
+      )}
+      {items.length === 0 && !adding && <Empty>No plant or materials logged yet — tap "Log a new item" to add the first one.</Empty>}
+      {items.map(item => (
         <Card key={item.id}>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">

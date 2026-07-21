@@ -18,4 +18,6 @@ export interface User {
   lastActiveAt?: Date | null;
   avatarUrl?: string | null;
   hasPin?: boolean;
+  /** SiteSort's own internal-staff flag — distinct from `role` (a customer's role within their own company). Only true for SiteSort staff; gates the platform Admin section. */
+  platformAdmin?: boolean;
 }

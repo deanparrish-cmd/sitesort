@@ -567,7 +567,17 @@ export async function ensureSchema(): Promise<void> {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS portal_submission_notes_item_idx ON portal_submission_notes (item_type, item_id)`);
 
-    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols + portal_shares + portal_sessions + push_subscriptions + pending_pushes + subcontractor_documents + subcontractors/people.archived_at + people.first_name/last_name + subcontractors.contact_first_name/contact_last_name + project_members write-permission cols + activity_log.metadata + photos closure/updated_at cols + plant_items/plant_item_attachments/plant_item_distributions + people.is_primary_contact + person_certifications + primary-contact/project_members backfill + project_members.can_edit_daily_report + messages.project_id + photos archive/photo-removal cols + primary-contact name self-heal ready + photos/daily_reports submitted_at+submitted_by + plant_items portal_draft cols + portal_submission_notes table + submitted-backfill ready");
+    // Platform Admin restriction — SiteSort's OWN internal-staff flag, separate
+    // from `role` (a customer's admin/pm/worker role WITHIN their own
+    // company). Seed the two known founders once; going forward the flag is
+    // managed via the Admin section's own user-management UI, not code.
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS platform_admin boolean NOT NULL DEFAULT false`);
+    await pool.query(`
+      UPDATE users SET platform_admin = true
+      WHERE email IN ('dean.parrish@me.com', 'amy-parrish@hotmail.co.uk') AND platform_admin = false
+    `);
+
+    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols + portal_shares + portal_sessions + push_subscriptions + pending_pushes + subcontractor_documents + subcontractors/people.archived_at + people.first_name/last_name + subcontractors.contact_first_name/contact_last_name + project_members write-permission cols + activity_log.metadata + photos closure/updated_at cols + plant_items/plant_item_attachments/plant_item_distributions + people.is_primary_contact + person_certifications + primary-contact/project_members backfill + project_members.can_edit_daily_report + messages.project_id + photos archive/photo-removal cols + primary-contact name self-heal ready + photos/daily_reports submitted_at+submitted_by + plant_items portal_draft cols + portal_submission_notes table + submitted-backfill ready + users.platform_admin + Dean/Amy seeded ready");
   } catch (err) {
     // Don't crash the server — membership lookups fall back to the home company.
     logger.error({ err }, "ensureSchema failed (continuing with home-company fallback)");

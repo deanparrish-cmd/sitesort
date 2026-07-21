@@ -54,6 +54,12 @@ export const LoginResponse = zod.object({
     lastActiveAt: zod.date().nullish(),
     avatarUrl: zod.string().nullish(),
     hasPin: zod.boolean().optional(),
+    platformAdmin: zod
+      .boolean()
+      .optional()
+      .describe(
+        "SiteSort's own internal-staff flag — distinct from `role` (a customer's role within their own company). Only true for SiteSort staff; gates the platform Admin section.",
+      ),
   }),
   token: zod.string(),
 });
@@ -80,6 +86,12 @@ export const GetMeResponse = zod.object({
   lastActiveAt: zod.date().nullish(),
   avatarUrl: zod.string().nullish(),
   hasPin: zod.boolean().optional(),
+  platformAdmin: zod
+    .boolean()
+    .optional()
+    .describe(
+      "SiteSort's own internal-staff flag — distinct from `role` (a customer's role within their own company). Only true for SiteSort staff; gates the platform Admin section.",
+    ),
 });
 
 /**
@@ -2572,6 +2584,12 @@ export const ListUsersResponseItem = zod.object({
   lastActiveAt: zod.date().nullish(),
   avatarUrl: zod.string().nullish(),
   hasPin: zod.boolean().optional(),
+  platformAdmin: zod
+    .boolean()
+    .optional()
+    .describe(
+      "SiteSort's own internal-staff flag — distinct from `role` (a customer's role within their own company). Only true for SiteSort staff; gates the platform Admin section.",
+    ),
 });
 export const ListUsersResponse = zod.array(ListUsersResponseItem);
 
@@ -2620,6 +2638,12 @@ export const UpdateUserResponse = zod.object({
   lastActiveAt: zod.date().nullish(),
   avatarUrl: zod.string().nullish(),
   hasPin: zod.boolean().optional(),
+  platformAdmin: zod
+    .boolean()
+    .optional()
+    .describe(
+      "SiteSort's own internal-staff flag — distinct from `role` (a customer's role within their own company). Only true for SiteSort staff; gates the platform Admin section.",
+    ),
 });
 
 /**

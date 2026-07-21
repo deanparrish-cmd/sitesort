@@ -1262,6 +1262,71 @@ router.get("/portal/plant-materials/:itemId", authenticate, requirePortalSession
   res.json(await serializePortalPlantItem(rows[0]));
 });
 
+// POST /api/portal/plant-materials — authorised members can log a NEW plant/
+// material item from site (user request: "should be able to be updated/logged
+// from the portal by anyone who has authorisation"). Creation is live
+// immediately (no draft stage — drafts only make sense for edits to existing
+// items) and the project's managers are notified so it lands in their view.
+router.post("/portal/plant-materials", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canUpdatePlantMaterials"), async (req, res) => {
+  const pid = req.portalProjectId!;
+  try {
+    const { name, category, quantity, unit, location, status, notes } = req.body as {
+      name?: string; category?: string; quantity?: string | null; unit?: string | null;
+      location?: string | null; status?: string; notes?: string | null;
+    };
+    const cleanName = String(name ?? "").trim().slice(0, 200);
+    if (!cleanName) { res.status(400).json({ error: "validation_error", message: "A name is required." }); return; }
+    if (!["plant_equipment", "materials"].includes(category ?? "")) {
+      res.status(400).json({ error: "validation_error", message: "category must be plant_equipment or materials" });
+      return;
+    }
+    const cleanStatus = ["on_site", "on_order", "off_hired", "depleted"].includes(status ?? "") ? status! : "on_site";
+
+    const id = generateId();
+    await db.insert(plantItemsTable).values({
+      id,
+      projectId: pid,
+      name: cleanName,
+      category: category!,
+      quantity: quantity ? String(quantity) : null,
+      unit: unit?.trim() || null,
+      location: location?.trim() || null,
+      status: cleanStatus,
+      notes: notes?.trim() || null,
+      createdBy: req.user!.id,
+      lastUpdatedBy: req.user!.id,
+      lastUpdatedAt: new Date(),
+    });
+    void logActivity({ userId: req.user!.id, projectId: pid, companyId: req.user!.companyId, section: "plant-materials", action: "create", itemType: "plant_item", itemId: id, req });
+
+    // Best-effort: let the company's managers know a member logged an item.
+    try {
+      const proj = (await db.select({ name: projectsTable.name, companyId: projectsTable.companyId })
+        .from(projectsTable).where(eq(projectsTable.id, pid)).limit(1))[0];
+      if (proj) {
+        const creator = (await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1))[0];
+        const managers = await db.select({ userId: companyMembersTable.userId })
+          .from(companyMembersTable)
+          .where(and(eq(companyMembersTable.companyId, proj.companyId), inArray(companyMembersTable.role, ["admin", "project_manager"])));
+        for (const userId of [...new Set(managers.map(m => m.userId))]) {
+          await db.insert(notificationsTable).values({
+            id: generateId(), userId, type: "portal_plant_item_logged",
+            title: `New plant/material at ${proj.name}`,
+            message: `${creator?.name ?? "A member"} logged "${cleanName}" from the portal.`,
+            relatedEntityId: pid, relatedEntityType: "project", read: false,
+          });
+        }
+      }
+    } catch { /* notifying managers is best-effort */ }
+
+    const created = (await db.select().from(plantItemsTable).where(eq(plantItemsTable.id, id)).limit(1))[0];
+    res.status(201).json(await serializePortalPlantItem(created));
+  } catch (err) {
+    req.log.error({ err }, "Portal create plant item error");
+    res.status(500).json({ error: "server_error", message: "Failed to log item" });
+  }
+});
+
 // PATCH /api/portal/plant-materials/:itemId — SAVE (draft only). Writes to the
 // portal_draft_* shadow columns, never the live status/location/notes — the PM
 // (and the dashboard's own view) sees nothing change until the member submits.

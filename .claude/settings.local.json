@@ -177,7 +177,10 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/api/health)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5000/api/health)",
       "Bash(echo \"rc=$?\")",
-      "Bash(python3 -)"
+      "Bash(python3 -)",
+      "Bash(ps -o pid,ppid,cmd -p 84038,84039)",
+      "Bash(curl -s -o /dev/null -w \"current health: %{http_code}\\\\n\" http://localhost:8080/api/health --max-time 3)",
+      "Bash(kill 84039 84038)"
     ]
   },
   "hooks": {
