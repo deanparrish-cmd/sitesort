@@ -7,12 +7,12 @@ import {
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuCheckboxItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
   UserPlus, Copy, Trash2, Mail, ShieldCheck, Send, MoreHorizontal, X,
-  RefreshCw, AlertTriangle, CheckCircle2,
+  RefreshCw, AlertTriangle, CheckCircle2, Circle,
 } from "lucide-react";
 
 type PortalStatus = {
@@ -93,6 +93,29 @@ function fmtRelative(iso?: string | null): string {
 }
 
 const PILL = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium transition-colors";
+
+// One-click on/off pill for a single portal-section grant, rendered directly on
+// the card (Feature: inline portal-permission toggles) — no menu to open, so a
+// manager can see and change access at a glance same as Notes/Docs/Share/Remove.
+function PermissionTogglePill({ label, checked, disabled, onToggle }: { label: string; checked: boolean; disabled?: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      className={cn(
+        PILL,
+        "disabled:opacity-50 disabled:cursor-not-allowed",
+        checked
+          ? "border-violet-200 bg-violet-50 text-violet-700 dark:bg-violet-950/30 dark:text-violet-300 dark:border-violet-800"
+          : "border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted"
+      )}
+      title={checked ? `${label}: granted in the portal — click to revoke` : `${label}: not granted — click to give portal access`}
+    >
+      {checked ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Circle className="w-3.5 h-3.5" />} {label}
+    </button>
+  );
+}
 
 // ── Card action-row pill ────────────────────────────────────────────────────
 // Invites the card's person directly (in-house card = that member; subcontractor
@@ -187,41 +210,37 @@ export function PortalInvitePill({
 
   if (portal.status === "member") {
     return (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button className={cn(PILL, "border-emerald-200 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800")} title={`Last active ${fmtRelative(portal.lastActiveAt)}`}>
-            <ShieldCheck className="w-3.5 h-3.5" /> Portal member
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-64">
-          <div className="px-2 py-1.5 text-xs text-muted-foreground">Last active {fmtRelative(portal.lastActiveAt)}</div>
-          <DropdownMenuSeparator />
-          <div className="px-2 py-1 text-[11px] font-medium text-muted-foreground">Portal access — off by default; ticking adds the section to their portal</div>
-          <DropdownMenuCheckboxItem
-            checked={portal.canLogIssues ?? false}
-            onSelect={e => e.preventDefault()}
-            onCheckedChange={v => togglePermission("canLogIssues", v)}
-          >
-            Site Issues
-          </DropdownMenuCheckboxItem>
-          <DropdownMenuCheckboxItem
-            checked={portal.canUpdatePlantMaterials ?? false}
-            onSelect={e => e.preventDefault()}
-            onCheckedChange={v => togglePermission("canUpdatePlantMaterials", v)}
-          >
-            Plant &amp; Materials
-          </DropdownMenuCheckboxItem>
-          <DropdownMenuCheckboxItem
-            checked={portal.canEditDailyReport ?? false}
-            onSelect={e => e.preventDefault()}
-            onCheckedChange={v => togglePermission("canEditDailyReport", v)}
-          >
-            Daily Report
-          </DropdownMenuCheckboxItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem className="gap-2 cursor-pointer text-destructive focus:text-destructive" onClick={doRevoke}><Trash2 className="w-4 h-4" /> Revoke access</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <span className="inline-flex flex-wrap items-center gap-1">
+        <span className={cn(PILL, "border-emerald-200 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800")} title={`Last active ${fmtRelative(portal.lastActiveAt)}`}>
+          <ShieldCheck className="w-3.5 h-3.5" /> Portal member
+        </span>
+        <PermissionTogglePill
+          label="Site Issues"
+          checked={portal.canLogIssues ?? false}
+          disabled={updatePermissions.isPending}
+          onToggle={() => togglePermission("canLogIssues", !(portal.canLogIssues ?? false))}
+        />
+        <PermissionTogglePill
+          label="Plant & Materials"
+          checked={portal.canUpdatePlantMaterials ?? false}
+          disabled={updatePermissions.isPending}
+          onToggle={() => togglePermission("canUpdatePlantMaterials", !(portal.canUpdatePlantMaterials ?? false))}
+        />
+        <PermissionTogglePill
+          label="Daily Report"
+          checked={portal.canEditDailyReport ?? false}
+          disabled={updatePermissions.isPending}
+          onToggle={() => togglePermission("canEditDailyReport", !(portal.canEditDailyReport ?? false))}
+        />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="p-1 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted" title="More"><MoreHorizontal className="w-4 h-4" /></button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuItem className="gap-2 cursor-pointer text-destructive focus:text-destructive" onClick={doRevoke}><Trash2 className="w-4 h-4" /> Revoke access</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </span>
     );
   }
 
