@@ -98,9 +98,21 @@ async function portalStatusFor(personIds: string[], projectId: string): Promise<
   for (const [personId, inv] of latestInvite) {
     if (out.has(personId)) continue; // member wins
     if (inv.status === "pending" && inv.expiresAt.getTime() > Date.now()) {
+      // A pending invite's person is already a project team member (that's how
+      // their card exists to invite from at all — see the person-first add
+      // flow), so their project_members row already exists here too, just with
+      // no userId yet. Surface its permission flags the same as a full member,
+      // so a PM can grant section access BEFORE the person accepts (Fix:
+      // permission parity between pending and accepted portal people) — the
+      // accept endpoint updates this SAME row in place rather than creating a
+      // second one, so nothing set here is lost when they log in.
+      const mem = memberByPerson.get(personId);
       out.set(personId, {
         status: "invited", role: inv.role, inviteId: inv.id,
-        memberId: memberByPerson.get(personId)?.id,
+        memberId: mem?.id,
+        canLogIssues: mem?.canLogIssues,
+        canUpdatePlantMaterials: mem?.canUpdatePlantMaterials,
+        canEditDailyReport: mem?.canEditDailyReport,
         emailStatus: inv.emailStatus ?? undefined,
         emailLastSentAt: inv.emailLastSentAt ? inv.emailLastSentAt.toISOString() : undefined,
       });

@@ -168,7 +168,8 @@
       "Bash(kill 385 398)",
       "Bash(PORT=8080 nohup node --enable-source-maps ./dist/index.mjs)",
       "Bash(curl -s -o /dev/null -w \"health: %{http_code}\\\\n\" http://localhost:8080/api/health --max-time 5)",
-      "Bash(curl -s -o /dev/null -w \"8080 health: %{http_code}\\\\n\" http://localhost:8080/api/health --max-time 3)"
+      "Bash(curl -s -o /dev/null -w \"8080 health: %{http_code}\\\\n\" http://localhost:8080/api/health --max-time 3)",
+      "Bash(kill 15927)"
     ]
   },
   "hooks": {
