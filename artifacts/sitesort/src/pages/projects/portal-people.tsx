@@ -7,11 +7,11 @@ import {
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
-  UserPlus, Copy, Trash2, Mail, ShieldCheck, Send, MoreHorizontal, X,
+  Copy, Trash2, ShieldCheck, ShieldOff, Send, X,
   RefreshCw, AlertTriangle, CheckCircle2, Circle,
 } from "lucide-react";
 
@@ -78,7 +78,7 @@ function splitName(full: string): { firstName: string; lastName: string } {
   if (idx === -1) return { firstName: trimmed, lastName: trimmed };
   return { firstName: trimmed.slice(0, idx), lastName: trimmed.slice(idx + 1).trim() || trimmed.slice(0, idx) };
 }
-type PillSource = { kind: "in_house" } | { kind: "subcontractor"; subcontractorId: string } | { kind: "person"; personId: string; subcontractorId?: string };
+export type PillSource = { kind: "in_house" } | { kind: "subcontractor"; subcontractorId: string } | { kind: "person"; personId: string; subcontractorId?: string };
 
 function fmtRelative(iso?: string | null): string {
   if (!iso) return "never";
@@ -97,6 +97,8 @@ const PILL = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border t
 // One-click on/off pill for a single portal-section grant, rendered directly on
 // the card (Feature: inline portal-permission toggles) — no menu to open, so a
 // manager can see and change access at a glance same as Notes/Docs/Share/Remove.
+// Scoped to ONE section only — distinct from the "Portal member" pill above,
+// which is the whole-login on/off (see PortalStatusPill).
 function PermissionTogglePill({ label, checked, disabled, onToggle }: { label: string; checked: boolean; disabled?: boolean; onToggle: () => void }) {
   return (
     <button
@@ -110,25 +112,24 @@ function PermissionTogglePill({ label, checked, disabled, onToggle }: { label: s
           ? "border-violet-200 bg-violet-50 text-violet-700 dark:bg-violet-950/30 dark:text-violet-300 dark:border-violet-800"
           : "border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted"
       )}
-      title={checked ? `${label}: granted in the portal — click to revoke` : `${label}: not granted — click to give portal access`}
+      title={checked
+        ? `${label}: granted — click to remove access to just this section (their portal login stays active)`
+        : `${label}: not granted — click to give access to just this section`}
     >
       {checked ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Circle className="w-3.5 h-3.5" />} {label}
     </button>
   );
 }
 
-// ── Card action-row pill ────────────────────────────────────────────────────
-// Invites the card's person directly (in-house card = that member; subcontractor
-// card = its primary contact). Lazily creates the underlying `people` row on first
-// invite, then reflects portal status in place. Manager-only (mounted gated).
-export function PortalInvitePill({
+// ── Shared data/mutations for one person's portal membership on this project ──
+// Both PortalStatusPill and PortalPermissionToggles call this with identical
+// arguments, so they share the same React Query cache entry (no duplicate
+// fetches) while rendering in two different places on the card (Fix: portal
+// status pill sits above the role/type tag; section toggles stay next to it).
+function usePortalMembership({
   projectId, personName, personEmail, source, canManage,
 }: {
-  projectId: string;
-  personName: string;
-  personEmail?: string;
-  source: PillSource;
-  canManage: boolean;
+  projectId: string; personName: string; personEmail?: string; source: PillSource; canManage: boolean;
 }) {
   const { toast } = useToast();
   const isPerson = source.kind === "person";
@@ -148,8 +149,6 @@ export function PortalInvitePill({
   const revoke = useRevokeProjectInvite();
   const updatePermissions = useUpdateMemberPermissions();
 
-  const [prompting, setPrompting] = useState(false);
-  const [emailInput, setEmailInput] = useState("");
   const busy = createSub.isPending || createInHouse.isPending || invite.isPending || revoke.isPending;
 
   const email = (personEmail ?? "").trim().toLowerCase();
@@ -158,6 +157,14 @@ export function PortalInvitePill({
   const person = knownPersonId ? people.find(p => p.id === knownPersonId) : (email ? people.find(p => p.email.toLowerCase() === email) : undefined);
   const portal: PortalStatus = person?.portal ?? { status: "not_invited" };
 
+  // Single invite-creation path for every route into the portal — email send
+  // and copyable link both come from this ONE call, which never accepts
+  // permission fields (CreatePortalInviteBody: personId + role only). Section
+  // permissions are only ever set afterwards, once status is "member", via
+  // togglePermission below — so no invite path can create a member with
+  // permissions that aren't uniformly manageable on the card (Fix: share-link
+  // invites carry the same guarantees as email invites, because there is no
+  // separate share-link route to drift out of sync).
   const doInvite = async (useEmail: string) => {
     try {
       let personId = person?.id ?? knownPersonId;
@@ -173,25 +180,57 @@ export function PortalInvitePill({
         try { await navigator.clipboard.writeText(res.inviteUrl); } catch { /* noop */ }
         toast({ title: "Invite link copied", description: "Share it to grant portal-only access." });
       }
-      await (isSub ? subQ.refetch() : inHouseQ.refetch());
+      refresh();
     } catch (e: any) {
       toast({ variant: "destructive", title: "Invite failed", description: e?.data?.message ?? "Please try again." });
     }
   };
 
-  const onInvite = () => { if (!email) { setPrompting(true); return; } void doInvite(email); };
+  // Whole-portal-login revoke (distinct from togglePermission, which only ever
+  // touches one section). Reuses the same endpoint the Team Portal tab's invite
+  // list revokes through — kills any active session immediately and cancels a
+  // pending invite; works for both a pending invite and an accepted member.
   const doRevoke = async () => {
     if (!portal.inviteId) return;
-    try { await revoke.mutateAsync({ projectId, inviteId: portal.inviteId }); refresh(); }
-    catch { toast({ variant: "destructive", title: "Could not revoke access" }); }
+    try { await revoke.mutateAsync({ projectId, inviteId: portal.inviteId }); refresh(); toast({ title: "Portal access removed" }); }
+    catch { toast({ variant: "destructive", title: "Could not remove portal access" }); }
   };
+
   const togglePermission = async (field: "canLogIssues" | "canUpdatePlantMaterials" | "canEditDailyReport", value: boolean) => {
     if (!portal.memberId) return;
     try { await updatePermissions.mutateAsync({ projectId, memberId: portal.memberId, data: { [field]: value } }); refresh(); }
     catch { toast({ variant: "destructive", title: "Could not update permission" }); }
   };
 
+  return { portal, busy, loading, doInvite, doRevoke, togglePermission, updatePermissions, revoke };
+}
+
+// ── Card row 1: whole-portal-login status/on-off ────────────────────────────
+// Invites the card's person directly (in-house card = that member; subcontractor
+// card = its primary contact). Lazily creates the underlying `people` row on first
+// invite, then reflects portal status in place. Manager-only (mounted gated).
+// The "Portal member" pill IS the whole-access on/off control: clicking it opens
+// a confirm dialog and, on confirm, removes the person's portal login entirely
+// (kills active sessions, cancels any pending invite). After removal the pill
+// reverts to "Invite to Portal", so clicking it again re-invites/restores.
+export function PortalStatusPill({
+  projectId, personName, personEmail, source, canManage,
+}: {
+  projectId: string;
+  personName: string;
+  personEmail?: string;
+  source: PillSource;
+  canManage: boolean;
+}) {
+  const { portal, busy, loading, doInvite, doRevoke, revoke } = usePortalMembership({ projectId, personName, personEmail, source, canManage });
+  const [prompting, setPrompting] = useState(false);
+  const [emailInput, setEmailInput] = useState("");
+  const [confirmRevoke, setConfirmRevoke] = useState<"member" | "invited" | null>(null);
+
   if (!canManage) return null;
+
+  const email = (personEmail ?? "").trim().toLowerCase();
+  const onInvite = () => { if (!email) { setPrompting(true); return; } void doInvite(email); };
 
   // Subcontractor primary contact with no email on file → prompt + save it back.
   if (prompting) {
@@ -210,58 +249,71 @@ export function PortalInvitePill({
 
   if (portal.status === "member") {
     return (
-      <span className="inline-flex flex-wrap items-center gap-1">
-        <span className={cn(PILL, "border-emerald-200 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800")} title={`Last active ${fmtRelative(portal.lastActiveAt)}`}>
+      <>
+        <button
+          type="button"
+          onClick={() => setConfirmRevoke("member")}
+          className={cn(PILL, "border-emerald-200 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800 hover:border-emerald-400")}
+          title={`Last active ${fmtRelative(portal.lastActiveAt)} — click to remove this person's portal login entirely`}
+        >
           <ShieldCheck className="w-3.5 h-3.5" /> Portal member
-        </span>
-        <PermissionTogglePill
-          label="Site Issues"
-          checked={portal.canLogIssues ?? false}
-          disabled={updatePermissions.isPending}
-          onToggle={() => togglePermission("canLogIssues", !(portal.canLogIssues ?? false))}
-        />
-        <PermissionTogglePill
-          label="Plant & Materials"
-          checked={portal.canUpdatePlantMaterials ?? false}
-          disabled={updatePermissions.isPending}
-          onToggle={() => togglePermission("canUpdatePlantMaterials", !(portal.canUpdatePlantMaterials ?? false))}
-        />
-        <PermissionTogglePill
-          label="Daily Report"
-          checked={portal.canEditDailyReport ?? false}
-          disabled={updatePermissions.isPending}
-          onToggle={() => togglePermission("canEditDailyReport", !(portal.canEditDailyReport ?? false))}
-        />
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="p-1 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted" title="More"><MoreHorizontal className="w-4 h-4" /></button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuItem className="gap-2 cursor-pointer text-destructive focus:text-destructive" onClick={doRevoke}><Trash2 className="w-4 h-4" /> Revoke access</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </span>
+        </button>
+        <Dialog open={confirmRevoke === "member"} onOpenChange={v => { if (!v) setConfirmRevoke(null); }}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <ShieldOff className="w-4 h-4" /> Remove {personName}'s portal access completely?
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 text-sm">
+            <p>This ends any active portal session immediately and cancels any pending invite for them.</p>
+            <p className="text-muted-foreground">
+              This is different from the Site Issues / Plant &amp; Materials / Daily Report toggles on this card — unticking one of those removes access to that section only. This removes{" "}
+              <span className="font-semibold text-foreground">their whole portal login</span>.
+            </p>
+            <p className="text-muted-foreground">You can re-invite {personName} to the portal afterwards.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmRevoke(null)}>Cancel</Button>
+            <Button variant="destructive" isLoading={revoke.isPending} onClick={async () => { await doRevoke(); setConfirmRevoke(null); }}>Remove access</Button>
+          </DialogFooter>
+        </Dialog>
+      </>
     );
   }
 
   if (portal.status === "invited") {
     return (
-      <span className="inline-flex flex-col items-end gap-0.5">
-        <span className="inline-flex items-center gap-1">
-          <button className={cn(PILL, portal.emailStatus === "failed" ? "border-red-200 bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300 dark:border-red-800" : "border-amber-200 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800")} onClick={onInvite} disabled={busy} title="Copy a fresh invite link">
-            <Copy className="w-3.5 h-3.5" /> Invited · Copy link
-          </button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="p-1 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted" title="More"><MoreHorizontal className="w-4 h-4" /></button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuItem className="gap-2 cursor-pointer text-destructive focus:text-destructive" onClick={doRevoke}><Trash2 className="w-4 h-4" /> Revoke invite</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+      <>
+        <span className="inline-flex flex-col items-end gap-0.5">
+          <span className="inline-flex items-center gap-1">
+            <button className={cn(PILL, portal.emailStatus === "failed" ? "border-red-200 bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300 dark:border-red-800" : "border-amber-200 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800")} onClick={onInvite} disabled={busy} title="Copy a fresh invite link">
+              <Copy className="w-3.5 h-3.5" /> Invited · Copy link
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmRevoke("invited")}
+              disabled={busy}
+              className="p-1 text-muted-foreground hover:text-destructive rounded-lg hover:bg-muted"
+              title="Cancel this pending invite"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </span>
+          <InviteEmailStatus projectId={projectId} portal={portal} onDone={() => {}} />
         </span>
-        <InviteEmailStatus projectId={projectId} portal={portal} onDone={refresh} />
-      </span>
+        <Dialog open={confirmRevoke === "invited"} onOpenChange={v => { if (!v) setConfirmRevoke(null); }}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <ShieldOff className="w-4 h-4" /> Cancel {personName}'s pending invite?
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">They won't be able to use the link they were sent. You can invite them again later.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmRevoke(null)}>Keep invite</Button>
+            <Button variant="destructive" isLoading={revoke.isPending} onClick={async () => { await doRevoke(); setConfirmRevoke(null); }}>Cancel invite</Button>
+          </DialogFooter>
+        </Dialog>
+      </>
     );
   }
 
@@ -272,3 +324,41 @@ export function PortalInvitePill({
   );
 }
 
+// ── Card row 2 (alongside the role/type badge): per-section access toggles ──
+// Only ever rendered once the person is a portal member. Each pill is scoped to
+// ONE section — see PermissionTogglePill's tooltip and PortalStatusPill's
+// confirm dialog for the wording distinguishing this from a whole-login revoke.
+export function PortalPermissionToggles({
+  projectId, personName, personEmail, source, canManage,
+}: {
+  projectId: string;
+  personName: string;
+  personEmail?: string;
+  source: PillSource;
+  canManage: boolean;
+}) {
+  const { portal, togglePermission, updatePermissions } = usePortalMembership({ projectId, personName, personEmail, source, canManage });
+  if (!canManage || portal.status !== "member") return null;
+  return (
+    <>
+      <PermissionTogglePill
+        label="Site Issues"
+        checked={portal.canLogIssues ?? false}
+        disabled={updatePermissions.isPending}
+        onToggle={() => togglePermission("canLogIssues", !(portal.canLogIssues ?? false))}
+      />
+      <PermissionTogglePill
+        label="Plant & Materials"
+        checked={portal.canUpdatePlantMaterials ?? false}
+        disabled={updatePermissions.isPending}
+        onToggle={() => togglePermission("canUpdatePlantMaterials", !(portal.canUpdatePlantMaterials ?? false))}
+      />
+      <PermissionTogglePill
+        label="Daily Report"
+        checked={portal.canEditDailyReport ?? false}
+        disabled={updatePermissions.isPending}
+        onToggle={() => togglePermission("canEditDailyReport", !(portal.canEditDailyReport ?? false))}
+      />
+    </>
+  );
+}

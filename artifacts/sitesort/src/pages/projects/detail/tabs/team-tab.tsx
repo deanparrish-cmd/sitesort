@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { PortalInvitePill } from "../../portal-people";
+import { PortalStatusPill, PortalPermissionToggles, type PillSource } from "../../portal-people";
 import { useCreateSubcontractorPerson, useListPersonCertifications, useCreatePersonCertification } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -155,6 +155,11 @@ export function TeamTab() {
   function renderPersonCard(member: any, opts: { showCompanyInline: boolean }) {
     const isSubcontractor = !!member.subcontractorId;
     const badge = complianceBadge(member.complianceStatus);
+    const portalSource: PillSource = member.personId
+      ? { kind: "person", personId: member.personId, subcontractorId: member.subcontractorId ?? undefined }
+      // Legacy direct-user row (added before Feature: person-first cards,
+      // no `people` row yet) — falls back to the original lazy-create-by-email path.
+      : (isSubcontractor ? { kind: "subcontractor", subcontractorId: member.subcontractorId } : { kind: "in_house" });
     return (
       <div key={member.id} className="bg-card border rounded-xl p-5 flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow min-w-0 overflow-hidden">
         <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 min-w-0">
@@ -198,20 +203,28 @@ export function TeamTab() {
             </div>
           </div>
           <div className="flex flex-col items-end gap-1 min-w-0">
-            <div className="flex flex-wrap items-center justify-end gap-1.5 min-w-0">
-              <Badge variant="secondary" className="text-[10px] capitalize">{member.role.replace('_', ' ')}</Badge>
-              {caps.canManageTeam && (
-                <PortalInvitePill
+            {/* Portal status sits above the role/type tag (Fix: portal-access
+                controls layout) — the "Portal member" pill here is the whole-login
+                on/off; the per-section toggles stay in the row below. */}
+            {caps.canManageTeam && (
+              <div className="flex flex-wrap justify-end">
+                <PortalStatusPill
                   projectId={projectId}
                   personName={member.name}
                   personEmail={member.email}
-                  source={
-                    member.personId
-                      ? { kind: "person", personId: member.personId, subcontractorId: member.subcontractorId ?? undefined }
-                      // Legacy direct-user row (added before Feature: person-first cards,
-                      // no `people` row yet) — falls back to the original lazy-create-by-email path.
-                      : (isSubcontractor ? { kind: "subcontractor", subcontractorId: member.subcontractorId } : { kind: "in_house" })
-                  }
+                  source={portalSource}
+                  canManage={caps.canManageTeam}
+                />
+              </div>
+            )}
+            <div className="flex flex-wrap items-center justify-end gap-1.5 min-w-0">
+              <Badge variant="secondary" className="text-[10px] capitalize">{member.role.replace('_', ' ')}</Badge>
+              {caps.canManageTeam && (
+                <PortalPermissionToggles
+                  projectId={projectId}
+                  personName={member.name}
+                  personEmail={member.email}
+                  source={portalSource}
                   canManage={caps.canManageTeam}
                 />
               )}

@@ -8,12 +8,13 @@ import {
 } from "@workspace/api-client-react";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { openDocument } from "@/lib/documents";
 import { formatBytes } from "@/lib/utils";
 import { SECTION_NAV } from "@/pages/portal/layout";
 import {
-  UserPlus, Trash2, Activity, Eye, ShieldAlert, Clock,
+  UserPlus, Trash2, Activity, Eye, ShieldAlert, ShieldOff, Clock,
   FileCheck, Check, X, ExternalLink,
 } from "lucide-react";
 
@@ -146,6 +147,11 @@ export function ProjectTeamActivity({ projectId }: { projectId: string }) {
   // only manages the resulting invites — one source of truth, no duplicate form.
   const invitesQ = useListProjectInvites(projectId, { query: { retry: false, queryKey: getListProjectInvitesQueryKey(projectId) } });
   const revokeInvite = useRevokeProjectInvite();
+  // Whole-portal-login revoke — same endpoint + same confirm-first pattern as
+  // the "Portal member" pill on the Team tab card (portal-people.tsx). "accepted"
+  // means an active member: revoking here ends any live session immediately.
+  // "pending" means the invite hasn't been used yet: revoking just cancels it.
+  const [confirmTarget, setConfirmTarget] = useState<{ id: string; name: string; status: string } | null>(null);
 
   const revoke = async (inviteId: string) => {
     await revokeInvite.mutateAsync({ projectId, inviteId }).catch(() => {});
@@ -194,7 +200,11 @@ export function ProjectTeamActivity({ projectId }: { projectId: string }) {
                     <div className="flex items-center gap-2 shrink-0">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${INVITE_BADGE[inv.status]}`}>{inv.status}</span>
                       {inv.status !== "revoked" && (
-                        <button onClick={() => revoke(inv.id)} className="p-1.5 text-muted-foreground hover:text-destructive rounded-lg hover:bg-muted" title="Revoke access">
+                        <button
+                          onClick={() => setConfirmTarget({ id: inv.id, name: inv.name, status: inv.status })}
+                          className="p-1.5 text-muted-foreground hover:text-destructive rounded-lg hover:bg-muted"
+                          title={inv.status === "accepted" ? "Remove portal access" : "Cancel invite"}
+                        >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       )}
@@ -206,6 +216,34 @@ export function ProjectTeamActivity({ projectId }: { projectId: string }) {
           )}
         </div>
       </section>
+
+      <Dialog open={!!confirmTarget} onOpenChange={v => { if (!v) setConfirmTarget(null); }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-destructive">
+            <ShieldOff className="w-4 h-4" />
+            {confirmTarget?.status === "accepted" ? `Remove ${confirmTarget?.name}'s portal access completely?` : `Cancel ${confirmTarget?.name}'s pending invite?`}
+          </DialogTitle>
+        </DialogHeader>
+        {confirmTarget?.status === "accepted" ? (
+          <div className="space-y-2 text-sm">
+            <p>This ends any active portal session immediately and cancels any pending invite for them.</p>
+            <p className="text-muted-foreground">This removes their whole portal login — section permissions (Site Issues, Plant &amp; Materials, Daily Report) are managed separately, from their card on the Team tab.</p>
+            <p className="text-muted-foreground">You can re-invite them to the portal afterwards.</p>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">They won't be able to use the link they were sent. You can invite them again later.</p>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setConfirmTarget(null)}>{confirmTarget?.status === "accepted" ? "Cancel" : "Keep invite"}</Button>
+          <Button
+            variant="destructive"
+            isLoading={revokeInvite.isPending}
+            onClick={async () => { if (confirmTarget) { await revoke(confirmTarget.id); setConfirmTarget(null); } }}
+          >
+            {confirmTarget?.status === "accepted" ? "Remove access" : "Cancel invite"}
+          </Button>
+        </DialogFooter>
+      </Dialog>
 
       {/* ---- Per-member summary ---- */}
       <section>
