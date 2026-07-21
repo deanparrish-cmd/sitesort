@@ -79,22 +79,28 @@ router.post("/projects/:projectId/invites/:inviteId/revoke", authenticate, async
     // person link (the portal membership this invite created); fall back to the
     // accepted user for legacy invites that predate person_id.
     if (inv.personId) {
-      // Cut portal access by clearing the person_id grant on the membership. For a
-      // portalOnly account there's no team role to keep, so remove the row entirely;
-      // for a dashboard (in-house) account, keep the row + team role and just drop
-      // the portal grant.
       const mem = (await db.select({ id: projectMembersTable.id, userId: projectMembersTable.userId })
         .from(projectMembersTable)
         .where(and(eq(projectMembersTable.projectId, req.params.projectId), eq(projectMembersTable.personId, inv.personId))).limit(1))[0];
       if (mem) {
-        const portalOnly = mem.userId
-          ? (await db.select({ p: usersTable.portalOnly }).from(usersTable).where(eq(usersTable.id, mem.userId)).limit(1))[0]?.p === true
-          : false;
-        if (portalOnly) await db.delete(projectMembersTable).where(eq(projectMembersTable.id, mem.id));
-        else await db.update(projectMembersTable).set({ personId: null }).where(eq(projectMembersTable.id, mem.id));
-        // Kill any live portal session immediately (the membership re-check would
-        // also 403 them, but this ends the session cleanly + server-side at once).
-        if (mem.userId) await revokePortalSessionsForMember(mem.userId, req.params.projectId);
+        if (!mem.userId) {
+          // Still pending — never accepted, so there's no session to kill and no
+          // account to detach. This row is their project team membership (the
+          // person-first add flow creates it independently of any invite), so
+          // keep it; just reset any section permissions a PM pre-set for this
+          // invite, since they no longer apply once it's cancelled.
+          await db.update(projectMembersTable).set({ canLogIssues: false, canUpdatePlantMaterials: false, canEditDailyReport: false }).where(eq(projectMembersTable.id, mem.id));
+        } else {
+          // Accepted. For a portalOnly account there's no team role to keep, so
+          // remove the row entirely; for a dashboard (in-house) account, keep
+          // the row + team role and just drop the portal grant.
+          const portalOnly = (await db.select({ p: usersTable.portalOnly }).from(usersTable).where(eq(usersTable.id, mem.userId)).limit(1))[0]?.p === true;
+          if (portalOnly) await db.delete(projectMembersTable).where(eq(projectMembersTable.id, mem.id));
+          else await db.update(projectMembersTable).set({ personId: null }).where(eq(projectMembersTable.id, mem.id));
+          // Kill any live portal session immediately (the membership re-check would
+          // also 403 them, but this ends the session cleanly + server-side at once).
+          await revokePortalSessionsForMember(mem.userId, req.params.projectId);
+        }
       }
     } else if (inv.acceptedUserId) {
       await db.delete(projectMembersTable)

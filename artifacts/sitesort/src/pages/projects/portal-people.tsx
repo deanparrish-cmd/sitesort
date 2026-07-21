@@ -99,7 +99,7 @@ const PILL = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border t
 // manager can see and change access at a glance same as Notes/Docs/Share/Remove.
 // Scoped to ONE section only — distinct from the "Portal member" pill above,
 // which is the whole-login on/off (see PortalStatusPill).
-function PermissionTogglePill({ label, checked, disabled, onToggle }: { label: string; checked: boolean; disabled?: boolean; onToggle: () => void }) {
+function PermissionTogglePill({ label, checked, disabled, note, onToggle }: { label: string; checked: boolean; disabled?: boolean; note?: string; onToggle: () => void }) {
   return (
     <button
       type="button"
@@ -112,9 +112,9 @@ function PermissionTogglePill({ label, checked, disabled, onToggle }: { label: s
           ? "border-violet-200 bg-violet-50 text-violet-700 dark:bg-violet-950/30 dark:text-violet-300 dark:border-violet-800"
           : "border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted"
       )}
-      title={checked
+      title={(checked
         ? `${label}: granted — click to remove access to just this section (their portal login stays active)`
-        : `${label}: not granted — click to give access to just this section`}
+        : `${label}: not granted — click to give access to just this section`) + (note ?? "")}
     >
       {checked ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Circle className="w-3.5 h-3.5" />} {label}
     </button>
@@ -324,10 +324,15 @@ export function PortalStatusPill({
   );
 }
 
-// ── Card row 2 (alongside the role/type badge): per-section access toggles ──
-// Only ever rendered once the person is a portal member. Each pill is scoped to
-// ONE section — see PermissionTogglePill's tooltip and PortalStatusPill's
-// confirm dialog for the wording distinguishing this from a whole-login revoke.
+// ── Card row: per-section access toggles ────────────────────────────────────
+// Rendered for BOTH a pending invite AND an accepted member — a PM can grant
+// section access before the person ever logs in, so it's ready the moment
+// they accept (Fix: permission parity regardless of invite route or accept
+// state). The underlying project_members row already exists by invite time
+// (see portalStatusFor in people.ts), so togglePermission works identically
+// either way. Each pill is scoped to ONE section — see PermissionTogglePill's
+// tooltip and PortalStatusPill's confirm dialog for the wording distinguishing
+// this from a whole-login revoke.
 export function PortalPermissionToggles({
   projectId, personName, personEmail, source, canManage,
 }: {
@@ -338,25 +343,29 @@ export function PortalPermissionToggles({
   canManage: boolean;
 }) {
   const { portal, togglePermission, updatePermissions } = usePortalMembership({ projectId, personName, personEmail, source, canManage });
-  if (!canManage || portal.status !== "member") return null;
+  if (!canManage || (portal.status !== "member" && portal.status !== "invited")) return null;
+  const pendingNote = portal.status === "invited" ? " — applies as soon as they accept" : "";
   return (
     <>
       <PermissionTogglePill
         label="Site Issues"
         checked={portal.canLogIssues ?? false}
         disabled={updatePermissions.isPending}
+        note={pendingNote}
         onToggle={() => togglePermission("canLogIssues", !(portal.canLogIssues ?? false))}
       />
       <PermissionTogglePill
         label="Plant & Materials"
         checked={portal.canUpdatePlantMaterials ?? false}
         disabled={updatePermissions.isPending}
+        note={pendingNote}
         onToggle={() => togglePermission("canUpdatePlantMaterials", !(portal.canUpdatePlantMaterials ?? false))}
       />
       <PermissionTogglePill
         label="Daily Report"
         checked={portal.canEditDailyReport ?? false}
         disabled={updatePermissions.isPending}
+        note={pendingNote}
         onToggle={() => togglePermission("canEditDailyReport", !(portal.canEditDailyReport ?? false))}
       />
     </>

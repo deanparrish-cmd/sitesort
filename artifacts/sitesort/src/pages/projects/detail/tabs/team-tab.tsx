@@ -203,12 +203,26 @@ export function TeamTab() {
             </div>
           </div>
           <div className="flex flex-col items-end gap-1 min-w-0">
-            {/* Portal status sits above the role/type tag (Fix: portal-access
-                controls layout) — the "Portal member" pill here is the whole-login
-                on/off; the per-section toggles stay in the row below. */}
-            {caps.canManageTeam && (
-              <div className="flex flex-wrap justify-end">
+            {/* Row 1: contact-type/role tag, then the whole-login "Portal
+                member" status pill. Row 2: the 3 per-section toggles, grouped
+                together on their own line. Row 3: Notes/Docs/Share/Remove.
+                Three distinct rows so the scopes read as three different
+                kinds of control, not one long wrapped strip. */}
+            <div className="flex flex-wrap items-center justify-end gap-1.5 min-w-0">
+              <Badge variant="secondary" className="text-[10px] capitalize">{member.role.replace('_', ' ')}</Badge>
+              {caps.canManageTeam && (
                 <PortalStatusPill
+                  projectId={projectId}
+                  personName={member.name}
+                  personEmail={member.email}
+                  source={portalSource}
+                  canManage={caps.canManageTeam}
+                />
+              )}
+            </div>
+            {caps.canManageTeam && (
+              <div className="flex flex-wrap items-center justify-end gap-1.5 min-w-0">
+                <PortalPermissionToggles
                   projectId={projectId}
                   personName={member.name}
                   personEmail={member.email}
@@ -218,16 +232,6 @@ export function TeamTab() {
               </div>
             )}
             <div className="flex flex-wrap items-center justify-end gap-1.5 min-w-0">
-              <Badge variant="secondary" className="text-[10px] capitalize">{member.role.replace('_', ' ')}</Badge>
-              {caps.canManageTeam && (
-                <PortalPermissionToggles
-                  projectId={projectId}
-                  personName={member.name}
-                  personEmail={member.email}
-                  source={portalSource}
-                  canManage={caps.canManageTeam}
-                />
-              )}
               {isSubcontractor && (
                 <button
                   type="button"

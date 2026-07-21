@@ -450,12 +450,21 @@ router.post("/portal/invite/:token/accept", async (req, res) => {
       await db.update(peopleTable).set({ userId }).where(eq(peopleTable.id, inv.personId));
     }
 
-    // Membership (user ↔ project) carrying the person link. If a membership row
-    // already exists for this user+project, set person_id on it; else insert one.
+    // Membership (user ↔ project) carrying the person link. The person is
+    // already a project team member by the time they can be invited (that's
+    // how their card exists to invite from — the person-first add flow), so
+    // their project_members row already exists here too, keyed by personId
+    // with no userId yet. Match on personId (not just the brand-new userId,
+    // which can never match an existing row) so accepting UPDATES that row in
+    // place — preserving any section permissions a PM already granted while
+    // the invite was pending — instead of inserting a second, duplicate row.
     const existingMember = (await db.select({ id: projectMembersTable.id }).from(projectMembersTable)
-      .where(and(eq(projectMembersTable.projectId, inv.projectId), eq(projectMembersTable.userId, userId))).limit(1))[0];
+      .where(and(
+        eq(projectMembersTable.projectId, inv.projectId),
+        inv.personId ? or(eq(projectMembersTable.userId, userId), eq(projectMembersTable.personId, inv.personId)) : eq(projectMembersTable.userId, userId),
+      )).limit(1))[0];
     if (existingMember) {
-      await db.update(projectMembersTable).set({ personId: inv.personId ?? null }).where(eq(projectMembersTable.id, existingMember.id));
+      await db.update(projectMembersTable).set({ personId: inv.personId ?? null, userId }).where(eq(projectMembersTable.id, existingMember.id));
     } else {
       await db.insert(projectMembersTable)
         .values({ id: generateId(), projectId: inv.projectId, userId, personId: inv.personId ?? null, role: inv.role })
