@@ -5,6 +5,7 @@
  * SiteSort API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { PortalDocumentMyStatus } from "./portalDocumentMyStatus";
 import type { PortalDocumentSupersededBy } from "./portalDocumentSupersededBy";
 
 export interface PortalDocument {
@@ -23,4 +24,10 @@ export interface PortalDocument {
   sharedAt?: string;
   /** Set when this document is superseded — points at the live replacement. */
   supersededBy?: PortalDocumentSupersededBy;
+  /** Whether this document needs a PIN sign-off. */
+  requiresAcknowledgment?: boolean;
+  /** This viewer's own sign-off status for the document, or null if they have no distribution record yet. */
+  myStatus?: PortalDocumentMyStatus;
+  /** When this viewer signed it off, if they have. */
+  mySignedOffAt?: Date | null;
 }

@@ -7,6 +7,8 @@
  */
 import type { DailyReportContributor } from "./dailyReportContributor";
 import type { ManagerReportFields } from "./managerReportFields";
+import type { PortalDailyReportHistoryItemLifecycleStatus } from "./portalDailyReportHistoryItemLifecycleStatus";
+import type { PortalSubmissionNote } from "./portalSubmissionNote";
 
 /**
  * A past day's site diary — always read-only in the portal.
@@ -15,4 +17,8 @@ export interface PortalDailyReportHistoryItem {
   reportDate: string;
   managerReport?: ManagerReportFields | null;
   contributors: DailyReportContributor[];
+  lifecycleStatus?: PortalDailyReportHistoryItemLifecycleStatus;
+  submittedAt?: Date | null;
+  submittedByName?: string | null;
+  submissionNotes?: PortalSubmissionNote[];
 }

@@ -4,11 +4,12 @@ import {
   plantItemsTable, plantItemAttachmentsTable, plantItemDistributionsTable,
   projectsTable, usersTable, subcontractorsTable, notificationsTable,
 } from "@workspace/db/schema";
-import { eq, and, inArray, sql } from "drizzle-orm";
+import { eq, and, inArray, sql, isNull, isNotNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { logActivity } from "../lib/activity";
 import { CreatePlantItemBody, UpdatePlantItemBody, CreatePlantItemAttachmentBody } from "@workspace/api-zod";
+import { notesFor, addNote } from "../lib/portal-submission-notes";
 
 const router: IRouter = Router();
 
@@ -39,7 +40,10 @@ async function loadOwnedProject(projectId: string, companyId: string) {
 type ItemRow = typeof plantItemsTable.$inferSelect;
 
 async function serializeItems(items: ItemRow[]) {
-  const updaterIds = [...new Set(items.map(i => i.lastUpdatedBy).filter((x): x is string => !!x))];
+  const updaterIds = [...new Set([
+    ...items.map(i => i.lastUpdatedBy).filter((x): x is string => !!x),
+    ...items.map(i => i.archivedBy).filter((x): x is string => !!x),
+  ])];
   const supplierIds = [...new Set(items.map(i => i.supplierContactId).filter((x): x is string => !!x))];
   const itemIds = items.map(i => i.id);
   const [updaters, suppliers, attachmentCounts] = await Promise.all([
@@ -57,6 +61,10 @@ async function serializeItems(items: ItemRow[]) {
   const updaterName = new Map(updaters.map(u => [u.id, u.name]));
   const supplierName = new Map(suppliers.map(s => [s.id, s.name]));
   const attachmentCount = new Map(attachmentCounts.map(a => [a.plantItemId, a.count]));
+  const draftUpdaterIds = [...new Set(items.map(i => i.portalDraftUpdatedBy).filter((x): x is string => !!x))];
+  const draftUpdaters = draftUpdaterIds.length ? await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(inArray(usersTable.id, draftUpdaterIds)) : [];
+  const draftUpdaterName = new Map(draftUpdaters.map(u => [u.id, u.name]));
+  const submissionNotesByItem = new Map(await Promise.all(items.map(async i => [i.id, await notesFor("plant_item", i.id)] as const)));
   return items.map(i => ({
     id: i.id,
     projectId: i.projectId,
@@ -77,6 +85,18 @@ async function serializeItems(items: ItemRow[]) {
     lastUpdatedAt: i.lastUpdatedAt ? i.lastUpdatedAt.toISOString() : null,
     attachmentCount: attachmentCount.get(i.id) ?? 0,
     createdAt: i.createdAt.toISOString(),
+    archivedAt: i.archivedAt ? i.archivedAt.toISOString() : null,
+    archivedByName: i.archivedBy ? (updaterName.get(i.archivedBy) ?? null) : null,
+    archiveReason: i.archiveReason ?? null,
+    // A portal member's pending (not-yet-submitted) proposed change — visible
+    // to the PM so they know an edit is in flight, but the fields above (the
+    // live/submitted values) are untouched until the member submits it.
+    pendingPortalDraft: i.portalDraftUpdatedAt ? {
+      status: i.portalDraftStatus, location: i.portalDraftLocation, notes: i.portalDraftNotes,
+      updatedByName: i.portalDraftUpdatedBy ? (draftUpdaterName.get(i.portalDraftUpdatedBy) ?? null) : null,
+      updatedAt: i.portalDraftUpdatedAt.toISOString(),
+    } : null,
+    submissionNotes: submissionNotesByItem.get(i.id) ?? [],
   }));
 }
 
@@ -91,6 +111,9 @@ router.get("/projects/:projectId/plant-items", authenticate, async (req, res) =>
     const status = typeof req.query.status === "string" ? req.query.status : undefined;
     if (category) filters.push(eq(plantItemsTable.category, category));
     if (status) filters.push(eq(plantItemsTable.status, status));
+    // Archived (soft-deleted) items are hidden unless explicitly requested —
+    // same convention as GET /api/issues.
+    filters.push(req.query.archived === "true" ? isNotNull(plantItemsTable.archivedAt) : isNull(plantItemsTable.archivedAt));
 
     const items = await db.select().from(plantItemsTable).where(and(...filters));
     res.json(await serializeItems(items));
@@ -178,6 +201,79 @@ router.patch("/projects/:projectId/plant-items/:itemId", authenticate, async (re
   } catch (err) {
     req.log.error({ err }, "Update plant item error");
     res.status(500).json({ error: "server_error", message: "Failed to update item" });
+  }
+});
+
+// POST /api/projects/:projectId/plant-items/:itemId/notes — PM-side
+// append-only note (the dashboard counterpart of the portal's
+// POST /portal/plant-materials/:itemId/notes).
+router.post("/projects/:projectId/plant-items/:itemId/notes", authenticate, async (req, res) => {
+  try {
+    if (!requireInternal(req, res)) return;
+    const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
+    if (!project) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+    const existing = await db.select({ id: plantItemsTable.id }).from(plantItemsTable)
+      .where(and(eq(plantItemsTable.id, req.params.itemId), eq(plantItemsTable.projectId, project.id))).limit(1);
+    if (!existing[0]) { res.status(404).json({ error: "not_found", message: "Item not found" }); return; }
+    const { body } = req.body as { body?: string };
+    if (!body || !body.trim()) { res.status(400).json({ error: "validation_error", message: "A note body is required." }); return; }
+
+    await addNote({ itemType: "plant_item", itemId: req.params.itemId, projectId: project.id, authorId: req.user!.id, body: body.trim() });
+
+    const updated = await db.select().from(plantItemsTable).where(eq(plantItemsTable.id, req.params.itemId)).limit(1);
+    res.status(201).json((await serializeItems(updated))[0]);
+  } catch (err) {
+    req.log.error({ err }, "Add plant item note error");
+    res.status(500).json({ error: "server_error", message: "Failed to add note" });
+  }
+});
+
+// POST /api/projects/:projectId/plant-items/:itemId/archive — soft-delete
+// (archive), manager-only. Mirrors DELETE /api/photos/:photoId: the row is
+// retained for audit and hidden from default lists.
+router.post("/projects/:projectId/plant-items/:itemId/archive", authenticate, async (req, res) => {
+  try {
+    if (!requireManager(req, res)) return;
+    const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
+    if (!project) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+    const existing = await db.select({ id: plantItemsTable.id }).from(plantItemsTable)
+      .where(and(eq(plantItemsTable.id, req.params.itemId), eq(plantItemsTable.projectId, project.id))).limit(1);
+    if (!existing[0]) { res.status(404).json({ error: "not_found", message: "Item not found" }); return; }
+
+    const { reason } = req.body as { reason?: string };
+    await db.update(plantItemsTable)
+      .set({ archivedAt: new Date(), archivedBy: req.user!.id, archiveReason: reason?.trim().slice(0, 500) || null })
+      .where(eq(plantItemsTable.id, req.params.itemId));
+    void logActivity({ userId: req.user!.id, projectId: project.id, companyId: req.user!.companyId, section: "plant-materials", action: "delete", itemType: "plant_item", itemId: req.params.itemId, metadata: { archiveReason: { from: null, to: reason?.trim() || null } }, req });
+
+    const updated = await db.select().from(plantItemsTable).where(eq(plantItemsTable.id, req.params.itemId)).limit(1);
+    res.json((await serializeItems(updated))[0]);
+  } catch (err) {
+    req.log.error({ err }, "Archive plant item error");
+    res.status(500).json({ error: "server_error", message: "Failed to archive item" });
+  }
+});
+
+// PATCH /api/projects/:projectId/plant-items/:itemId/restore — un-archive (manager-only).
+router.patch("/projects/:projectId/plant-items/:itemId/restore", authenticate, async (req, res) => {
+  try {
+    if (!requireManager(req, res)) return;
+    const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
+    if (!project) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+    const existing = await db.select({ id: plantItemsTable.id }).from(plantItemsTable)
+      .where(and(eq(plantItemsTable.id, req.params.itemId), eq(plantItemsTable.projectId, project.id))).limit(1);
+    if (!existing[0]) { res.status(404).json({ error: "not_found", message: "Item not found" }); return; }
+
+    await db.update(plantItemsTable)
+      .set({ archivedAt: null, archivedBy: null, archiveReason: null })
+      .where(eq(plantItemsTable.id, req.params.itemId));
+    void logActivity({ userId: req.user!.id, projectId: project.id, companyId: req.user!.companyId, section: "plant-materials", action: "restore", itemType: "plant_item", itemId: req.params.itemId, req });
+
+    const updated = await db.select().from(plantItemsTable).where(eq(plantItemsTable.id, req.params.itemId)).limit(1);
+    res.json((await serializeItems(updated))[0]);
+  } catch (err) {
+    req.log.error({ err }, "Restore plant item error");
+    res.status(500).json({ error: "server_error", message: "Failed to restore item" });
   }
 });
 

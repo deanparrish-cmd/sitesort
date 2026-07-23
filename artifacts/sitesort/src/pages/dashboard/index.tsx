@@ -57,7 +57,8 @@ const EVENT_LINK: Record<CalEvent["type"], { href: string; label: string }> = {
 function notifIcon(type: string) {
   switch (type) {
     case "new_message":    return <MessageSquare className="w-4 h-4 text-blue-500" />;
-    case "document_uploaded": return <FileText className="w-4 h-4 text-indigo-500" />;
+    case "document_uploaded":
+    case "member_document_uploaded": return <FileText className="w-4 h-4 text-indigo-500" />;
     case "safety_concern": return <AlertTriangle className="w-4 h-4 text-amber-500" />;
     case "daily_report":   return <ClipboardCheck className="w-4 h-4 text-teal-500" />;
     case "trial_ending":   return <CreditCard className="w-4 h-4 text-orange-500" />;
@@ -678,6 +679,18 @@ export default function Dashboard() {
         navigate(`/projects/${doc.projectId}?tab=documents`);
         return;
       }
+    }
+
+    // A portal member's "My documents" self-upload / a plant item logged from
+    // the portal — relatedEntityId is already the PROJECT id (no single-row
+    // fetch exists for either), so these go straight to the relevant tab.
+    if (n.type === "member_document_uploaded" && n.relatedEntityId) {
+      navigate(`/projects/${n.relatedEntityId}?tab=teamportal`);
+      return;
+    }
+    if (n.type === "portal_plant_item_logged" && n.relatedEntityId) {
+      navigate(`/projects/${n.relatedEntityId}?tab=plant`);
+      return;
     }
 
     if (n.type === "new_message") { navigate("/messages"); return; }

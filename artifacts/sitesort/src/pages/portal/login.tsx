@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation, useSearch } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { usePortalLogin } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -124,6 +124,11 @@ export default function PortalLogin() {
             <Button type="submit" className="w-full" size="lg" isLoading={login.isPending}>
               Log In
             </Button>
+            <p className="text-center text-sm">
+              <Link href="/portal/forgot-password" className="text-primary hover:underline">
+                Forgot password?
+              </Link>
+            </p>
           </form>
         )}
 

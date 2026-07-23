@@ -25,4 +25,5 @@ export {
   CreatePortalSiteIssueBody,
   UpdatePortalSiteIssueBody,
   GetPortalDmThreadParams,
+  EditPortalSiteIssueDraftBody,
 } from "./generated/api";

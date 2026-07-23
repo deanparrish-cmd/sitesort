@@ -7,6 +7,8 @@
  */
 import type { PhotoCategory } from "./photoCategory";
 import type { PhotoClosureReason } from "./photoClosureReason";
+import type { PhotoLifecycleStatus } from "./photoLifecycleStatus";
+import type { PortalSubmissionNote } from "./portalSubmissionNote";
 
 export interface Photo {
   id: string;
@@ -35,4 +37,9 @@ export interface Photo {
   archiveReason?: string | null;
   /** Set when a manager removes just the attached photo, leaving the issue record intact. */
   photoRemovedAt?: Date | null;
+  /** Portal save-vs-submit lifecycle. Null = still a draft with its reporter, absent from the PM's triage queue. Dashboard-created issues are always submitted immediately. */
+  submittedAt?: Date | null;
+  submittedByName?: string | null;
+  lifecycleStatus?: PhotoLifecycleStatus;
+  notes?: PortalSubmissionNote[];
 }

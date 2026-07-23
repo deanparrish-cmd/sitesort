@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PortalIssueClosureReason } from "./portalIssueClosureReason";
+import type { PortalIssueLifecycleStatus } from "./portalIssueLifecycleStatus";
+import type { PortalSubmissionNote } from "./portalSubmissionNote";
 
 export interface PortalIssue {
   id: string;
@@ -25,4 +27,8 @@ export interface PortalIssue {
   /** Set only on issues this member reported themselves. */
   reporterName?: string;
   closureReason?: PortalIssueClosureReason;
+  submittedAt?: Date | null;
+  submittedByName?: string | null;
+  lifecycleStatus?: PortalIssueLifecycleStatus;
+  notes?: PortalSubmissionNote[];
 }

@@ -6,6 +6,18 @@ import { authenticate } from "../middlewares/auth";
 import { generateDailyReportForProject, hasManagerContent, upsertManagerReport, contributorsForReport } from "../lib/daily-reports";
 import { generateId } from "../lib/id";
 import { enqueuePushForMembers, acceptedPortalMemberUserIds } from "../lib/push-triggers";
+import { notesFor, addNote } from "../lib/portal-submission-notes";
+
+// A report's narrative only counts as "there" for the PM once its author has
+// submitted it — a portal member's still-in-progress draft doesn't show.
+function hasSubmittedContent(managerReport: unknown, submittedAt: Date | null): boolean {
+  return !!submittedAt && hasManagerContent(managerReport as Parameters<typeof hasManagerContent>[0]);
+}
+async function nameForReportsUser(userId: string | null): Promise<string | null> {
+  if (!userId) return null;
+  const rows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+  return rows[0]?.name ?? null;
+}
 
 const router: IRouter = Router();
 
@@ -56,6 +68,7 @@ router.get("/daily-reports", authenticate, async (req, res) => {
         photoCount: dailyReportsTable.photoCount,
         managerReport: dailyReportsTable.managerReport,
         authoredAt: dailyReportsTable.authoredAt,
+        submittedAt: dailyReportsTable.submittedAt,
       })
       .from(dailyReportsTable)
       .innerJoin(projectsTable, eq(projectsTable.id, dailyReportsTable.projectId))
@@ -72,7 +85,8 @@ router.get("/daily-reports", authenticate, async (req, res) => {
         checkinCount: r.checkinCount,
         documentEventCount: r.documentEventCount,
         photoCount: r.photoCount,
-        hasManagerReport: hasManagerContent(r.managerReport),
+        // A portal member's still-in-progress draft doesn't count as "there" yet.
+        hasManagerReport: hasSubmittedContent(r.managerReport, r.submittedAt),
         authoredAt: r.authoredAt ? r.authoredAt.toISOString() : null,
       })),
     );
@@ -110,16 +124,18 @@ router.get("/projects/:projectId/daily-reports", authenticate, async (req, res) 
         documentEventCount: dailyReportsTable.documentEventCount,
         photoCount: dailyReportsTable.photoCount,
         managerReport: dailyReportsTable.managerReport,
+        submittedAt: dailyReportsTable.submittedAt,
       })
       .from(dailyReportsTable)
       .where(eq(dailyReportsTable.projectId, req.params.projectId))
       .orderBy(desc(dailyReportsTable.reportDate));
 
     res.json(
-      reports.map(({ managerReport, ...r }) => ({
+      reports.map(({ managerReport, submittedAt, ...r }) => ({
         ...r,
         generatedAt: r.generatedAt.toISOString(),
-        hasManagerReport: hasManagerContent(managerReport),
+        hasManagerReport: hasSubmittedContent(managerReport, submittedAt),
+        lifecycleStatus: hasManagerContent(managerReport) ? (submittedAt ? "submitted" : "draft") : null,
       })),
     );
   } catch (err) {
@@ -151,6 +167,8 @@ router.get("/daily-reports/:id", authenticate, async (req, res) => {
         authoredAt: dailyReportsTable.authoredAt,
         authorName: usersTable.name,
         companyId: projectsTable.companyId,
+        submittedAt: dailyReportsTable.submittedAt,
+        submittedBy: dailyReportsTable.submittedBy,
       })
       .from(dailyReportsTable)
       .innerJoin(projectsTable, eq(projectsTable.id, dailyReportsTable.projectId))
@@ -164,6 +182,9 @@ router.get("/daily-reports/:id", authenticate, async (req, res) => {
       return;
     }
 
+    // A portal member's still-in-progress draft narrative isn't shown to the
+    // PM yet — only that a draft exists, via lifecycleStatus.
+    const hasContent = hasManagerContent(report.managerReport);
     res.json({
       id: report.id,
       projectId: report.projectId,
@@ -174,14 +195,41 @@ router.get("/daily-reports/:id", authenticate, async (req, res) => {
       documentEventCount: report.documentEventCount,
       photoCount: report.photoCount,
       data: report.data,
-      managerReport: hasManagerContent(report.managerReport) ? report.managerReport : null,
+      managerReport: hasSubmittedContent(report.managerReport, report.submittedAt) ? report.managerReport : null,
       authorName: report.authorName ?? null,
       authoredAt: report.authoredAt ? report.authoredAt.toISOString() : null,
       contributors: await contributorsForReport(report.id),
+      lifecycleStatus: hasContent ? (report.submittedAt ? "submitted" : "draft") : null,
+      submittedAt: report.submittedAt ? report.submittedAt.toISOString() : null,
+      submittedByName: await nameForReportsUser(report.submittedBy),
+      submissionNotes: await notesFor("daily_report", report.id),
     });
   } catch (err) {
     req.log.error({ err }, "Get daily report error");
     res.status(500).json({ error: "server_error", message: "Failed to load report" });
+  }
+});
+
+// POST /api/daily-reports/:id/notes — PM-side append-only note (the dashboard
+// counterpart of the portal's POST /portal/daily-report/:date/notes).
+router.post("/daily-reports/:id/notes", authenticate, async (req, res) => {
+  try {
+    if (!isInternal(req.user!.role)) { res.status(403).json({ error: "forbidden", message: "Not allowed to add notes" }); return; }
+    const rows = await db.select({ id: dailyReportsTable.id, projectId: dailyReportsTable.projectId, submittedAt: dailyReportsTable.submittedAt, companyId: projectsTable.companyId })
+      .from(dailyReportsTable)
+      .innerJoin(projectsTable, eq(projectsTable.id, dailyReportsTable.projectId))
+      .where(eq(dailyReportsTable.id, req.params.id)).limit(1);
+    const report = rows[0];
+    if (!report || report.companyId !== req.user!.companyId) { res.status(404).json({ error: "not_found", message: "Report not found" }); return; }
+    if (!report.submittedAt) { res.status(400).json({ error: "validation_error", message: "This report hasn't been submitted yet." }); return; }
+    const { body } = req.body as { body?: string };
+    if (!body || !body.trim()) { res.status(400).json({ error: "validation_error", message: "A note body is required." }); return; }
+
+    await addNote({ itemType: "daily_report", itemId: report.id, projectId: report.projectId, authorId: req.user!.id, body: body.trim() });
+    res.status(201).json({ submissionNotes: await notesFor("daily_report", report.id) });
+  } catch (err) {
+    req.log.error({ err }, "Add daily report note error");
+    res.status(500).json({ error: "server_error", message: "Failed to add note" });
   }
 });
 
@@ -337,6 +385,10 @@ router.patch("/projects/:projectId/daily-reports/:date", authenticate, async (re
       res.status(400).json({ error: "validation_error", message: "Enter at least one field" });
       return;
     }
+    // Dashboard writes are always immediately "submitted" — the PM IS the
+    // destination, there's no draft step for their own entries (mirrors the
+    // same convention for dashboard-created site issues/plant items).
+    await db.update(dailyReportsTable).set({ submittedAt: new Date(), submittedBy: req.user!.id }).where(eq(dailyReportsTable.id, result.id));
     res.json({ id: result.id, reportDate: date, managerReport: result.managerReport });
   } catch (err) {
     req.log.error({ err }, "Author daily report error");

@@ -179,6 +179,14 @@ function usePortalMembership({
       if (res.inviteUrl) {
         try { await navigator.clipboard.writeText(res.inviteUrl); } catch { /* noop */ }
         toast({ title: "Invite link copied", description: "Share it to grant portal-only access." });
+      } else if (res.status === "member") {
+        // Server auto-linked an EXISTING SiteSort account with this email (same
+        // company) — no invite email is sent in that case, which looks like a
+        // silent no-op unless we say so explicitly.
+        toast({
+          title: "Already has a SiteSort account",
+          description: `${useEmail} already has a SiteSort login, so portal access was granted to that account — no invite email is needed. They sign in at the portal with their existing email and password (or "Forgot password" if they can't remember it).`,
+        });
       }
       refresh();
     } catch (e: any) {

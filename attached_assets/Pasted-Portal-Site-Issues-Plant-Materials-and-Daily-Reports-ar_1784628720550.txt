@@ -1,0 +1,59 @@
+Portal Site Issues, Plant & Materials, and Daily Reports are missing their
+full save→submit→reopen lifecycle, plus two bugs. Fix all together.
+
+BUGS FIRST:
+1. DICTATION: voice-to-text is not working on the portal Daily Reports
+   page. EVERY free-text field across all three portal features (Daily
+   Reports, Site Issues description, Plant & Materials notes) must have
+   working dictation. Fix the Daily Reports mic, and audit that the mic
+   appears and works on every text/textarea field in all three. Use the
+   existing Web Speech implementation, en-GB, graceful fallback where the
+   browser doesn't support it (esp. iOS Safari) — never a dead button.
+2. PLANT & MATERIALS shows empty ("nothing shared with you yet") for a
+   member who HAS the Plant permission. Plant & Materials is NOT a
+   shared-document section — if the member has the permission, they see
+   the project's plant list and can edit it. Fix so the permission grants
+   the actual plant data, not an empty shared-with-me state. (Likely it's
+   wrongly reusing the shared-docs visibility instead of the plant
+   permission.)
+
+LIFECYCLE — apply to all three (Daily Reports, Site Issues, Plant &
+Materials edits) consistently:
+3. SAVE vs SUBMIT — two distinct states:
+   - "Save" = save as DRAFT. Stays with the member, editable, NOT yet
+     sent to the PM. Right now "Save" leads nowhere visible — make clear
+     it's a draft ("Saved – draft, not yet sent").
+   - Add "Submit to PM" as a separate action after saving. Submitting
+     sends it to the PM: site issue → PM triage queue; daily report →
+     PM's report view; plant change → PM dashboard with attribution.
+   - Tell me plainly, in the report, exactly where each submitted item
+     lands on the PM/dashboard side.
+4. REOPEN + EDIT BEFORE SUBMIT:
+   - A saved draft can be reopened and freely edited (full edit) any time
+     before it's submitted.
+5. AFTER SUBMIT — append-only, nothing lost:
+   - Once submitted, the original content is LOCKED and always remains
+     visible.
+   - The member (and PM) can still ADD further notes/updates afterwards,
+     shown as timestamped additions with author, layered under the
+     original — never overwriting or hiding what was submitted.
+   - So reopening a submitted item shows: original (read-only) + any
+     later additions in order. Editing after submit = adding, not
+     rewriting.
+6. STATUS visible on each item: Draft / Submitted (+ when, by whom) /
+   and for site issues the existing triage states beyond that.
+
+QUALITY: OpenAPI + codegen, Zod, migration for draft/submitted states +
+append-only notes, server-side enforcement (a submitted record's original
+fields are immutable via the API, not just the UI), typecheck +
+check:layout at 360px.
+
+VERIFY end to end as a permitted portal member, for EACH of the three:
+- dictate into a field (confirm voice-to-text works)
+- save as draft, reopen, edit it, confirm changes persist
+- submit to PM, confirm it lands in the right place PM-side (name where)
+- reopen after submit: original shows locked, add a note, confirm the
+  note appears as a timestamped addition and the original is unchanged
+- confirm Plant & Materials shows real plant data for a permitted member,
+  not "nothing shared"
+Report pass/fail per step per feature.

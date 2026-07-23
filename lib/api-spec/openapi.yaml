@@ -137,6 +137,140 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /auth/pin:
+    post:
+      operationId: setSignOffPin
+      tags: [auth]
+      summary: Set, update, or reset the current user's sign-off PIN
+      description: Requires the account password as re-verification — also the "forgot PIN" path for a signed-in user. Every call is logged (set vs reset), never the PIN itself.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetPinRequest"
+      responses:
+        "200":
+          description: PIN set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          description: Current password is incorrect
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/forgot-password:
+    post:
+      operationId: forgotPassword
+      tags: [auth]
+      security: []
+      summary: Request a password reset email (main account)
+      description: Always returns the same generic success whether or not the email is registered. Rate-limited per email and per IP. The emailed link is single-use, hashed at rest, and expires in 60 minutes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotCredentialRequest"
+      responses:
+        "200":
+          description: Generic acknowledgement (no account enumeration)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "429":
+          description: Too many reset requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/reset-password:
+    post:
+      operationId: resetPassword
+      tags: [auth]
+      security: []
+      summary: Set a new password using an emailed reset token
+      description: Consumes the single-use token. On success all existing sessions for the account are invalidated (dashboard tokens and portal sessions).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordRequest"
+      responses:
+        "200":
+          description: Password reset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Invalid, used, or expired token (error is invalid_token or token_expired)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/forgot-pin:
+    post:
+      operationId: forgotPin
+      tags: [auth]
+      security: []
+      summary: Request a sign-off PIN reset email (locked-out path)
+      description: Same shared backbone as password resets — generic response, rate-limited, hashed single-use 60-minute token. A signed-in user should instead reset the PIN in-app with their password.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPinRequest"
+      responses:
+        "200":
+          description: Generic acknowledgement (no account enumeration)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "429":
+          description: Too many reset requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/reset-pin:
+    post:
+      operationId: resetPin
+      tags: [auth]
+      security: []
+      summary: Set a new sign-off PIN using an emailed reset token
+      description: Consumes the single-use token; the new 4-digit PIN is stored hashed and the reset is recorded in the PIN audit log.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPinRequest"
+      responses:
+        "200":
+          description: PIN reset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Invalid, used, or expired token (error is invalid_token or token_expired)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /projects:
     get:
       operationId: listProjects
@@ -1100,7 +1234,7 @@ paths:
     patch:
       operationId: updatePortalPlantMaterialItem
       tags: [portal]
-      summary: Update a plant/material item's status, location, or notes (requires can-update-plant-materials permission)
+      summary: SAVE (draft only) a proposed status/location/notes change — writes to the member's pending draft, never the live/submitted values
       parameters:
         - name: itemId
           in: path
@@ -1115,7 +1249,57 @@ paths:
               $ref: "#/components/schemas/UpdatePortalPlantItemRequest"
       responses:
         "200":
-          description: Item updated
+          description: Draft saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalPlantItem"
+
+  /portal/plant-materials/{itemId}/submit:
+    post:
+      operationId: submitPortalPlantMaterialItem
+      tags: [portal]
+      summary: Submit the pending draft — copies it onto the live status/location/notes (what the PM sees) with attribution, then clears the draft
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalPlantItem"
+        "400":
+          description: No draft to submit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /portal/plant-materials/{itemId}/notes:
+    post:
+      operationId: addPortalPlantMaterialNote
+      tags: [portal]
+      summary: Add a timestamped note to a plant item (append-only)
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddPortalSubmissionNoteRequest"
+      responses:
+        "201":
+          description: Note added
           content:
             application/json:
               schema:
@@ -1217,6 +1401,64 @@ paths:
                 $ref: "#/components/schemas/PortalDailyReportHistoryItem"
         "403":
           description: Not permitted, or the day is locked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /portal/daily-report/{date}/submit:
+    post:
+      operationId: submitPortalDailyReport
+      tags: [portal]
+      summary: Submit today's site diary to the PM — locks the narrative (further changes go through notes)
+      parameters:
+        - name: date
+          in: path
+          required: true
+          description: YYYY-MM-DD
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalDailyReportHistoryItem"
+        "400":
+          description: No content to submit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /portal/daily-report/{date}/notes:
+    post:
+      operationId: addPortalDailyReportNote
+      tags: [portal]
+      summary: Add a timestamped note to a submitted report (append-only)
+      parameters:
+        - name: date
+          in: path
+          required: true
+          description: YYYY-MM-DD
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddPortalSubmissionNoteRequest"
+      responses:
+        "201":
+          description: Note added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalDailyReportHistoryItem"
+        "400":
+          description: Not yet submitted
           content:
             application/json:
               schema:
@@ -1866,6 +2108,60 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /portal/forgot-password:
+    post:
+      operationId: portalForgotPassword
+      tags: [portal]
+      security: []
+      summary: Request a portal-member password reset email
+      description: Same shared backbone as the main-app reset (a portal member is the same account underneath); the emailed link targets the portal reset page. Generic response — never reveals whether the email is registered. Rate-limited per email and per IP.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotCredentialRequest"
+      responses:
+        "200":
+          description: Generic acknowledgement (no account enumeration)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "429":
+          description: Too many reset requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /portal/reset-password:
+    post:
+      operationId: portalResetPassword
+      tags: [portal]
+      security: []
+      summary: Set a new portal-member password using an emailed reset token
+      description: Consumes the single-use token. On success all existing sessions for the account are invalidated (portal sessions revoked, dashboard tokens rejected).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordRequest"
+      responses:
+        "200":
+          description: Password reset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Invalid, used, or expired token (error is invalid_token or token_expired)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /portal/invite/{token}:
     get:
       operationId: getPortalInvite
@@ -1935,6 +2231,32 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PortalContext"
+
+  /portal/pin:
+    post:
+      operationId: setPortalPin
+      tags: [portal]
+      summary: Set, update, or reset the signed-in member's sign-off PIN
+      description: Requires the account password as re-verification — also the "forgot PIN" path. Every call is logged (set vs reset), never the PIN itself.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetPinRequest"
+      responses:
+        "200":
+          description: PIN set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          description: Current password is incorrect
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /portal/overview:
     get:
@@ -2058,6 +2380,101 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /portal/site-issues/{issueId}/edit:
+    patch:
+      operationId: editPortalSiteIssueDraft
+      tags: [portal]
+      summary: Full edit of a draft issue's own fields (reporter-only, only while still a draft — 403 once submitted)
+      parameters:
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum: [snag, safety_concern, work_completed]
+                description:
+                  type: string
+                zone:
+                  type: string
+      responses:
+        "200":
+          description: Draft updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalIssue"
+        "403":
+          description: Not the reporter, or already submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /portal/site-issues/{issueId}/submit:
+    post:
+      operationId: submitPortalSiteIssue
+      tags: [portal]
+      summary: Submit a draft issue to the PM (reporter-only) — locks the original fields, adds it to the PM's triage queue
+      parameters:
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalIssue"
+        "403":
+          description: Not the reporter, or already submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /portal/site-issues/{issueId}/notes:
+    post:
+      operationId: addPortalSiteIssueNote
+      tags: [portal]
+      summary: Add a timestamped note to a submitted issue (append-only — never edits the original)
+      parameters:
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddPortalSubmissionNoteRequest"
+      responses:
+        "201":
+          description: Note added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalIssue"
+        "400":
+          description: Not yet submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /portal/site-board:
     get:
       operationId: getPortalSiteBoard
@@ -2172,6 +2589,74 @@ paths:
                 format: binary
         "404":
           description: Document not found or file unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /portal/documents/{documentId}/view:
+    post:
+      operationId: viewPortalDocument
+      tags: [portal]
+      summary: Record that this member opened a document (pending → viewed)
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: View recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          description: Document not found or not shared with this member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /portal/documents/{documentId}/acknowledge:
+    post:
+      operationId: acknowledgePortalDocument
+      tags: [portal]
+      summary: Sign off a document shared with this member (PIN-confirmed)
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcknowledgeRequest"
+      responses:
+        "200":
+          description: Sign-off recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Validation error, or no PIN set yet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Incorrect PIN
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Too many incorrect PIN attempts
           content:
             application/json:
               schema:
@@ -3008,6 +3493,9 @@ components:
           nullable: true
         hasPin:
           type: boolean
+        platformAdmin:
+          type: boolean
+          description: "SiteSort's own internal-staff flag — distinct from `role` (a customer's role within their own company). Only true for SiteSort staff; gates the platform Admin section."
       required: [id, companyId, email, name, role, createdAt]
 
     InviteUserRequest:
@@ -3241,6 +3729,54 @@ components:
           type: number
           nullable: true
       required: []
+
+    SetPinRequest:
+      type: object
+      properties:
+        currentPassword:
+          type: string
+        pin:
+          type: string
+          description: Exactly 4 digits.
+      required: [currentPassword, pin]
+
+    ForgotCredentialRequest:
+      type: object
+      properties:
+        email:
+          type: string
+      required: [email]
+
+    ForgotPinRequest:
+      type: object
+      properties:
+        email:
+          type: string
+        context:
+          type: string
+          enum: [app, portal]
+          description: Which reset page the emailed link should target. Defaults to app.
+      required: [email]
+
+    ResetPasswordRequest:
+      type: object
+      properties:
+        token:
+          type: string
+        password:
+          type: string
+          description: Minimum 8 characters.
+      required: [token, password]
+
+    ResetPinRequest:
+      type: object
+      properties:
+        token:
+          type: string
+        pin:
+          type: string
+          description: Exactly 4 digits.
+      required: [token, pin]
 
     DistributeRequest:
       type: object
@@ -3959,6 +4495,34 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PlantItemAttachment"
+        lifecycleStatus:
+          type: string
+          enum: [draft, submitted]
+          description: "'draft' means this member has a pending edit not yet submitted — the status/location/notes fields above stay the last-submitted values until they do."
+        draft:
+          type: object
+          nullable: true
+          description: The member's pending, not-yet-submitted edit — reopen and keep editing before submitting.
+          properties:
+            status:
+              type: string
+              nullable: true
+            location:
+              type: string
+              nullable: true
+            notes:
+              type: string
+              nullable: true
+            updatedByName:
+              type: string
+              nullable: true
+            updatedAt:
+              type: string
+              format: date-time
+        submissionNotes:
+          type: array
+          items:
+            $ref: "#/components/schemas/PortalSubmissionNote"
       required: [id, name, category, status]
 
     UpdatePortalPlantItemRequest:
@@ -4021,6 +4585,20 @@ components:
           type: boolean
         canEdit:
           type: boolean
+        lifecycleStatus:
+          type: string
+          enum: [draft, submitted]
+        submittedAt:
+          type: string
+          format: date-time
+          nullable: true
+        submittedByName:
+          type: string
+          nullable: true
+        submissionNotes:
+          type: array
+          items:
+            $ref: "#/components/schemas/PortalSubmissionNote"
       required: [reportDate, contributors, locked, canEdit]
 
     PortalDailyReportHistoryItem:
@@ -4037,6 +4615,20 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/DailyReportContributor"
+        lifecycleStatus:
+          type: string
+          enum: [draft, submitted]
+        submittedAt:
+          type: string
+          format: date-time
+          nullable: true
+        submittedByName:
+          type: string
+          nullable: true
+        submissionNotes:
+          type: array
+          items:
+            $ref: "#/components/schemas/PortalSubmissionNote"
       required: [reportDate, contributors]
 
     UpdatePortalDailyReportRequest:
@@ -4329,7 +4921,44 @@ components:
           format: date-time
           nullable: true
           description: "Set when a manager removes just the attached photo, leaving the issue record intact."
+        submittedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: "Portal save-vs-submit lifecycle. Null = still a draft with its reporter, absent from the PM's triage queue. Dashboard-created issues are always submitted immediately."
+        submittedByName:
+          type: string
+          nullable: true
+        lifecycleStatus:
+          type: string
+          enum: [draft, submitted]
+        notes:
+          type: array
+          items:
+            $ref: "#/components/schemas/PortalSubmissionNote"
       required: [id, projectId, uploadedBy, uploaderName, category, referenceNumber, takenAt]
+
+    PortalSubmissionNote:
+      type: object
+      description: One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.
+      properties:
+        id:
+          type: string
+        authorName:
+          type: string
+        body:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, authorName, body, createdAt]
+
+    AddPortalSubmissionNoteRequest:
+      type: object
+      properties:
+        body:
+          type: string
+      required: [body]
 
     ArchivePhotoRequest:
       type: object
@@ -4443,7 +5072,45 @@ components:
           type: string
         pendingCount:
           type: integer
-      required: [documentId, documentName, projectId, projectName, pendingCount]
+        fileUrl:
+          type: string
+          nullable: true
+        version:
+          type: integer
+        revision:
+          type: string
+          nullable: true
+        myStatus:
+          type: string
+          enum: [pending, viewed, acknowledged]
+          nullable: true
+          description: The requesting user's own sign-off status for this document, or null if they aren't a recipient (pure PM oversight).
+        recipients:
+          type: array
+          description: Every recipient of this document — so "N pending" resolves to named people, not just a count.
+          items:
+            $ref: "#/components/schemas/AckRecipient"
+      required: [documentId, documentName, projectId, projectName, pendingCount, version, recipients]
+
+    AckRecipient:
+      type: object
+      properties:
+        userId:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+          enum: [pending, viewed, acknowledged]
+        viewedAt:
+          type: string
+          format: date-time
+          nullable: true
+        acknowledgedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required: [userId, name, status]
 
     Notification:
       type: object
@@ -4546,7 +5213,10 @@ components:
           type: boolean
         canEditDailyReport:
           type: boolean
-      required: [userId, name, role, email, canLogIssues, canUpdatePlantMaterials, canEditDailyReport]
+        hasPin:
+          type: boolean
+          description: Whether this member has already set their sign-off PIN.
+      required: [userId, name, role, email, canLogIssues, canUpdatePlantMaterials, canEditDailyReport, hasPin]
 
     PortalLoginRequest:
       type: object
@@ -4781,6 +5451,20 @@ components:
         closureReason:
           type: string
           enum: [completed, invalid, duplicate]
+        submittedAt:
+          type: string
+          format: date-time
+          nullable: true
+        submittedByName:
+          type: string
+          nullable: true
+        lifecycleStatus:
+          type: string
+          enum: [draft, submitted]
+        notes:
+          type: array
+          items:
+            $ref: "#/components/schemas/PortalSubmissionNote"
       required: [id, category, referenceNumber]
 
     CreatePortalSiteIssueRequest:
@@ -4836,6 +5520,19 @@ components:
             revision:
               type: string
           required: [id, name, version]
+        requiresAcknowledgment:
+          type: boolean
+          description: Whether this document needs a PIN sign-off.
+        myStatus:
+          type: string
+          enum: [pending, viewed, acknowledged]
+          nullable: true
+          description: This viewer's own sign-off status for the document, or null if they have no distribution record yet.
+        mySignedOffAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When this viewer signed it off, if they have.
       required: [id, name, type, version, fileUrl, status]
 
     PortalMemberDocument:

@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
-const ADMIN_EMAILS = ["dean.parrish@me.com", "amy-parrish@hotmail.co.uk"];
 const ORANGE = "#ea580c";
 
 // ─── Data fetching ───────────────────────────────────────────────────────────
@@ -91,6 +90,15 @@ function useMe() {
     queryKey: ["me"],
     queryFn: () => apiFetch("/api/auth/me"),
     retry: false,
+  });
+}
+
+type AdminUserRow = { id: string; name: string; email: string; role: string; companyId: string; platformAdmin: boolean; portalOnly: boolean };
+function usePlatformAdminUsers(q: string) {
+  return useQuery({
+    queryKey: ["admin-users", q],
+    queryFn: () => apiFetch(`/api/admin/users?q=${encodeURIComponent(q)}`) as Promise<AdminUserRow[]>,
+    staleTime: 10_000,
   });
 }
 
@@ -277,6 +285,36 @@ export default function AdminDashboard() {
   const [deletingCompanyId, setDeletingCompanyId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
+  // Platform Admins — grant/revoke SiteSort staff access (users.platformAdmin),
+  // so managing the internal-staff list is a toggle here, never a code change.
+  const [adminSearch, setAdminSearch] = useState("");
+  const { data: adminUsers, isLoading: adminUsersLoading, refetch: refetchAdminUsers } = usePlatformAdminUsers(adminSearch);
+  const [adminTogglingId, setAdminTogglingId] = useState<string | null>(null);
+  const [adminToggleError, setAdminToggleError] = useState<string | null>(null);
+
+  async function togglePlatformAdmin(userId: string, current: boolean) {
+    setAdminTogglingId(userId);
+    setAdminToggleError(null);
+    const token = localStorage.getItem("sitesort_token");
+    try {
+      const res = await fetch(`/api/admin/users/${userId}/platform-admin`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ platformAdmin: !current }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        setAdminToggleError(body?.message ?? `Failed (${res.status}).`);
+      } else {
+        await refetchAdminUsers();
+      }
+    } catch {
+      setAdminToggleError("Request failed.");
+    } finally {
+      setAdminTogglingId(null);
+    }
+  }
+
   async function toggleBeta(companyId: string, current: boolean) {
     setBetaTogglingId(companyId);
     const token = localStorage.getItem("sitesort_token");
@@ -365,7 +403,12 @@ export default function AdminDashboard() {
     );
   }
 
-  if (!me || !ADMIN_EMAILS.includes(me.email)) {
+  // Platform Admin (SiteSort's own staff) — distinct from a customer's
+  // company-level "admin" role. The real security boundary is server-side
+  // (every /api/admin/* route re-checks users.platformAdmin itself); this is
+  // just the matching page-level UX so a non-admin who navigates here
+  // directly gets a clear message instead of a page full of failed fetches.
+  if (!me || !me.platformAdmin) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center text-center px-4">
         <div>
@@ -1149,6 +1192,77 @@ export default function AdminDashboard() {
                 )}
               </tbody>
             </table>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Platform Admins ── */}
+        <section>
+          <SectionTitle icon={ShieldCheck} title="Platform Admins" sub="SiteSort staff who can see this Admin section — distinct from a customer's own company-level Admin role" />
+          <div className="mb-3 relative max-w-sm">
+            <Search className="w-4 h-4 text-gray-600 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              value={adminSearch}
+              onChange={e => setAdminSearch(e.target.value)}
+              placeholder="Search by name or email…"
+              className="w-full pl-9 pr-3 py-2 rounded-lg bg-gray-900 border border-gray-800 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500/40"
+            />
+          </div>
+          {adminToggleError && (
+            <div className="mb-3 px-3 py-2 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-xs">{adminToggleError}</div>
+          )}
+          <div className="rounded-xl border border-gray-800 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-800 bg-gray-900/60">
+                    <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3">Name</th>
+                    <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 hidden md:table-cell">Email</th>
+                    <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 hidden md:table-cell">Company role</th>
+                    <th className="text-center text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3">Platform Admin</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-800">
+                  {adminUsersLoading ? (
+                    Array.from({ length: 3 }).map((_, i) => (
+                      <tr key={i}>
+                        <td className="px-5 py-3"><Skeleton className="h-4 w-32" /></td>
+                        <td className="px-5 py-3 hidden md:table-cell"><Skeleton className="h-4 w-40" /></td>
+                        <td className="px-5 py-3 hidden md:table-cell"><Skeleton className="h-4 w-20" /></td>
+                        <td className="px-5 py-3"><Skeleton className="h-6 w-12 mx-auto rounded-full" /></td>
+                      </tr>
+                    ))
+                  ) : (adminUsers ?? []).length === 0 ? (
+                    <tr><td colSpan={4} className="px-5 py-8 text-center text-gray-600 text-sm">No matching users.</td></tr>
+                  ) : (
+                    (adminUsers ?? []).map(u => (
+                      <tr key={u.id} className="hover:bg-gray-900/40 transition-colors">
+                        <td className="px-5 py-3 font-medium text-gray-200">{u.name}</td>
+                        <td className="px-5 py-3 text-gray-400 hidden md:table-cell">{u.email}</td>
+                        <td className="px-5 py-3 hidden md:table-cell">
+                          <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize bg-gray-800 text-gray-400">
+                            {u.portalOnly ? "portal-only" : u.role.replace("_", " ")}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 text-center">
+                          <button
+                            onClick={() => togglePlatformAdmin(u.id, u.platformAdmin)}
+                            disabled={adminTogglingId === u.id}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50 ${
+                              u.platformAdmin ? "bg-orange-500" : "bg-gray-700"
+                            }`}
+                            title={u.platformAdmin ? "Revoke platform admin access" : "Grant platform admin access"}
+                          >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                              u.platformAdmin ? "translate-x-6" : "translate-x-1"
+                            }`} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </section>

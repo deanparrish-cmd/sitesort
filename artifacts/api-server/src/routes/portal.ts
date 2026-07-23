@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import multer from "multer";
 import { createHash } from "crypto";
 import bcrypt from "bcryptjs";
 import { db } from "@workspace/db";
@@ -8,8 +9,8 @@ import {
   qrBoardPinsTable, calendarEventsTable, subcontractorsTable, peopleTable,
   portalSharesTable, documentDistributionsTable, companiesTable, qrCodesTable,
   portalMemberDocumentsTable, notificationsTable, companyMembersTable,
-  plantItemsTable, plantItemAttachmentsTable, personCertificationsTable, dailyReportsTable,
-  messagesTable, channelMessagesTable,
+  plantItemsTable, plantItemAttachmentsTable, plantItemDistributionsTable, personCertificationsTable, dailyReportsTable,
+  messagesTable, channelMessagesTable, acknowledgmentAuditTable,
 } from "@workspace/db/schema";
 import { and, eq, inArray, isNull, isNotNull, desc, asc, gte, lt, count, max, or, ne } from "drizzle-orm";
 import { buildSiteBoardPayload } from "../lib/site-board";
@@ -30,6 +31,12 @@ import { PortalLoginBody, AcceptPortalInviteBody } from "@workspace/api-zod";
 import { getBucket, objectKey } from "../lib/gcs";
 import { memberUploadSingle, saveMemberUpload } from "../lib/portal-upload";
 import { isReportLocked, upsertManagerReport, contributorsForReport, hasManagerContent, londonDateStr } from "../lib/daily-reports";
+import { notesFor, addNote } from "../lib/portal-submission-notes";
+import { isPinLockedOut, recordFailedPinAttempt, clearPinAttempts } from "../lib/pin-attempts";
+import { setUserPin } from "../lib/pin";
+import { requestCredentialReset, consumeCredentialResetToken } from "../lib/credential-reset";
+import { transcribeAudio } from "../lib/transcribe";
+import { completePasswordReset } from "../lib/credential-reset-complete";
 import { createRequire } from "module";
 import type { Archiver, ArchiverOptions } from "archiver";
 const nodeRequire = createRequire(import.meta.url);
@@ -80,7 +87,27 @@ function serializeDoc(d: typeof documentsTable.$inferSelect) {
     id: d.id, name: d.name, type: d.type, version: d.version,
     revision: d.revision ?? undefined, fileUrl: d.fileUrl, fileSize: d.fileSize,
     status: d.status, createdAt: d.createdAt.toISOString(),
+    requiresAcknowledgment: d.requiresAcknowledgment,
   };
+}
+// This viewer's own sign-off status for a batch of documents — merged onto
+// serializeDoc's output wherever a member might need to sign off (the PIN
+// gate itself is re-checked server-side regardless of what the client saw).
+async function myDocStatuses(userId: string, docIds: string[]): Promise<Map<string, { status: string; acknowledgedAt: Date | null }>> {
+  if (docIds.length === 0) return new Map();
+  const rows = await db.select({
+    documentId: documentDistributionsTable.documentId,
+    status: documentDistributionsTable.status,
+    acknowledgedAt: documentDistributionsTable.acknowledgedAt,
+  }).from(documentDistributionsTable)
+    .where(and(inArray(documentDistributionsTable.documentId, docIds), eq(documentDistributionsTable.userId, userId)));
+  return new Map(rows.map(r => [r.documentId, { status: r.status, acknowledgedAt: r.acknowledgedAt }]));
+}
+function withMyStatus<T extends { id: string }>(rows: T[], statuses: Map<string, { status: string; acknowledgedAt: Date | null }>): (T & { myStatus: string | null; mySignedOffAt: string | null })[] {
+  return rows.map(r => {
+    const mine = statuses.get(r.id);
+    return { ...r, myStatus: mine?.status ?? null, mySignedOffAt: mine?.acknowledgedAt?.toISOString() ?? null };
+  });
 }
 function serializePermit(p: typeof permitsTable.$inferSelect) {
   return {
@@ -89,7 +116,9 @@ function serializePermit(p: typeof permitsTable.$inferSelect) {
     status: expiryStatus(p.expiryDate), documentUrl: p.documentUrl ?? undefined,
   };
 }
-function serializeIssue(p: typeof photosTable.$inferSelect, reporterName?: string | null) {
+async function serializeIssue(p: typeof photosTable.$inferSelect, reporterName?: string | null) {
+  const submittedByName = p.submittedBy ? await nameForPortalUser(p.submittedBy) : undefined;
+  const notes = await notesFor("site_issue", p.id);
   return {
     id: p.id, category: p.category, description: p.description ?? undefined,
     zone: p.zone ?? undefined, referenceNumber: p.referenceNumber,
@@ -101,7 +130,16 @@ function serializeIssue(p: typeof photosTable.$inferSelect, reporterName?: strin
     assignedToUserId: p.assignedToUserId ?? undefined,
     reporterName: reporterName ?? undefined,
     closureReason: p.closureReason ?? undefined,
+    // Portal save-vs-submit lifecycle (Feature).
+    submittedAt: p.submittedAt ? p.submittedAt.toISOString() : undefined,
+    submittedByName,
+    lifecycleStatus: p.submittedAt ? "submitted" : "draft",
+    notes,
   };
+}
+async function nameForPortalUser(userId: string): Promise<string | undefined> {
+  const rows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+  return rows[0]?.name ?? undefined;
 }
 
 async function computeProgress(projectId: string): Promise<number> {
@@ -157,6 +195,16 @@ async function visibleIds(projectId: string, itemType: string, viewer: Viewer): 
   return set;
 }
 
+// Safety docs bypass sharing entirely (always visible); everything else is
+// gated on an explicit portal_shares rule. Used by the doc-scoped write routes
+// (view/acknowledge) that don't go through docListHandler/docDetailHandler.
+async function isDocVisibleToViewer(pid: string, userId: string, doc: { id: string; type: string }): Promise<boolean> {
+  if (doc.type === "safety") return true;
+  const viewer = await resolveViewer(userId, pid);
+  const ids = await visibleIds(pid, "document", viewer);
+  return ids.has(doc.id);
+}
+
 // Like visibleIds, but maps each visible item to the MOST RECENT matching share
 // time — the "shared with me at" timestamp used for unseen-since detection and
 // newest-first ordering.
@@ -194,11 +242,10 @@ const isAfter = (d: Date | null | undefined, since: Date | undefined): boolean =
 // whose share/create time is newer than the member's last view of that section.
 async function computeUnseen(userId: string, projectId: string): Promise<{ counts: Record<string, number>; total: number }> {
   const viewer = await resolveViewer(userId, projectId);
-  const [docMap, photoMap, permitMap, plantMap, lastView, permRow] = await Promise.all([
+  const [docMap, photoMap, permitMap, lastView, permRow] = await Promise.all([
     visibleShareMap(projectId, "document", viewer),
     visibleShareMap(projectId, "photo", viewer),
     visibleShareMap(projectId, "permit", viewer),
-    visibleShareMap(projectId, "plant_item", viewer),
     lastViewedBySection(userId, projectId),
     db.select({
       canLogIssues: projectMembersTable.canLogIssues,
@@ -224,15 +271,32 @@ async function computeUnseen(userId: string, projectId: string): Promise<{ count
     const at = docMap.get(d.id);
     if (isAfter(at, lv("shared"))) sharedCount++;
   }
-  // Site issues and plant items only count toward "Shared with me" (and never
-  // leak a count at all) when the viewer actually has that section's grant —
-  // otherwise the nav badge itself would tip off gated content they can't open.
+  // Site issues only count toward "Shared with me" (and never leak a count at
+  // all) when the viewer actually has that section's grant — otherwise the nav
+  // badge itself would tip off gated content they can't open.
   if (canLogIssues) {
     for (const at of photoMap.values()) { if (isAfter(at, lv("shared"))) sharedCount++; if (isAfter(at, lv("site-issues"))) bump("site-issues"); }
   }
   for (const at of permitMap.values()) { if (isAfter(at, lv("shared"))) sharedCount++; }
+  // Plant & Materials is its own gated section, not a shared-document type
+  // (see the sharing-bug fix above) — its badge counts every project plant
+  // item's latest activity, not a portal_shares timestamp.
   if (canUpdatePlantMaterials) {
-    for (const at of plantMap.values()) { if (isAfter(at, lv("shared"))) sharedCount++; if (isAfter(at, lv("plant-materials"))) bump("plant-materials"); }
+    // Submission privacy: badge only counts items this member can actually
+    // see (own createdBy or distributed to them) — counting the PM's private
+    // items would leak their existence via the badge number.
+    const plantItems = await db.select({ id: plantItemsTable.id, createdBy: plantItemsTable.createdBy, createdAt: plantItemsTable.createdAt, lastUpdatedAt: plantItemsTable.lastUpdatedAt })
+      .from(plantItemsTable).where(eq(plantItemsTable.projectId, projectId));
+    const otherIds = plantItems.filter(p => p.createdBy !== userId).map(p => p.id);
+    const sharedIds = otherIds.length
+      ? new Set((await db.select({ plantItemId: plantItemDistributionsTable.plantItemId }).from(plantItemDistributionsTable)
+          .where(and(eq(plantItemDistributionsTable.userId, userId), inArray(plantItemDistributionsTable.plantItemId, otherIds)))).map(d => d.plantItemId))
+      : new Set<string>();
+    for (const p of plantItems) {
+      if (p.createdBy !== userId && !sharedIds.has(p.id)) continue;
+      const at = p.lastUpdatedAt ?? p.createdAt;
+      if (isAfter(at, lv("plant-materials"))) bump("plant-materials");
+    }
   }
 
   // Safety docs are always visible (never gated) → new ones count toward
@@ -362,6 +426,62 @@ router.post("/portal/login", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Portal login error");
     res.status(500).json({ error: "server_error", message: "Login failed" });
+  }
+});
+
+// POST /api/portal/forgot-password — public. Same shared reset backbone as the
+// main app (a portal member is the same users row underneath); "portal" context
+// only changes the email's link target and copy. Generic response — never
+// reveals whether the email is registered.
+router.post("/portal/forgot-password", async (req, res) => {
+  try {
+    const { email: rawEmail } = req.body ?? {};
+    if (!rawEmail) {
+      res.status(400).json({ error: "validation_error", message: "Email required" });
+      return;
+    }
+    const { limited } = await requestCredentialReset({
+      email: String(rawEmail), kind: "password", context: "portal", req,
+    });
+    if (limited) {
+      res.status(429).json({ error: "rate_limited", message: "Too many reset requests. Please try again later." });
+      return;
+    }
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Portal forgot password error");
+    res.status(500).json({ error: "server_error", message: "Failed to process request" });
+  }
+});
+
+// POST /api/portal/reset-password — public. Consumes a single-use token and
+// sets the new password; all existing sessions (portal + dashboard) are
+// invalidated by completePasswordReset.
+router.post("/portal/reset-password", async (req, res) => {
+  try {
+    const { token, password } = req.body ?? {};
+    if (!token || !password) {
+      res.status(400).json({ error: "validation_error", message: "Token and password required" });
+      return;
+    }
+    if (String(password).length < 8) {
+      res.status(400).json({ error: "validation_error", message: "Password must be at least 8 characters" });
+      return;
+    }
+    const consumed = await consumeCredentialResetToken(String(token), "password");
+    if (!consumed.ok) {
+      if (consumed.reason === "expired") {
+        res.status(400).json({ error: "token_expired", message: "This reset link has expired. Please request a new one." });
+      } else {
+        res.status(400).json({ error: "invalid_token", message: "This reset link is invalid or has already been used. Please request a new one." });
+      }
+      return;
+    }
+    await completePasswordReset(consumed.userId, String(password), req);
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Portal reset password error");
+    res.status(500).json({ error: "server_error", message: "Failed to reset password" });
   }
 });
 
@@ -510,7 +630,7 @@ router.get("/portal/me", ...portalGuards, async (req, res) => {
   const pid = req.portalProjectId!;
   const proj = await loadProject(pid);
   if (!proj) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
-  const urow = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
+  const urow = await db.select({ name: usersTable.name, pinHash: usersTable.pinHash }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
   const permRow = await db.select({
     canLogIssues: projectMembersTable.canLogIssues,
     canUpdatePlantMaterials: projectMembersTable.canUpdatePlantMaterials,
@@ -528,9 +648,28 @@ router.get("/portal/me", ...portalGuards, async (req, res) => {
       canLogIssues: permRow[0]?.canLogIssues ?? false,
       canUpdatePlantMaterials: permRow[0]?.canUpdatePlantMaterials ?? false,
       canEditDailyReport: permRow[0]?.canEditDailyReport ?? false,
+      hasPin: !!urow[0]?.pinHash,
     },
     sections: PORTAL_SECTIONS,
   });
+});
+
+// POST /api/portal/pin — set/update/reset the signed-in member's sign-off PIN.
+// Same password-reverification + audit-log pattern as /auth/pin (dashboard);
+// portal members are usersTable rows too, so the underlying logic is identical.
+router.post("/portal/pin", ...portalGuards, async (req, res) => {
+  try {
+    const { currentPassword, pin } = req.body ?? {};
+    const result = await setUserPin(req.user!.id, currentPassword, pin, req);
+    if (!result.ok) {
+      res.status(result.status).json({ error: result.error, message: result.message });
+      return;
+    }
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Portal set PIN error");
+    res.status(500).json({ error: "server_error", message: "Failed to set PIN" });
+  }
 });
 
 // POST /api/portal/logout — end THIS session server-side (revoked, not just a
@@ -640,7 +779,7 @@ router.get("/portal/overview", ...portalGuards, async (req, res) => {
     }).from(dailyNotesTable)
       .leftJoin(usersTable, eq(dailyNotesTable.authorId, usersTable.id))
       .where(eq(dailyNotesTable.projectId, pid))
-      .orderBy(desc(dailyNotesTable.createdAt)).limit(5),
+      .orderBy(desc(dailyNotesTable.createdAt)).limit(10),
   ]);
   const progressPercent = milestonesRows.length === 0 ? 0 : Math.round(milestonesRows.filter(m => m.completedAt !== null).length / milestonesRows.length * 100);
   const activePermits = (permitRows as { expiryDate: string }[]).filter(p => expiryStatus(p.expiryDate) === "active").length;
@@ -688,6 +827,7 @@ router.get("/portal/shared", ...portalGuards, async (req, res) => {
   const docMapWithSafety = new Map(docMap);
   for (const d of safetyDocs) if (!docMapWithSafety.has(d.id)) docMapWithSafety.set(d.id, d.createdAt);
   const docs = [...gatedDocs, ...safetyDocs.filter(d => !docMap.has(d.id))];
+  const myStatuses = await myDocStatuses(req.user!.id, docs.map(d => d.id));
   // Annotate each item with when it was shared + whether it's unseen, and order
   // NEWEST-shared first so fresh content is at the top with the unseen highlight.
   const annotate = <T extends { id: string }>(rows: T[], serialize: (r: T) => any, map: Map<string, Date>) =>
@@ -696,7 +836,7 @@ router.get("/portal/shared", ...portalGuards, async (req, res) => {
       .sort((a, b) => b._at - a._at)
       .map(({ _at, ...rest }) => rest);
   res.json({
-    documents: annotate(docs, serializeDoc, docMapWithSafety),
+    documents: withMyStatus(annotate(docs, serializeDoc, docMapWithSafety), myStatuses),
     photos: annotate(photos, serializeIssue, photoMap),
     permits: annotate(permits, serializePermit, permitMap),
   });
@@ -795,13 +935,31 @@ router.get("/portal/team", ...portalGuards, async (req, res) => {
   res.json(result);
 });
 
-// GET /api/portal/site-issues — the whole section is gated on canLogIssues
-// (minimal-portal redesign: no grant = the section doesn't exist for this
-// member, not just read-only). Within a granted member's view: shared photos,
-// PLUS an issue this member reported or is assigned to (they must always see
-// their own status, even without an explicit share) — this never leaks who
-// ELSE it's shared with, only the reporter's own name on their own reports.
-router.get("/portal/site-issues", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canLogIssues"), autoLogPortalActivity, async (req, res) => {
+// Portal dictation: speech-to-text for the mic buttons across the portal
+// (Daily Report, Site Issues, Plant & Materials, notes, messages). Gated on a
+// portal session only — dictation is an input aid, not a data-access surface.
+const transcribeUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+router.post("/portal/transcribe", authenticate, requirePortalSession, requirePortalMember, transcribeUpload.single("audio"), async (req, res) => {
+  try {
+    if (!req.file) {
+      res.status(400).json({ error: "validation_error", message: "No audio file provided" });
+      return;
+    }
+    const transcript = await transcribeAudio(req.file.buffer, req.file.mimetype);
+    res.json({ transcript });
+  } catch (err: any) {
+    req.log.error({ err }, "Portal transcription error");
+    res.status(500).json({ error: "server_error", message: "Transcription failed" });
+  }
+});
+
+// GET /api/portal/site-issues — READ is open to every portal member (members
+// can always reopen and view issues); canLogIssues only gates the write
+// endpoints below. Within a member's view: shared photos, PLUS an issue this
+// member reported or is assigned to (they must always see their own status,
+// even without an explicit share) — this never leaks who ELSE it's shared
+// with, only the reporter's own name on their own reports.
+router.get("/portal/site-issues", authenticate, requirePortalSession, requirePortalMember, autoLogPortalActivity, async (req, res) => {
   const pid = req.portalProjectId!;
   const viewer = await resolveViewer(req.user!.id, pid);
   const sharedIds = await visibleIds(pid, "photo", viewer);
@@ -810,16 +968,19 @@ router.get("/portal/site-issues", authenticate, requirePortalSession, requirePor
       eq(photosTable.projectId, pid),
       issueCategoryFilter(),
       or(
-        sharedIds.size ? inArray(photosTable.id, [...sharedIds]) : undefined,
+        // Shared / assigned issues from OTHERS only ever show once submitted —
+        // a draft is private to its reporter until they choose to submit it.
+        sharedIds.size ? and(inArray(photosTable.id, [...sharedIds]), isNotNull(photosTable.submittedAt)) : undefined,
+        and(eq(photosTable.assignedToUserId, req.user!.id), isNotNull(photosTable.submittedAt)),
+        // The reporter always sees their own, draft or submitted.
         eq(photosTable.uploadedBy, req.user!.id),
-        eq(photosTable.assignedToUserId, req.user!.id),
       ),
     ))
     .orderBy(desc(photosTable.takenAt));
   const reporterIds = [...new Set(rows.filter(r => r.uploadedBy === req.user!.id).map(r => r.uploadedBy))];
   const reporters = reporterIds.length ? await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(inArray(usersTable.id, reporterIds)) : [];
   const reporterName = new Map(reporters.map(u => [u.id, u.name]));
-  res.json(rows.map(r => serializeIssue(r, r.uploadedBy === req.user!.id ? (reporterName.get(r.uploadedBy) ?? null) : null)));
+  res.json(await Promise.all(rows.map(r => serializeIssue(r, r.uploadedBy === req.user!.id ? (reporterName.get(r.uploadedBy) ?? null) : null))));
 });
 
 // POST /api/portal/site-issues — a portal member (with canLogIssues) logs a
@@ -845,15 +1006,73 @@ router.post("/portal/site-issues", authenticate, requirePortalSession, requirePo
     const [{ total }] = await db.select({ total: count() }).from(photosTable);
     const referenceNumber = `PHOTO-${String(total + 1).padStart(4, "0")}`;
     const id = generateId();
+    // Saved as a DRAFT — submittedAt/submittedBy left null. The PM isn't
+    // notified and the issue doesn't appear in their triage queue until the
+    // reporter explicitly submits it (see POST .../submit below).
     await db.insert(photosTable).values({
       id, projectId: pid, uploadedBy: req.user!.id, photoUrl, category, description, zone,
       referenceNumber, status: "new", assignedToUserId: null, dueDate: null,
     });
 
-    // In-app notification only (bell) — dashboard/staff users have no push
-    // channel today, only portal members do. Mirrors the exact manager-loop
-    // pattern already used for dashboard-created snags/safety concerns
-    // (project_members.role === "manager"), the closest existing analog.
+    void logActivity({ userId: req.user!.id, projectId: pid, companyId: req.user!.companyId, section: "site-issues", action: "create", itemType: "photo", itemId: id, req });
+
+    const created = (await db.select().from(photosTable).where(eq(photosTable.id, id)).limit(1))[0];
+    const reporter = (await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1))[0];
+    res.status(201).json(await serializeIssue(created, reporter?.name ?? null));
+  } catch (err) {
+    req.log.error({ err }, "Portal log site issue error");
+    res.status(500).json({ error: "server_error", message: "Failed to log issue" });
+  }
+});
+
+// PATCH /api/portal/site-issues/:issueId/edit — full edit of a draft's own
+// fields (reporter-only, only while status is still "draft"). Once submitted,
+// the original fields lock — further changes go through the notes endpoint.
+router.patch("/portal/site-issues/:issueId/edit", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canLogIssues"), async (req, res) => {
+  const pid = req.portalProjectId!;
+  try {
+    const rows = await db.select().from(photosTable)
+      .where(and(eq(photosTable.id, req.params.issueId), eq(photosTable.projectId, pid))).limit(1);
+    if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Issue not found" }); return; }
+    const issue = rows[0];
+    if (issue.uploadedBy !== req.user!.id) { res.status(403).json({ error: "forbidden", message: "Only the reporter can edit this issue." }); return; }
+    if (issue.submittedAt) { res.status(403).json({ error: "forbidden", message: "This issue has already been submitted — add a note instead." }); return; }
+
+    const { type, description, zone } = req.body as { type?: string; description?: string; zone?: string };
+    const updates: Partial<typeof photosTable.$inferInsert> = {};
+    if (type !== undefined && ["snag", "safety_concern", "work_completed"].includes(type)) updates.category = type;
+    if (description !== undefined) updates.description = description.trim() || null;
+    if (zone !== undefined) updates.zone = zone.trim() || null;
+    if (Object.keys(updates).length > 0) {
+      await db.update(photosTable).set(updates).where(eq(photosTable.id, req.params.issueId));
+    }
+
+    const updated = (await db.select().from(photosTable).where(eq(photosTable.id, req.params.issueId)).limit(1))[0];
+    const reporter = (await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, updated.uploadedBy)).limit(1))[0];
+    res.json(await serializeIssue(updated, reporter?.name ?? null));
+  } catch (err) {
+    req.log.error({ err }, "Portal edit draft issue error");
+    res.status(500).json({ error: "server_error", message: "Failed to update draft" });
+  }
+});
+
+// POST /api/portal/site-issues/:issueId/submit — reporter-only. Locks the
+// original fields and puts the issue in front of the PM for the first time
+// (notification + triage queue) — mirrors the create-time notify logic that
+// used to fire immediately, now deferred until the reporter is actually ready.
+router.post("/portal/site-issues/:issueId/submit", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canLogIssues"), async (req, res) => {
+  const pid = req.portalProjectId!;
+  try {
+    const rows = await db.select().from(photosTable)
+      .where(and(eq(photosTable.id, req.params.issueId), eq(photosTable.projectId, pid))).limit(1);
+    if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Issue not found" }); return; }
+    const issue = rows[0];
+    if (issue.uploadedBy !== req.user!.id) { res.status(403).json({ error: "forbidden", message: "Only the reporter can submit this issue." }); return; }
+    if (issue.submittedAt) { res.status(403).json({ error: "forbidden", message: "Already submitted." }); return; }
+
+    await db.update(photosTable).set({ submittedAt: new Date(), submittedBy: req.user!.id }).where(eq(photosTable.id, req.params.issueId));
+    void logActivity({ userId: req.user!.id, projectId: pid, companyId: req.user!.companyId, section: "site-issues", action: "update", itemType: "photo", itemId: issue.id, metadata: { submitted: { from: false, to: true } }, req });
+
     const proj = (await db.select({ name: projectsTable.name }).from(projectsTable).where(eq(projectsTable.id, pid)).limit(1))[0];
     const reporter = (await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1))[0];
     const managers = await db.select({ userId: projectMembersTable.userId }).from(projectMembersTable)
@@ -862,19 +1081,50 @@ router.post("/portal/site-issues", authenticate, requirePortalSession, requirePo
       if (!m.userId) continue;
       await db.insert(notificationsTable).values({
         id: generateId(), userId: m.userId, type: "portal_issue_logged",
-        title: `New — awaiting triage: ${referenceNumber}`,
-        message: `${reporter?.name ?? "A member"} logged a ${category.replace("_", " ")} at ${proj?.name ?? "your project"}.`,
-        relatedEntityId: id, relatedEntityType: "photo", read: false,
+        title: `New — awaiting triage: ${issue.referenceNumber}`,
+        message: `${reporter?.name ?? "A member"} logged a ${issue.category.replace("_", " ")} at ${proj?.name ?? "your project"}.`,
+        relatedEntityId: issue.id, relatedEntityType: "photo", read: false,
       });
     }
 
-    void logActivity({ userId: req.user!.id, projectId: pid, companyId: req.user!.companyId, section: "site-issues", action: "create", itemType: "photo", itemId: id, req });
-
-    const created = (await db.select().from(photosTable).where(eq(photosTable.id, id)).limit(1))[0];
-    res.status(201).json(serializeIssue(created, reporter?.name ?? null));
+    const updated = (await db.select().from(photosTable).where(eq(photosTable.id, req.params.issueId)).limit(1))[0];
+    res.json(await serializeIssue(updated, reporter?.name ?? null));
   } catch (err) {
-    req.log.error({ err }, "Portal log site issue error");
-    res.status(500).json({ error: "server_error", message: "Failed to log issue" });
+    req.log.error({ err }, "Portal submit issue error");
+    res.status(500).json({ error: "server_error", message: "Failed to submit issue" });
+  }
+});
+
+// POST /api/portal/site-issues/:issueId/notes — append-only addition on a
+// submitted issue. Available to the reporter and any manager; never edits
+// the original fields.
+router.post("/portal/site-issues/:issueId/notes", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canLogIssues"), async (req, res) => {
+  const pid = req.portalProjectId!;
+  try {
+    const rows = await db.select().from(photosTable)
+      .where(and(eq(photosTable.id, req.params.issueId), eq(photosTable.projectId, pid))).limit(1);
+    if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Issue not found" }); return; }
+    const issue = rows[0];
+    if (!issue.submittedAt) { res.status(400).json({ error: "validation_error", message: "Submit this issue before adding notes." }); return; }
+    // Same visibility rule as the list read: the reporter, the assignee, or
+    // anyone it's been shared to may add a note — never someone who can't see
+    // the issue at all.
+    if (issue.uploadedBy !== req.user!.id && issue.assignedToUserId !== req.user!.id) {
+      const viewer = await resolveViewer(req.user!.id, pid);
+      const sharedIds = await visibleIds(pid, "photo", viewer);
+      if (!sharedIds.has(issue.id)) { res.status(403).json({ error: "forbidden", message: "You don't have access to this issue." }); return; }
+    }
+    const { body } = req.body as { body?: string };
+    if (!body || !body.trim()) { res.status(400).json({ error: "validation_error", message: "A note body is required." }); return; }
+
+    await addNote({ itemType: "site_issue", itemId: issue.id, projectId: pid, authorId: req.user!.id, body: body.trim() });
+    void logActivity({ userId: req.user!.id, projectId: pid, companyId: req.user!.companyId, section: "site-issues", action: "update", itemType: "photo", itemId: issue.id, req });
+
+    const reporter = (await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, issue.uploadedBy)).limit(1))[0];
+    res.status(201).json(await serializeIssue(issue, reporter?.name ?? null));
+  } catch (err) {
+    req.log.error({ err }, "Portal add issue note error");
+    res.status(500).json({ error: "server_error", message: "Failed to add note" });
   }
 });
 
@@ -901,7 +1151,7 @@ router.patch("/portal/site-issues/:issueId", authenticate, requirePortalSession,
     void logActivity({ userId: req.user!.id, projectId: pid, companyId: req.user!.companyId, section: "site-issues", action: "update", itemType: "photo", itemId: issue.id, metadata: { status: { from: issue.status, to: "pending_confirmation" } }, req });
 
     const updated = (await db.select().from(photosTable).where(eq(photosTable.id, req.params.issueId)).limit(1))[0];
-    res.json(serializeIssue(updated));
+    res.json(await serializeIssue(updated));
   } catch (err) {
     req.log.error({ err }, "Portal mark issue done error");
     res.status(500).json({ error: "server_error", message: "Failed to update issue" });
@@ -945,7 +1195,8 @@ function docListHandler(type: string) {
       const rows = await db.select().from(documentsTable)
         .where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, type), eq(documentsTable.status, "current")))
         .orderBy(asc(documentsTable.name));
-      res.json(rows.map(serializeDoc));
+      const myStatuses = await myDocStatuses(req.user!.id, rows.map(r => r.id));
+      res.json(withMyStatus(rows.map(serializeDoc), myStatuses));
       return;
     }
     const viewer = await resolveViewer(req.user!.id, pid);
@@ -954,7 +1205,8 @@ function docListHandler(type: string) {
     const rows = await db.select().from(documentsTable)
       .where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, type), inArray(documentsTable.id, [...ids]), inArray(documentsTable.status, ["current", "superseded"])))
       .orderBy(asc(documentsTable.name));
-    res.json(rows.map(serializeDoc));
+    const myStatuses = await myDocStatuses(req.user!.id, rows.map(r => r.id));
+    res.json(withMyStatus(rows.map(serializeDoc), myStatuses));
   };
 }
 function docDetailHandler(type: string) {
@@ -971,7 +1223,8 @@ function docDetailHandler(type: string) {
       if (!ids.has(rows[0].id)) { res.status(404).json({ error: "not_found", message: "Document not found" }); return; }
       await recordDocView(rows[0].id, req.user!.id);
     }
-    const payload: Record<string, unknown> = serializeDoc(rows[0]);
+    const myStatuses = await myDocStatuses(req.user!.id, [rows[0].id]);
+    const payload: Record<string, unknown> = withMyStatus([serializeDoc(rows[0])], myStatuses)[0];
     // If this doc has been superseded, point the member at its live replacement
     // so they can jump straight to the current version.
     if (rows[0].status === "superseded") {
@@ -1067,6 +1320,103 @@ router.get("/portal/documents/:documentId/download", ...portalGuards, async (req
   stream.pipe(res);
 });
 
+// POST /api/portal/documents/:documentId/view — record that this member opened
+// a document (pending → viewed). Fired from the client on "Open", separate from
+// sign-off: viewing never needs a PIN, only signing off does.
+router.post("/portal/documents/:documentId/view", ...portalGuards, async (req, res) => {
+  const pid = req.portalProjectId!;
+  const rows = await db.select({ id: documentsTable.id, type: documentsTable.type }).from(documentsTable)
+    .where(and(eq(documentsTable.id, req.params.documentId), eq(documentsTable.projectId, pid)))
+    .limit(1);
+  if (!rows[0] || !(await isDocVisibleToViewer(pid, req.user!.id, rows[0]))) {
+    res.status(404).json({ error: "not_found", message: "Document not found" });
+    return;
+  }
+  await recordDocView(rows[0].id, req.user!.id);
+  res.json({ success: true });
+});
+
+// POST /api/portal/documents/:documentId/acknowledge — PIN-confirmed sign-off,
+// the portal twin of POST /documents/:documentId/acknowledge (dashboard). A
+// portal member's "distribution" is implicit in what's shared with them (no
+// separate distribute step), so this upserts the row rather than requiring one
+// to already exist — same rate-limited PIN check, same append-only audit row.
+router.post("/portal/documents/:documentId/acknowledge", ...portalGuards, async (req, res) => {
+  const pid = req.portalProjectId!;
+  try {
+    const { pin } = req.body as { pin?: string };
+    const rows = await db.select().from(documentsTable)
+      .where(and(eq(documentsTable.id, req.params.documentId), eq(documentsTable.projectId, pid)))
+      .limit(1);
+    if (!rows[0] || !(await isDocVisibleToViewer(pid, req.user!.id, rows[0]))) {
+      res.status(404).json({ error: "not_found", message: "Document not found" });
+      return;
+    }
+    const doc = rows[0];
+    if (!doc.requiresAcknowledgment) {
+      res.status(400).json({ error: "validation_error", message: "This document does not require sign-off." });
+      return;
+    }
+
+    if (await isPinLockedOut(req.user!.id)) {
+      res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
+      return;
+    }
+    const userRows = await db.select({ pinHash: usersTable.pinHash, name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
+    const pinHash = userRows[0]?.pinHash ?? null;
+    if (!pinHash) {
+      res.status(400).json({ error: "pin_not_set", message: "You need to set a sign-off PIN before signing off documents." });
+      return;
+    }
+    if (!pin || !/^\d{4}$/.test(String(pin))) {
+      res.status(400).json({ error: "validation_error", message: "A 4-digit PIN is required to sign off this document." });
+      return;
+    }
+    const valid = await bcrypt.compare(String(pin), pinHash);
+    if (!valid) {
+      const { locked, remaining } = await recordFailedPinAttempt(req.user!.id);
+      if (locked) res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
+      else res.status(401).json({ error: "invalid_pin", message: "Incorrect PIN", attemptsRemaining: remaining });
+      return;
+    }
+    await clearPinAttempts(req.user!.id);
+
+    const existing = await db.select().from(documentDistributionsTable)
+      .where(and(eq(documentDistributionsTable.documentId, doc.id), eq(documentDistributionsTable.userId, req.user!.id)))
+      .limit(1);
+
+    await db.transaction(async (tx) => {
+      if (existing[0]) {
+        await tx.update(documentDistributionsTable)
+          .set({ status: "acknowledged", acknowledgedAt: new Date(), viewedAt: existing[0].viewedAt ?? new Date(), signedOffWithPin: true })
+          .where(eq(documentDistributionsTable.id, existing[0].id));
+      } else {
+        await tx.insert(documentDistributionsTable).values({
+          id: generateId(), documentId: doc.id, userId: req.user!.id,
+          status: "acknowledged", viewedAt: new Date(), acknowledgedAt: new Date(), signedOffWithPin: true,
+        });
+      }
+      await tx.insert(acknowledgmentAuditTable).values({
+        id: generateId(),
+        documentId: doc.id,
+        documentVersion: doc.version,
+        userId: req.user!.id,
+        userName: userRows[0]?.name ?? "Unknown",
+        userRole: req.portalMemberRole ?? "portal_member",
+        action: "acknowledged",
+        signedOffWithPin: true,
+        ipAddress: req.ip ?? null,
+        userAgent: req.headers["user-agent"] ?? null,
+      });
+    });
+
+    res.json({ success: true, message: "Document acknowledged" });
+  } catch (err) {
+    req.log.error({ err }, "Portal acknowledge document error");
+    res.status(500).json({ error: "server_error", message: "Failed to sign off document" });
+  }
+});
+
 // GET /api/portal/method-statements (+ /:documentId)
 router.get("/portal/method-statements", ...portalGuards, docListHandler("method_statement"));
 router.get("/portal/method-statements/:documentId", ...portalGuards, docDetailHandler("method_statement"));
@@ -1086,18 +1436,24 @@ router.get("/portal/permits", ...portalGuards, async (req, res) => {
   res.json(rows.map(serializePermit));
 });
 
-// ---- Plant & Materials (GATED like documents; portal write is behind
-// requirePortalPermission("canUpdatePlantMaterials"), the portal's first
-// write capability) ----
+// ---- Plant & Materials ----
+// Fix: this is NOT a shared-documents section — it was wrongly gated behind
+// visibleIds/portal_shares (the same mechanism as documents/photos/permits),
+// so a member with canUpdatePlantMaterials but no explicit per-item share saw
+// an empty "nothing shared with you" list. The permission alone now grants
+// the WHOLE project plant list — no separate sharing step.
 async function serializePortalPlantItem(item: typeof plantItemsTable.$inferSelect): Promise<Record<string, unknown>> {
-  const [updater, supplier, attachments] = await Promise.all([
+  const [updater, supplier, attachments, draftUpdater, submissionNotes] = await Promise.all([
     item.lastUpdatedBy ? db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, item.lastUpdatedBy)).limit(1) : Promise.resolve([]),
     item.supplierContactId ? db.select({ name: subcontractorsTable.companyName }).from(subcontractorsTable).where(eq(subcontractorsTable.id, item.supplierContactId)).limit(1) : Promise.resolve([]),
     db.select().from(plantItemAttachmentsTable).where(eq(plantItemAttachmentsTable.plantItemId, item.id)),
+    item.portalDraftUpdatedBy ? db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, item.portalDraftUpdatedBy)).limit(1) : Promise.resolve([]),
+    notesFor("plant_item", item.id),
   ]);
   const uploaderIds = [...new Set(attachments.map(a => a.uploadedBy))];
   const uploaders = uploaderIds.length ? await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(inArray(usersTable.id, uploaderIds)) : [];
   const uploaderName = new Map(uploaders.map(u => [u.id, u.name]));
+  const hasDraft = !!item.portalDraftUpdatedAt;
   return {
     id: item.id, name: item.name, category: item.category,
     quantity: item.quantity ?? null, unit: item.unit ?? null,
@@ -1113,73 +1469,216 @@ async function serializePortalPlantItem(item: typeof plantItemsTable.$inferSelec
       name: a.name, kind: a.kind, fileUrl: a.fileUrl, fileSize: a.fileSize,
       createdAt: a.createdAt.toISOString(),
     })),
+    // Portal save-vs-submit lifecycle (Feature). A pending draft edit — visible
+    // so the member can reopen and keep editing before submitting — never
+    // touches the live status/location/notes above until submitted.
+    lifecycleStatus: hasDraft ? "draft" : "submitted",
+    draft: hasDraft ? {
+      status: item.portalDraftStatus, location: item.portalDraftLocation, notes: item.portalDraftNotes,
+      updatedByName: draftUpdater[0]?.name ?? null,
+      updatedAt: item.portalDraftUpdatedAt!.toISOString(),
+    } : null,
+    submissionNotes,
   };
 }
 
-// GET /api/portal/plant-materials — section gated on canUpdatePlantMaterials
-// (minimal-portal redesign), items within it further gated to shared items.
-router.get("/portal/plant-materials", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canUpdatePlantMaterials"), autoLogPortalActivity, async (req, res) => {
-  const pid = req.portalProjectId!;
-  const viewer = await resolveViewer(req.user!.id, pid);
-  const ids = await visibleIds(pid, "plant_item", viewer);
-  if (ids.size === 0) { res.json([]); return; }
+// Portal submission privacy (user rule): a member only sees plant/material
+// entries they logged THEMSELVES, plus entries the PM explicitly shared with
+// them (plant_item_distributions). The PM's own dashboard log stays private
+// to the dashboard until shared — mirrors the Site Issues visibility model.
+async function portalVisiblePlantItem(pid: string, itemId: string, userId: string): Promise<typeof plantItemsTable.$inferSelect | null> {
   const rows = await db.select().from(plantItemsTable)
-    .where(and(eq(plantItemsTable.projectId, pid), inArray(plantItemsTable.id, [...ids])))
+    .where(and(eq(plantItemsTable.id, itemId), eq(plantItemsTable.projectId, pid), isNull(plantItemsTable.archivedAt))).limit(1);
+  const item = rows[0];
+  if (!item) return null;
+  if (item.createdBy === userId) return item;
+  const dist = await db.select({ id: plantItemDistributionsTable.id }).from(plantItemDistributionsTable)
+    .where(and(eq(plantItemDistributionsTable.plantItemId, itemId), eq(plantItemDistributionsTable.userId, userId))).limit(1);
+  return dist[0] ? item : null;
+}
+
+// GET /api/portal/plant-materials — only the member's own entries + entries
+// the PM has shared with them (see privacy note above).
+router.get("/portal/plant-materials", authenticate, requirePortalSession, requirePortalMember, autoLogPortalActivity, async (req, res) => {
+  const pid = req.portalProjectId!;
+  const uid = req.user!.id;
+  const rows = await db.select().from(plantItemsTable)
+    .where(and(eq(plantItemsTable.projectId, pid), isNull(plantItemsTable.archivedAt)))
     .orderBy(asc(plantItemsTable.name));
-  res.json(await Promise.all(rows.map(serializePortalPlantItem)));
+  let visible = rows.filter(r => r.createdBy === uid);
+  const others = rows.filter(r => r.createdBy !== uid);
+  if (others.length > 0) {
+    const dists = await db.select({ plantItemId: plantItemDistributionsTable.plantItemId })
+      .from(plantItemDistributionsTable)
+      .where(and(eq(plantItemDistributionsTable.userId, uid), inArray(plantItemDistributionsTable.plantItemId, others.map(r => r.id))));
+    const shared = new Set(dists.map(d => d.plantItemId));
+    visible = rows.filter(r => r.createdBy === uid || shared.has(r.id));
+  }
+  res.json(await Promise.all(visible.map(serializePortalPlantItem)));
 });
 
 // GET /api/portal/plant-materials/:itemId
-router.get("/portal/plant-materials/:itemId", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canUpdatePlantMaterials"), autoLogPortalActivity, async (req, res) => {
+router.get("/portal/plant-materials/:itemId", authenticate, requirePortalSession, requirePortalMember, autoLogPortalActivity, async (req, res) => {
   const pid = req.portalProjectId!;
-  const rows = await db.select().from(plantItemsTable)
-    .where(and(eq(plantItemsTable.id, req.params.itemId), eq(plantItemsTable.projectId, pid))).limit(1);
-  if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Item not found" }); return; }
-  const viewer = await resolveViewer(req.user!.id, pid);
-  const ids = await visibleIds(pid, "plant_item", viewer);
-  if (!ids.has(rows[0].id)) { res.status(404).json({ error: "not_found", message: "Item not found" }); return; }
-  res.json(await serializePortalPlantItem(rows[0]));
+  const item = await portalVisiblePlantItem(pid, req.params.itemId, req.user!.id);
+  if (!item) { res.status(404).json({ error: "not_found", message: "Item not found" }); return; }
+  res.json(await serializePortalPlantItem(item));
 });
 
-// PATCH /api/portal/plant-materials/:itemId — the portal's first WRITE
-// endpoint. Restricted to status/location/notes only (name/category/supplier/
-// dates stay dashboard-only, per the feature's confirmed scope). The
-// permission flag alone doesn't unlock an item not shared to this viewer —
-// both checks apply.
+// POST /api/portal/plant-materials — authorised members can log a NEW plant/
+// material item from site (user request: "should be able to be updated/logged
+// from the portal by anyone who has authorisation"). Creation is live
+// immediately (no draft stage — drafts only make sense for edits to existing
+// items) and the project's managers are notified so it lands in their view.
+router.post("/portal/plant-materials", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canUpdatePlantMaterials"), async (req, res) => {
+  const pid = req.portalProjectId!;
+  try {
+    const { name, category, quantity, unit, location, status, notes } = req.body as {
+      name?: string; category?: string; quantity?: string | null; unit?: string | null;
+      location?: string | null; status?: string; notes?: string | null;
+    };
+    const cleanName = String(name ?? "").trim().slice(0, 200);
+    if (!cleanName) { res.status(400).json({ error: "validation_error", message: "A name is required." }); return; }
+    if (!["plant_equipment", "materials"].includes(category ?? "")) {
+      res.status(400).json({ error: "validation_error", message: "category must be plant_equipment or materials" });
+      return;
+    }
+    const cleanStatus = ["on_site", "on_order", "off_hired", "depleted"].includes(status ?? "") ? status! : "on_site";
+
+    const id = generateId();
+    await db.insert(plantItemsTable).values({
+      id,
+      projectId: pid,
+      name: cleanName,
+      category: category!,
+      quantity: quantity ? String(quantity) : null,
+      unit: unit?.trim() || null,
+      location: location?.trim() || null,
+      status: cleanStatus,
+      notes: notes?.trim() || null,
+      createdBy: req.user!.id,
+      lastUpdatedBy: req.user!.id,
+      lastUpdatedAt: new Date(),
+    });
+    void logActivity({ userId: req.user!.id, projectId: pid, companyId: req.user!.companyId, section: "plant-materials", action: "create", itemType: "plant_item", itemId: id, req });
+
+    // Best-effort: let the company's managers know a member logged an item.
+    try {
+      const proj = (await db.select({ name: projectsTable.name, companyId: projectsTable.companyId })
+        .from(projectsTable).where(eq(projectsTable.id, pid)).limit(1))[0];
+      if (proj) {
+        const creator = (await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1))[0];
+        const managers = await db.select({ userId: companyMembersTable.userId })
+          .from(companyMembersTable)
+          .where(and(eq(companyMembersTable.companyId, proj.companyId), inArray(companyMembersTable.role, ["admin", "project_manager"])));
+        for (const userId of [...new Set(managers.map(m => m.userId))]) {
+          await db.insert(notificationsTable).values({
+            id: generateId(), userId, type: "portal_plant_item_logged",
+            title: `New plant/material at ${proj.name}`,
+            message: `${creator?.name ?? "A member"} logged "${cleanName}" from the portal.`,
+            relatedEntityId: pid, relatedEntityType: "project", read: false,
+          });
+        }
+      }
+    } catch { /* notifying managers is best-effort */ }
+
+    const created = (await db.select().from(plantItemsTable).where(eq(plantItemsTable.id, id)).limit(1))[0];
+    res.status(201).json(await serializePortalPlantItem(created));
+  } catch (err) {
+    req.log.error({ err }, "Portal create plant item error");
+    res.status(500).json({ error: "server_error", message: "Failed to log item" });
+  }
+});
+
+// PATCH /api/portal/plant-materials/:itemId — SAVE (draft only). Writes to the
+// portal_draft_* shadow columns, never the live status/location/notes — the PM
+// (and the dashboard's own view) sees nothing change until the member submits.
 router.patch("/portal/plant-materials/:itemId", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canUpdatePlantMaterials"), async (req, res) => {
   const pid = req.portalProjectId!;
   try {
-    const rows = await db.select().from(plantItemsTable)
-      .where(and(eq(plantItemsTable.id, req.params.itemId), eq(plantItemsTable.projectId, pid))).limit(1);
-    if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Item not found" }); return; }
-    const viewer = await resolveViewer(req.user!.id, pid);
-    const ids = await visibleIds(pid, "plant_item", viewer);
-    if (!ids.has(rows[0].id)) { res.status(404).json({ error: "not_found", message: "Item not found" }); return; }
+    const item = await portalVisiblePlantItem(pid, req.params.itemId, req.user!.id);
+    if (!item) { res.status(404).json({ error: "not_found", message: "Item not found" }); return; }
 
     const { status, location, notes } = req.body as { status?: string; location?: string | null; notes?: string | null };
-    const updates: Partial<typeof plantItemsTable.$inferInsert> = {};
-    const diff: Record<string, { from: unknown; to: unknown }> = {};
-    if (status !== undefined && status !== rows[0].status) { updates.status = status; diff.status = { from: rows[0].status, to: status }; }
-    if (location !== undefined && location !== rows[0].location) { updates.location = location; diff.location = { from: rows[0].location, to: location }; }
-    if (notes !== undefined && notes !== rows[0].notes) { updates.notes = notes; diff.notes = { from: rows[0].notes, to: notes }; }
+    await db.update(plantItemsTable).set({
+      portalDraftStatus: status !== undefined ? status : (item.portalDraftStatus ?? item.status),
+      portalDraftLocation: location !== undefined ? location : (item.portalDraftLocation ?? item.location),
+      portalDraftNotes: notes !== undefined ? notes : (item.portalDraftNotes ?? item.notes),
+      portalDraftUpdatedBy: req.user!.id,
+      portalDraftUpdatedAt: new Date(),
+    }).where(eq(plantItemsTable.id, req.params.itemId));
 
-    if (Object.keys(updates).length > 0) {
-      updates.lastUpdatedBy = req.user!.id;
-      updates.lastUpdatedAt = new Date();
-      await db.update(plantItemsTable).set(updates).where(eq(plantItemsTable.id, req.params.itemId));
+    const updated = await db.select().from(plantItemsTable).where(eq(plantItemsTable.id, req.params.itemId)).limit(1);
+    res.json(await serializePortalPlantItem(updated[0]));
+  } catch (err) {
+    req.log.error({ err }, "Portal save plant item draft error");
+    res.status(500).json({ error: "server_error", message: "Failed to save draft" });
+  }
+});
+
+// POST /api/portal/plant-materials/:itemId/submit — copies the pending draft
+// onto the live status/location/notes (what the PM and dashboard actually
+// see), stamps lastUpdatedBy/lastUpdatedAt for attribution, and clears the
+// draft. 400 if there's nothing staged to submit.
+router.post("/portal/plant-materials/:itemId/submit", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canUpdatePlantMaterials"), async (req, res) => {
+  const pid = req.portalProjectId!;
+  try {
+    const item = await portalVisiblePlantItem(pid, req.params.itemId, req.user!.id);
+    if (!item) { res.status(404).json({ error: "not_found", message: "Item not found" }); return; }
+    if (!item.portalDraftUpdatedAt) { res.status(400).json({ error: "validation_error", message: "No draft to submit." }); return; }
+
+    const diff: Record<string, { from: unknown; to: unknown }> = {};
+    if (item.portalDraftStatus !== item.status) diff.status = { from: item.status, to: item.portalDraftStatus };
+    if (item.portalDraftLocation !== item.location) diff.location = { from: item.location, to: item.portalDraftLocation };
+    if (item.portalDraftNotes !== item.notes) diff.notes = { from: item.notes, to: item.portalDraftNotes };
+
+    await db.update(plantItemsTable).set({
+      status: item.portalDraftStatus ?? item.status,
+      location: item.portalDraftLocation,
+      notes: item.portalDraftNotes,
+      lastUpdatedBy: req.user!.id,
+      lastUpdatedAt: new Date(),
+      portalDraftStatus: null, portalDraftLocation: null, portalDraftNotes: null,
+      portalDraftUpdatedBy: null, portalDraftUpdatedAt: null,
+    }).where(eq(plantItemsTable.id, req.params.itemId));
+    if (Object.keys(diff).length > 0) {
       void logActivity({ userId: req.user!.id, projectId: pid, companyId: req.user!.companyId, section: "plant-materials", action: "update", itemType: "plant_item", itemId: req.params.itemId, metadata: diff, req });
     }
 
     const updated = await db.select().from(plantItemsTable).where(eq(plantItemsTable.id, req.params.itemId)).limit(1);
     res.json(await serializePortalPlantItem(updated[0]));
   } catch (err) {
-    req.log.error({ err }, "Portal update plant item error");
-    res.status(500).json({ error: "server_error", message: "Failed to update item" });
+    req.log.error({ err }, "Portal submit plant item error");
+    res.status(500).json({ error: "server_error", message: "Failed to submit" });
+  }
+});
+
+// POST /api/portal/plant-materials/:itemId/notes — append-only addition,
+// independent of the draft/submit flow above (works any time, not gated on a
+// prior submit, since a plant item is never "unsubmitted" as a whole — it's a
+// persistent PM-owned record members annotate over time).
+router.post("/portal/plant-materials/:itemId/notes", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canUpdatePlantMaterials"), async (req, res) => {
+  const pid = req.portalProjectId!;
+  try {
+    const item = await portalVisiblePlantItem(pid, req.params.itemId, req.user!.id);
+    if (!item) { res.status(404).json({ error: "not_found", message: "Item not found" }); return; }
+    const { body } = req.body as { body?: string };
+    if (!body || !body.trim()) { res.status(400).json({ error: "validation_error", message: "A note body is required." }); return; }
+
+    await addNote({ itemType: "plant_item", itemId: req.params.itemId, projectId: pid, authorId: req.user!.id, body: body.trim() });
+    void logActivity({ userId: req.user!.id, projectId: pid, companyId: req.user!.companyId, section: "plant-materials", action: "update", itemType: "plant_item", itemId: req.params.itemId, req });
+
+    const updated = await db.select().from(plantItemsTable).where(eq(plantItemsTable.id, req.params.itemId)).limit(1);
+    res.status(201).json(await serializePortalPlantItem(updated[0]));
+  } catch (err) {
+    req.log.error({ err }, "Portal add plant item note error");
+    res.status(500).json({ error: "server_error", message: "Failed to add note" });
   }
 });
 
 // POST /api/portal/plant-materials/:itemId/attachments — add a photo/document
-// to a shared item. Same permission + visibility gate as the PATCH above.
+// to a plant item. Gated purely on the canUpdatePlantMaterials permission
+// (see the sharing-bug fix note above serializePortalPlantItem).
 router.post("/portal/plant-materials/:itemId/attachments", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canUpdatePlantMaterials"), memberUploadSingle("file"), async (req, res) => {
   const pid = req.portalProjectId!;
   if (!req.file) { res.status(400).json({ error: "validation_error", message: "No file provided" }); return; }
@@ -1188,12 +1687,8 @@ router.post("/portal/plant-materials/:itemId/attachments", authenticate, require
   if (!name) { res.status(400).json({ error: "validation_error", message: "A name is required." }); return; }
 
   try {
-    const rows = await db.select({ id: plantItemsTable.id }).from(plantItemsTable)
-      .where(and(eq(plantItemsTable.id, req.params.itemId), eq(plantItemsTable.projectId, pid))).limit(1);
-    if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Item not found" }); return; }
-    const viewer = await resolveViewer(req.user!.id, pid);
-    const ids = await visibleIds(pid, "plant_item", viewer);
-    if (!ids.has(rows[0].id)) { res.status(404).json({ error: "not_found", message: "Item not found" }); return; }
+    const item = await portalVisiblePlantItem(pid, req.params.itemId, req.user!.id);
+    if (!item) { res.status(404).json({ error: "not_found", message: "Item not found" }); return; }
 
     const { fileUrl, fileSize } = await saveMemberUpload(req.file, req.user!.id, req.user!.companyId);
     const id = generateId();
@@ -1224,7 +1719,7 @@ router.post("/portal/plant-materials/:itemId/attachments", authenticate, require
 const HISTORY_LIMIT = 14;
 
 // GET /api/portal/daily-report — today's report, section-gated.
-router.get("/portal/daily-report", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canEditDailyReport"), autoLogPortalActivity, async (req, res) => {
+router.get("/portal/daily-report", authenticate, requirePortalSession, requirePortalMember, autoLogPortalActivity, async (req, res) => {
   try {
     const pid = req.portalProjectId!;
     const date = londonDateStr(new Date());
@@ -1236,12 +1731,27 @@ router.get("/portal/daily-report", authenticate, requirePortalSession, requirePo
       .where(and(eq(projectMembersTable.projectId, pid), eq(projectMembersTable.userId, req.user!.id)))
       .limit(1);
     const locked = isReportLocked(date);
+    // Submission privacy (user rule): a member only sees a day's report if
+    // they contributed to it themselves. The PM's own diary entries stay
+    // private to the dashboard — a day the PM started looks blank here, and
+    // editing it is blocked (canEdit false) so the member can't blind-
+    // overwrite or surface content they aren't meant to see.
+    const contributors = report ? await contributorsForReport(report.id) : [];
+    const mine = contributors.some(c => c.userId === req.user!.id);
+    const hiddenFromMember = !!report && hasManagerContent(report.managerReport) && !mine;
+    const submittedAt = !hiddenFromMember ? (report?.submittedAt ?? null) : null;
     res.json({
       reportDate: date,
-      managerReport: report && hasManagerContent(report.managerReport) ? report.managerReport : null,
-      contributors: report ? await contributorsForReport(report.id) : [],
+      managerReport: report && !hiddenFromMember && hasManagerContent(report.managerReport) ? report.managerReport : null,
+      contributors: hiddenFromMember ? [] : contributors,
       locked,
-      canEdit: (permRow[0]?.canEditDailyReport ?? false) && !locked,
+      // Once submitted, direct edits are blocked (append-only notes instead) —
+      // separate from (and checked in addition to) the date-lock window above.
+      canEdit: (permRow[0]?.canEditDailyReport ?? false) && !locked && !submittedAt && !hiddenFromMember,
+      submittedAt: submittedAt ? submittedAt.toISOString() : null,
+      submittedByName: !hiddenFromMember && report?.submittedBy ? await nameForPortalUser(report.submittedBy) : null,
+      lifecycleStatus: submittedAt ? "submitted" : "draft",
+      submissionNotes: report && !hiddenFromMember ? await notesFor("daily_report", report.id) : [],
     });
   } catch (err) {
     req.log.error({ err }, "Portal get daily report error");
@@ -1252,7 +1762,7 @@ router.get("/portal/daily-report", authenticate, requirePortalSession, requirePo
 // GET /api/portal/daily-report/history — last HISTORY_LIMIT past days that
 // have a site diary entry, newest first. Section-gated like the rest of Daily
 // Report; always read-only within the section.
-router.get("/portal/daily-report/history", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canEditDailyReport"), autoLogPortalActivity, async (req, res) => {
+router.get("/portal/daily-report/history", authenticate, requirePortalSession, requirePortalMember, autoLogPortalActivity, async (req, res) => {
   try {
     const pid = req.portalProjectId!;
     const today = londonDateStr(new Date());
@@ -1261,10 +1771,20 @@ router.get("/portal/daily-report/history", authenticate, requirePortalSession, r
       .orderBy(desc(dailyReportsTable.reportDate))
       .limit(HISTORY_LIMIT);
     const withContent = rows.filter(r => hasManagerContent(r.managerReport));
-    res.json(await Promise.all(withContent.map(async r => ({
+    // Submission privacy: history only shows days this member contributed to —
+    // the PM's own diary days are private to the dashboard until shared.
+    const visible: { r: typeof withContent[number]; contributors: { userId: string; name: string }[] }[] = [];
+    for (const r of withContent) {
+      const contributors = await contributorsForReport(r.id);
+      if (contributors.some(c => c.userId === req.user!.id)) visible.push({ r, contributors });
+    }
+    res.json(await Promise.all(visible.map(async ({ r, contributors }) => ({
       reportDate: r.reportDate,
       managerReport: r.managerReport,
-      contributors: await contributorsForReport(r.id),
+      contributors,
+      lifecycleStatus: r.submittedAt ? "submitted" : "draft",
+      submittedAt: r.submittedAt ? r.submittedAt.toISOString() : null,
+      submittedByName: r.submittedBy ? await nameForPortalUser(r.submittedBy) : null,
     }))));
   } catch (err) {
     req.log.error({ err }, "Portal daily report history error");
@@ -1272,9 +1792,11 @@ router.get("/portal/daily-report/history", authenticate, requirePortalSession, r
   }
 });
 
-// PATCH /api/portal/daily-report/:date — amend today's (or, within the grace
-// window, yesterday's) site diary. 403 distinctly for "no permission" vs
-// "locked" so the frontend can explain which applies.
+// PATCH /api/portal/daily-report/:date — SAVE (draft only). Amends today's (or,
+// within the grace window, yesterday's) site diary. 403 distinctly for "no
+// permission" vs "locked" vs "already submitted" so the frontend can explain
+// which applies — once submitted, further changes go through the notes
+// endpoint instead of rewriting the original.
 router.patch("/portal/daily-report/:date", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canEditDailyReport"), async (req, res) => {
   const pid = req.portalProjectId!;
   const date = req.params.date;
@@ -1282,12 +1804,96 @@ router.patch("/portal/daily-report/:date", authenticate, requirePortalSession, r
   if (date > londonDateStr(new Date())) { res.status(400).json({ error: "validation_error", message: "Cannot edit a future date" }); return; }
   if (isReportLocked(date)) { res.status(403).json({ error: "locked", message: "This day's report is locked — ask your project manager to amend it from the dashboard." }); return; }
   try {
+    const existing = await db.select({ id: dailyReportsTable.id, submittedAt: dailyReportsTable.submittedAt, managerReport: dailyReportsTable.managerReport }).from(dailyReportsTable)
+      .where(and(eq(dailyReportsTable.projectId, pid), eq(dailyReportsTable.reportDate, date))).limit(1);
+    if (existing[0]?.submittedAt) { res.status(403).json({ error: "submitted", message: "This report has already been submitted — add a note instead." }); return; }
+    // Submission privacy: a member can't edit a day the PM (or someone else)
+    // already started unless they contributed to it — prevents both blind
+    // overwrites and leaking the PM's private diary content via a save.
+    if (existing[0] && hasManagerContent(existing[0].managerReport)) {
+      const contributors = await contributorsForReport(existing[0].id);
+      if (!contributors.some(c => c.userId === req.user!.id)) {
+        res.status(403).json({ error: "forbidden", message: "This day's report was started by your project manager and isn't shared with you." });
+        return;
+      }
+    }
     const result = await upsertManagerReport({ projectId: pid, companyId: req.user!.companyId, date, userId: req.user!.id, patch: req.body, req });
     if ("error" in result) { res.status(400).json({ error: "validation_error", message: "Enter at least one field" }); return; }
-    res.json({ reportDate: date, managerReport: result.managerReport, contributors: await contributorsForReport(result.id) });
+    res.json({ reportDate: date, managerReport: result.managerReport, contributors: await contributorsForReport(result.id), lifecycleStatus: "draft", submittedAt: null, submittedByName: null, submissionNotes: await notesFor("daily_report", result.id) });
   } catch (err) {
     req.log.error({ err }, "Portal update daily report error");
     res.status(500).json({ error: "server_error", message: "Failed to save report" });
+  }
+});
+
+// POST /api/portal/daily-report/:date/submit — locks today's site diary and
+// surfaces it in the PM's report view for the first time. Requires actual
+// content (an empty report has nothing to submit) and the same lock-window
+// check as the PATCH above.
+router.post("/portal/daily-report/:date/submit", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canEditDailyReport"), async (req, res) => {
+  const pid = req.portalProjectId!;
+  const date = req.params.date;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { res.status(400).json({ error: "validation_error", message: "date must be YYYY-MM-DD" }); return; }
+  if (isReportLocked(date)) { res.status(403).json({ error: "locked", message: "This day's report is locked." }); return; }
+  try {
+    const rows = await db.select().from(dailyReportsTable)
+      .where(and(eq(dailyReportsTable.projectId, pid), eq(dailyReportsTable.reportDate, date))).limit(1);
+    const report = rows[0];
+    if (!report || !hasManagerContent(report.managerReport)) { res.status(400).json({ error: "validation_error", message: "Add some content before submitting." }); return; }
+    if (report.submittedAt) { res.status(403).json({ error: "forbidden", message: "Already submitted." }); return; }
+    // Submission privacy: members can only submit a report they contributed to.
+    const submitContribs = await contributorsForReport(report.id);
+    if (!submitContribs.some(c => c.userId === req.user!.id)) {
+      res.status(403).json({ error: "forbidden", message: "This day's report was started by your project manager and isn't shared with you." });
+      return;
+    }
+
+    await db.update(dailyReportsTable).set({ submittedAt: new Date(), submittedBy: req.user!.id }).where(eq(dailyReportsTable.id, report.id));
+    void logActivity({ userId: req.user!.id, projectId: pid, companyId: req.user!.companyId, section: "daily-reports", action: "update", itemType: "daily_report", itemId: report.id, metadata: { submitted: { from: false, to: true } }, req });
+
+    const submittedByName = await nameForPortalUser(req.user!.id);
+    res.json({
+      reportDate: date, managerReport: report.managerReport, contributors: await contributorsForReport(report.id),
+      lifecycleStatus: "submitted", submittedAt: new Date().toISOString(), submittedByName,
+      submissionNotes: await notesFor("daily_report", report.id),
+    });
+  } catch (err) {
+    req.log.error({ err }, "Portal submit daily report error");
+    res.status(500).json({ error: "server_error", message: "Failed to submit report" });
+  }
+});
+
+// POST /api/portal/daily-report/:date/notes — append-only addition on a
+// submitted report. Available to the reporter/any contributor and the PM;
+// never rewrites the original managerReport fields.
+router.post("/portal/daily-report/:date/notes", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canEditDailyReport"), async (req, res) => {
+  const pid = req.portalProjectId!;
+  const date = req.params.date;
+  try {
+    const rows = await db.select().from(dailyReportsTable)
+      .where(and(eq(dailyReportsTable.projectId, pid), eq(dailyReportsTable.reportDate, date))).limit(1);
+    const report = rows[0];
+    if (!report || !report.submittedAt) { res.status(400).json({ error: "validation_error", message: "Submit this report before adding notes." }); return; }
+    // Submission privacy: notes only on reports this member contributed to.
+    const noteContribs = await contributorsForReport(report.id);
+    if (!noteContribs.some(c => c.userId === req.user!.id)) {
+      res.status(403).json({ error: "forbidden", message: "This report isn't shared with you." });
+      return;
+    }
+    const { body } = req.body as { body?: string };
+    if (!body || !body.trim()) { res.status(400).json({ error: "validation_error", message: "A note body is required." }); return; }
+
+    await addNote({ itemType: "daily_report", itemId: report.id, projectId: pid, authorId: req.user!.id, body: body.trim() });
+    void logActivity({ userId: req.user!.id, projectId: pid, companyId: req.user!.companyId, section: "daily-reports", action: "update", itemType: "daily_report", itemId: report.id, req });
+
+    res.status(201).json({
+      reportDate: date, managerReport: report.managerReport, contributors: await contributorsForReport(report.id),
+      lifecycleStatus: "submitted", submittedAt: report.submittedAt.toISOString(), submittedByName: report.submittedBy ? await nameForPortalUser(report.submittedBy) : null,
+      submissionNotes: await notesFor("daily_report", report.id),
+    });
+  } catch (err) {
+    req.log.error({ err }, "Portal add daily report note error");
+    res.status(500).json({ error: "server_error", message: "Failed to add note" });
   }
 });
 

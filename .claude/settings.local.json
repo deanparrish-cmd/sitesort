@@ -172,7 +172,24 @@
       "Bash(kill 15927)",
       "Bash(awk '/^82\\\\./{print length\\($0\\)}' /home/runner/workspace/CLAUDE.md)",
       "Bash(awk '/^81\\\\./{print length\\($0\\)}' /home/runner/workspace/CLAUDE.md)",
-      "Bash(awk '/^80\\\\./{print length\\($0\\)}' /home/runner/workspace/CLAUDE.md)"
+      "Bash(awk '/^80\\\\./{print length\\($0\\)}' /home/runner/workspace/CLAUDE.md)",
+      "Bash(git status *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/api/health)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5000/api/health)",
+      "Bash(echo \"rc=$?\")",
+      "Bash(python3 -)",
+      "Bash(ps -o pid,ppid,cmd -p 84038,84039)",
+      "Bash(curl -s -o /dev/null -w \"current health: %{http_code}\\\\n\" http://localhost:8080/api/health --max-time 3)",
+      "Bash(kill 84039 84038)",
+      "Bash(pkill -f \"node artifacts/api-server/dist/index.js\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(d[0]['id'], d[0]['name']\\)\")",
+      "Bash(LAYOUT_VIEWPORTS=360,768 timeout 300 pnpm run check:layout)",
+      "Bash(curl *)",
+      "Bash(awk 'NR==174{print length\\($0\\)}' CLAUDE.md)",
+      "Bash(awk 'NR==175{print length\\($0\\)}' CLAUDE.md)",
+      "Bash(awk 'NR==176{print length\\($0\\)}' CLAUDE.md)",
+      "Bash(awk 'NR==177{print length\\($0\\)}' CLAUDE.md)",
+      "Bash(python3)"
     ]
   },
   "hooks": {

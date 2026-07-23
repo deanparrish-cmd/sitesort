@@ -41,6 +41,12 @@ export const photosTable = pgTable("photos", {
   // photoRemovedAt is set, so the record can't be silently corrupted.
   photoRemovedAt: timestamp("photo_removed_at"),
   photoRemovedBy: text("photo_removed_by").references(() => usersTable.id),
+  // Draft/submit lifecycle for portal-reported issues (Feature: portal
+  // save-vs-submit). NULL = draft — visible only to its reporter, absent from
+  // the PM's triage queue. Dashboard-created issues are stamped submitted
+  // immediately (no draft step for the PM's own entries).
+  submittedAt: timestamp("submitted_at"),
+  submittedBy: text("submitted_by").references(() => usersTable.id),
 });
 
 export const insertPhotoSchema = createInsertSchema(photosTable).omit({ takenAt: true });

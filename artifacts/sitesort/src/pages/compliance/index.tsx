@@ -10,10 +10,12 @@ import { ShareModal } from "@/components/share-modal";
 import {
   ShieldAlert, ShieldX, FileSignature, Search,
   CheckCircle2, Upload, FileText, AlertTriangle, Loader2, Calendar,
-  ExternalLink, Share2, Archive, ChevronDown, ChevronUp,
+  ExternalLink, Share2, Archive, ChevronDown, ChevronUp, User,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCapabilities } from "@/hooks/use-capabilities";
+import { useGetMe } from "@workspace/api-client-react";
+import { useSignOffFlow } from "@/hooks/use-sign-off-flow";
 
 type InsuranceItem = { subcontractorId: string; subcontractorName: string; insuranceType: string; expiryDate: string; status: string; certificateUrl?: string | null };
 type ArchivedInsuranceItem = { id: string; subcontractorId: string; subcontractorName: string; insuranceType: string; expiryDate: string; certificateUrl?: string | null; archivedAt: string };
@@ -22,7 +24,12 @@ type ArchivedCertItem = { id: string; personId: string; personName: string; cert
 type PermitItem = { permitId: string; projectId: string; projectName: string; permitType: string; expiryDate: string; status: string; documentUrl?: string | null };
 type ArchivedPermitItem = { id: string; projectId: string; projectName: string; permitType: string; expiryDate: string; documentUrl?: string | null; archivedAt: string };
 type ArchivedDocItem = { id: string; name: string; type: string; version: number; fileUrl: string; projectId: string; projectName: string; createdAt: string };
-type AckItem = { documentId: string; documentName: string; projectId: string; projectName: string; pendingCount: number; fileUrl?: string | null };
+type AckRecipient = { userId: string; name: string; status: string; viewedAt?: string | null; acknowledgedAt?: string | null };
+type AckItem = {
+  documentId: string; documentName: string; projectId: string; projectName: string;
+  pendingCount: number; fileUrl?: string | null; version: number; revision?: string | null;
+  myStatus?: string | null; recipients: AckRecipient[];
+};
 type Sub = { id: string; companyName: string; contactName: string };
 type Project = { id: string; name: string };
 type ContactProject = { id: string; name: string };
@@ -100,6 +107,15 @@ export default function CompliancePage() {
 
   type ShareItem = { entityType: string; entityId: string; entityName: string; fileUrl?: string | null; projectId?: string | null };
   const [shareItem, setShareItem] = useState<ShareItem | null>(null);
+  const [expandedAckId, setExpandedAckId] = useState<string | null>(null);
+
+  const authHeaders = useCallback((): Record<string, string> => {
+    const token = localStorage.getItem("sitesort_token");
+    return token ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
+  }, []);
+
+  const { data: me, refetch: refetchMe } = useGetMe();
+  const hasPin = !!(me as { hasPin?: boolean } | undefined)?.hasPin;
 
   const loadCompliance = useCallback(() => {
     const token = localStorage.getItem("sitesort_token");
@@ -118,6 +134,27 @@ export default function CompliancePage() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  const signOff = useSignOffFlow({
+    hasPin,
+    acknowledgeUrl: id => `/api/documents/${id}/acknowledge`,
+    setPinUrl: "/api/auth/pin",
+    authHeaders,
+    onSigned: loadCompliance,
+    onPinSet: () => refetchMe(),
+  });
+
+  const openAck = async (a: AckItem) => {
+    try {
+      const res = await fetch(`/api/documents/${a.documentId}`, { headers: authHeaders() });
+      const fresh = await res.json().catch(() => null);
+      const url = (fresh?.fileUrl ?? a.fileUrl)?.replace(/^\/uploads\//, "/api/uploads/");
+      if (url) window.open(url, "_blank", "noopener,noreferrer");
+      loadCompliance();
+    } catch {
+      if (a.fileUrl) window.open(a.fileUrl.replace(/^\/uploads\//, "/api/uploads/"), "_blank", "noopener,noreferrer");
+    }
+  };
 
   useEffect(() => {
     loadCompliance();
@@ -700,34 +737,78 @@ export default function CompliancePage() {
               </Card>
             ) : (
               <div className="space-y-2">
-                {filteredAcks.map(a => (
-                  <div key={a.documentId} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 px-4 py-3 rounded-xl border bg-blue-50 border-blue-200">
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-sm truncate">{a.documentName}</p>
-                      <p className="text-xs text-muted-foreground truncate">{a.projectName}</p>
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Badge className="text-[10px] bg-blue-100 text-blue-700 border-blue-200">{a.pendingCount} pending</Badge>
-                      {a.fileUrl && (
-                        <button
-                          onClick={() => window.open(a.fileUrl!.replace(/^\/uploads\//, "/api/uploads/"), '_blank', 'noopener,noreferrer')}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
-                          title="Open document"
-                        >
-                          <ExternalLink className="w-3 h-3" />
-                          Open
-                        </button>
+                {filteredAcks.map(a => {
+                  const expanded = expandedAckId === a.documentId;
+                  const iNeedToSign = !!a.myStatus && a.myStatus !== "acknowledged";
+                  return (
+                    <div key={a.documentId} className="rounded-xl border bg-blue-50 border-blue-200 overflow-hidden">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 px-4 py-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-sm truncate">{a.documentName}</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {a.projectName} · {a.revision ? `Rev ${a.revision}` : `v${a.version}`}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {iNeedToSign && (
+                            <Badge className="text-[10px] bg-amber-100 text-amber-700 border-amber-200">Awaiting your sign-off</Badge>
+                          )}
+                          <button
+                            onClick={() => setExpandedAckId(expanded ? null : a.documentId)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-medium hover:bg-blue-200 transition-colors"
+                            title="Show who's signed off"
+                          >
+                            {a.pendingCount} pending
+                            {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                          </button>
+                          <button
+                            onClick={() => void openAck(a)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
+                            title="Open document"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            Open
+                          </button>
+                          {iNeedToSign && (
+                            <button
+                              onClick={() => signOff.open({ id: a.documentId, name: a.documentName })}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent text-accent-foreground text-xs font-medium hover:opacity-90 transition-opacity"
+                              title="Sign off with your PIN"
+                            >
+                              <FileSignature className="w-3 h-3" /> Sign off
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setShareItem({ entityType: "document", entityId: a.documentId, entityName: a.documentName, fileUrl: a.fileUrl, projectId: a.projectId })}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
+                            title="Share document"
+                          >
+                            <Share2 className="w-3 h-3" /> Share
+                          </button>
+                        </div>
+                      </div>
+                      {expanded && (
+                        <div className="border-t border-blue-200 bg-white/60 px-4 py-2 space-y-1.5">
+                          {a.recipients.map(r => (
+                            <div key={r.userId} className="flex items-center justify-between gap-2 text-xs">
+                              <span className="flex items-center gap-1.5 min-w-0">
+                                <User className="w-3 h-3 text-muted-foreground shrink-0" />
+                                <span className="truncate">{r.name}</span>
+                              </span>
+                              {r.status === "acknowledged" ? (
+                                <span className="flex items-center gap-1 text-emerald-600 font-medium shrink-0">
+                                  <CheckCircle2 className="w-3 h-3" /> Signed off {r.acknowledgedAt ? new Date(r.acknowledgedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : ""}
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground shrink-0 capitalize">{r.status}</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
                       )}
-                      <button
-                        onClick={() => setShareItem({ entityType: "document", entityId: a.documentId, entityName: a.documentName, fileUrl: a.fileUrl, projectId: a.projectId })}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
-                        title="Share document"
-                      >
-                        <Share2 className="w-3 h-3" /> Share
-                      </button>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </section>
@@ -912,6 +993,73 @@ export default function CompliancePage() {
         fileUrl={shareItem?.fileUrl}
         projectId={shareItem?.projectId}
       />
+
+      <Dialog open={!!signOff.target} onOpenChange={v => { if (!v) signOff.close(); }}>
+        <DialogHeader>
+          <DialogTitle>{signOff.setPinMode ? "Set your sign-off PIN" : "Sign off with your PIN"}</DialogTitle>
+        </DialogHeader>
+        {signOff.target && (
+          <div className="space-y-4">
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/40 border">
+              <FileSignature className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="font-semibold text-sm truncate">{signOff.target.name}</p>
+                <p className="text-xs text-muted-foreground">Signing off confirms you have read and understood this document.</p>
+              </div>
+            </div>
+
+            {signOff.setPinMode ? (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Set a 4-digit sign-off PIN to continue — you'll use it to confirm future sign-offs.
+                </p>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold block">Account password</label>
+                  <Input type="password" value={signOff.password} onChange={e => signOff.setPassword(e.target.value)} autoComplete="current-password" placeholder="Confirm it's you" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold block">Choose a 4-digit PIN</label>
+                  <Input type="password" inputMode="numeric" value={signOff.newPin} onChange={e => signOff.setNewPin(signOff.onlyDigits(e.target.value))} placeholder="••••" />
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold block">Enter your 4-digit PIN</label>
+                <Input
+                  type="password"
+                  inputMode="numeric"
+                  value={signOff.pin}
+                  onChange={e => signOff.setPin(signOff.onlyDigits(e.target.value))}
+                  onKeyDown={e => { if (e.key === "Enter") signOff.submit(); }}
+                  placeholder="••••"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={signOff.forgotPin}
+                  className="text-xs text-primary hover:underline"
+                >
+                  Forgot your PIN? Reset it with your password
+                </button>
+              </div>
+            )}
+
+            {signOff.error && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{signOff.error}</span>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button variant="ghost" onClick={signOff.close}>Cancel</Button>
+              <Button variant="accent" onClick={signOff.submit} isLoading={signOff.submitting}>
+                {signOff.setPinMode ? "Set PIN & sign off" : "Sign off"}
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+      </Dialog>
     </SidebarLayout>
   );
 }

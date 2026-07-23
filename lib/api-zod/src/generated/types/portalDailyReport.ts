@@ -7,6 +7,8 @@
  */
 import type { DailyReportContributor } from "./dailyReportContributor";
 import type { ManagerReportFields } from "./managerReportFields";
+import type { PortalDailyReportLifecycleStatus } from "./portalDailyReportLifecycleStatus";
+import type { PortalSubmissionNote } from "./portalSubmissionNote";
 
 /**
  * Today's site diary — always visible to every portal member; canEdit reflects the caller's permission AND the lock window.
@@ -17,4 +19,8 @@ export interface PortalDailyReport {
   contributors: DailyReportContributor[];
   locked: boolean;
   canEdit: boolean;
+  lifecycleStatus?: PortalDailyReportLifecycleStatus;
+  submittedAt?: Date | null;
+  submittedByName?: string | null;
+  submissionNotes?: PortalSubmissionNote[];
 }

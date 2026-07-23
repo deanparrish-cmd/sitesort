@@ -2,6 +2,9 @@ import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { isTokenBlocked } from "../lib/token-blocklist";
 import { logActivity } from "../lib/activity";
+import { db } from "@workspace/db";
+import { usersTable } from "@workspace/db/schema";
+import { eq } from "drizzle-orm";
 
 if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET environment variable is required");
 const JWT_SECRET: string = process.env.JWT_SECRET;
@@ -37,11 +40,25 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
 
   const token = authHeader.slice(7);
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as AuthUser;
+    const payload = jwt.verify(token, JWT_SECRET) as AuthUser & { iat?: number };
     if (await isTokenBlocked(token)) {
       res.status(401).json({ error: "unauthorized", message: "Token has been revoked" });
       return;
     }
+
+    // Password-reset invalidation: any JWT issued before the user's
+    // sessions_invalid_before instant is dead, so a compromised account can't
+    // stay logged in after a reset. Portal tokens are enforced separately via
+    // the portal_sessions table (revoked on reset), so this check targets
+    // dashboard tokens; the 60s cache keeps the hot path off the DB.
+    if (typeof payload.iat === "number" && !payload.sid) {
+      const invalidBefore = await getSessionsInvalidBefore(payload.id);
+      if (invalidBefore && payload.iat * 1000 < invalidBefore.getTime()) {
+        res.status(401).json({ error: "unauthorized", message: "Session expired — please sign in again." });
+        return;
+      }
+    }
+
     req.user = payload;
 
     // Team Portal containment: a portal-scoped token may ONLY reach the
@@ -72,6 +89,27 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
   } catch {
     res.status(401).json({ error: "unauthorized", message: "Invalid or expired token" });
   }
+}
+
+// 60s per-user cache over users.sessions_invalid_before so the reset-
+// invalidation check doesn't hit the DB on every authenticated request.
+// completePasswordReset busts the local entry so the cutoff is immediate
+// in-process; other instances converge within the TTL.
+const invalidBeforeCache = new Map<string, { value: Date | null; fetchedAt: number }>();
+const INVALID_BEFORE_TTL_MS = 60 * 1000;
+
+async function getSessionsInvalidBefore(userId: string): Promise<Date | null> {
+  const cached = invalidBeforeCache.get(userId);
+  if (cached && Date.now() - cached.fetchedAt < INVALID_BEFORE_TTL_MS) return cached.value;
+  const rows = await db.select({ sessionsInvalidBefore: usersTable.sessionsInvalidBefore })
+    .from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+  const value = rows[0]?.sessionsInvalidBefore ?? null;
+  invalidBeforeCache.set(userId, { value, fetchedAt: Date.now() });
+  return value;
+}
+
+export function bustSessionsInvalidBeforeCache(userId: string): void {
+  invalidBeforeCache.delete(userId);
 }
 
 // A short label for a blocked out-of-scope path, for the audit feed.

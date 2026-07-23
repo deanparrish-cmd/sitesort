@@ -54,6 +54,12 @@ export const LoginResponse = zod.object({
     lastActiveAt: zod.date().nullish(),
     avatarUrl: zod.string().nullish(),
     hasPin: zod.boolean().optional(),
+    platformAdmin: zod
+      .boolean()
+      .optional()
+      .describe(
+        "SiteSort's own internal-staff flag — distinct from `role` (a customer's role within their own company). Only true for SiteSort staff; gates the platform Admin section.",
+      ),
   }),
   token: zod.string(),
 });
@@ -80,6 +86,86 @@ export const GetMeResponse = zod.object({
   lastActiveAt: zod.date().nullish(),
   avatarUrl: zod.string().nullish(),
   hasPin: zod.boolean().optional(),
+  platformAdmin: zod
+    .boolean()
+    .optional()
+    .describe(
+      "SiteSort's own internal-staff flag — distinct from `role` (a customer's role within their own company). Only true for SiteSort staff; gates the platform Admin section.",
+    ),
+});
+
+/**
+ * Requires the account password as re-verification — also the "forgot PIN" path for a signed-in user. Every call is logged (set vs reset), never the PIN itself.
+ * @summary Set, update, or reset the current user's sign-off PIN
+ */
+export const SetSignOffPinBody = zod.object({
+  currentPassword: zod.string(),
+  pin: zod.string().describe("Exactly 4 digits."),
+});
+
+export const SetSignOffPinResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * Always returns the same generic success whether or not the email is registered. Rate-limited per email and per IP. The emailed link is single-use, hashed at rest, and expires in 60 minutes.
+ * @summary Request a password reset email (main account)
+ */
+export const ForgotPasswordBody = zod.object({
+  email: zod.string(),
+});
+
+export const ForgotPasswordResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * Consumes the single-use token. On success all existing sessions for the account are invalidated (dashboard tokens and portal sessions).
+ * @summary Set a new password using an emailed reset token
+ */
+export const ResetPasswordBody = zod.object({
+  token: zod.string(),
+  password: zod.string().describe("Minimum 8 characters."),
+});
+
+export const ResetPasswordResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * Same shared backbone as password resets — generic response, rate-limited, hashed single-use 60-minute token. A signed-in user should instead reset the PIN in-app with their password.
+ * @summary Request a sign-off PIN reset email (locked-out path)
+ */
+export const ForgotPinBody = zod.object({
+  email: zod.string(),
+  context: zod
+    .enum(["app", "portal"])
+    .optional()
+    .describe(
+      "Which reset page the emailed link should target. Defaults to app.",
+    ),
+});
+
+export const ForgotPinResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * Consumes the single-use token; the new 4-digit PIN is stored hashed and the reset is recorded in the PIN audit log.
+ * @summary Set a new sign-off PIN using an emailed reset token
+ */
+export const ResetPinBody = zod.object({
+  token: zod.string(),
+  pin: zod.string().describe("Exactly 4 digits."),
+});
+
+export const ResetPinResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
 });
 
 /**
@@ -1214,6 +1300,38 @@ export const GetPortalPlantMaterialsResponseItem = zod
         }),
       )
       .optional(),
+    lifecycleStatus: zod
+      .enum(["draft", "submitted"])
+      .optional()
+      .describe(
+        "'draft' means this member has a pending edit not yet submitted — the status\/location\/notes fields above stay the last-submitted values until they do.",
+      ),
+    draft: zod
+      .object({
+        status: zod.string().nullish(),
+        location: zod.string().nullish(),
+        notes: zod.string().nullish(),
+        updatedByName: zod.string().nullish(),
+        updatedAt: zod.date().optional(),
+      })
+      .nullish()
+      .describe(
+        "The member's pending, not-yet-submitted edit — reopen and keep editing before submitting.",
+      ),
+    submissionNotes: zod
+      .array(
+        zod
+          .object({
+            id: zod.string(),
+            authorName: zod.string(),
+            body: zod.string(),
+            createdAt: zod.date(),
+          })
+          .describe(
+            "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+          ),
+      )
+      .optional(),
   })
   .describe("Gated serialization — never exposes share\/audience data.");
 export const GetPortalPlantMaterialsResponse = zod.array(
@@ -1264,11 +1382,43 @@ export const GetPortalPlantMaterialItemResponse = zod
         }),
       )
       .optional(),
+    lifecycleStatus: zod
+      .enum(["draft", "submitted"])
+      .optional()
+      .describe(
+        "'draft' means this member has a pending edit not yet submitted — the status\/location\/notes fields above stay the last-submitted values until they do.",
+      ),
+    draft: zod
+      .object({
+        status: zod.string().nullish(),
+        location: zod.string().nullish(),
+        notes: zod.string().nullish(),
+        updatedByName: zod.string().nullish(),
+        updatedAt: zod.date().optional(),
+      })
+      .nullish()
+      .describe(
+        "The member's pending, not-yet-submitted edit — reopen and keep editing before submitting.",
+      ),
+    submissionNotes: zod
+      .array(
+        zod
+          .object({
+            id: zod.string(),
+            authorName: zod.string(),
+            body: zod.string(),
+            createdAt: zod.date(),
+          })
+          .describe(
+            "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+          ),
+      )
+      .optional(),
   })
   .describe("Gated serialization — never exposes share\/audience data.");
 
 /**
- * @summary Update a plant/material item's status, location, or notes (requires can-update-plant-materials permission)
+ * @summary SAVE (draft only) a proposed status/location/notes change — writes to the member's pending draft, never the live/submitted values
  */
 export const UpdatePortalPlantMaterialItemParams = zod.object({
   itemId: zod.coerce.string(),
@@ -1323,8 +1473,130 @@ export const UpdatePortalPlantMaterialItemResponse = zod
         }),
       )
       .optional(),
+    lifecycleStatus: zod
+      .enum(["draft", "submitted"])
+      .optional()
+      .describe(
+        "'draft' means this member has a pending edit not yet submitted — the status\/location\/notes fields above stay the last-submitted values until they do.",
+      ),
+    draft: zod
+      .object({
+        status: zod.string().nullish(),
+        location: zod.string().nullish(),
+        notes: zod.string().nullish(),
+        updatedByName: zod.string().nullish(),
+        updatedAt: zod.date().optional(),
+      })
+      .nullish()
+      .describe(
+        "The member's pending, not-yet-submitted edit — reopen and keep editing before submitting.",
+      ),
+    submissionNotes: zod
+      .array(
+        zod
+          .object({
+            id: zod.string(),
+            authorName: zod.string(),
+            body: zod.string(),
+            createdAt: zod.date(),
+          })
+          .describe(
+            "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+          ),
+      )
+      .optional(),
   })
   .describe("Gated serialization — never exposes share\/audience data.");
+
+/**
+ * @summary Submit the pending draft — copies it onto the live status/location/notes (what the PM sees) with attribution, then clears the draft
+ */
+export const SubmitPortalPlantMaterialItemParams = zod.object({
+  itemId: zod.coerce.string(),
+});
+
+export const SubmitPortalPlantMaterialItemResponse = zod
+  .object({
+    id: zod.string(),
+    name: zod.string(),
+    category: zod.enum(["plant_equipment", "materials"]),
+    quantity: zod.string().nullish(),
+    unit: zod.string().nullish(),
+    supplierOwnerText: zod.string().nullish(),
+    supplierContactName: zod.string().nullish(),
+    location: zod.string().nullish(),
+    status: zod.enum(["on_site", "on_order", "off_hired", "depleted"]),
+    notes: zod.string().nullish(),
+    onSiteDate: zod.string().nullish(),
+    expectedOffHireDate: zod.string().nullish(),
+    lastUpdatedByName: zod.string().nullish(),
+    lastUpdatedAt: zod.date().nullish(),
+    attachments: zod
+      .array(
+        zod.object({
+          id: zod.string(),
+          plantItemId: zod.string(),
+          uploadedBy: zod.string(),
+          uploaderName: zod.string(),
+          name: zod.string(),
+          kind: zod.enum([
+            "delivery_ticket",
+            "certificate",
+            "test_certificate",
+            "photo",
+            "other",
+          ]),
+          fileUrl: zod.string(),
+          fileSize: zod.number(),
+          createdAt: zod.date(),
+        }),
+      )
+      .optional(),
+    lifecycleStatus: zod
+      .enum(["draft", "submitted"])
+      .optional()
+      .describe(
+        "'draft' means this member has a pending edit not yet submitted — the status\/location\/notes fields above stay the last-submitted values until they do.",
+      ),
+    draft: zod
+      .object({
+        status: zod.string().nullish(),
+        location: zod.string().nullish(),
+        notes: zod.string().nullish(),
+        updatedByName: zod.string().nullish(),
+        updatedAt: zod.date().optional(),
+      })
+      .nullish()
+      .describe(
+        "The member's pending, not-yet-submitted edit — reopen and keep editing before submitting.",
+      ),
+    submissionNotes: zod
+      .array(
+        zod
+          .object({
+            id: zod.string(),
+            authorName: zod.string(),
+            body: zod.string(),
+            createdAt: zod.date(),
+          })
+          .describe(
+            "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+          ),
+      )
+      .optional(),
+  })
+  .describe("Gated serialization — never exposes share\/audience data.");
+
+/**
+ * @summary Add a timestamped note to a plant item (append-only)
+ */
+export const AddPortalPlantMaterialNoteParams = zod.object({
+  itemId: zod.coerce.string(),
+});
+
+export const AddPortalPlantMaterialNoteBody = zod.object({
+  body: zod.string(),
+});
 
 /**
  * @summary Upload a document/photo for a shared plant/material item (multipart; requires can-update-plant-materials permission)
@@ -1375,6 +1647,23 @@ export const GetPortalDailyReportResponse = zod
     ),
     locked: zod.boolean(),
     canEdit: zod.boolean(),
+    lifecycleStatus: zod.enum(["draft", "submitted"]).optional(),
+    submittedAt: zod.date().nullish(),
+    submittedByName: zod.string().nullish(),
+    submissionNotes: zod
+      .array(
+        zod
+          .object({
+            id: zod.string(),
+            authorName: zod.string(),
+            body: zod.string(),
+            createdAt: zod.date(),
+          })
+          .describe(
+            "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+          ),
+      )
+      .optional(),
   })
   .describe(
     "Today's site diary — always visible to every portal member; canEdit reflects the caller's permission AND the lock window.",
@@ -1406,6 +1695,23 @@ export const GetPortalDailyReportHistoryResponseItem = zod
         name: zod.string(),
       }),
     ),
+    lifecycleStatus: zod.enum(["draft", "submitted"]).optional(),
+    submittedAt: zod.date().nullish(),
+    submittedByName: zod.string().nullish(),
+    submissionNotes: zod
+      .array(
+        zod
+          .object({
+            id: zod.string(),
+            authorName: zod.string(),
+            body: zod.string(),
+            createdAt: zod.date(),
+          })
+          .describe(
+            "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+          ),
+      )
+      .optional(),
   })
   .describe("A past day's site diary — always read-only in the portal.");
 export const GetPortalDailyReportHistoryResponse = zod.array(
@@ -1457,8 +1763,86 @@ export const UpdatePortalDailyReportResponse = zod
         name: zod.string(),
       }),
     ),
+    lifecycleStatus: zod.enum(["draft", "submitted"]).optional(),
+    submittedAt: zod.date().nullish(),
+    submittedByName: zod.string().nullish(),
+    submissionNotes: zod
+      .array(
+        zod
+          .object({
+            id: zod.string(),
+            authorName: zod.string(),
+            body: zod.string(),
+            createdAt: zod.date(),
+          })
+          .describe(
+            "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+          ),
+      )
+      .optional(),
   })
   .describe("A past day's site diary — always read-only in the portal.");
+
+/**
+ * @summary Submit today's site diary to the PM — locks the narrative (further changes go through notes)
+ */
+export const SubmitPortalDailyReportParams = zod.object({
+  date: zod.coerce.string().describe("YYYY-MM-DD"),
+});
+
+export const SubmitPortalDailyReportResponse = zod
+  .object({
+    reportDate: zod.string(),
+    managerReport: zod
+      .object({
+        weather: zod.string().optional(),
+        labourOnSite: zod.string().optional(),
+        plantEquipment: zod.string().optional(),
+        workCompleted: zod.string().optional(),
+        delaysIssues: zod.string().optional(),
+        deliveries: zod.string().optional(),
+        hsNotes: zod.string().optional(),
+      })
+      .describe(
+        'The structured \"site diary\" — every field optional\/free text.',
+      )
+      .nullish(),
+    contributors: zod.array(
+      zod.object({
+        userId: zod.string(),
+        name: zod.string(),
+      }),
+    ),
+    lifecycleStatus: zod.enum(["draft", "submitted"]).optional(),
+    submittedAt: zod.date().nullish(),
+    submittedByName: zod.string().nullish(),
+    submissionNotes: zod
+      .array(
+        zod
+          .object({
+            id: zod.string(),
+            authorName: zod.string(),
+            body: zod.string(),
+            createdAt: zod.date(),
+          })
+          .describe(
+            "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+          ),
+      )
+      .optional(),
+  })
+  .describe("A past day's site diary — always read-only in the portal.");
+
+/**
+ * @summary Add a timestamped note to a submitted report (append-only)
+ */
+export const AddPortalDailyReportNoteParams = zod.object({
+  date: zod.coerce.string().describe("YYYY-MM-DD"),
+});
+
+export const AddPortalDailyReportNoteBody = zod.object({
+  body: zod.string(),
+});
 
 /**
  * @summary Everyone on this project a member can message — no email/phone exposed
@@ -1809,6 +2193,28 @@ export const ListPhotosResponseItem = zod.object({
     .describe(
       "Set when a manager removes just the attached photo, leaving the issue record intact.",
     ),
+  submittedAt: zod
+    .date()
+    .nullish()
+    .describe(
+      "Portal save-vs-submit lifecycle. Null = still a draft with its reporter, absent from the PM's triage queue. Dashboard-created issues are always submitted immediately.",
+    ),
+  submittedByName: zod.string().nullish(),
+  lifecycleStatus: zod.enum(["draft", "submitted"]).optional(),
+  notes: zod
+    .array(
+      zod
+        .object({
+          id: zod.string(),
+          authorName: zod.string(),
+          body: zod.string(),
+          createdAt: zod.date(),
+        })
+        .describe(
+          "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+        ),
+    )
+    .optional(),
 });
 export const ListPhotosResponse = zod.array(ListPhotosResponseItem);
 
@@ -1895,6 +2301,28 @@ export const UpdatePhotoResponse = zod.object({
     .describe(
       "Set when a manager removes just the attached photo, leaving the issue record intact.",
     ),
+  submittedAt: zod
+    .date()
+    .nullish()
+    .describe(
+      "Portal save-vs-submit lifecycle. Null = still a draft with its reporter, absent from the PM's triage queue. Dashboard-created issues are always submitted immediately.",
+    ),
+  submittedByName: zod.string().nullish(),
+  lifecycleStatus: zod.enum(["draft", "submitted"]).optional(),
+  notes: zod
+    .array(
+      zod
+        .object({
+          id: zod.string(),
+          authorName: zod.string(),
+          body: zod.string(),
+          createdAt: zod.date(),
+        })
+        .describe(
+          "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+        ),
+    )
+    .optional(),
 });
 
 /**
@@ -1953,6 +2381,28 @@ export const ArchivePhotoResponse = zod.object({
     .describe(
       "Set when a manager removes just the attached photo, leaving the issue record intact.",
     ),
+  submittedAt: zod
+    .date()
+    .nullish()
+    .describe(
+      "Portal save-vs-submit lifecycle. Null = still a draft with its reporter, absent from the PM's triage queue. Dashboard-created issues are always submitted immediately.",
+    ),
+  submittedByName: zod.string().nullish(),
+  lifecycleStatus: zod.enum(["draft", "submitted"]).optional(),
+  notes: zod
+    .array(
+      zod
+        .object({
+          id: zod.string(),
+          authorName: zod.string(),
+          body: zod.string(),
+          createdAt: zod.date(),
+        })
+        .describe(
+          "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+        ),
+    )
+    .optional(),
 });
 
 /**
@@ -2005,6 +2455,28 @@ export const RestorePhotoResponse = zod.object({
     .describe(
       "Set when a manager removes just the attached photo, leaving the issue record intact.",
     ),
+  submittedAt: zod
+    .date()
+    .nullish()
+    .describe(
+      "Portal save-vs-submit lifecycle. Null = still a draft with its reporter, absent from the PM's triage queue. Dashboard-created issues are always submitted immediately.",
+    ),
+  submittedByName: zod.string().nullish(),
+  lifecycleStatus: zod.enum(["draft", "submitted"]).optional(),
+  notes: zod
+    .array(
+      zod
+        .object({
+          id: zod.string(),
+          authorName: zod.string(),
+          body: zod.string(),
+          createdAt: zod.date(),
+        })
+        .describe(
+          "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+        ),
+    )
+    .optional(),
 });
 
 /**
@@ -2057,6 +2529,28 @@ export const RemovePhotoAttachmentResponse = zod.object({
     .describe(
       "Set when a manager removes just the attached photo, leaving the issue record intact.",
     ),
+  submittedAt: zod
+    .date()
+    .nullish()
+    .describe(
+      "Portal save-vs-submit lifecycle. Null = still a draft with its reporter, absent from the PM's triage queue. Dashboard-created issues are always submitted immediately.",
+    ),
+  submittedByName: zod.string().nullish(),
+  lifecycleStatus: zod.enum(["draft", "submitted"]).optional(),
+  notes: zod
+    .array(
+      zod
+        .object({
+          id: zod.string(),
+          authorName: zod.string(),
+          body: zod.string(),
+          createdAt: zod.date(),
+        })
+        .describe(
+          "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+        ),
+    )
+    .optional(),
 });
 
 /**
@@ -2100,6 +2594,28 @@ export const GetComplianceOverviewResponse = zod.object({
       projectId: zod.string(),
       projectName: zod.string(),
       pendingCount: zod.number(),
+      fileUrl: zod.string().nullish(),
+      version: zod.number(),
+      revision: zod.string().nullish(),
+      myStatus: zod
+        .enum(["pending", "viewed", "acknowledged"])
+        .nullish()
+        .describe(
+          "The requesting user's own sign-off status for this document, or null if they aren't a recipient (pure PM oversight).",
+        ),
+      recipients: zod
+        .array(
+          zod.object({
+            userId: zod.string(),
+            name: zod.string(),
+            status: zod.enum(["pending", "viewed", "acknowledged"]),
+            viewedAt: zod.date().nullish(),
+            acknowledgedAt: zod.date().nullish(),
+          }),
+        )
+        .describe(
+          'Every recipient of this document — so \"N pending\" resolves to named people, not just a count.',
+        ),
     }),
   ),
 });
@@ -2164,6 +2680,12 @@ export const ListUsersResponseItem = zod.object({
   lastActiveAt: zod.date().nullish(),
   avatarUrl: zod.string().nullish(),
   hasPin: zod.boolean().optional(),
+  platformAdmin: zod
+    .boolean()
+    .optional()
+    .describe(
+      "SiteSort's own internal-staff flag — distinct from `role` (a customer's role within their own company). Only true for SiteSort staff; gates the platform Admin section.",
+    ),
 });
 export const ListUsersResponse = zod.array(ListUsersResponseItem);
 
@@ -2212,6 +2734,12 @@ export const UpdateUserResponse = zod.object({
   lastActiveAt: zod.date().nullish(),
   avatarUrl: zod.string().nullish(),
   hasPin: zod.boolean().optional(),
+  platformAdmin: zod
+    .boolean()
+    .optional()
+    .describe(
+      "SiteSort's own internal-staff flag — distinct from `role` (a customer's role within their own company). Only true for SiteSort staff; gates the platform Admin section.",
+    ),
 });
 
 /**
@@ -2319,6 +2847,9 @@ export const PortalLoginResponse = zod.object({
       canLogIssues: zod.boolean(),
       canUpdatePlantMaterials: zod.boolean(),
       canEditDailyReport: zod.boolean(),
+      hasPin: zod
+        .boolean()
+        .describe("Whether this member has already set their sign-off PIN."),
     })
     .optional(),
   projects: zod
@@ -2329,6 +2860,33 @@ export const PortalLoginResponse = zod.object({
       }),
     )
     .optional(),
+});
+
+/**
+ * Same shared backbone as the main-app reset (a portal member is the same account underneath); the emailed link targets the portal reset page. Generic response — never reveals whether the email is registered. Rate-limited per email and per IP.
+ * @summary Request a portal-member password reset email
+ */
+export const PortalForgotPasswordBody = zod.object({
+  email: zod.string(),
+});
+
+export const PortalForgotPasswordResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * Consumes the single-use token. On success all existing sessions for the account are invalidated (portal sessions revoked, dashboard tokens rejected).
+ * @summary Set a new portal-member password using an emailed reset token
+ */
+export const PortalResetPasswordBody = zod.object({
+  token: zod.string(),
+  password: zod.string().describe("Minimum 8 characters."),
+});
+
+export const PortalResetPasswordResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
 });
 
 /**
@@ -2391,6 +2949,9 @@ export const AcceptPortalInviteResponse = zod.object({
       canLogIssues: zod.boolean(),
       canUpdatePlantMaterials: zod.boolean(),
       canEditDailyReport: zod.boolean(),
+      hasPin: zod
+        .boolean()
+        .describe("Whether this member has already set their sign-off PIN."),
     })
     .optional(),
   projects: zod
@@ -2425,8 +2986,25 @@ export const GetPortalContextResponse = zod.object({
     canLogIssues: zod.boolean(),
     canUpdatePlantMaterials: zod.boolean(),
     canEditDailyReport: zod.boolean(),
+    hasPin: zod
+      .boolean()
+      .describe("Whether this member has already set their sign-off PIN."),
   }),
   sections: zod.array(zod.string()),
+});
+
+/**
+ * Requires the account password as re-verification — also the "forgot PIN" path. Every call is logged (set vs reset), never the PIN itself.
+ * @summary Set, update, or reset the signed-in member's sign-off PIN
+ */
+export const SetPortalPinBody = zod.object({
+  currentPassword: zod.string(),
+  pin: zod.string().describe("Exactly 4 digits."),
+});
+
+export const SetPortalPinResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
 });
 
 /**
@@ -2536,6 +3114,23 @@ export const GetPortalSiteIssuesResponseItem = zod.object({
     .optional()
     .describe("Set only on issues this member reported themselves."),
   closureReason: zod.enum(["completed", "invalid", "duplicate"]).optional(),
+  submittedAt: zod.date().nullish(),
+  submittedByName: zod.string().nullish(),
+  lifecycleStatus: zod.enum(["draft", "submitted"]).optional(),
+  notes: zod
+    .array(
+      zod
+        .object({
+          id: zod.string(),
+          authorName: zod.string(),
+          body: zod.string(),
+          createdAt: zod.date(),
+        })
+        .describe(
+          "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+        ),
+    )
+    .optional(),
 });
 export const GetPortalSiteIssuesResponse = zod.array(
   GetPortalSiteIssuesResponseItem,
@@ -2584,6 +3179,140 @@ export const UpdatePortalSiteIssueResponse = zod.object({
     .optional()
     .describe("Set only on issues this member reported themselves."),
   closureReason: zod.enum(["completed", "invalid", "duplicate"]).optional(),
+  submittedAt: zod.date().nullish(),
+  submittedByName: zod.string().nullish(),
+  lifecycleStatus: zod.enum(["draft", "submitted"]).optional(),
+  notes: zod
+    .array(
+      zod
+        .object({
+          id: zod.string(),
+          authorName: zod.string(),
+          body: zod.string(),
+          createdAt: zod.date(),
+        })
+        .describe(
+          "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+        ),
+    )
+    .optional(),
+});
+
+/**
+ * @summary Full edit of a draft issue's own fields (reporter-only, only while still a draft — 403 once submitted)
+ */
+export const EditPortalSiteIssueDraftParams = zod.object({
+  issueId: zod.coerce.string(),
+});
+
+export const EditPortalSiteIssueDraftBody = zod.object({
+  type: zod.enum(["snag", "safety_concern", "work_completed"]).optional(),
+  description: zod.string().optional(),
+  zone: zod.string().optional(),
+});
+
+export const EditPortalSiteIssueDraftResponse = zod.object({
+  id: zod.string(),
+  category: zod.string(),
+  description: zod.string().optional(),
+  zone: zod.string().optional(),
+  referenceNumber: zod.string(),
+  status: zod.string().optional(),
+  photoUrl: zod.string().optional(),
+  takenAt: zod.string().optional(),
+  latitude: zod.string().optional(),
+  longitude: zod.string().optional(),
+  unseen: zod.boolean().optional(),
+  sharedAt: zod.string().optional(),
+  assignedToUserId: zod
+    .string()
+    .optional()
+    .describe(
+      'Present so a member can tell whether an issue is allocated to them (\"Mark as done\" visibility).',
+    ),
+  reporterName: zod
+    .string()
+    .optional()
+    .describe("Set only on issues this member reported themselves."),
+  closureReason: zod.enum(["completed", "invalid", "duplicate"]).optional(),
+  submittedAt: zod.date().nullish(),
+  submittedByName: zod.string().nullish(),
+  lifecycleStatus: zod.enum(["draft", "submitted"]).optional(),
+  notes: zod
+    .array(
+      zod
+        .object({
+          id: zod.string(),
+          authorName: zod.string(),
+          body: zod.string(),
+          createdAt: zod.date(),
+        })
+        .describe(
+          "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+        ),
+    )
+    .optional(),
+});
+
+/**
+ * @summary Submit a draft issue to the PM (reporter-only) — locks the original fields, adds it to the PM's triage queue
+ */
+export const SubmitPortalSiteIssueParams = zod.object({
+  issueId: zod.coerce.string(),
+});
+
+export const SubmitPortalSiteIssueResponse = zod.object({
+  id: zod.string(),
+  category: zod.string(),
+  description: zod.string().optional(),
+  zone: zod.string().optional(),
+  referenceNumber: zod.string(),
+  status: zod.string().optional(),
+  photoUrl: zod.string().optional(),
+  takenAt: zod.string().optional(),
+  latitude: zod.string().optional(),
+  longitude: zod.string().optional(),
+  unseen: zod.boolean().optional(),
+  sharedAt: zod.string().optional(),
+  assignedToUserId: zod
+    .string()
+    .optional()
+    .describe(
+      'Present so a member can tell whether an issue is allocated to them (\"Mark as done\" visibility).',
+    ),
+  reporterName: zod
+    .string()
+    .optional()
+    .describe("Set only on issues this member reported themselves."),
+  closureReason: zod.enum(["completed", "invalid", "duplicate"]).optional(),
+  submittedAt: zod.date().nullish(),
+  submittedByName: zod.string().nullish(),
+  lifecycleStatus: zod.enum(["draft", "submitted"]).optional(),
+  notes: zod
+    .array(
+      zod
+        .object({
+          id: zod.string(),
+          authorName: zod.string(),
+          body: zod.string(),
+          createdAt: zod.date(),
+        })
+        .describe(
+          "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+        ),
+    )
+    .optional(),
+});
+
+/**
+ * @summary Add a timestamped note to a submitted issue (append-only — never edits the original)
+ */
+export const AddPortalSiteIssueNoteParams = zod.object({
+  issueId: zod.coerce.string(),
+});
+
+export const AddPortalSiteIssueNoteBody = zod.object({
+  body: zod.string(),
 });
 
 /**
@@ -2699,6 +3428,20 @@ export const GetPortalHsResponse = zod.object({
         .describe(
           "Set when this document is superseded — points at the live replacement.",
         ),
+      requiresAcknowledgment: zod
+        .boolean()
+        .optional()
+        .describe("Whether this document needs a PIN sign-off."),
+      myStatus: zod
+        .enum(["pending", "viewed", "acknowledged"])
+        .nullish()
+        .describe(
+          "This viewer's own sign-off status for the document, or null if they have no distribution record yet.",
+        ),
+      mySignedOffAt: zod
+        .date()
+        .nullish()
+        .describe("When this viewer signed it off, if they have."),
     }),
   ),
   safety: zod.array(
@@ -2735,6 +3478,20 @@ export const GetPortalHsResponse = zod.object({
         .describe(
           "Set when this document is superseded — points at the live replacement.",
         ),
+      requiresAcknowledgment: zod
+        .boolean()
+        .optional()
+        .describe("Whether this document needs a PIN sign-off."),
+      myStatus: zod
+        .enum(["pending", "viewed", "acknowledged"])
+        .nullish()
+        .describe(
+          "This viewer's own sign-off status for the document, or null if they have no distribution record yet.",
+        ),
+      mySignedOffAt: zod
+        .date()
+        .nullish()
+        .describe("When this viewer signed it off, if they have."),
     }),
   ),
   permits: zod.array(
@@ -2790,6 +3547,20 @@ export const GetPortalSharedResponse = zod.object({
         .describe(
           "Set when this document is superseded — points at the live replacement.",
         ),
+      requiresAcknowledgment: zod
+        .boolean()
+        .optional()
+        .describe("Whether this document needs a PIN sign-off."),
+      myStatus: zod
+        .enum(["pending", "viewed", "acknowledged"])
+        .nullish()
+        .describe(
+          "This viewer's own sign-off status for the document, or null if they have no distribution record yet.",
+        ),
+      mySignedOffAt: zod
+        .date()
+        .nullish()
+        .describe("When this viewer signed it off, if they have."),
     }),
   ),
   photos: zod.array(
@@ -2817,6 +3588,23 @@ export const GetPortalSharedResponse = zod.object({
         .optional()
         .describe("Set only on issues this member reported themselves."),
       closureReason: zod.enum(["completed", "invalid", "duplicate"]).optional(),
+      submittedAt: zod.date().nullish(),
+      submittedByName: zod.string().nullish(),
+      lifecycleStatus: zod.enum(["draft", "submitted"]).optional(),
+      notes: zod
+        .array(
+          zod
+            .object({
+              id: zod.string(),
+              authorName: zod.string(),
+              body: zod.string(),
+              createdAt: zod.date(),
+            })
+            .describe(
+              "One timestamped append-only addition on a submitted item (site issue, plant item, or daily report) — never edits the original.",
+            ),
+        )
+        .optional(),
     }),
   ),
   permits: zod.array(
@@ -2870,6 +3658,20 @@ export const GetPortalDrawingsResponseItem = zod.object({
     .describe(
       "Set when this document is superseded — points at the live replacement.",
     ),
+  requiresAcknowledgment: zod
+    .boolean()
+    .optional()
+    .describe("Whether this document needs a PIN sign-off."),
+  myStatus: zod
+    .enum(["pending", "viewed", "acknowledged"])
+    .nullish()
+    .describe(
+      "This viewer's own sign-off status for the document, or null if they have no distribution record yet.",
+    ),
+  mySignedOffAt: zod
+    .date()
+    .nullish()
+    .describe("When this viewer signed it off, if they have."),
 });
 export const GetPortalDrawingsResponse = zod.array(
   GetPortalDrawingsResponseItem,
@@ -2915,6 +3717,20 @@ export const GetPortalDrawingResponse = zod.object({
     .describe(
       "Set when this document is superseded — points at the live replacement.",
     ),
+  requiresAcknowledgment: zod
+    .boolean()
+    .optional()
+    .describe("Whether this document needs a PIN sign-off."),
+  myStatus: zod
+    .enum(["pending", "viewed", "acknowledged"])
+    .nullish()
+    .describe(
+      "This viewer's own sign-off status for the document, or null if they have no distribution record yet.",
+    ),
+  mySignedOffAt: zod
+    .date()
+    .nullish()
+    .describe("When this viewer signed it off, if they have."),
 });
 
 /**
@@ -2922,6 +3738,36 @@ export const GetPortalDrawingResponse = zod.object({
  */
 export const DownloadPortalDocumentParams = zod.object({
   documentId: zod.coerce.string(),
+});
+
+/**
+ * @summary Record that this member opened a document (pending → viewed)
+ */
+export const ViewPortalDocumentParams = zod.object({
+  documentId: zod.coerce.string(),
+});
+
+export const ViewPortalDocumentResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * @summary Sign off a document shared with this member (PIN-confirmed)
+ */
+export const AcknowledgePortalDocumentParams = zod.object({
+  documentId: zod.coerce.string(),
+});
+
+export const AcknowledgePortalDocumentBody = zod.object({
+  pin: zod.string().nullish(),
+  latitude: zod.number().nullish(),
+  longitude: zod.number().nullish(),
+});
+
+export const AcknowledgePortalDocumentResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
 });
 
 /**
@@ -3028,6 +3874,20 @@ export const GetPortalMethodStatementsResponseItem = zod.object({
     .describe(
       "Set when this document is superseded — points at the live replacement.",
     ),
+  requiresAcknowledgment: zod
+    .boolean()
+    .optional()
+    .describe("Whether this document needs a PIN sign-off."),
+  myStatus: zod
+    .enum(["pending", "viewed", "acknowledged"])
+    .nullish()
+    .describe(
+      "This viewer's own sign-off status for the document, or null if they have no distribution record yet.",
+    ),
+  mySignedOffAt: zod
+    .date()
+    .nullish()
+    .describe("When this viewer signed it off, if they have."),
 });
 export const GetPortalMethodStatementsResponse = zod.array(
   GetPortalMethodStatementsResponseItem,
@@ -3073,6 +3933,20 @@ export const GetPortalMethodStatementResponse = zod.object({
     .describe(
       "Set when this document is superseded — points at the live replacement.",
     ),
+  requiresAcknowledgment: zod
+    .boolean()
+    .optional()
+    .describe("Whether this document needs a PIN sign-off."),
+  myStatus: zod
+    .enum(["pending", "viewed", "acknowledged"])
+    .nullish()
+    .describe(
+      "This viewer's own sign-off status for the document, or null if they have no distribution record yet.",
+    ),
+  mySignedOffAt: zod
+    .date()
+    .nullish()
+    .describe("When this viewer signed it off, if they have."),
 });
 
 /**
@@ -3127,6 +4001,20 @@ export const GetPortalSafetyResponseItem = zod.object({
     .describe(
       "Set when this document is superseded — points at the live replacement.",
     ),
+  requiresAcknowledgment: zod
+    .boolean()
+    .optional()
+    .describe("Whether this document needs a PIN sign-off."),
+  myStatus: zod
+    .enum(["pending", "viewed", "acknowledged"])
+    .nullish()
+    .describe(
+      "This viewer's own sign-off status for the document, or null if they have no distribution record yet.",
+    ),
+  mySignedOffAt: zod
+    .date()
+    .nullish()
+    .describe("When this viewer signed it off, if they have."),
 });
 export const GetPortalSafetyResponse = zod.array(GetPortalSafetyResponseItem);
 
@@ -3168,6 +4056,20 @@ export const GetPortalGeneralResponse = zod.object({
         .describe(
           "Set when this document is superseded — points at the live replacement.",
         ),
+      requiresAcknowledgment: zod
+        .boolean()
+        .optional()
+        .describe("Whether this document needs a PIN sign-off."),
+      myStatus: zod
+        .enum(["pending", "viewed", "acknowledged"])
+        .nullish()
+        .describe(
+          "This viewer's own sign-off status for the document, or null if they have no distribution record yet.",
+        ),
+      mySignedOffAt: zod
+        .date()
+        .nullish()
+        .describe("When this viewer signed it off, if they have."),
     }),
   ),
   notes: zod.array(

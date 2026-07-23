@@ -8,9 +8,9 @@ import { PortalNotifyPrompt } from "@/components/portal-notify-prompt";
 import { markPortalSession, disablePush } from "@/lib/portal-push";
 import { cn } from "@/lib/utils";
 import {
-  LayoutDashboard, TrendingUp, Users, AlertTriangle, LayoutGrid,
+  Home, AlertTriangle,
   LogOut, Inbox, HardHat,
-  Settings, Menu, X, FolderUp, Wrench, ClipboardList, MessageSquare,
+  Settings, Menu, X, FolderUp, Wrench, ClipboardList, MessageSquare, QrCode, FileCheck,
 } from "lucide-react";
 
 // The fixed portal nav — order + labels + icons. `key` matches the URL segment
@@ -20,22 +20,28 @@ import {
 // General were retired as standalone tabs — that content now surfaces only
 // inside "Shared with me" (with a category filter), since it was always just
 // a differently-sliced view of the same shared documents/permits. Site
-// Issues, Plant & Materials, and Daily Report are marked `permission` below:
-// PortalLayout filters them out entirely (not greyed — absent) unless the PM
-// has granted the matching flag on that member's project_members row. Every
-// other entry here is always visible to every portal member.
-export const SECTION_NAV: { key: string; label: string; Icon: typeof LayoutDashboard; permission?: "canLogIssues" | "canUpdatePlantMaterials" | "canEditDailyReport" }[] = [
-  { key: "overview", label: "Overview", Icon: LayoutDashboard },
+// Issues, Plant & Materials, and Daily Report are visible to EVERY member as
+// read-only sections (members can always reopen and view items); the
+// project_members permission flags only gate the write actions inside them.
+// Simplified-portal redesign (2 pages): "Home" is the single landing page
+// (project details + site manager contact + Team + Overview + Site Board all
+// on one scrollable page — Overview/Progress/Team/Site Board tabs retired,
+// their old URLs land on Home). The rest of the menu is the member's own
+// workspace, with the permission-gated work sections at the BOTTOM.
+export const SECTION_NAV: { key: string; label: string; Icon: typeof Home; permission?: "canLogIssues" | "canUpdatePlantMaterials" | "canEditDailyReport" }[] = [
+  { key: "overview", label: "Home", Icon: Home },
   { key: "messages", label: "Messages", Icon: MessageSquare },
   { key: "shared", label: "Shared with me", Icon: Inbox },
-  { key: "progress", label: "Progress", Icon: TrendingUp },
-  { key: "team", label: "Team", Icon: Users },
-  { key: "site-issues", label: "Site Issues", Icon: AlertTriangle, permission: "canLogIssues" },
-  { key: "site-board", label: "Site Board", Icon: LayoutGrid },
-  { key: "plant-materials", label: "Plant & Materials", Icon: Wrench, permission: "canUpdatePlantMaterials" },
-  { key: "daily-report", label: "Daily Report", Icon: ClipboardList, permission: "canEditDailyReport" },
   { key: "my-documents", label: "My documents", Icon: FolderUp },
+  // 5-box-home redesign: Site Board + member-shared Permits moved off Home
+  // into this "page 2" workspace menu; user asked for them to sit below
+  // "My documents" in the menu order.
+  { key: "site-board", label: "Site Board", Icon: QrCode },
+  { key: "permits", label: "Permits", Icon: FileCheck },
   { key: "settings", label: "Settings", Icon: Settings },
+  { key: "site-issues", label: "Site Issues", Icon: AlertTriangle },
+  { key: "plant-materials", label: "Plant & Materials", Icon: Wrench },
+  { key: "daily-report", label: "Daily Report", Icon: ClipboardList },
 ];
 
 export function portalLogout(setLocation: (to: string) => void) {

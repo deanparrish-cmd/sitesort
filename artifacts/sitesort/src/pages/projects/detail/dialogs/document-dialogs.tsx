@@ -39,6 +39,7 @@ export function DocumentDialogs() {
     signOffSubmitting,
     signOffError,
     setPinMode,
+    setSetPinMode,
     setPinPassword,
     setSetPinPassword,
     setPinValue,
@@ -206,6 +207,13 @@ export function DocumentDialogs() {
                   placeholder="••••"
                   autoFocus
                 />
+                <button
+                  type="button"
+                  onClick={() => { setSetPinMode(true); setSignOffPin(""); }}
+                  className="text-xs text-primary hover:underline"
+                >
+                  Forgot your PIN? Reset it with your password
+                </button>
               </div>
             )}
 

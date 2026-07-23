@@ -5,6 +5,8 @@
  * SiteSort API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AckRecipient } from "./ackRecipient";
+import type { PendingAcknowledgmentItemMyStatus } from "./pendingAcknowledgmentItemMyStatus";
 
 export interface PendingAcknowledgmentItem {
   documentId: string;
@@ -12,4 +14,11 @@ export interface PendingAcknowledgmentItem {
   projectId: string;
   projectName: string;
   pendingCount: number;
+  fileUrl?: string | null;
+  version: number;
+  revision?: string | null;
+  /** The requesting user's own sign-off status for this document, or null if they aren't a recipient (pure PM oversight). */
+  myStatus?: PendingAcknowledgmentItemMyStatus;
+  /** Every recipient of this document — so "N pending" resolves to named people, not just a count. */
+  recipients: AckRecipient[];
 }

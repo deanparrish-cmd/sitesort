@@ -187,7 +187,7 @@ export function DailyReportDetail({
                       className="flex-1"
                     />
                   )}
-                  {f.multiline && <DictationButton onTranscript={(t) => appendField(f.key, t)} />}
+                  {f.multiline && <DictationButton transcribeUrl={`/api/projects/${report.projectId}/transcribe`} onTranscript={(t) => appendField(f.key, t)} />}
                 </div>
               </div>
             ))}

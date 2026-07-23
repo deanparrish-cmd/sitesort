@@ -15,8 +15,6 @@ import {
   ShieldAlert,
   MessageSquare,
   AlertCircle,
-  AlertTriangle,
-  ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { onMessagesRead } from "@/lib/message-events";
@@ -151,8 +149,10 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
   const mainNavItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, badge: 0 },
     { name: "Projects", href: "/projects", icon: Building2, badge: 0 },
-    // Daily Reports hub — internal staff only (subcontractors are 403'd by the API).
-    ...(isInternal ? [{ name: "Daily Reports", href: "/daily-reports", icon: ClipboardList, badge: 0 }] : []),
+    // Daily Reports + Site Issues removed from the nav (same rationale as
+    // Compliance/Check-Ins below): both live inside each project's own tabs
+    // now, so the company-wide hub pages were redundant. Routes/pages still
+    // exist (deep-linkable) but are no longer surfaced here.
     { name: "Contacts", href: "/subcontractors", icon: Users, badge: 0 },
     { name: "In House Team", href: "/team", icon: Users, badge: 0 },
     { name: "Messages", href: "/messages", icon: MessageSquare, badge: unreadMsgCount },
@@ -165,7 +165,10 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     // still exist (deep-linkable) but are no longer surfaced here.
     { name: "Invoices", href: "/invoices", icon: Receipt, badge: 0 },
     { name: "QR Codes", href: "/qr", icon: QrCode, badge: 0 },
-    ...(user?.role === "admin"
+    // Platform Admin (SiteSort's own staff) — distinct from a customer's
+    // company-level "admin" role. A customer who is admin of their own
+    // account must never see this; only users.platformAdmin === true.
+    ...(user?.platformAdmin
       ? [{ name: "Admin", href: "/admin", icon: ShieldAlert, badge: 0 }]
       : []),
     { name: "Settings", href: "/settings", icon: Settings, badge: 0 },

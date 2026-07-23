@@ -517,7 +517,83 @@ export async function ensureSchema(): Promise<void> {
     await pool.query(`ALTER TABLE photos ADD COLUMN IF NOT EXISTS photo_removed_at timestamp`);
     await pool.query(`ALTER TABLE photos ADD COLUMN IF NOT EXISTS photo_removed_by text REFERENCES users(id)`);
 
-    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols + portal_shares + portal_sessions + push_subscriptions + pending_pushes + subcontractor_documents + subcontractors/people.archived_at + people.first_name/last_name + subcontractors.contact_first_name/contact_last_name + project_members write-permission cols + activity_log.metadata + photos closure/updated_at cols + plant_items/plant_item_attachments/plant_item_distributions + people.is_primary_contact + person_certifications + primary-contact/project_members backfill + project_members.can_edit_daily_report + messages.project_id + photos archive/photo-removal cols + primary-contact name self-heal ready");
+    // Portal save-vs-submit lifecycle (Feature: draft/submit/append-only notes
+    // across Site Issues, Plant & Materials, Daily Reports). NULL submitted_at
+    // = still a draft, not yet visible to the PM.
+    // IMPORTANT: the backfills below must run ONLY when the column is first
+    // added. Re-running them on every boot would stamp members' un-submitted
+    // drafts as "submitted" at each restart/deploy, silently sending drafts
+    // to the PM. So we detect column existence BEFORE the ALTER and backfill
+    // only on that first migration.
+    const photosSubmittedExisted = (await pool.query(
+      `SELECT 1 FROM information_schema.columns WHERE table_name = 'photos' AND column_name = 'submitted_at'`,
+    )).rowCount! > 0;
+    await pool.query(`ALTER TABLE photos ADD COLUMN IF NOT EXISTS submitted_at timestamp`);
+    await pool.query(`ALTER TABLE photos ADD COLUMN IF NOT EXISTS submitted_by text REFERENCES users(id)`);
+    // Dashboard-created issues have always been immediately visible to the PM
+    // (they ARE the PM) — backfill them as already-submitted so this new gate
+    // doesn't retroactively hide existing data from the triage queue.
+    if (!photosSubmittedExisted) {
+      await pool.query(`UPDATE photos SET submitted_at = taken_at, submitted_by = uploaded_by WHERE submitted_at IS NULL`);
+    }
+
+    await pool.query(`ALTER TABLE plant_items ADD COLUMN IF NOT EXISTS portal_draft_status text`);
+    await pool.query(`ALTER TABLE plant_items ADD COLUMN IF NOT EXISTS portal_draft_location text`);
+    await pool.query(`ALTER TABLE plant_items ADD COLUMN IF NOT EXISTS portal_draft_notes text`);
+    await pool.query(`ALTER TABLE plant_items ADD COLUMN IF NOT EXISTS portal_draft_updated_by text REFERENCES users(id)`);
+    await pool.query(`ALTER TABLE plant_items ADD COLUMN IF NOT EXISTS portal_draft_updated_at timestamp`);
+
+    const reportsSubmittedExisted = (await pool.query(
+      `SELECT 1 FROM information_schema.columns WHERE table_name = 'daily_reports' AND column_name = 'submitted_at'`,
+    )).rowCount! > 0;
+    await pool.query(`ALTER TABLE daily_reports ADD COLUMN IF NOT EXISTS submitted_at timestamp`);
+    await pool.query(`ALTER TABLE daily_reports ADD COLUMN IF NOT EXISTS submitted_by text REFERENCES users(id)`);
+    // Backfill existing reports as already-submitted too, for the same reason —
+    // but only on the first migration, never on later boots (see note above).
+    if (!reportsSubmittedExisted) {
+      await pool.query(`UPDATE daily_reports SET submitted_at = COALESCE(authored_at, generated_at), submitted_by = authored_by WHERE submitted_at IS NULL`);
+    }
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS portal_submission_notes (
+        id text PRIMARY KEY,
+        project_id text NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        item_type text NOT NULL,
+        item_id text NOT NULL,
+        author_id text NOT NULL REFERENCES users(id),
+        body text NOT NULL,
+        created_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS portal_submission_notes_item_idx ON portal_submission_notes (item_type, item_id)`);
+
+    // Platform Admin restriction — SiteSort's OWN internal-staff flag, separate
+    // from `role` (a customer's admin/pm/worker role WITHIN their own
+    // company). Seed the two known founders once; going forward the flag is
+    // managed via the Admin section's own user-management UI, not code.
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS platform_admin boolean NOT NULL DEFAULT false`);
+    await pool.query(`
+      UPDATE users SET platform_admin = true
+      WHERE email IN ('dean.parrish@me.com', 'amy-parrish@hotmail.co.uk') AND platform_admin = false
+    `);
+
+    // PIN sign-off audit — logs every PIN set/reset event (never the PIN itself),
+    // so a forgotten-PIN reset is attributable. Used by both /auth/pin (dashboard)
+    // and /portal/pin (portal members).
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS pin_audit_log (
+        id text PRIMARY KEY,
+        user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        user_name text NOT NULL,
+        action text NOT NULL,
+        ip_address text,
+        user_agent text,
+        created_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS pin_audit_user_idx ON pin_audit_log (user_id)`);
+
+    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols + portal_shares + portal_sessions + push_subscriptions + pending_pushes + subcontractor_documents + subcontractors/people.archived_at + people.first_name/last_name + subcontractors.contact_first_name/contact_last_name + project_members write-permission cols + activity_log.metadata + photos closure/updated_at cols + plant_items/plant_item_attachments/plant_item_distributions + people.is_primary_contact + person_certifications + primary-contact/project_members backfill + project_members.can_edit_daily_report + messages.project_id + photos archive/photo-removal cols + primary-contact name self-heal ready + photos/daily_reports submitted_at+submitted_by + plant_items portal_draft cols + portal_submission_notes table + submitted-backfill ready + users.platform_admin + Dean/Amy seeded ready + pin_audit_log table ready");
   } catch (err) {
     // Don't crash the server — membership lookups fall back to the home company.
     logger.error({ err }, "ensureSchema failed (continuing with home-company fallback)");

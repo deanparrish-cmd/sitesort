@@ -55,6 +55,7 @@ function notifIcon(type: string) {
     case "new_message":
       return <MessageSquare className="w-5 h-5 text-blue-500" />;
     case "document_uploaded":
+    case "member_document_uploaded":
       return <FileText className="w-5 h-5 text-indigo-500" />;
     case "safety_concern":
       return <AlertTriangle className="w-5 h-5 text-amber-500" />;
@@ -76,6 +77,7 @@ function notifBg(type: string) {
     case "new_message":
       return "bg-blue-100";
     case "document_uploaded":
+    case "member_document_uploaded":
       return "bg-indigo-100";
     case "safety_concern":
       return "bg-amber-100";
@@ -113,7 +115,7 @@ function filterMatch(n: Notification, f: Filter) {
   if (f === "all") return true;
   if (f === "unread") return !n.read;
   if (f === "messages") return n.type === "new_message";
-  if (f === "documents") return n.type === "document_uploaded";
+  if (f === "documents") return n.type === "document_uploaded" || n.type === "member_document_uploaded";
   if (f === "safety") return n.type === "safety_concern";
   if (f === "billing") return n.type === "trial_ending" || n.type === "payment_failed";
   return true;
@@ -202,6 +204,21 @@ export default function NotificationsPage() {
           return;
         }
       } catch { /* fall through */ }
+    }
+
+    // A portal member's "My documents" self-upload — relatedEntityId is the
+    // PROJECT id (there's no single-row fetch for a portal_member_documents
+    // row), so this goes straight to the Team Portal activity tab where
+    // pending submissions are reviewed, no lookup needed.
+    if (n.type === "member_document_uploaded" && n.relatedEntityId) {
+      setLocation(`/projects/${n.relatedEntityId}?tab=teamportal`);
+      return;
+    }
+
+    // A portal member logging a new plant/material item — same shape (project id).
+    if (n.type === "portal_plant_item_logged" && n.relatedEntityId) {
+      setLocation(`/projects/${n.relatedEntityId}?tab=plant`);
+      return;
     }
 
     const link = notifLink(n);

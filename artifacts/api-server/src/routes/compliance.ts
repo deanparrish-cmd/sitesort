@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { insuranceRecordsTable, subcontractorsTable, permitsTable, projectsTable, documentDistributionsTable, documentsTable, personCertificationsTable, peopleTable } from "@workspace/db/schema";
+import { insuranceRecordsTable, subcontractorsTable, permitsTable, projectsTable, documentDistributionsTable, documentsTable, personCertificationsTable, peopleTable, usersTable } from "@workspace/db/schema";
 import { eq, and, inArray, isNull, isNotNull } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
 import { expiryStatus } from "../lib/expiry";
@@ -158,6 +158,10 @@ router.get("/compliance", authenticate, async (req, res) => {
       projectName: string;
       pendingCount: number;
       fileUrl: string | null;
+      version: number;
+      revision: string | null;
+      myStatus: string | null;
+      recipients: Array<{ userId: string; name: string; status: string; viewedAt: string | null; acknowledgedAt: string | null }>;
     }> = [];
 
     let archivedDocuments: Array<{
@@ -207,21 +211,50 @@ router.get("/compliance", authenticate, async (req, res) => {
         });
       }
 
+      // Batch-load every distribution for every current doc in one go, then group
+      // in memory — a named "who's pending" breakdown per document, not just a
+      // count, so a PM can actually chase the right person.
       const allDocs = await db.select().from(documentsTable).where(and(inArray(documentsTable.projectId, projectIds), eq(documentsTable.status, "current")));
+      const allDocIds = allDocs.map(d => d.id);
+      const allDists = allDocIds.length
+        ? await db.select().from(documentDistributionsTable).where(inArray(documentDistributionsTable.documentId, allDocIds))
+        : [];
+      const distsByDoc = new Map<string, typeof allDists>();
+      for (const dist of allDists) {
+        const arr = distsByDoc.get(dist.documentId) ?? [];
+        arr.push(dist);
+        distsByDoc.set(dist.documentId, arr);
+      }
+      const distUserIds = [...new Set(allDists.map(d => d.userId))];
+      const distUsers = distUserIds.length
+        ? await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(inArray(usersTable.id, distUserIds))
+        : [];
+      const nameByUserId = new Map(distUsers.map(u => [u.id, u.name]));
+
       for (const doc of allDocs) {
-        const pending = await db.select().from(documentDistributionsTable)
-          .where(and(eq(documentDistributionsTable.documentId, doc.id), eq(documentDistributionsTable.status, "pending")));
-        if (pending.length > 0) {
-          const proj = myProjects.find(p => p.id === doc.projectId);
-          pendingAcknowledgments.push({
-            documentId: doc.id,
-            documentName: doc.name,
-            projectId: doc.projectId,
-            projectName: proj?.name ?? "Unknown",
-            pendingCount: pending.length,
-            fileUrl: doc.fileUrl ?? null,
-          });
-        }
+        const dists = distsByDoc.get(doc.id) ?? [];
+        const pending = dists.filter(d => d.status === "pending");
+        if (pending.length === 0) continue;
+        const proj = myProjects.find(p => p.id === doc.projectId);
+        const mine = dists.find(d => d.userId === req.user!.id);
+        pendingAcknowledgments.push({
+          documentId: doc.id,
+          documentName: doc.name,
+          projectId: doc.projectId,
+          projectName: proj?.name ?? "Unknown",
+          pendingCount: pending.length,
+          fileUrl: doc.fileUrl ?? null,
+          version: doc.version,
+          revision: doc.revision ?? null,
+          myStatus: mine?.status ?? null,
+          recipients: dists.map(d => ({
+            userId: d.userId,
+            name: nameByUserId.get(d.userId) ?? "Unknown",
+            status: d.status,
+            viewedAt: d.viewedAt?.toISOString() ?? null,
+            acknowledgedAt: d.acknowledgedAt?.toISOString() ?? null,
+          })),
+        });
       }
 
       const supersededDocs = await db.select().from(documentsTable)

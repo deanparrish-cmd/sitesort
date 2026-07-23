@@ -1,19 +1,24 @@
 import { useState, useEffect, useRef } from "react";
-import { useRoute, useSearch, Link } from "wouter";
+import { useRoute, useSearch, useLocation, Link } from "wouter";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import {
-  useGetPortalOverview, useGetPortalProgress, useGetPortalTeam,
-  useGetPortalSiteIssues, useGetPortalSiteBoard,
+  useGetPortalOverview, useGetPortalTeam,
+  useGetPortalSiteIssues, useGetPortalSiteBoard, useGetPortalPermits,
+  getGetPortalPermitsQueryKey,
   useGetPortalGeneral, useGetPortalShared,
   useGetPortalMyDocuments, useGetPortalUnseen, useGetPortalContext,
   useGetPortalPlantMaterials, useUpdatePortalPlantMaterialItem,
+  useSubmitPortalPlantMaterialItem, useAddPortalPlantMaterialNote,
   useCreatePortalSiteIssue, useUpdatePortalSiteIssue,
+  useEditPortalSiteIssueDraft, useSubmitPortalSiteIssue, useAddPortalSiteIssueNote,
   useGetPortalDailyReport, useGetPortalDailyReportHistory, useUpdatePortalDailyReport,
+  useSubmitPortalDailyReport, useAddPortalDailyReportNote,
   getGetPortalOverviewQueryKey, getGetPortalSiteIssuesQueryKey,
   getGetPortalGeneralQueryKey, getGetPortalSharedQueryKey,
   getGetPortalMyDocumentsQueryKey, getGetPortalUnseenQueryKey,
   getGetPortalPlantMaterialsQueryKey,
   getGetPortalDailyReportQueryKey, getGetPortalDailyReportHistoryQueryKey,
+  getGetPortalContextQueryKey,
 } from "@workspace/api-client-react";
 import { DictationButton } from "@/components/ui/dictation-button";
 import { MessagesView } from "./messages-view";
@@ -21,11 +26,11 @@ import { QRCodeSVG } from "qrcode.react";
 import { PortalLayout, SECTION_NAV } from "./layout";
 import { portalQueryClient, PORTAL_LIVE_REFETCH } from "./query-client";
 import { Spinner } from "@/components/ui/spinner";
-import { LinkRow } from "@/components/ui/link-row";
 import {
-  ExternalLink, MapPin, Calendar, CheckCircle2, Circle, Phone, Mail,
-  FileText, AlertTriangle, StickyNote, Download, TrendingUp, FileCheck, Users,
+  ExternalLink, MapPin, Calendar, Phone, Mail,
+  FileText, AlertTriangle, StickyNote, Download,
   QrCode, Copy, Building2, ShieldCheck, X, Sparkles, UploadCloud, Share, Plus,
+  ChevronDown, Users, FileSignature, CheckCircle2,
 } from "lucide-react";
 import { isCadFile, cadBadgeLabel, downloadFile } from "@/lib/documents";
 import { useToast } from "@/hooks/use-toast";
@@ -36,6 +41,7 @@ import {
   iosNeedsInstall, isIOS,
 } from "@/lib/portal-push";
 import { Bell, BellOff } from "lucide-react";
+import { useSignOffFlow } from "@/hooks/use-sign-off-flow";
 
 // Portal-authed binary download: the app's global fetch interceptor attaches the
 // portal bearer token to /api/portal/* requests, so a plain <a href> (which does
@@ -155,6 +161,57 @@ function Badge({ label, className }: { label: string; className?: string }) {
   return <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${className ?? "bg-muted text-muted-foreground"}`}>{label}</span>;
 }
 
+// ── Save-vs-submit lifecycle (shared by Site Issues, Plant & Materials, Daily
+// Reports): a "Draft" is saved to the member but not yet visible to the PM;
+// "Submit to PM" locks the original and puts it in front of them. After
+// submit, further changes are append-only notes — never a rewrite.
+function fmtRelativeShort(iso?: string | null): string {
+  if (!iso) return "";
+  const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.round(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+function LifecycleBadge({ status, submittedAt, submittedByName }: { status: "draft" | "submitted"; submittedAt?: string | null; submittedByName?: string | null }) {
+  if (status === "submitted") {
+    return <Badge label={`Submitted${submittedByName ? ` by ${submittedByName}` : ""}${submittedAt ? ` · ${fmtRelativeShort(submittedAt)}` : ""}`} className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300" />;
+  }
+  return <Badge label="Draft — not yet sent" className="bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300" />;
+}
+type SubmissionNoteItem = { id: string; authorName: string; body: string; createdAt: string };
+function SubmissionNotesThread({ notes, onAdd, adding }: { notes: SubmissionNoteItem[]; onAdd: (body: string) => Promise<void>; adding?: boolean }) {
+  const [draft, setDraft] = useState("");
+  return (
+    <div className="space-y-2 mt-3 pt-3 border-t border-border/50">
+      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Notes</p>
+      {notes.length === 0 && <p className="text-xs text-muted-foreground">No notes yet — the original above is locked; add updates here instead.</p>}
+      {notes.map(n => (
+        <div key={n.id} className="rounded-lg bg-muted/30 p-2">
+          <p className="text-sm whitespace-pre-wrap break-words">{n.body}</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">{n.authorName} · {fmtRelativeShort(n.createdAt)}</p>
+        </div>
+      ))}
+      <div className="flex gap-2">
+        <input
+          value={draft} onChange={e => setDraft(e.target.value)} placeholder="Add a note…"
+          onKeyDown={e => { if (e.key === "Enter" && draft.trim() && !adding) { void onAdd(draft.trim()).then(() => setDraft("")); } }}
+          className="flex-1 min-h-9 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+        />
+        <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setDraft(d => (d.trim() ? d.trimEnd() + " " : "") + t)} />
+        <button
+          disabled={!draft.trim() || adding}
+          onClick={() => { void onAdd(draft.trim()).then(() => setDraft("")); }}
+          className="px-3 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
+        >Add</button>
+      </div>
+    </div>
+  );
+}
+
 // Small "New" pill for unseen (newly-shared) items in "Shared with me".
 function NewPill() {
   return <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-primary text-primary-foreground px-1.5 py-0.5 rounded">New</span>;
@@ -167,12 +224,13 @@ function NewPill() {
 type SupersededBy = { id: string; name: string; version: number; revision?: string };
 type FreshDocFull = { status?: string; supersededBy?: SupersededBy } | null;
 
-function DocRow({ doc, section, unseen }: { doc: any; section: string; unseen?: boolean }) {
+function DocRow({ doc, section, unseen, signOff }: { doc: any; section: string; unseen?: boolean; signOff: ReturnType<typeof useSignOffFlow> }) {
   const { toast } = useToast();
   const clickable = section === "drawings" || section === "method-statements";
   const cad = cadBadgeLabel(doc.fileUrl, doc.name);
   const [supersededNow, setSupersededNow] = useState(doc.status === "superseded");
   const [downloading, setDownloading] = useState(false);
+  const active = signOff.target?.id === doc.id;
 
   // Open the live replacement of a superseded document: fetch its detail for the
   // freshest fileUrl, then open/download it.
@@ -189,6 +247,9 @@ function DocRow({ doc, section, unseen }: { doc: any; section: string; unseen?: 
 
   const open = () => {
     openDocFile(doc);
+    // Log the view for every doc type (not just drawings/method-statements) —
+    // opening never needs a PIN, only signing off does. Fire-and-forget.
+    void fetch(`/api/portal/documents/${doc.id}/view`, { method: "POST" });
     if (!clickable) return;
     // Confirm current status at open (not from the cached list row).
     void fetchFreshDoc(section, doc.id).then(({ ok, doc: fresh }: { ok: boolean; doc: FreshDocFull }) => {
@@ -230,40 +291,124 @@ function DocRow({ doc, section, unseen }: { doc: any; section: string; unseen?: 
     }
   };
 
+  const needsSignOff = doc.requiresAcknowledgment && doc.myStatus !== "acknowledged";
+  const signedOff = doc.requiresAcknowledgment && doc.myStatus === "acknowledged";
+
   return (
-    <div className={cn("flex items-center justify-between gap-3 py-2.5 border-b border-border/60 last:border-0", unseen && "-mx-4 px-4 bg-primary/5")}>
-      <div className="min-w-0">
-        <p className="font-medium truncate flex items-center gap-1.5">
-          {unseen && <NewPill />}
-          <span className="truncate">{doc.name}</span>
-          {supersededNow && (
-            <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 px-1.5 py-0.5 rounded">Superseded</span>
-          )}
-        </p>
-        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-          <span>{doc.revision ? `Rev ${doc.revision}` : `v${doc.version}`} · {fmtDate(doc.createdAt)}</span>
-          {cad && <span className="font-mono bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 px-1.5 py-0.5 rounded text-[10px] font-bold">{cad}</span>}
-        </p>
-      </div>
-      <div className="shrink-0 flex items-center gap-1">
-        <button
-          onClick={open}
-          className="inline-flex items-center gap-1 rounded-lg px-3 min-h-11 text-sm text-primary font-medium hover:bg-primary/10"
-        >
-          {cad ? <><Download className="w-4 h-4" /> Download</> : <><ExternalLink className="w-4 h-4" /> View</>}
-        </button>
-        {!cad && (
+    <div className={cn("border-b border-border/60 last:border-0", unseen && "-mx-4 px-4 bg-primary/5")}>
+      <div className="flex items-center justify-between gap-3 py-2.5">
+        <div className="min-w-0">
+          <p className="font-medium truncate flex items-center gap-1.5">
+            {unseen && <NewPill />}
+            <span className="truncate">{doc.name}</span>
+            {supersededNow && (
+              <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 px-1.5 py-0.5 rounded">Superseded</span>
+            )}
+          </p>
+          <p className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
+            <span>{doc.revision ? `Rev ${doc.revision}` : `v${doc.version}`} · {fmtDate(doc.createdAt)}</span>
+            {cad && <span className="font-mono bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 px-1.5 py-0.5 rounded text-[10px] font-bold">{cad}</span>}
+            {signedOff && (
+              <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
+                <CheckCircle2 className="w-3 h-3" /> Signed off {doc.mySignedOffAt ? fmtDate(doc.mySignedOffAt) : ""}
+              </span>
+            )}
+          </p>
+        </div>
+        <div className="shrink-0 flex items-center gap-1">
           <button
-            onClick={() => void download()}
-            disabled={downloading}
-            aria-label={`Download ${doc.name}`}
-            className="inline-flex items-center justify-center rounded-lg px-3 min-h-11 text-sm text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+            onClick={open}
+            className="inline-flex items-center gap-1 rounded-lg px-3 min-h-11 text-sm text-primary font-medium hover:bg-primary/10"
           >
-            <Download className="w-4 h-4" />
+            {cad ? <><Download className="w-4 h-4" /> Download</> : <><ExternalLink className="w-4 h-4" /> View</>}
           </button>
-        )}
+          {!cad && (
+            <button
+              onClick={() => void download()}
+              disabled={downloading}
+              aria-label={`Download ${doc.name}`}
+              className="inline-flex items-center justify-center rounded-lg px-3 min-h-11 text-sm text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+          )}
+          {needsSignOff && !active && (
+            <button
+              onClick={() => signOff.open({ id: doc.id, name: doc.name })}
+              className="inline-flex items-center gap-1 rounded-lg px-3 min-h-11 text-sm text-primary font-semibold hover:bg-primary/10"
+            >
+              <FileSignature className="w-4 h-4" /> Sign off
+            </button>
+          )}
+        </div>
       </div>
+      {active && (
+        <div className="pb-3">
+          <SignOffPinCard flow={signOff} />
+        </div>
+      )}
     </div>
+  );
+}
+
+// Inline (no modal) PIN entry for a portal sign-off — mobile-first, matches the
+// rest of the portal's "expand in place" pattern (e.g. AddPlantItemForm) rather
+// than the dashboard's dialog-based flow.
+function SignOffPinCard({ flow }: { flow: ReturnType<typeof useSignOffFlow> }) {
+  if (!flow.target) return null;
+  return (
+    <Card className="border-primary/30 bg-primary/5">
+      {flow.setPinMode ? (
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">Set a 4-digit sign-off PIN to continue — you'll use it to confirm future sign-offs.</p>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Account password</label>
+            <input
+              type="password" autoComplete="current-password" value={flow.password} onChange={e => flow.setPassword(e.target.value)}
+              placeholder="Confirm it's you"
+              className="mt-1 w-full min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Choose a 4-digit PIN</label>
+            <input
+              type="password" inputMode="numeric" value={flow.newPin} onChange={e => flow.setNewPin(flow.onlyDigits(e.target.value))}
+              placeholder="••••"
+              className="mt-1 w-full min-h-11 rounded-xl border border-border bg-background px-3 text-sm tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </div>
+        </div>
+      ) : (
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">Enter your 4-digit PIN</label>
+          <input
+            type="password" inputMode="numeric" autoFocus value={flow.pin}
+            onChange={e => flow.setPin(flow.onlyDigits(e.target.value))}
+            onKeyDown={e => { if (e.key === "Enter") void flow.submit(); }}
+            placeholder="••••"
+            className="mt-1 w-full min-h-11 rounded-xl border border-border bg-background px-3 text-sm tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-primary/40"
+          />
+          <button
+            type="button"
+            onClick={flow.forgotPin}
+            className="mt-2 text-xs text-primary hover:underline"
+          >
+            Forgot your PIN? Reset it with your password
+          </button>
+        </div>
+      )}
+      {flow.error && <p className="mt-2 text-xs text-destructive">{flow.error}</p>}
+      <div className="flex gap-2 mt-3">
+        <button
+          onClick={() => void flow.submit()}
+          disabled={flow.submitting}
+          className="flex-1 min-h-11 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50"
+        >
+          {flow.submitting ? "Signing off…" : flow.setPinMode ? "Set PIN & sign off" : "Sign off"}
+        </button>
+        <button onClick={flow.close} className="min-h-11 px-4 rounded-xl border text-sm font-medium hover:bg-muted">Cancel</button>
+      </div>
+    </Card>
   );
 }
 function PermitRow({ p, unseen }: { p: any; unseen?: boolean }) {
@@ -280,136 +425,138 @@ function PermitRow({ p, unseen }: { p: any; unseen?: boolean }) {
 
 // ---------- section views ----------
 
-// Human labels for the "New since your last visit" card — keyed by section key
-// (from SECTION_NAV, minus non-content sections that never carry unseen counts).
-const SECTION_LABEL: Record<string, string> = Object.fromEntries(SECTION_NAV.map(s => [s.key, s.label]));
-
-function WhatsNewCard() {
-  // Reuse the same unseen data the nav badges use (polled + focus-refetched).
-  const { data } = useGetPortalUnseen({ query: { refetchInterval: 60_000, queryKey: getGetPortalUnseenQueryKey() } });
-  const { data: ctx } = useGetPortalContext();
-  const counts = (data?.counts ?? {}) as Record<string, number>;
-  // Don't list Overview itself (you're already here); skip a permission-gated
-  // section this member doesn't have — its nav link is gone, so a stray count
-  // (belt-and-braces; the server itself stops counting these) must never
-  // render a dead/forbidden link. Order follows the nav.
-  const entries = SECTION_NAV
-    .filter(s => s.key !== "overview" && (counts[s.key] ?? 0) > 0)
-    .filter(s => !s.permission || !!ctx?.member[s.permission])
-    .map(s => ({ key: s.key, label: SECTION_LABEL[s.key] ?? s.key, count: counts[s.key], Icon: s.Icon }));
-  if (entries.length === 0) return null;
+// One site update, rendered identically in "Site Updates" and "Past Updates".
+function UpdateCard({ n }: { n: { id: string; body: string; noteDate: string; authorName: string } }) {
   return (
-    <div>
-      <div className="flex items-center gap-2 mb-3">
-        <Sparkles className="w-5 h-5 text-primary" />
-        <h2 className="text-lg font-display font-bold">New since your last visit</h2>
-      </div>
-      <div className="space-y-2">
-        {entries.map(e => (
-          <LinkRow
-            key={e.key}
-            href={`/portal/${e.key}`}
-            icon={<e.Icon className="w-5 h-5 text-primary" />}
-            label={e.label}
-            detail={<span className="min-w-[1.5rem] h-6 px-1.5 rounded-full text-xs font-bold flex items-center justify-center bg-primary text-primary-foreground">{e.count > 99 ? "99+" : e.count}</span>}
-            ariaLabel={`${e.label}: ${e.count} new`}
-          />
-        ))}
-      </div>
-    </div>
+    <Card>
+      <p className="text-sm whitespace-pre-wrap break-words">{n.body}</p>
+      <p className="text-xs text-muted-foreground mt-2">{n.authorName} · {fmtDate(n.noteDate)}</p>
+    </Card>
   );
 }
 
-function OverviewView() {
-  // Site updates are time-sensitive → poll while visible.
-  const { data, isLoading } = useGetPortalOverview({ query: { refetchInterval: PORTAL_LIVE_REFETCH, queryKey: getGetPortalOverviewQueryKey() } });
+// Portal home — 5-box redesign. Exactly five glanceable boxes: 1) Project info,
+// 2) Site manager, 3) Site Updates (the latest update only), 4) Past Updates
+// (older ones), 5) Team (collapsible). Everything else lives elsewhere: Site
+// Board + member-shared Permits moved to the second page (/portal/more, linked
+// prominently below the boxes AND in the nav); permission-gated work sections,
+// Messages and Shared with me are unchanged nav destinations. Old /portal/team
+// and /portal/progress deep links land here.
+function HomeView() {
   const { data: ctx } = useGetPortalContext();
-  if (isLoading) return <Loading />;
-  if (!data) return <Empty>Nothing to show yet.</Empty>;
-  const stats = [
-    // Open issues deep-links into the (permission-gated) Site Issues section —
-    // showing the count at all would tip off gated content, so drop the whole
-    // card when this member has no grant, same "absent, not greyed" rule as the nav.
-    ...(ctx?.member.canLogIssues ? [{ label: "Open issues", value: data.stats.openIssues, href: "/portal/site-issues?status=open", Icon: AlertTriangle }] : []),
-    { label: "Milestones left", value: data.stats.upcomingMilestones, href: "/portal/progress", Icon: TrendingUp },
-    // Permits no longer has its own nav tab — deep-links into "Shared with me"
-    // pre-filtered to the Permits category instead.
-    { label: "Active permits", value: data.stats.activePermits, href: "/portal/shared?category=permits", Icon: FileCheck },
-    { label: "Team size", value: data.stats.teamSize, href: "/portal/team", Icon: Users },
-  ];
+  const { data: board } = useGetPortalSiteBoard();
+  // Site updates are time-sensitive → poll while visible.
+  const { data: overview, isLoading } = useGetPortalOverview({ query: { refetchInterval: PORTAL_LIVE_REFETCH, queryKey: getGetPortalOverviewQueryKey() } });
+  const [teamOpen, setTeamOpen] = useState(false);
+  const [pastOpen, setPastOpen] = useState(false);
+  if (isLoading && !ctx) return <Loading />;
+  const project = ctx?.project;
+  const sm = board?.siteManager;
+  const notes = overview?.recentNotes ?? [];
+  const latest = notes[0];
+  const past = notes.slice(1);
+  const dates = project?.startDate || project?.targetEndDate
+    ? [project?.startDate ? fmtDate(project.startDate) : "TBC", project?.targetEndDate ? fmtDate(project.targetEndDate) : "TBC"].join(" – ")
+    : null;
   return (
-    <div className="space-y-5">
-      <WhatsNewCard />
+    <div className="space-y-6">
+      {/* Box 1 — Project info */}
       <Card>
-        <p className="text-sm text-muted-foreground">{data.project.address}</p>
-        <div className="flex items-center gap-2 mt-3">
-          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-            <div className="h-full bg-emerald-500" style={{ width: `${data.project.progressPercent}%` }} />
+        <h2 className="text-lg font-display font-bold truncate">{project?.name}</h2>
+        {project?.address && (
+          <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+            <MapPin className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{project.address}</span>
+          </p>
+        )}
+        {dates && (
+          <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+            <Calendar className="w-3.5 h-3.5 shrink-0" /><span>{dates}</span>
+          </p>
+        )}
+        {typeof project?.progressPercent === "number" && (
+          <div className="flex items-center gap-2 mt-3">
+            <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+              <div className="h-full bg-emerald-500" style={{ width: `${project.progressPercent}%` }} />
+            </div>
+            <span className="text-sm font-bold">{project.progressPercent}%</span>
           </div>
-          <span className="text-sm font-bold">{data.project.progressPercent}%</span>
-        </div>
+        )}
       </Card>
-      {/* Each stat is a whole-row tap target (shared LinkRow) into its section, pre-filtered. */}
-      <div className="space-y-2">
-        {stats.map(s => (
-          <LinkRow
-            key={s.label}
-            href={s.href}
-            icon={<s.Icon className="w-5 h-5 text-primary" />}
-            label={s.label}
-            detail={<span className="text-lg font-bold text-foreground">{s.value}</span>}
-            ariaLabel={`${s.label}: ${s.value}`}
-          />
-        ))}
-      </div>
+
+      {/* Box 2 — Site manager */}
+      {sm && (
+        <Card>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Site manager</p>
+          <p className="font-medium truncate mt-1">{sm.name}</p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 min-w-0">
+            {sm.phone && <a href={`tel:${sm.phone}`} className="inline-flex items-center gap-1 text-xs text-primary font-medium"><Phone className="w-3 h-3" /> {sm.phone}</a>}
+            {sm.email && <a href={`mailto:${sm.email}`} className="inline-flex items-center gap-1 text-xs text-primary font-medium min-w-0 max-w-full"><Mail className="w-3 h-3 shrink-0" /><span className="truncate">{sm.email}</span></a>}
+          </div>
+        </Card>
+      )}
+
+      {/* Box 3 — Site Updates (latest only) — the title lives INSIDE the card
+          (like Box 2's "Site manager") so the box reads as one unit. */}
+      <Card>
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Site updates</p>
+        {latest ? (
+          <>
+            <p className="text-sm whitespace-pre-wrap break-words">{latest.body}</p>
+            <p className="text-xs text-muted-foreground mt-2">{latest.authorName} · {fmtDate(latest.noteDate)}</p>
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">No site updates posted yet.</p>
+        )}
+      </Card>
+
+      {/* Box 4 — Past Updates (collapsible, identical pattern to Team below) */}
       <div>
-        <SectionTitle>Recent site updates</SectionTitle>
-        {data.recentNotes.length === 0 ? <Empty>No site updates posted yet.</Empty> : (
-          <div className="space-y-3">
-            {data.recentNotes.map(n => (
-              <Card key={n.id}>
-                <p className="text-sm whitespace-pre-wrap break-words">{n.body}</p>
-                <p className="text-xs text-muted-foreground mt-2">{n.authorName} · {fmtDate(n.noteDate)}</p>
-              </Card>
-            ))}
+        <button
+          onClick={() => setPastOpen(o => !o)}
+          aria-expanded={pastOpen}
+          className="w-full flex items-center justify-between gap-3 bg-card border rounded-xl px-4 py-3 hover:bg-muted/50 transition-colors"
+        >
+          <span className="flex items-center gap-2 font-display font-bold"><StickyNote className="w-5 h-5 text-primary" /> Past updates</span>
+          <ChevronDown className={cn("w-5 h-5 text-muted-foreground transition-transform", pastOpen && "rotate-180")} />
+        </button>
+        {pastOpen && (
+          <div className="mt-3">
+            {past.length === 0 ? <Empty>No earlier updates yet.</Empty> : (
+              <div className="space-y-3">{past.map(n => <UpdateCard key={n.id} n={n} />)}</div>
+            )}
           </div>
         )}
       </div>
+
+      {/* Box 5 — Team (collapsible, collapsed by default = glanceable home) */}
+      <div>
+        <button
+          onClick={() => setTeamOpen(o => !o)}
+          aria-expanded={teamOpen}
+          className="w-full flex items-center justify-between gap-3 bg-card border rounded-xl px-4 py-3 hover:bg-muted/50 transition-colors"
+        >
+          <span className="flex items-center gap-2 font-display font-bold"><Users className="w-5 h-5 text-primary" /> Team</span>
+          <ChevronDown className={cn("w-5 h-5 text-muted-foreground transition-transform", teamOpen && "rotate-180")} />
+        </button>
+        {teamOpen && <div className="mt-3"><TeamView /></div>}
+      </div>
+
+      {/* Site Board + Permits are reachable from the workspace menu only —
+          removed from Home to keep page 1 to the five glanceable boxes. */}
     </div>
   );
 }
 
-function ProgressView() {
-  const { data, isLoading } = useGetPortalProgress();
+// Permits page (workspace menu) — the permits shared with THIS member. Comes
+// from GET /api/portal/permits, which is server-gated to what has been shared
+// with the member (visibleIds), same mechanism as "Shared with me". NOTE:
+// navigation only — the PUBLIC QR board (/site/:token, no login) is a
+// separate route and untouched.
+function PermitsView() {
+  const { data: permits, isLoading } = useGetPortalPermits({ query: { queryKey: getGetPortalPermitsQueryKey() } });
   if (isLoading) return <Loading />;
-  if (!data) return <Empty>Nothing to show yet.</Empty>;
-  return (
-    <div className="space-y-5">
-      <Card>
-        <div className="flex items-center gap-2">
-          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-            <div className="h-full bg-emerald-500" style={{ width: `${data.progressPercent}%` }} />
-          </div>
-          <span className="text-sm font-bold">{data.progressPercent}%</span>
-        </div>
-      </Card>
-      {data.milestones.length === 0 ? <Empty>No milestones set for this project yet.</Empty> : (
-        <Card>
-          {data.milestones.map(m => (
-            <div key={m.id} className="flex items-start gap-3 py-2.5 border-b border-border/60 last:border-0">
-              {m.completedAt
-                ? <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-                : <Circle className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />}
-              <div className="min-w-0">
-                <p className={`font-medium ${m.completedAt ? "line-through text-muted-foreground" : ""}`}>{m.title}</p>
-                <p className="text-xs text-muted-foreground">Due {fmtDate(m.dueDate)}</p>
-              </div>
-            </div>
-          ))}
-        </Card>
-      )}
-    </div>
-  );
+  if (!permits || permits.length === 0) return <Empty>No permits have been shared with you yet.</Empty>;
+  return <Card>{permits.map((p: any) => <PermitRow key={p.id} p={p} />)}</Card>;
 }
 
 function TeamView() {
@@ -484,7 +631,7 @@ function LogIssueForm({ onLogged }: { onLogged: () => void }) {
     e.preventDefault();
     try {
       await create.mutateAsync({ data: { type, description: description || undefined, zone: zone || undefined, photo: file ?? undefined } });
-      toast({ title: "Issue logged" });
+      toast({ title: "Saved as draft", description: "Submit it when you're ready — your PM won't see it until then." });
       setDescription(""); setZone(""); setFile(null);
       if (fileRef.current) fileRef.current.value = "";
       onLogged();
@@ -508,12 +655,15 @@ function LogIssueForm({ onLogged }: { onLogged: () => void }) {
           <label className="text-xs font-medium text-muted-foreground">Description</label>
           <div className="mt-1 flex items-start gap-2">
             <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} placeholder="What's the issue?" className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
-            <DictationButton onTranscript={t => setDescription(d => (d.trim() ? d.trimEnd() + " " : "") + t)} />
+            <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setDescription(d => (d.trim() ? d.trimEnd() + " " : "") + t)} />
           </div>
         </div>
         <div>
           <label className="text-xs font-medium text-muted-foreground">Zone / location</label>
-          <input value={zone} onChange={e => setZone(e.target.value)} placeholder="e.g. Level 2, East wing" className="mt-1 w-full min-h-12 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+          <div className="mt-1 flex items-center gap-2">
+            <input value={zone} onChange={e => setZone(e.target.value)} placeholder="e.g. Level 2, East wing" className="flex-1 min-h-12 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+            <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setZone(z => (z.trim() ? z.trimEnd() + " " : "") + t)} />
+          </div>
         </div>
         <div>
           <label className="text-xs font-medium text-muted-foreground">Photo</label>
@@ -528,6 +678,59 @@ function LogIssueForm({ onLogged }: { onLogged: () => void }) {
   );
 }
 
+// Edit panel for a reporter's own DRAFT issue — full edit of type/description/
+// zone while un-submitted. Locked out server-side once submitted.
+function IssueDraftEditPanel({ issue, onDone }: { issue: { id: string; category: string; description?: string; zone?: string }; onDone: () => void }) {
+  const { toast } = useToast();
+  const edit = useEditPortalSiteIssueDraft();
+  const [type, setType] = useState<"snag" | "safety_concern" | "work_completed">((issue.category as "snag" | "safety_concern" | "work_completed") ?? "snag");
+  const [description, setDescription] = useState(issue.description ?? "");
+  const [zone, setZone] = useState(issue.zone ?? "");
+
+  const save = async () => {
+    try {
+      await edit.mutateAsync({ issueId: issue.id, data: { type, description: description || undefined, zone: zone || undefined } });
+      toast({ title: "Draft updated" });
+      onDone();
+    } catch {
+      toast({ title: "Couldn't update draft", variant: "destructive" });
+    }
+  };
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border/60 space-y-3">
+      <div>
+        <label className="text-xs font-medium text-muted-foreground">Type</label>
+        <select value={type} onChange={e => setType(e.target.value as typeof type)} className="mt-1 w-full min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+          <option value="snag">Snag</option>
+          <option value="safety_concern">Safety Concern</option>
+          <option value="work_completed">Work Completed</option>
+        </select>
+      </div>
+      <div>
+        <label className="text-xs font-medium text-muted-foreground">Description</label>
+        <div className="mt-1 flex items-start gap-2">
+          <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+          <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setDescription(d => (d.trim() ? d.trimEnd() + " " : "") + t)} />
+        </div>
+      </div>
+      <div>
+        <label className="text-xs font-medium text-muted-foreground">Zone / location</label>
+        <div className="mt-1 flex items-center gap-2">
+          <input value={zone} onChange={e => setZone(e.target.value)} className="flex-1 min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+          <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setZone(z => (z.trim() ? z.trimEnd() + " " : "") + t)} />
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <button onClick={save} disabled={edit.isPending} className="flex-1 min-h-11 rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+          {edit.isPending ? "Saving…" : "Save draft"}
+        </button>
+        <button onClick={onDone} className="min-h-11 px-4 rounded-xl border text-sm font-medium hover:bg-muted">Cancel</button>
+      </div>
+    </div>
+  );
+}
+
 function SiteIssuesView() {
   const openOnly = new URLSearchParams(useSearch()).get("status") === "open";
   const { toast } = useToast();
@@ -537,9 +740,21 @@ function SiteIssuesView() {
   const canLogIssues = ctx?.member?.canLogIssues ?? false;
   const { data, isLoading } = useGetPortalSiteIssues({ query: { refetchInterval: PORTAL_LIVE_REFETCH, queryKey: getGetPortalSiteIssuesQueryKey() } });
   const markDone = useUpdatePortalSiteIssue();
+  const submitIssue = useSubmitPortalSiteIssue();
+  const addIssueNote = useAddPortalSiteIssueNote();
   const [showForm, setShowForm] = useState(false);
+  const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: getGetPortalSiteIssuesQueryKey() });
+  const doSubmit = async (issueId: string) => {
+    try {
+      await submitIssue.mutateAsync({ issueId });
+      toast({ title: "Submitted to your PM", description: "The original is now locked — add updates as notes." });
+      await invalidate();
+    } catch {
+      toast({ title: "Couldn't submit", variant: "destructive" });
+    }
+  };
   const doMarkDone = async (issueId: string) => {
     try {
       await markDone.mutateAsync({ issueId, data: {} });
@@ -570,6 +785,9 @@ function SiteIssuesView() {
       ) : filtered.map(issue => {
         const isMine = !!selfUserId && issue.assignedToUserId === selfUserId;
         const canMarkDone = isMine && (issue.status === "open" || issue.status === "in_progress");
+        // reporterName is only serialized on issues the viewer reported themselves.
+        const reportedByMe = !!issue.reporterName;
+        const isDraft = issue.lifecycleStatus === "draft";
         return (
           <Card key={issue.id}>
             <div className="flex items-start justify-between gap-3">
@@ -578,17 +796,46 @@ function SiteIssuesView() {
                   <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
                   <span className="font-medium">{ISSUE_TYPE_LABEL[issue.category] ?? issue.category}</span>
                   <span className="text-xs text-muted-foreground">#{issue.referenceNumber}</span>
+                  {reportedByMe && <LifecycleBadge status={isDraft ? "draft" : "submitted"} submittedAt={issue.submittedAt} />}
                 </div>
                 {issue.description && <p className="text-sm mt-1 break-words">{issue.description}</p>}
                 <p className="text-xs text-muted-foreground mt-1">
                   {issue.zone ? `${issue.zone} · ` : ""}{fmtDate(issue.takenAt)}
-                  {issue.reporterName ? ` · reported by you` : ""}
+                  {reportedByMe ? ` · reported by you` : ""}
                 </p>
               </div>
               <Badge label={(issue.status ?? "open").replace(/_/g, " ")} className={ISSUE_BADGE[issue.status ?? "open"] ?? "bg-muted text-muted-foreground"} />
             </div>
             {issue.photoUrl && (
               <img src={fileHref(issue.photoUrl)} alt="" className="mt-3 rounded-lg w-full max-h-56 object-cover" loading="lazy" />
+            )}
+            {reportedByMe && isDraft && (
+              editingDraftId === issue.id ? (
+                <IssueDraftEditPanel issue={issue} onDone={() => { setEditingDraftId(null); void invalidate(); }} />
+              ) : (
+                <div className="mt-3 flex gap-2">
+                  <button onClick={() => doSubmit(issue.id)} disabled={submitIssue.isPending}
+                    className="flex-1 min-h-11 rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+                    {submitIssue.isPending ? "Submitting…" : "Submit to PM"}
+                  </button>
+                  <button onClick={() => setEditingDraftId(issue.id)}
+                    className="min-h-11 px-4 rounded-xl border text-sm font-medium hover:bg-muted">Edit draft</button>
+                </div>
+              )
+            )}
+            {reportedByMe && !isDraft && (
+              <SubmissionNotesThread
+                notes={issue.notes ?? []}
+                adding={addIssueNote.isPending}
+                onAdd={async (body) => {
+                  try {
+                    await addIssueNote.mutateAsync({ issueId: issue.id, data: { body } });
+                    await invalidate();
+                  } catch {
+                    toast({ title: "Couldn't add note", variant: "destructive" });
+                  }
+                }}
+              />
             )}
             {canMarkDone && (
               <button onClick={() => doMarkDone(issue.id)} disabled={markDone.isPending}
@@ -605,7 +852,9 @@ function SiteIssuesView() {
 
 // Full Site Board — same content as the public scanned view (single source), plus
 // the board's own QR so anyone on site can rescan/share it.
-function SiteBoardView() {
+// `embedded` — rendered inside the Home landing page, where the project card
+// and site manager contact already appear at the top, so skip them here.
+function SiteBoardView({ embedded }: { embedded?: boolean }) {
   const { data, isLoading } = useGetPortalSiteBoard();
   if (isLoading) return <Loading />;
   if (!data) return <Empty>Site board unavailable.</Empty>;
@@ -617,12 +866,14 @@ function SiteBoardView() {
   const permitBadge = (s?: string) => s === "expired" ? "bg-rose-100 text-rose-800" : s === "expiring_soon" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800";
   return (
     <div className="space-y-5">
-      {/* Project */}
-      <Card>
-        <h2 className="text-lg font-display font-bold truncate">{data.project.name}</h2>
-        <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1"><MapPin className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{data.project.address}</span></p>
-        <span className="inline-block mt-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-muted capitalize">{data.project.status}</span>
-      </Card>
+      {/* Project (skipped when embedded — Home shows it at the top) */}
+      {!embedded && (
+        <Card>
+          <h2 className="text-lg font-display font-bold truncate">{data.project.name}</h2>
+          <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1"><MapPin className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{data.project.address}</span></p>
+          <span className="inline-block mt-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-muted capitalize">{data.project.status}</span>
+        </Card>
+      )}
 
       {/* Site board QR */}
       {siteUrl && (
@@ -637,8 +888,8 @@ function SiteBoardView() {
         </Card>
       )}
 
-      {/* Site manager */}
-      {data.siteManager && (
+      {/* Site manager (skipped when embedded — Home shows the contact card up top) */}
+      {!embedded && data.siteManager && (
         <div>
           <SectionTitle>Site manager</SectionTitle>
           <Card>
@@ -779,11 +1030,21 @@ function docMatchesCategory(doc: any, cat: SharedCategory): boolean {
 const CATEGORY_SHOWS_PERMITS = new Set<SharedCategory>(["all", "permits", "hs"]);
 
 function SharedView() {
+  const queryClient = useQueryClient();
   const initial = new URLSearchParams(useSearch()).get("category") as SharedCategory | null;
   const [category, setCategory] = useState<SharedCategory>(
     initial && SHARED_CATEGORIES.some(c => c.key === initial) ? initial : "all",
   );
   const { data, isLoading } = useGetPortalShared({ query: { refetchInterval: PORTAL_LIVE_REFETCH, queryKey: getGetPortalSharedQueryKey() } });
+  const { data: ctx } = useGetPortalContext();
+  const hasPin = !!ctx?.member.hasPin;
+  const signOff = useSignOffFlow({
+    hasPin,
+    acknowledgeUrl: id => `/api/portal/documents/${id}/acknowledge`,
+    setPinUrl: "/api/portal/pin",
+    onSigned: () => queryClient.invalidateQueries({ queryKey: getGetPortalSharedQueryKey() }),
+    onPinSet: () => queryClient.invalidateQueries({ queryKey: getGetPortalContextQueryKey() }),
+  });
   // Site notes lived on the old (now-retired) General tab alongside general
   // documents — they're project-wide announcements, not gated/shared content,
   // so they don't come back from /portal/shared. Pulled in here separately so
@@ -827,7 +1088,7 @@ function SharedView() {
         ))}
       </div>
       {filteredDocs.length > 0 && (
-        <div><SectionTitle>Documents</SectionTitle><Card>{filteredDocs.map(d => <DocRow key={d.id} doc={d} section={docTypeSection(d.type)} unseen={isNew(d.id)} />)}</Card></div>
+        <div><SectionTitle>Documents</SectionTitle><Card>{filteredDocs.map(d => <DocRow key={d.id} doc={d} section={docTypeSection(d.type)} unseen={isNew(d.id)} signOff={signOff} />)}</Card></div>
       )}
       {showPermits && (
         <div><SectionTitle>Permits</SectionTitle><Card>{data!.permits.map(p => <PermitRow key={p.id} p={p} unseen={isNew(p.id)} />)}</Card></div>
@@ -887,6 +1148,9 @@ type PlantItemRow = {
   supplierOwnerText?: string | null; supplierContactName?: string | null; location?: string | null;
   status: string; notes?: string | null; lastUpdatedByName?: string | null; lastUpdatedAt?: string | null;
   attachments?: { id: string; name: string; kind: string; fileUrl: string; createdAt: string }[];
+  lifecycleStatus?: "draft" | "submitted";
+  draft?: { status?: string | null; location?: string | null; notes?: string | null; updatedByName?: string | null; updatedAt: string } | null;
+  submissionNotes?: SubmissionNoteItem[];
 };
 
 // Inline edit panel for one item — only rendered for members with the
@@ -896,9 +1160,11 @@ function PlantItemEditPanel({ item, onClose }: { item: PlantItemRow; onClose: ()
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const update = useUpdatePortalPlantMaterialItem();
-  const [status, setStatus] = useState<"on_site" | "on_order" | "off_hired" | "depleted">(item.status as "on_site" | "on_order" | "off_hired" | "depleted");
-  const [location, setLocation] = useState(item.location ?? "");
-  const [notes, setNotes] = useState(item.notes ?? "");
+  // Prefill from a pending draft if one exists — reopening a draft continues
+  // it rather than starting again from the live values.
+  const [status, setStatus] = useState<"on_site" | "on_order" | "off_hired" | "depleted">((item.draft?.status ?? item.status) as "on_site" | "on_order" | "off_hired" | "depleted");
+  const [location, setLocation] = useState(item.draft ? (item.draft.location ?? "") : (item.location ?? ""));
+  const [notes, setNotes] = useState(item.draft ? (item.draft.notes ?? "") : (item.notes ?? ""));
   const [file, setFile] = useState<File | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -906,7 +1172,7 @@ function PlantItemEditPanel({ item, onClose }: { item: PlantItemRow; onClose: ()
   const save = async () => {
     try {
       await update.mutateAsync({ itemId: item.id, data: { status, location: location || null, notes: notes || null } });
-      toast({ title: "Saved" });
+      toast({ title: "Saved as draft", description: "Submit it when you're ready — your PM won't see the change until then." });
       await queryClient.invalidateQueries({ queryKey: getGetPortalPlantMaterialsQueryKey() });
       onClose();
     } catch {
@@ -945,13 +1211,16 @@ function PlantItemEditPanel({ item, onClose }: { item: PlantItemRow; onClose: ()
       </div>
       <div>
         <label className="text-xs font-medium text-muted-foreground">Location on site</label>
-        <input value={location} onChange={e => setLocation(e.target.value)} className="mt-1 w-full min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+        <div className="mt-1 flex items-center gap-2">
+          <input value={location} onChange={e => setLocation(e.target.value)} className="flex-1 min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+          <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setLocation(l => (l.trim() ? l.trimEnd() + " " : "") + t)} />
+        </div>
       </div>
       <div>
         <label className="text-xs font-medium text-muted-foreground">Notes</label>
         <div className="mt-1 flex items-start gap-2">
           <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
-          <DictationButton onTranscript={t => setNotes(n => (n.trim() ? n.trimEnd() + " " : "") + t)} />
+          <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setNotes(n => (n.trim() ? n.trimEnd() + " " : "") + t)} />
         </div>
       </div>
       <div>
@@ -975,18 +1244,140 @@ function PlantItemEditPanel({ item, onClose }: { item: PlantItemRow; onClose: ()
   );
 }
 
+// Log a brand-new plant/material item from site — only rendered for members
+// with the canUpdatePlantMaterials permission. Creation is live immediately
+// (the PM is notified); the save-vs-submit draft flow applies only to edits.
+function AddPlantItemForm({ onDone }: { onDone: () => void }) {
+  const { toast } = useToast();
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState<"plant_equipment" | "materials">("plant_equipment");
+  const [itemStatus, setItemStatus] = useState<"on_site" | "on_order" | "off_hired" | "depleted">("on_site");
+  const [location, setLocation] = useState("");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const create = async () => {
+    if (!name.trim()) { toast({ title: "Give the item a name", variant: "destructive" }); return; }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/portal/plant-materials", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), category, status: itemStatus, location: location.trim() || null, notes: notes.trim() || null }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null) as { message?: string } | null;
+        throw new Error(body?.message || "");
+      }
+      toast({ title: "Item logged", description: "Your PM has been notified." });
+      onDone();
+    } catch (e) {
+      toast({ title: "Couldn't log the item", description: e instanceof Error && e.message ? e.message : undefined, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card>
+      <p className="font-medium mb-3">Log a new item</p>
+      <div className="space-y-3">
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">Name</label>
+          <div className="mt-1 flex items-center gap-2">
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Excavator, Cement bags"
+              className="flex-1 min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+            <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setName(n => (n.trim() ? n.trimEnd() + " " : "") + t)} />
+          </div>
+        </div>
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">Type</label>
+          <div className="mt-1 flex gap-2">
+            {([["plant_equipment", "Plant / equipment"], ["materials", "Materials"]] as const).map(([val, label]) => (
+              <button key={val} type="button" onClick={() => setCategory(val)}
+                className={cn("flex-1 min-h-11 rounded-xl border text-sm font-medium",
+                  category === val ? "bg-primary text-primary-foreground border-primary" : "bg-background text-muted-foreground border-border hover:bg-muted")}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">Status</label>
+          <select value={itemStatus} onChange={e => setItemStatus(e.target.value as typeof itemStatus)}
+            className="mt-1 w-full min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+            {PLANT_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">Location on site</label>
+          <div className="mt-1 flex items-center gap-2">
+            <input value={location} onChange={e => setLocation(e.target.value)}
+              className="flex-1 min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+            <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setLocation(l => (l.trim() ? l.trimEnd() + " " : "") + t)} />
+          </div>
+        </div>
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">Notes</label>
+          <div className="mt-1 flex items-start gap-2">
+            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
+              className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+            <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setNotes(n => (n.trim() ? n.trimEnd() + " " : "") + t)} />
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={create} disabled={saving}
+            className="flex-1 min-h-11 rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+            {saving ? "Logging…" : "Log item"}
+          </button>
+          <button onClick={onDone} className="min-h-11 px-4 rounded-xl border text-sm font-medium hover:bg-muted">Cancel</button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 function PlantMaterialsView() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { data: ctx } = useGetPortalContext();
   const canEdit = ctx?.member?.canUpdatePlantMaterials ?? false;
   const { data, isLoading } = useGetPortalPlantMaterials({ query: { refetchInterval: PORTAL_LIVE_REFETCH, queryKey: getGetPortalPlantMaterialsQueryKey() } });
+  const submitItem = useSubmitPortalPlantMaterialItem();
+  const addItemNote = useAddPortalPlantMaterialNote();
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: getGetPortalPlantMaterialsQueryKey() });
+  const doSubmit = async (itemId: string) => {
+    try {
+      await submitItem.mutateAsync({ itemId });
+      toast({ title: "Submitted to your PM", description: "The item has been updated with your changes." });
+      await invalidate();
+    } catch {
+      toast({ title: "Couldn't submit", variant: "destructive" });
+    }
+  };
 
   if (isLoading) return <Loading />;
-  if (!data || data.length === 0) return <Empty>Nothing shared with you here yet.</Empty>;
+
+  const items = (data ?? []) as PlantItemRow[];
+  if (items.length === 0 && !canEdit) return <Empty>Nothing shared with you here yet.</Empty>;
 
   return (
     <div className="space-y-3">
-      {(data as PlantItemRow[]).map(item => (
+      {canEdit && (
+        adding ? (
+          <AddPlantItemForm onDone={async () => { setAdding(false); await invalidate(); }} />
+        ) : (
+          <button onClick={() => setAdding(true)}
+            className="w-full min-h-11 rounded-xl border border-dashed border-primary/50 text-sm font-semibold text-primary hover:bg-primary/5">
+            + Log a new item
+          </button>
+        )
+      )}
+      {items.length === 0 && !adding && <Empty>No plant or materials logged yet — tap "Log a new item" to add the first one.</Empty>}
+      {items.map(item => (
         <Card key={item.id}>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -1009,12 +1400,48 @@ function PlantMaterialsView() {
               ))}
             </div>
           )}
+          {canEdit && item.draft && editingId !== item.id && (
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30 p-3 space-y-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <LifecycleBadge status="draft" />
+                <span className="text-xs text-muted-foreground">
+                  {item.draft.updatedByName ? `by ${item.draft.updatedByName} · ` : ""}{fmtRelativeShort(item.draft.updatedAt)}
+                </span>
+              </div>
+              <p className="text-sm break-words">
+                {PLANT_STATUS_OPTIONS.find(o => o.value === item.draft?.status)?.label ?? item.draft.status}
+                {item.draft.location ? ` · ${item.draft.location}` : ""}
+                {item.draft.notes ? ` — ${item.draft.notes}` : ""}
+              </p>
+              <div className="flex gap-2">
+                <button onClick={() => doSubmit(item.id)} disabled={submitItem.isPending}
+                  className="flex-1 min-h-11 rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+                  {submitItem.isPending ? "Submitting…" : "Submit to PM"}
+                </button>
+                <button onClick={() => setEditingId(item.id)} className="min-h-11 px-4 rounded-xl border text-sm font-medium hover:bg-muted">Edit draft</button>
+              </div>
+            </div>
+          )}
           {canEdit && (
             editingId === item.id ? (
               <PlantItemEditPanel item={item} onClose={() => setEditingId(null)} />
-            ) : (
+            ) : !item.draft ? (
               <button onClick={() => setEditingId(item.id)} className="mt-3 text-sm font-medium text-primary hover:underline">Update</button>
-            )
+            ) : null
+          )}
+          {canEdit && (
+            <SubmissionNotesThread
+              notes={item.submissionNotes ?? []}
+              adding={addItemNote.isPending}
+              onAdd={async (body) => {
+                try {
+                  await addItemNote.mutateAsync({ itemId: item.id, data: { body } });
+                  await invalidate();
+                } catch {
+                  toast({ title: "Couldn't add note", variant: "destructive" });
+                }
+              }}
+            />
           )}
         </Card>
       ))}
@@ -1048,11 +1475,18 @@ function DailyReportView() {
   const { data: today, isLoading } = useGetPortalDailyReport({ query: { refetchInterval: PORTAL_LIVE_REFETCH, queryKey: getGetPortalDailyReportQueryKey() } });
   const { data: history } = useGetPortalDailyReportHistory({ query: { queryKey: getGetPortalDailyReportHistoryQueryKey() } });
   const update = useUpdatePortalDailyReport();
+  const submitReport = useSubmitPortalDailyReport();
+  const addReportNote = useAddPortalDailyReportNote();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<ManagerReportFields>({});
   const [showHistory, setShowHistory] = useState(false);
 
-  useEffect(() => { if (today) setForm(today.managerReport ?? {}); }, [today]);
+  // Only resync from the polled server data while NOT actively editing — the
+  // 60s live refetch was silently overwriting in-progress typing/dictation
+  // with the last-saved server state whenever a poll landed mid-edit (Fix:
+  // dictation "not working" on the portal Daily Report — it wasn't the mic,
+  // it was this effect discarding the just-dictated text on the next poll).
+  useEffect(() => { if (today && !editing) setForm(today.managerReport ?? {}); }, [today, editing]);
 
   if (isLoading) return <Loading />;
   if (!today) return <Empty>Couldn't load today's report.</Empty>;
@@ -1075,13 +1509,28 @@ function DailyReportView() {
 
   const hasContent = (mr: ManagerReportFields | null | undefined) => !!mr && DIARY_FIELDS.some(f => (mr[f.key] ?? "").trim().length > 0);
   const present = hasContent(today.managerReport);
+  const isSubmitted = !!today.submittedAt;
+
+  const doSubmitReport = async () => {
+    try {
+      await submitReport.mutateAsync({ date: today.reportDate });
+      toast({ title: "Submitted to your PM", description: "Today's report is now locked — add updates as notes." });
+      setEditing(false);
+      await queryClient.invalidateQueries({ queryKey: getGetPortalDailyReportQueryKey() });
+    } catch {
+      toast({ title: "Couldn't submit", variant: "destructive" });
+    }
+  };
 
   return (
     <div className="space-y-4">
       <Card>
         <div className="flex items-center justify-between gap-2 mb-1">
           <p className="font-semibold">{fmtReportDate(today.reportDate)}</p>
-          {today.locked && <Badge label="Locked" className="bg-muted text-muted-foreground" />}
+          <div className="flex items-center gap-1.5">
+            {present && <LifecycleBadge status={isSubmitted ? "submitted" : "draft"} submittedAt={today.submittedAt} submittedByName={today.submittedByName} />}
+            {today.locked && <Badge label="Locked" className="bg-muted text-muted-foreground" />}
+          </div>
         </div>
         {today.contributors.length > 0 && (
           <p className="text-xs text-muted-foreground mb-3">
@@ -1102,7 +1551,7 @@ function DailyReportView() {
                     <input value={form[f.key] ?? ""} onChange={e => setField(f.key, e.target.value)} placeholder={f.placeholder}
                       className="flex-1 min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
                   )}
-                  {f.multiline && <DictationButton onTranscript={t => appendField(f.key, t)} />}
+                  <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => appendField(f.key, t)} />
                 </div>
               </div>
             ))}
@@ -1121,8 +1570,28 @@ function DailyReportView() {
                 <p className="text-sm whitespace-pre-wrap break-words">{today.managerReport?.[f.key]}</p>
               </div>
             ))}
-            {today.canEdit && (
-              <button onClick={() => setEditing(true)} className="text-sm font-medium text-primary hover:underline">Edit</button>
+            {today.canEdit && !isSubmitted && (
+              <div className="flex gap-2 pt-1">
+                <button onClick={doSubmitReport} disabled={submitReport.isPending}
+                  className="flex-1 min-h-11 rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+                  {submitReport.isPending ? "Submitting…" : "Submit to PM"}
+                </button>
+                <button onClick={() => setEditing(true)} className="min-h-11 px-4 rounded-xl border text-sm font-medium hover:bg-muted">Edit</button>
+              </div>
+            )}
+            {isSubmitted && (
+              <SubmissionNotesThread
+                notes={today.submissionNotes ?? []}
+                adding={addReportNote.isPending}
+                onAdd={async (body) => {
+                  try {
+                    await addReportNote.mutateAsync({ date: today.reportDate, data: { body } });
+                    await queryClient.invalidateQueries({ queryKey: getGetPortalDailyReportQueryKey() });
+                  } catch {
+                    toast({ title: "Couldn't add note", variant: "destructive" });
+                  }
+                }}
+              />
             )}
           </div>
         ) : today.canEdit ? (
@@ -1425,35 +1894,121 @@ function SettingsView() {
           )}
         </Card>
       </div>
+      <PortalPinSection />
       <AddToHomeScreenCard />
     </div>
   );
 }
 
-// Sections whose nav entry is only ever shown when the matching permission is
-// granted (see layout.tsx's SECTION_NAV `permission` field). Guarded again
-// here so a direct URL visit (nav can't stop that) can't render the real view
-// while its own data fetch 403s underneath — same "absent, not greyed"
-// contract as the nav, reached by any path.
-const SECTION_PERMISSION: Record<string, "canLogIssues" | "canUpdatePlantMaterials" | "canEditDailyReport"> = {
-  "site-issues": "canLogIssues",
-  "plant-materials": "canUpdatePlantMaterials",
-  "daily-report": "canEditDailyReport",
-};
-
-function renderSection(section: string) {
+// Sign-off PIN setup/reset — same password-reverification pattern as the
+// dashboard's Settings PIN section (POST /api/auth/pin), just against the
+// portal-scoped twin (POST /api/portal/pin). This form doubles as "forgot PIN":
+// there's no separate reset flow, re-entering the account password IS the reset.
+function PortalPinSection() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { data: ctx } = useGetPortalContext();
-  const required = SECTION_PERMISSION[section];
-  if (required && ctx && !ctx.member[required]) return <Empty>Section not found.</Empty>;
+  const hasPin = !!ctx?.member.hasPin;
+  const [password, setPassword] = useState("");
+  const [pin, setPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const onlyDigits = (v: string) => v.replace(/\D/g, "").slice(0, 4);
+
+  const save = async () => {
+    setStatus(null);
+    if (!password) { setStatus({ type: "error", text: "Enter your account password." }); return; }
+    if (!/^\d{4}$/.test(pin)) { setStatus({ type: "error", text: "PIN must be exactly 4 digits." }); return; }
+    if (pin !== confirmPin) { setStatus({ type: "error", text: "PINs do not match." }); return; }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/portal/pin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword: password, pin }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setStatus({ type: "error", text: data.message ?? "Could not save your PIN." }); return; }
+      setStatus({ type: "success", text: hasPin ? "Sign-off PIN updated." : "Sign-off PIN set." });
+      toast({ title: hasPin ? "PIN updated" : "PIN set" });
+      setPassword(""); setPin(""); setConfirmPin("");
+      queryClient.invalidateQueries({ queryKey: getGetPortalContextQueryKey() });
+    } catch {
+      setStatus({ type: "error", text: "Network error. Please try again." });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div>
+      <SectionTitle>Sign-off PIN</SectionTitle>
+      <Card>
+        <p className="text-sm text-muted-foreground mb-3">
+          {hasPin
+            ? "Used to confirm document sign-offs. Forgotten it? Enter your account password and choose a new one below."
+            : "Set a 4-digit PIN — you'll use it to sign off documents shared with you."}
+        </p>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Account password</label>
+            <input
+              type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)}
+              placeholder="Confirm it's you"
+              className="mt-1 w-full min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">{hasPin ? "New PIN" : "Choose PIN"}</label>
+              <input
+                type="password" inputMode="numeric" value={pin} onChange={e => setPin(onlyDigits(e.target.value))}
+                placeholder="••••"
+                className="mt-1 w-full min-h-11 rounded-xl border border-border bg-background px-3 text-sm tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Confirm PIN</label>
+              <input
+                type="password" inputMode="numeric" value={confirmPin} onChange={e => setConfirmPin(onlyDigits(e.target.value))}
+                placeholder="••••"
+                className="mt-1 w-full min-h-11 rounded-xl border border-border bg-background px-3 text-sm tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+          </div>
+          {status && <p className={cn("text-xs", status.type === "error" ? "text-destructive" : "text-emerald-600 dark:text-emerald-400")}>{status.text}</p>}
+          <button
+            onClick={() => void save()}
+            disabled={saving}
+            className="w-full min-h-11 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50"
+          >
+            {saving ? "Saving…" : hasPin ? "Update PIN" : "Set PIN"}
+          </button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// Site Issues / Plant & Materials / Daily Report are viewable by EVERY portal
+// member (read-only reopen of existing items); the per-member permission
+// flags only gate the write affordances inside each view (checked there and
+// again on the server's write endpoints).
+function renderSection(section: string) {
   switch (section) {
-    case "overview": return <OverviewView />;
+    // 5-box-home redesign: Overview/Team/Progress deep links land on Home;
+    // Site Board and Permits are their own workspace-menu pages again.
+    case "overview":
+    case "progress":
+    case "team":
+      return <HomeView />;
+    case "site-board": return <SiteBoardView />;
+    case "permits": return <PermitsView />;
     case "shared": return <SharedView />;
     case "my-documents": return <MyDocumentsView />;
     case "settings": return <SettingsView />;
-    case "progress": return <ProgressView />;
-    case "team": return <TeamView />;
     case "site-issues": return <SiteIssuesView />;
-    case "site-board": return <SiteBoardView />;
     case "plant-materials": return <PlantMaterialsView />;
     case "daily-report": return <DailyReportView />;
     case "messages": return <MessagesView />;
@@ -1461,9 +2016,21 @@ function renderSection(section: string) {
   }
 }
 
+// Legacy section URLs from the old multi-tab portal: team/progress show the
+// Home page. Site Board and Permits are real sections again. "more" was a
+// short-lived alias for Site Board — canonicalize so nav highlighting, unseen
+// counts, and the server's per-section tracking all agree on one key.
+const LEGACY_HOME_SECTIONS = new Set(["team", "progress"]);
+
 export default function PortalSectionPage() {
   const [, params] = useRoute("/portal/:section");
-  const section = params?.section ?? "overview";
+  const rawSection = params?.section ?? "overview";
+  const section = LEGACY_HOME_SECTIONS.has(rawSection) ? "overview" : rawSection === "more" ? "site-board" : rawSection;
+  const [, navigate] = useLocation();
+  useEffect(() => {
+    if (LEGACY_HOME_SECTIONS.has(rawSection)) navigate("/portal/overview", { replace: true });
+    else if (rawSection === "more") navigate("/portal/site-board", { replace: true });
+  }, [rawSection, navigate]);
   // Portal pages run on their own QueryClient (fresh-on-focus/mount + polling)
   // so a long-lived member session never shows stale content.
   return (

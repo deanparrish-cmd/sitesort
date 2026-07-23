@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Building2, Lock, CheckCircle } from "lucide-react";
+import { Building2, Lock, CheckCircle, AlertTriangle } from "lucide-react";
 
 const schema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters"),
@@ -23,6 +23,7 @@ export default function ResetPassword() {
   const [, setLocation] = useLocation();
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [linkDead, setLinkDead] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
@@ -44,7 +45,11 @@ export default function ResetPassword() {
       });
       if (!r.ok) {
         const body = await r.json().catch(() => ({}));
-        setError(body.message ?? "Something went wrong. Please try again.");
+        if (body.error === "token_expired" || body.error === "invalid_token") {
+          setLinkDead(body.message ?? "This reset link has expired or was already used. Please request a new one.");
+        } else {
+          setError(body.message ?? "Something went wrong. Please try again.");
+        }
       } else {
         setDone(true);
         setTimeout(() => setLocation("/login"), 3000);
@@ -69,7 +74,16 @@ export default function ResetPassword() {
           </p>
         </div>
 
-        {done ? (
+        {linkDead ? (
+          <div className="flex flex-col items-center gap-4 text-center py-4">
+            <AlertTriangle className="w-12 h-12 text-amber-500" />
+            <h2 className="text-lg font-semibold">This link has expired</h2>
+            <p className="text-muted-foreground text-sm">{linkDead}</p>
+            <Button className="mt-2 w-full" onClick={() => setLocation("/forgot-password")}>
+              Request a new link
+            </Button>
+          </div>
+        ) : done ? (
           <div className="flex flex-col items-center gap-4 text-center py-4">
             <CheckCircle className="w-12 h-12 text-green-500" />
             <h2 className="text-lg font-semibold">Password updated!</h2>

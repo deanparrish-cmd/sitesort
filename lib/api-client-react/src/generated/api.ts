@@ -21,6 +21,7 @@ import type {
   AcknowledgeRequest,
   AddInsuranceRequest,
   AddMemberRequest,
+  AddPortalSubmissionNoteRequest,
   AddProjectMemberPersonRequest,
   AdminDeletePhoto200,
   ArchivePhotoRequest,
@@ -41,7 +42,10 @@ import type {
   Distribution,
   Document,
   DocumentDetail,
+  EditPortalSiteIssueDraftBody,
   ErrorResponse,
+  ForgotCredentialRequest,
+  ForgotPinRequest,
   GenerateQrRequest,
   GetPortalChannelThreadParams,
   GetPortalDmThreadParams,
@@ -113,8 +117,11 @@ import type {
   RemoveContactResponse,
   RemoveMemberResponse,
   ResendInviteResponse,
+  ResetPasswordRequest,
+  ResetPinRequest,
   ReviewMemberDocumentRequest,
   SendPortalMessageRequest,
+  SetPinRequest,
   Subcontractor,
   SubcontractorDetail,
   SubcontractorDocument,
@@ -537,6 +544,441 @@ export function useGetMe<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Requires the account password as re-verification — also the "forgot PIN" path for a signed-in user. Every call is logged (set vs reset), never the PIN itself.
+ * @summary Set, update, or reset the current user's sign-off PIN
+ */
+export const getSetSignOffPinUrl = () => {
+  return `/api/auth/pin`;
+};
+
+export const setSignOffPin = async (
+  setPinRequest: SetPinRequest,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getSetSignOffPinUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(setPinRequest),
+  });
+};
+
+export const getSetSignOffPinMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setSignOffPin>>,
+    TError,
+    { data: BodyType<SetPinRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setSignOffPin>>,
+  TError,
+  { data: BodyType<SetPinRequest> },
+  TContext
+> => {
+  const mutationKey = ["setSignOffPin"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setSignOffPin>>,
+    { data: BodyType<SetPinRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return setSignOffPin(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetSignOffPinMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setSignOffPin>>
+>;
+export type SetSignOffPinMutationBody = BodyType<SetPinRequest>;
+export type SetSignOffPinMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Set, update, or reset the current user's sign-off PIN
+ */
+export const useSetSignOffPin = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setSignOffPin>>,
+    TError,
+    { data: BodyType<SetPinRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setSignOffPin>>,
+  TError,
+  { data: BodyType<SetPinRequest> },
+  TContext
+> => {
+  return useMutation(getSetSignOffPinMutationOptions(options));
+};
+
+/**
+ * Always returns the same generic success whether or not the email is registered. Rate-limited per email and per IP. The emailed link is single-use, hashed at rest, and expires in 60 minutes.
+ * @summary Request a password reset email (main account)
+ */
+export const getForgotPasswordUrl = () => {
+  return `/api/auth/forgot-password`;
+};
+
+export const forgotPassword = async (
+  forgotCredentialRequest: ForgotCredentialRequest,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getForgotPasswordUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(forgotCredentialRequest),
+  });
+};
+
+export const getForgotPasswordMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof forgotPassword>>,
+    TError,
+    { data: BodyType<ForgotCredentialRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof forgotPassword>>,
+  TError,
+  { data: BodyType<ForgotCredentialRequest> },
+  TContext
+> => {
+  const mutationKey = ["forgotPassword"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof forgotPassword>>,
+    { data: BodyType<ForgotCredentialRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return forgotPassword(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ForgotPasswordMutationResult = NonNullable<
+  Awaited<ReturnType<typeof forgotPassword>>
+>;
+export type ForgotPasswordMutationBody = BodyType<ForgotCredentialRequest>;
+export type ForgotPasswordMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Request a password reset email (main account)
+ */
+export const useForgotPassword = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof forgotPassword>>,
+    TError,
+    { data: BodyType<ForgotCredentialRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof forgotPassword>>,
+  TError,
+  { data: BodyType<ForgotCredentialRequest> },
+  TContext
+> => {
+  return useMutation(getForgotPasswordMutationOptions(options));
+};
+
+/**
+ * Consumes the single-use token. On success all existing sessions for the account are invalidated (dashboard tokens and portal sessions).
+ * @summary Set a new password using an emailed reset token
+ */
+export const getResetPasswordUrl = () => {
+  return `/api/auth/reset-password`;
+};
+
+export const resetPassword = async (
+  resetPasswordRequest: ResetPasswordRequest,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getResetPasswordUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(resetPasswordRequest),
+  });
+};
+
+export const getResetPasswordMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resetPassword>>,
+    TError,
+    { data: BodyType<ResetPasswordRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof resetPassword>>,
+  TError,
+  { data: BodyType<ResetPasswordRequest> },
+  TContext
+> => {
+  const mutationKey = ["resetPassword"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof resetPassword>>,
+    { data: BodyType<ResetPasswordRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return resetPassword(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ResetPasswordMutationResult = NonNullable<
+  Awaited<ReturnType<typeof resetPassword>>
+>;
+export type ResetPasswordMutationBody = BodyType<ResetPasswordRequest>;
+export type ResetPasswordMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Set a new password using an emailed reset token
+ */
+export const useResetPassword = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resetPassword>>,
+    TError,
+    { data: BodyType<ResetPasswordRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof resetPassword>>,
+  TError,
+  { data: BodyType<ResetPasswordRequest> },
+  TContext
+> => {
+  return useMutation(getResetPasswordMutationOptions(options));
+};
+
+/**
+ * Same shared backbone as password resets — generic response, rate-limited, hashed single-use 60-minute token. A signed-in user should instead reset the PIN in-app with their password.
+ * @summary Request a sign-off PIN reset email (locked-out path)
+ */
+export const getForgotPinUrl = () => {
+  return `/api/auth/forgot-pin`;
+};
+
+export const forgotPin = async (
+  forgotPinRequest: ForgotPinRequest,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getForgotPinUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(forgotPinRequest),
+  });
+};
+
+export const getForgotPinMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof forgotPin>>,
+    TError,
+    { data: BodyType<ForgotPinRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof forgotPin>>,
+  TError,
+  { data: BodyType<ForgotPinRequest> },
+  TContext
+> => {
+  const mutationKey = ["forgotPin"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof forgotPin>>,
+    { data: BodyType<ForgotPinRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return forgotPin(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ForgotPinMutationResult = NonNullable<
+  Awaited<ReturnType<typeof forgotPin>>
+>;
+export type ForgotPinMutationBody = BodyType<ForgotPinRequest>;
+export type ForgotPinMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Request a sign-off PIN reset email (locked-out path)
+ */
+export const useForgotPin = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof forgotPin>>,
+    TError,
+    { data: BodyType<ForgotPinRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof forgotPin>>,
+  TError,
+  { data: BodyType<ForgotPinRequest> },
+  TContext
+> => {
+  return useMutation(getForgotPinMutationOptions(options));
+};
+
+/**
+ * Consumes the single-use token; the new 4-digit PIN is stored hashed and the reset is recorded in the PIN audit log.
+ * @summary Set a new sign-off PIN using an emailed reset token
+ */
+export const getResetPinUrl = () => {
+  return `/api/auth/reset-pin`;
+};
+
+export const resetPin = async (
+  resetPinRequest: ResetPinRequest,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getResetPinUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(resetPinRequest),
+  });
+};
+
+export const getResetPinMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resetPin>>,
+    TError,
+    { data: BodyType<ResetPinRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof resetPin>>,
+  TError,
+  { data: BodyType<ResetPinRequest> },
+  TContext
+> => {
+  const mutationKey = ["resetPin"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof resetPin>>,
+    { data: BodyType<ResetPinRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return resetPin(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ResetPinMutationResult = NonNullable<
+  Awaited<ReturnType<typeof resetPin>>
+>;
+export type ResetPinMutationBody = BodyType<ResetPinRequest>;
+export type ResetPinMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Set a new sign-off PIN using an emailed reset token
+ */
+export const useResetPin = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resetPin>>,
+    TError,
+    { data: BodyType<ResetPinRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof resetPin>>,
+  TError,
+  { data: BodyType<ResetPinRequest> },
+  TContext
+> => {
+  return useMutation(getResetPinMutationOptions(options));
+};
 
 /**
  * @summary List all projects for the company
@@ -4311,7 +4753,7 @@ export function useGetPortalPlantMaterialItem<
 }
 
 /**
- * @summary Update a plant/material item's status, location, or notes (requires can-update-plant-materials permission)
+ * @summary SAVE (draft only) a proposed status/location/notes change — writes to the member's pending draft, never the live/submitted values
  */
 export const getUpdatePortalPlantMaterialItemUrl = (itemId: string) => {
   return `/api/portal/plant-materials/${itemId}`;
@@ -4379,7 +4821,7 @@ export type UpdatePortalPlantMaterialItemMutationBody =
 export type UpdatePortalPlantMaterialItemMutationError = ErrorType<unknown>;
 
 /**
- * @summary Update a plant/material item's status, location, or notes (requires can-update-plant-materials permission)
+ * @summary SAVE (draft only) a proposed status/location/notes change — writes to the member's pending draft, never the live/submitted values
  */
 export const useUpdatePortalPlantMaterialItem = <
   TError = ErrorType<unknown>,
@@ -4399,6 +4841,185 @@ export const useUpdatePortalPlantMaterialItem = <
   TContext
 > => {
   return useMutation(getUpdatePortalPlantMaterialItemMutationOptions(options));
+};
+
+/**
+ * @summary Submit the pending draft — copies it onto the live status/location/notes (what the PM sees) with attribution, then clears the draft
+ */
+export const getSubmitPortalPlantMaterialItemUrl = (itemId: string) => {
+  return `/api/portal/plant-materials/${itemId}/submit`;
+};
+
+export const submitPortalPlantMaterialItem = async (
+  itemId: string,
+  options?: RequestInit,
+): Promise<PortalPlantItem> => {
+  return customFetch<PortalPlantItem>(
+    getSubmitPortalPlantMaterialItemUrl(itemId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getSubmitPortalPlantMaterialItemMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitPortalPlantMaterialItem>>,
+    TError,
+    { itemId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof submitPortalPlantMaterialItem>>,
+  TError,
+  { itemId: string },
+  TContext
+> => {
+  const mutationKey = ["submitPortalPlantMaterialItem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof submitPortalPlantMaterialItem>>,
+    { itemId: string }
+  > = (props) => {
+    const { itemId } = props ?? {};
+
+    return submitPortalPlantMaterialItem(itemId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SubmitPortalPlantMaterialItemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof submitPortalPlantMaterialItem>>
+>;
+
+export type SubmitPortalPlantMaterialItemMutationError =
+  ErrorType<ErrorResponse>;
+
+/**
+ * @summary Submit the pending draft — copies it onto the live status/location/notes (what the PM sees) with attribution, then clears the draft
+ */
+export const useSubmitPortalPlantMaterialItem = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitPortalPlantMaterialItem>>,
+    TError,
+    { itemId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof submitPortalPlantMaterialItem>>,
+  TError,
+  { itemId: string },
+  TContext
+> => {
+  return useMutation(getSubmitPortalPlantMaterialItemMutationOptions(options));
+};
+
+/**
+ * @summary Add a timestamped note to a plant item (append-only)
+ */
+export const getAddPortalPlantMaterialNoteUrl = (itemId: string) => {
+  return `/api/portal/plant-materials/${itemId}/notes`;
+};
+
+export const addPortalPlantMaterialNote = async (
+  itemId: string,
+  addPortalSubmissionNoteRequest: AddPortalSubmissionNoteRequest,
+  options?: RequestInit,
+): Promise<PortalPlantItem> => {
+  return customFetch<PortalPlantItem>(
+    getAddPortalPlantMaterialNoteUrl(itemId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(addPortalSubmissionNoteRequest),
+    },
+  );
+};
+
+export const getAddPortalPlantMaterialNoteMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addPortalPlantMaterialNote>>,
+    TError,
+    { itemId: string; data: BodyType<AddPortalSubmissionNoteRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addPortalPlantMaterialNote>>,
+  TError,
+  { itemId: string; data: BodyType<AddPortalSubmissionNoteRequest> },
+  TContext
+> => {
+  const mutationKey = ["addPortalPlantMaterialNote"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addPortalPlantMaterialNote>>,
+    { itemId: string; data: BodyType<AddPortalSubmissionNoteRequest> }
+  > = (props) => {
+    const { itemId, data } = props ?? {};
+
+    return addPortalPlantMaterialNote(itemId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AddPortalPlantMaterialNoteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addPortalPlantMaterialNote>>
+>;
+export type AddPortalPlantMaterialNoteMutationBody =
+  BodyType<AddPortalSubmissionNoteRequest>;
+export type AddPortalPlantMaterialNoteMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Add a timestamped note to a plant item (append-only)
+ */
+export const useAddPortalPlantMaterialNote = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addPortalPlantMaterialNote>>,
+    TError,
+    { itemId: string; data: BodyType<AddPortalSubmissionNoteRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof addPortalPlantMaterialNote>>,
+  TError,
+  { itemId: string; data: BodyType<AddPortalSubmissionNoteRequest> },
+  TContext
+> => {
+  return useMutation(getAddPortalPlantMaterialNoteMutationOptions(options));
 };
 
 /**
@@ -4745,6 +5366,184 @@ export const useUpdatePortalDailyReport = <
   TContext
 > => {
   return useMutation(getUpdatePortalDailyReportMutationOptions(options));
+};
+
+/**
+ * @summary Submit today's site diary to the PM — locks the narrative (further changes go through notes)
+ */
+export const getSubmitPortalDailyReportUrl = (date: string) => {
+  return `/api/portal/daily-report/${date}/submit`;
+};
+
+export const submitPortalDailyReport = async (
+  date: string,
+  options?: RequestInit,
+): Promise<PortalDailyReportHistoryItem> => {
+  return customFetch<PortalDailyReportHistoryItem>(
+    getSubmitPortalDailyReportUrl(date),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getSubmitPortalDailyReportMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitPortalDailyReport>>,
+    TError,
+    { date: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof submitPortalDailyReport>>,
+  TError,
+  { date: string },
+  TContext
+> => {
+  const mutationKey = ["submitPortalDailyReport"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof submitPortalDailyReport>>,
+    { date: string }
+  > = (props) => {
+    const { date } = props ?? {};
+
+    return submitPortalDailyReport(date, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SubmitPortalDailyReportMutationResult = NonNullable<
+  Awaited<ReturnType<typeof submitPortalDailyReport>>
+>;
+
+export type SubmitPortalDailyReportMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Submit today's site diary to the PM — locks the narrative (further changes go through notes)
+ */
+export const useSubmitPortalDailyReport = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitPortalDailyReport>>,
+    TError,
+    { date: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof submitPortalDailyReport>>,
+  TError,
+  { date: string },
+  TContext
+> => {
+  return useMutation(getSubmitPortalDailyReportMutationOptions(options));
+};
+
+/**
+ * @summary Add a timestamped note to a submitted report (append-only)
+ */
+export const getAddPortalDailyReportNoteUrl = (date: string) => {
+  return `/api/portal/daily-report/${date}/notes`;
+};
+
+export const addPortalDailyReportNote = async (
+  date: string,
+  addPortalSubmissionNoteRequest: AddPortalSubmissionNoteRequest,
+  options?: RequestInit,
+): Promise<PortalDailyReportHistoryItem> => {
+  return customFetch<PortalDailyReportHistoryItem>(
+    getAddPortalDailyReportNoteUrl(date),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(addPortalSubmissionNoteRequest),
+    },
+  );
+};
+
+export const getAddPortalDailyReportNoteMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addPortalDailyReportNote>>,
+    TError,
+    { date: string; data: BodyType<AddPortalSubmissionNoteRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addPortalDailyReportNote>>,
+  TError,
+  { date: string; data: BodyType<AddPortalSubmissionNoteRequest> },
+  TContext
+> => {
+  const mutationKey = ["addPortalDailyReportNote"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addPortalDailyReportNote>>,
+    { date: string; data: BodyType<AddPortalSubmissionNoteRequest> }
+  > = (props) => {
+    const { date, data } = props ?? {};
+
+    return addPortalDailyReportNote(date, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AddPortalDailyReportNoteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addPortalDailyReportNote>>
+>;
+export type AddPortalDailyReportNoteMutationBody =
+  BodyType<AddPortalSubmissionNoteRequest>;
+export type AddPortalDailyReportNoteMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Add a timestamped note to a submitted report (append-only)
+ */
+export const useAddPortalDailyReportNote = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addPortalDailyReportNote>>,
+    TError,
+    { date: string; data: BodyType<AddPortalSubmissionNoteRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof addPortalDailyReportNote>>,
+  TError,
+  { date: string; data: BodyType<AddPortalSubmissionNoteRequest> },
+  TContext
+> => {
+  return useMutation(getAddPortalDailyReportNoteMutationOptions(options));
 };
 
 /**
@@ -7180,6 +7979,181 @@ export const usePortalLogin = <
 };
 
 /**
+ * Same shared backbone as the main-app reset (a portal member is the same account underneath); the emailed link targets the portal reset page. Generic response — never reveals whether the email is registered. Rate-limited per email and per IP.
+ * @summary Request a portal-member password reset email
+ */
+export const getPortalForgotPasswordUrl = () => {
+  return `/api/portal/forgot-password`;
+};
+
+export const portalForgotPassword = async (
+  forgotCredentialRequest: ForgotCredentialRequest,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getPortalForgotPasswordUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(forgotCredentialRequest),
+  });
+};
+
+export const getPortalForgotPasswordMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof portalForgotPassword>>,
+    TError,
+    { data: BodyType<ForgotCredentialRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof portalForgotPassword>>,
+  TError,
+  { data: BodyType<ForgotCredentialRequest> },
+  TContext
+> => {
+  const mutationKey = ["portalForgotPassword"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof portalForgotPassword>>,
+    { data: BodyType<ForgotCredentialRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return portalForgotPassword(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PortalForgotPasswordMutationResult = NonNullable<
+  Awaited<ReturnType<typeof portalForgotPassword>>
+>;
+export type PortalForgotPasswordMutationBody =
+  BodyType<ForgotCredentialRequest>;
+export type PortalForgotPasswordMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Request a portal-member password reset email
+ */
+export const usePortalForgotPassword = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof portalForgotPassword>>,
+    TError,
+    { data: BodyType<ForgotCredentialRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof portalForgotPassword>>,
+  TError,
+  { data: BodyType<ForgotCredentialRequest> },
+  TContext
+> => {
+  return useMutation(getPortalForgotPasswordMutationOptions(options));
+};
+
+/**
+ * Consumes the single-use token. On success all existing sessions for the account are invalidated (portal sessions revoked, dashboard tokens rejected).
+ * @summary Set a new portal-member password using an emailed reset token
+ */
+export const getPortalResetPasswordUrl = () => {
+  return `/api/portal/reset-password`;
+};
+
+export const portalResetPassword = async (
+  resetPasswordRequest: ResetPasswordRequest,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getPortalResetPasswordUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(resetPasswordRequest),
+  });
+};
+
+export const getPortalResetPasswordMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof portalResetPassword>>,
+    TError,
+    { data: BodyType<ResetPasswordRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof portalResetPassword>>,
+  TError,
+  { data: BodyType<ResetPasswordRequest> },
+  TContext
+> => {
+  const mutationKey = ["portalResetPassword"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof portalResetPassword>>,
+    { data: BodyType<ResetPasswordRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return portalResetPassword(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PortalResetPasswordMutationResult = NonNullable<
+  Awaited<ReturnType<typeof portalResetPassword>>
+>;
+export type PortalResetPasswordMutationBody = BodyType<ResetPasswordRequest>;
+export type PortalResetPasswordMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Set a new portal-member password using an emailed reset token
+ */
+export const usePortalResetPassword = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof portalResetPassword>>,
+    TError,
+    { data: BodyType<ResetPasswordRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof portalResetPassword>>,
+  TError,
+  { data: BodyType<ResetPasswordRequest> },
+  TContext
+> => {
+  return useMutation(getPortalResetPasswordMutationOptions(options));
+};
+
+/**
  * @summary Look up a pending invite by its single-use token
  */
 export const getGetPortalInviteUrl = (token: string) => {
@@ -7427,6 +8401,93 @@ export function useGetPortalContext<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Requires the account password as re-verification — also the "forgot PIN" path. Every call is logged (set vs reset), never the PIN itself.
+ * @summary Set, update, or reset the signed-in member's sign-off PIN
+ */
+export const getSetPortalPinUrl = () => {
+  return `/api/portal/pin`;
+};
+
+export const setPortalPin = async (
+  setPinRequest: SetPinRequest,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getSetPortalPinUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(setPinRequest),
+  });
+};
+
+export const getSetPortalPinMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setPortalPin>>,
+    TError,
+    { data: BodyType<SetPinRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setPortalPin>>,
+  TError,
+  { data: BodyType<SetPinRequest> },
+  TContext
+> => {
+  const mutationKey = ["setPortalPin"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setPortalPin>>,
+    { data: BodyType<SetPinRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return setPortalPin(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetPortalPinMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setPortalPin>>
+>;
+export type SetPortalPinMutationBody = BodyType<SetPinRequest>;
+export type SetPortalPinMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Set, update, or reset the signed-in member's sign-off PIN
+ */
+export const useSetPortalPin = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setPortalPin>>,
+    TError,
+    { data: BodyType<SetPinRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setPortalPin>>,
+  TError,
+  { data: BodyType<SetPinRequest> },
+  TContext
+> => {
+  return useMutation(getSetPortalPinMutationOptions(options));
+};
 
 /**
  * @summary Portal overview (summary stats + recent notes)
@@ -7912,6 +8973,266 @@ export const useUpdatePortalSiteIssue = <
   TContext
 > => {
   return useMutation(getUpdatePortalSiteIssueMutationOptions(options));
+};
+
+/**
+ * @summary Full edit of a draft issue's own fields (reporter-only, only while still a draft — 403 once submitted)
+ */
+export const getEditPortalSiteIssueDraftUrl = (issueId: string) => {
+  return `/api/portal/site-issues/${issueId}/edit`;
+};
+
+export const editPortalSiteIssueDraft = async (
+  issueId: string,
+  editPortalSiteIssueDraftBody: EditPortalSiteIssueDraftBody,
+  options?: RequestInit,
+): Promise<PortalIssue> => {
+  return customFetch<PortalIssue>(getEditPortalSiteIssueDraftUrl(issueId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(editPortalSiteIssueDraftBody),
+  });
+};
+
+export const getEditPortalSiteIssueDraftMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof editPortalSiteIssueDraft>>,
+    TError,
+    { issueId: string; data: BodyType<EditPortalSiteIssueDraftBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof editPortalSiteIssueDraft>>,
+  TError,
+  { issueId: string; data: BodyType<EditPortalSiteIssueDraftBody> },
+  TContext
+> => {
+  const mutationKey = ["editPortalSiteIssueDraft"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof editPortalSiteIssueDraft>>,
+    { issueId: string; data: BodyType<EditPortalSiteIssueDraftBody> }
+  > = (props) => {
+    const { issueId, data } = props ?? {};
+
+    return editPortalSiteIssueDraft(issueId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type EditPortalSiteIssueDraftMutationResult = NonNullable<
+  Awaited<ReturnType<typeof editPortalSiteIssueDraft>>
+>;
+export type EditPortalSiteIssueDraftMutationBody =
+  BodyType<EditPortalSiteIssueDraftBody>;
+export type EditPortalSiteIssueDraftMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Full edit of a draft issue's own fields (reporter-only, only while still a draft — 403 once submitted)
+ */
+export const useEditPortalSiteIssueDraft = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof editPortalSiteIssueDraft>>,
+    TError,
+    { issueId: string; data: BodyType<EditPortalSiteIssueDraftBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof editPortalSiteIssueDraft>>,
+  TError,
+  { issueId: string; data: BodyType<EditPortalSiteIssueDraftBody> },
+  TContext
+> => {
+  return useMutation(getEditPortalSiteIssueDraftMutationOptions(options));
+};
+
+/**
+ * @summary Submit a draft issue to the PM (reporter-only) — locks the original fields, adds it to the PM's triage queue
+ */
+export const getSubmitPortalSiteIssueUrl = (issueId: string) => {
+  return `/api/portal/site-issues/${issueId}/submit`;
+};
+
+export const submitPortalSiteIssue = async (
+  issueId: string,
+  options?: RequestInit,
+): Promise<PortalIssue> => {
+  return customFetch<PortalIssue>(getSubmitPortalSiteIssueUrl(issueId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getSubmitPortalSiteIssueMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitPortalSiteIssue>>,
+    TError,
+    { issueId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof submitPortalSiteIssue>>,
+  TError,
+  { issueId: string },
+  TContext
+> => {
+  const mutationKey = ["submitPortalSiteIssue"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof submitPortalSiteIssue>>,
+    { issueId: string }
+  > = (props) => {
+    const { issueId } = props ?? {};
+
+    return submitPortalSiteIssue(issueId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SubmitPortalSiteIssueMutationResult = NonNullable<
+  Awaited<ReturnType<typeof submitPortalSiteIssue>>
+>;
+
+export type SubmitPortalSiteIssueMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Submit a draft issue to the PM (reporter-only) — locks the original fields, adds it to the PM's triage queue
+ */
+export const useSubmitPortalSiteIssue = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitPortalSiteIssue>>,
+    TError,
+    { issueId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof submitPortalSiteIssue>>,
+  TError,
+  { issueId: string },
+  TContext
+> => {
+  return useMutation(getSubmitPortalSiteIssueMutationOptions(options));
+};
+
+/**
+ * @summary Add a timestamped note to a submitted issue (append-only — never edits the original)
+ */
+export const getAddPortalSiteIssueNoteUrl = (issueId: string) => {
+  return `/api/portal/site-issues/${issueId}/notes`;
+};
+
+export const addPortalSiteIssueNote = async (
+  issueId: string,
+  addPortalSubmissionNoteRequest: AddPortalSubmissionNoteRequest,
+  options?: RequestInit,
+): Promise<PortalIssue> => {
+  return customFetch<PortalIssue>(getAddPortalSiteIssueNoteUrl(issueId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(addPortalSubmissionNoteRequest),
+  });
+};
+
+export const getAddPortalSiteIssueNoteMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addPortalSiteIssueNote>>,
+    TError,
+    { issueId: string; data: BodyType<AddPortalSubmissionNoteRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addPortalSiteIssueNote>>,
+  TError,
+  { issueId: string; data: BodyType<AddPortalSubmissionNoteRequest> },
+  TContext
+> => {
+  const mutationKey = ["addPortalSiteIssueNote"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addPortalSiteIssueNote>>,
+    { issueId: string; data: BodyType<AddPortalSubmissionNoteRequest> }
+  > = (props) => {
+    const { issueId, data } = props ?? {};
+
+    return addPortalSiteIssueNote(issueId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AddPortalSiteIssueNoteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addPortalSiteIssueNote>>
+>;
+export type AddPortalSiteIssueNoteMutationBody =
+  BodyType<AddPortalSubmissionNoteRequest>;
+export type AddPortalSiteIssueNoteMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Add a timestamped note to a submitted issue (append-only — never edits the original)
+ */
+export const useAddPortalSiteIssueNote = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addPortalSiteIssueNote>>,
+    TError,
+    { issueId: string; data: BodyType<AddPortalSubmissionNoteRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof addPortalSiteIssueNote>>,
+  TError,
+  { issueId: string; data: BodyType<AddPortalSubmissionNoteRequest> },
+  TContext
+> => {
+  return useMutation(getAddPortalSiteIssueNoteMutationOptions(options));
 };
 
 /**
@@ -8468,6 +9789,181 @@ export function useDownloadPortalDocument<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Record that this member opened a document (pending → viewed)
+ */
+export const getViewPortalDocumentUrl = (documentId: string) => {
+  return `/api/portal/documents/${documentId}/view`;
+};
+
+export const viewPortalDocument = async (
+  documentId: string,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getViewPortalDocumentUrl(documentId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getViewPortalDocumentMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof viewPortalDocument>>,
+    TError,
+    { documentId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof viewPortalDocument>>,
+  TError,
+  { documentId: string },
+  TContext
+> => {
+  const mutationKey = ["viewPortalDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof viewPortalDocument>>,
+    { documentId: string }
+  > = (props) => {
+    const { documentId } = props ?? {};
+
+    return viewPortalDocument(documentId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ViewPortalDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof viewPortalDocument>>
+>;
+
+export type ViewPortalDocumentMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Record that this member opened a document (pending → viewed)
+ */
+export const useViewPortalDocument = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof viewPortalDocument>>,
+    TError,
+    { documentId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof viewPortalDocument>>,
+  TError,
+  { documentId: string },
+  TContext
+> => {
+  return useMutation(getViewPortalDocumentMutationOptions(options));
+};
+
+/**
+ * @summary Sign off a document shared with this member (PIN-confirmed)
+ */
+export const getAcknowledgePortalDocumentUrl = (documentId: string) => {
+  return `/api/portal/documents/${documentId}/acknowledge`;
+};
+
+export const acknowledgePortalDocument = async (
+  documentId: string,
+  acknowledgeRequest: AcknowledgeRequest,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(
+    getAcknowledgePortalDocumentUrl(documentId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(acknowledgeRequest),
+    },
+  );
+};
+
+export const getAcknowledgePortalDocumentMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof acknowledgePortalDocument>>,
+    TError,
+    { documentId: string; data: BodyType<AcknowledgeRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof acknowledgePortalDocument>>,
+  TError,
+  { documentId: string; data: BodyType<AcknowledgeRequest> },
+  TContext
+> => {
+  const mutationKey = ["acknowledgePortalDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof acknowledgePortalDocument>>,
+    { documentId: string; data: BodyType<AcknowledgeRequest> }
+  > = (props) => {
+    const { documentId, data } = props ?? {};
+
+    return acknowledgePortalDocument(documentId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AcknowledgePortalDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof acknowledgePortalDocument>>
+>;
+export type AcknowledgePortalDocumentMutationBody =
+  BodyType<AcknowledgeRequest>;
+export type AcknowledgePortalDocumentMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Sign off a document shared with this member (PIN-confirmed)
+ */
+export const useAcknowledgePortalDocument = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof acknowledgePortalDocument>>,
+    TError,
+    { documentId: string; data: BodyType<AcknowledgeRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof acknowledgePortalDocument>>,
+  TError,
+  { documentId: string; data: BodyType<AcknowledgeRequest> },
+  TContext
+> => {
+  return useMutation(getAcknowledgePortalDocumentMutationOptions(options));
+};
 
 /**
  * @summary The signed-in member's own uploaded documents (newest first)
