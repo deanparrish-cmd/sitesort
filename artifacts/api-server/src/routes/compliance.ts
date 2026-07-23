@@ -4,6 +4,7 @@ import { insuranceRecordsTable, subcontractorsTable, permitsTable, projectsTable
 import { eq, and, inArray, isNull, isNotNull } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
 import { expiryStatus } from "../lib/expiry";
+import { pinRequiredForDoc } from "../lib/signoff";
 
 const router: IRouter = Router();
 
@@ -161,6 +162,7 @@ router.get("/compliance", authenticate, async (req, res) => {
       version: number;
       revision: string | null;
       myStatus: string | null;
+      pinRequired: boolean;
       recipients: Array<{ userId: string; name: string; status: string; viewedAt: string | null; acknowledgedAt: string | null }>;
     }> = [];
 
@@ -247,6 +249,7 @@ router.get("/compliance", authenticate, async (req, res) => {
           version: doc.version,
           revision: doc.revision ?? null,
           myStatus: mine?.status ?? null,
+          pinRequired: pinRequiredForDoc(doc),
           recipients: dists.map(d => ({
             userId: d.userId,
             name: nameByUserId.get(d.userId) ?? "Unknown",

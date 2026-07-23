@@ -195,7 +195,12 @@
       "Bash(tee /tmp/invite.json)",
       "Bash(tee /tmp/doc.json)",
       "Bash(tee /tmp/doc2.json)",
-      "Bash(python3 -c \"import json,sys; print\\(json.load\\(sys.stdin\\)['id']\\)\")"
+      "Bash(python3 -c \"import json,sys; print\\(json.load\\(sys.stdin\\)['id']\\)\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(d.get\\('token',''\\)[:20], d['user']['id'], d['user']['companyId']\\)\")",
+      "Bash(kill 370 369)",
+      "Bash(mkdir -p /tmp/claude-1000/-home-runner-workspace/07568353-fea8-49be-996d-8df3e09633bf/scratchpad)",
+      "Bash(nohup node --enable-source-maps ./dist/index.mjs)",
+      "Bash(git --no-pager diff -- artifacts/sitesort/src/pages/projects/detail/use-project-detail.tsx)"
     ]
   },
   "hooks": {

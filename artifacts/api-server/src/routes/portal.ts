@@ -23,6 +23,7 @@ import { getVapidPublicKey } from "../lib/web-push";
 import { pushSubscriptionsTable, activityLogTable } from "@workspace/db/schema";
 import { PortalPushSubscribeBody, PortalPushUnsubscribeBody } from "@workspace/api-zod";
 import { isLockedOut, recordFailedAttempt, clearAttempts } from "../lib/login-attempts";
+import { pinRequiredForDoc } from "../lib/signoff";
 import { expiryStatus } from "../lib/expiry";
 import { issueCategoryFilter } from "../lib/accountability";
 import { canonicalPersonName } from "../lib/person-name";
@@ -88,6 +89,7 @@ function serializeDoc(d: typeof documentsTable.$inferSelect) {
     revision: d.revision ?? undefined, fileUrl: d.fileUrl, fileSize: d.fileSize,
     status: d.status, createdAt: d.createdAt.toISOString(),
     requiresAcknowledgment: d.requiresAcknowledgment,
+    pinRequired: pinRequiredForDoc(d),
   };
 }
 // This viewer's own sign-off status for a batch of documents — merged onto
@@ -802,25 +804,37 @@ router.get("/portal/overview", ...portalGuards, async (req, res) => {
 // Safety docs are always included (never gated). Site issues ("photos") are
 // additionally gated on canLogIssues — that flag now governs the whole Site
 // Issues section, including whether it can leak through this aggregate view.
+// A shared daily report is deliberately narrow — just the authored site diary
+// (weather/labour/plant/work completed/delays/deliveries/H&S notes), never the
+// auto-collated internal activity (check-ins, document views/sign-offs, site
+// photos) that the dashboard's full report shows. That activity is operational/
+// audit data, not meant for external distribution — the PM chose to share the
+// diary, not the whole day's audit trail.
+function serializeSharedReport(r: { id: string; reportDate: string; managerReport: unknown }) {
+  return { id: r.id, reportDate: r.reportDate, managerReport: r.managerReport };
+}
+
 router.get("/portal/shared", ...portalGuards, async (req, res) => {
   const pid = req.portalProjectId!;
   const viewer = await resolveViewer(req.user!.id, pid);
-  const [docMap, photoMap, permitMap, lastView, permRow] = await Promise.all([
+  const [docMap, photoMap, permitMap, reportMap, lastView, permRow] = await Promise.all([
     visibleShareMap(pid, "document", viewer),
     visibleShareMap(pid, "photo", viewer),
     visibleShareMap(pid, "permit", viewer),
+    visibleShareMap(pid, "daily_report", viewer),
     lastViewedBySection(req.user!.id, pid),
     db.select({ canLogIssues: projectMembersTable.canLogIssues }).from(projectMembersTable)
       .where(and(eq(projectMembersTable.projectId, pid), eq(projectMembersTable.userId, req.user!.id))).limit(1),
   ]);
   const canLogIssues = permRow[0]?.canLogIssues ?? false;
   const seenBefore = lastView.get("shared");
-  const docIds = [...docMap.keys()], photoIds = canLogIssues ? [...photoMap.keys()] : [], permitIds = [...permitMap.keys()];
-  const [gatedDocs, safetyDocs, photos, permits] = await Promise.all([
+  const docIds = [...docMap.keys()], photoIds = canLogIssues ? [...photoMap.keys()] : [], permitIds = [...permitMap.keys()], reportIds = [...reportMap.keys()];
+  const [gatedDocs, safetyDocs, photos, permits, reports] = await Promise.all([
     docIds.length ? db.select().from(documentsTable).where(and(eq(documentsTable.projectId, pid), inArray(documentsTable.id, docIds), inArray(documentsTable.status, ["current", "superseded"]))) : Promise.resolve([]),
     db.select().from(documentsTable).where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, "safety"), eq(documentsTable.status, "current"))),
     photoIds.length ? db.select().from(photosTable).where(and(eq(photosTable.projectId, pid), inArray(photosTable.id, photoIds))) : Promise.resolve([]),
     permitIds.length ? db.select().from(permitsTable).where(and(eq(permitsTable.projectId, pid), isNull(permitsTable.archivedAt), inArray(permitsTable.id, permitIds))) : Promise.resolve([]),
+    reportIds.length ? db.select().from(dailyReportsTable).where(and(eq(dailyReportsTable.projectId, pid), inArray(dailyReportsTable.id, reportIds))) : Promise.resolve([] as (typeof dailyReportsTable.$inferSelect)[]),
   ]);
   // Safety docs bypass portal_shares entirely, so they have no entry in docMap —
   // fold their own createdAt in as a synthetic "shared at" for ordering/unseen.
@@ -828,6 +842,9 @@ router.get("/portal/shared", ...portalGuards, async (req, res) => {
   for (const d of safetyDocs) if (!docMapWithSafety.has(d.id)) docMapWithSafety.set(d.id, d.createdAt);
   const docs = [...gatedDocs, ...safetyDocs.filter(d => !docMap.has(d.id))];
   const myStatuses = await myDocStatuses(req.user!.id, docs.map(d => d.id));
+  // A share rule can outlive its content (e.g. shared before the diary was ever
+  // written) — only surface reports that actually have something to read.
+  const reportsWithContent = reports.filter(r => hasManagerContent(r.managerReport));
   // Annotate each item with when it was shared + whether it's unseen, and order
   // NEWEST-shared first so fresh content is at the top with the unseen highlight.
   const annotate = <T extends { id: string }>(rows: T[], serialize: (r: T) => any, map: Map<string, Date>) =>
@@ -839,7 +856,21 @@ router.get("/portal/shared", ...portalGuards, async (req, res) => {
     documents: withMyStatus(annotate(docs, serializeDoc, docMapWithSafety), myStatuses),
     photos: annotate(photos, serializeIssue, photoMap),
     permits: annotate(permits, serializePermit, permitMap),
+    dailyReports: annotate(reportsWithContent, serializeSharedReport, reportMap),
   });
+});
+
+// POST /api/portal/daily-reports/:reportId/view — log that this member opened a
+// report explicitly shared with them via the portal (distinct from the
+// permission-gated /portal/daily-report flow for today's report, which doesn't
+// need a separate view log since it's already activity-tracked by section).
+router.post("/portal/daily-reports/:reportId/view", ...portalGuards, async (req, res) => {
+  const pid = req.portalProjectId!;
+  const viewer = await resolveViewer(req.user!.id, pid);
+  const ids = await visibleIds(pid, "daily_report", viewer);
+  if (!ids.has(req.params.reportId)) { res.status(404).json({ error: "not_found", message: "Report not found" }); return; }
+  void logActivity({ userId: req.user!.id, projectId: pid, companyId: req.user!.companyId, section: "shared", action: "view", itemType: "daily_report", itemId: req.params.reportId, req });
+  res.json({ success: true });
 });
 
 // GET /api/portal/progress
@@ -1358,28 +1389,35 @@ router.post("/portal/documents/:documentId/acknowledge", ...portalGuards, async 
       return;
     }
 
-    if (await isPinLockedOut(req.user!.id)) {
-      res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
-      return;
-    }
+    // Safety-critical documents (method statements/RAMS, permits, safety docs)
+    // and any document flagged "require PIN sign-off" are PIN-confirmed. All
+    // other sign-offs are a single deliberate confirm — still attributed,
+    // timestamped, and audit-logged exactly the same, just without PIN entry.
+    const pinRequired = pinRequiredForDoc(doc);
     const userRows = await db.select({ pinHash: usersTable.pinHash, name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
-    const pinHash = userRows[0]?.pinHash ?? null;
-    if (!pinHash) {
-      res.status(400).json({ error: "pin_not_set", message: "You need to set a sign-off PIN before signing off documents." });
-      return;
+    if (pinRequired) {
+      if (await isPinLockedOut(req.user!.id)) {
+        res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
+        return;
+      }
+      const pinHash = userRows[0]?.pinHash ?? null;
+      if (!pinHash) {
+        res.status(400).json({ error: "pin_not_set", message: "You need to set a sign-off PIN before signing off documents." });
+        return;
+      }
+      if (!pin || !/^\d{4}$/.test(String(pin))) {
+        res.status(400).json({ error: "validation_error", message: "A 4-digit PIN is required to sign off this document." });
+        return;
+      }
+      const valid = await bcrypt.compare(String(pin), pinHash);
+      if (!valid) {
+        const { locked, remaining } = await recordFailedPinAttempt(req.user!.id);
+        if (locked) res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
+        else res.status(401).json({ error: "invalid_pin", message: "Incorrect PIN", attemptsRemaining: remaining });
+        return;
+      }
+      await clearPinAttempts(req.user!.id);
     }
-    if (!pin || !/^\d{4}$/.test(String(pin))) {
-      res.status(400).json({ error: "validation_error", message: "A 4-digit PIN is required to sign off this document." });
-      return;
-    }
-    const valid = await bcrypt.compare(String(pin), pinHash);
-    if (!valid) {
-      const { locked, remaining } = await recordFailedPinAttempt(req.user!.id);
-      if (locked) res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
-      else res.status(401).json({ error: "invalid_pin", message: "Incorrect PIN", attemptsRemaining: remaining });
-      return;
-    }
-    await clearPinAttempts(req.user!.id);
 
     const existing = await db.select().from(documentDistributionsTable)
       .where(and(eq(documentDistributionsTable.documentId, doc.id), eq(documentDistributionsTable.userId, req.user!.id)))
@@ -1388,12 +1426,12 @@ router.post("/portal/documents/:documentId/acknowledge", ...portalGuards, async 
     await db.transaction(async (tx) => {
       if (existing[0]) {
         await tx.update(documentDistributionsTable)
-          .set({ status: "acknowledged", acknowledgedAt: new Date(), viewedAt: existing[0].viewedAt ?? new Date(), signedOffWithPin: true })
+          .set({ status: "acknowledged", acknowledgedAt: new Date(), viewedAt: existing[0].viewedAt ?? new Date(), signedOffWithPin: pinRequired })
           .where(eq(documentDistributionsTable.id, existing[0].id));
       } else {
         await tx.insert(documentDistributionsTable).values({
           id: generateId(), documentId: doc.id, userId: req.user!.id,
-          status: "acknowledged", viewedAt: new Date(), acknowledgedAt: new Date(), signedOffWithPin: true,
+          status: "acknowledged", viewedAt: new Date(), acknowledgedAt: new Date(), signedOffWithPin: pinRequired,
         });
       }
       await tx.insert(acknowledgmentAuditTable).values({
@@ -1404,7 +1442,7 @@ router.post("/portal/documents/:documentId/acknowledge", ...portalGuards, async 
         userName: userRows[0]?.name ?? "Unknown",
         userRole: req.portalMemberRole ?? "portal_member",
         action: "acknowledged",
-        signedOffWithPin: true,
+        signedOffWithPin: pinRequired,
         ipAddress: req.ip ?? null,
         userAgent: req.headers["user-agent"] ?? null,
       });

@@ -3620,6 +3620,44 @@ export const GetPortalSharedResponse = zod.object({
       sharedAt: zod.string().optional(),
     }),
   ),
+  dailyReports: zod.array(
+    zod
+      .object({
+        id: zod.string(),
+        reportDate: zod.string(),
+        managerReport: zod
+          .object({
+            weather: zod.string().optional(),
+            labourOnSite: zod.string().optional(),
+            plantEquipment: zod.string().optional(),
+            workCompleted: zod.string().optional(),
+            delaysIssues: zod.string().optional(),
+            deliveries: zod.string().optional(),
+            hsNotes: zod.string().optional(),
+          })
+          .describe(
+            'The structured \"site diary\" — every field optional\/free text.',
+          )
+          .nullish(),
+        sharedAt: zod.date().optional(),
+        unseen: zod.boolean().optional(),
+      })
+      .describe(
+        "A daily report explicitly shared to the portal — the authored site diary only, never the auto-collated internal activity (check-ins, document views\/sign-offs, site photos) the dashboard's full report shows.",
+      ),
+  ),
+});
+
+/**
+ * @summary Record that this member opened a daily report explicitly shared with them
+ */
+export const ViewPortalSharedDailyReportParams = zod.object({
+  reportId: zod.coerce.string(),
+});
+
+export const ViewPortalSharedDailyReportResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
 });
 
 /**

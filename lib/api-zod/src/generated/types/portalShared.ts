@@ -8,9 +8,11 @@
 import type { PortalDocument } from "./portalDocument";
 import type { PortalIssue } from "./portalIssue";
 import type { PortalPermit } from "./portalPermit";
+import type { PortalSharedDailyReport } from "./portalSharedDailyReport";
 
 export interface PortalShared {
   documents: PortalDocument[];
   photos: PortalIssue[];
   permits: PortalPermit[];
+  dailyReports: PortalSharedDailyReport[];
 }

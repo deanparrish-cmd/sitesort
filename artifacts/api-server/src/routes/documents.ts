@@ -9,6 +9,7 @@ import { sendDocumentNotificationEmail } from "../lib/email";
 import { enqueuePushForMembers, acceptedPortalMemberUserIds } from "../lib/push-triggers";
 import { removedFromProjectUserIds } from "../lib/project-membership";
 import { isPinLockedOut, recordFailedPinAttempt, clearPinAttempts } from "../lib/pin-attempts";
+import { pinRequiredForDoc } from "../lib/signoff";
 
 const APP_URL = process.env.APP_URL ?? `https://${process.env.REPLIT_DEV_DOMAIN ?? "www.sitesort.co.uk"}`;
 
@@ -114,6 +115,8 @@ router.get("/projects/:projectId/documents", authenticate, async (req, res) => {
         previousVersionId: d.previousVersionId ?? null,
         status: d.status,
         requiresAcknowledgment: d.requiresAcknowledgment,
+        requirePinSignoff: d.requirePinSignoff,
+        pinRequired: pinRequiredForDoc(d),
         publicAccess: d.publicAccess,
         createdAt: d.createdAt.toISOString(),
         distributionSummary: getDistSummary(dists),
@@ -138,7 +141,7 @@ router.post("/projects/:projectId/documents", authenticate, async (req, res) => 
       return;
     }
 
-    const { name, type, fileUrl, fileSize, requiresAcknowledgment, publicAccess, distributeToUserIds, supersededDocumentId, revision } = req.body;
+    const { name, type, fileUrl, fileSize, requiresAcknowledgment, requirePinSignoff, publicAccess, distributeToUserIds, supersededDocumentId, revision } = req.body;
     if (!name || !type || !fileUrl) {
       res.status(400).json({ error: "validation_error", message: "name, type, fileUrl required" });
       return;
@@ -192,6 +195,7 @@ router.post("/projects/:projectId/documents", authenticate, async (req, res) => 
       previousVersionId,
       status: "current",
       requiresAcknowledgment: requiresAcknowledgment ?? false,
+      requirePinSignoff: requirePinSignoff ?? false,
       publicAccess: publicAccess ?? false,
     });
 
@@ -264,6 +268,8 @@ router.post("/projects/:projectId/documents", authenticate, async (req, res) => 
       previousVersionId,
       status: "current",
       requiresAcknowledgment: requiresAcknowledgment ?? false,
+      requirePinSignoff: requirePinSignoff ?? false,
+      pinRequired: pinRequiredForDoc({ type, requirePinSignoff: requirePinSignoff ?? false }),
       publicAccess: publicAccess ?? false,
       createdAt: new Date().toISOString(),
       distributionSummary: getDistSummary(dists),
@@ -342,6 +348,8 @@ router.get("/documents/:documentId", authenticate, async (req, res) => {
       previousVersionId: d.previousVersionId ?? null,
       status: d.status,
       requiresAcknowledgment: d.requiresAcknowledgment,
+      requirePinSignoff: d.requirePinSignoff,
+      pinRequired: pinRequiredForDoc(d),
       publicAccess: d.publicAccess,
       createdAt: d.createdAt.toISOString(),
       distributionSummary: getDistSummary(distsWithUsers),
@@ -358,7 +366,7 @@ router.post("/documents/:documentId/acknowledge", authenticate, async (req, res)
     const { pin } = req.body ?? {};
 
     // Load the document and verify tenant access.
-    const docs = await db.select({ id: documentsTable.id, type: documentsTable.type, projectId: documentsTable.projectId, version: documentsTable.version })
+    const docs = await db.select({ id: documentsTable.id, type: documentsTable.type, projectId: documentsTable.projectId, version: documentsTable.version, requirePinSignoff: documentsTable.requirePinSignoff })
       .from(documentsTable).where(eq(documentsTable.id, req.params.documentId)).limit(1);
     if (!docs[0]) {
       res.status(404).json({ error: "not_found", message: "Document not found" });
@@ -381,38 +389,43 @@ router.post("/documents/:documentId/acknowledge", authenticate, async (req, res)
       return;
     }
 
-    // Every sign-off is PIN-confirmed — that's what makes it an attributable
-    // signature, not just a click. Rate-limited per user (5 wrong attempts locks
-    // out for 15 minutes) so a PIN can't be brute-forced.
-    if (await isPinLockedOut(req.user!.id)) {
-      res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
-      return;
-    }
-
-    const users = await db.select({ pinHash: usersTable.pinHash }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
-    const pinHash = users[0]?.pinHash ?? null;
-    if (!pinHash) {
-      res.status(400).json({ error: "pin_not_set", message: "You need to set a sign-off PIN before signing off documents." });
-      return;
-    }
-
-    if (!pin || !/^\d{4}$/.test(String(pin))) {
-      res.status(400).json({ error: "validation_error", message: "A 4-digit PIN is required to sign off this document." });
-      return;
-    }
-
-    const valid = await bcrypt.compare(String(pin), pinHash);
-    if (!valid) {
-      const { locked, remaining } = await recordFailedPinAttempt(req.user!.id);
-      if (locked) {
+    // Safety-critical documents (method statements/RAMS, permits, safety docs)
+    // and any document flagged "require PIN sign-off" are PIN-confirmed. All
+    // other sign-offs are a single deliberate confirm — still attributed,
+    // timestamped, and audit-logged exactly the same, just without PIN entry.
+    // PIN checks are rate-limited per user (5 wrong attempts locks out 15 min).
+    const pinRequired = pinRequiredForDoc(docs[0]);
+    if (pinRequired) {
+      if (await isPinLockedOut(req.user!.id)) {
         res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
-      } else {
-        res.status(401).json({ error: "invalid_pin", message: "Incorrect PIN", attemptsRemaining: remaining });
+        return;
       }
-      return;
-    }
 
-    await clearPinAttempts(req.user!.id);
+      const users = await db.select({ pinHash: usersTable.pinHash }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
+      const pinHash = users[0]?.pinHash ?? null;
+      if (!pinHash) {
+        res.status(400).json({ error: "pin_not_set", message: "You need to set a sign-off PIN before signing off documents." });
+        return;
+      }
+
+      if (!pin || !/^\d{4}$/.test(String(pin))) {
+        res.status(400).json({ error: "validation_error", message: "A 4-digit PIN is required to sign off this document." });
+        return;
+      }
+
+      const valid = await bcrypt.compare(String(pin), pinHash);
+      if (!valid) {
+        const { locked, remaining } = await recordFailedPinAttempt(req.user!.id);
+        if (locked) {
+          res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
+        } else {
+          res.status(401).json({ error: "invalid_pin", message: "Incorrect PIN", attemptsRemaining: remaining });
+        }
+        return;
+      }
+
+      await clearPinAttempts(req.user!.id);
+    }
 
     // Snapshot the actor's name/role so the audit record survives later user changes.
     const actorRows = await db.select({ name: usersTable.name, role: usersTable.role })
@@ -422,7 +435,7 @@ router.post("/documents/:documentId/acknowledge", authenticate, async (req, res)
     // either both the sign-off and its append-only audit record persist, or neither does.
     await db.transaction(async (tx) => {
       await tx.update(documentDistributionsTable)
-        .set({ status: "acknowledged", acknowledgedAt: new Date(), viewedAt: distRecord[0].viewedAt ?? new Date(), signedOffWithPin: true })
+        .set({ status: "acknowledged", acknowledgedAt: new Date(), viewedAt: distRecord[0].viewedAt ?? new Date(), signedOffWithPin: pinRequired })
         .where(eq(documentDistributionsTable.id, distRecord[0].id));
 
       await tx.insert(acknowledgmentAuditTable).values({
@@ -433,7 +446,7 @@ router.post("/documents/:documentId/acknowledge", authenticate, async (req, res)
         userName: actorRows[0]?.name ?? "Unknown",
         userRole: actorRows[0]?.role ?? req.user!.role,
         action: "acknowledged",
-        signedOffWithPin: true,
+        signedOffWithPin: pinRequired,
         ipAddress: req.ip ?? null,
         userAgent: req.headers["user-agent"] ?? null,
       });
@@ -617,8 +630,12 @@ router.patch("/documents/:documentId", authenticate, async (req, res) => {
       return;
     }
 
-    const { status, version, revision } = req.body;
+    const { status, version, revision, requirePinSignoff } = req.body;
     const updates: Record<string, unknown> = {};
+    // Per-document "require PIN sign-off" toggle a PM can flip after upload.
+    if (requirePinSignoff !== undefined) {
+      updates.requirePinSignoff = Boolean(requirePinSignoff);
+    }
     if (status !== undefined) {
       if (!["current", "superseded"].includes(status)) {
         res.status(400).json({ error: "validation_error", message: "status must be current or superseded" });
@@ -654,6 +671,7 @@ router.patch("/documents/:documentId", authenticate, async (req, res) => {
       name: d.name, type: d.type, version: d.version, revision: d.revision ?? null, fileUrl: d.fileUrl,
       fileSize: d.fileSize, previousVersionId: d.previousVersionId ?? null,
       status: d.status, requiresAcknowledgment: d.requiresAcknowledgment,
+      requirePinSignoff: d.requirePinSignoff, pinRequired: pinRequiredForDoc(d),
       publicAccess: d.publicAccess, createdAt: d.createdAt.toISOString(),
       distributionSummary: getDistSummary(dists),
     });

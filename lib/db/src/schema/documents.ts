@@ -20,6 +20,10 @@ export const documentsTable = pgTable("documents", {
   previousVersionId: text("previous_version_id"),
   status: text("status").notNull().default("current"),
   requiresAcknowledgment: boolean("requires_acknowledgment").notNull().default(false),
+  // Per-document PIN override (in addition to the always-PIN safety-critical
+  // types: method_statement, permit, safety). When true, sign-off requires the
+  // member's 4-digit PIN even for otherwise click-to-confirm doc types.
+  requirePinSignoff: boolean("require_pin_signoff").notNull().default(false),
   publicAccess: boolean("public_access").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

@@ -1,0 +1,36 @@
+Two things have now been reported as done multiple times and still don't
+work. I need definitive answers, not another attempt.
+
+PART 1 — VIEWING SUBMITTED ITEMS (Site Issues, Plant & Materials, Daily
+Reports in the portal):
+Once a member submits to the PM, they cannot open the item to view it at
+all. The specified behaviour was: reopening a submitted item shows the
+original content (locked, read-only) plus any later timestamped
+additions, and allows adding further notes without altering the original.
+1. State plainly whether the submitted-state read view was ever built.
+2. Build/fix it so a member can open ANY of their items in any state:
+   draft (fully editable), submitted (original read-only + additions
+   visible + can add a new timestamped note). Same for the PM side.
+3. Do NOT report this done until you have actually opened a submitted
+   item of each of the three types and seen the content render.
+
+PART 2 — DICTATION: I need a straight answer on why it doesn't work.
+1. Determine whether the Web Speech API (SpeechRecognition /
+   webkitSpeechRecognition) is actually AVAILABLE and functional in the
+   contexts our users are in — specifically iOS Safari in STANDALONE PWA
+   mode (home-screen installed), Android Chrome, and desktop. Test, don't
+   assume. Report availability per platform.
+2. If it is unavailable/unreliable in standalone PWA (which I suspect is
+   the real reason this keeps "not working"), say so plainly and switch
+   approach: implement dictation as record-audio → upload → server-side
+   transcription (e.g. a speech-to-text API), with a clear recording UI
+   (tap to record, stop, text inserted into the field). That works
+   regardless of browser speech support.
+3. Whichever approach: the mic must work on EVERY free-text field in all
+   three features, and where a platform genuinely cannot support it, the
+   button must not appear at all rather than sitting there doing nothing.
+4. Report exactly which platforms now work and how you verified it.
+
+Do not mark either part complete based on code inspection. I want the
+verification steps performed and the results reported per platform and
+per feature.

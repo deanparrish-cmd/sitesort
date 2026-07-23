@@ -9,8 +9,10 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { LinkRow } from "@/components/ui/link-row";
 import { useToast } from "@/hooks/use-toast";
 import { openDocument } from "@/lib/documents";
+import { itemDeepLink } from "@/lib/deep-link";
 import { formatBytes } from "@/lib/utils";
 import { SECTION_NAV } from "@/pages/portal/layout";
 import {
@@ -293,20 +295,35 @@ export function ProjectTeamActivity({ projectId }: { projectId: string }) {
             <>
               <p className="text-xs text-muted-foreground mb-2">{activityQ.data?.total} total events{(activityQ.data?.total ?? 0) > (activityQ.data?.entries.length ?? 0) ? ` (showing latest ${activityQ.data?.entries.length})` : ""}</p>
               <div className="divide-y divide-border border border-border rounded-lg overflow-hidden">
-                {activityQ.data?.entries.map(en => (
-                  <div key={en.id} className="flex items-center gap-3 px-3 py-2.5 bg-card text-sm">
-                    {en.action === "blocked" ? <ShieldAlert className="w-4 h-4 text-rose-500 shrink-0" /> : <Eye className="w-4 h-4 text-muted-foreground shrink-0" />}
-                    <div className="min-w-0 flex-1">
+                {activityQ.data?.entries.map(en => {
+                  const label = (
+                    <>
                       <span className="font-medium">{en.memberName}</span>
                       {en.removedFromProject && <span className="text-muted-foreground"> (removed from project)</span>}{" "}
                       <span className="text-muted-foreground">
                         {en.action === "blocked" ? "was blocked from" : "viewed"} {en.sectionLabel}
-                        {en.itemId ? " (opened an item)" : ""}
                       </span>
+                    </>
+                  );
+                  const icon = en.action === "blocked" ? <ShieldAlert className="w-4 h-4 text-rose-500" /> : <Eye className="w-4 h-4 text-muted-foreground" />;
+                  const href = en.itemId ? itemDeepLink(projectId, en.itemType, en.itemId) ?? undefined : undefined;
+                  return href ? (
+                    <LinkRow
+                      key={en.id}
+                      href={href}
+                      icon={icon}
+                      label={label}
+                      detail={fmtDateTime(en.createdAt)}
+                      className="rounded-none border-0 min-h-0 px-3 py-2.5 bg-card"
+                    />
+                  ) : (
+                    <div key={en.id} className="flex items-center gap-3 px-3 py-2.5 bg-card text-sm">
+                      {icon}
+                      <div className="min-w-0 flex-1">{label}</div>
+                      <span className="text-xs text-muted-foreground shrink-0">{fmtDateTime(en.createdAt)}</span>
                     </div>
-                    <span className="text-xs text-muted-foreground shrink-0">{fmtDateTime(en.createdAt)}</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </>
           )

@@ -2514,6 +2514,31 @@ paths:
               schema:
                 $ref: "#/components/schemas/PortalShared"
 
+  /portal/daily-reports/{reportId}/view:
+    post:
+      operationId: viewPortalSharedDailyReport
+      tags: [portal]
+      summary: Record that this member opened a daily report explicitly shared with them
+      parameters:
+        - name: reportId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: View recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          description: Report not found or not shared with this member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /portal/drawings:
     get:
       operationId: getPortalDrawings
@@ -5726,6 +5751,25 @@ components:
             $ref: "#/components/schemas/PortalPermit"
       required: [methodStatements, safety, permits]
 
+    PortalSharedDailyReport:
+      type: object
+      description: A daily report explicitly shared to the portal — the authored site diary only, never the auto-collated internal activity (check-ins, document views/sign-offs, site photos) the dashboard's full report shows.
+      properties:
+        id:
+          type: string
+        reportDate:
+          type: string
+        managerReport:
+          allOf:
+            - $ref: "#/components/schemas/ManagerReportFields"
+          nullable: true
+        sharedAt:
+          type: string
+          format: date-time
+        unseen:
+          type: boolean
+      required: [id, reportDate]
+
     PortalShared:
       type: object
       properties:
@@ -5741,7 +5785,11 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PortalPermit"
-      required: [documents, photos, permits]
+        dailyReports:
+          type: array
+          items:
+            $ref: "#/components/schemas/PortalSharedDailyReport"
+      required: [documents, photos, permits, dailyReports]
 
     PortalGeneral:
       type: object

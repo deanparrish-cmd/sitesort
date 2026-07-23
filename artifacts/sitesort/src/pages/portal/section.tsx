@@ -12,7 +12,7 @@ import {
   useCreatePortalSiteIssue, useUpdatePortalSiteIssue,
   useEditPortalSiteIssueDraft, useSubmitPortalSiteIssue, useAddPortalSiteIssueNote,
   useGetPortalDailyReport, useGetPortalDailyReportHistory, useUpdatePortalDailyReport,
-  useSubmitPortalDailyReport, useAddPortalDailyReportNote,
+  useSubmitPortalDailyReport, useAddPortalDailyReportNote, useViewPortalSharedDailyReport,
   getGetPortalOverviewQueryKey, getGetPortalSiteIssuesQueryKey,
   getGetPortalGeneralQueryKey, getGetPortalSharedQueryKey,
   getGetPortalMyDocumentsQueryKey, getGetPortalUnseenQueryKey,
@@ -42,6 +42,8 @@ import {
 } from "@/lib/portal-push";
 import { Bell, BellOff } from "lucide-react";
 import { useSignOffFlow } from "@/hooks/use-sign-off-flow";
+import { ClipboardList } from "lucide-react";
+import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 // Portal-authed binary download: the app's global fetch interceptor attaches the
 // portal bearer token to /api/portal/* requests, so a plain <a href> (which does
@@ -1045,6 +1047,12 @@ function SharedView() {
     onSigned: () => queryClient.invalidateQueries({ queryKey: getGetPortalSharedQueryKey() }),
     onPinSet: () => queryClient.invalidateQueries({ queryKey: getGetPortalContextQueryKey() }),
   });
+  const viewReport = useViewPortalSharedDailyReport();
+  const [viewingReport, setViewingReport] = useState<{ id: string; reportDate: string; managerReport?: ManagerReportFields | null } | null>(null);
+  const openSharedReport = (r: { id: string; reportDate: string; managerReport?: ManagerReportFields | null }) => {
+    setViewingReport(r);
+    viewReport.mutate({ reportId: r.id });
+  };
   // Site notes lived on the old (now-retired) General tab alongside general
   // documents — they're project-wide announcements, not gated/shared content,
   // so they don't come back from /portal/shared. Pulled in here separately so
@@ -1058,17 +1066,19 @@ function SharedView() {
   // while the member is still reading the page. The nav badge still clears.
   const unseenIds = useRef<Set<string> | null>(null);
   if (data && unseenIds.current === null) {
-    unseenIds.current = new Set<string>([...data.documents, ...data.permits, ...data.photos].filter((i: any) => i.unseen).map((i: any) => i.id));
+    unseenIds.current = new Set<string>([...data.documents, ...data.permits, ...data.photos, ...(data.dailyReports ?? [])].filter((i: any) => i.unseen).map((i: any) => i.id));
   }
   const isNew = (id: string) => unseenIds.current?.has(id) ?? false;
   if (isLoading) return <Loading />;
-  const empty = !data || (!data.documents.length && !data.photos.length && !data.permits.length && !notes.length);
+  const dailyReports = data?.dailyReports ?? [];
+  const empty = !data || (!data.documents.length && !data.photos.length && !data.permits.length && !notes.length && !dailyReports.length);
   if (empty) return <Empty>Nothing has been shared with you yet. Your project manager will share drawings, documents and updates here.</Empty>;
 
   const filteredDocs = data!.documents.filter(d => docMatchesCategory(d, category));
   const showPermits = CATEGORY_SHOWS_PERMITS.has(category) && data!.permits.length > 0;
   const showPhotos = category === "all" && data!.photos.length > 0;
   const showNotes = (category === "all" || category === "general") && notes.length > 0;
+  const showDailyReports = category === "all" && dailyReports.length > 0;
   const nothingInCategory = category !== "all" && filteredDocs.length === 0 && !showPermits && !(category === "general" && showNotes);
 
   return (
@@ -1125,7 +1135,38 @@ function SharedView() {
           ))}
         </div></div>
       )}
+      {showDailyReports && (
+        <div><SectionTitle>Daily reports</SectionTitle><Card>
+          {dailyReports.map(r => (
+            <button
+              key={r.id}
+              onClick={() => openSharedReport(r)}
+              className="w-full flex items-center gap-3 px-3 py-3 min-h-[44px] text-left hover:bg-muted/60 transition-colors border-b border-border last:border-b-0"
+            >
+              {isNew(r.id) && <NewPill />}
+              <ClipboardList className="w-4 h-4 text-primary shrink-0" />
+              <span className="flex-1 min-w-0 text-sm font-medium truncate">Daily site report — {fmtDate(r.reportDate)}</span>
+            </button>
+          ))}
+        </Card></div>
+      )}
       {nothingInCategory && <Empty>Nothing in this category yet.</Empty>}
+
+      {viewingReport && (
+        <Dialog open onOpenChange={v => { if (!v) setViewingReport(null); }}>
+          <DialogHeader>
+            <DialogTitle>Daily site report — {fmtDate(viewingReport.reportDate)}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {DIARY_FIELDS.filter(f => (viewingReport.managerReport?.[f.key] ?? "").toString().trim().length > 0).map(f => (
+              <div key={f.key}>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{f.label}</p>
+                <p className="text-sm mt-1 whitespace-pre-wrap break-words">{viewingReport.managerReport![f.key]}</p>
+              </div>
+            ))}
+          </div>
+        </Dialog>
+      )}
     </div>
   );
 }

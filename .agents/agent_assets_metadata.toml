@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "af4gUO4O9dAB4Z6ZbRHxF"
+uri = "file://attached_assets/generated_audio/dictation_test.mp3"
+type = "audio"
+title = "dictation test phrase"

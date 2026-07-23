@@ -1822,10 +1822,22 @@ export interface PortalHs {
   permits: PortalPermit[];
 }
 
+/**
+ * A daily report explicitly shared to the portal — the authored site diary only, never the auto-collated internal activity (check-ins, document views/sign-offs, site photos) the dashboard's full report shows.
+ */
+export interface PortalSharedDailyReport {
+  id: string;
+  reportDate: string;
+  managerReport?: ManagerReportFields | null;
+  sharedAt?: string;
+  unseen?: boolean;
+}
+
 export interface PortalShared {
   documents: PortalDocument[];
   photos: PortalIssue[];
   permits: PortalPermit[];
+  dailyReports: PortalSharedDailyReport[];
 }
 
 export interface PortalGeneral {
