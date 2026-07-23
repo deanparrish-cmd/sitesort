@@ -189,7 +189,13 @@
       "Bash(awk 'NR==175{print length\\($0\\)}' CLAUDE.md)",
       "Bash(awk 'NR==176{print length\\($0\\)}' CLAUDE.md)",
       "Bash(awk 'NR==177{print length\\($0\\)}' CLAUDE.md)",
-      "Bash(python3)"
+      "Bash(python3)",
+      "Bash(tee /tmp/person.json)",
+      "Bash(tee /tmp/member.json)",
+      "Bash(tee /tmp/invite.json)",
+      "Bash(tee /tmp/doc.json)",
+      "Bash(tee /tmp/doc2.json)",
+      "Bash(python3 -c \"import json,sys; print\\(json.load\\(sys.stdin\\)['id']\\)\")"
     ]
   },
   "hooks": {
