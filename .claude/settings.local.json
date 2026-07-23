@@ -204,7 +204,10 @@
       "Bash(echo \"---exit code: $?---\")",
       "Bash(tee /tmp/gendoc.json)",
       "Bash(tee /tmp/permitdoc.json)",
-      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('id:',d['id'],'pinRequired:',d.get\\('pinRequired'\\)\\)\")"
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('id:',d['id'],'pinRequired:',d.get\\('pinRequired'\\)\\)\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(d[0] if d else 'no docs'\\)\")",
+      "Bash(awk '/^87\\\\. /{print length\\($0\\)}' /home/runner/workspace/CLAUDE.md)",
+      "Bash(awk '/^88\\\\. /{print length\\($0\\)}' /home/runner/workspace/CLAUDE.md)"
     ]
   },
   "hooks": {
