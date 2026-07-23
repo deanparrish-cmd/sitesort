@@ -18,6 +18,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { ShareModal } from "@/components/share-modal";
 import { AlertViewer } from "@/components/alert-viewer";
+import { navigateToNotification } from "@/lib/deep-link";
 import { useToast } from "@/hooks/use-toast";
 import { useListProjects, useGetComplianceOverview } from "@workspace/api-client-react";
 import type { ExpiringInsuranceItem, ExpiringPermitItem } from "@workspace/api-client-react";
@@ -652,46 +653,7 @@ export default function Dashboard() {
   const handleActivityClick = async (n: Notification) => {
     markActivityRead(n.id);
 
-    const h = authHeaders();
-
-    if (n.type === "daily_report" && n.relatedEntityId) {
-      const res = await fetch(`/api/daily-reports/${n.relatedEntityId}`, { headers: h }).catch(() => null);
-      if (res?.ok) {
-        const r = await res.json();
-        navigate(`/projects/${r.projectId}?tab=reports&report=${n.relatedEntityId}`);
-        return;
-      }
-    }
-
-    if (n.type === "safety_concern" && n.relatedEntityId) {
-      const res = await fetch(`/api/photos/${n.relatedEntityId}`, { headers: h }).catch(() => null);
-      if (res?.ok) {
-        const photo = await res.json();
-        navigate(`/projects/${photo.projectId}?tab=photos&photo=${n.relatedEntityId}`);
-        return;
-      }
-    }
-
-    if (n.type === "document_uploaded" && n.relatedEntityId) {
-      const res = await fetch(`/api/documents/${n.relatedEntityId}`, { headers: h }).catch(() => null);
-      if (res?.ok) {
-        const doc = await res.json();
-        navigate(`/projects/${doc.projectId}?tab=documents`);
-        return;
-      }
-    }
-
-    // A portal member's "My documents" self-upload / a plant item logged from
-    // the portal — relatedEntityId is already the PROJECT id (no single-row
-    // fetch exists for either), so these go straight to the relevant tab.
-    if (n.type === "member_document_uploaded" && n.relatedEntityId) {
-      navigate(`/projects/${n.relatedEntityId}?tab=teamportal`);
-      return;
-    }
-    if (n.type === "portal_plant_item_logged" && n.relatedEntityId) {
-      navigate(`/projects/${n.relatedEntityId}?tab=plant`);
-      return;
-    }
+    if (await navigateToNotification(n, navigate)) return;
 
     if (n.type === "new_message") { navigate("/messages"); return; }
     if (n.type === "trial_ending" || n.type === "payment_failed") { navigate("/settings?tab=billing"); return; }

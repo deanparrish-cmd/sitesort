@@ -9459,6 +9459,93 @@ export function useGetPortalShared<
 }
 
 /**
+ * @summary Record that this member opened a daily report explicitly shared with them
+ */
+export const getViewPortalSharedDailyReportUrl = (reportId: string) => {
+  return `/api/portal/daily-reports/${reportId}/view`;
+};
+
+export const viewPortalSharedDailyReport = async (
+  reportId: string,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(
+    getViewPortalSharedDailyReportUrl(reportId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getViewPortalSharedDailyReportMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof viewPortalSharedDailyReport>>,
+    TError,
+    { reportId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof viewPortalSharedDailyReport>>,
+  TError,
+  { reportId: string },
+  TContext
+> => {
+  const mutationKey = ["viewPortalSharedDailyReport"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof viewPortalSharedDailyReport>>,
+    { reportId: string }
+  > = (props) => {
+    const { reportId } = props ?? {};
+
+    return viewPortalSharedDailyReport(reportId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ViewPortalSharedDailyReportMutationResult = NonNullable<
+  Awaited<ReturnType<typeof viewPortalSharedDailyReport>>
+>;
+
+export type ViewPortalSharedDailyReportMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Record that this member opened a daily report explicitly shared with them
+ */
+export const useViewPortalSharedDailyReport = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof viewPortalSharedDailyReport>>,
+    TError,
+    { reportId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof viewPortalSharedDailyReport>>,
+  TError,
+  { reportId: string },
+  TContext
+> => {
+  return useMutation(getViewPortalSharedDailyReportMutationOptions(options));
+};
+
+/**
  * @summary Drawings (current, with revisions)
  */
 export const getGetPortalDrawingsUrl = () => {

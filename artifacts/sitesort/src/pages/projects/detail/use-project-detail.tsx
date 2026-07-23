@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronUp, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, PinOff, StickyNote, Send, Loader2, History, Archive, Paperclip } from "lucide-react";
 import { ShareModal } from "@/components/share-modal";
+import { openDocument } from "@/lib/documents";
 import { DailyReportDetail, type ManagerReport } from "@/components/daily-report-detail";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -227,6 +228,35 @@ export function useProjectDetailState() {
         }
       });
   };
+
+  // Deep-link from an activity/notification entry: ?document=<id> opens the file
+  // directly (same action as the Documents tab's own "Open" button) and switches
+  // to the Documents tab for context. Mirrors the ?photo= pattern above.
+  useEffect(() => {
+    if (!documents || documents.length === 0) return;
+    const documentParam = new URLSearchParams(window.location.search).get("document");
+    if (!documentParam) return;
+    const match = documents.find(d => d.id === documentParam);
+    if (!match) return;
+    setActiveTab("documents");
+    window.history.replaceState({}, "", window.location.pathname + "?tab=documents");
+    openDocument(match.fileUrl, match.name);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documents]);
+
+  // Deep-link ?permit=<id>: same idea for permits (opens the attached certificate
+  // if one exists, and switches to the Permits tab either way).
+  useEffect(() => {
+    if (permits.length === 0) return;
+    const permitParam = new URLSearchParams(window.location.search).get("permit");
+    if (!permitParam) return;
+    const match = permits.find(p => p.id === permitParam);
+    if (!match) return;
+    setActiveTab("permits");
+    window.history.replaceState({}, "", window.location.pathname + "?tab=permits");
+    if (match.documentUrl) openDocument(match.documentUrl, match.type);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [permits]);
 
   // Lazily loaded on first toggle to "Archived" — no need to fetch a company's
   // whole archive history on every normal page load.

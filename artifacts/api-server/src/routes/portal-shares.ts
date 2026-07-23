@@ -23,7 +23,7 @@ function requireManager(req: import("express").Request, res: import("express").R
 }
 
 const SITE_STAFF = "Site Staff";
-const ITEM_TYPES = new Set(["document", "photo", "permit", "plant_item"]);
+const ITEM_TYPES = new Set(["document", "photo", "permit", "plant_item", "daily_report"]);
 
 async function ownedProject(req: import("express").Request): Promise<boolean> {
   const rows = await db.select({ id: projectsTable.id }).from(projectsTable)

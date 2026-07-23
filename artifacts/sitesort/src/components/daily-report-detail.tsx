@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
+import { LinkRow } from "@/components/ui/link-row";
 import { useToast } from "@/hooks/use-toast";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -11,6 +12,7 @@ import {
   ClipboardCheck, ClipboardList, PencilLine, Plus,
 } from "lucide-react";
 import { DictationButton } from "@/components/ui/dictation-button";
+import { itemDeepLink } from "@/lib/deep-link";
 
 // Shared by the Daily Reports hub (/daily-reports) and the project-detail
 // "Daily Reports" tab: renders the immutable auto snapshot plus the editable
@@ -53,8 +55,8 @@ export type DailyReportDetailData = {
   authoredAt?: string | null;
 };
 
-type DiaryFieldKey = keyof ManagerReport;
-const DIARY_FIELDS: { key: DiaryFieldKey; label: string; multiline: boolean; placeholder: string }[] = [
+export type DiaryFieldKey = keyof ManagerReport;
+export const DIARY_FIELDS: { key: DiaryFieldKey; label: string; multiline: boolean; placeholder: string }[] = [
   { key: "weather", label: "Weather", multiline: false, placeholder: "e.g. Dry, 16°C, light wind" },
   { key: "labourOnSite", label: "Labour on site", multiline: false, placeholder: "e.g. 8 (3 trades)" },
   { key: "plantEquipment", label: "Plant / equipment", multiline: false, placeholder: "e.g. Excavator, 2× dumper" },
@@ -238,32 +240,40 @@ export function DailyReportDetail({
           <h4 className="flex items-center gap-2 font-semibold text-sm mb-2"><FileText className="w-4 h-4 text-primary" />Document activity ({report.documentEventCount})</h4>
           <div className="space-y-1.5">
             {d.documentActivity.uploaded.map((e) => (
-              <div key={`u-${e.documentId}-${e.at}`} className="flex items-center gap-2 text-sm border rounded-lg px-3 py-2">
-                <Upload className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <span className="flex-1 min-w-0 truncate"><span className="font-medium">{e.name}</span> uploaded by {e.uploaderName}</span>
-                <span className="text-xs text-muted-foreground shrink-0">{time(e.at)}</span>
-              </div>
+              <LinkRow
+                key={`u-${e.documentId}-${e.at}`}
+                href={itemDeepLink(report.projectId, "document", e.documentId) ?? undefined}
+                icon={<Upload className="w-3.5 h-3.5 text-emerald-600" />}
+                label={<><span className="font-medium">{e.name}</span> uploaded by {e.uploaderName}</>}
+                detail={time(e.at)}
+              />
             ))}
             {d.documentActivity.amended.map((e) => (
-              <div key={`a-${e.documentId}-${e.at}`} className="flex items-center gap-2 text-sm border rounded-lg px-3 py-2">
-                <Pencil className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                <span className="flex-1 min-w-0 truncate"><span className="font-medium">{e.name}</span> amended (v{e.version}) by {e.uploaderName}</span>
-                <span className="text-xs text-muted-foreground shrink-0">{time(e.at)}</span>
-              </div>
+              <LinkRow
+                key={`a-${e.documentId}-${e.at}`}
+                href={itemDeepLink(report.projectId, "document", e.documentId) ?? undefined}
+                icon={<Pencil className="w-3.5 h-3.5 text-amber-600" />}
+                label={<><span className="font-medium">{e.name}</span> amended (v{e.version}) by {e.uploaderName}</>}
+                detail={time(e.at)}
+              />
             ))}
             {d.documentActivity.signedOff.map((e) => (
-              <div key={`s-${e.documentId}-${e.at}`} className="flex items-center gap-2 text-sm border rounded-lg px-3 py-2">
-                <ShieldCheck className="w-3.5 h-3.5 text-primary shrink-0" />
-                <span className="flex-1 min-w-0 truncate"><span className="font-medium">{e.documentName}</span> signed off by {e.userName}</span>
-                <span className="text-xs text-muted-foreground shrink-0">{time(e.at)}</span>
-              </div>
+              <LinkRow
+                key={`s-${e.documentId}-${e.at}`}
+                href={itemDeepLink(report.projectId, "document", e.documentId) ?? undefined}
+                icon={<ShieldCheck className="w-3.5 h-3.5 text-primary" />}
+                label={<><span className="font-medium">{e.documentName}</span> signed off by {e.userName}</>}
+                detail={time(e.at)}
+              />
             ))}
             {d.documentActivity.viewed.map((e) => (
-              <div key={`v-${e.documentId}-${e.at}`} className="flex items-center gap-2 text-sm border rounded-lg px-3 py-2">
-                <Eye className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                <span className="flex-1 min-w-0 truncate"><span className="font-medium">{e.documentName}</span> viewed by {e.userName}</span>
-                <span className="text-xs text-muted-foreground shrink-0">{time(e.at)}</span>
-              </div>
+              <LinkRow
+                key={`v-${e.documentId}-${e.at}`}
+                href={itemDeepLink(report.projectId, "document", e.documentId) ?? undefined}
+                icon={<Eye className="w-3.5 h-3.5 text-muted-foreground" />}
+                label={<><span className="font-medium">{e.documentName}</span> viewed by {e.userName}</>}
+                detail={time(e.at)}
+              />
             ))}
           </div>
         </div>

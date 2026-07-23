@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AlertViewer } from "@/components/alert-viewer";
+import { navigateToNotification } from "@/lib/deep-link";
 
 type Notification = {
   id: string;
@@ -162,64 +163,7 @@ export default function NotificationsPage() {
   const handleClick = async (n: Notification) => {
     if (!n.read) await markRead(n.id);
 
-    if (n.type === "daily_report" && n.relatedEntityId) {
-      try {
-        const res = await fetch(`/api/daily-reports/${n.relatedEntityId}`, { headers: authHeaders() });
-        if (res.ok) {
-          const r = await res.json();
-          setLocation(`/projects/${r.projectId}?tab=reports&report=${n.relatedEntityId}`);
-          return;
-        }
-      } catch { /* fall through */ }
-    }
-
-    if (n.type === "safety_concern" && n.relatedEntityId) {
-      try {
-        const res = await fetch(`/api/photos/${n.relatedEntityId}`, { headers: authHeaders() });
-        if (res.ok) {
-          const photo = await res.json();
-          setLocation(`/projects/${photo.projectId}?tab=photos`);
-          return;
-        }
-      } catch { /* fall through */ }
-    }
-
-    if (n.type === "document_uploaded" && n.relatedEntityId) {
-      try {
-        const res = await fetch(`/api/documents/${n.relatedEntityId}`, { headers: authHeaders() });
-        if (res.ok) {
-          const doc = await res.json();
-          setLocation(`/projects/${doc.projectId}?tab=documents`);
-          return;
-        }
-      } catch { /* fall through */ }
-    }
-
-    if (n.type === "portal_issue_logged" && n.relatedEntityId) {
-      try {
-        const res = await fetch(`/api/photos/${n.relatedEntityId}`, { headers: authHeaders() });
-        if (res.ok) {
-          const photo = await res.json();
-          setLocation(`/projects/${photo.projectId}?tab=issues&issueStatus=new`);
-          return;
-        }
-      } catch { /* fall through */ }
-    }
-
-    // A portal member's "My documents" self-upload — relatedEntityId is the
-    // PROJECT id (there's no single-row fetch for a portal_member_documents
-    // row), so this goes straight to the Team Portal activity tab where
-    // pending submissions are reviewed, no lookup needed.
-    if (n.type === "member_document_uploaded" && n.relatedEntityId) {
-      setLocation(`/projects/${n.relatedEntityId}?tab=teamportal`);
-      return;
-    }
-
-    // A portal member logging a new plant/material item — same shape (project id).
-    if (n.type === "portal_plant_item_logged" && n.relatedEntityId) {
-      setLocation(`/projects/${n.relatedEntityId}?tab=plant`);
-      return;
-    }
+    if (await navigateToNotification(n, setLocation)) return;
 
     const link = notifLink(n);
     if (link) setLocation(link);

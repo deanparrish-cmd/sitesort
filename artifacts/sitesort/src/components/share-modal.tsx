@@ -38,8 +38,9 @@ function normaliseUrl(url: string) {
 }
 
 // Portal-shareable entity types (things portal members can actually open). Also
-// the set that can be pinned to the Site Board.
-const PORTAL_ENTITY_TYPES = new Set(["document", "photo", "permit", "plant_item"]);
+// the set that can be pinned to the Site Board (daily reports have no fileUrl,
+// so the QR/Pin tab naturally has nothing to show them regardless).
+const PORTAL_ENTITY_TYPES = new Set(["document", "photo", "permit", "plant_item", "daily_report"]);
 
 function methodLabel(method: string) {
   const map: Record<string, string> = {
