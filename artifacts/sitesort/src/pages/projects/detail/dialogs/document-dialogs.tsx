@@ -9,6 +9,9 @@ import { formatDate, formatBytes, cn } from "@/lib/utils";
 import { useDetail } from "../context";
 import { docRev } from "../use-project-detail";
 
+// Safety-critical document types always require a PIN to sign off (mirrors the server's list).
+const PIN_ALWAYS_TYPES = new Set(["method_statement", "permit", "safety"]);
+
 export function DocumentDialogs() {
   const {
     project,
@@ -55,7 +58,10 @@ export function DocumentDialogs() {
     register,
     handleSubmit,
     setValue,
+    watch,
     watchedType,
+    editDocRequirePin,
+    setEditDocRequirePin,
     supersedableDocs,
     onUpload,
     toggleAllocate,
@@ -104,6 +110,26 @@ export function DocumentDialogs() {
                   className="flex h-11 w-full rounded-lg border-2 border-input bg-background px-3 py-2 text-sm"
                 />
                 <p className="text-xs text-muted-foreground">Drawing revision shown as “Rev …”. Override to match the title block.</p>
+              </div>
+            )}
+            {PIN_ALWAYS_TYPES.has(editDocModal.type) ? (
+              <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 shrink-0 text-primary" />
+                Safety-critical document — a 4-digit PIN is always required to sign off.
+              </p>
+            ) : (
+              <div className="flex items-start gap-2 p-4 bg-muted/30 border rounded-lg">
+                <input
+                  type="checkbox"
+                  id="editReqPin"
+                  checked={editDocRequirePin}
+                  onChange={e => setEditDocRequirePin(e.target.checked)}
+                  className="w-4 h-4 mt-0.5 text-accent rounded border-input focus:ring-accent"
+                />
+                <label htmlFor="editReqPin" className="text-sm">
+                  <span className="font-medium">Require a PIN to sign off</span>
+                  <span className="block text-xs text-muted-foreground">Off by default — signers just tap a single confirmation.</span>
+                </label>
               </div>
             )}
             <DialogFooter>
@@ -167,6 +193,12 @@ export function DocumentDialogs() {
               </div>
             </div>
 
+            {!signOffNeedsPin && (
+              <p className="text-sm text-muted-foreground">
+                By signing off you confirm: <span className="font-medium text-foreground">"I confirm I have read and understood this document."</span> Your name and the time will be recorded.
+              </p>
+            )}
+
             {signOffNeedsPin && setPinMode && (
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">
@@ -227,7 +259,7 @@ export function DocumentDialogs() {
             <DialogFooter>
               <Button variant="ghost" onClick={closeSignOff}>Cancel</Button>
               <Button variant="accent" onClick={submitSignOff} isLoading={signOffSubmitting}>
-                {signOffNeedsPin && setPinMode ? "Set PIN & sign off" : "Sign off"}
+                {!signOffNeedsPin ? "Confirm & sign off" : setPinMode ? "Set PIN & sign off" : "Sign off"}
               </Button>
             </DialogFooter>
           </div>
@@ -335,6 +367,22 @@ export function DocumentDialogs() {
             <input type="checkbox" id="reqAck" {...register("requiresAcknowledgment")} className="w-4 h-4 text-accent rounded border-input focus:ring-accent" />
             <label htmlFor="reqAck" className="text-sm font-medium">Require team members to digitally sign-off</label>
           </div>
+          {!!watch("requiresAcknowledgment") && (
+            PIN_ALWAYS_TYPES.has(watchedType) ? (
+              <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 shrink-0 text-primary" />
+                Safety-critical document — a 4-digit PIN is always required to sign off.
+              </p>
+            ) : (
+              <div className="flex items-start gap-2 p-4 bg-muted/30 border rounded-lg mt-2">
+                <input type="checkbox" id="reqPin" {...register("requirePinSignoff")} className="w-4 h-4 mt-0.5 text-accent rounded border-input focus:ring-accent" />
+                <label htmlFor="reqPin" className="text-sm">
+                  <span className="font-medium">Require a PIN to sign off</span>
+                  <span className="block text-xs text-muted-foreground">Off by default — signers just tap a single confirmation. Turn on for extra assurance.</span>
+                </label>
+              </div>
+            )
+          )}
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => setIsUploadOpen(false)}>Cancel</Button>
             <Button type="submit" variant="accent" isLoading={uploadMutation.isPending}>Upload</Button>

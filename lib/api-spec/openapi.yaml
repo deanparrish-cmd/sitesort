@@ -3676,6 +3676,12 @@ components:
           enum: [current, superseded]
         requiresAcknowledgment:
           type: boolean
+        requirePinSignoff:
+          type: boolean
+          description: Per-document override forcing PIN sign-off even for non-safety-critical types.
+        pinRequired:
+          type: boolean
+          description: Whether signing off this document requires the member's 4-digit PIN (safety-critical types or per-document override).
         publicAccess:
           type: boolean
         createdAt:
@@ -3726,6 +3732,8 @@ components:
         fileSize:
           type: integer
         requiresAcknowledgment:
+          type: boolean
+        requirePinSignoff:
           type: boolean
         publicAccess:
           type: boolean
@@ -5547,7 +5555,10 @@ components:
           required: [id, name, version]
         requiresAcknowledgment:
           type: boolean
-          description: Whether this document needs a PIN sign-off.
+          description: Whether this document needs a digital sign-off.
+        pinRequired:
+          type: boolean
+          description: Whether signing off requires the member's 4-digit PIN (safety-critical types or per-document override).
         myStatus:
           type: string
           enum: [pending, viewed, acknowledged]

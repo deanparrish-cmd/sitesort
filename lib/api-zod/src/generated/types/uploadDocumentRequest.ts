@@ -13,6 +13,7 @@ export interface UploadDocumentRequest {
   fileUrl: string;
   fileSize: number;
   requiresAcknowledgment?: boolean;
+  requirePinSignoff?: boolean;
   publicAccess?: boolean;
   distributeToUserIds?: string[];
   supersededDocumentId?: string | null;

@@ -11,6 +11,7 @@
 - [Giant component splits](giant-component-split.md) — safe recipe: single state hook + context provider + verbatim JSX slices; SiteSort detail page uses this (detail/ dir).
 - [e2e fixture roles](e2e-fixture-roles.md) — dashboard JWT role comes from company_members.role; fixtures must use admin/project_manager/site_worker or authz 403s fake a bug.
 - [Portal dictation STT](portal-dictation-stt.md) — never Web Speech API (silent fail in iOS standalone PWA); always MediaRecorder + server transcription via shared DictationButton.
-- [Portal read/write permissions](portal-read-vs-write-permissions.md) — Site Issues/Plant/Daily Report are read-for-all-members; permission flags gate writes only. Don't add nav/view guards on reads.
+- [Portal read/write permissions](portal-read-vs-write-permissions.md) — flags gate visibility AND writes; content is submission-private (own/distributed only) until the PM shares. Apply the predicate to every read path incl. counts.
+- [Sign-off PIN gating](signoff-pin-gating.md) — PIN only for safety-critical types or per-doc toggle; policy computed server-side per doc, mutation routes must be role-gated.
 - [Tenant delete cascade](tenant-delete-cascade.md) — delete-company must track the full FK graph; scrub (not delete) cross-tenant users; drizzle ANY() needs `{a,b}`::text[] literals.
 - [Site-board check-in matching](site-board-checkin-matching.md) — QR check-in must cover all 3 project_members link types (user_id, subcontractor_id, person_id); sub-linked people need valid insurance.

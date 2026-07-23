@@ -497,12 +497,13 @@ export function useProjectDetailState() {
   const [allocateSelected, setAllocateSelected] = useState<Set<string>>(new Set());
   const [allocateSubmitting, setAllocateSubmitting] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
-  type EditDocModal = { id: string; name: string; status: string; version: number; type: string; revision?: string | null };
+  type EditDocModal = { id: string; name: string; status: string; version: number; type: string; revision?: string | null; requirePinSignoff?: boolean };
   const [editDocModal, setEditDocModal] = useState<EditDocModal | null>(null);
   const [editDocSaving, setEditDocSaving] = useState(false);
   const [editDocStatus, setEditDocStatus] = useState("current");
   const [editDocVersion, setEditDocVersion] = useState(1);
   const [editDocRevision, setEditDocRevision] = useState("");
+  const [editDocRequirePin, setEditDocRequirePin] = useState(false);
   // F3 — drawing revision history (the supersede chain)
   type RevisionItem = { id: string; version: number; revision: string | null; status: string; fileUrl: string; uploaderName: string; createdAt: string };
   const [revHistoryDoc, setRevHistoryDoc] = useState<{ id: string; name: string } | null>(null);
@@ -524,7 +525,7 @@ export function useProjectDetailState() {
   const { data: me } = useGetMe();
   const caps = useCapabilities();
   const hasPin = !!(me as { hasPin?: boolean } | undefined)?.hasPin;
-  type SignOffDoc = { id: string; name: string; type: string };
+  type SignOffDoc = { id: string; name: string; type: string; pinRequired?: boolean };
   const [signOffDoc, setSignOffDoc] = useState<SignOffDoc | null>(null);
   const [signOffPin, setSignOffPin] = useState("");
   const [signOffSubmitting, setSignOffSubmitting] = useState(false);
@@ -532,8 +533,10 @@ export function useProjectDetailState() {
   const [setPinMode, setSetPinMode] = useState(false);
   const [setPinPassword, setSetPinPassword] = useState("");
   const [setPinValue, setSetPinValue] = useState("");
-  // Every sign-off is PIN-confirmed — that's what makes it an attributable signature.
-  const signOffNeedsPin = !!signOffDoc;
+  // Safety-critical docs (method statements, permits, safety) and docs with the
+  // "require PIN sign-off" toggle are PIN-confirmed; everything else is a single
+  // deliberate confirm — still attributed and timestamped in the audit trail.
+  const signOffNeedsPin = !!signOffDoc && (signOffDoc.pinRequired ?? true);
   const onlyDigits = (v: string) => v.replace(/\D/g, "").slice(0, 4);
 
   // Immutable acknowledgment audit trail — admins & project managers only.
@@ -551,7 +554,7 @@ export function useProjectDetailState() {
     setSignOffPin("");
     setSetPinPassword("");
     setSetPinValue("");
-    setSetPinMode(!hasPin);
+    setSetPinMode((doc.pinRequired ?? true) && !hasPin);
     setSignOffDoc(doc);
   };
 
@@ -568,8 +571,11 @@ export function useProjectDetailState() {
     if (!signOffDoc) return;
     setSignOffError(null);
 
+    const pinRequired = signOffDoc.pinRequired ?? true;
     let pinToUse: string | undefined;
-    if (setPinMode) {
+    if (!pinRequired) {
+      // Confirm-only path — no PIN collected or sent.
+    } else if (setPinMode) {
       if (!setPinPassword) { setSignOffError("Enter your account password to set a PIN."); return; }
       if (!/^\d{4}$/.test(setPinValue)) { setSignOffError("PIN must be exactly 4 digits."); return; }
       pinToUse = setPinValue;
@@ -580,7 +586,7 @@ export function useProjectDetailState() {
 
     setSignOffSubmitting(true);
     try {
-      if (setPinMode) {
+      if (pinRequired && setPinMode) {
         const pinRes = await fetch("/api/auth/pin", {
           method: "POST",
           headers: authHeaders(),
@@ -1134,6 +1140,7 @@ export function useProjectDetailState() {
           fileUrl: data.fileUrl,
           fileSize: data.fileSize,
           requiresAcknowledgment: data.requiresAcknowledgment,
+          requirePinSignoff: !!data.requirePinSignoff,
           ...(data.supersededDocumentId ? { supersededDocumentId: data.supersededDocumentId } : {}),
           ...(data.type === "drawing" && data.revision?.trim() ? { revision: data.revision.trim() } : {}),
         } as any
@@ -1146,10 +1153,11 @@ export function useProjectDetailState() {
     }
   };
 
-  const openDocEdit = (doc: { id: string; name: string; status: string; version: number; type: string; revision?: string | null }) => {
+  const openDocEdit = (doc: { id: string; name: string; status: string; version: number; type: string; revision?: string | null; requirePinSignoff?: boolean }) => {
     setEditDocStatus(doc.status);
     setEditDocVersion(doc.version);
     setEditDocRevision(doc.revision ?? "");
+    setEditDocRequirePin(doc.requirePinSignoff ?? false);
     setEditDocModal(doc);
   };
 
@@ -1208,6 +1216,7 @@ export function useProjectDetailState() {
           version: editDocVersion,
           // Only drawings carry a revision; send it (empty clears it back to null).
           ...(editDocModal.type === "drawing" ? { revision: editDocRevision } : {}),
+          requirePinSignoff: editDocRequirePin,
         }),
       });
       setEditDocModal(null);
@@ -1544,6 +1553,8 @@ tr:last-child td{border-bottom:none}
     setEditDocVersion,
     editDocRevision,
     setEditDocRevision,
+    editDocRequirePin,
+    setEditDocRequirePin,
     revHistoryDoc,
     setRevHistoryDoc,
     revHistory,

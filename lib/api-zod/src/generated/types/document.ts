@@ -24,6 +24,10 @@ export interface Document {
   previousVersionId?: string | null;
   status: DocumentStatus;
   requiresAcknowledgment: boolean;
+  /** Per-document override forcing PIN sign-off even for non-safety-critical types. */
+  requirePinSignoff?: boolean;
+  /** Whether signing off this document requires the member's 4-digit PIN (safety-critical types or per-document override). */
+  pinRequired?: boolean;
   publicAccess: boolean;
   createdAt: Date;
   distributionSummary: DistributionSummary;

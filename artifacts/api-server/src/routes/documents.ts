@@ -617,6 +617,12 @@ router.get("/documents/:documentId/audit-log", authenticate, async (req, res) =>
 
 router.patch("/documents/:documentId", authenticate, async (req, res) => {
   try {
+    // Document edits (status/version/revision and the PIN sign-off policy toggle)
+    // are restricted to compliance-oversight roles — mirrors the frontend gating.
+    if (req.user!.role !== "admin" && req.user!.role !== "project_manager") {
+      res.status(403).json({ error: "forbidden", message: "Only admins and project managers can edit documents." });
+      return;
+    }
     const docs = await db.select().from(documentsTable).where(eq(documentsTable.id, req.params.documentId)).limit(1);
     if (!docs[0]) {
       res.status(404).json({ error: "not_found", message: "Document not found" });

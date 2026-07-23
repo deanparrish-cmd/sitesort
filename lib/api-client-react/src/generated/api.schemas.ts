@@ -235,6 +235,10 @@ export interface Document {
   previousVersionId?: string | null;
   status: DocumentStatus;
   requiresAcknowledgment: boolean;
+  /** Per-document override forcing PIN sign-off even for non-safety-critical types. */
+  requirePinSignoff?: boolean;
+  /** Whether signing off this document requires the member's 4-digit PIN (safety-critical types or per-document override). */
+  pinRequired?: boolean;
   publicAccess: boolean;
   createdAt: string;
   distributionSummary: DistributionSummary;
@@ -284,6 +288,7 @@ export interface UploadDocumentRequest {
   fileUrl: string;
   fileSize: number;
   requiresAcknowledgment?: boolean;
+  requirePinSignoff?: boolean;
   publicAccess?: boolean;
   distributeToUserIds?: string[];
   supersededDocumentId?: string | null;
@@ -1684,8 +1689,10 @@ export interface PortalDocument {
   sharedAt?: string;
   /** Set when this document is superseded — points at the live replacement. */
   supersededBy?: PortalDocumentSupersededBy;
-  /** Whether this document needs a PIN sign-off. */
+  /** Whether this document needs a digital sign-off. */
   requiresAcknowledgment?: boolean;
+  /** Whether signing off requires the member's 4-digit PIN (safety-critical types or per-document override). */
+  pinRequired?: boolean;
   /** This viewer's own sign-off status for the document, or null if they have no distribution record yet. */
   myStatus?: PortalDocumentMyStatus;
   /** When this viewer signed it off, if they have. */
