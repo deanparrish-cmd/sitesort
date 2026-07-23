@@ -23,6 +23,7 @@ import { getVapidPublicKey } from "../lib/web-push";
 import { pushSubscriptionsTable, activityLogTable } from "@workspace/db/schema";
 import { PortalPushSubscribeBody, PortalPushUnsubscribeBody } from "@workspace/api-zod";
 import { isLockedOut, recordFailedAttempt, clearAttempts } from "../lib/login-attempts";
+import { pinRequiredForDoc } from "../lib/signoff";
 import { expiryStatus } from "../lib/expiry";
 import { issueCategoryFilter } from "../lib/accountability";
 import { canonicalPersonName } from "../lib/person-name";
@@ -88,6 +89,7 @@ function serializeDoc(d: typeof documentsTable.$inferSelect) {
     revision: d.revision ?? undefined, fileUrl: d.fileUrl, fileSize: d.fileSize,
     status: d.status, createdAt: d.createdAt.toISOString(),
     requiresAcknowledgment: d.requiresAcknowledgment,
+    pinRequired: pinRequiredForDoc(d),
   };
 }
 // This viewer's own sign-off status for a batch of documents — merged onto
@@ -1387,28 +1389,35 @@ router.post("/portal/documents/:documentId/acknowledge", ...portalGuards, async 
       return;
     }
 
-    if (await isPinLockedOut(req.user!.id)) {
-      res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
-      return;
-    }
+    // Safety-critical documents (method statements/RAMS, permits, safety docs)
+    // and any document flagged "require PIN sign-off" are PIN-confirmed. All
+    // other sign-offs are a single deliberate confirm — still attributed,
+    // timestamped, and audit-logged exactly the same, just without PIN entry.
+    const pinRequired = pinRequiredForDoc(doc);
     const userRows = await db.select({ pinHash: usersTable.pinHash, name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
-    const pinHash = userRows[0]?.pinHash ?? null;
-    if (!pinHash) {
-      res.status(400).json({ error: "pin_not_set", message: "You need to set a sign-off PIN before signing off documents." });
-      return;
+    if (pinRequired) {
+      if (await isPinLockedOut(req.user!.id)) {
+        res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
+        return;
+      }
+      const pinHash = userRows[0]?.pinHash ?? null;
+      if (!pinHash) {
+        res.status(400).json({ error: "pin_not_set", message: "You need to set a sign-off PIN before signing off documents." });
+        return;
+      }
+      if (!pin || !/^\d{4}$/.test(String(pin))) {
+        res.status(400).json({ error: "validation_error", message: "A 4-digit PIN is required to sign off this document." });
+        return;
+      }
+      const valid = await bcrypt.compare(String(pin), pinHash);
+      if (!valid) {
+        const { locked, remaining } = await recordFailedPinAttempt(req.user!.id);
+        if (locked) res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
+        else res.status(401).json({ error: "invalid_pin", message: "Incorrect PIN", attemptsRemaining: remaining });
+        return;
+      }
+      await clearPinAttempts(req.user!.id);
     }
-    if (!pin || !/^\d{4}$/.test(String(pin))) {
-      res.status(400).json({ error: "validation_error", message: "A 4-digit PIN is required to sign off this document." });
-      return;
-    }
-    const valid = await bcrypt.compare(String(pin), pinHash);
-    if (!valid) {
-      const { locked, remaining } = await recordFailedPinAttempt(req.user!.id);
-      if (locked) res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
-      else res.status(401).json({ error: "invalid_pin", message: "Incorrect PIN", attemptsRemaining: remaining });
-      return;
-    }
-    await clearPinAttempts(req.user!.id);
 
     const existing = await db.select().from(documentDistributionsTable)
       .where(and(eq(documentDistributionsTable.documentId, doc.id), eq(documentDistributionsTable.userId, req.user!.id)))
@@ -1417,12 +1426,12 @@ router.post("/portal/documents/:documentId/acknowledge", ...portalGuards, async 
     await db.transaction(async (tx) => {
       if (existing[0]) {
         await tx.update(documentDistributionsTable)
-          .set({ status: "acknowledged", acknowledgedAt: new Date(), viewedAt: existing[0].viewedAt ?? new Date(), signedOffWithPin: true })
+          .set({ status: "acknowledged", acknowledgedAt: new Date(), viewedAt: existing[0].viewedAt ?? new Date(), signedOffWithPin: pinRequired })
           .where(eq(documentDistributionsTable.id, existing[0].id));
       } else {
         await tx.insert(documentDistributionsTable).values({
           id: generateId(), documentId: doc.id, userId: req.user!.id,
-          status: "acknowledged", viewedAt: new Date(), acknowledgedAt: new Date(), signedOffWithPin: true,
+          status: "acknowledged", viewedAt: new Date(), acknowledgedAt: new Date(), signedOffWithPin: pinRequired,
         });
       }
       await tx.insert(acknowledgmentAuditTable).values({
@@ -1433,7 +1442,7 @@ router.post("/portal/documents/:documentId/acknowledge", ...portalGuards, async 
         userName: userRows[0]?.name ?? "Unknown",
         userRole: req.portalMemberRole ?? "portal_member",
         action: "acknowledged",
-        signedOffWithPin: true,
+        signedOffWithPin: pinRequired,
         ipAddress: req.ip ?? null,
         userAgent: req.headers["user-agent"] ?? null,
       });

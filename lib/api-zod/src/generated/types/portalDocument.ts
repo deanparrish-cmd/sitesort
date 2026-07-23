@@ -24,8 +24,10 @@ export interface PortalDocument {
   sharedAt?: string;
   /** Set when this document is superseded — points at the live replacement. */
   supersededBy?: PortalDocumentSupersededBy;
-  /** Whether this document needs a PIN sign-off. */
+  /** Whether this document needs a digital sign-off. */
   requiresAcknowledgment?: boolean;
+  /** Whether signing off requires the member's 4-digit PIN (safety-critical types or per-document override). */
+  pinRequired?: boolean;
   /** This viewer's own sign-off status for the document, or null if they have no distribution record yet. */
   myStatus?: PortalDocumentMyStatus;
   /** When this viewer signed it off, if they have. */

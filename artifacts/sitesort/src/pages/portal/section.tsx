@@ -336,7 +336,7 @@ function DocRow({ doc, section, unseen, signOff }: { doc: any; section: string; 
           )}
           {needsSignOff && !active && (
             <button
-              onClick={() => signOff.open({ id: doc.id, name: doc.name })}
+              onClick={() => signOff.open({ id: doc.id, name: doc.name, pinRequired: doc.pinRequired ?? true })}
               className="inline-flex items-center gap-1 rounded-lg px-3 min-h-11 text-sm text-primary font-semibold hover:bg-primary/10"
             >
               <FileSignature className="w-4 h-4" /> Sign off
@@ -360,7 +360,11 @@ function SignOffPinCard({ flow }: { flow: ReturnType<typeof useSignOffFlow> }) {
   if (!flow.target) return null;
   return (
     <Card className="border-primary/30 bg-primary/5">
-      {flow.setPinMode ? (
+      {!flow.target.pinRequired ? (
+        <p className="text-sm text-muted-foreground">
+          By signing off you confirm: <span className="font-medium text-foreground">"I confirm I have read and understood this document."</span> Your name and the time will be recorded.
+        </p>
+      ) : flow.setPinMode ? (
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">Set a 4-digit sign-off PIN to continue — you'll use it to confirm future sign-offs.</p>
           <div>
@@ -406,7 +410,7 @@ function SignOffPinCard({ flow }: { flow: ReturnType<typeof useSignOffFlow> }) {
           disabled={flow.submitting}
           className="flex-1 min-h-11 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50"
         >
-          {flow.submitting ? "Signing off…" : flow.setPinMode ? "Set PIN & sign off" : "Sign off"}
+          {flow.submitting ? "Signing off…" : !flow.target.pinRequired ? "Confirm & sign off" : flow.setPinMode ? "Set PIN & sign off" : "Sign off"}
         </button>
         <button onClick={flow.close} className="min-h-11 px-4 rounded-xl border text-sm font-medium hover:bg-muted">Cancel</button>
       </div>

@@ -28,7 +28,7 @@ type AckRecipient = { userId: string; name: string; status: string; viewedAt?: s
 type AckItem = {
   documentId: string; documentName: string; projectId: string; projectName: string;
   pendingCount: number; fileUrl?: string | null; version: number; revision?: string | null;
-  myStatus?: string | null; recipients: AckRecipient[];
+  myStatus?: string | null; pinRequired?: boolean; recipients: AckRecipient[];
 };
 type Sub = { id: string; companyName: string; contactName: string };
 type Project = { id: string; name: string };
@@ -771,9 +771,9 @@ export default function CompliancePage() {
                           </button>
                           {iNeedToSign && (
                             <button
-                              onClick={() => signOff.open({ id: a.documentId, name: a.documentName })}
+                              onClick={() => signOff.open({ id: a.documentId, name: a.documentName, pinRequired: a.pinRequired ?? true })}
                               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent text-accent-foreground text-xs font-medium hover:opacity-90 transition-opacity"
-                              title="Sign off with your PIN"
+                              title="Sign off this document"
                             >
                               <FileSignature className="w-3 h-3" /> Sign off
                             </button>
@@ -996,7 +996,7 @@ export default function CompliancePage() {
 
       <Dialog open={!!signOff.target} onOpenChange={v => { if (!v) signOff.close(); }}>
         <DialogHeader>
-          <DialogTitle>{signOff.setPinMode ? "Set your sign-off PIN" : "Sign off with your PIN"}</DialogTitle>
+          <DialogTitle>{signOff.target && !signOff.target.pinRequired ? "Sign off this document" : signOff.setPinMode ? "Set your sign-off PIN" : "Sign off with your PIN"}</DialogTitle>
         </DialogHeader>
         {signOff.target && (
           <div className="space-y-4">
@@ -1008,7 +1008,11 @@ export default function CompliancePage() {
               </div>
             </div>
 
-            {signOff.setPinMode ? (
+            {!signOff.target.pinRequired ? (
+              <p className="text-sm text-muted-foreground">
+                By signing off you confirm: <span className="font-medium text-foreground">"I confirm I have read and understood this document."</span> Your name and the time will be recorded.
+              </p>
+            ) : signOff.setPinMode ? (
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">
                   Set a 4-digit sign-off PIN to continue — you'll use it to confirm future sign-offs.
@@ -1054,7 +1058,7 @@ export default function CompliancePage() {
             <DialogFooter>
               <Button variant="ghost" onClick={signOff.close}>Cancel</Button>
               <Button variant="accent" onClick={signOff.submit} isLoading={signOff.submitting}>
-                {signOff.setPinMode ? "Set PIN & sign off" : "Sign off"}
+                {!signOff.target.pinRequired ? "Confirm & sign off" : signOff.setPinMode ? "Set PIN & sign off" : "Sign off"}
               </Button>
             </DialogFooter>
           </div>

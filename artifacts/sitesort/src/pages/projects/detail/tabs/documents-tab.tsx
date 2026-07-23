@@ -139,7 +139,7 @@ export function DocumentsTab() {
                     <div className="flex flex-wrap gap-2">
                       {!isSuperseded && (doc.myDistributionStatus === "pending" || doc.myDistributionStatus === "viewed") && (
                         <button
-                          onClick={() => openSignOff({ id: doc.id, name: doc.name, type: doc.type })}
+                          onClick={() => openSignOff({ id: doc.id, name: doc.name, type: doc.type, pinRequired: doc.pinRequired ?? true })}
                           className="flex items-center gap-1 px-2 py-1 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-xs font-semibold"
                         >
                           <ClipboardCheck className="w-3 h-3" />Sign off
@@ -253,7 +253,7 @@ export function DocumentsTab() {
                         <div className="flex flex-wrap items-center gap-1.5">
                           {!isSuperseded && (doc.myDistributionStatus === "pending" || doc.myDistributionStatus === "viewed") && (
                             <button
-                              onClick={() => openSignOff({ id: doc.id, name: doc.name, type: doc.type })}
+                              onClick={() => openSignOff({ id: doc.id, name: doc.name, type: doc.type, pinRequired: doc.pinRequired ?? true })}
                               className="flex items-center gap-1 px-2 py-1 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-xs font-semibold"
                               title="Sign off this document"
                             >

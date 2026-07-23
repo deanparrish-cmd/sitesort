@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-export type SignOffTarget = { id: string; name: string } | null;
+export type SignOffTarget = { id: string; name: string; pinRequired: boolean } | null;
 
 type Options = {
   hasPin: boolean;
@@ -28,13 +28,17 @@ export function useSignOffFlow({ hasPin, acknowledgeUrl, setPinUrl, authHeaders,
 
   const onlyDigits = (v: string) => v.replace(/\D/g, "").slice(0, 4);
 
-  const open = (doc: { id: string; name: string }) => {
+  // pinRequired defaults to true so any caller not yet passing the flag keeps
+  // the strict PIN behaviour. When false, sign-off is a single deliberate
+  // confirm ("I confirm I have read and understood") — no PIN entry at all.
+  const open = (doc: { id: string; name: string; pinRequired?: boolean }) => {
+    const pinRequired = doc.pinRequired ?? true;
     setError(null);
     setPin("");
     setPassword("");
     setNewPin("");
-    setSetPinMode(!hasPin);
-    setTarget(doc);
+    setSetPinMode(pinRequired && !hasPin);
+    setTarget({ id: doc.id, name: doc.name, pinRequired });
   };
 
   // "Forgot PIN?" — signed-in path: switch the dialog to set-a-new-PIN mode,
@@ -59,8 +63,10 @@ export function useSignOffFlow({ hasPin, acknowledgeUrl, setPinUrl, authHeaders,
     if (!target) return;
     setError(null);
 
-    let pinToUse: string;
-    if (setPinMode) {
+    let pinToUse: string | null = null;
+    if (!target.pinRequired) {
+      // Confirm-only path — no PIN collected or sent.
+    } else if (setPinMode) {
       if (!password) { setError("Enter your account password to set a PIN."); return; }
       if (!/^\d{4}$/.test(newPin)) { setError("PIN must be exactly 4 digits."); return; }
       pinToUse = newPin;
@@ -71,7 +77,7 @@ export function useSignOffFlow({ hasPin, acknowledgeUrl, setPinUrl, authHeaders,
 
     setSubmitting(true);
     try {
-      if (setPinMode) {
+      if (target.pinRequired && setPinMode) {
         const pinRes = await fetch(setPinUrl, {
           method: "POST",
           headers: headers(),
@@ -85,7 +91,7 @@ export function useSignOffFlow({ hasPin, acknowledgeUrl, setPinUrl, authHeaders,
       const res = await fetch(acknowledgeUrl(target.id), {
         method: "POST",
         headers: headers(),
-        body: JSON.stringify({ pin: pinToUse }),
+        body: JSON.stringify(pinToUse ? { pin: pinToUse } : {}),
       });
       const data = await res.json().catch(() => ({}));
 

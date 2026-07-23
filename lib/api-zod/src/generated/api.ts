@@ -292,6 +292,18 @@ export const ListDocumentsResponseItem = zod.object({
   previousVersionId: zod.string().nullish(),
   status: zod.enum(["current", "superseded"]),
   requiresAcknowledgment: zod.boolean(),
+  requirePinSignoff: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Per-document override forcing PIN sign-off even for non-safety-critical types.",
+    ),
+  pinRequired: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Whether signing off this document requires the member's 4-digit PIN (safety-critical types or per-document override).",
+    ),
   publicAccess: zod.boolean(),
   createdAt: zod.date(),
   distributionSummary: zod.object({
@@ -325,6 +337,7 @@ export const UploadDocumentBody = zod.object({
   fileUrl: zod.string(),
   fileSize: zod.number(),
   requiresAcknowledgment: zod.boolean().optional(),
+  requirePinSignoff: zod.boolean().optional(),
   publicAccess: zod.boolean().optional(),
   distributeToUserIds: zod.array(zod.string()).optional(),
   supersededDocumentId: zod.string().nullish(),
@@ -359,6 +372,18 @@ export const GetDocumentResponse = zod
     previousVersionId: zod.string().nullish(),
     status: zod.enum(["current", "superseded"]),
     requiresAcknowledgment: zod.boolean(),
+    requirePinSignoff: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Per-document override forcing PIN sign-off even for non-safety-critical types.",
+      ),
+    pinRequired: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Whether signing off this document requires the member's 4-digit PIN (safety-critical types or per-document override).",
+      ),
     publicAccess: zod.boolean(),
     createdAt: zod.date(),
     distributionSummary: zod.object({
@@ -2799,6 +2824,18 @@ export const GetQrContentResponse = zod.object({
       previousVersionId: zod.string().nullish(),
       status: zod.enum(["current", "superseded"]),
       requiresAcknowledgment: zod.boolean(),
+      requirePinSignoff: zod
+        .boolean()
+        .optional()
+        .describe(
+          "Per-document override forcing PIN sign-off even for non-safety-critical types.",
+        ),
+      pinRequired: zod
+        .boolean()
+        .optional()
+        .describe(
+          "Whether signing off this document requires the member's 4-digit PIN (safety-critical types or per-document override).",
+        ),
       publicAccess: zod.boolean(),
       createdAt: zod.date(),
       distributionSummary: zod.object({
@@ -3431,7 +3468,13 @@ export const GetPortalHsResponse = zod.object({
       requiresAcknowledgment: zod
         .boolean()
         .optional()
-        .describe("Whether this document needs a PIN sign-off."),
+        .describe("Whether this document needs a digital sign-off."),
+      pinRequired: zod
+        .boolean()
+        .optional()
+        .describe(
+          "Whether signing off requires the member's 4-digit PIN (safety-critical types or per-document override).",
+        ),
       myStatus: zod
         .enum(["pending", "viewed", "acknowledged"])
         .nullish()
@@ -3481,7 +3524,13 @@ export const GetPortalHsResponse = zod.object({
       requiresAcknowledgment: zod
         .boolean()
         .optional()
-        .describe("Whether this document needs a PIN sign-off."),
+        .describe("Whether this document needs a digital sign-off."),
+      pinRequired: zod
+        .boolean()
+        .optional()
+        .describe(
+          "Whether signing off requires the member's 4-digit PIN (safety-critical types or per-document override).",
+        ),
       myStatus: zod
         .enum(["pending", "viewed", "acknowledged"])
         .nullish()
@@ -3550,7 +3599,13 @@ export const GetPortalSharedResponse = zod.object({
       requiresAcknowledgment: zod
         .boolean()
         .optional()
-        .describe("Whether this document needs a PIN sign-off."),
+        .describe("Whether this document needs a digital sign-off."),
+      pinRequired: zod
+        .boolean()
+        .optional()
+        .describe(
+          "Whether signing off requires the member's 4-digit PIN (safety-critical types or per-document override).",
+        ),
       myStatus: zod
         .enum(["pending", "viewed", "acknowledged"])
         .nullish()
@@ -3699,7 +3754,13 @@ export const GetPortalDrawingsResponseItem = zod.object({
   requiresAcknowledgment: zod
     .boolean()
     .optional()
-    .describe("Whether this document needs a PIN sign-off."),
+    .describe("Whether this document needs a digital sign-off."),
+  pinRequired: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Whether signing off requires the member's 4-digit PIN (safety-critical types or per-document override).",
+    ),
   myStatus: zod
     .enum(["pending", "viewed", "acknowledged"])
     .nullish()
@@ -3758,7 +3819,13 @@ export const GetPortalDrawingResponse = zod.object({
   requiresAcknowledgment: zod
     .boolean()
     .optional()
-    .describe("Whether this document needs a PIN sign-off."),
+    .describe("Whether this document needs a digital sign-off."),
+  pinRequired: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Whether signing off requires the member's 4-digit PIN (safety-critical types or per-document override).",
+    ),
   myStatus: zod
     .enum(["pending", "viewed", "acknowledged"])
     .nullish()
@@ -3915,7 +3982,13 @@ export const GetPortalMethodStatementsResponseItem = zod.object({
   requiresAcknowledgment: zod
     .boolean()
     .optional()
-    .describe("Whether this document needs a PIN sign-off."),
+    .describe("Whether this document needs a digital sign-off."),
+  pinRequired: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Whether signing off requires the member's 4-digit PIN (safety-critical types or per-document override).",
+    ),
   myStatus: zod
     .enum(["pending", "viewed", "acknowledged"])
     .nullish()
@@ -3974,7 +4047,13 @@ export const GetPortalMethodStatementResponse = zod.object({
   requiresAcknowledgment: zod
     .boolean()
     .optional()
-    .describe("Whether this document needs a PIN sign-off."),
+    .describe("Whether this document needs a digital sign-off."),
+  pinRequired: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Whether signing off requires the member's 4-digit PIN (safety-critical types or per-document override).",
+    ),
   myStatus: zod
     .enum(["pending", "viewed", "acknowledged"])
     .nullish()
@@ -4042,7 +4121,13 @@ export const GetPortalSafetyResponseItem = zod.object({
   requiresAcknowledgment: zod
     .boolean()
     .optional()
-    .describe("Whether this document needs a PIN sign-off."),
+    .describe("Whether this document needs a digital sign-off."),
+  pinRequired: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Whether signing off requires the member's 4-digit PIN (safety-critical types or per-document override).",
+    ),
   myStatus: zod
     .enum(["pending", "viewed", "acknowledged"])
     .nullish()
@@ -4097,7 +4182,13 @@ export const GetPortalGeneralResponse = zod.object({
       requiresAcknowledgment: zod
         .boolean()
         .optional()
-        .describe("Whether this document needs a PIN sign-off."),
+        .describe("Whether this document needs a digital sign-off."),
+      pinRequired: zod
+        .boolean()
+        .optional()
+        .describe(
+          "Whether signing off requires the member's 4-digit PIN (safety-critical types or per-document override).",
+        ),
       myStatus: zod
         .enum(["pending", "viewed", "acknowledged"])
         .nullish()
