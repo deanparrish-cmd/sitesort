@@ -355,7 +355,7 @@ export default function LandingPage() {
                 icon: QrCode,
                 step: "02",
                 title: "Invite your site team",
-                body: "Add your team and subcontractors, print your QR site boards, and distribute documents for sign-off — all from your phone.",
+                body: "Add your team and subcontractors, print your QR site boards, and distribute documents for sign-off — all from your phone, tablet or desktop.",
               },
               {
                 icon: BellRing,
