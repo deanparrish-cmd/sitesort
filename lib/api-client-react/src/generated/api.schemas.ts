@@ -426,7 +426,13 @@ export interface ProjectMember {
   canUpdatePlantMaterials?: boolean;
   /** Portal write permission — can author/amend the project's daily site report. Default false. */
   canEditDailyReport?: boolean;
+  /** Project-level approver authority (distinct from company-wide role and the portal permission flags above) — triage issues, manage portal sharing, review member documents on THIS project. Default false; company admin/project_manager always has this implicitly regardless of the flag. */
+  isProjectManager?: boolean;
   addedAt: string;
+}
+
+export interface UpdateMemberAuthorityRequest {
+  isProjectManager: boolean;
 }
 
 export interface UpdateMemberPermissionsRequest {

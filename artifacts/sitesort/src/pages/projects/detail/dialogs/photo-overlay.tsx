@@ -20,7 +20,7 @@ export function PhotoOverlay() {
     archiveIssue,
     restoreIssue,
     removeIssuePhoto,
-    caps,
+    isProjectApprover,
     setSharingDoc,
   } = useDetail();
   const [closingIssueId, setClosingIssueId] = useState<string | null>(null);
@@ -67,7 +67,7 @@ export function PhotoOverlay() {
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
-                  {isIssue && caps.canManageProjects && viewingPhoto.status === "pending_confirmation" && (
+                  {isIssue && isProjectApprover && viewingPhoto.status === "pending_confirmation" && (
                     <button
                       onClick={() => confirmIssueDone(viewingPhoto.id)}
                       className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
@@ -75,7 +75,7 @@ export function PhotoOverlay() {
                       <CheckCircle2 className="w-3.5 h-3.5" /><span className="hidden sm:inline">Confirm resolved</span>
                     </button>
                   )}
-                  {isIssue && caps.canManageProjects && viewingPhoto.status !== "resolved" && viewingPhoto.status !== "pending_confirmation" && (
+                  {isIssue && isProjectApprover && viewingPhoto.status !== "resolved" && viewingPhoto.status !== "pending_confirmation" && (
                     <button
                       onClick={() => updatePhotoStatus(viewingPhoto.id, "resolved")}
                       className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
@@ -83,7 +83,7 @@ export function PhotoOverlay() {
                       <CheckCircle2 className="w-3.5 h-3.5" /><span className="hidden sm:inline">Mark resolved</span>
                     </button>
                   )}
-                  {isIssue && caps.canManageProjects && viewingPhoto.status === "resolved" && (
+                  {isIssue && isProjectApprover && viewingPhoto.status === "resolved" && (
                     <button
                       onClick={() => updatePhotoStatus(viewingPhoto.id, "open")}
                       className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border border-border bg-muted text-muted-foreground hover:bg-muted/70 transition-colors"
@@ -91,7 +91,7 @@ export function PhotoOverlay() {
                       <Clock className="w-3.5 h-3.5" /><span className="hidden sm:inline">Re-open</span>
                     </button>
                   )}
-                  {isIssue && caps.canManageProjects && viewingPhoto.status !== "resolved" && (
+                  {isIssue && isProjectApprover && viewingPhoto.status !== "resolved" && (
                     <button
                       onClick={() => setClosingIssueId(viewingPhoto.id)}
                       className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border border-border bg-background text-destructive hover:bg-destructive/10 transition-colors"
@@ -99,7 +99,7 @@ export function PhotoOverlay() {
                       <Ban className="w-3.5 h-3.5" /><span className="hidden sm:inline">Close invalid/duplicate</span>
                     </button>
                   )}
-                  {isIssue && caps.canManageProjects && !viewingPhoto.archivedAt && (
+                  {isIssue && isProjectApprover && !viewingPhoto.archivedAt && (
                     <button
                       onClick={() => setArchivingIssueId(viewingPhoto.id)}
                       className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border border-border bg-background text-destructive hover:bg-destructive/10 transition-colors"
@@ -107,7 +107,7 @@ export function PhotoOverlay() {
                       <Archive className="w-3.5 h-3.5" /><span className="hidden sm:inline">Archive</span>
                     </button>
                   )}
-                  {isIssue && caps.canManageProjects && viewingPhoto.archivedAt && (
+                  {isIssue && isProjectApprover && viewingPhoto.archivedAt && (
                     <button
                       onClick={() => restoreIssue(viewingPhoto.id)}
                       className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border bg-background hover:bg-muted transition-colors"
@@ -115,7 +115,7 @@ export function PhotoOverlay() {
                       <RefreshCw className="w-3.5 h-3.5" /><span className="hidden sm:inline">Restore</span>
                     </button>
                   )}
-                  {isIssue && photoUrl && caps.canManageProjects && (
+                  {isIssue && photoUrl && isProjectApprover && (
                     <button
                       onClick={() => removeIssuePhoto(viewingPhoto.id)}
                       className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border border-border bg-background text-destructive hover:bg-destructive/10 transition-colors"
@@ -185,7 +185,7 @@ export function PhotoOverlay() {
                   {isIssue && (
                     <div>
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 flex items-center gap-2">Assignment {viewingPhoto.overdue && <OverdueBadge />}</p>
-                      {caps.canManageProjects ? (
+                      {isProjectApprover ? (
                         <div className="space-y-2">
                           <select
                             value={viewingPhoto.assignedToUserId ?? ""}
@@ -241,7 +241,7 @@ export function PhotoOverlay() {
                       {viewingPhoto.archiveReason && <p className="text-xs text-muted-foreground italic mt-0.5 break-words">"{viewingPhoto.archiveReason}"</p>}
                     </div>
                   )}
-                  {isIssue && caps.canManageProjects && (
+                  {isIssue && isProjectApprover && (
                     <div className="pt-2 space-y-1.5">
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Update Status</p>
                       {(viewingPhoto.status === "new" || viewingPhoto.status === "pending_confirmation") && (

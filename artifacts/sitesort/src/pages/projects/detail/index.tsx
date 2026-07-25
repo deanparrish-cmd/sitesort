@@ -54,6 +54,7 @@ function ProjectDetailInner() {
     activeTab,
     openTab,
     caps,
+    isProjectApprover,
     closeout,
     openEdit,
     generateReport,
@@ -121,7 +122,7 @@ function ProjectDetailInner() {
           {/* Divider */}
           <div className="w-px self-stretch bg-border/60 mx-0.5 my-0.5" />
           {/* Group 2: Site activity */}
-          {buildActivityTabs(caps, checkins.length).map(tab => (
+          {buildActivityTabs(caps, checkins.length, isProjectApprover).map(tab => (
             <TabsTrigger key={tab.value} value={tab.value} className="flex-1 sm:flex-none justify-center rounded-lg py-2 px-3 sm:px-4 text-sm whitespace-nowrap">
               {tab.label}
             </TabsTrigger>
@@ -141,7 +142,7 @@ function ProjectDetailInner() {
         <CheckinsTab />
         <CloseoutTab />
 
-        {caps.canManageProjects && (
+        {isProjectApprover && (
           <TabsContent value="teamportal">
             <ProjectTeamActivity projectId={projectId} />
           </TabsContent>

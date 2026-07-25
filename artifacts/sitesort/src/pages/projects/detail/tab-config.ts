@@ -18,11 +18,14 @@ export function buildManagementTabs(caps: Caps, openIssueCount: number): TabDef[
   ];
 }
 
-export function buildActivityTabs(caps: Caps, checkinCount: number): TabDef[] {
+export function buildActivityTabs(caps: Caps, checkinCount: number, isProjectApprover: boolean): TabDef[] {
   return [
     { value: "finances", label: "Finances & Expiry" },
     { value: "checkins", label: `Check-ins${checkinCount > 0 ? ` (${checkinCount})` : ""}` },
     ...(caps.isInternal ? [{ value: "reports", label: "Daily Reports" }] : []),
-    ...(caps.canManageProjects ? [{ value: "teamportal", label: "Team Portal" }] : []),
+    // Team Portal (member document review etc.) is available to anyone with
+    // project-approver authority, not just a company-wide manager — see
+    // isProjectApprover in use-project-detail.tsx.
+    ...(isProjectApprover ? [{ value: "teamportal", label: "Team Portal" }] : []),
   ];
 }

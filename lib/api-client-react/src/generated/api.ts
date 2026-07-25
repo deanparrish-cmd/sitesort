@@ -127,6 +127,7 @@ import type {
   SubcontractorDocument,
   SuccessResponse,
   UpdateInsuranceRequest,
+  UpdateMemberAuthorityRequest,
   UpdateMemberPermissionsRequest,
   UpdatePermitRequest,
   UpdatePersonRequest,
@@ -2340,6 +2341,121 @@ export const useUpdateMemberPermissions = <
   TContext
 > => {
   return useMutation(getUpdateMemberPermissionsMutationOptions(options));
+};
+
+/**
+ * @summary Grant or revoke project-level project-manager/approver authority (company admin/PM-gated)
+ */
+export const getUpdateMemberAuthorityUrl = (
+  projectId: string,
+  memberId: string,
+) => {
+  return `/api/projects/${projectId}/members/${memberId}/authority`;
+};
+
+export const updateMemberAuthority = async (
+  projectId: string,
+  memberId: string,
+  updateMemberAuthorityRequest: UpdateMemberAuthorityRequest,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(
+    getUpdateMemberAuthorityUrl(projectId, memberId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updateMemberAuthorityRequest),
+    },
+  );
+};
+
+export const getUpdateMemberAuthorityMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateMemberAuthority>>,
+    TError,
+    {
+      projectId: string;
+      memberId: string;
+      data: BodyType<UpdateMemberAuthorityRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateMemberAuthority>>,
+  TError,
+  {
+    projectId: string;
+    memberId: string;
+    data: BodyType<UpdateMemberAuthorityRequest>;
+  },
+  TContext
+> => {
+  const mutationKey = ["updateMemberAuthority"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateMemberAuthority>>,
+    {
+      projectId: string;
+      memberId: string;
+      data: BodyType<UpdateMemberAuthorityRequest>;
+    }
+  > = (props) => {
+    const { projectId, memberId, data } = props ?? {};
+
+    return updateMemberAuthority(projectId, memberId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateMemberAuthorityMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateMemberAuthority>>
+>;
+export type UpdateMemberAuthorityMutationBody =
+  BodyType<UpdateMemberAuthorityRequest>;
+export type UpdateMemberAuthorityMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Grant or revoke project-level project-manager/approver authority (company admin/PM-gated)
+ */
+export const useUpdateMemberAuthority = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateMemberAuthority>>,
+    TError,
+    {
+      projectId: string;
+      memberId: string;
+      data: BodyType<UpdateMemberAuthorityRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateMemberAuthority>>,
+  TError,
+  {
+    projectId: string;
+    memberId: string;
+    data: BodyType<UpdateMemberAuthorityRequest>;
+  },
+  TContext
+> => {
+  return useMutation(getUpdateMemberAuthorityMutationOptions(options));
 };
 
 /**

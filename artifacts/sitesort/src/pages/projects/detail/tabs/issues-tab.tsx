@@ -47,6 +47,7 @@ export function IssuesTab() {
     closeIssueAsInvalid,
     submitSnagPhoto,
     caps,
+    isProjectApprover,
   } = useDetail();
   const [closingIssueId, setClosingIssueId] = useState<string | null>(null);
   const [archivingIssueId, setArchivingIssueId] = useState<string | null>(null);
@@ -103,7 +104,7 @@ export function IssuesTab() {
                   <AlertTriangle className="w-5 h-5 text-amber-500" />
                   <h3 className="font-bold text-lg">Site Issues</h3>
                   <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{issuePhotos.length}</span>
-                  {caps.canManageProjects && (
+                  {isProjectApprover && (
                     <button
                       type="button"
                       onClick={toggleArchivedIssues}
@@ -310,7 +311,7 @@ export function IssuesTab() {
                                 <span className="text-xs text-muted-foreground whitespace-nowrap">{formatDate(issue.takenAt)} · {issue.uploaderName}</span>
                               </div>
                             </div>
-                            {caps.canManageProjects && (
+                            {isProjectApprover && (
                               <div className="shrink-0 flex items-center gap-1" onClick={e => e.stopPropagation()}>
                                 {issue.status === "pending_confirmation" ? (
                                   <button onClick={() => confirmIssueDone(issue.id)} title="Confirm as resolved" className="p-1.5 rounded-lg text-cyan-600 hover:text-emerald-600 hover:bg-emerald-50 transition-colors">

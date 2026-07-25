@@ -210,6 +210,7 @@ router.get("/projects/:projectId/members", authenticate, async (req, res) => {
         canLogIssues: m.canLogIssues,
         canUpdatePlantMaterials: m.canUpdatePlantMaterials,
         canEditDailyReport: m.canEditDailyReport,
+        isProjectManager: m.isProjectManager,
         addedAt: m.addedAt.toISOString(),
       };
     }));
@@ -463,6 +464,33 @@ router.patch("/projects/:projectId/members/:memberId/permissions", authenticate,
   } catch (err) {
     req.log.error({ err }, "Update member permissions error");
     res.status(500).json({ error: "server_error", message: "Failed to update permissions" });
+  }
+});
+
+// PATCH /api/projects/:projectId/members/:memberId/authority — grants or
+// revokes PM-equivalent authority (triage issues, manage portal sharing,
+// review member documents) on THIS project only, without touching the
+// member's company-wide role. Deliberately restricted to company-wide
+// admin/project_manager (requireManager, not isProjectApprover) — an
+// existing PM can hand out cover, but a newly-covering member can't chain-
+// grant it to others themselves; keeps who-can-grant simple and centralized.
+router.patch("/projects/:projectId/members/:memberId/authority", authenticate, async (req, res) => {
+  try {
+    if (!requireManager(req, res)) return;
+    const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
+    if (!project) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+    const { isProjectManager } = req.body as { isProjectManager?: boolean };
+    if (typeof isProjectManager !== "boolean") {
+      res.status(400).json({ error: "validation_error", message: "isProjectManager (boolean) is required" });
+      return;
+    }
+    await db.update(projectMembersTable)
+      .set({ isProjectManager })
+      .where(and(eq(projectMembersTable.id, req.params.memberId), eq(projectMembersTable.projectId, req.params.projectId)));
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Update member authority error");
+    res.status(500).json({ error: "server_error", message: "Failed to update authority" });
   }
 });
 

@@ -42,7 +42,6 @@ export function DocumentsTab() {
     setSelectedStatus,
     setSharingDoc,
     openDocEdit,
-    openAllocate,
   } = useDetail();
 
   return (
@@ -154,12 +153,6 @@ export function DocumentsTab() {
                       >
                         {cadBadge ? <><Download className="w-3 h-3" />Download</> : <><ExternalLink className="w-3 h-3" />Open</>}
                       </button>
-                      {!isSuperseded && caps.canUploadDocument && (
-                        <button onClick={() => openAllocate({ id: doc.id, name: doc.name })}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors">
-                          <Send className="w-3 h-3" />Allocate
-                        </button>
-                      )}
                       {canViewAudit && (
                         <button onClick={() => setAuditDoc({ id: doc.id, name: doc.name })}
                           className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors">
@@ -177,6 +170,7 @@ export function DocumentsTab() {
                         <Pencil className="w-3 h-3" />Edit
                       </button>
                       <button onClick={() => setSharingDoc({ type: "document", id: doc.id, name: doc.name, version: doc.version, fileUrl: doc.fileUrl })}
+                        title="Email, WhatsApp, or distribute a tracked copy to specific people/trades via the Team Portal"
                         className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors">
                         <Share2 className="w-3 h-3" />Share
                       </button>
@@ -276,16 +270,6 @@ export function DocumentsTab() {
                               ? <><Download className="w-3.5 h-3.5" />Download</>
                               : <><ExternalLink className="w-3.5 h-3.5" />Open</>}
                           </button>
-                          {!isSuperseded && caps.canUploadDocument && (
-                            <button
-                              type="button"
-                              onClick={() => openAllocate({ id: doc.id, name: doc.name })}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors"
-                              title="Allocate to team members"
-                            >
-                              <Send className="w-3.5 h-3.5" />Allocate
-                            </button>
-                          )}
                           {canViewAudit && (
                             <button
                               type="button"
@@ -320,7 +304,7 @@ export function DocumentsTab() {
                             type="button"
                             onClick={() => setSharingDoc({ type: "document", id: doc.id, name: doc.name, version: doc.version, fileUrl: doc.fileUrl })}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors"
-                            title="Share"
+                            title="Email, WhatsApp, or distribute a tracked copy to specific people/trades via the Team Portal"
                           >
                             <Share2 className="w-3.5 h-3.5" />Share
                           </button>
