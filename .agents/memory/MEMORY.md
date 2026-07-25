@@ -19,4 +19,5 @@
 - [Portal share audience vs distribution](portal-share-audience.md) — share rules are per PERSON (pending invitees count in audience lists); emails/push/recipientCount need a user; don't gate Share on a file existing.
 - [JWT membership revalidation](jwt-membership-revalidation.md) — removing a member must also invalidate their long-lived JWTs; auth middleware re-checks membership with a 60s cache.
 - [Contact email identity](contact-email-identity.md) — never edit a login-linked contact's email via contact endpoints; keep people↔subcontractor mirror in sync; manager-gate reused PATCH routes.
+- [Team tab member dedupe](team-member-dedupe.md) — only userId+personId membership rows are enforced; legacy firm-only rows are hidden when a person-backed row for the same firm exists.
 - [Site-board check-in matching](site-board-checkin-matching.md) — QR check-in must cover all 3 project_members link types (user_id, subcontractor_id, person_id); sub-linked people need valid insurance.

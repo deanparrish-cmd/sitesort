@@ -93,7 +93,18 @@ function PersonCertifications({ personId, canManage }: { personId: string; canMa
     <div className="flex flex-wrap items-center gap-1.5">
       {(certs ?? []).map(c => (
         <span key={c.id} className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium border", statusColor(c.status))}>
-          <ShieldCheck className="w-3 h-3" />{c.name}
+          <ShieldCheck className="w-3 h-3" />
+          {c.name}
+          {c.expiryDate && (
+            <span className="opacity-80">
+              — {c.status === "expired" ? "expired" : "expires"} {new Date(c.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+            </span>
+          )}
+          {c.documentUrl && (
+            <button type="button" onClick={() => window.open(c.documentUrl!.startsWith("/uploads/") ? `/api${c.documentUrl}` : c.documentUrl!, "_blank", "noopener,noreferrer")} className="hover:opacity-70 shrink-0" title="Open document">
+              <ExternalLink className="w-3 h-3" />
+            </button>
+          )}
         </span>
       ))}
       {canManage && !open && (
