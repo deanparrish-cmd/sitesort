@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { projectsTable, projectMembersTable, usersTable, documentsTable, documentDistributionsTable, permitsTable, notificationsTable, subcontractorsTable, companiesTable, milestonesTable } from "@workspace/db/schema";
-import { eq, and, count, sql, asc } from "drizzle-orm";
+import { projectsTable, projectMembersTable, usersTable, documentsTable, documentDistributionsTable, permitsTable, notificationsTable, subcontractorsTable, companiesTable, milestonesTable, photosTable, dailyNotesTable } from "@workspace/db/schema";
+import { eq, and, count, sql, asc, desc, isNotNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 
@@ -13,6 +13,46 @@ async function computeProgress(projectId: string): Promise<number> {
   if (rows.length === 0) return 0;
   const done = rows.filter(r => r.completedAt !== null).length;
   return Math.round((done / rows.length) * 100);
+}
+
+type ActivityItem = { id: string; type: string; description: string; userId: string | null; userName: string | null; createdAt: string };
+
+async function getRecentActivity(projectId: string, limit = 8): Promise<ActivityItem[]> {
+  const [docs, photos, notes, milestones] = await Promise.all([
+    db.select({ id: documentsTable.id, name: documentsTable.name, createdAt: documentsTable.createdAt, userId: documentsTable.uploadedBy, userName: usersTable.name })
+      .from(documentsTable)
+      .innerJoin(usersTable, eq(usersTable.id, documentsTable.uploadedBy))
+      .where(eq(documentsTable.projectId, projectId))
+      .orderBy(desc(documentsTable.createdAt))
+      .limit(limit),
+    db.select({ id: photosTable.id, description: photosTable.description, referenceNumber: photosTable.referenceNumber, createdAt: photosTable.takenAt, userId: photosTable.uploadedBy, userName: usersTable.name })
+      .from(photosTable)
+      .innerJoin(usersTable, eq(usersTable.id, photosTable.uploadedBy))
+      .where(and(eq(photosTable.projectId, projectId), isNotNull(photosTable.submittedAt)))
+      .orderBy(desc(photosTable.takenAt))
+      .limit(limit),
+    db.select({ id: dailyNotesTable.id, body: dailyNotesTable.body, createdAt: dailyNotesTable.createdAt, userId: dailyNotesTable.authorId, userName: usersTable.name })
+      .from(dailyNotesTable)
+      .innerJoin(usersTable, eq(usersTable.id, dailyNotesTable.authorId))
+      .where(eq(dailyNotesTable.projectId, projectId))
+      .orderBy(desc(dailyNotesTable.createdAt))
+      .limit(limit),
+    db.select({ id: milestonesTable.id, title: milestonesTable.title, completedAt: milestonesTable.completedAt })
+      .from(milestonesTable)
+      .where(and(eq(milestonesTable.projectId, projectId), isNotNull(milestonesTable.completedAt)))
+      .orderBy(desc(milestonesTable.completedAt))
+      .limit(limit),
+  ]);
+
+  const items: { id: string; type: string; description: string; userId: string | null; userName: string | null; createdAt: Date }[] = [
+    ...docs.map(d => ({ id: `document-${d.id}`, type: "document_uploaded", description: `${d.name} uploaded`, userId: d.userId, userName: d.userName, createdAt: d.createdAt })),
+    ...photos.map(p => ({ id: `photo-${p.id}`, type: "photo_logged", description: `Photo logged${p.description ? `: ${p.description}` : ` (${p.referenceNumber})`}`, userId: p.userId, userName: p.userName, createdAt: p.createdAt })),
+    ...notes.map(n => ({ id: `note-${n.id}`, type: "note_posted", description: `Site update posted: "${n.body.length > 60 ? `${n.body.slice(0, 60)}…` : n.body}"`, userId: n.userId, userName: n.userName, createdAt: n.createdAt })),
+    ...milestones.map(m => ({ id: `milestone-${m.id}`, type: "milestone_completed", description: `Milestone completed: ${m.title}`, userId: null, userName: null, createdAt: m.completedAt! })),
+  ];
+
+  items.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  return items.slice(0, limit).map(it => ({ ...it, createdAt: it.createdAt.toISOString() }));
 }
 
 const PLAN_PROJECT_LIMITS: Record<string, number> = {
@@ -134,6 +174,7 @@ router.get("/projects/:projectId", authenticate, async (req, res) => {
       .where(and(eq(documentsTable.projectId, p.id), eq(documentDistributionsTable.status, "pending")));
 
     const progressPercent = await computeProgress(p.id);
+    const recentActivity = await getRecentActivity(p.id);
     res.json({
       id: p.id,
       companyId: p.companyId,
@@ -147,7 +188,7 @@ router.get("/projects/:projectId", authenticate, async (req, res) => {
       alertCount: Number(docAlerts.count),
       progressPercent,
       trades: p.trades ?? [],
-      recentActivity: [],
+      recentActivity,
     });
   } catch (err) {
     req.log.error({ err }, "Get project error");
