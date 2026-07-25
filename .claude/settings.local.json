@@ -217,7 +217,11 @@
       "Bash(PORT=8080 nohup pnpm --filter @workspace/api-server run dev)",
       "Bash(disown -a)",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('after unset -> siteManagerId:', d.get\\('siteManagerId'\\)\\)\")",
-      "Bash(LAYOUT_VIEWPORTS=360 pnpm run check:layout)"
+      "Bash(LAYOUT_VIEWPORTS=360 pnpm run check:layout)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('siteManagerId'\\), d.get\\('siteManagerName'\\)\\)\")",
+      "Bash(python3 -c \"import sys,json; print\\('after unset:', json.load\\(sys.stdin\\)['siteManager']\\)\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('archived:', d.get\\('archivedAt'\\) is not None\\)\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('siteManagerId:', d.get\\('siteManagerId'\\), '| memberCount:', d.get\\('memberCount'\\)\\)\")"
     ]
   },
   "hooks": {
