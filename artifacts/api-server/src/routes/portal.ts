@@ -984,13 +984,13 @@ router.post("/portal/transcribe", authenticate, requirePortalSession, requirePor
   }
 });
 
-// GET /api/portal/site-issues — READ is open to every portal member (members
-// can always reopen and view issues); canLogIssues only gates the write
-// endpoints below. Within a member's view: shared photos, PLUS an issue this
-// member reported or is assigned to (they must always see their own status,
-// even without an explicit share) — this never leaks who ELSE it's shared
-// with, only the reporter's own name on their own reports.
-router.get("/portal/site-issues", authenticate, requirePortalSession, requirePortalMember, autoLogPortalActivity, async (req, res) => {
+// GET /api/portal/site-issues — gated on canLogIssues: the whole section is
+// absent from nav and inaccessible for a member the PM hasn't granted it to.
+// Within a granted member's view: shared photos, PLUS an issue this member
+// reported or is assigned to (they must always see their own status, even
+// without an explicit share) — this never leaks who ELSE it's shared with,
+// only the reporter's own name on their own reports.
+router.get("/portal/site-issues", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canLogIssues"), autoLogPortalActivity, async (req, res) => {
   const pid = req.portalProjectId!;
   const viewer = await resolveViewer(req.user!.id, pid);
   const sharedIds = await visibleIds(pid, "photo", viewer);
@@ -1537,7 +1537,7 @@ async function portalVisiblePlantItem(pid: string, itemId: string, userId: strin
 
 // GET /api/portal/plant-materials — only the member's own entries + entries
 // the PM has shared with them (see privacy note above).
-router.get("/portal/plant-materials", authenticate, requirePortalSession, requirePortalMember, autoLogPortalActivity, async (req, res) => {
+router.get("/portal/plant-materials", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canUpdatePlantMaterials"), autoLogPortalActivity, async (req, res) => {
   const pid = req.portalProjectId!;
   const uid = req.user!.id;
   const rows = await db.select().from(plantItemsTable)
@@ -1556,7 +1556,7 @@ router.get("/portal/plant-materials", authenticate, requirePortalSession, requir
 });
 
 // GET /api/portal/plant-materials/:itemId
-router.get("/portal/plant-materials/:itemId", authenticate, requirePortalSession, requirePortalMember, autoLogPortalActivity, async (req, res) => {
+router.get("/portal/plant-materials/:itemId", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canUpdatePlantMaterials"), autoLogPortalActivity, async (req, res) => {
   const pid = req.portalProjectId!;
   const item = await portalVisiblePlantItem(pid, req.params.itemId, req.user!.id);
   if (!item) { res.status(404).json({ error: "not_found", message: "Item not found" }); return; }
@@ -1757,7 +1757,7 @@ router.post("/portal/plant-materials/:itemId/attachments", authenticate, require
 const HISTORY_LIMIT = 14;
 
 // GET /api/portal/daily-report — today's report, section-gated.
-router.get("/portal/daily-report", authenticate, requirePortalSession, requirePortalMember, autoLogPortalActivity, async (req, res) => {
+router.get("/portal/daily-report", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canEditDailyReport"), autoLogPortalActivity, async (req, res) => {
   try {
     const pid = req.portalProjectId!;
     const date = londonDateStr(new Date());
@@ -1800,7 +1800,7 @@ router.get("/portal/daily-report", authenticate, requirePortalSession, requirePo
 // GET /api/portal/daily-report/history — last HISTORY_LIMIT past days that
 // have a site diary entry, newest first. Section-gated like the rest of Daily
 // Report; always read-only within the section.
-router.get("/portal/daily-report/history", authenticate, requirePortalSession, requirePortalMember, autoLogPortalActivity, async (req, res) => {
+router.get("/portal/daily-report/history", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canEditDailyReport"), autoLogPortalActivity, async (req, res) => {
   try {
     const pid = req.portalProjectId!;
     const today = londonDateStr(new Date());

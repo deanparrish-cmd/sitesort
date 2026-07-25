@@ -161,6 +161,8 @@ export interface ActivityItem {
 
 export type ProjectDetail = Project & {
   recentActivity: ActivityItem[];
+  siteManagerId?: string | null;
+  siteManagerName?: string | null;
 };
 
 export interface CreateProjectRequest {
@@ -184,6 +186,8 @@ export interface UpdateProjectRequest {
   address?: string;
   status?: UpdateProjectRequestStatus;
   targetEndDate?: string;
+  /** Must be the userId of a current member of this project. Null unsets it. */
+  siteManagerId?: string | null;
 }
 
 export type DocumentType = (typeof DocumentType)[keyof typeof DocumentType];

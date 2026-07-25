@@ -229,6 +229,8 @@ export const GetProjectResponse = zod
           createdAt: zod.date(),
         }),
       ),
+      siteManagerId: zod.string().nullish(),
+      siteManagerName: zod.string().nullish(),
     }),
   );
 
@@ -244,6 +246,12 @@ export const UpdateProjectBody = zod.object({
   address: zod.string().optional(),
   status: zod.enum(["active", "on_hold", "complete"]).optional(),
   targetEndDate: zod.date().optional(),
+  siteManagerId: zod
+    .string()
+    .nullish()
+    .describe(
+      "Must be the userId of a current member of this project. Null unsets it.",
+    ),
 });
 
 export const UpdateProjectResponse = zod.object({

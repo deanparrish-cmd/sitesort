@@ -8,6 +8,7 @@ import { useDetail } from "../context";
 export function ProjectDialogs() {
   const {
     project,
+    members,
     updateMutation,
     isEditOpen,
     setIsEditOpen,
@@ -57,6 +58,16 @@ export function ProjectDialogs() {
           <div>
             <label className="text-sm font-semibold mb-1 block">Target End Date</label>
             <Input type="date" {...editRegister("targetEndDate")} icon={<Calendar className="w-4 h-4" />} />
+          </div>
+          <div>
+            <label className="text-sm font-semibold mb-1 block">Site Manager</label>
+            <select {...editRegister("siteManagerId")} className="flex h-11 w-full rounded-lg border-2 border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:border-primary">
+              <option value="">Not set</option>
+              {((members ?? []) as any[]).filter(m => m.userId).map(m => (
+                <option key={m.userId} value={m.userId}>{m.name}</option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground mt-1">Shown to the Team Portal as this project's site manager contact. Only members who've accepted their portal/dashboard invite can be chosen.</p>
           </div>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => setIsEditOpen(false)}>Cancel</Button>

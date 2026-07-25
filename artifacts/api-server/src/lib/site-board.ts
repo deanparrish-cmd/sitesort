@@ -17,10 +17,10 @@ export async function buildSiteBoardPayload(projectId: string) {
   const project = (await db.select().from(projectsTable).where(eq(projectsTable.id, projectId)).limit(1))[0];
   if (!project) return null;
 
-  const [members, permits, documents, pins] = await Promise.all([
+  const [members, permits, documents, pins, siteManagerRows] = await Promise.all([
     db.select({
       id: usersTable.id, name: usersTable.name, email: usersTable.email,
-      phone: usersTable.phone, role: projectMembersTable.role,
+      phone: usersTable.phone,
     }).from(projectMembersTable)
       .innerJoin(usersTable, eq(usersTable.id, projectMembersTable.userId))
       .where(eq(projectMembersTable.projectId, projectId)),
@@ -31,6 +31,10 @@ export async function buildSiteBoardPayload(projectId: string) {
       createdAt: documentsTable.createdAt, publicAccess: documentsTable.publicAccess,
     }).from(documentsTable).where(and(eq(documentsTable.projectId, projectId), eq(documentsTable.status, "current"))),
     db.select().from(qrBoardPinsTable).where(eq(qrBoardPinsTable.projectId, projectId)),
+    project.siteManagerId
+      ? db.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, phone: usersTable.phone })
+          .from(usersTable).where(eq(usersTable.id, project.siteManagerId)).limit(1)
+      : Promise.resolve([]),
   ]);
 
   const docPinIds = pins.filter(p => p.itemType === "document").map(p => p.itemId);
@@ -54,7 +58,9 @@ export async function buildSiteBoardPayload(projectId: string) {
     ))
     .orderBy(asc(calendarEventsTable.eventDate));
 
-  const siteManager = members.find(m => m.role === "manager") ?? members[0] ?? null;
+  // Deliberately PM-chosen (projects.siteManagerId) — never guessed. No
+  // fallback to "first member"/"role=manager": unset means "Not set".
+  const siteManager = siteManagerRows[0] ?? null;
 
   return {
     project: {

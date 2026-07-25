@@ -10,4 +10,6 @@ import type { Project } from "./project";
 
 export type ProjectDetail = Project & {
   recentActivity: ActivityItem[];
+  siteManagerId?: string | null;
+  siteManagerName?: string | null;
 };
