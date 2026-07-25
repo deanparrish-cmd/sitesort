@@ -459,11 +459,15 @@ function PermitRow({ p, unseen }: { p: any; unseen?: boolean }) {
   const view = async () => {
     setDownloading(true);
     try {
-      // Download the attached file when there is one; a permit with no file is
-      // still "viewable" — its details are the row itself — so View just
-      // confirms receipt.
+      // Open the attached file INLINE in a new tab (same as documents) — the
+      // window must open synchronously from the click so popup blockers and
+      // iOS don't interfere. Forced blob-downloads on iPhone/iPad surface a
+      // useless "? Open in…" sheet, so never download here. A permit with no
+      // file is still "viewable" — its details are the row itself — so View
+      // just confirms receipt.
       if (p.documentUrl) {
-        await downloadAuthed(`/api/portal/permits/${p.id}/download`, p.type || "permit");
+        const href = fileHref(p.documentUrl);
+        if (href) window.open(href, "_blank", "noopener");
       }
       const r = await fetch(`/api/portal/permits/${p.id}/view`, { method: "POST" });
       if (!r.ok) throw new Error();
