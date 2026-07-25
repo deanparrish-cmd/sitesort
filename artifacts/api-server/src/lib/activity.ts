@@ -23,6 +23,7 @@ export const PORTAL_SECTIONS = [
   "plant-materials",
   "daily-report",
   "messages",
+  "my-documents",
 ] as const;
 
 export type PortalSection = (typeof PORTAL_SECTIONS)[number];

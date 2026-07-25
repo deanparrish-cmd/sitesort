@@ -82,17 +82,19 @@ function MemberDocumentsReview({ projectId }: { projectId: string }) {
 
   const docs = docsQ.data ?? [];
   const pendingCount = docs.filter(d => d.status === "pending").length;
+  // Reject flow opens a proper dialog with a notes box (the note is stored on
+  // the doc and shown to the uploader in their portal "My documents" section).
+  const [rejectTarget, setRejectTarget] = useState<{ id: string; name: string; uploaderName: string } | null>(null);
+  const [rejectNote, setRejectNote] = useState("");
 
-  const doReview = async (id: string, action: "approve" | "reject") => {
-    let note: string | undefined;
-    if (action === "reject") {
-      const input = window.prompt("Reason for rejection (optional):") ?? "";
-      note = input.trim() || undefined;
-    }
+  const doReview = async (id: string, action: "approve" | "reject", note?: string) => {
     setBusyId(id);
     try {
-      await review.mutateAsync({ projectId, id, data: { action, note } });
-      toast({ title: action === "approve" ? "Document approved" : "Document rejected" });
+      await review.mutateAsync({ projectId, id, data: { action, note: note?.trim() || undefined } });
+      toast({
+        title: action === "approve" ? "Document approved" : "Document rejected",
+        description: action === "reject" ? "The sender will see the decision and your note in their portal." : undefined,
+      });
       await docsQ.refetch();
     } catch (e: any) {
       toast({ variant: "destructive", title: "Could not update", description: e?.data?.message ?? "Please try again." });
@@ -129,7 +131,7 @@ function MemberDocumentsReview({ projectId }: { projectId: string }) {
                   {d.status === "pending" && (
                     <>
                       <Button size="sm" variant="outline" className="h-8 px-2 text-xs" isLoading={busyId === d.id && review.variables?.data.action === "approve"} disabled={busyId === d.id} onClick={() => doReview(d.id, "approve")}><Check className="w-3.5 h-3.5" /> Approve</Button>
-                      <Button size="sm" variant="outline" className="h-8 px-2 text-xs text-destructive hover:text-destructive" isLoading={busyId === d.id && review.variables?.data.action === "reject"} disabled={busyId === d.id} onClick={() => doReview(d.id, "reject")}><X className="w-3.5 h-3.5" /> Reject</Button>
+                      <Button size="sm" variant="outline" className="h-8 px-2 text-xs text-destructive hover:text-destructive" disabled={busyId === d.id} onClick={() => { setRejectNote(""); setRejectTarget({ id: d.id, name: d.name, uploaderName: d.uploaderName }); }}><X className="w-3.5 h-3.5" /> Reject</Button>
                     </>
                   )}
                 </div>
@@ -138,6 +140,37 @@ function MemberDocumentsReview({ projectId }: { projectId: string }) {
           </div>
         )
       )}
+
+      {/* Reject-with-notes dialog — the note is saved on the document and shown
+          to the sender in their portal "My documents" list, plus a notification. */}
+      <Dialog open={!!rejectTarget} onOpenChange={v => { if (!v) setRejectTarget(null); }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-destructive"><X className="w-4 h-4" /> Reject "{rejectTarget?.name}"?</DialogTitle>
+          <p className="text-sm text-muted-foreground">Add a note explaining why, so {rejectTarget?.uploaderName ?? "the sender"} knows what to fix. They'll see the decision and your note in their portal.</p>
+        </DialogHeader>
+        <textarea
+          value={rejectNote}
+          onChange={e => setRejectNote(e.target.value)}
+          rows={3}
+          maxLength={500}
+          placeholder="e.g. Certificate has expired — please upload the current one"
+          className="w-full rounded-lg border-2 border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:border-primary resize-none"
+        />
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setRejectTarget(null)}>Cancel</Button>
+          <Button
+            variant="destructive"
+            isLoading={busyId === rejectTarget?.id}
+            onClick={async () => {
+              if (!rejectTarget) return;
+              await doReview(rejectTarget.id, "reject", rejectNote);
+              setRejectTarget(null);
+            }}
+          >
+            Reject document
+          </Button>
+        </DialogFooter>
+      </Dialog>
     </section>
   );
 }

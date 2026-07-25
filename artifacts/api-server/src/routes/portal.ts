@@ -397,6 +397,17 @@ async function computeUnseen(userId: string, projectId: string): Promise<{ count
   for (const m of dmRows) if (isAfter(m.createdAt, lv("messages"))) bump("messages");
   for (const m of channelRows) if (isAfter(m.createdAt, lv("messages"))) bump("messages");
 
+  // My documents: a PM decision (approve/reject) on a doc THIS member uploaded
+  // counts as unseen until they open the section — the rejection note rides
+  // along on the doc row itself, so the badge is what tells them to look.
+  const myDocs = await db.select({ reviewedAt: portalMemberDocumentsTable.reviewedAt, reviewedByUserId: portalMemberDocumentsTable.reviewedByUserId })
+    .from(portalMemberDocumentsTable)
+    .where(and(eq(portalMemberDocumentsTable.projectId, projectId), eq(portalMemberDocumentsTable.userId, userId)));
+  for (const d of myDocs) {
+    if (d.reviewedByUserId === userId) continue;
+    if (isAfter(d.reviewedAt, lv("my-documents"))) bump("my-documents");
+  }
+
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   return { counts, total };
 }

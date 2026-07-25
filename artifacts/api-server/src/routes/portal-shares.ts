@@ -288,15 +288,38 @@ router.post("/projects/:projectId/member-documents/:id/review", authenticate, as
       res.status(400).json({ error: "validation_error", message: "action must be 'approve' or 'reject'." });
       return;
     }
-    const existing = (await db.select({ id: portalMemberDocumentsTable.id }).from(portalMemberDocumentsTable)
+    const existing = (await db.select({ id: portalMemberDocumentsTable.id, userId: portalMemberDocumentsTable.userId, name: portalMemberDocumentsTable.name })
+      .from(portalMemberDocumentsTable)
       .where(and(eq(portalMemberDocumentsTable.id, req.params.id), eq(portalMemberDocumentsTable.projectId, req.params.projectId))).limit(1))[0];
     if (!existing) { res.status(404).json({ error: "not_found", message: "Document not found" }); return; }
-    await db.update(portalMemberDocumentsTable).set({
+    // Pending-only guard: two managers reviewing at once must not flip the
+    // decision back and forth or double-notify — first decision wins.
+    const updated = await db.update(portalMemberDocumentsTable).set({
       status: action === "approve" ? "approved" : "rejected",
       reviewNote: typeof note === "string" && note.trim() ? note.trim() : null,
       reviewedByUserId: req.user!.id,
       reviewedAt: new Date(),
-    }).where(eq(portalMemberDocumentsTable.id, existing.id));
+    }).where(and(eq(portalMemberDocumentsTable.id, existing.id), eq(portalMemberDocumentsTable.status, "pending")))
+      .returning({ id: portalMemberDocumentsTable.id });
+    if (updated.length === 0) {
+      res.status(409).json({ error: "already_reviewed", message: "This document has already been reviewed." });
+      return;
+    }
+
+    // Tell the uploader the decision landed (push, debounced/batched like every
+    // other portal notification). The rejection note itself is shown on the doc
+    // row in "My documents"; the unseen badge on that section comes from
+    // computeUnseen reading reviewedAt. Don't notify a PM reviewing their own upload.
+    if (existing.userId !== req.user!.id) {
+      const proj = (await db.select({ name: projectsTable.name }).from(projectsTable)
+        .where(eq(projectsTable.id, req.params.projectId)).limit(1))[0];
+      await enqueuePushForMembers([existing.userId], req.params.projectId, {
+        kind: "member_document_review", itemType: "member_document", itemId: existing.id,
+        title: action === "approve" ? `Document approved: ${existing.name}` : `Document rejected: ${existing.name}`,
+        projectName: proj?.name ?? "SiteSort",
+        deepLink: "/portal/my-documents",
+      });
+    }
     res.json({ success: true });
   } catch (err) {
     req.log.error({ err }, "Review member document error");
