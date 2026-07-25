@@ -10784,6 +10784,179 @@ export function useGetPortalPermits<
 }
 
 /**
+ * @summary Record that this member opened a permit shared with them
+ */
+export const getViewPortalPermitUrl = (permitId: string) => {
+  return `/api/portal/permits/${permitId}/view`;
+};
+
+export const viewPortalPermit = async (
+  permitId: string,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getViewPortalPermitUrl(permitId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getViewPortalPermitMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof viewPortalPermit>>,
+    TError,
+    { permitId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof viewPortalPermit>>,
+  TError,
+  { permitId: string },
+  TContext
+> => {
+  const mutationKey = ["viewPortalPermit"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof viewPortalPermit>>,
+    { permitId: string }
+  > = (props) => {
+    const { permitId } = props ?? {};
+
+    return viewPortalPermit(permitId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ViewPortalPermitMutationResult = NonNullable<
+  Awaited<ReturnType<typeof viewPortalPermit>>
+>;
+
+export type ViewPortalPermitMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Record that this member opened a permit shared with them
+ */
+export const useViewPortalPermit = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof viewPortalPermit>>,
+    TError,
+    { permitId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof viewPortalPermit>>,
+  TError,
+  { permitId: string },
+  TContext
+> => {
+  return useMutation(getViewPortalPermitMutationOptions(options));
+};
+
+/**
+ * @summary Download a shared permit's attached document
+ */
+export const getDownloadPortalPermitUrl = (permitId: string) => {
+  return `/api/portal/permits/${permitId}/download`;
+};
+
+export const downloadPortalPermit = async (
+  permitId: string,
+  options?: RequestInit,
+): Promise<Blob> => {
+  return customFetch<Blob>(getDownloadPortalPermitUrl(permitId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getDownloadPortalPermitQueryKey = (permitId: string) => {
+  return [`/api/portal/permits/${permitId}/download`] as const;
+};
+
+export const getDownloadPortalPermitQueryOptions = <
+  TData = Awaited<ReturnType<typeof downloadPortalPermit>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  permitId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof downloadPortalPermit>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getDownloadPortalPermitQueryKey(permitId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof downloadPortalPermit>>
+  > = ({ signal }) =>
+    downloadPortalPermit(permitId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!permitId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof downloadPortalPermit>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type DownloadPortalPermitQueryResult = NonNullable<
+  Awaited<ReturnType<typeof downloadPortalPermit>>
+>;
+export type DownloadPortalPermitQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Download a shared permit's attached document
+ */
+
+export function useDownloadPortalPermit<
+  TData = Awaited<ReturnType<typeof downloadPortalPermit>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  permitId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof downloadPortalPermit>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getDownloadPortalPermitQueryOptions(permitId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * @summary Safety documents
  */
 export const getGetPortalSafetyUrl = () => {

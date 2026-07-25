@@ -10,7 +10,7 @@ import {
   portalSharesTable, documentDistributionsTable, companiesTable, qrCodesTable,
   portalMemberDocumentsTable, notificationsTable, companyMembersTable, portalSubmissionNotesTable,
   plantItemsTable, plantItemAttachmentsTable, plantItemDistributionsTable, personCertificationsTable, dailyReportsTable,
-  messagesTable, channelMessagesTable, acknowledgmentAuditTable,
+  messagesTable, channelMessagesTable, acknowledgmentAuditTable, portalItemViewsTable,
 } from "@workspace/db/schema";
 import { and, eq, inArray, isNull, isNotNull, desc, asc, gte, lt, count, max, or, ne } from "drizzle-orm";
 import { buildSiteBoardPayload } from "../lib/site-board";
@@ -427,6 +427,33 @@ async function recordDocView(documentId: string, userId: string): Promise<void> 
       await db.update(documentDistributionsTable).set({ status: "viewed", viewedAt: new Date() }).where(eq(documentDistributionsTable.id, existing[0].id));
     }
   } catch { /* tracking is best-effort */ }
+}
+
+// Per-member open receipts for NON-document shared items (permits, daily
+// reports, photos) — documents use document_distributions.viewed_at instead
+// because the PM dashboard reads those counts. First open wins: the unique
+// index makes the insert a no-op on repeat opens, so "Received <when>" never
+// drifts. Best-effort like recordDocView.
+async function recordItemView(projectId: string, userId: string, itemType: string, itemId: string): Promise<void> {
+  try {
+    await db.insert(portalItemViewsTable)
+      .values({ id: generateId(), projectId, userId, itemType, itemId })
+      .onConflictDoNothing();
+  } catch { /* tracking is best-effort */ }
+}
+
+// itemId → viewedAt for this member, for stamping myViewedAt onto list payloads.
+async function myItemViews(userId: string, itemType: string, ids: string[]): Promise<Map<string, Date>> {
+  if (ids.length === 0) return new Map();
+  const rows = await db.select({ itemId: portalItemViewsTable.itemId, viewedAt: portalItemViewsTable.viewedAt })
+    .from(portalItemViewsTable)
+    .where(and(eq(portalItemViewsTable.userId, userId), eq(portalItemViewsTable.itemType, itemType), inArray(portalItemViewsTable.itemId, ids)));
+  return new Map(rows.map(r => [r.itemId, r.viewedAt]));
+}
+
+// Stamp myViewedAt onto already-serialized rows from a views map.
+function withMyView<T extends { id: string }>(rows: T[], views: Map<string, Date>): (T & { myViewedAt: string | null })[] {
+  return rows.map(r => ({ ...r, myViewedAt: views.get(r.id)?.toISOString() ?? null }));
 }
 
 // ==========================================================================
@@ -937,11 +964,16 @@ router.get("/portal/shared", ...portalGuards, async (req, res) => {
       .map(r => { const at = map.get(r.id); return { ...serialize(r), sharedAt: at?.toISOString(), _at: at?.getTime() ?? 0, unseen: isAfter(at, seenBefore) }; })
       .sort((a, b) => b._at - a._at)
       .map(({ _at, ...rest }) => rest);
+  // Non-document items get their own per-member open receipts (portal_item_views).
+  const [permitViews, reportViews] = await Promise.all([
+    myItemViews(req.user!.id, "permit", permits.map(p => p.id)),
+    myItemViews(req.user!.id, "daily_report", reportsWithContent.map(r => r.id)),
+  ]);
   res.json({
     documents: withMyStatus(annotate(docs, serializeDoc, docMapWithSafety), myStatuses),
     photos: annotate(photos, serializeIssue, photoMap),
-    permits: annotate(permits, serializePermit, permitMap),
-    dailyReports: annotate(reportsWithContent, serializeSharedReport, reportMap),
+    permits: withMyView(annotate(permits, serializePermit, permitMap), permitViews),
+    dailyReports: withMyView(annotate(reportsWithContent, serializeSharedReport, reportMap), reportViews),
   });
 });
 
@@ -955,6 +987,7 @@ router.post("/portal/daily-reports/:reportId/view", ...portalGuards, async (req,
   const ids = await visibleIds(pid, "daily_report", viewer);
   if (!ids.has(req.params.reportId)) { res.status(404).json({ error: "not_found", message: "Report not found" }); return; }
   void logActivity({ userId: req.user!.id, projectId: pid, companyId: req.user!.companyId, section: "shared", action: "view", itemType: "daily_report", itemId: req.params.reportId, req });
+  await recordItemView(pid, req.user!.id, "daily_report", req.params.reportId);
   res.json({ success: true });
 });
 
@@ -1556,7 +1589,52 @@ router.get("/portal/permits", ...portalGuards, async (req, res) => {
   const rows = await db.select().from(permitsTable)
     .where(and(eq(permitsTable.projectId, pid), isNull(permitsTable.archivedAt), inArray(permitsTable.id, [...ids])))
     .orderBy(asc(permitsTable.expiryDate));
-  res.json(rows.map(serializePermit));
+  const views = await myItemViews(req.user!.id, "permit", rows.map(r => r.id));
+  res.json(withMyView(rows.map(serializePermit), views));
+});
+
+// POST /api/portal/permits/:permitId/view — record that this member opened a
+// permit shared with them. Same open-receipt pattern as documents: fired from
+// the client on "View"; flips the New pill to "Received <when>".
+router.post("/portal/permits/:permitId/view", ...portalGuards, async (req, res) => {
+  const pid = req.portalProjectId!;
+  const viewer = await resolveViewer(req.user!.id, pid);
+  const ids = await visibleIds(pid, "permit", viewer);
+  if (!ids.has(req.params.permitId)) { res.status(404).json({ error: "not_found", message: "Permit not found" }); return; }
+  await recordItemView(pid, req.user!.id, "permit", req.params.permitId);
+  void logActivity({ userId: req.user!.id, projectId: pid, companyId: req.user!.companyId, section: "shared", action: "view", itemType: "permit", itemId: req.params.permitId, req });
+  res.json({ success: true });
+});
+
+// GET /api/portal/permits/:permitId/download — stream a shared permit's
+// attached document, mirroring the document download route (attachment
+// disposition; visibility-gated to what's shared with this member).
+router.get("/portal/permits/:permitId/download", ...portalGuards, async (req, res) => {
+  const pid = req.portalProjectId!;
+  const viewer = await resolveViewer(req.user!.id, pid);
+  const ids = await visibleIds(pid, "permit", viewer);
+  if (!ids.has(req.params.permitId)) { res.status(404).json({ error: "not_found", message: "Permit not found" }); return; }
+  const rows = await db.select().from(permitsTable)
+    .where(and(eq(permitsTable.id, req.params.permitId), eq(permitsTable.projectId, pid), isNull(permitsTable.archivedAt)))
+    .limit(1);
+  const permit = rows[0];
+  if (!permit?.documentUrl) { res.status(404).json({ error: "not_found", message: "This permit has no attached file" }); return; }
+  const filename = fileUrlToFilename(permit.documentUrl);
+  if (!filename) { res.status(404).json({ error: "not_found", message: "Permit file unavailable" }); return; }
+  // Strip path separators, quotes AND control chars (CR/LF would allow header injection).
+  let downloadName = permit.type.replace(/[/\\"]|[\r\n\t\x00-\x1f]/g, "-");
+  if (!/\.[a-z0-9]+$/i.test(downloadName)) {
+    downloadName += filename.match(/\.[a-z0-9]+$/i)?.[0] ?? "";
+  }
+  const stream = getBucket().file(objectKey(filename)).createReadStream();
+  stream.on("error", (err) => {
+    req.log.error({ err }, "Permit download error");
+    if (!res.headersSent) res.status(404).json({ error: "not_found", message: "Permit file unavailable" });
+    else res.destroy();
+  });
+  res.setHeader("Content-Type", "application/octet-stream");
+  res.setHeader("Content-Disposition", `attachment; filename="${downloadName}"`);
+  stream.pipe(res);
 });
 
 // ---- Plant & Materials ----

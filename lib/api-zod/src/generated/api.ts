@@ -3597,6 +3597,7 @@ export const GetPortalHsResponse = zod.object({
       documentUrl: zod.string().optional(),
       unseen: zod.boolean().optional(),
       sharedAt: zod.string().optional(),
+      myViewedAt: zod.date().nullish(),
     }),
   ),
 });
@@ -3722,6 +3723,7 @@ export const GetPortalSharedResponse = zod.object({
       documentUrl: zod.string().optional(),
       unseen: zod.boolean().optional(),
       sharedAt: zod.string().optional(),
+      myViewedAt: zod.date().nullish(),
     }),
   ),
   dailyReports: zod.array(
@@ -3745,6 +3747,7 @@ export const GetPortalSharedResponse = zod.object({
           .nullish(),
         sharedAt: zod.date().optional(),
         unseen: zod.boolean().optional(),
+        myViewedAt: zod.date().nullish(),
       })
       .describe(
         "A daily report explicitly shared to the portal — the authored site diary only, never the auto-collated internal activity (check-ins, document views\/sign-offs, site photos) the dashboard's full report shows.",
@@ -4152,8 +4155,28 @@ export const GetPortalPermitsResponseItem = zod.object({
   documentUrl: zod.string().optional(),
   unseen: zod.boolean().optional(),
   sharedAt: zod.string().optional(),
+  myViewedAt: zod.date().nullish(),
 });
 export const GetPortalPermitsResponse = zod.array(GetPortalPermitsResponseItem);
+
+/**
+ * @summary Record that this member opened a permit shared with them
+ */
+export const ViewPortalPermitParams = zod.object({
+  permitId: zod.coerce.string(),
+});
+
+export const ViewPortalPermitResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * @summary Download a shared permit's attached document
+ */
+export const DownloadPortalPermitParams = zod.object({
+  permitId: zod.coerce.string(),
+});
 
 /**
  * @summary Safety documents

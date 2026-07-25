@@ -1761,6 +1761,7 @@ export interface PortalPermit {
   documentUrl?: string;
   unseen?: boolean;
   sharedAt?: string;
+  myViewedAt?: string | null;
 }
 
 export interface PortalEvent {
@@ -1850,6 +1851,7 @@ export interface PortalSharedDailyReport {
   managerReport?: ManagerReportFields | null;
   sharedAt?: string;
   unseen?: boolean;
+  myViewedAt?: string | null;
 }
 
 export interface PortalShared {

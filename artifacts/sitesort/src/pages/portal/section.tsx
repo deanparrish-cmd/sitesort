@@ -446,13 +446,54 @@ function SignOffPinCard({ flow }: { flow: ReturnType<typeof useSignOffFlow> }) {
   );
 }
 function PermitRow({ p, unseen }: { p: any; unseen?: boolean }) {
+  const { toast } = useToast();
+  const [downloading, setDownloading] = useState(false);
+  // Same per-item receipt pattern as DocRow: New until THIS member opens it,
+  // then a permanent "Received <when>". openedAt covers the current session so
+  // the pill flips instantly; the server's viewed_at makes it stick.
+  const [openedAt, setOpenedAt] = useState<string | null>(null);
+  const receivedAt: string | null = openedAt ?? p.myViewedAt ?? null;
+  const tracksViews = "myViewedAt" in p;
+  const isNewPermit = tracksViews ? !receivedAt : !!unseen;
+
+  const view = async () => {
+    setDownloading(true);
+    try {
+      // Download the attached file when there is one; a permit with no file is
+      // still "viewable" — its details are the row itself — so View just
+      // confirms receipt.
+      if (p.documentUrl) {
+        await downloadAuthed(`/api/portal/permits/${p.id}/download`, p.type || "permit");
+      }
+      const r = await fetch(`/api/portal/permits/${p.id}/view`, { method: "POST" });
+      if (!r.ok) throw new Error();
+      if (!openedAt && !p.myViewedAt) setOpenedAt(new Date().toISOString());
+    } catch {
+      toast({ title: "Couldn't open permit", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   return (
-    <div className={cn("flex items-center justify-between gap-3 py-2.5 border-b border-border/60 last:border-0", unseen && "-mx-4 px-4 bg-primary/5")}>
+    <div className={cn("flex items-center justify-between gap-3 py-2.5 border-b border-border/60 last:border-0", isNewPermit && "-mx-4 px-4 bg-primary/5")}>
       <div className="min-w-0">
-        <p className="font-medium truncate flex items-center gap-1.5">{unseen && <NewPill />}<span className="truncate">{p.type}</span></p>
+        <p className="font-medium truncate flex items-center gap-1.5">
+          {receivedAt ? <ReceivedPill at={receivedAt} /> : isNewPermit && <NewPill />}
+          <span className="truncate">{p.type}</span>
+        </p>
         <p className="text-xs text-muted-foreground truncate">{p.description} · expires {fmtDate(p.expiryDate)}</p>
       </div>
-      <Badge label={p.status === "expiring_soon" ? "Expiring" : p.status === "expired" ? "Expired" : "Active"} className={PERMIT_BADGE[p.status]} />
+      <div className="shrink-0 flex items-center gap-2">
+        <Badge label={p.status === "expiring_soon" ? "Expiring" : p.status === "expired" ? "Expired" : "Active"} className={PERMIT_BADGE[p.status]} />
+        <button
+          onClick={view}
+          disabled={downloading}
+          className="min-h-9 px-3 rounded-lg border text-xs font-medium hover:bg-muted disabled:opacity-50"
+        >
+          {downloading ? "Opening…" : "View"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -1092,9 +1133,14 @@ function SharedView() {
   });
   const viewReport = useViewPortalSharedDailyReport();
   const [viewingReport, setViewingReport] = useState<{ id: string; reportDate: string; managerReport?: ManagerReportFields | null } | null>(null);
+  // Session-local receipts so the "Received" pill flips instantly on open;
+  // the server's recorded view (myViewedAt) makes it permanent.
+  const [reportOpened, setReportOpened] = useState<Record<string, string>>({});
   const openSharedReport = (r: { id: string; reportDate: string; managerReport?: ManagerReportFields | null }) => {
     setViewingReport(r);
-    viewReport.mutate({ reportId: r.id });
+    viewReport.mutate({ reportId: r.id }, {
+      onSuccess: () => setReportOpened(prev => prev[r.id] ? prev : { ...prev, [r.id]: new Date().toISOString() }),
+    });
   };
   // Site notes lived on the old (now-retired) General tab alongside general
   // documents — they're project-wide announcements, not gated/shared content,
@@ -1180,17 +1226,20 @@ function SharedView() {
       )}
       {showDailyReports && (
         <div><SectionTitle>Daily reports</SectionTitle><Card>
-          {dailyReports.map(r => (
-            <button
-              key={r.id}
-              onClick={() => openSharedReport(r)}
-              className="w-full flex items-center gap-3 px-3 py-3 min-h-[44px] text-left hover:bg-muted/60 transition-colors border-b border-border last:border-b-0"
-            >
-              {isNew(r.id) && <NewPill />}
-              <ClipboardList className="w-4 h-4 text-primary shrink-0" />
-              <span className="flex-1 min-w-0 text-sm font-medium truncate">Daily site report — {fmtDate(r.reportDate)}</span>
-            </button>
-          ))}
+          {dailyReports.map(r => {
+            const receivedAt = reportOpened[r.id] ?? (r as any).myViewedAt ?? null;
+            return (
+              <button
+                key={r.id}
+                onClick={() => openSharedReport(r)}
+                className="w-full flex items-center gap-3 px-3 py-3 min-h-[44px] text-left hover:bg-muted/60 transition-colors border-b border-border last:border-b-0"
+              >
+                {receivedAt ? <ReceivedPill at={receivedAt} /> : <NewPill />}
+                <ClipboardList className="w-4 h-4 text-primary shrink-0" />
+                <span className="flex-1 min-w-0 text-sm font-medium truncate">Daily site report — {fmtDate(r.reportDate)}</span>
+              </button>
+            );
+          })}
         </Card></div>
       )}
       {nothingInCategory && <Empty>Nothing in this category yet.</Empty>}

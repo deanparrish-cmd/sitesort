@@ -2876,6 +2876,57 @@ paths:
                 items:
                   $ref: "#/components/schemas/PortalPermit"
 
+  /portal/permits/{permitId}/view:
+    post:
+      operationId: viewPortalPermit
+      tags: [portal]
+      summary: Record that this member opened a permit shared with them
+      parameters:
+        - name: permitId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: View recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          description: Permit not found or not shared with this member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /portal/permits/{permitId}/download:
+    get:
+      operationId: downloadPortalPermit
+      tags: [portal]
+      summary: Download a shared permit's attached document
+      parameters:
+        - name: permitId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Permit file stream
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Permit not found, not shared, or has no file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /portal/safety:
     get:
       operationId: getPortalSafety
@@ -5707,6 +5758,10 @@ components:
           type: boolean
         sharedAt:
           type: string
+        myViewedAt:
+          type: string
+          format: date-time
+          nullable: true
       required: [id, type, description, expiryDate, status]
 
     PortalEvent:
@@ -5834,6 +5889,10 @@ components:
           format: date-time
         unseen:
           type: boolean
+        myViewedAt:
+          type: string
+          format: date-time
+          nullable: true
       required: [id, reportDate]
 
     PortalShared:
