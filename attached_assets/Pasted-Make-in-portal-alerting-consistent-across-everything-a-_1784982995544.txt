@@ -1,0 +1,38 @@
+Make in-portal alerting consistent across everything a member receives.
+Reuse the EXISTING unseen-tracking/badge system and the EXISTING web push
+setup — do not build a second parallel mechanism (we've had duplicate-
+count bugs before from exactly that).
+
+1. IN-PORTAL BADGES: every portal section that can receive new content
+   shows an unseen indicator (dot + count) when something new has arrived
+   since the member last viewed it. Cover ALL of:
+   - Messages (new message / new reply)
+   - Shared with me (newly shared document/drawing/permit)
+   - Site Issues, Plant & Materials, Daily Reports (for members with
+     access: e.g. an issue they logged got allocated/updated, a PM note
+     added) — badge only appears on sections they can actually see
+   - A single aggregate indicator on the app icon / portal home so they
+     know "something's new" at a glance without opening each section
+   Use the ONE shared unseen definition/helper — same source everywhere,
+   so the aggregate and per-section counts can't disagree. Opening the
+   section clears its badge and updates the aggregate together.
+
+2. WEB PUSH (reuse existing): send a push (respecting existing per-member
+   notification on/off preference and batching) when:
+   - a new message arrives for them
+   - a document is newly shared with them
+   - (existing triggers stay as they are)
+   Tapping the push deep-links to the exact item/conversation via the
+   existing login-then-return flow.
+
+3. Freshness: badges update without a manual refresh (reuse the
+   refetch-on-focus/interval behaviour already added), and clear
+   reliably when the member views the item — no phantom counts that
+   survive after opening.
+
+QUALITY: typecheck + check:layout at 360px. VERIFY: as a member, receive
+a new message → badge on Messages + aggregate indicator + push arrives →
+open it → both clear without refresh. Share a document to them → Shared
+with me badges → clears on view. Confirm counts never disagree between
+per-section and aggregate. Report which parts already existed vs were
+newly wired.

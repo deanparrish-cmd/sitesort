@@ -222,7 +222,9 @@
       "Bash(python3 -c \"import sys,json; print\\('after unset:', json.load\\(sys.stdin\\)['siteManager']\\)\")",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('archived:', d.get\\('archivedAt'\\) is not None\\)\")",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('siteManagerId:', d.get\\('siteManagerId'\\), '| memberCount:', d.get\\('memberCount'\\)\\)\")",
-      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('status:', d['status'], '| resolvedAt:', d['resolvedAt'] is not None\\)\")"
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('status:', d['status'], '| resolvedAt:', d['resolvedAt'] is not None\\)\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('memberCount:', d['memberCount']\\)\")",
+      "Bash(git reset *)"
     ]
   },
   "hooks": {
