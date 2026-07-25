@@ -1937,18 +1937,18 @@ function SettingsView() {
               <div className="min-w-0">
                 <p className="font-medium">New content alerts</p>
                 <p className="text-xs text-muted-foreground">
-                  {subscribed ? "On — you'll be notified when new drawings or notices are shared." : perm === "denied" ? "Blocked in your browser settings for this site." : "Off — get a heads-up when something new is shared with you."}
+                  {subscribed ? "On — you'll be notified when new drawings or notices are shared." : perm === "denied" ? "Blocked in your browser settings. To fix: tap the padlock or settings icon by the address bar, set Notifications to Allow, then reload this page." : "Off — get a heads-up when something new is shared with you."}
                 </p>
               </div>
               {subscribed ? (
                 <button onClick={disable} disabled={busy} className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm font-medium hover:bg-muted disabled:opacity-50">
                   <BellOff className="w-4 h-4" /> Turn off
                 </button>
-              ) : (
-                <button onClick={enable} disabled={busy || perm === "denied"} className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50">
+              ) : perm !== "denied" ? (
+                <button onClick={enable} disabled={busy} className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50">
                   <Bell className="w-4 h-4" /> {busy ? "…" : "Turn on"}
                 </button>
-              )}
+              ) : null}
             </div>
           )}
         </Card>
