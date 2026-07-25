@@ -315,13 +315,21 @@ function DocRow({ doc, section, unseen, signOff }: { doc: any; section: string; 
 
   const needsSignOff = doc.requiresAcknowledgment && doc.myStatus !== "acknowledged";
   const signedOff = doc.requiresAcknowledgment && doc.myStatus === "acknowledged";
+  // "New" is PER-DOCUMENT, not per-visit: a document stays New until this member
+  // actually opens it (server-recorded viewed_at), then flips to a "Received
+  // <date time>" receipt. Section-level `unseen` alone used to drive this, which
+  // meant the pill vanished as soon as the feed refreshed — before anyone opened
+  // anything. `unseen` is kept only as a fallback for payloads without view
+  // tracking (myViewedAt key absent).
+  const tracksViews = "myViewedAt" in doc;
+  const isNewDoc = tracksViews ? !receivedAt : !!unseen;
 
   return (
-    <div className={cn("border-b border-border/60 last:border-0", unseen && "-mx-4 px-4 bg-primary/5")}>
+    <div className={cn("border-b border-border/60 last:border-0", isNewDoc && "-mx-4 px-4 bg-primary/5")}>
       <div className="flex items-center justify-between gap-3 py-2.5">
         <div className="min-w-0">
           <p className="font-medium truncate flex items-center gap-1.5">
-            {receivedAt ? <ReceivedPill at={receivedAt} /> : unseen && <NewPill />}
+            {receivedAt ? <ReceivedPill at={receivedAt} /> : isNewDoc && <NewPill />}
             <span className="truncate">{doc.name}</span>
             {supersededNow && (
               <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 px-1.5 py-0.5 rounded">Superseded</span>

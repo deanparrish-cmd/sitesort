@@ -50,7 +50,13 @@ export function pushSupported(): boolean {
 
 export function isIOS(): boolean {
   const ua = navigator.userAgent;
-  return /iphone|ipad|ipod/i.test(ua) && !(window as unknown as { MSStream?: unknown }).MSStream;
+  if (/iphone|ipad|ipod/i.test(ua) && !(window as unknown as { MSStream?: unknown }).MSStream) return true;
+  // iPad Safari defaults to "desktop mode" and reports itself as a Mac
+  // ("Macintosh; Intel Mac OS X"). Real Macs have no touch screen, so
+  // Mac UA + multi-touch = iPad. Without this, iPads skip the mandatory
+  // Add-to-Home-Screen step and end up with subscriptions Apple never
+  // delivers to.
+  return /Macintosh/i.test(ua) && navigator.maxTouchPoints > 1;
 }
 
 export function isStandalone(): boolean {
