@@ -221,6 +221,7 @@ export * from "./subcontractorInsuranceStatus";
 export * from "./successResponse";
 export * from "./updateInsuranceRequest";
 export * from "./updateInsuranceRequestType";
+export * from "./updateMemberAuthorityRequest";
 export * from "./updateMemberPermissionsRequest";
 export * from "./updatePermitRequest";
 export * from "./updatePersonRequest";

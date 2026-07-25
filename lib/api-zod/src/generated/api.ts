@@ -571,6 +571,12 @@ export const ListProjectMembersResponseItem = zod.object({
     .describe(
       "Portal write permission — can author\/amend the project's daily site report. Default false.",
     ),
+  isProjectManager: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Project-level approver authority (distinct from company-wide role and the portal permission flags above) — triage issues, manage portal sharing, review member documents on THIS project. Default false; company admin\/project_manager always has this implicitly regardless of the flag.",
+    ),
   addedAt: zod.date(),
 });
 export const ListProjectMembersResponse = zod.array(
@@ -618,6 +624,23 @@ export const UpdateMemberPermissionsBody = zod.object({
 });
 
 export const UpdateMemberPermissionsResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * @summary Grant or revoke project-level project-manager/approver authority (company admin/PM-gated)
+ */
+export const UpdateMemberAuthorityParams = zod.object({
+  projectId: zod.coerce.string(),
+  memberId: zod.coerce.string(),
+});
+
+export const UpdateMemberAuthorityBody = zod.object({
+  isProjectManager: zod.boolean(),
+});
+
+export const UpdateMemberAuthorityResponse = zod.object({
   success: zod.boolean(),
   message: zod.string().optional(),
 });

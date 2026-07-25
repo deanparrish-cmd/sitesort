@@ -9,6 +9,7 @@ import { isOverdue, issueCategoryFilter } from "../lib/accountability";
 import { logActivity } from "../lib/activity";
 import { enqueuePushForMembers } from "../lib/push-triggers";
 import { notesFor, addNote } from "../lib/portal-submission-notes";
+import { isProjectApprover } from "../lib/project-authority";
 
 const router: IRouter = Router();
 
@@ -123,8 +124,6 @@ router.get("/photos/:photoId", authenticate, async (req, res) => {
   }
 });
 
-const MANAGER_ROLES = ["admin", "project_manager"];
-
 router.patch("/photos/:photoId", authenticate, async (req, res) => {
   try {
     const rows = await db.select().from(photosTable).where(eq(photosTable.id, req.params.photoId)).limit(1);
@@ -136,23 +135,24 @@ router.patch("/photos/:photoId", authenticate, async (req, res) => {
       .limit(1);
     if (!project[0]) { res.status(403).json({ error: "forbidden" }); return; }
 
+    // Triaging an issue (status/assignment/closure changes) is PM-authority
+    // only — company admin/PM, or anyone explicitly granted project-manager
+    // authority on THIS project (see lib/project-authority.ts). The frontend
+    // already hid these controls from non-managers; this is the server-side
+    // enforcement that was previously missing entirely.
+    if (!(await isProjectApprover(req.user!, photo.projectId))) {
+      res.status(403).json({ error: "forbidden", message: "Only a project manager can triage this issue." });
+      return;
+    }
+
     const { status, assignedToUserId, dueDate, closureReason, closureNote } = req.body as {
       status?: string; assignedToUserId?: string | null; dueDate?: string | null;
       closureReason?: string | null; closureNote?: string | null;
     };
 
-    // "Close as invalid/duplicate" is PM-only, and requires a reason note —
-    // this is the concrete server-side enforcement (the endpoint had no role
-    // gate at all before this).
-    if (closureReason === "invalid" || closureReason === "duplicate") {
-      if (!MANAGER_ROLES.includes(req.user!.role)) {
-        res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can close an issue as invalid/duplicate." });
-        return;
-      }
-      if (!closureNote || !closureNote.trim()) {
-        res.status(400).json({ error: "validation_error", message: "A reason is required to close as invalid/duplicate." });
-        return;
-      }
+    if ((closureReason === "invalid" || closureReason === "duplicate") && (!closureNote || !closureNote.trim())) {
+      res.status(400).json({ error: "validation_error", message: "A reason is required to close as invalid/duplicate." });
+      return;
     }
 
     const updates: Partial<typeof photosTable.$inferInsert> = {};
@@ -217,10 +217,6 @@ router.patch("/photos/:photoId", authenticate, async (req, res) => {
 // admin.ts for the genuine, admin-only hard delete.
 router.delete("/photos/:photoId", authenticate, async (req, res) => {
   try {
-    if (!MANAGER_ROLES.includes(req.user!.role)) {
-      res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can archive an issue." });
-      return;
-    }
     const rows = await db.select().from(photosTable).where(eq(photosTable.id, req.params.photoId)).limit(1);
     if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Photo not found" }); return; }
     const photo = rows[0];
@@ -229,6 +225,10 @@ router.delete("/photos/:photoId", authenticate, async (req, res) => {
       .where(and(eq(projectsTable.id, photo.projectId), eq(projectsTable.companyId, req.user!.companyId)))
       .limit(1);
     if (!project[0]) { res.status(403).json({ error: "forbidden" }); return; }
+    if (!(await isProjectApprover(req.user!, photo.projectId))) {
+      res.status(403).json({ error: "forbidden", message: "Only a project manager can archive an issue." });
+      return;
+    }
 
     const { reason } = req.body as { reason?: string };
     await db.update(photosTable)
@@ -248,10 +248,6 @@ router.delete("/photos/:photoId", authenticate, async (req, res) => {
 // PATCH /api/photos/:photoId/restore — un-archive (manager-only).
 router.patch("/photos/:photoId/restore", authenticate, async (req, res) => {
   try {
-    if (!MANAGER_ROLES.includes(req.user!.role)) {
-      res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can restore an issue." });
-      return;
-    }
     const rows = await db.select().from(photosTable).where(eq(photosTable.id, req.params.photoId)).limit(1);
     if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Photo not found" }); return; }
     const photo = rows[0];
@@ -260,6 +256,10 @@ router.patch("/photos/:photoId/restore", authenticate, async (req, res) => {
       .where(and(eq(projectsTable.id, photo.projectId), eq(projectsTable.companyId, req.user!.companyId)))
       .limit(1);
     if (!project[0]) { res.status(403).json({ error: "forbidden" }); return; }
+    if (!(await isProjectApprover(req.user!, photo.projectId))) {
+      res.status(403).json({ error: "forbidden", message: "Only a project manager can restore an issue." });
+      return;
+    }
 
     await db.update(photosTable)
       .set({ archivedAt: null, archivedBy: null, archiveReason: null, updatedAt: new Date() })
@@ -280,10 +280,6 @@ router.patch("/photos/:photoId/restore", authenticate, async (req, res) => {
 // (formatPhoto), so it can't corrupt the issue's own history.
 router.delete("/photos/:photoId/photo", authenticate, async (req, res) => {
   try {
-    if (!MANAGER_ROLES.includes(req.user!.role)) {
-      res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can remove a photo." });
-      return;
-    }
     const rows = await db.select().from(photosTable).where(eq(photosTable.id, req.params.photoId)).limit(1);
     if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Photo not found" }); return; }
     const photo = rows[0];
@@ -292,6 +288,10 @@ router.delete("/photos/:photoId/photo", authenticate, async (req, res) => {
       .where(and(eq(projectsTable.id, photo.projectId), eq(projectsTable.companyId, req.user!.companyId)))
       .limit(1);
     if (!project[0]) { res.status(403).json({ error: "forbidden" }); return; }
+    if (!(await isProjectApprover(req.user!, photo.projectId))) {
+      res.status(403).json({ error: "forbidden", message: "Only a project manager can remove a photo." });
+      return;
+    }
     if (!photo.photoUrl || photo.photoRemovedAt) { res.status(400).json({ error: "validation_error", message: "No photo to remove." }); return; }
 
     await db.update(photosTable)

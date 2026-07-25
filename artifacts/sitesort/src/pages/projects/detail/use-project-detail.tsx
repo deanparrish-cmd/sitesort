@@ -493,9 +493,6 @@ export function useProjectDetailState() {
   const updateMutation = useUpdateProject();
   const queryClient = useQueryClient();
   const [isUploadOpen, setIsUploadOpen] = useState(false);
-  const [allocateDoc, setAllocateDoc] = useState<{ id: string; name: string } | null>(null);
-  const [allocateSelected, setAllocateSelected] = useState<Set<string>>(new Set());
-  const [allocateSubmitting, setAllocateSubmitting] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   type EditDocModal = { id: string; name: string; status: string; version: number; type: string; revision?: string | null; requirePinSignoff?: boolean };
   const [editDocModal, setEditDocModal] = useState<EditDocModal | null>(null);
@@ -525,6 +522,13 @@ export function useProjectDetailState() {
   const { data: me } = useGetMe();
   const caps = useCapabilities();
   const hasPin = !!(me as { hasPin?: boolean } | undefined)?.hasPin;
+  // Project-level PM authority: company-wide admin/PM (unchanged), OR anyone
+  // explicitly granted isProjectManager on THIS project's member row — lets a
+  // second person cover triage/allocate/confirm/approve without a company
+  // role change. Distinct from caps.canManageProjects, which stays company-wide
+  // and still gates non-project-scoped things (e.g. creating new projects).
+  const myMembership = (members ?? []).find((m: any) => m.userId === me?.id);
+  const isProjectApprover = caps.isManager || !!myMembership?.isProjectManager;
   type SignOffDoc = { id: string; name: string; type: string; pinRequired?: boolean };
   const [signOffDoc, setSignOffDoc] = useState<SignOffDoc | null>(null);
   const [signOffPin, setSignOffPin] = useState("");
@@ -1161,47 +1165,6 @@ export function useProjectDetailState() {
     setEditDocModal(doc);
   };
 
-  const openAllocate = (doc: { id: string; name: string }) => {
-    setAllocateSelected(new Set());
-    setAllocateDoc(doc);
-  };
-
-  const toggleAllocate = (userId: string) => {
-    setAllocateSelected(prev => {
-      const next = new Set(prev);
-      next.has(userId) ? next.delete(userId) : next.add(userId);
-      return next;
-    });
-  };
-
-  // Allocate (distribute) a document to selected team members. Creates a tracked
-  // distribution record per recipient + emails them a tracked open link, so the
-  // allocation registers and the view count moves when they open it.
-  const submitAllocate = async () => {
-    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
-    if (!allocateDoc) return;
-    const userIds = Array.from(allocateSelected);
-    if (userIds.length === 0) return;
-    setAllocateSubmitting(true);
-    try {
-      const token = localStorage.getItem("sitesort_token");
-      const res = await fetch(`/api/documents/${allocateDoc.id}/distribute`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ userIds }),
-      });
-      if (!res.ok) throw new Error("Failed to allocate");
-      toast({ title: "Document allocated", description: `Sent to ${userIds.length} recipient${userIds.length === 1 ? "" : "s"}.` });
-      setAllocateDoc(null);
-      setAllocateSelected(new Set());
-      refetchDocs();
-    } catch {
-      toast({ title: "Couldn't allocate", description: "Please try again.", variant: "destructive" });
-    } finally {
-      setAllocateSubmitting(false);
-    }
-  };
-
   const saveDocEdit = async () => {
     if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
     if (!editDocModal) return;
@@ -1537,12 +1500,6 @@ tr:last-child td{border-bottom:none}
     queryClient,
     isUploadOpen,
     setIsUploadOpen,
-    allocateDoc,
-    setAllocateDoc,
-    allocateSelected,
-    setAllocateSelected,
-    allocateSubmitting,
-    setAllocateSubmitting,
     isEditOpen,
     setIsEditOpen,
     editDocModal,
@@ -1568,6 +1525,7 @@ tr:last-child td{border-bottom:none}
     setEditError,
     me,
     caps,
+    isProjectApprover,
     hasPin,
     signOffDoc,
     setSignOffDoc,
@@ -1738,9 +1696,6 @@ tr:last-child td{border-bottom:none}
     supersedableDocs,
     onUpload,
     openDocEdit,
-    openAllocate,
-    toggleAllocate,
-    submitAllocate,
     saveDocEdit,
     openEdit,
     onEditSubmit,

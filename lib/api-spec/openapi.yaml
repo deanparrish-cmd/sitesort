@@ -631,6 +631,36 @@ paths:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
 
+  /projects/{projectId}/members/{memberId}/authority:
+    patch:
+      operationId: updateMemberAuthority
+      tags: [team]
+      summary: Grant or revoke project-level project-manager/approver authority (company admin/PM-gated)
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMemberAuthorityRequest"
+      responses:
+        "200":
+          description: Authority updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
   /projects/{projectId}/members/company/{subcontractorId}:
     delete:
       operationId: removeProjectMemberCompany
@@ -3973,10 +4003,20 @@ components:
         canEditDailyReport:
           type: boolean
           description: Portal write permission — can author/amend the project's daily site report. Default false.
+        isProjectManager:
+          type: boolean
+          description: Project-level approver authority (distinct from company-wide role and the portal permission flags above) — triage issues, manage portal sharing, review member documents on THIS project. Default false; company admin/project_manager always has this implicitly regardless of the flag.
         addedAt:
           type: string
           format: date-time
       required: [id, projectId, name, role, complianceStatus, addedAt]
+
+    UpdateMemberAuthorityRequest:
+      type: object
+      properties:
+        isProjectManager:
+          type: boolean
+      required: [isProjectManager]
 
     UpdateMemberPermissionsRequest:
       type: object

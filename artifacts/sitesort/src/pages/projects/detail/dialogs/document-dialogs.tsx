@@ -15,14 +15,9 @@ const PIN_ALWAYS_TYPES = new Set(["method_statement", "permit", "safety"]);
 export function DocumentDialogs() {
   const {
     project,
-    members,
     uploadMutation,
     isUploadOpen,
     setIsUploadOpen,
-    allocateDoc,
-    setAllocateDoc,
-    allocateSelected,
-    allocateSubmitting,
     editDocModal,
     setEditDocModal,
     editDocSaving,
@@ -64,8 +59,6 @@ export function DocumentDialogs() {
     setEditDocRequirePin,
     supersedableDocs,
     onUpload,
-    toggleAllocate,
-    submitAllocate,
     saveDocEdit,
   } = useDetail();
 
@@ -388,41 +381,6 @@ export function DocumentDialogs() {
             <Button type="submit" variant="accent" isLoading={uploadMutation.isPending}>Upload</Button>
           </DialogFooter>
         </form>
-      </Dialog>
-
-      <Dialog open={!!allocateDoc} onOpenChange={v => { if (!v) setAllocateDoc(null); }}>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Send className="w-4 h-4" /> Allocate document</DialogTitle>
-          {allocateDoc && <p className="text-sm text-muted-foreground truncate mt-0.5">{allocateDoc.name}</p>}
-        </DialogHeader>
-        <div className="space-y-3">
-          <p className="text-xs text-muted-foreground">Select team members to allocate this document to. They'll get an email with a tracked link, and their view registers when they open it.</p>
-          {(() => {
-            const allocatable = ((members as any[]) ?? []).filter(m => m.userId);
-            if (allocatable.length === 0) {
-              return <p className="text-sm text-muted-foreground py-4 text-center">No team members with accounts to allocate to. Add people to the project team first.</p>;
-            }
-            return (
-              <div className="max-h-72 overflow-y-auto space-y-1.5 border rounded-lg p-2">
-                {allocatable.map((m: any) => (
-                  <label key={m.userId} className="flex items-center gap-3 p-2 rounded-md hover:bg-muted/50 cursor-pointer">
-                    <input type="checkbox" checked={allocateSelected.has(m.userId)} onChange={() => toggleAllocate(m.userId)} className="w-4 h-4 rounded border-input shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{m.name}</p>
-                      <p className="text-xs text-muted-foreground truncate capitalize">{(m.role ?? "").replace("_", " ")}{m.email ? ` · ${m.email}` : ""}</p>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            );
-          })()}
-        </div>
-        <DialogFooter>
-          <Button type="button" variant="ghost" onClick={() => setAllocateDoc(null)}>Cancel</Button>
-          <Button type="button" onClick={submitAllocate} disabled={allocateSelected.size === 0} isLoading={allocateSubmitting}>
-            Allocate{allocateSelected.size > 0 ? ` (${allocateSelected.size})` : ""}
-          </Button>
-        </DialogFooter>
       </Dialog>
     </>
   );

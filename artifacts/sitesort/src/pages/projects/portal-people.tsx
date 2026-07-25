@@ -99,7 +99,7 @@ const PILL = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border t
 // manager can see and change access at a glance same as Notes/Docs/Share/Remove.
 // Scoped to ONE section only — distinct from the "Portal member" pill above,
 // which is the whole-login on/off (see PortalStatusPill).
-function PermissionTogglePill({ label, checked, disabled, note, onToggle }: { label: string; checked: boolean; disabled?: boolean; note?: string; onToggle: () => void }) {
+export function PermissionTogglePill({ label, checked, disabled, note, onToggle }: { label: string; checked: boolean; disabled?: boolean; note?: string; onToggle: () => void }) {
   return (
     <button
       type="button"

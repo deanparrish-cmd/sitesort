@@ -30,6 +30,13 @@ export const projectMembersTable = pgTable("project_members", {
   canLogIssues: boolean("can_log_issues").notNull().default(false),
   canUpdatePlantMaterials: boolean("can_update_plant_materials").notNull().default(false),
   canEditDailyReport: boolean("can_edit_daily_report").notNull().default(false),
+  // Project-level approver authority (distinct from users.role/company_members.role
+  // and from the portal permission flags above): lets a company admin/PM grant
+  // PM-equivalent authority — triage issues, manage portal sharing, review member
+  // documents — to another team member scoped to THIS project only, without
+  // changing their company-wide role. Multiple people per project may hold this,
+  // so PM actions aren't a single point of failure. See lib/project-authority.ts.
+  isProjectManager: boolean("is_project_manager").notNull().default(false),
   addedAt: timestamp("added_at").notNull().defaultNow(),
 }, (t) => ({
   // Team Portal: a user is a member of a project at most once (the same email

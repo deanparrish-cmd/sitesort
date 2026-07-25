@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { PortalStatusPill, PortalPermissionToggles, type PillSource } from "../../portal-people";
-import { useCreateSubcontractorPerson, useListPersonCertifications, useCreatePersonCertification } from "@workspace/api-client-react";
+import { PortalStatusPill, PortalPermissionToggles, PermissionTogglePill, type PillSource } from "../../portal-people";
+import { useCreateSubcontractorPerson, useListPersonCertifications, useCreatePersonCertification, useUpdateMemberAuthority, getListProjectMembersQueryKey } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -117,6 +118,30 @@ function PersonCertifications({ personId, canManage }: { personId: string; canMa
   );
 }
 
+// Project-level PM/approver authority toggle (distinct from the portal
+// canLogIssues/canUpdatePlantMaterials/canEditDailyReport permissions above —
+// those gate what a PORTAL member can do in the member-facing app; this
+// grants dashboard PM-equivalent authority — triage issues, manage portal
+// sharing, review member documents — on THIS project only, without changing
+// the person's company-wide role. Only shown for members with a login
+// (userId) since authority is meaningless without one.
+function ProjectManagerTogglePill({ projectId, memberId, checked }: { projectId: string; memberId: string; checked: boolean }) {
+  const queryClient = useQueryClient();
+  const mutation = useUpdateMemberAuthority();
+  return (
+    <PermissionTogglePill
+      label="Project Manager"
+      checked={checked}
+      disabled={mutation.isPending}
+      note=" Company admins/project managers already have this authority everywhere; this grants it to someone else scoped to just this project (useful cover if the usual PM is off)."
+      onToggle={async () => {
+        await mutation.mutateAsync({ projectId, memberId, data: { isProjectManager: !checked } });
+        await queryClient.invalidateQueries({ queryKey: getListProjectMembersQueryKey(projectId) });
+      }}
+    />
+  );
+}
+
 export function TeamTab() {
   const {
     projectId,
@@ -220,6 +245,11 @@ export function TeamTab() {
                 />
               )}
             </div>
+            {caps.canManageTeam && member.userId && (
+              <div className="flex flex-wrap items-center justify-end gap-1.5 min-w-0">
+                <ProjectManagerTogglePill projectId={projectId} memberId={member.id} checked={!!member.isProjectManager} />
+              </div>
+            )}
             {caps.canManageTeam && (
               <div className="flex flex-wrap items-center justify-end gap-1.5 min-w-0">
                 <PortalPermissionToggles

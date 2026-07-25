@@ -1,24 +1,15 @@
 import { Router, type IRouter } from "express";
 import bcrypt from "bcryptjs";
 import { db } from "@workspace/db";
-import { documentsTable, documentDistributionsTable, usersTable, notificationsTable, projectsTable, acknowledgmentAuditTable } from "@workspace/db/schema";
+import { documentsTable, documentDistributionsTable, usersTable, projectsTable, acknowledgmentAuditTable } from "@workspace/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
-import { sendDocumentNotificationEmail } from "../lib/email";
 import { enqueuePushForMembers, acceptedPortalMemberUserIds } from "../lib/push-triggers";
 import { removedFromProjectUserIds } from "../lib/project-membership";
 import { isPinLockedOut, recordFailedPinAttempt, clearPinAttempts } from "../lib/pin-attempts";
 import { pinRequiredForDoc } from "../lib/signoff";
-
-const APP_URL = process.env.APP_URL ?? `https://${process.env.REPLIT_DEV_DOMAIN ?? "www.sitesort.co.uk"}`;
-
-// A per-distribution tracked open link. When the recipient clicks it from their
-// email it hits GET /documents/:id/open, which records the open (pending→viewed)
-// and 302-redirects to the file — so the eye-icon view count moves on a real open.
-function trackedOpenUrl(documentId: string, distributionId: string): string {
-  return `${APP_URL}/api/documents/${documentId}/open?d=${distributionId}`;
-}
+import { distributeDocumentToUser } from "../lib/document-distribution";
 
 const router: IRouter = Router();
 
@@ -219,35 +210,11 @@ router.post("/projects/:projectId/documents", authenticate, async (req, res) => 
     }
 
     if (distributeToUserIds && Array.isArray(distributeToUserIds)) {
+      const doc = { id: docId, name, version: newVersion, requiresAcknowledgment: requiresAcknowledgment ?? false };
       for (const userId of distributeToUserIds) {
-        const distId = generateId();
-        await db.insert(documentDistributionsTable).values({
-          id: distId,
-          documentId: docId,
-          userId,
-          status: "pending",
-        });
-
-        await db.insert(notificationsTable).values({
-          id: generateId(),
-          userId,
-          type: "document_uploaded",
-          title: `New document: ${name}`,
-          message: `${name} (v${newVersion}) has been uploaded and requires your attention.`,
-          relatedEntityId: docId,
-          relatedEntityType: "document",
-          read: false,
-        });
-
-        // Send email notification (fire-and-forget) with a tracked open link so
-        // the recipient's view is recorded when they open it from the email.
-        const recipientRows = await db.select({ email: usersTable.email, name: usersTable.name }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
-        if (recipientRows[0]) {
-          const { email: recipientEmail, name: recipientName } = recipientRows[0];
-          sendDocumentNotificationEmail(recipientEmail, recipientName, name, newVersion, projectName, requiresAcknowledgment ?? false, trackedOpenUrl(docId, distId)).catch(err =>
-            req.log.error({ err }, "Failed to send document notification email"),
-          );
-        }
+        await distributeDocumentToUser(doc, projectName, userId, `New document: ${name}`, err =>
+          req.log.error({ err }, "Failed to send document notification email"),
+        );
       }
     }
 
@@ -456,76 +423,6 @@ router.post("/documents/:documentId/acknowledge", authenticate, async (req, res)
   } catch (err) {
     req.log.error({ err }, "Acknowledge document error");
     res.status(500).json({ error: "server_error", message: "Failed to acknowledge document" });
-  }
-});
-
-router.post("/documents/:documentId/distribute", authenticate, async (req, res) => {
-  try {
-    const { userIds } = req.body;
-    if (!userIds || !Array.isArray(userIds)) {
-      res.status(400).json({ error: "validation_error", message: "userIds array required" });
-      return;
-    }
-
-    const docs = await db.select().from(documentsTable).where(eq(documentsTable.id, req.params.documentId)).limit(1);
-    if (docs.length === 0) {
-      res.status(404).json({ error: "not_found", message: "Document not found" });
-      return;
-    }
-
-    const project = await db.select().from(projectsTable)
-      .where(and(eq(projectsTable.id, docs[0].projectId), eq(projectsTable.companyId, req.user!.companyId)))
-      .limit(1);
-    if (!project[0]) {
-      res.status(404).json({ error: "not_found", message: "Document not found" });
-      return;
-    }
-
-    for (const userId of userIds) {
-      const existing = await db.select().from(documentDistributionsTable)
-        .where(and(eq(documentDistributionsTable.documentId, req.params.documentId), eq(documentDistributionsTable.userId, userId)))
-        .limit(1);
-
-      if (existing.length === 0) {
-        const distId = generateId();
-        await db.insert(documentDistributionsTable).values({
-          id: distId,
-          documentId: req.params.documentId,
-          userId,
-          status: "pending",
-        });
-
-        await db.insert(notificationsTable).values({
-          id: generateId(),
-          userId,
-          type: "document_uploaded",
-          title: `Document distributed: ${docs[0].name}`,
-          message: `${docs[0].name} has been shared with you.`,
-          relatedEntityId: req.params.documentId,
-          relatedEntityType: "document",
-          read: false,
-        });
-
-        // Email the recipient a tracked open link so their view is recorded.
-        const recipientRows = await db.select({ email: usersTable.email, name: usersTable.name }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
-        if (recipientRows[0]) {
-          sendDocumentNotificationEmail(
-            recipientRows[0].email,
-            recipientRows[0].name,
-            docs[0].name,
-            docs[0].version,
-            project[0].name,
-            docs[0].requiresAcknowledgment,
-            trackedOpenUrl(req.params.documentId, distId),
-          ).catch(err => req.log.error({ err }, "Failed to send distribution email"));
-        }
-      }
-    }
-
-    res.json({ success: true, message: "Document distributed" });
-  } catch (err) {
-    req.log.error({ err }, "Distribute document error");
-    res.status(500).json({ error: "server_error", message: "Failed to distribute document" });
   }
 });
 

@@ -2,24 +2,27 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import {
   portalSharesTable, projectsTable, projectMembersTable, peopleTable,
-  subcontractorsTable, documentDistributionsTable, documentsTable, usersTable,
+  subcontractorsTable, documentsTable, usersTable,
   portalMemberDocumentsTable,
 } from "@workspace/db/schema";
 import { and, eq, isNotNull, inArray, desc } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { enqueuePushForMembers } from "../lib/push-triggers";
-import { sendDocumentNotificationEmail } from "../lib/email";
+import { isProjectApprover } from "../lib/project-authority";
+import { distributeDocumentToUser } from "../lib/document-distribution";
 
 const router: IRouter = Router();
 
-const MANAGER_ROLES = ["admin", "project_manager"];
-function requireManager(req: import("express").Request, res: import("express").Response): boolean {
-  if (!MANAGER_ROLES.includes(req.user!.role)) {
-    res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can manage portal sharing." });
-    return false;
-  }
-  return true;
+// Project-scoped equivalent of the old company-wide-only manager check —
+// also allows a member with
+// per-project PM authority (project_members.isProjectManager), not just a
+// company-wide admin/PM. Used for the write actions that fold in what used
+// to be the "Allocate" document action.
+async function requireProjectApprover(req: import("express").Request, res: import("express").Response): Promise<boolean> {
+  if (await isProjectApprover(req.user!, req.params.projectId)) return true;
+  res.status(403).json({ error: "forbidden", message: "Only a project manager can manage portal sharing." });
+  return false;
 }
 
 const SITE_STAFF = "Site Staff";
@@ -62,7 +65,7 @@ async function acceptedMembers(projectId: string) {
 router.get("/projects/:projectId/portal-audience", authenticate, async (req, res) => {
   try {
     if (!(await ownedProject(req))) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
-    if (!requireManager(req, res)) return;
+    if (!(await requireProjectApprover(req, res))) return;
 
     const proj = await db.select({ trades: projectsTable.trades }).from(projectsTable)
       .where(eq(projectsTable.id, req.params.projectId)).limit(1);
@@ -136,7 +139,7 @@ type Audience = { type: "all" | "trade" | "person"; trade?: string; personId?: s
 router.post("/projects/:projectId/portal-shares", authenticate, async (req, res) => {
   try {
     if (!(await ownedProject(req))) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
-    if (!requireManager(req, res)) return;
+    if (!(await requireProjectApprover(req, res))) return;
     const { itemType, itemId, audiences } = req.body as { itemType?: string; itemId?: string; audiences?: Audience[] };
     if (!itemType || !ITEM_TYPES.has(itemType) || !itemId || !Array.isArray(audiences) || audiences.length === 0) {
       res.status(400).json({ error: "validation_error", message: "itemType (document|photo|permit), itemId and a non-empty audiences array are required." });
@@ -161,6 +164,12 @@ router.post("/projects/:projectId/portal-shares", authenticate, async (req, res)
     // accepted members matched by the audiences and create pending rows so the PM
     // sees them immediately; members invited LATER are reached at portal read time
     // via the stored rule (and get a distribution row lazily on first view).
+    // This is also the ONLY path for distributing a document to specific people —
+    // the old separate "Allocate" button/endpoint was folded in here, since this
+    // does everything Allocate did (tracked distribution + notification + email)
+    // PLUS creates the portal_shares visibility rule Allocate never did (without
+    // which a portal-only recipient couldn't actually see/sign off the doc
+    // in-portal even though they'd been "allocated" it).
     let recipientCount = 0;
     if (itemType === "document") {
       const members = await acceptedMembers(req.params.projectId);
@@ -174,21 +183,18 @@ router.post("/projects/:projectId/portal-shares", authenticate, async (req, res)
         }
       }
       recipientCount = targetUserIds.size;
-      for (const userId of targetUserIds) {
-        const existing = await db.select({ id: documentDistributionsTable.id }).from(documentDistributionsTable)
-          .where(and(eq(documentDistributionsTable.documentId, itemId), eq(documentDistributionsTable.userId, userId))).limit(1);
-        if (existing.length === 0) {
-          await db.insert(documentDistributionsTable).values({ id: generateId(), documentId: itemId, userId, status: "pending" });
-        }
-      }
 
-      // Notify the resolved members (batched/debounced). A drawing shared to a
-      // trade/everyone/individual all funnel here — the audience is already
-      // flattened to the exact members it reaches.
       if (targetUserIds.size > 0) {
-        const doc = (await db.select({ name: documentsTable.name, type: documentsTable.type, version: documentsTable.version }).from(documentsTable).where(eq(documentsTable.id, itemId)).limit(1))[0];
+        const doc = (await db.select({ id: documentsTable.id, name: documentsTable.name, type: documentsTable.type, version: documentsTable.version, requiresAcknowledgment: documentsTable.requiresAcknowledgment }).from(documentsTable).where(eq(documentsTable.id, itemId)).limit(1))[0];
         const proj = (await db.select({ name: projectsTable.name }).from(projectsTable).where(eq(projectsTable.id, req.params.projectId)).limit(1))[0];
         if (doc && proj) {
+          for (const userId of targetUserIds) {
+            await distributeDocumentToUser(doc, proj.name, userId, `New document: ${doc.name}`, err => req.log.error({ err }, "Failed to send portal share email"));
+          }
+
+          // Push notification (batched/debounced). A drawing shared to a
+          // trade/everyone/individual all funnel here — the audience is
+          // already flattened to the exact members it reaches.
           const label = doc.type === "drawing" ? "drawing" : doc.type === "method_statement" ? "method statement" : doc.type === "safety" ? "safety document" : "document";
           const section = doc.type === "drawing" ? "drawings" : doc.type === "method_statement" ? "method-statements" : doc.type === "safety" ? "safety" : doc.type === "general" ? "general" : "shared";
           await enqueuePushForMembers([...targetUserIds], req.params.projectId, {
@@ -197,16 +203,6 @@ router.post("/projects/:projectId/portal-shares", authenticate, async (req, res)
             projectName: proj.name,
             deepLink: section === "shared" ? "/portal/shared" : `/portal/${section}?doc=${itemId}`,
           });
-
-          // Email each target member too (fire-and-forget). A failed send must
-          // never fail the share — the push + in-portal listing already stand.
-          const recipients = await db.select({ email: usersTable.email, name: usersTable.name })
-            .from(usersTable).where(inArray(usersTable.id, [...targetUserIds]));
-          for (const r of recipients) {
-            if (!r.email) continue;
-            sendDocumentNotificationEmail(r.email, r.name, doc.name, doc.version, proj.name, false)
-              .catch(err => req.log.error({ err }, "Failed to send portal share email"));
-          }
         }
       }
     }
@@ -222,7 +218,7 @@ router.post("/projects/:projectId/portal-shares", authenticate, async (req, res)
 router.delete("/projects/:projectId/portal-shares/:id", authenticate, async (req, res) => {
   try {
     if (!(await ownedProject(req))) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
-    if (!requireManager(req, res)) return;
+    if (!(await requireProjectApprover(req, res))) return;
     await db.delete(portalSharesTable).where(and(
       eq(portalSharesTable.id, req.params.id),
       eq(portalSharesTable.projectId, req.params.projectId),
@@ -243,7 +239,7 @@ router.delete("/projects/:projectId/portal-shares/:id", authenticate, async (req
 router.get("/projects/:projectId/member-documents", authenticate, async (req, res) => {
   try {
     if (!(await ownedProject(req))) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
-    if (!requireManager(req, res)) return;
+    if (!(await requireProjectApprover(req, res))) return;
     const rows = await db.select({
       id: portalMemberDocumentsTable.id,
       name: portalMemberDocumentsTable.name,
@@ -277,7 +273,7 @@ router.get("/projects/:projectId/member-documents", authenticate, async (req, re
 router.post("/projects/:projectId/member-documents/:id/review", authenticate, async (req, res) => {
   try {
     if (!(await ownedProject(req))) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
-    if (!requireManager(req, res)) return;
+    if (!(await requireProjectApprover(req, res))) return;
     const { action, note } = req.body as { action?: string; note?: string };
     if (action !== "approve" && action !== "reject") {
       res.status(400).json({ error: "validation_error", message: "action must be 'approve' or 'reject'." });
