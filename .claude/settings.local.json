@@ -208,7 +208,14 @@
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(d[0] if d else 'no docs'\\)\")",
       "Bash(awk '/^87\\\\. /{print length\\($0\\)}' /home/runner/workspace/CLAUDE.md)",
       "Bash(awk '/^88\\\\. /{print length\\($0\\)}' /home/runner/workspace/CLAUDE.md)",
-      "Bash(kill 54747 54748)"
+      "Bash(kill 54747 54748)",
+      "Bash(kill 402)",
+      "Bash(kill %1)",
+      "Bash(pkill -f \"api-server run dev\")",
+      "Bash(pkill -f \"node ./build.mjs\")",
+      "Bash(PORT=8080 pnpm --filter @workspace/api-server run dev)",
+      "Bash(PORT=8080 nohup pnpm --filter @workspace/api-server run dev)",
+      "Bash(disown -a)"
     ]
   },
   "hooks": {

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import {
-  Building2,
   ShieldCheck,
   FileText,
   ArrowRight,
@@ -14,6 +13,14 @@ import {
   BellRing,
   Plus,
   Minus,
+  ClipboardCheck,
+  HardHat,
+  Wrench,
+  NotebookPen,
+  AlertTriangle,
+  Smartphone,
+  Mic,
+  Users,
 } from "lucide-react";
 import { captureAttribution, withAttribution } from "@/lib/attribution";
 import builtForBeam from "@assets/built_for_beam_nobg.webp";
@@ -21,7 +28,11 @@ import builtForBeam from "@assets/built_for_beam_nobg.webp";
 const faqs = [
   {
     q: "Do I need to install anything on site?",
-    a: "No. SiteSort runs in any browser on phone, tablet or desktop. Site teams and subcontractors scan a QR code to open the latest documents — no app download or login required.",
+    a: "No. SiteSort runs in any browser on phone, tablet or desktop. Site teams and subcontractors scan a QR code to open the latest documents — no app download required.",
+  },
+  {
+    q: "How do digital sign-offs work?",
+    a: "You choose which documents need signing off. Most take a single tap — \"I confirm I have read and understood\" — recorded with the person's name and the time. Safety-critical documents like RAMS, permits and safety packs always require the signer's personal 4-digit PIN — and you can switch PIN protection on for any other document too. Every sign-off is kept in a tamper-proof audit trail.",
   },
   {
     q: "How does the free trial work?",
@@ -29,11 +40,15 @@ const faqs = [
   },
   {
     q: "Can I control who sees which documents?",
-    a: "Yes. You decide what's published to public site boards and what stays internal. Sign-off tracking shows exactly who has acknowledged each drawing or method statement.",
+    a: "Yes. You choose exactly who each document is distributed to, what's published to public site boards and what stays internal. Distribution tracking shows who has viewed and signed off every drawing or method statement.",
   },
   {
     q: "What happens when a drawing is superseded?",
-    a: "Upload a new version and SiteSort automatically flags the old one as superseded, warns anyone working from it, and keeps a full version history for your records.",
+    a: "Upload a new revision and SiteSort automatically flags the old one as superseded, warns anyone working from it, and keeps a full revision history for your records. When you distribute the new revision for sign-off, recipients are asked to sign off the latest version.",
+  },
+  {
+    q: "What do my site team and subcontractors see?",
+    a: "They get their own team portal — a simple mobile view with just their documents to sign off, site issues, plant and materials, and the site diary. They only ever see what you've shared with them, never your whole project.",
   },
   {
     q: "Is my data secure?",
@@ -101,9 +116,10 @@ export default function LandingPage() {
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-800 to-orange-400">site information.</span>
             </h1>
             <p className="text-lg md:text-xl text-muted-foreground mb-10 leading-relaxed max-w-2xl mx-auto">
-              All of your site information in one place. Distribute the right documents,
-              track compliance and progress without the paperwork headache. Never work from
-              the wrong drawings again.
+              Drawings, RAMS, sign-offs, daily reports and compliance — all in one place,
+              for the office and the site team. Distribute the right documents, track
+              progress without the paperwork headache, and never work from the wrong
+              drawing again.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link href={registerHref} className="w-full sm:w-auto">
@@ -153,7 +169,7 @@ export default function LandingPage() {
           </p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
             {[
-              { stat: "10,000+", label: "Documents kept current" },
+              { stat: "1 place", label: "For every drawing, RAMS, permit and report" },
               { stat: "100%", label: "Version-controlled drawings" },
               { stat: "Zero", label: "Sales meetings, hidden costs or lengthy onboarding" },
               { stat: "14 days", label: "Free on every plan" },
@@ -178,39 +194,140 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-700 hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center mb-6 text-orange-500 shadow-lg shadow-white/10">
-                <FileText className="w-6 h-6" />
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[
+              {
+                icon: FileText,
+                title: "Drawing & document control",
+                points: [
+                  "Never build from the wrong drawing again",
+                  "Revision history with automatic superseded warnings",
+                  "Tracked distribution — see who's viewed and who's pending",
+                ],
+              },
+              {
+                icon: ClipboardCheck,
+                title: "Digital sign-offs",
+                points: [
+                  "One-tap 'read and understood' confirmations",
+                  "PIN-protected sign-off for RAMS, permits & safety docs",
+                  "Tamper-proof audit trail of every sign-off",
+                ],
+              },
+              {
+                icon: ShieldCheck,
+                title: "Compliance hub",
+                points: [
+                  "Subcontractor insurance & certificates in one place",
+                  "Track active permits across all sites",
+                  "Automated alerts before anything expires",
+                ],
+              },
+              {
+                icon: QrCode,
+                title: "QR site boards & check-in",
+                points: [
+                  "Dynamic QR codes for your site signage",
+                  "Public safety documents & site contacts on scan",
+                  "Site check-in for an attendance record",
+                ],
+              },
+              {
+                icon: NotebookPen,
+                title: "Site diary & daily reports",
+                points: [
+                  "Daily reports from site — draft, then submit to the PM",
+                  "Dictate notes on the go, transcribed automatically",
+                  "Photos, site updates and progress in one record",
+                ],
+              },
+              {
+                icon: Wrench,
+                title: "Issues, plant & materials",
+                points: [
+                  "Log site issues with photos, track new to resolved",
+                  "Plant & materials register — on site, on order, off-hired",
+                  "Invoices, project finances and close-out when the job wraps up",
+                ],
+              },
+            ].map(card => (
+              <div key={card.title} className="bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-700 hover:shadow-md hover:border-gray-600 transition-all">
+                <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center mb-6 text-orange-500 shadow-lg shadow-white/10">
+                  <card.icon className="w-6 h-6" />
+                </div>
+                <h3 className="text-xl font-bold mb-3 text-white">{card.title}</h3>
+                <ul className="text-gray-300 leading-relaxed space-y-1.5 list-disc list-outside pl-5 font-medium text-[15px]">
+                  {card.points.map(p => (
+                    <li key={p}>{p}</li>
+                  ))}
+                </ul>
               </div>
-              <h3 className="text-xl font-bold mb-3 text-white">Version control</h3>
-              <ul className="text-gray-300 leading-relaxed space-y-1 list-disc list-outside pl-5 font-medium">
-                <li>Never build from the wrong drawing again</li>
-                <li>Automatic superseded warnings</li>
-                <li>Digital sign-off tracking</li>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Team portal */}
+      <section id="team-portal" className="py-24 border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent/10 text-accent text-xs font-semibold uppercase tracking-wide mb-6">
+                <Smartphone className="w-3.5 h-3.5" />
+                Team portal
+              </div>
+              <h2 className="text-3xl md:text-4xl font-bold text-primary mb-5">
+                Your site team gets their own simple view
+              </h2>
+              <p className="text-muted-foreground text-lg leading-relaxed mb-8">
+                Workers and subcontractors log in to a stripped-back mobile portal built for
+                muddy hands and patchy signal — just what they need, nothing they don't. You
+                stay in control of exactly what each person can see and do.
+              </p>
+              <ul className="space-y-4">
+                {[
+                  { icon: ClipboardCheck, text: "Documents to read and sign off — with PIN protection on safety-critical ones" },
+                  { icon: AlertTriangle, text: "Raise site issues with photos, straight from the phone" },
+                  { icon: Mic, text: "Dictate daily report notes — transcribed automatically" },
+                  { icon: Wrench, text: "Check plant & materials and flag what's running low" },
+                  { icon: Users, text: "Site board, messages and everything shared with them" },
+                ].map(item => (
+                  <li key={item.text} className="flex items-start gap-3">
+                    <span className="w-9 h-9 rounded-lg bg-accent/10 text-accent flex items-center justify-center shrink-0 mt-0.5">
+                      <item.icon className="w-4 h-4" />
+                    </span>
+                    <span className="text-foreground leading-relaxed pt-1.5">{item.text}</span>
+                  </li>
+                ))}
               </ul>
             </div>
-            <div className="bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-700 hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center mb-6 text-orange-500 shadow-lg shadow-white/10">
-                <ShieldCheck className="w-6 h-6" />
+            <div className="relative">
+              <div className="absolute -inset-4 bg-gradient-to-br from-accent/20 to-primary/10 rounded-3xl blur-2xl opacity-60"></div>
+              <div className="relative rounded-2xl border bg-card shadow-xl p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-10 h-10 rounded-lg bg-primary text-primary-foreground flex items-center justify-center">
+                    <HardHat className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-foreground">Built for the whole site</p>
+                    <p className="text-sm text-muted-foreground">No training day needed</p>
+                  </div>
+                </div>
+                <ul className="space-y-3 text-sm">
+                  {[
+                    "Works on any phone — nothing to install",
+                    "Each person only sees what you've shared",
+                    "Sign-offs recorded with name, time and version",
+                    "Daily reports flow straight back to the office",
+                    "Internal messaging keeps everyone off WhatsApp",
+                  ].map(t => (
+                    <li key={t} className="flex items-center gap-2.5 text-foreground">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      {t}
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <h3 className="text-xl font-bold mb-3 text-white">Compliance hub</h3>
-              <ul className="text-gray-300 leading-relaxed space-y-1 list-disc list-outside pl-5 font-medium">
-                <li>Monitor subcontractor insurance in real time</li>
-                <li>Track active permits across all sites</li>
-                <li>Automated alerts before they expire</li>
-              </ul>
-            </div>
-            <div className="bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-700 hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center mb-6 text-orange-500 shadow-lg shadow-white/10">
-                <Building2 className="w-6 h-6" />
-              </div>
-              <h3 className="text-xl font-bold mb-3 text-white">QR site boards</h3>
-              <ul className="text-gray-300 leading-relaxed space-y-1 list-disc list-outside pl-5 font-medium">
-                <li>Generate dynamic QR codes for site boards</li>
-                <li>Instant access to public safety documents</li>
-                <li>No app download required to scan</li>
-              </ul>
             </div>
           </div>
         </div>
@@ -237,14 +354,14 @@ export default function LandingPage() {
               {
                 icon: QrCode,
                 step: "02",
-                title: "Print your QR site boards",
-                body: "Generate a QR code for each site. Pin it up so anyone can scan to the latest approved documents.",
+                title: "Invite your site team",
+                body: "Add your team and subcontractors, print your QR site boards, and distribute documents for sign-off — all from your phone, tablet or desktop.",
               },
               {
                 icon: BellRing,
                 step: "03",
-                title: "Stay ahead of expiries",
-                body: "Track sign-offs and get automated alerts before insurance or permits lapse — nothing slips through.",
+                title: "Stay ahead of everything",
+                body: "Daily reports and site issues flow in from site. Automated alerts fire before insurance or permits lapse — nothing slips through.",
               },
             ].map(item => (
               <div key={item.step} className="relative p-8 rounded-2xl border bg-card shadow-sm">
@@ -279,22 +396,22 @@ export default function LandingPage() {
                 tagline: "Perfect for a single site",
                 price: "£29",
                 image: "plan-solo.jpeg",
-                features: ["1 active project", "Unlimited team members", "Document version control", "QR site boards", "Compliance tracking"],
+                features: ["1 active project", "Unlimited team members", "Every feature included", "Team portal for your site team", "QR site boards & compliance hub"],
               },
               {
                 name: "Team",
                 tagline: "For growing contractors",
                 price: "£79",
                 image: "plan-team.jpeg",
-                features: ["Up to 5 active projects", "Unlimited team members", "Document version control", "QR site boards", "Compliance tracking"],
+                features: ["Up to 5 active projects", "Unlimited team members", "Every feature included", "Team portal for your site team", "QR site boards & compliance hub"],
                 highlight: true,
               },
               {
                 name: "Pro",
-                tagline: "Full access to every feature",
+                tagline: "For busy contractors",
                 price: "£149",
                 image: "plan-pro.jpeg",
-                features: ["Unlimited projects", "Unlimited team members", "Document version control", "QR site boards", "Compliance tracking"],
+                features: ["Unlimited projects", "Unlimited team members", "Every feature included", "Team portal for your site team", "QR site boards & compliance hub"],
               },
             ].map(plan => (
               <div
@@ -388,6 +505,7 @@ export default function LandingPage() {
             </div>
             <nav className="flex flex-wrap items-center gap-x-8 gap-y-3 text-sm text-muted-foreground">
               <a href="#features" className="hover:text-foreground transition-colors">Features</a>
+              <a href="#team-portal" className="hover:text-foreground transition-colors">Team portal</a>
               <a href="#how-it-works" className="hover:text-foreground transition-colors">How it works</a>
               <a href="#pricing" className="hover:text-foreground transition-colors">Pricing</a>
               <a href="#faq" className="hover:text-foreground transition-colors">FAQ</a>
@@ -395,8 +513,8 @@ export default function LandingPage() {
             </nav>
           </div>
           <div className="mt-8 pt-8 border-t flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
-            <p>© {new Date().getFullYear()} SiteSort. Built for UK construction SMEs.</p>
-            <p>Document control, compliance &amp; QR site boards.</p>
+            <p>© {new Date().getFullYear()} SiteSort. Built by OnyxSorts for UK construction SMEs.</p>
+            <p>Document control, sign-offs, compliance, daily reports &amp; QR site boards.</p>
           </div>
         </div>
       </footer>
