@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { subcontractorsTable, insuranceRecordsTable, projectMembersTable, projectsTable, subcontractorNotesTable, usersTable, peopleTable, subcontractorDocumentsTable, personCertificationsTable } from "@workspace/db/schema";
-import { eq, and, desc, or, isNull, isNotNull, inArray } from "drizzle-orm";
+import { eq, and, desc, or, isNull, isNotNull, inArray, sql } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { expiryStatus } from "../lib/expiry";
@@ -34,6 +34,25 @@ type InsuranceRow = typeof insuranceRecordsTable.$inferSelect;
 // the contact card, and insurance-named ones also count towards the
 // insurance badge so a filed insurance cert clears "No Insurance".
 async function certificationsForSubcontractor(subcontractorId: string, companyId: string) {
+  // People directly linked to this subcontractor.
+  const linked = await db.select({
+    id: peopleTable.id, userId: peopleTable.userId, email: peopleTable.email,
+  }).from(peopleTable)
+    .where(and(eq(peopleTable.subcontractorId, subcontractorId), eq(peopleTable.companyId, companyId)));
+  if (linked.length === 0) return [];
+  // Duplicate person rows can exist for the same human (same user account or
+  // email) where only one is linked to the subcontractor. Certs filed onto a
+  // duplicate must still surface on the contact card, so expand to siblings.
+  const userIds = linked.map(p => p.userId).filter((v): v is string => !!v);
+  const emails = linked.map(p => p.email?.trim().toLowerCase()).filter((v): v is string => !!v);
+  const siblingConds = [] as ReturnType<typeof eq>[];
+  if (userIds.length) siblingConds.push(inArray(peopleTable.userId, userIds));
+  if (emails.length) siblingConds.push(inArray(sql`lower(trim(${peopleTable.email}))`, emails));
+  const siblings = siblingConds.length
+    ? await db.select({ id: peopleTable.id }).from(peopleTable)
+        .where(and(eq(peopleTable.companyId, companyId), or(...siblingConds)))
+    : [];
+  const personIds = Array.from(new Set([...linked.map(p => p.id), ...siblings.map(p => p.id)]));
   const rows = await db.select({
     id: personCertificationsTable.id,
     personId: personCertificationsTable.personId,
@@ -46,7 +65,7 @@ async function certificationsForSubcontractor(subcontractorId: string, companyId
     .innerJoin(peopleTable, eq(peopleTable.id, personCertificationsTable.personId))
     // companyId re-check is defense-in-depth: callers already verify the
     // subcontractor belongs to the caller's company.
-    .where(and(eq(peopleTable.subcontractorId, subcontractorId), eq(peopleTable.companyId, companyId), isNull(personCertificationsTable.archivedAt)))
+    .where(and(inArray(personCertificationsTable.personId, personIds), eq(peopleTable.companyId, companyId), isNull(personCertificationsTable.archivedAt)))
     .orderBy(desc(personCertificationsTable.createdAt));
   return rows.map(c => ({
     id: c.id,
