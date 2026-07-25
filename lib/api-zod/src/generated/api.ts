@@ -4489,6 +4489,17 @@ export const UpdatePersonBody = zod
       .describe("Must be a real 2+ character name after trimming whitespace."),
     showContactInPortal: zod.boolean().nullish(),
     roleTitle: zod.string().nullish(),
+    email: zod
+      .string()
+      .email()
+      .optional()
+      .describe(
+        "New contact email (trimmed + lowercased server-side). Cannot be blank.",
+      ),
+    phone: zod
+      .string()
+      .nullish()
+      .describe("Contact phone; null\/empty clears it."),
   })
   .describe(
     "Partial update; omit a field to leave it unchanged. showContactInPortal null = reset to role default.",

@@ -1785,7 +1785,10 @@ function MyDocumentsView() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="font-medium truncate">{d.name}</p>
-                      <p className="text-xs text-muted-foreground capitalize">{d.kind} · {fmtDate(d.createdAt)}</p>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                        <span className="px-2 py-0.5 rounded-full font-medium capitalize bg-muted text-muted-foreground">{d.kind}</span>
+                        {fmtDate(d.createdAt)}
+                      </p>
                     </div>
                     <Badge label={st.label} className={st.className} />
                   </div>

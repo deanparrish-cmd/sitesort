@@ -117,7 +117,10 @@ function MemberDocumentsReview({ projectId }: { projectId: string }) {
             {docs.map(d => (
               <div key={d.id} className="flex items-center justify-between gap-3 p-3 bg-card border border-border rounded-lg">
                 <div className="min-w-0">
-                  <p className="font-medium truncate">{d.name} <span className="text-xs text-muted-foreground font-normal">· {d.kind}</span></p>
+                  <p className="font-medium truncate flex items-center gap-2">
+                    <span className="truncate">{d.name}</span>
+                    <span className="shrink-0 px-2 py-0.5 rounded-full text-xs font-medium capitalize bg-muted text-muted-foreground">{d.kind}</span>
+                  </p>
                   <p className="text-xs text-muted-foreground truncate">
                     {d.uploaderName} · {formatBytes(d.fileSize)} · {fmtRelative(d.createdAt)}
                   </p>
@@ -127,11 +130,20 @@ function MemberDocumentsReview({ projectId }: { projectId: string }) {
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${MEMBER_DOC_BADGE[d.status] ?? "bg-muted text-muted-foreground"}`}>{d.status}</span>
-                  <button onClick={() => openDocument(d.fileUrl, d.name)} className="p-1.5 text-muted-foreground hover:text-primary rounded-lg hover:bg-muted" title="Open file"><ExternalLink className="w-4 h-4" /></button>
+                  <button onClick={() => openDocument(d.fileUrl, d.name)}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-primary/25 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/15 transition-colors">
+                    <ExternalLink className="w-3 h-3" />Open
+                  </button>
                   {d.status === "pending" && (
                     <>
-                      <Button size="sm" variant="outline" className="h-8 px-2 text-xs" isLoading={busyId === d.id && review.variables?.data.action === "approve"} disabled={busyId === d.id} onClick={() => doReview(d.id, "approve")}><Check className="w-3.5 h-3.5" /> Approve</Button>
-                      <Button size="sm" variant="outline" className="h-8 px-2 text-xs text-destructive hover:text-destructive" disabled={busyId === d.id} onClick={() => { setRejectNote(""); setRejectTarget({ id: d.id, name: d.name, uploaderName: d.uploaderName }); }}><X className="w-3.5 h-3.5" /> Reject</Button>
+                      <button disabled={busyId === d.id} onClick={() => doReview(d.id, "approve")}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-success hover:bg-muted transition-colors disabled:opacity-50">
+                        {busyId === d.id && review.variables?.data.action === "approve" ? <Spinner className="size-3" /> : <Check className="w-3 h-3" />}Approve
+                      </button>
+                      <button disabled={busyId === d.id} onClick={() => { setRejectNote(""); setRejectTarget({ id: d.id, name: d.name, uploaderName: d.uploaderName }); }}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-destructive hover:bg-muted transition-colors disabled:opacity-50">
+                        <X className="w-3 h-3" />Reject
+                      </button>
                     </>
                   )}
                 </div>

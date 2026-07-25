@@ -355,7 +355,7 @@ router.patch("/people/:personId", authenticate, async (req, res) => {
 
     const parsed = UpdatePersonBody.safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ error: "validation_error", message: "Invalid update — a first name and surname must be at least 2 characters each." }); return; }
-    const { showContactInPortal, roleTitle, firstName, lastName } = parsed.data;
+    const { showContactInPortal, roleTitle, firstName, lastName, email, phone } = parsed.data;
     if ((firstName !== undefined) !== (lastName !== undefined)) {
       res.status(400).json({ error: "validation_error", message: "Provide both first name and surname together." });
       return;
@@ -371,6 +371,24 @@ router.patch("/people/:personId", authenticate, async (req, res) => {
     const patch: Record<string, unknown> = {};
     if (showContactInPortal !== undefined) patch.showContactInPortal = showContactInPortal === null ? null : !!showContactInPortal;
     if (roleTitle !== undefined) patch.roleTitle = (roleTitle ?? "").toString().trim() || null;
+    // Contact details: email is normalized (trim + lowercase, same rule as user
+    // accounts) and can't be blanked — it's how invites/logins are matched.
+    if (email !== undefined) {
+      // A person linked to a login account signs in with that email — changing
+      // the person copy would desync it from users.email and break invite/login
+      // matching, so it's refused here just like on the project Team tab.
+      if (rows[0].userId) {
+        res.status(400).json({ error: "validation_error", message: "This contact signs in with their email — it can't be changed here." });
+        return;
+      }
+      const cleanEmail = (email ?? "").trim().toLowerCase();
+      if (!/^\S+@\S+\.\S+$/.test(cleanEmail)) {
+        res.status(400).json({ error: "validation_error", message: "Enter a valid email address." });
+        return;
+      }
+      patch.email = cleanEmail;
+    }
+    if (phone !== undefined) patch.phone = (phone ?? "").trim() || null;
     if (firstName !== undefined && lastName !== undefined) {
       const fn = firstName.trim();
       const ln = lastName.trim();
@@ -383,12 +401,17 @@ router.patch("/people/:personId", authenticate, async (req, res) => {
     // Mirror a name change back onto the parent subcontractor row when this is
     // its primary-contact person (Feature: person-first cards — keeps
     // subcontructors.contactName in sync for legacy readers).
-    if (rows[0].isPrimaryContact && rows[0].subcontractorId && patch.firstName !== undefined) {
-      await db.update(subcontractorsTable).set({
-        contactFirstName: patch.firstName as string,
-        contactLastName: patch.lastName as string,
-        contactName: patch.name as string,
-      }).where(eq(subcontractorsTable.id, rows[0].subcontractorId));
+    if (rows[0].isPrimaryContact && rows[0].subcontractorId
+      && (patch.firstName !== undefined || patch.email !== undefined || patch.phone !== undefined)) {
+      const mirror: Record<string, unknown> = {};
+      if (patch.firstName !== undefined) {
+        mirror.contactFirstName = patch.firstName;
+        mirror.contactLastName = patch.lastName;
+        mirror.contactName = patch.name;
+      }
+      if (patch.email !== undefined) mirror.contactEmail = patch.email;
+      if (patch.phone !== undefined) mirror.contactPhone = patch.phone;
+      await db.update(subcontractorsTable).set(mirror).where(eq(subcontractorsTable.id, rows[0].subcontractorId));
     }
     const updated = (await db.select().from(peopleTable).where(eq(peopleTable.id, req.params.personId)).limit(1))[0];
     res.json(serializePerson(updated));

@@ -6078,6 +6078,14 @@ components:
         roleTitle:
           type: string
           nullable: true
+        email:
+          type: string
+          format: email
+          description: "New contact email (trimmed + lowercased server-side). Cannot be blank."
+        phone:
+          type: string
+          nullable: true
+          description: "Contact phone; null/empty clears it."
 
     PersonCertification:
       type: object

@@ -783,6 +783,26 @@ export function useProjectDetailState() {
     setEditingPhoneId(null);
   };
 
+  // Email edits mirror the phone flow (inline pencil on the Team tab card).
+  const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
+  const [emailInput, setEmailInput] = useState("");
+  const saveEmail = async (memberId: string) => {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
+    const token = localStorage.getItem("sitesort_token");
+    const res = await fetch(`/api/projects/${projectId}/members/${memberId}/contact`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ email: emailInput }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      toast({ variant: "destructive", title: "Could not update email", description: body?.message ?? "Please try again." });
+      return;
+    }
+    await queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/members`] });
+    setEditingEmailId(null);
+  };
+
   const submitNewPermit = async () => {
     if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
     if (!newPermitDesc.trim() || !newPermitResponsibleId || !newPermitStart || !newPermitExpiry) {
@@ -1598,6 +1618,11 @@ tr:last-child td{border-bottom:none}
     phoneInput,
     setPhoneInput,
     savePhone,
+    editingEmailId,
+    setEditingEmailId,
+    emailInput,
+    setEmailInput,
+    saveEmail,
     submitNewPermit,
     submitEditPermit,
     deletePermit,

@@ -10,6 +10,7 @@ import { ShareModal } from "@/components/share-modal";
 import {
   Users, Search, Mail, Phone, ShieldCheck, Share2,
   MessageSquare, StickyNote, Send, Loader2, Clock, UserPlus, FolderOpen, Check,
+  Pencil, CheckCircle2, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCapabilities } from "@/hooks/use-capabilities";
@@ -103,6 +104,25 @@ export default function TeamPage() {
   const [addSuccess, setAddSuccess] = useState("");
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjects, setSelectedProjects] = useState<Set<string>>(new Set());
+
+  // Inline phone edit (dashboard-level contact details for in-house members)
+  const [editingPhoneId, setEditingPhoneId] = useState<string | null>(null);
+  const [phoneInput, setPhoneInput] = useState("");
+  const [phoneSaving, setPhoneSaving] = useState(false);
+
+  async function savePhone(memberId: string) {
+    setPhoneSaving(true);
+    const res = await fetch(`/api/users/${memberId}`, {
+      method: "PATCH",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: phoneInput.trim() || null }),
+    });
+    setPhoneSaving(false);
+    if (res.ok) {
+      setMembers(prev => prev.map(m => m.id === memberId ? { ...m, phone: phoneInput.trim() || null } : m));
+      setEditingPhoneId(null);
+    }
+  }
 
   // Notes dialog state
   const [sharingContact, setSharingContact] = useState<{ id: string; name: string; text: string } | null>(null);
@@ -286,10 +306,39 @@ export default function TeamPage() {
                           <a href={`mailto:${m.email}`} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors">
                             <Mail className="w-3 h-3 shrink-0" /><span className="truncate">{m.email}</span>
                           </a>
-                          {m.phone && (
-                            <a href={`tel:${m.phone}`} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors">
-                              <Phone className="w-3 h-3 shrink-0" /><span className="truncate">{m.phone}</span>
-                            </a>
+                          {editingPhoneId === m.id ? (
+                            <div className="flex items-center gap-1.5">
+                              <Phone className="w-3 h-3 shrink-0 text-muted-foreground" />
+                              <input
+                                autoFocus
+                                value={phoneInput}
+                                onChange={e => setPhoneInput(e.target.value)}
+                                onKeyDown={e => { if (e.key === "Enter") savePhone(m.id); if (e.key === "Escape") setEditingPhoneId(null); }}
+                                placeholder="+44 7700 000000"
+                                className="flex-1 text-xs bg-muted rounded px-2 py-0.5 outline-none focus:ring-2 focus:ring-primary/30 min-w-0"
+                              />
+                              <button onClick={() => savePhone(m.id)} disabled={phoneSaving} className="text-success hover:text-success/80 shrink-0" title="Save"><CheckCircle2 className="w-3.5 h-3.5" /></button>
+                              <button onClick={() => setEditingPhoneId(null)} className="text-muted-foreground hover:text-destructive shrink-0" title="Cancel"><X className="w-3.5 h-3.5" /></button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1 group/phone min-w-0">
+                              {m.phone ? (
+                                <a href={`tel:${m.phone}`} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors min-w-0">
+                                  <Phone className="w-3 h-3 shrink-0" /><span className="truncate">{m.phone}</span>
+                                </a>
+                              ) : caps.canManageTeam ? (
+                                <span className="flex items-center gap-1.5 text-xs text-muted-foreground italic">
+                                  <Phone className="w-3 h-3 shrink-0" />Add phone number
+                                </span>
+                              ) : null}
+                              {caps.canManageTeam && (
+                                <button
+                                  onClick={() => { setEditingPhoneId(m.id); setPhoneInput(m.phone ?? ""); }}
+                                  className="ml-0.5 opacity-100 lg:opacity-0 lg:group-hover/phone:opacity-100 transition-opacity text-muted-foreground hover:text-primary shrink-0"
+                                  title="Edit phone"
+                                ><Pencil className="w-3 h-3" /></button>
+                              )}
+                            </div>
                           )}
                         </div>
 

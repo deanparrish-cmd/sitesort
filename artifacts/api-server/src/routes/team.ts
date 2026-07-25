@@ -386,16 +386,65 @@ router.post("/projects/:projectId/members/:memberId/insurance-cert", authenticat
 
 router.patch("/projects/:projectId/members/:memberId/contact", authenticate, async (req, res) => {
   try {
-    const { phone } = req.body;
+    // Tenant scope + role gate (this endpoint predates both; the Team tab only
+    // shows the pencil to managers, but the API must enforce it too).
+    if (!MANAGER_ROLES.includes(req.user!.role)) {
+      res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can edit contact details." });
+      return;
+    }
+    const proj = (await db.select({ id: projectsTable.id }).from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId))).limit(1))[0];
+    if (!proj) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+
+    const { phone, email } = req.body as { phone?: string | null; email?: string | null };
+    if (phone === undefined && email === undefined) {
+      res.status(400).json({ error: "validation_error", message: "Nothing to update." });
+      return;
+    }
+    const cleanEmail = typeof email === "string" ? email.trim().toLowerCase() : undefined;
+    if (cleanEmail !== undefined && !/^\S+@\S+\.\S+$/.test(cleanEmail)) {
+      res.status(400).json({ error: "validation_error", message: "Enter a valid email address." });
+      return;
+    }
     const memberRows = await db.select().from(projectMembersTable)
       .where(and(eq(projectMembersTable.id, req.params.memberId), eq(projectMembersTable.projectId, req.params.projectId)))
       .limit(1);
     if (!memberRows.length) { res.status(404).json({ error: "not_found", message: "Member not found" }); return; }
     const m = memberRows[0];
-    if (m.userId) {
+
+    // Where the details live, in priority order: the person record (the modern
+    // source of truth), then the legacy firm row. A login account's phone can be
+    // updated, but its EMAIL is their sign-in identity — never editable here,
+    // regardless of whether the member also has a person record (people.email
+    // must stay in sync with users.email for invite/login matching).
+    if (cleanEmail !== undefined && m.userId) {
+      res.status(400).json({ error: "validation_error", message: "This member signs in with their email — it can't be changed here." });
+      return;
+    }
+    if (m.personId) {
+      const patch: Record<string, unknown> = {};
+      if (phone !== undefined) patch.phone = phone || null;
+      if (cleanEmail !== undefined) patch.email = cleanEmail;
+      const person = (await db.select({ isPrimaryContact: peopleTable.isPrimaryContact, subcontractorId: peopleTable.subcontractorId })
+        .from(peopleTable).where(eq(peopleTable.id, m.personId)).limit(1))[0];
+      await db.update(peopleTable).set(patch).where(eq(peopleTable.id, m.personId));
+      // Keep the legacy firm-row mirror in sync for primary contacts.
+      if (person?.isPrimaryContact && person.subcontractorId) {
+        const subPatch: Record<string, unknown> = {};
+        if (phone !== undefined) subPatch.contactPhone = phone || null;
+        if (cleanEmail !== undefined) subPatch.contactEmail = cleanEmail;
+        await db.update(subcontractorsTable).set(subPatch).where(eq(subcontractorsTable.id, person.subcontractorId));
+      }
+      if (phone !== undefined && m.userId) {
+        await db.update(usersTable).set({ phone: phone || null }).where(eq(usersTable.id, m.userId));
+      }
+    } else if (m.userId) {
       await db.update(usersTable).set({ phone: phone || null }).where(eq(usersTable.id, m.userId));
     } else if (m.subcontractorId) {
-      await db.update(subcontractorsTable).set({ contactPhone: phone || null }).where(eq(subcontractorsTable.id, m.subcontractorId));
+      const subPatch: Record<string, unknown> = {};
+      if (phone !== undefined) subPatch.contactPhone = phone || null;
+      if (cleanEmail !== undefined) subPatch.contactEmail = cleanEmail;
+      await db.update(subcontractorsTable).set(subPatch).where(eq(subcontractorsTable.id, m.subcontractorId));
     }
     res.json({ success: true });
   } catch (err) {

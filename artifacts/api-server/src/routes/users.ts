@@ -109,7 +109,20 @@ router.post("/users", authenticate, async (req, res) => {
 
 router.patch("/users/:userId", authenticate, async (req, res) => {
   try {
+    // Manager-gated (self-edits of name/phone allowed): editing another member's
+    // details — and role changes in particular — is an admin/PM action. The UI
+    // only shows the controls to managers, but the API must enforce it too.
+    const isManager = ["admin", "project_manager"].includes(req.user!.role);
+    const isSelf = req.user!.id === req.params.userId;
+    if (!isManager && !isSelf) {
+      res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can edit other members." });
+      return;
+    }
     const { name, role, phone } = req.body;
+    if (role !== undefined && !isManager) {
+      res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can change roles." });
+      return;
+    }
     if (name !== undefined) {
       const nameParsed = parseFullPersonName(name);
       if (!nameParsed.success) {
