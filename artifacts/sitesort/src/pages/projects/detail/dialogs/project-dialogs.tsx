@@ -1,8 +1,12 @@
+import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useUpdateMemberAuthority, getListProjectMembersQueryKey } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronUp, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, PinOff, StickyNote, Send, Loader2, History, Archive, Paperclip } from "lucide-react";
 import { formatDate, formatBytes, cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 import { useDetail } from "../context";
 
 export function ProjectDialogs() {
@@ -26,6 +30,40 @@ export function ProjectDialogs() {
     addPersonToProject,
     onEditSubmit,
   } = useDetail();
+  const { toast } = useToast();
+
+  // "Project Managers / Approvers" multi-select: per-project approver authority
+  // (project_members.isProjectManager). Local Set of memberIds is seeded from
+  // the members list each time the dialog opens; changes are saved on submit
+  // via the authority endpoint (one call per changed member), alongside the
+  // normal project-fields save.
+  const queryClient = useQueryClient();
+  const authorityMutation = useUpdateMemberAuthority();
+  const [approverIds, setApproverIds] = useState<Set<string>>(new Set());
+  const accepted = ((members ?? []) as any[]).filter(m => m.userId);
+  useEffect(() => {
+    if (isEditOpen) setApproverIds(new Set(accepted.filter(m => m.isProjectManager).map(m => m.id)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditOpen, members]);
+
+  // Applied AFTER the core project fields save succeeds, so a failed edit never
+  // half-applies authority changes. If an individual grant fails mid-way, the
+  // members list is refetched (showing the true current state) and the error
+  // names who couldn't be updated.
+  const saveApprovers = async () => {
+    if (!project) return;
+    const changed = accepted.filter(m => !!m.isProjectManager !== approverIds.has(m.id));
+    if (!changed.length) return;
+    try {
+      for (const m of changed) {
+        await authorityMutation.mutateAsync({ projectId: project.id, memberId: m.id, data: { isProjectManager: approverIds.has(m.id) } });
+      }
+    } catch (e: any) {
+      throw new Error(e?.data?.message ?? "Project details were saved, but updating the approver list failed. Reopen the dialog to see the current approvers and try again.");
+    } finally {
+      await queryClient.invalidateQueries({ queryKey: getListProjectMembersQueryKey(project.id) });
+    }
+  };
 
   return (
     <>
@@ -38,7 +76,20 @@ export function ProjectDialogs() {
             {editError}
           </div>
         )}
-        <form onSubmit={editHandleSubmit(onEditSubmit)} className="space-y-4">
+        <form
+          onSubmit={editHandleSubmit(async (data: any) => {
+            // Project fields save FIRST — approver changes only apply once the
+            // core edit succeeded, so a failed save never half-applies authority.
+            const ok = await onEditSubmit(data);
+            if (!ok) return;
+            try {
+              await saveApprovers();
+            } catch (e: any) {
+              toast({ variant: "destructive", title: "Approver update failed", description: e?.message });
+            }
+          })}
+          className="space-y-4"
+        >
           <div>
             <label className="text-sm font-semibold mb-1 block">Project Name</label>
             <Input {...editRegister("name", { required: true })} placeholder="e.g. Riverside Apartments" />
@@ -68,6 +119,33 @@ export function ProjectDialogs() {
               ))}
             </select>
             <p className="text-xs text-muted-foreground mt-1">Shown to the Team Portal as this project's site manager contact. Only members who've accepted their portal/dashboard invite can be chosen.</p>
+          </div>
+          <div>
+            <label className="text-sm font-semibold mb-1 block">Project Managers / Approvers</label>
+            {accepted.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No members have accepted an invite yet — invite people from the Team tab first.</p>
+            ) : (
+              <div className="space-y-1.5 max-h-44 overflow-y-auto rounded-lg border-2 border-input p-2">
+                {accepted.map(m => (
+                  <label key={m.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-muted/50 cursor-pointer text-sm">
+                    <input
+                      type="checkbox"
+                      checked={approverIds.has(m.id)}
+                      onChange={e => setApproverIds(prev => {
+                        const next = new Set(prev);
+                        if (e.target.checked) next.add(m.id); else next.delete(m.id);
+                        return next;
+                      })}
+                      className="w-4 h-4 accent-primary shrink-0"
+                    />
+                    <span className="truncate">{m.name}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground mt-1">
+              Approvers can triage site issues, allocate, confirm two-step closures, approve submitted reports and documents, and sign off — so there's always cover if a PM is away. Pick one or more. Company admins and project managers always have this authority. Every action is still recorded against the individual who did it.
+            </p>
           </div>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => setIsEditOpen(false)}>Cancel</Button>

@@ -1240,8 +1240,10 @@ export function useProjectDetailState() {
       await queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}`] });
       await queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
       setIsEditOpen(false);
+      return true;
     } catch (e: any) {
       setEditError(e?.message ?? "Failed to save changes.");
+      return false;
     }
   };
 

@@ -380,7 +380,14 @@ export default function ProjectsList() {
                     <span>{project.memberCount} members</span>
                   </div>
                   {project.alertCount > 0 && (
-                    <Badge variant="destructive" className="mb-2">{project.alertCount} Alerts</Badge>
+                    <button
+                      type="button"
+                      onClick={e => { e.preventDefault(); e.stopPropagation(); setLocation(`/projects/${project.id}?tab=documents`); }}
+                      className="cursor-pointer"
+                      aria-label="View pending document sign-offs"
+                    >
+                      <Badge variant="destructive" className="mb-2 hover:opacity-80 transition-opacity">{project.alertCount} Alerts</Badge>
+                    </button>
                   )}
                   <div className="flex items-center gap-2">
                     <div className="flex-1 bg-muted rounded-full h-1.5 overflow-hidden">
@@ -430,7 +437,14 @@ export default function ProjectsList() {
                         {project.status.replace('_', ' ').toUpperCase()}
                       </Badge>
                       {project.alertCount > 0 && (
-                         <Badge variant="destructive" className="ml-2">{project.alertCount} Alerts</Badge>
+                         <button
+                           type="button"
+                           onClick={e => { e.stopPropagation(); setLocation(`/projects/${project.id}?tab=documents`); }}
+                           className="cursor-pointer"
+                           aria-label="View pending document sign-offs"
+                         >
+                           <Badge variant="destructive" className="ml-2 hover:opacity-80 transition-opacity">{project.alertCount} Alerts</Badge>
+                         </button>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-muted-foreground">

@@ -1,5 +1,5 @@
 import { db } from "@workspace/db";
-import { projectMembersTable } from "@workspace/db/schema";
+import { projectMembersTable, usersTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 
 const COMPANY_MANAGER_ROLES = ["admin", "project_manager"];
@@ -19,7 +19,12 @@ export async function isProjectApprover(user: { id: string; role: string }, proj
       eq(projectMembersTable.isProjectManager, true),
     ))
     .limit(1);
-  return rows.length > 0;
+  if (rows.length > 0) return true;
+  // SiteSort platform admins (internal staff) always retain approver ability —
+  // checked from the DB (not the JWT) so a revoked flag takes effect immediately.
+  const admin = await db.select({ platformAdmin: usersTable.platformAdmin }).from(usersTable)
+    .where(eq(usersTable.id, user.id)).limit(1);
+  return !!admin[0]?.platformAdmin;
 }
 
 export { COMPANY_MANAGER_ROLES };

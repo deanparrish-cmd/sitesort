@@ -922,9 +922,21 @@ export default function Dashboard() {
                           <div className="flex items-center gap-2 mb-0.5">
                             <Badge variant="success" className="text-xs">Active</Badge>
                             {project.alertCount > 0 && (
-                              <Badge variant="destructive" className="text-xs animate-pulse">
-                                <AlertTriangle className="w-3 h-3 mr-1" />{project.alertCount} Alert{project.alertCount > 1 ? "s" : ""}
-                              </Badge>
+                              // Deep-links to the project's Documents tab (the
+                              // alerts are pending document sign-offs) — same
+                              // ?tab= pattern the Close-out card and activity
+                              // entries use. Stops propagation so it wins over
+                              // the card's own link to the project overview.
+                              <button
+                                type="button"
+                                onClick={e => { e.preventDefault(); e.stopPropagation(); navigate(`/projects/${project.id}?tab=documents`); }}
+                                className="cursor-pointer"
+                                aria-label={`View ${project.alertCount} pending document sign-off${project.alertCount > 1 ? "s" : ""}`}
+                              >
+                                <Badge variant="destructive" className="text-xs animate-pulse hover:opacity-80 transition-opacity">
+                                  <AlertTriangle className="w-3 h-3 mr-1" />{project.alertCount} Alert{project.alertCount > 1 ? "s" : ""}
+                                </Badge>
+                              </button>
                             )}
                           </div>
                           <p className="font-semibold group-hover:text-primary transition-colors truncate">{project.name}</p>
