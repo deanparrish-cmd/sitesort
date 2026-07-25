@@ -5,6 +5,7 @@
  * SiteSort API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { PersonCertification } from "./personCertification";
 import type { SubcontractorContactType } from "./subcontractorContactType";
 import type { SubcontractorInsuranceStatus } from "./subcontractorInsuranceStatus";
 
@@ -23,6 +24,8 @@ export interface Subcontractor {
   reliabilityRating?: number | null;
   paymentHold: boolean;
   insuranceStatus: SubcontractorInsuranceStatus;
+  /** Active certifications filed against this contact's people (e.g. an approved Insurance document filed via "Add to contact"). Insurance-named certs also count towards insuranceStatus. */
+  certifications?: PersonCertification[];
   archivedAt?: Date | null;
   createdAt: Date;
 }

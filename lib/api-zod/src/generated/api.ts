@@ -709,6 +709,27 @@ export const ListSubcontractorsResponseItem = zod.object({
   reliabilityRating: zod.number().nullish(),
   paymentHold: zod.boolean(),
   insuranceStatus: zod.enum(["valid", "expiring_soon", "expired", "none"]),
+  certifications: zod
+    .array(
+      zod
+        .object({
+          id: zod.string(),
+          personId: zod.string(),
+          name: zod.string(),
+          certNumber: zod.string().nullish(),
+          expiryDate: zod.date(),
+          status: zod.enum(["valid", "expiring_soon", "expired"]),
+          documentUrl: zod.string().nullish(),
+          createdAt: zod.date(),
+        })
+        .describe(
+          "An individual certification\/ticket held by a person (CSCS, SSSTS\/SMSTS, gas safe, plant tickets, etc.) — distinct from company-level PLI\/insurance.",
+        ),
+    )
+    .optional()
+    .describe(
+      'Active certifications filed against this contact\'s people (e.g. an approved Insurance document filed via \"Add to contact\"). Insurance-named certs also count towards insuranceStatus.',
+    ),
   archivedAt: zod.date().nullish(),
   createdAt: zod.date(),
 });
@@ -787,6 +808,27 @@ export const GetSubcontractorResponse = zod
     reliabilityRating: zod.number().nullish(),
     paymentHold: zod.boolean(),
     insuranceStatus: zod.enum(["valid", "expiring_soon", "expired", "none"]),
+    certifications: zod
+      .array(
+        zod
+          .object({
+            id: zod.string(),
+            personId: zod.string(),
+            name: zod.string(),
+            certNumber: zod.string().nullish(),
+            expiryDate: zod.date(),
+            status: zod.enum(["valid", "expiring_soon", "expired"]),
+            documentUrl: zod.string().nullish(),
+            createdAt: zod.date(),
+          })
+          .describe(
+            "An individual certification\/ticket held by a person (CSCS, SSSTS\/SMSTS, gas safe, plant tickets, etc.) — distinct from company-level PLI\/insurance.",
+          ),
+      )
+      .optional()
+      .describe(
+        'Active certifications filed against this contact\'s people (e.g. an approved Insurance document filed via \"Add to contact\"). Insurance-named certs also count towards insuranceStatus.',
+      ),
     archivedAt: zod.date().nullish(),
     createdAt: zod.date(),
   })
@@ -889,6 +931,27 @@ export const UpdateSubcontractorResponse = zod.object({
   reliabilityRating: zod.number().nullish(),
   paymentHold: zod.boolean(),
   insuranceStatus: zod.enum(["valid", "expiring_soon", "expired", "none"]),
+  certifications: zod
+    .array(
+      zod
+        .object({
+          id: zod.string(),
+          personId: zod.string(),
+          name: zod.string(),
+          certNumber: zod.string().nullish(),
+          expiryDate: zod.date(),
+          status: zod.enum(["valid", "expiring_soon", "expired"]),
+          documentUrl: zod.string().nullish(),
+          createdAt: zod.date(),
+        })
+        .describe(
+          "An individual certification\/ticket held by a person (CSCS, SSSTS\/SMSTS, gas safe, plant tickets, etc.) — distinct from company-level PLI\/insurance.",
+        ),
+    )
+    .optional()
+    .describe(
+      'Active certifications filed against this contact\'s people (e.g. an approved Insurance document filed via \"Add to contact\"). Insurance-named certs also count towards insuranceStatus.',
+    ),
   archivedAt: zod.date().nullish(),
   createdAt: zod.date(),
 });

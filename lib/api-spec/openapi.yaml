@@ -4141,6 +4141,11 @@ components:
         insuranceStatus:
           type: string
           enum: [valid, expiring_soon, expired, none]
+        certifications:
+          type: array
+          description: Active certifications filed against this contact's people (e.g. an approved Insurance document filed via "Add to contact"). Insurance-named certs also count towards insuranceStatus.
+          items:
+            $ref: "#/components/schemas/PersonCertification"
         archivedAt:
           type: string
           format: date-time
