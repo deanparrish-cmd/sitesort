@@ -3592,6 +3592,12 @@ components:
               type: array
               items:
                 $ref: "#/components/schemas/ActivityItem"
+            siteManagerId:
+              type: string
+              nullable: true
+            siteManagerName:
+              type: string
+              nullable: true
           required: [recentActivity]
 
     CreateProjectRequest:
@@ -3622,6 +3628,10 @@ components:
         targetEndDate:
           type: string
           format: date
+        siteManagerId:
+          type: string
+          nullable: true
+          description: Must be the userId of a current member of this project. Null unsets it.
 
     ActivityItem:
       type: object

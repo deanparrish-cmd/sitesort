@@ -1234,6 +1234,7 @@ export function useProjectDetailState() {
       address: project?.address ?? "",
       status: project?.status ?? "active",
       targetEndDate: project?.targetEndDate ?? "",
+      siteManagerId: project?.siteManagerId ?? "",
     });
     setEditError(null);
     setIsEditOpen(true);
@@ -1250,6 +1251,7 @@ export function useProjectDetailState() {
           address: data.address,
           status: data.status as UpdateProjectRequestStatus,
           targetEndDate: data.targetEndDate || undefined,
+          siteManagerId: data.siteManagerId ? data.siteManagerId : null,
         },
       });
       await queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}`] });

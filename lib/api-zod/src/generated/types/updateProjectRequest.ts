@@ -12,4 +12,6 @@ export interface UpdateProjectRequest {
   address?: string;
   status?: UpdateProjectRequestStatus;
   targetEndDate?: Date;
+  /** Must be the userId of a current member of this project. Null unsets it. */
+  siteManagerId?: string | null;
 }

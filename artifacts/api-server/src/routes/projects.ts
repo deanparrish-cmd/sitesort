@@ -175,6 +175,9 @@ router.get("/projects/:projectId", authenticate, async (req, res) => {
 
     const progressPercent = await computeProgress(p.id);
     const recentActivity = await getRecentActivity(p.id);
+    const siteManagerName = p.siteManagerId
+      ? (await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, p.siteManagerId)).limit(1))[0]?.name ?? null
+      : null;
     res.json({
       id: p.id,
       companyId: p.companyId,
@@ -189,6 +192,8 @@ router.get("/projects/:projectId", authenticate, async (req, res) => {
       progressPercent,
       trades: p.trades ?? [],
       recentActivity,
+      siteManagerId: p.siteManagerId ?? null,
+      siteManagerName,
     });
   } catch (err) {
     req.log.error({ err }, "Get project error");
@@ -198,12 +203,26 @@ router.get("/projects/:projectId", authenticate, async (req, res) => {
 
 router.patch("/projects/:projectId", authenticate, async (req, res) => {
   try {
-    const { name, address, status, targetEndDate } = req.body;
+    const { name, address, status, targetEndDate, siteManagerId } = req.body;
     const updates: Record<string, unknown> = {};
     if (name) updates.name = name;
     if (address) updates.address = address;
     if (status) updates.status = status;
     if (targetEndDate !== undefined) updates.targetEndDate = targetEndDate;
+    if (siteManagerId !== undefined) {
+      if (siteManagerId === null) {
+        updates.siteManagerId = null;
+      } else {
+        const memberRows = await db.select({ id: projectMembersTable.id }).from(projectMembersTable)
+          .where(and(eq(projectMembersTable.projectId, req.params.projectId), eq(projectMembersTable.userId, siteManagerId)))
+          .limit(1);
+        if (memberRows.length === 0) {
+          res.status(400).json({ error: "validation_error", message: "siteManagerId must be a current member of this project" });
+          return;
+        }
+        updates.siteManagerId = siteManagerId;
+      }
+    }
 
     await db.update(projectsTable).set(updates).where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)));
 
@@ -215,7 +234,10 @@ router.patch("/projects/:projectId", authenticate, async (req, res) => {
       return;
     }
     const p = projects[0];
-    res.json({ id: p.id, companyId: p.companyId, name: p.name, address: p.address, status: p.status, startDate: p.startDate, targetEndDate: p.targetEndDate ?? null, createdAt: p.createdAt.toISOString(), memberCount: 0, alertCount: 0, progressPercent: 0 });
+    const siteManagerName = p.siteManagerId
+      ? (await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, p.siteManagerId)).limit(1))[0]?.name ?? null
+      : null;
+    res.json({ id: p.id, companyId: p.companyId, name: p.name, address: p.address, status: p.status, startDate: p.startDate, targetEndDate: p.targetEndDate ?? null, createdAt: p.createdAt.toISOString(), memberCount: 0, alertCount: 0, progressPercent: 0, siteManagerId: p.siteManagerId ?? null, siteManagerName });
   } catch (err) {
     req.log.error({ err }, "Update project error");
     res.status(500).json({ error: "server_error", message: "Failed to update project" });

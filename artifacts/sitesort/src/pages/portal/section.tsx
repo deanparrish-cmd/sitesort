@@ -489,17 +489,22 @@ function HomeView() {
         )}
       </Card>
 
-      {/* Box 2 — Site manager */}
-      {sm && (
-        <Card>
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Site manager</p>
-          <p className="font-medium truncate mt-1">{sm.name}</p>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 min-w-0">
-            {sm.phone && <a href={`tel:${sm.phone}`} className="inline-flex items-center gap-1 text-xs text-primary font-medium"><Phone className="w-3 h-3" /> {sm.phone}</a>}
-            {sm.email && <a href={`mailto:${sm.email}`} className="inline-flex items-center gap-1 text-xs text-primary font-medium min-w-0 max-w-full"><Mail className="w-3 h-3 shrink-0" /><span className="truncate">{sm.email}</span></a>}
-          </div>
-        </Card>
-      )}
+      {/* Box 2 — Site manager. A deliberate PM choice (never guessed) — shown
+          as "Not set" rather than silently disappearing when unset. */}
+      <Card>
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Site manager</p>
+        {sm ? (
+          <>
+            <p className="font-medium truncate mt-1">{sm.name}</p>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 min-w-0">
+              {sm.phone && <a href={`tel:${sm.phone}`} className="inline-flex items-center gap-1 text-xs text-primary font-medium"><Phone className="w-3 h-3" /> {sm.phone}</a>}
+              {sm.email && <a href={`mailto:${sm.email}`} className="inline-flex items-center gap-1 text-xs text-primary font-medium min-w-0 max-w-full"><Mail className="w-3 h-3 shrink-0" /><span className="truncate">{sm.email}</span></a>}
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground mt-1">Not set</p>
+        )}
+      </Card>
 
       {/* Box 3 — Site Updates (latest only) — the title lives INSIDE the card
           (like Box 2's "Site manager") so the box reads as one unit. */}
@@ -895,15 +900,21 @@ function SiteBoardView({ embedded }: { embedded?: boolean }) {
       )}
 
       {/* Site manager (skipped when embedded — Home shows the contact card up top) */}
-      {!embedded && data.siteManager && (
+      {!embedded && (
         <div>
           <SectionTitle>Site manager</SectionTitle>
           <Card>
-            <p className="font-medium truncate">{data.siteManager.name}</p>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 min-w-0">
-              {data.siteManager.phone && <a href={`tel:${data.siteManager.phone}`} className="inline-flex items-center gap-1 text-xs text-primary font-medium"><Phone className="w-3 h-3" /> {data.siteManager.phone}</a>}
-              {data.siteManager.email && <a href={`mailto:${data.siteManager.email}`} className="inline-flex items-center gap-1 text-xs text-primary font-medium min-w-0 max-w-full"><Mail className="w-3 h-3 shrink-0" /><span className="truncate">{data.siteManager.email}</span></a>}
-            </div>
+            {data.siteManager ? (
+              <>
+                <p className="font-medium truncate">{data.siteManager.name}</p>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 min-w-0">
+                  {data.siteManager.phone && <a href={`tel:${data.siteManager.phone}`} className="inline-flex items-center gap-1 text-xs text-primary font-medium"><Phone className="w-3 h-3" /> {data.siteManager.phone}</a>}
+                  {data.siteManager.email && <a href={`mailto:${data.siteManager.email}`} className="inline-flex items-center gap-1 text-xs text-primary font-medium min-w-0 max-w-full"><Mail className="w-3 h-3 shrink-0" /><span className="truncate">{data.siteManager.email}</span></a>}
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">Not set</p>
+            )}
           </Card>
         </div>
       )}
