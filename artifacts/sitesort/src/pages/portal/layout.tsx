@@ -5,7 +5,7 @@ import { useGetPortalContext, getGetPortalContextQueryKey, useGetPortalUnseen, g
 import { Spinner } from "@/components/ui/spinner";
 import { PortalInstallPrompt } from "@/components/portal-install-prompt";
 import { PortalNotifyPrompt } from "@/components/portal-notify-prompt";
-import { markPortalSession, disablePush } from "@/lib/portal-push";
+import { markPortalSession, disablePush, resyncPush } from "@/lib/portal-push";
 import { cn } from "@/lib/utils";
 import {
   Home, AlertTriangle,
@@ -74,7 +74,7 @@ export function PortalLayout({ active, children }: { active: string; children: R
   const counts = (unseen?.counts ?? {}) as Record<string, number>;
 
   // Count this app open once (drives when the "enable notifications" card may appear).
-  useEffect(() => { markPortalSession(); }, []);
+  useEffect(() => { markPortalSession(); resyncPush(); }, []);
 
   // Clear-on-open: the server records the section view AFTER the section's own
   // GET responds (so that request still sees the old badge state). Shortly after
