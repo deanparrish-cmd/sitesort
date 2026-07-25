@@ -14,4 +14,5 @@
 - [Portal read/write permissions](portal-read-vs-write-permissions.md) — flags gate visibility AND writes; content is submission-private (own/distributed only) until the PM shares. Apply the predicate to every read path incl. counts.
 - [Sign-off PIN gating](signoff-pin-gating.md) — PIN only for safety-critical types or per-doc toggle; policy computed server-side per doc, mutation routes must be role-gated.
 - [Tenant delete cascade](tenant-delete-cascade.md) — delete-company must track the full FK graph; scrub (not delete) cross-tenant users; drizzle ANY() needs `{a,b}`::text[] literals.
+- [Portal unseen badges](portal-unseen-badges.md) — one shared unseen source (computeUnseen); aggregate = sum of visible-section counts; privacy predicate applies to counts too.
 - [Site-board check-in matching](site-board-checkin-matching.md) — QR check-in must cover all 3 project_members link types (user_id, subcontractor_id, person_id); sub-linked people need valid insurance.

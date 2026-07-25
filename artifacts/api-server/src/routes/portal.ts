@@ -8,7 +8,7 @@ import {
   documentsTable, photosTable, permitsTable, milestonesTable, dailyNotesTable,
   qrBoardPinsTable, calendarEventsTable, subcontractorsTable, peopleTable,
   portalSharesTable, documentDistributionsTable, companiesTable, qrCodesTable,
-  portalMemberDocumentsTable, notificationsTable, companyMembersTable,
+  portalMemberDocumentsTable, notificationsTable, companyMembersTable, portalSubmissionNotesTable,
   plantItemsTable, plantItemAttachmentsTable, plantItemDistributionsTable, personCertificationsTable, dailyReportsTable,
   messagesTable, channelMessagesTable, acknowledgmentAuditTable,
 } from "@workspace/db/schema";
@@ -252,11 +252,13 @@ async function computeUnseen(userId: string, projectId: string): Promise<{ count
     db.select({
       canLogIssues: projectMembersTable.canLogIssues,
       canUpdatePlantMaterials: projectMembersTable.canUpdatePlantMaterials,
+      canEditDailyReport: projectMembersTable.canEditDailyReport,
     }).from(projectMembersTable)
       .where(and(eq(projectMembersTable.projectId, projectId), eq(projectMembersTable.userId, userId))).limit(1),
   ]);
   const canLogIssues = permRow[0]?.canLogIssues ?? false;
   const canUpdatePlantMaterials = permRow[0]?.canUpdatePlantMaterials ?? false;
+  const canEditDailyReport = permRow[0]?.canEditDailyReport ?? false;
   const lv = (s: string) => lastView.get(s);
   const counts: Record<string, number> = {};
   const bump = (s: string, n = 1) => { if (n) counts[s] = (counts[s] ?? 0) + n; };
@@ -278,6 +280,31 @@ async function computeUnseen(userId: string, projectId: string): Promise<{ count
   // badge itself would tip off gated content they can't open.
   if (canLogIssues) {
     for (const at of photoMap.values()) { if (isAfter(at, lv("shared"))) sharedCount++; if (isAfter(at, lv("site-issues"))) bump("site-issues"); }
+    // Updates on issues THIS member logged: triage/allocation edits stamp
+    // photos.updated_at, and PM notes land in portal_submission_notes. Both
+    // count as "new since last view" for the Site Issues badge — same
+    // last-view mark as above, so opening the section clears everything at once.
+    const myIssues = await db.select({ id: photosTable.id, updatedAt: photosTable.updatedAt })
+      .from(photosTable)
+      .where(and(
+        eq(photosTable.projectId, projectId),
+        issueCategoryFilter(),
+        isNull(photosTable.archivedAt),
+        or(eq(photosTable.uploadedBy, userId), eq(photosTable.submittedBy, userId)),
+      ));
+    for (const p of myIssues) if (isAfter(p.updatedAt, lv("site-issues"))) bump("site-issues");
+    const myIssueIds = myIssues.map(p => p.id);
+    if (myIssueIds.length) {
+      const issueNotes = await db.select({ createdAt: portalSubmissionNotesTable.createdAt })
+        .from(portalSubmissionNotesTable)
+        .where(and(
+          eq(portalSubmissionNotesTable.projectId, projectId),
+          eq(portalSubmissionNotesTable.itemType, "site_issue"),
+          inArray(portalSubmissionNotesTable.itemId, myIssueIds),
+          ne(portalSubmissionNotesTable.authorId, userId),
+        ));
+      for (const n of issueNotes) if (isAfter(n.createdAt, lv("site-issues"))) bump("site-issues");
+    }
   }
   for (const at of permitMap.values()) { if (isAfter(at, lv("shared"))) sharedCount++; }
   // Plant & Materials is its own gated section, not a shared-document type
@@ -299,6 +326,49 @@ async function computeUnseen(userId: string, projectId: string): Promise<{ count
       const at = p.lastUpdatedAt ?? p.createdAt;
       if (isAfter(at, lv("plant-materials"))) bump("plant-materials");
     }
+    // PM notes on plant items this member can see also count as new activity.
+    const visiblePlantIds = plantItems.filter(p => p.createdBy === userId || sharedIds.has(p.id)).map(p => p.id);
+    if (visiblePlantIds.length) {
+      const plantNotes = await db.select({ createdAt: portalSubmissionNotesTable.createdAt })
+        .from(portalSubmissionNotesTable)
+        .where(and(
+          eq(portalSubmissionNotesTable.projectId, projectId),
+          eq(portalSubmissionNotesTable.itemType, "plant_item"),
+          inArray(portalSubmissionNotesTable.itemId, visiblePlantIds),
+          ne(portalSubmissionNotesTable.authorId, userId),
+        ));
+      for (const n of plantNotes) if (isAfter(n.createdAt, lv("plant-materials"))) bump("plant-materials");
+    }
+  }
+
+  // Daily Report (gated on canEditDailyReport, same flag that shows the nav
+  // entry): new PM submission notes on this project's daily reports count as
+  // unseen — the member's own edits never bump their own badge.
+  if (canEditDailyReport) {
+    // Submission privacy: only notes on reports this member CONTRIBUTED to may
+    // count — the PM's private diary days must not leak activity, not even as
+    // a badge number. Contribution = an activity_log row for that report by
+    // this member (same source of truth as contributorsForReport).
+    const myReportRows = await db.select({ itemId: activityLogTable.itemId })
+      .from(activityLogTable)
+      .where(and(
+        eq(activityLogTable.projectId, projectId),
+        eq(activityLogTable.userId, userId),
+        eq(activityLogTable.itemType, "daily_report"),
+        isNotNull(activityLogTable.itemId),
+      ));
+    const myReportIds = Array.from(new Set(myReportRows.map(r => r.itemId as string)));
+    if (myReportIds.length) {
+      const reportNotes = await db.select({ createdAt: portalSubmissionNotesTable.createdAt })
+        .from(portalSubmissionNotesTable)
+        .where(and(
+          eq(portalSubmissionNotesTable.projectId, projectId),
+          eq(portalSubmissionNotesTable.itemType, "daily_report"),
+          inArray(portalSubmissionNotesTable.itemId, myReportIds),
+          ne(portalSubmissionNotesTable.authorId, userId),
+        ));
+      for (const n of reportNotes) if (isAfter(n.createdAt, lv("daily-report"))) bump("daily-report");
+    }
   }
 
   // Safety docs are always visible (never gated) → new ones count toward
@@ -309,8 +379,11 @@ async function computeUnseen(userId: string, projectId: string): Promise<{ count
   bump("shared", sharedCount);
 
   // Site updates (daily notes) drive Overview + General badges.
+  // ("general" was retired from the nav — badging it would desync the
+  // aggregate total from what the member can actually see, so only Overview
+  // counts site updates now.)
   const notes = await db.select({ createdAt: dailyNotesTable.createdAt }).from(dailyNotesTable).where(eq(dailyNotesTable.projectId, projectId));
-  for (const n of notes) { if (isAfter(n.createdAt, lv("overview"))) bump("overview"); if (isAfter(n.createdAt, lv("general"))) bump("general"); }
+  for (const n of notes) { if (isAfter(n.createdAt, lv("overview"))) bump("overview"); }
 
   // Messages: unseen = DMs received (not sent by me) + channel posts not
   // authored by me, newer than my last view of the Messages section. Not fed
