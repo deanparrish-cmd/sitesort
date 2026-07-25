@@ -4,9 +4,9 @@ import {
   portalSharesTable, projectsTable, projectMembersTable, peopleTable,
   subcontractorsTable, documentsTable, usersTable, permitsTable,
   photosTable, plantItemsTable, dailyReportsTable,
-  portalMemberDocumentsTable,
+  portalMemberDocumentsTable, personCertificationsTable,
 } from "@workspace/db/schema";
-import { and, eq, isNotNull, inArray, desc } from "drizzle-orm";
+import { and, eq, isNull, isNotNull, inArray, desc } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { enqueuePushForMembers } from "../lib/push-triggers";
@@ -297,7 +297,18 @@ router.get("/projects/:projectId/member-documents", authenticate, async (req, re
       uploaderName: usersTable.name,
     }).from(portalMemberDocumentsTable)
       .leftJoin(usersTable, eq(portalMemberDocumentsTable.userId, usersTable.id))
-      .where(eq(portalMemberDocumentsTable.projectId, req.params.projectId))
+      // Once a submission has been "Added to contact" (a person certification
+      // exists with this exact file), it's filed — drop it from the review
+      // list so the queue only shows items still needing attention.
+      .leftJoin(personCertificationsTable, and(
+        eq(personCertificationsTable.personId, portalMemberDocumentsTable.personId),
+        eq(personCertificationsTable.documentUrl, portalMemberDocumentsTable.fileUrl),
+        isNull(personCertificationsTable.archivedAt),
+      ))
+      .where(and(
+        eq(portalMemberDocumentsTable.projectId, req.params.projectId),
+        isNull(personCertificationsTable.id),
+      ))
       .orderBy(desc(portalMemberDocumentsTable.createdAt));
     res.json(rows.map(r => ({
       id: r.id, name: r.name, kind: r.kind, personId: r.personId ?? undefined,

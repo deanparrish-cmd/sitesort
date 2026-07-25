@@ -112,6 +112,9 @@ function MemberDocumentsReview({ projectId }: { projectId: string }) {
       setFiledIds(prev => ({ ...prev, [docId]: true }));
       setFileTarget(null);
       toast({ title: "Added to contact", description: `Saved to ${fileTarget.uploaderName}'s records — you'll find it on their contact page and in Compliance.` });
+      // The server now drops filed submissions from the review list — refetch
+      // so the row disappears from "Documents for review".
+      await docsQ.refetch();
     } catch (e: any) {
       toast({ variant: "destructive", title: "Couldn't add to contact", description: e?.data?.message ?? "Please try again." });
     }
