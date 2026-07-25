@@ -2,7 +2,8 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import {
   portalSharesTable, projectsTable, projectMembersTable, peopleTable,
-  subcontractorsTable, documentsTable, usersTable,
+  subcontractorsTable, documentsTable, usersTable, permitsTable,
+  photosTable, plantItemsTable, dailyReportsTable,
   portalMemberDocumentsTable,
 } from "@workspace/db/schema";
 import { and, eq, isNotNull, inArray, desc } from "drizzle-orm";
@@ -155,6 +156,18 @@ router.post("/projects/:projectId/portal-shares", authenticate, async (req, res)
       return;
     }
 
+    // The item must actually belong to THIS project — otherwise a manager of
+    // one project could create share rules (and fire notifications) for
+    // another project's items just by guessing ids.
+    const ITEM_TABLE = {
+      document: documentsTable, photo: photosTable, permit: permitsTable,
+      plant_item: plantItemsTable, daily_report: dailyReportsTable,
+    } as const;
+    const table = ITEM_TABLE[itemType as keyof typeof ITEM_TABLE];
+    const owned = (await db.select({ id: table.id }).from(table)
+      .where(and(eq(table.id, itemId), eq(table.projectId, req.params.projectId))).limit(1))[0];
+    if (!owned) { res.status(404).json({ error: "not_found", message: "Item not found in this project" }); return; }
+
     for (const a of audiences) {
       if (a.type === "trade" && !a.trade) continue;
       if (a.type === "person" && !a.personId) continue;
@@ -180,19 +193,22 @@ router.post("/projects/:projectId/portal-shares", authenticate, async (req, res)
     // which a portal-only recipient couldn't actually see/sign off the doc
     // in-portal even though they'd been "allocated" it).
     let recipientCount = 0;
-    if (itemType === "document") {
-      const members = await acceptedMembers(req.params.projectId);
-      const targetUserIds = new Set<string>();
-      for (const a of audiences) {
-        if (a.type === "all") members.forEach(m => targetUserIds.add(m.userId));
-        else if (a.type === "person" && a.personId) members.filter(m => m.personId === a.personId).forEach(m => targetUserIds.add(m.userId));
-        else if (a.type === "trade" && a.trade) {
-          members.filter(m => m.trades.includes(a.trade!) || (m.trades.length === 0 && a.trade === SITE_STAFF))
-            .forEach(m => targetUserIds.add(m.userId));
-        }
+    // Resolve the exact accepted members this share reaches — same audience
+    // flattening for EVERY item type, so permits/photos notify just like
+    // documents (previously only documents pushed; a shared permit was silent).
+    const members = await acceptedMembers(req.params.projectId);
+    const targetUserIds = new Set<string>();
+    for (const a of audiences) {
+      if (a.type === "all") members.forEach(m => targetUserIds.add(m.userId));
+      else if (a.type === "person" && a.personId) members.filter(m => m.personId === a.personId).forEach(m => targetUserIds.add(m.userId));
+      else if (a.type === "trade" && a.trade) {
+        members.filter(m => m.trades.includes(a.trade!) || (m.trades.length === 0 && a.trade === SITE_STAFF))
+          .forEach(m => targetUserIds.add(m.userId));
       }
-      recipientCount = targetUserIds.size;
+    }
+    recipientCount = targetUserIds.size;
 
+    if (itemType === "document") {
       if (targetUserIds.size > 0) {
         const doc = (await db.select({ id: documentsTable.id, name: documentsTable.name, type: documentsTable.type, version: documentsTable.version, requiresAcknowledgment: documentsTable.requiresAcknowledgment }).from(documentsTable).where(eq(documentsTable.id, itemId)).limit(1))[0];
         const proj = (await db.select({ name: projectsTable.name }).from(projectsTable).where(eq(projectsTable.id, req.params.projectId)).limit(1))[0];
@@ -214,6 +230,24 @@ router.post("/projects/:projectId/portal-shares", authenticate, async (req, res)
           });
         }
       }
+    } else if (targetUserIds.size > 0) {
+      // Non-document items (permits, photos): push only — there's no
+      // distribution/email tracking for these, but recipients must still get
+      // an alert that something new landed in their portal.
+      const proj = (await db.select({ name: projectsTable.name }).from(projectsTable).where(eq(projectsTable.id, req.params.projectId)).limit(1))[0];
+      let title = "New item shared with you";
+      if (itemType === "permit") {
+        const p = (await db.select({ type: permitsTable.type }).from(permitsTable).where(eq(permitsTable.id, itemId)).limit(1))[0];
+        title = p?.type ? `New permit: ${p.type}` : "New permit shared with you";
+      } else if (itemType === "photo") {
+        title = "New site photo shared with you";
+      }
+      await enqueuePushForMembers([...targetUserIds], req.params.projectId, {
+        kind: "site_update", itemType, itemId,
+        title,
+        projectName: proj?.name ?? "SiteSort",
+        deepLink: "/portal/shared",
+      });
     }
 
     res.status(201).json({ success: true, recipientCount });
@@ -253,6 +287,7 @@ router.get("/projects/:projectId/member-documents", authenticate, async (req, re
       id: portalMemberDocumentsTable.id,
       name: portalMemberDocumentsTable.name,
       kind: portalMemberDocumentsTable.kind,
+      personId: portalMemberDocumentsTable.personId,
       fileUrl: portalMemberDocumentsTable.fileUrl,
       fileSize: portalMemberDocumentsTable.fileSize,
       status: portalMemberDocumentsTable.status,
@@ -265,7 +300,8 @@ router.get("/projects/:projectId/member-documents", authenticate, async (req, re
       .where(eq(portalMemberDocumentsTable.projectId, req.params.projectId))
       .orderBy(desc(portalMemberDocumentsTable.createdAt));
     res.json(rows.map(r => ({
-      id: r.id, name: r.name, kind: r.kind, fileUrl: r.fileUrl, fileSize: r.fileSize,
+      id: r.id, name: r.name, kind: r.kind, personId: r.personId ?? undefined,
+      fileUrl: r.fileUrl, fileSize: r.fileSize,
       status: r.status, reviewNote: r.reviewNote ?? undefined,
       reviewedAt: r.reviewedAt ? r.reviewedAt.toISOString() : undefined,
       createdAt: r.createdAt.toISOString(),

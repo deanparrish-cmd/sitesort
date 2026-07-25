@@ -5710,6 +5710,9 @@ components:
           type: string
         kind:
           type: string
+        personId:
+          type: string
+          description: The submitter's contact (person) id, when linked — enables filing the doc to their contact record.
         fileUrl:
           type: string
         fileSize:

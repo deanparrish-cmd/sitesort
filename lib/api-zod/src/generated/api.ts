@@ -3977,6 +3977,12 @@ export const ListMemberDocumentsResponseItem = zod.object({
   id: zod.string(),
   name: zod.string(),
   kind: zod.string(),
+  personId: zod
+    .string()
+    .optional()
+    .describe(
+      "The submitter's contact (person) id, when linked — enables filing the doc to their contact record.",
+    ),
   fileUrl: zod.string(),
   fileSize: zod.number(),
   status: zod.string().describe("pending | approved | rejected"),

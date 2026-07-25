@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import {
   useListProjectInvites, useRevokeProjectInvite,
   useGetProjectActivity, useGetProjectActivitySummary,
-  useListMemberDocuments, useReviewMemberDocument,
+  useListMemberDocuments, useReviewMemberDocument, useCreatePersonCertification,
   getListProjectInvitesQueryKey, getGetProjectActivityQueryKey, getGetProjectActivitySummaryQueryKey,
   getListMemberDocumentsQueryKey,
 } from "@workspace/api-client-react";
@@ -17,7 +17,7 @@ import { formatBytes } from "@/lib/utils";
 import { SECTION_NAV } from "@/pages/portal/layout";
 import {
   UserPlus, Trash2, Activity, Eye, ShieldAlert, ShieldOff, Clock,
-  FileCheck, Check, X, ExternalLink,
+  FileCheck, Check, X, ExternalLink, UserRoundPlus,
 } from "lucide-react";
 
 function fmtRelative(iso?: string | null): string {
@@ -87,6 +87,36 @@ function MemberDocumentsReview({ projectId }: { projectId: string }) {
   const [rejectTarget, setRejectTarget] = useState<{ id: string; name: string; uploaderName: string } | null>(null);
   const [rejectNote, setRejectNote] = useState("");
 
+  // "Add to contact" — file an approved submission onto the sender's contact
+  // record as a certification/insurance entry (needs a name + expiry date).
+  const createCert = useCreatePersonCertification();
+  const [fileTarget, setFileTarget] = useState<{ docId: string; personId: string; fileUrl: string; docName: string; uploaderName: string } | null>(null);
+  const [certName, setCertName] = useState("");
+  const [certNumber, setCertNumber] = useState("");
+  const [certExpiry, setCertExpiry] = useState("");
+  const [filedIds, setFiledIds] = useState<Record<string, boolean>>({});
+
+  const doFile = async () => {
+    if (!fileTarget || !certName.trim() || !certExpiry) return;
+    const docId = fileTarget.docId;
+    try {
+      await createCert.mutateAsync({
+        personId: fileTarget.personId,
+        data: {
+          name: certName.trim(),
+          certNumber: certNumber.trim() || undefined,
+          expiryDate: certExpiry,
+          documentUrl: fileTarget.fileUrl,
+        },
+      });
+      setFiledIds(prev => ({ ...prev, [docId]: true }));
+      setFileTarget(null);
+      toast({ title: "Added to contact", description: `Saved to ${fileTarget.uploaderName}'s records — you'll find it on their contact page and in Compliance.` });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Couldn't add to contact", description: e?.data?.message ?? "Please try again." });
+    }
+  };
+
   const doReview = async (id: string, action: "approve" | "reject", note?: string) => {
     setBusyId(id);
     try {
@@ -134,6 +164,24 @@ function MemberDocumentsReview({ projectId }: { projectId: string }) {
                     className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-primary/25 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/15 transition-colors">
                     <ExternalLink className="w-3 h-3" />Open
                   </button>
+                  {d.status === "approved" && d.personId && (
+                    filedIds[d.id] ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                        <Check className="w-3 h-3" />Added
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setCertName(d.name);
+                          setCertNumber("");
+                          setCertExpiry("");
+                          setFileTarget({ docId: d.id, personId: d.personId!, fileUrl: d.fileUrl, docName: d.name, uploaderName: d.uploaderName });
+                        }}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-primary/25 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/15 transition-colors">
+                        <UserRoundPlus className="w-3 h-3" />Add to contact
+                      </button>
+                    )
+                  )}
                   {d.status === "pending" && (
                     <>
                       <button disabled={busyId === d.id} onClick={() => doReview(d.id, "approve")}
@@ -180,6 +228,43 @@ function MemberDocumentsReview({ projectId }: { projectId: string }) {
             }}
           >
             Reject document
+          </Button>
+        </DialogFooter>
+      </Dialog>
+
+      {/* Add-to-contact dialog — files the approved doc onto the sender's
+          contact record as a certification/insurance entry with an expiry date,
+          so it shows on their contact page and feeds compliance reminders. */}
+      <Dialog open={!!fileTarget} onOpenChange={v => { if (!v) setFileTarget(null); }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><UserRoundPlus className="w-4 h-4 text-primary" /> Add to {fileTarget?.uploaderName ?? "contact"}'s records</DialogTitle>
+          <p className="text-sm text-muted-foreground">The approved file will be saved to their contact record with an expiry date, so it appears in Compliance and expiry reminders.</p>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Name (e.g. Public Liability Insurance, CSCS card)</label>
+            <input value={certName} onChange={e => setCertName(e.target.value)} maxLength={120}
+              className="mt-1 w-full rounded-lg border-2 border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:border-primary" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Certificate / policy number (optional)</label>
+            <input value={certNumber} onChange={e => setCertNumber(e.target.value)} maxLength={80}
+              className="mt-1 w-full rounded-lg border-2 border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:border-primary" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Expiry date</label>
+            <input type="date" value={certExpiry} onChange={e => setCertExpiry(e.target.value)}
+              className="mt-1 w-full rounded-lg border-2 border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:border-primary" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setFileTarget(null)}>Cancel</Button>
+          <Button
+            disabled={!certName.trim() || !certExpiry}
+            isLoading={createCert.isPending}
+            onClick={() => void doFile()}
+          >
+            Add to contact
           </Button>
         </DialogFooter>
       </Dialog>
