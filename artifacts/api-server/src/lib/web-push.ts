@@ -65,5 +65,8 @@ export async function sendPushToMember(userId: string, projectId: string, payloa
       }
     }
   }));
+  // Log every send outcome (success included) — without this, prod gives no
+  // way to tell "delivered to APNs" apart from "silently dropped".
+  logger.info({ userId, projectId, devices: subs.length, delivered, tag: payload.tag }, "web-push: send");
   return delivered;
 }
