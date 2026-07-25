@@ -15,4 +15,5 @@
 - [Sign-off PIN gating](signoff-pin-gating.md) — PIN only for safety-critical types or per-doc toggle; policy computed server-side per doc, mutation routes must be role-gated.
 - [Tenant delete cascade](tenant-delete-cascade.md) — delete-company must track the full FK graph; scrub (not delete) cross-tenant users; drizzle ANY() needs `{a,b}`::text[] literals.
 - [Portal unseen badges](portal-unseen-badges.md) — one shared unseen source (computeUnseen); aggregate = sum of visible-section counts; privacy predicate applies to counts too.
+- [Portal share audience vs distribution](portal-share-audience.md) — share rules are per PERSON (pending invitees count in audience lists); emails/push/recipientCount need a user; don't gate Share on a file existing.
 - [Site-board check-in matching](site-board-checkin-matching.md) — QR check-in must cover all 3 project_members link types (user_id, subcontractor_id, person_id); sub-linked people need valid insurance.

@@ -40,6 +40,16 @@ async function ownedProject(req: import("express").Request): Promise<boolean> {
 // the trades of the firm they belong to. In-house people (no firm) carry no
 // trade and fall in the synthetic "Site Staff" bucket.
 async function acceptedMembers(projectId: string) {
+  const rows = await portalAudienceMembers(projectId);
+  return rows.filter(r => r.userId !== null).map(r => ({ ...r, userId: r.userId as string }));
+}
+
+// All person-linked project members, whether or not they've accepted their
+// portal invite yet (userId null = pending). Share rules are stored by PERSON,
+// so sharing with a pending member is meaningful — they see the item the
+// moment they accept. The share dialog therefore lists pending people too
+// (flagged), instead of claiming "no portal members" while people are invited.
+async function portalAudienceMembers(projectId: string) {
   const rows = await db.select({
     personId: projectMembersTable.personId,
     userId: projectMembersTable.userId,
@@ -51,11 +61,10 @@ async function acceptedMembers(projectId: string) {
     .where(and(
       eq(projectMembersTable.projectId, projectId),
       isNotNull(projectMembersTable.personId),
-      isNotNull(projectMembersTable.userId),
     ));
   return rows.map(r => ({
     personId: r.personId as string,
-    userId: r.userId as string,
+    userId: (r.userId ?? null) as string | null,
     trades: (r.trades ?? []) as string[],
   }));
 }
@@ -69,7 +78,7 @@ router.get("/projects/:projectId/portal-audience", authenticate, async (req, res
 
     const proj = await db.select({ trades: projectsTable.trades }).from(projectsTable)
       .where(eq(projectsTable.id, req.params.projectId)).limit(1);
-    const members = await acceptedMembers(req.params.projectId);
+    const members = await portalAudienceMembers(req.params.projectId);
 
     // Member names for the individual multi-select (sorted by surname). Company
     // + contact type let the picker show "Name · Company · Trade" (Feature:
@@ -80,7 +89,7 @@ router.get("/projects/:projectId/portal-audience", authenticate, async (req, res
     }).from(projectMembersTable)
       .innerJoin(peopleTable, eq(projectMembersTable.personId, peopleTable.id))
       .leftJoin(subcontractorsTable, eq(peopleTable.subcontractorId, subcontractorsTable.id))
-      .where(and(eq(projectMembersTable.projectId, req.params.projectId), isNotNull(projectMembersTable.userId)));
+      .where(and(eq(projectMembersTable.projectId, req.params.projectId), isNotNull(projectMembersTable.personId)));
     const nameByPerson = new Map(named.map(n => [n.personId as string, n.name]));
     const companyByPerson = new Map(named.map(n => [n.personId as string, n.contactType === "self_employed" ? "Self-employed" : n.companyName]));
     const surnameOf = (n: { name: string; lastName: string | null }) => (n.lastName?.trim() || n.name.trim().split(" ").slice(-1)[0] || n.name).toLowerCase();
@@ -97,7 +106,7 @@ router.get("/projects/:projectId/portal-audience", authenticate, async (req, res
     res.json({
       trades: [...tradeSet].sort().map(trade => ({ trade, memberCount: counts.get(trade) ?? 0 })),
       members: members
-        .map(m => ({ personId: m.personId, userId: m.userId, name: nameByPerson.get(m.personId) ?? "Unknown", companyName: companyByPerson.get(m.personId) ?? undefined, trades: m.trades }))
+        .map(m => ({ personId: m.personId, userId: m.userId, accepted: m.userId !== null, name: nameByPerson.get(m.personId) ?? "Unknown", companyName: companyByPerson.get(m.personId) ?? undefined, trades: m.trades }))
         .sort((a, b) => (surnameByPerson.get(a.personId) ?? "").localeCompare(surnameByPerson.get(b.personId) ?? "")),
     });
   } catch (err) {

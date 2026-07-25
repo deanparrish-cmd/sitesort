@@ -32,6 +32,7 @@ export function ShareAndNoteDialogs() {
         projectId={projectId}
         version={sharingDoc?.version ?? null}
         additionalInfo={sharingDoc?.additionalInfo}
+        shareText={sharingDoc?.shareText ?? null}
       />
 
       {/* Note detail dialog */}

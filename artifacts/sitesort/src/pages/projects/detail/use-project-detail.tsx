@@ -970,7 +970,7 @@ export function useProjectDetailState() {
     }
     setLinkingSubId(null);
   };
-  type SharingDoc = { type: string; id: string; name: string; version: number | null; fileUrl: string; additionalInfo?: string };
+  type SharingDoc = { type: string; id: string; name: string; version: number | null; fileUrl: string | null; additionalInfo?: string; shareText?: string };
   const [sharingDoc, setSharingDoc] = useState<SharingDoc | null>(null);
   // Contact / invoice shares route through the one ShareModal (External channels).
   const [sharingContact, setSharingContact] = useState<{ id: string; name: string; text: string } | null>(null);
