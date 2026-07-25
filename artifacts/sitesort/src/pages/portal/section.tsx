@@ -219,6 +219,17 @@ function NewPill() {
   return <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-primary text-primary-foreground px-1.5 py-0.5 rounded">New</span>;
 }
 
+// Once a shared document has been opened, "New" gives way to a quiet receipt:
+// when this member first viewed it (server-recorded viewed_at, or the moment
+// they opened it this session).
+function ReceivedPill({ at }: { at: string }) {
+  return (
+    <span className="shrink-0 text-[10px] font-semibold bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
+      Received {fmtDateTime(at)}
+    </span>
+  );
+}
+
 // A row for a document (drawing / method statement / safety / general doc). The
 // superseded badge reflects the last list fetch; opening re-checks live status.
 // FreshDoc extended to carry the superseded replacement (T003): the per-item
@@ -232,6 +243,10 @@ function DocRow({ doc, section, unseen, signOff }: { doc: any; section: string; 
   const cad = cadBadgeLabel(doc.fileUrl, doc.name);
   const [supersededNow, setSupersededNow] = useState(doc.status === "superseded");
   const [downloading, setDownloading] = useState(false);
+  // "Received" receipt: the server records first-view (viewed_at) when the doc
+  // is opened; openedAt covers the current session so the pill flips instantly.
+  const [openedAt, setOpenedAt] = useState<string | null>(null);
+  const receivedAt: string | null = openedAt ?? doc.myViewedAt ?? null;
   const active = signOff.target?.id === doc.id;
 
   // Open the live replacement of a superseded document: fetch its detail for the
@@ -248,10 +263,15 @@ function DocRow({ doc, section, unseen, signOff }: { doc: any; section: string; 
   };
 
   const open = () => {
-    openDocFile(doc);
+    const opened = openDocFile(doc);
     // Log the view for every doc type (not just drawings/method-statements) —
-    // opening never needs a PIN, only signing off does. Fire-and-forget.
-    void fetch(`/api/portal/documents/${doc.id}/view`, { method: "POST" });
+    // opening never needs a PIN, only signing off does. Fire-and-forget for the
+    // open itself, but the "Received" receipt only flips once the file actually
+    // opened AND the server confirmed it recorded the view — so the pill never
+    // claims a receipt the audit trail doesn't have.
+    void fetch(`/api/portal/documents/${doc.id}/view`, { method: "POST" }).then(r => {
+      if (opened && r.ok && !openedAt && !doc.myViewedAt) setOpenedAt(new Date().toISOString());
+    }).catch(() => {});
     if (!clickable) return;
     // Confirm current status at open (not from the cached list row).
     void fetchFreshDoc(section, doc.id).then(({ ok, doc: fresh }: { ok: boolean; doc: FreshDocFull }) => {
@@ -301,7 +321,7 @@ function DocRow({ doc, section, unseen, signOff }: { doc: any; section: string; 
       <div className="flex items-center justify-between gap-3 py-2.5">
         <div className="min-w-0">
           <p className="font-medium truncate flex items-center gap-1.5">
-            {unseen && <NewPill />}
+            {receivedAt ? <ReceivedPill at={receivedAt} /> : unseen && <NewPill />}
             <span className="truncate">{doc.name}</span>
             {supersededNow && (
               <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 px-1.5 py-0.5 rounded">Superseded</span>

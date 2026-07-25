@@ -3516,6 +3516,12 @@ export const GetPortalHsResponse = zod.object({
         .date()
         .nullish()
         .describe("When this viewer signed it off, if they have."),
+      myViewedAt: zod
+        .date()
+        .nullish()
+        .describe(
+          'When this viewer first opened the document, if they have (powers the \"Received\" label once a New item is opened).',
+        ),
     }),
   ),
   safety: zod.array(
@@ -3572,6 +3578,12 @@ export const GetPortalHsResponse = zod.object({
         .date()
         .nullish()
         .describe("When this viewer signed it off, if they have."),
+      myViewedAt: zod
+        .date()
+        .nullish()
+        .describe(
+          'When this viewer first opened the document, if they have (powers the \"Received\" label once a New item is opened).',
+        ),
     }),
   ),
   permits: zod.array(
@@ -3647,6 +3659,12 @@ export const GetPortalSharedResponse = zod.object({
         .date()
         .nullish()
         .describe("When this viewer signed it off, if they have."),
+      myViewedAt: zod
+        .date()
+        .nullish()
+        .describe(
+          'When this viewer first opened the document, if they have (powers the \"Received\" label once a New item is opened).',
+        ),
     }),
   ),
   photos: zod.array(
@@ -3802,6 +3820,12 @@ export const GetPortalDrawingsResponseItem = zod.object({
     .date()
     .nullish()
     .describe("When this viewer signed it off, if they have."),
+  myViewedAt: zod
+    .date()
+    .nullish()
+    .describe(
+      'When this viewer first opened the document, if they have (powers the \"Received\" label once a New item is opened).',
+    ),
 });
 export const GetPortalDrawingsResponse = zod.array(
   GetPortalDrawingsResponseItem,
@@ -3867,6 +3891,12 @@ export const GetPortalDrawingResponse = zod.object({
     .date()
     .nullish()
     .describe("When this viewer signed it off, if they have."),
+  myViewedAt: zod
+    .date()
+    .nullish()
+    .describe(
+      'When this viewer first opened the document, if they have (powers the \"Received\" label once a New item is opened).',
+    ),
 });
 
 /**
@@ -4030,6 +4060,12 @@ export const GetPortalMethodStatementsResponseItem = zod.object({
     .date()
     .nullish()
     .describe("When this viewer signed it off, if they have."),
+  myViewedAt: zod
+    .date()
+    .nullish()
+    .describe(
+      'When this viewer first opened the document, if they have (powers the \"Received\" label once a New item is opened).',
+    ),
 });
 export const GetPortalMethodStatementsResponse = zod.array(
   GetPortalMethodStatementsResponseItem,
@@ -4095,6 +4131,12 @@ export const GetPortalMethodStatementResponse = zod.object({
     .date()
     .nullish()
     .describe("When this viewer signed it off, if they have."),
+  myViewedAt: zod
+    .date()
+    .nullish()
+    .describe(
+      'When this viewer first opened the document, if they have (powers the \"Received\" label once a New item is opened).',
+    ),
 });
 
 /**
@@ -4169,6 +4211,12 @@ export const GetPortalSafetyResponseItem = zod.object({
     .date()
     .nullish()
     .describe("When this viewer signed it off, if they have."),
+  myViewedAt: zod
+    .date()
+    .nullish()
+    .describe(
+      'When this viewer first opened the document, if they have (powers the \"Received\" label once a New item is opened).',
+    ),
 });
 export const GetPortalSafetyResponse = zod.array(GetPortalSafetyResponseItem);
 
@@ -4230,6 +4278,12 @@ export const GetPortalGeneralResponse = zod.object({
         .date()
         .nullish()
         .describe("When this viewer signed it off, if they have."),
+      myViewedAt: zod
+        .date()
+        .nullish()
+        .describe(
+          'When this viewer first opened the document, if they have (powers the \"Received\" label once a New item is opened).',
+        ),
     }),
   ),
   notes: zod.array(

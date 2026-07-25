@@ -5619,6 +5619,11 @@ components:
           format: date-time
           nullable: true
           description: When this viewer signed it off, if they have.
+        myViewedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When this viewer first opened the document, if they have (powers the "Received" label once a New item is opened).
       required: [id, name, type, version, fileUrl, status]
 
     PortalMemberDocument:

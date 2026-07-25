@@ -95,20 +95,21 @@ function serializeDoc(d: typeof documentsTable.$inferSelect) {
 // This viewer's own sign-off status for a batch of documents — merged onto
 // serializeDoc's output wherever a member might need to sign off (the PIN
 // gate itself is re-checked server-side regardless of what the client saw).
-async function myDocStatuses(userId: string, docIds: string[]): Promise<Map<string, { status: string; acknowledgedAt: Date | null }>> {
+async function myDocStatuses(userId: string, docIds: string[]): Promise<Map<string, { status: string; acknowledgedAt: Date | null; viewedAt: Date | null }>> {
   if (docIds.length === 0) return new Map();
   const rows = await db.select({
     documentId: documentDistributionsTable.documentId,
     status: documentDistributionsTable.status,
     acknowledgedAt: documentDistributionsTable.acknowledgedAt,
+    viewedAt: documentDistributionsTable.viewedAt,
   }).from(documentDistributionsTable)
     .where(and(inArray(documentDistributionsTable.documentId, docIds), eq(documentDistributionsTable.userId, userId)));
-  return new Map(rows.map(r => [r.documentId, { status: r.status, acknowledgedAt: r.acknowledgedAt }]));
+  return new Map(rows.map(r => [r.documentId, { status: r.status, acknowledgedAt: r.acknowledgedAt, viewedAt: r.viewedAt }]));
 }
-function withMyStatus<T extends { id: string }>(rows: T[], statuses: Map<string, { status: string; acknowledgedAt: Date | null }>): (T & { myStatus: string | null; mySignedOffAt: string | null })[] {
+function withMyStatus<T extends { id: string }>(rows: T[], statuses: Map<string, { status: string; acknowledgedAt: Date | null; viewedAt: Date | null }>): (T & { myStatus: string | null; mySignedOffAt: string | null; myViewedAt: string | null })[] {
   return rows.map(r => {
     const mine = statuses.get(r.id);
-    return { ...r, myStatus: mine?.status ?? null, mySignedOffAt: mine?.acknowledgedAt?.toISOString() ?? null };
+    return { ...r, myStatus: mine?.status ?? null, mySignedOffAt: mine?.acknowledgedAt?.toISOString() ?? null, myViewedAt: mine?.viewedAt?.toISOString() ?? null };
   });
 }
 function serializePermit(p: typeof permitsTable.$inferSelect) {
