@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import {
   Home, AlertTriangle,
   LogOut, Inbox, HardHat,
-  Settings, Menu, X, FolderUp, Wrench, ClipboardList, MessageSquare, QrCode, FileCheck,
+  Settings, Menu, X, FolderUp, Wrench, ClipboardList, MessageSquare, QrCode, FileCheck, HelpCircle,
 } from "lucide-react";
 
 // The fixed portal nav — order + labels + icons. `key` matches the URL segment
@@ -40,6 +40,7 @@ export const SECTION_NAV: { key: string; label: string; Icon: typeof Home; permi
   { key: "site-board", label: "Site Board", Icon: QrCode },
   { key: "permits", label: "Permits", Icon: FileCheck },
   { key: "settings", label: "Settings", Icon: Settings },
+  { key: "help", label: "Help", Icon: HelpCircle },
   { key: "site-issues", label: "Site Issues", Icon: AlertTriangle, permission: "canLogIssues" },
   { key: "plant-materials", label: "Plant & Materials", Icon: Wrench, permission: "canUpdatePlantMaterials" },
   { key: "daily-report", label: "Daily Report", Icon: ClipboardList, permission: "canEditDailyReport" },

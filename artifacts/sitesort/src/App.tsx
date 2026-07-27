@@ -55,6 +55,7 @@ const ForgotPassword = lazyWithRetry(() => import("@/pages/auth/forgot-password"
 const ResetPassword = lazyWithRetry(() => import("@/pages/auth/reset-password"));
 const ForgotPin = lazyWithRetry(() => import("@/pages/auth/forgot-pin"));
 const ResetPin = lazyWithRetry(() => import("@/pages/auth/reset-pin"));
+const Guide = lazyWithRetry(() => import("@/pages/guide"));
 const PortalForgotPassword = lazyWithRetry(() => import("@/pages/portal/forgot-password"));
 const PortalResetPassword = lazyWithRetry(() => import("@/pages/portal/reset-password"));
 const Dashboard = lazyWithRetry(() => import("@/pages/dashboard"));
@@ -70,6 +71,7 @@ const TeamPage = lazyWithRetry(() => import("@/pages/team"));
 const MessagesPage = lazyWithRetry(() => import("@/pages/messages"));
 const NotificationsPage = lazyWithRetry(() => import("@/pages/notifications"));
 const SettingsPage = lazyWithRetry(() => import("@/pages/settings"));
+const UserGuidePage = lazyWithRetry(() => import("@/pages/user-guide"));
 const IssuesPage = lazyWithRetry(() => import("@/pages/issues"));
 const CheckinsPage = lazyWithRetry(() => import("@/pages/checkins"));
 const DailyReportsPage = lazyWithRetry(() => import("@/pages/daily-reports"));
@@ -118,6 +120,7 @@ function Router() {
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/forgot-pin" component={ForgotPin} />
       <Route path="/reset-pin" component={ResetPin} />
+      <Route path="/guide" component={Guide} />
 
       {/* Authenticated Routes */}
       <Route path="/dashboard" component={Dashboard} />
@@ -132,6 +135,7 @@ function Router() {
       <Route path="/messages" component={MessagesPage} />
       <Route path="/notifications" component={NotificationsPage} />
       <Route path="/settings" component={SettingsPage} />
+      <Route path="/user-guide" component={UserGuidePage} />
 
       <Route path="/invoices" component={InvoicesPage} />
       <Route path="/daily-reports" component={DailyReportsPage} />

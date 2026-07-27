@@ -44,6 +44,7 @@ import { Bell, BellOff } from "lucide-react";
 import { useSignOffFlow } from "@/hooks/use-sign-off-flow";
 import { ClipboardList } from "lucide-react";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { WORKER_GUIDE, workerFaq } from "@workspace/user-guide";
 
 // Portal-authed binary download: the app's global fetch interceptor attaches the
 // portal bearer token to /api/portal/* requests, so a plain <a href> (which does
@@ -2040,6 +2041,42 @@ function SettingsView() {
   );
 }
 
+// Help — the worker half of the shared User Guide (dashboard has the full
+// PM+worker version). Same content source as the dashboard page and the
+// "Invite to Portal" email — edit lib/user-guide/src/index.ts to update all three.
+function HelpView() {
+  return (
+    <div className="space-y-5">
+      {WORKER_GUIDE.map((section) => (
+        <div key={section.id}>
+          <SectionTitle>{section.title}</SectionTitle>
+          <Card className="space-y-3">
+            {section.steps.map((step, i) => (
+              <div key={i}>
+                <p className="text-sm font-semibold">{step.heading}</p>
+                {step.body.map((line, j) => (
+                  <p key={j} className="text-sm text-muted-foreground mt-1">{line}</p>
+                ))}
+              </div>
+            ))}
+          </Card>
+        </div>
+      ))}
+      <div>
+        <SectionTitle>FAQ</SectionTitle>
+        <Card className="divide-y divide-border/60">
+          {workerFaq().map((item) => (
+            <div key={item.id} className="py-3 first:pt-0 last:pb-0">
+              <p className="text-sm font-semibold">{item.question}</p>
+              <p className="text-sm text-muted-foreground mt-1">{item.answer}</p>
+            </div>
+          ))}
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 // Sign-off PIN setup/reset — same password-reverification pattern as the
 // dashboard's Settings PIN section (POST /api/auth/pin), just against the
 // portal-scoped twin (POST /api/portal/pin). This form doubles as "forgot PIN":
@@ -2148,6 +2185,7 @@ function renderSection(section: string) {
     case "shared": return <SharedView />;
     case "my-documents": return <MyDocumentsView />;
     case "settings": return <SettingsView />;
+    case "help": return <HelpView />;
     case "site-issues": return <SiteIssuesView />;
     case "plant-materials": return <PlantMaterialsView />;
     case "daily-report": return <DailyReportView />;

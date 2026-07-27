@@ -120,6 +120,7 @@ function buildRoutes(projectId: string, hasPortal: boolean): RouteSpec[] {
     { path: "/login", label: "login", auth: "none" },
     { path: "/register", label: "register", auth: "none" },
     { path: "/forgot-password", label: "forgot-password", auth: "none" },
+    { path: "/guide", label: "guide", auth: "none" },
     { path: "/portal/login", label: "portal-login", auth: "none" },
 
     { path: "/dashboard", label: "dashboard", auth: "app" },
@@ -131,6 +132,7 @@ function buildRoutes(projectId: string, hasPortal: boolean): RouteSpec[] {
     { path: "/messages", label: "messages", auth: "app" },
     { path: "/notifications", label: "notifications", auth: "app" },
     { path: "/settings", label: "settings", auth: "app" },
+    { path: "/user-guide", label: "user-guide", auth: "app" },
     { path: "/invoices", label: "invoices", auth: "app" },
     { path: "/daily-reports", label: "daily-reports", auth: "app" },
     { path: "/issues", label: "issues", auth: "app" },
@@ -144,7 +146,7 @@ function buildRoutes(projectId: string, hasPortal: boolean): RouteSpec[] {
   }
 
   if (hasPortal) {
-    const sections = ["overview", "shared", "settings", "progress", "team", "site-issues", "site-board", "hs", "drawings", "method-statements", "permits", "safety", "general", "plant-materials", "daily-report", "messages"];
+    const sections = ["overview", "shared", "settings", "help", "progress", "team", "site-issues", "site-board", "hs", "drawings", "method-statements", "permits", "safety", "general", "plant-materials", "daily-report", "messages"];
     for (const section of sections) {
       routes.push({ path: `/portal/${section}`, label: `portal:${section}`, auth: "portal" });
     }
