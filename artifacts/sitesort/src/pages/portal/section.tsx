@@ -45,6 +45,7 @@ import { useSignOffFlow } from "@/hooks/use-sign-off-flow";
 import { ClipboardList } from "lucide-react";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { WORKER_GUIDE, workerFaq } from "@workspace/user-guide";
+import { GuideSectionGrid, GuideFaqAccordion } from "@/components/user-guide-view";
 
 // Portal-authed binary download: the app's global fetch interceptor attaches the
 // portal bearer token to /api/portal/* requests, so a plain <a href> (which does
@@ -2047,31 +2048,10 @@ function SettingsView() {
 function HelpView() {
   return (
     <div className="space-y-5">
-      {WORKER_GUIDE.map((section) => (
-        <div key={section.id}>
-          <SectionTitle>{section.title}</SectionTitle>
-          <Card className="space-y-3">
-            {section.steps.map((step, i) => (
-              <div key={i}>
-                <p className="text-sm font-semibold">{step.heading}</p>
-                {step.body.map((line, j) => (
-                  <p key={j} className="text-sm text-muted-foreground mt-1">{line}</p>
-                ))}
-              </div>
-            ))}
-          </Card>
-        </div>
-      ))}
+      <GuideSectionGrid sections={WORKER_GUIDE} columns={false} />
       <div>
         <SectionTitle>FAQ</SectionTitle>
-        <Card className="divide-y divide-border/60">
-          {workerFaq().map((item) => (
-            <div key={item.id} className="py-3 first:pt-0 last:pb-0">
-              <p className="text-sm font-semibold">{item.question}</p>
-              <p className="text-sm text-muted-foreground mt-1">{item.answer}</p>
-            </div>
-          ))}
-        </Card>
+        <GuideFaqAccordion items={workerFaq()} />
       </div>
     </div>
   );

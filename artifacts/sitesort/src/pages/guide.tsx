@@ -1,5 +1,4 @@
-import { Card } from "@/components/ui/card";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { GuideSectionGrid, GuideFaqAccordion, AudiencePill } from "@/components/user-guide-view";
 import { WORKER_GUIDE, workerFaq, WORKER_GUIDE_TITLE } from "@workspace/user-guide";
 
 // Public, unauthenticated worker guide — the same page portal members reach
@@ -10,8 +9,9 @@ import { WORKER_GUIDE, workerFaq, WORKER_GUIDE_TITLE } from "@workspace/user-gui
 export default function Guide() {
   return (
     <div className="min-h-screen bg-background">
-      <div className="border-b bg-card">
-        <div className="max-w-2xl mx-auto px-4 py-6 flex items-center gap-3">
+      <div className="border-b bg-card relative overflow-hidden">
+        <div className="absolute -top-16 -right-16 w-56 h-56 bg-accent/10 rounded-full blur-3xl" />
+        <div className="max-w-2xl mx-auto px-4 py-6 flex items-center gap-3 relative">
           <img src={`${import.meta.env.BASE_URL}images/logo.webp?v=5`} alt="SiteSort" className="h-12 w-auto" />
           <div>
             <p className="font-display font-bold text-lg leading-tight">{WORKER_GUIDE_TITLE}</p>
@@ -21,34 +21,13 @@ export default function Guide() {
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
-        {WORKER_GUIDE.map((section) => (
-          <Card key={section.id} className="p-4">
-            <h2 className="font-display font-bold text-base mb-3">{section.title}</h2>
-            <div className="space-y-3">
-              {section.steps.map((step, i) => (
-                <div key={i}>
-                  <p className="text-sm font-semibold">{step.heading}</p>
-                  {step.body.map((line, j) => (
-                    <p key={j} className="text-sm text-muted-foreground mt-1">{line}</p>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </Card>
-        ))}
+        <AudiencePill audience="worker" />
+
+        <GuideSectionGrid sections={WORKER_GUIDE} columns={false} />
 
         <div>
           <h2 className="font-display font-bold text-lg mb-3">FAQ</h2>
-          <Card className="p-2">
-            <Accordion type="single" collapsible>
-              {workerFaq().map((item) => (
-                <AccordionItem key={item.id} value={item.id} className="px-3">
-                  <AccordionTrigger className="text-sm">{item.question}</AccordionTrigger>
-                  <AccordionContent className="text-sm text-muted-foreground">{item.answer}</AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
-          </Card>
+          <GuideFaqAccordion items={workerFaq()} />
         </div>
       </div>
     </div>
