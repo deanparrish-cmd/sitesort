@@ -227,7 +227,8 @@
       "Bash(git reset *)",
       "Bash(APP_URL=https://www.sitesort.co.uk node *)",
       "Bash(cp /tmp/claude-1000/-home-runner-workspace/74a2a9d5-48cb-4693-b053-d51f002dfcdb/scratchpad/check-dashboard-guide.mjs /home/runner/workspace/.claude/skills/browser-check/check-dashboard-guide.mjs)",
-      "Bash(rm -f check-dashboard-guide.mjs)"
+      "Bash(rm -f check-dashboard-guide.mjs)",
+      "Bash(awk 'NR==148{print length\\($0\\)}' /home/runner/workspace/CLAUDE.md)"
     ]
   },
   "hooks": {
