@@ -5,9 +5,18 @@
 // Edit copy here — layout for all three lives elsewhere and reads this file,
 // so a copy change updates everywhere at once.
 
+export type GuideCallout = {
+  tone: "tip" | "note";
+  text: string;
+};
+
 export type GuideStep = {
   heading: string;
   body: string[];
+  // An optional colored aside rendered under this step — "tip" for a handy
+  // shortcut, "note" for something worth flagging. Keep rare: only the most
+  // useful asides, not every step.
+  callout?: GuideCallout;
 };
 
 export type GuideSection = {
@@ -78,8 +87,11 @@ export const PM_GUIDE: GuideSection[] = [
         heading: "Share a document, photo or permit",
         body: [
           "Click Share on any document, photo or permit. Choose Everyone, one or more trades, or specific people. This both notifies the recipients and makes the item visible to them in their portal — one action does both.",
-          "Trade shares also reach anyone invited to that trade later, so you don't need to re-share when a new person joins.",
         ],
+        callout: {
+          tone: "tip",
+          text: "Trade shares also reach anyone invited to that trade later, so you don't need to re-share when a new person joins.",
+        },
       },
     ],
   },
@@ -97,8 +109,12 @@ export const PM_GUIDE: GuideSection[] = [
       {
         heading: "Manage access",
         body: [
-          "The Portal member pill on their card is the on/off switch for their whole portal login — turning it off ends any active session immediately and cancels a pending invite.",
+          "The Portal member pill on their card is the on/off switch for their whole portal login.",
         ],
+        callout: {
+          tone: "note",
+          text: "Turning it off ends any active session immediately and cancels a pending invite.",
+        },
       },
     ],
   },
@@ -169,8 +185,12 @@ export const PM_GUIDE: GuideSection[] = [
       {
         heading: "Delegate approver authority for one project",
         body: [
-          "If you're away, grant the Project Manager pill to someone else on that project's Team tab. It gives them the same authority as a PM on that project only — triaging issues, sharing to the portal, managing permissions — without changing their company-wide role. Revoke it the same way when you're back.",
+          "If you're away, grant the Project Manager pill to someone else on that project's Team tab. It gives them the same authority as a PM on that project only — triaging issues, sharing to the portal, managing permissions — without changing their company-wide role.",
         ],
+        callout: {
+          tone: "note",
+          text: "Revoke it the same way when you're back — access ends immediately.",
+        },
       },
     ],
   },
@@ -220,8 +240,12 @@ export const WORKER_GUIDE: GuideSection[] = [
       {
         heading: "Scan the site board",
         body: [
-          "Scan the QR code posted on site (or open it from Site Board in the portal). Complete your check-in — your details are matched against the project's contacts — then take a photo when prompted. It's automatically stamped with your name, the date and the project, no portal login needed for this step.",
+          "Scan the QR code posted on site (or open it from Site Board in the portal). Complete your check-in — your details are matched against the project's contacts — then take a photo when prompted. It's automatically stamped with your name, the date and the project.",
         ],
+        callout: {
+          tone: "tip",
+          text: "No portal login is needed for this step.",
+        },
       },
     ],
   },
@@ -280,8 +304,12 @@ export const WORKER_GUIDE: GuideSection[] = [
       {
         heading: "Save vs Submit",
         body: [
-          "Saving keeps an entry as a draft that only you can see and edit. Submit to PM locks it and sends it to your project manager — after that, add updates as notes rather than editing the original, so there's always a clear record of what was said and when.",
+          "Saving keeps an entry as a draft that only you can see and edit. Submit to PM locks it and sends it to your project manager.",
         ],
+        callout: {
+          tone: "note",
+          text: "After you submit, add updates as notes rather than editing the original, so there's always a clear record of what was said and when.",
+        },
       },
     ],
   },

@@ -224,7 +224,10 @@
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('siteManagerId:', d.get\\('siteManagerId'\\), '| memberCount:', d.get\\('memberCount'\\)\\)\")",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('status:', d['status'], '| resolvedAt:', d['resolvedAt'] is not None\\)\")",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('memberCount:', d['memberCount']\\)\")",
-      "Bash(git reset *)"
+      "Bash(git reset *)",
+      "Bash(APP_URL=https://www.sitesort.co.uk node *)",
+      "Bash(cp /tmp/claude-1000/-home-runner-workspace/74a2a9d5-48cb-4693-b053-d51f002dfcdb/scratchpad/check-dashboard-guide.mjs /home/runner/workspace/.claude/skills/browser-check/check-dashboard-guide.mjs)",
+      "Bash(rm -f check-dashboard-guide.mjs)"
     ]
   },
   "hooks": {
