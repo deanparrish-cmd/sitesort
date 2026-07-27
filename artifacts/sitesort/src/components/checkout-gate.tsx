@@ -95,7 +95,7 @@ export function CheckoutGate() {
           </div>
           <h1 className="text-2xl font-display font-bold text-primary">Add payment to start your trial</h1>
           <p className="text-muted-foreground mt-2 text-sm">
-            Your account is ready — choose a plan to begin your <strong>14-day free trial</strong>. No charge today, cancel any time.
+            Your account is ready. Choose a plan to begin your <strong>14-day free trial</strong>. No charge today, cancel any time.
           </p>
         </div>
 

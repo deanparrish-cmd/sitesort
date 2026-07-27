@@ -322,7 +322,7 @@ export default function ProjectsList() {
               if (atLimit) { setShowUpgradeDialog(true); return; }
               setIsModalOpen(true);
             }}
-            title={isCancelled ? "Subscription ended — upgrade to create projects" : atLimit ? "Project limit reached — upgrade to add more" : undefined}
+            title={isCancelled ? "Subscription ended. Upgrade to create projects" : atLimit ? "Project limit reached. Upgrade to add more" : undefined}
           >
             <Plus className="w-5 h-5 mr-2" /> New Project
           </Button>
@@ -489,7 +489,7 @@ export default function ProjectsList() {
           </div>
           {nextPlan && (
             <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm">
-              <p className="font-semibold text-primary">{nextPlan.name} plan — {nextPlan.projects}</p>
+              <p className="font-semibold text-primary">{nextPlan.name} plan · {nextPlan.projects}</p>
               <p className="text-muted-foreground mt-0.5">{nextPlan.price} · More projects, team collaboration, advanced compliance &amp; more.</p>
             </div>
           )}

@@ -293,7 +293,7 @@ export function useProjectDetailState() {
     setPhotos(prev => prev.filter(p => p.id !== photoId));
     setViewingPhoto(prev => prev?.id === photoId ? null : prev);
     if (archivedIssuesLoaded) setArchivedPhotos(prev => [archived, ...prev]);
-    toast({ title: "Issue archived", description: "Moved to Archived — still viewable there." });
+    toast({ title: "Issue archived", description: "Moved to Archived, still viewable there." });
   };
 
   const restoreIssue = async (photoId: string) => {
@@ -937,14 +937,14 @@ export function useProjectDetailState() {
     const svg = qrSvgRef.current.querySelector("svg");
     const win = window.open("", "_blank");
     if (!win) return;
-    win.document.write(`<html><head><title>${project.name} — Site Board QR</title>
+    win.document.write(`<html><head><title>${project.name} · Site Board QR</title>
       <style>body{font-family:system-ui,sans-serif;margin:0;padding:40px;text-align:center;background:white}
       h2{font-size:24px;font-weight:800;margin-bottom:4px;color:#1f2937}
       p{color:#6b7280;font-size:14px;margin:4px 0}
       .url{font-size:11px;color:#9ca3af;word-break:break-all;margin-top:12px}
       .badge{display:inline-block;background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;border-radius:9999px;padding:4px 12px;font-size:12px;font-weight:600;margin-bottom:20px}
       svg{margin:20px auto;display:block}</style></head><body>
-      <span class="badge">SiteSort — Site Board</span>
+      <span class="badge">SiteSort · Site Board</span>
       <h2>${project.name}</h2><p>${project.address}</p>
       ${svg?.outerHTML ?? ""}
       <p class="url">Scan to view site information: ${qrCode.siteUrl}</p>
@@ -1250,7 +1250,7 @@ export function useProjectDetailState() {
   const generateReport = () => {
     if (!project) return;
     const now = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" } as Intl.DateTimeFormatOptions);
-    const fmtD = (s?: string | null) => s ? new Date(s.slice(0, 10) + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—";
+    const fmtD = (s?: string | null) => s ? new Date(s.slice(0, 10) + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "-";
     const fmtAmt = (currency: string, amount: string) => `${currency} ${Number(amount).toLocaleString("en-GB", { minimumFractionDigits: 2 })}`;
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const daysLeft = (s: string) => Math.ceil((new Date(s + "T00:00:00").getTime() - today.getTime()) / 86400000);
@@ -1264,14 +1264,14 @@ export function useProjectDetailState() {
     const teamRows = allTrades.map(trade => {
       const tradeMembers = allMembersArr.filter((m: any) => trade === "Site Staff" ? !m.trades?.length : m.trades?.includes(trade));
       if (!tradeMembers.length) return "";
-      return `<tr class="trade-header"><td colspan="4">${trade}</td></tr>${tradeMembers.map((m: any) => `<tr><td>${m.name}</td><td class="capitalize">${m.role.replace("_", " ")}</td><td>${m.email ?? "—"}</td><td>${m.phone ?? "—"}</td></tr>`).join("")}`;
+      return `<tr class="trade-header"><td colspan="4">${trade}</td></tr>${tradeMembers.map((m: any) => `<tr><td>${m.name}</td><td class="capitalize">${m.role.replace("_", " ")}</td><td>${m.email ?? "-"}</td><td>${m.phone ?? "-"}</td></tr>`).join("")}`;
     }).join("");
 
     const permitsRows = [...permits].sort((a, b) => a.expiryDate.localeCompare(b.expiryDate)).map(p => {
       const d = daysLeft(p.expiryDate);
       const statusLabel = d < 0 ? "Expired" : d <= 7 ? `Expires in ${d}d` : `Active (${d}d)`;
       const cls = d < 0 ? "red" : d <= 7 ? "orange" : "";
-      return `<tr><td>${p.type}</td><td>${p.description}</td><td>${fmtD(p.expiryDate)}</td><td class="${cls}">${statusLabel}</td><td>${p.responsibleName ?? "—"}</td></tr>`;
+      return `<tr><td>${p.type}</td><td>${p.description}</td><td>${fmtD(p.expiryDate)}</td><td class="${cls}">${statusLabel}</td><td>${p.responsibleName ?? "-"}</td></tr>`;
     }).join("");
 
     const docsRows = [...(documents ?? [])].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).map(doc => {
@@ -1286,14 +1286,14 @@ export function useProjectDetailState() {
       const d = daysLeft(inv.dueDate); const paid = inv.status === "paid";
       const statusLabel = paid ? "Paid" : d < 0 ? "Overdue" : `Due in ${d}d`;
       const cls = paid ? "green" : d < 0 ? "red" : d <= 7 ? "orange" : "";
-      return `<tr><td>${inv.direction === "inbound" ? "↓ Inbound" : "↑ Outbound"}</td><td>${inv.counterpartyName}</td><td>${inv.description}</td><td>${inv.reference ?? "—"}</td><td>${fmtAmt(inv.currency, inv.amount)}</td><td>${fmtD(inv.dueDate)}</td><td class="${cls}">${statusLabel}</td></tr>`;
+      return `<tr><td>${inv.direction === "inbound" ? "↓ Inbound" : "↑ Outbound"}</td><td>${inv.counterpartyName}</td><td>${inv.description}</td><td>${inv.reference ?? "-"}</td><td>${fmtAmt(inv.currency, inv.amount)}</td><td>${fmtD(inv.dueDate)}</td><td class="${cls}">${statusLabel}</td></tr>`;
     }).join("");
 
     const photoCounts = photos.reduce((acc, p) => { acc[p.category] = (acc[p.category] ?? 0) + 1; return acc; }, {} as Record<string, number>);
     const photoSummary = Object.entries(photoCounts).map(([cat, n]) => `${n} ${cat.replace("_", " ")}`).join(", ");
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/>
-<title>${project.name} — Project Report</title>
+<title>${project.name} · Project Report</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:11px;color:#1a1a1a;background:white;padding:0}
@@ -1344,7 +1344,7 @@ tr:last-child td{border-bottom:none}
   <div class="meta">
     <div class="meta-item"><label>Status</label><span><span class="badge ${project.status === "active" ? "badge-active" : "badge-hold"}">${project.status.toUpperCase()}</span></span></div>
     <div class="meta-item"><label>Started</label><span>${fmtD(project.startDate)}</span></div>
-    <div class="meta-item"><label>Target End</label><span>${project.targetEndDate ? fmtD(project.targetEndDate) : "—"}</span></div>
+    <div class="meta-item"><label>Target End</label><span>${project.targetEndDate ? fmtD(project.targetEndDate) : "-"}</span></div>
     <div class="meta-item"><label>Progress</label><span>${project.progressPercent}%</span><div class="prog"><div class="prog-fill" style="width:${project.progressPercent}%"></div></div></div>
   </div>
 </div>
@@ -1366,7 +1366,7 @@ tr:last-child td{border-bottom:none}
 </section>
 <section>
   <h2>Photo Log<span class="count">${photos.length}</span></h2>
-  ${photos.length ? `<div class="photo-box"><strong>${photos.length}</strong> photo${photos.length !== 1 ? "s" : ""} logged${photoSummary ? ` — ${photoSummary}` : ""}</div>` : `<p class="empty">No photos logged yet.</p>`}
+  ${photos.length ? `<div class="photo-box"><strong>${photos.length}</strong> photo${photos.length !== 1 ? "s" : ""} logged${photoSummary ? ` · ${photoSummary}` : ""}</div>` : `<p class="empty">No photos logged yet.</p>`}
 </section>
 <div class="footer"><span>${project.name} · SiteSort</span><span>Generated ${now}</span></div>
 </div></body></html>`;

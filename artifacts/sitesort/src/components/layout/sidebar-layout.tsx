@@ -349,7 +349,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
             <div className="flex items-center gap-2 min-w-0">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span className="text-sm font-medium truncate">
-                Your subscription has ended — new projects and edits are restricted.
+                Your subscription has ended. New projects and edits are restricted.
               </span>
             </div>
             <button

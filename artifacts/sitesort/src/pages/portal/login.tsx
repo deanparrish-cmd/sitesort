@@ -40,7 +40,7 @@ export default function PortalLogin() {
       const code = err?.data?.error;
       setError(
         code === "use_dashboard"
-          ? "This is a full SiteSort account — please use the main login page."
+          ? "This is a full SiteSort account. Please use the main login page."
           : err?.data?.message || "Unable to log in. Check your email and password and try again.",
       );
     }

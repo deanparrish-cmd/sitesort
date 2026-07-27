@@ -43,7 +43,7 @@ export function FinancesTab() {
             const statusLabel = (days: number, paid = false) => {
               if (paid) return "Paid";
               if (days < 0) return "Overdue";
-              if (days <= 7) return `${days}d — urgent`;
+              if (days <= 7) return `${days}d · urgent`;
               if (days <= 30) return `${days}d`;
               return `${days}d`;
             };

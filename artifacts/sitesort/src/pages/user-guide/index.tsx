@@ -16,7 +16,7 @@ export default function UserGuidePage() {
     <SidebarLayout>
       <PageHeader
         title="User Guide"
-        description="How to use SiteSort — for project managers and site workers."
+        description="How to use SiteSort, for project managers and site workers."
         icon={
           <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-accent/10 text-accent shrink-0">
             <HelpCircle className="w-5 h-5" />

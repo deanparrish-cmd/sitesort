@@ -60,7 +60,7 @@ export function RecentActivityGlance({ projectId, canManage }: { projectId: stri
           <span className="font-medium text-foreground">{latest.sectionLabel}</span> · {fmtRelative(latest.createdAt)}
         </span>
       ) : (
-        <span className="text-muted-foreground">No portal activity yet — invite people from the Team tab.</span>
+        <span className="text-muted-foreground">No portal activity yet. Invite people from the Team tab.</span>
       )}
     </div>
   );
@@ -111,7 +111,7 @@ function MemberDocumentsReview({ projectId }: { projectId: string }) {
       });
       setFiledIds(prev => ({ ...prev, [docId]: true }));
       setFileTarget(null);
-      toast({ title: "Added to contact", description: `Saved to ${fileTarget.uploaderName}'s records — you'll find it on their contact page and in Compliance.` });
+      toast({ title: "Added to contact", description: `Saved to ${fileTarget.uploaderName}'s records. You'll find it on their contact page and in Compliance.` });
       // The server now drops filed submissions from the review list — refetch
       // so the row disappears from "Documents for review".
       await docsQ.refetch();
@@ -216,7 +216,7 @@ function MemberDocumentsReview({ projectId }: { projectId: string }) {
           onChange={e => setRejectNote(e.target.value)}
           rows={3}
           maxLength={500}
-          placeholder="e.g. Certificate has expired — please upload the current one"
+          placeholder="e.g. Certificate has expired, please upload the current one"
           className="w-full rounded-lg border-2 border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:border-primary resize-none"
         />
         <DialogFooter>
@@ -319,7 +319,7 @@ export function ProjectTeamActivity({ projectId }: { projectId: string }) {
       <section>
         <h3 className="text-lg font-display font-bold mb-1 flex items-center gap-2"><UserPlus className="w-5 h-5 text-primary" /> Portal invites</h3>
         <p className="text-sm text-muted-foreground mb-4">
-          Invite people from the <span className="font-medium text-foreground">Team</span> tab — each subcontractor person and in-house member has their own “Invite to Portal” action. Manage the resulting invites and revoke access here.
+          Invite people from the <span className="font-medium text-foreground">Team</span> tab. Each subcontractor person and in-house member has their own “Invite to Portal” action. Manage the resulting invites and revoke access here.
         </p>
 
         <div className="mt-1">
@@ -362,7 +362,7 @@ export function ProjectTeamActivity({ projectId }: { projectId: string }) {
         {confirmTarget?.status === "accepted" ? (
           <div className="space-y-2 text-sm">
             <p>This ends any active portal session immediately and cancels any pending invite for them.</p>
-            <p className="text-muted-foreground">This removes their whole portal login — section permissions (Site Issues, Plant &amp; Materials, Daily Report) are managed separately, from their card on the Team tab.</p>
+            <p className="text-muted-foreground">This removes their whole portal login. Section permissions (Site Issues, Plant &amp; Materials, Daily Report) are managed separately, from their card on the Team tab.</p>
             <p className="text-muted-foreground">You can re-invite them to the portal afterwards.</p>
           </div>
         ) : (

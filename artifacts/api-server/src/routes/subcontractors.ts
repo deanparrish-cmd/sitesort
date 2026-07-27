@@ -270,7 +270,7 @@ router.get("/subcontractors/:subcontractorId", authenticate, async (req, res) =>
 router.patch("/subcontractors/:subcontractorId", authenticate, async (req, res) => {
   try {
     const parsed = UpdateSubcontractorBody.safeParse(req.body);
-    if (!parsed.success) { res.status(400).json({ error: "validation_error", message: "Invalid update — a first name and surname must be at least 2 characters each." }); return; }
+    if (!parsed.success) { res.status(400).json({ error: "validation_error", message: "Invalid update: a first name and surname must be at least 2 characters each." }); return; }
     const { companyName, contactFirstName, contactLastName, contactEmail, contactPhone, contactType, trades, reliabilityRating, paymentHold, notes } = parsed.data;
     // Name is stored as two parts + a derived display string; if only one of
     // first/last is given, require the other too so contactName never drifts

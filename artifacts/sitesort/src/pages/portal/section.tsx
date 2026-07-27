@@ -184,7 +184,7 @@ function LifecycleBadge({ status, submittedAt, submittedByName }: { status: "dra
   if (status === "submitted") {
     return <Badge label={`Submitted${submittedByName ? ` by ${submittedByName}` : ""}${submittedAt ? ` · ${fmtRelativeShort(submittedAt)}` : ""}`} className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300" />;
   }
-  return <Badge label="Draft — not yet sent" className="bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300" />;
+  return <Badge label="Draft · not yet sent" className="bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300" />;
 }
 type SubmissionNoteItem = { id: string; authorName: string; body: string; createdAt: string };
 function SubmissionNotesThread({ notes, onAdd, adding }: { notes: SubmissionNoteItem[]; onAdd: (body: string) => Promise<void>; adding?: boolean }) {
@@ -192,7 +192,7 @@ function SubmissionNotesThread({ notes, onAdd, adding }: { notes: SubmissionNote
   return (
     <div className="space-y-2 mt-3 pt-3 border-t border-border/50">
       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Notes</p>
-      {notes.length === 0 && <p className="text-xs text-muted-foreground">No notes yet — the original above is locked; add updates here instead.</p>}
+      {notes.length === 0 && <p className="text-xs text-muted-foreground">No notes yet. The original above is locked; add updates here instead.</p>}
       {notes.map(n => (
         <div key={n.id} className="rounded-lg bg-muted/30 p-2">
           <p className="text-sm whitespace-pre-wrap break-words">{n.body}</p>
@@ -396,7 +396,7 @@ function SignOffPinCard({ flow }: { flow: ReturnType<typeof useSignOffFlow> }) {
         </p>
       ) : flow.setPinMode ? (
         <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">Set a 4-digit sign-off PIN to continue — you'll use it to confirm future sign-offs.</p>
+          <p className="text-sm text-muted-foreground">Set a 4-digit sign-off PIN to continue. You'll use it to confirm future sign-offs.</p>
           <div>
             <label className="text-xs font-medium text-muted-foreground">Account password</label>
             <input
@@ -717,7 +717,7 @@ function LogIssueForm({ onLogged }: { onLogged: () => void }) {
     e.preventDefault();
     try {
       await create.mutateAsync({ data: { type, description: description || undefined, zone: zone || undefined, photo: file ?? undefined } });
-      toast({ title: "Saved as draft", description: "Submit it when you're ready — your PM won't see it until then." });
+      toast({ title: "Saved as draft", description: "Submit it when you're ready. Your PM won't see it until then." });
       setDescription(""); setZone(""); setFile(null);
       if (fileRef.current) fileRef.current.value = "";
       onLogged();
@@ -835,7 +835,7 @@ function SiteIssuesView() {
   const doSubmit = async (issueId: string) => {
     try {
       await submitIssue.mutateAsync({ issueId });
-      toast({ title: "Submitted to your PM", description: "The original is now locked — add updates as notes." });
+      toast({ title: "Submitted to your PM", description: "The original is now locked. Add updates as notes." });
       await invalidate();
     } catch {
       toast({ title: "Couldn't submit", variant: "destructive" });
@@ -844,7 +844,7 @@ function SiteIssuesView() {
   const doMarkDone = async (issueId: string) => {
     try {
       await markDone.mutateAsync({ issueId, data: {} });
-      toast({ title: "Marked done — awaiting PM confirmation" });
+      toast({ title: "Marked done, awaiting PM confirmation" });
       await invalidate();
     } catch {
       toast({ title: "Couldn't update issue", variant: "destructive" });
@@ -926,7 +926,7 @@ function SiteIssuesView() {
             {canMarkDone && (
               <button onClick={() => doMarkDone(issue.id)} disabled={markDone.isPending}
                 className="mt-3 w-full inline-flex items-center justify-center gap-2 rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 min-h-11 text-sm font-semibold hover:bg-cyan-100 disabled:opacity-50">
-                Mark as done — awaiting confirmation
+                Mark as done, awaiting confirmation
               </button>
             )}
           </Card>
@@ -1242,7 +1242,7 @@ function SharedView() {
               >
                 {receivedAt ? <ReceivedPill at={receivedAt} /> : <NewPill />}
                 <ClipboardList className="w-4 h-4 text-primary shrink-0" />
-                <span className="flex-1 min-w-0 text-sm font-medium truncate">Daily site report — {fmtDate(r.reportDate)}</span>
+                <span className="flex-1 min-w-0 text-sm font-medium truncate">Daily site report · {fmtDate(r.reportDate)}</span>
               </button>
             );
           })}
@@ -1253,7 +1253,7 @@ function SharedView() {
       {viewingReport && (
         <Dialog open onOpenChange={v => { if (!v) setViewingReport(null); }}>
           <DialogHeader>
-            <DialogTitle>Daily site report — {fmtDate(viewingReport.reportDate)}</DialogTitle>
+            <DialogTitle>Daily site report · {fmtDate(viewingReport.reportDate)}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             {DIARY_FIELDS.filter(f => (viewingReport.managerReport?.[f.key] ?? "").toString().trim().length > 0).map(f => (
@@ -1311,7 +1311,7 @@ function PlantItemEditPanel({ item, onClose }: { item: PlantItemRow; onClose: ()
   const save = async () => {
     try {
       await update.mutateAsync({ itemId: item.id, data: { status, location: location || null, notes: notes || null } });
-      toast({ title: "Saved as draft", description: "Submit it when you're ready — your PM won't see the change until then." });
+      toast({ title: "Saved as draft", description: "Submit it when you're ready. Your PM won't see the change until then." });
       await queryClient.invalidateQueries({ queryKey: getGetPortalPlantMaterialsQueryKey() });
       onClose();
     } catch {
@@ -1515,7 +1515,7 @@ function PlantMaterialsView() {
           </button>
         )
       )}
-      {items.length === 0 && !adding && <Empty>No plant or materials logged yet — tap "Log a new item" to add the first one.</Empty>}
+      {items.length === 0 && !adding && <Empty>No plant or materials logged yet. Tap "Log a new item" to add the first one.</Empty>}
       {items.map(item => (
         <Card key={item.id}>
           <div className="flex items-start justify-between gap-3">
@@ -1550,7 +1550,7 @@ function PlantMaterialsView() {
               <p className="text-sm break-words">
                 {PLANT_STATUS_OPTIONS.find(o => o.value === item.draft?.status)?.label ?? item.draft.status}
                 {item.draft.location ? ` · ${item.draft.location}` : ""}
-                {item.draft.notes ? ` — ${item.draft.notes}` : ""}
+                {item.draft.notes ? ` · ${item.draft.notes}` : ""}
               </p>
               <div className="flex gap-2">
                 <button onClick={() => doSubmit(item.id)} disabled={submitItem.isPending}
@@ -1653,7 +1653,7 @@ function DailyReportView() {
   const doSubmitReport = async () => {
     try {
       await submitReport.mutateAsync({ date: today.reportDate });
-      toast({ title: "Submitted to your PM", description: "Today's report is now locked — add updates as notes." });
+      toast({ title: "Submitted to your PM", description: "Today's report is now locked. Add updates as notes." });
       setEditing(false);
       await queryClient.invalidateQueries({ queryKey: getGetPortalDailyReportQueryKey() });
     } catch {
@@ -2020,7 +2020,7 @@ function SettingsView() {
               <div className="min-w-0">
                 <p className="font-medium">New content alerts</p>
                 <p className="text-xs text-muted-foreground">
-                  {subscribed ? "On — you'll be notified when new drawings or notices are shared." : perm === "denied" ? "Blocked in your browser settings. To fix: tap the padlock or settings icon by the address bar, set Notifications to Allow, then reload this page." : "Off — get a heads-up when something new is shared with you."}
+                  {subscribed ? "On. You'll be notified when new drawings or notices are shared." : perm === "denied" ? "Blocked in your browser settings. To fix: tap the padlock or settings icon by the address bar, set Notifications to Allow, then reload this page." : "Off. Get a heads-up when something new is shared with you."}
                 </p>
               </div>
               {subscribed ? (
@@ -2105,7 +2105,7 @@ function PortalPinSection() {
         <p className="text-sm text-muted-foreground mb-3">
           {hasPin
             ? "Used to confirm document sign-offs. Forgotten it? Enter your account password and choose a new one below."
-            : "Set a 4-digit PIN — you'll use it to sign off documents shared with you."}
+            : "Set a 4-digit PIN. You'll use it to sign off documents shared with you."}
         </p>
         <div className="space-y-3">
           <div>

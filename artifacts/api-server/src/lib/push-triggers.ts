@@ -75,7 +75,7 @@ export async function flushPendingPushes(): Promise<void> {
         const docs = rows.filter((r) => r.kind === "document").length;
         const noun = docs === rows.length ? "documents" : docs === 0 ? "updates" : "new items";
         payload = {
-          title: `${rows.length} new ${noun} — ${projectName}`,
+          title: `${rows.length} new ${noun} · ${projectName}`,
           body: "Tap to view what's been shared with you.",
           url: "/portal/shared",
           tag: `portal-${projectId}`,

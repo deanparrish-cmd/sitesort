@@ -53,7 +53,7 @@ async function notifyBlockedCheckin(
         userId,
         type: "check_in_blocked",
         title: `Check-in blocked at ${proj.name}`,
-        message: `${workerName} (${companyName}) was blocked from checking in — ${reasonText}.`,
+        message: `${workerName} (${companyName}) was blocked from checking in: ${reasonText}.`,
         relatedEntityId: projectId,
         relatedEntityType: "project",
         read: false,

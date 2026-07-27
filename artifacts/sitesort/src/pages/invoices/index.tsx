@@ -981,7 +981,7 @@ export default function InvoicesPage() {
 
             <div>
               <label className="text-sm font-medium mb-1.5 block">Description</label>
-              <Input placeholder="e.g. Materials — Site A" {...register("description", { required: true })} />
+              <Input placeholder="e.g. Materials · Site A" {...register("description", { required: true })} />
               {errors.description && <p className="text-xs text-destructive mt-1">Required</p>}
             </div>
 
@@ -1017,7 +1017,7 @@ export default function InvoicesPage() {
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Link to Project <span className="text-muted-foreground font-normal">(optional)</span></label>
                 <select {...register("projectId")} className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
-                  <option value="">— No project —</option>
+                  <option value="">No project</option>
                   {projects?.filter(p => p.status === "active").map(p => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
@@ -1040,7 +1040,7 @@ export default function InvoicesPage() {
           <p className="text-sm text-muted-foreground">
             {moveToInvoice?.projectId
               ? <>Currently allocated to <span className="font-medium text-foreground">{projects?.find(p => p.id === moveToInvoice.projectId)?.name ?? "a project"}</span>. Choose a different project, or un-allocate.</>
-              : "Choose a project to allocate this invoice to — it will appear under that project's Finances tab."}
+              : "Choose a project to allocate this invoice to. It will appear under that project's Finances tab."}
           </p>
         </DialogHeader>
         <div className="max-h-80 overflow-y-auto -mx-1 px-1 space-y-1">

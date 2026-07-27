@@ -336,7 +336,7 @@ router.post("/projects/:projectId/daily-notes", authenticate, async (req, res) =
       const members = await acceptedPortalMemberUserIds(req.params.projectId);
       await enqueuePushForMembers(members, req.params.projectId, {
         kind: "site_update", itemType: "note", itemId: id,
-        title: `New site update — ${proj?.name ?? "your project"}`,
+        title: `New site update · ${proj?.name ?? "your project"}`,
         projectName: proj?.name ?? "your project",
         deepLink: "/portal/overview",
       });

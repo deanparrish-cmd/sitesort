@@ -613,7 +613,7 @@ export default function AdminDashboard() {
 
         {/* ── Revenue / Subscription ── */}
         <section>
-          <SectionTitle icon={TrendingUp} title="Revenue & Subscriptions" sub="No payment processor connected — subscription tier data shown" />
+          <SectionTitle icon={TrendingUp} title="Revenue & Subscriptions" sub="No payment processor connected, subscription tier data shown" />
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
             <BigStat label="Total Companies" value={s?.revenue?.totalCompanies ?? 0} loading={loading} />
             <BigStat label="Paid Plans" value={s?.revenue?.paidTiers ?? 0} sub="Pro / Enterprise" loading={loading} accent />
@@ -679,7 +679,7 @@ export default function AdminDashboard() {
               <div className="flex items-center gap-2 mb-3">
                 <UserX className="w-4 h-4 text-yellow-500" />
                 <p className="text-yellow-400 text-sm font-semibold">At-Risk Users</p>
-                <span className="text-gray-500 text-xs">— were active, now quiet for 7–30 days</span>
+                <span className="text-gray-500 text-xs">were active, now quiet for 7–30 days</span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -859,7 +859,7 @@ export default function AdminDashboard() {
 
             {/* Users over time */}
             <Card>
-              <p className="text-gray-300 font-semibold text-sm mb-4">New Users — Last 30 Days</p>
+              <p className="text-gray-300 font-semibold text-sm mb-4">New Users · Last 30 Days</p>
               {chartsLoading
                 ? <Skeleton className="h-48 w-full" />
                 : (
@@ -878,7 +878,7 @@ export default function AdminDashboard() {
 
             {/* Documents over time */}
             <Card>
-              <p className="text-gray-300 font-semibold text-sm mb-4">Documents Uploaded — Last 30 Days</p>
+              <p className="text-gray-300 font-semibold text-sm mb-4">Documents Uploaded · Last 30 Days</p>
               {chartsLoading
                 ? <Skeleton className="h-48 w-full" />
                 : (
@@ -937,7 +937,7 @@ export default function AdminDashboard() {
 
         {/* ── Best Time to Post ── */}
         <section>
-          <SectionTitle icon={Clock} title="Best Time to Post" sub="Peak platform activity by hour — post on social when your users are most active" />
+          <SectionTitle icon={Clock} title="Best Time to Post" sub="Peak platform activity by hour, post on social when your users are most active" />
           <Card>
             {chartsLoading ? (
               <Skeleton className="h-64 w-full" />
@@ -957,7 +957,7 @@ export default function AdminDashboard() {
                     ))}
                     {sorted[0] && (
                       <p className="w-full text-gray-500 text-xs mt-1">
-                        Post around <span className="text-orange-400 font-semibold">{sorted[0].label}</span> for maximum reach — that's when your users are most active.
+                        Post around <span className="text-orange-400 font-semibold">{sorted[0].label}</span> for maximum reach. That's when your users are most active.
                       </p>
                     )}
                   </div>
@@ -969,7 +969,7 @@ export default function AdminDashboard() {
                       <Tooltip
                         contentStyle={{ background: "#111827", border: "1px solid #374151", borderRadius: 8, color: "#f3f4f6" }}
                         formatter={(v: number) => [v, "actions"]}
-                        labelFormatter={l => `${l} — ${Math.round((Number(hours.find(h => h.label === l)?.count ?? 0) / maxCount) * 100)}% of peak`}
+                        labelFormatter={l => `${l} · ${Math.round((Number(hours.find(h => h.label === l)?.count ?? 0) / maxCount) * 100)}% of peak`}
                       />
                       <Bar dataKey="count" radius={[3, 3, 0, 0]} name="Actions">
                         {hours.map(h => (
@@ -986,13 +986,13 @@ export default function AdminDashboard() {
 
         {/* ── Lapsed This Week ── */}
         <section>
-          <SectionTitle icon={UserX} title="Active Last Week — Gone This Week" sub="Users who were active 7–14 days ago but haven't logged in since" />
+          <SectionTitle icon={UserX} title="Active Last Week · Gone This Week" sub="Users who were active 7–14 days ago but haven't logged in since" />
           {lapsedLoading ? (
             <div className="space-y-2">
               {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}
             </div>
           ) : !lapsedUsers?.length ? (
-            <Card><p className="text-gray-400 text-sm">No lapsed users this week — everyone who was active last week has returned.</p></Card>
+            <Card><p className="text-gray-400 text-sm">No lapsed users this week. Everyone who was active last week has returned.</p></Card>
           ) : (
             <Card className="p-0 overflow-hidden">
               <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800">
@@ -1031,13 +1031,13 @@ export default function AdminDashboard() {
 
         {/* ── Dormant Users ── */}
         <section>
-          <SectionTitle icon={UserX} title="Signed Up — Never Active" sub="Users who registered but have never uploaded a document, photo, permit, or sign-off" />
+          <SectionTitle icon={UserX} title="Signed Up · Never Active" sub="Users who registered but have never uploaded a document, photo, permit, or sign-off" />
           {dormantLoading ? (
             <div className="space-y-2">
               {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}
             </div>
           ) : !dormantUsers?.length ? (
-            <Card><p className="text-gray-400 text-sm">No dormant users — everyone has taken at least one action.</p></Card>
+            <Card><p className="text-gray-400 text-sm">No dormant users. Everyone has taken at least one action.</p></Card>
           ) : (
             <Card className="p-0 overflow-hidden">
               <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800">
@@ -1093,7 +1093,7 @@ export default function AdminDashboard() {
 
         {/* ── Companies & Beta Access ── */}
         <section>
-          <SectionTitle icon={FlaskConical} title="Companies & Beta Access" sub="Manage beta access per company — bypasses all Stripe subscription checks" />
+          <SectionTitle icon={FlaskConical} title="Companies & Beta Access" sub="Manage beta access per company, bypasses all Stripe subscription checks" />
           <div className="rounded-xl border border-gray-800 overflow-hidden">
             <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -1198,7 +1198,7 @@ export default function AdminDashboard() {
 
         {/* ── Platform Admins ── */}
         <section>
-          <SectionTitle icon={ShieldCheck} title="Platform Admins" sub="SiteSort staff who can see this Admin section — distinct from a customer's own company-level Admin role" />
+          <SectionTitle icon={ShieldCheck} title="Platform Admins" sub="SiteSort staff who can see this Admin section, distinct from a customer's own company-level Admin role" />
           <div className="mb-3 relative max-w-sm">
             <Search className="w-4 h-4 text-gray-600 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
@@ -1290,11 +1290,11 @@ export default function AdminDashboard() {
 
         {/* ── Danger Zone ── */}
         <section>
-          <SectionTitle icon={Trash2} title="Danger Zone" sub="Genuine, unrecoverable deletes — for real test/mistake data with no audit value" />
+          <SectionTitle icon={Trash2} title="Danger Zone" sub="Genuine, unrecoverable deletes for real test/mistake data with no audit value" />
           <div className="rounded-xl border border-red-900/50 bg-red-950/10 p-4 space-y-3">
             <div>
               <p className="text-sm font-semibold text-gray-200">Permanently delete a photo / site issue</p>
-              <p className="text-xs text-gray-500 mt-0.5">Not the same as archiving from a project's Issues tab (which is reversible). This actually removes the row — find the id from the issue detail's URL or a share link.</p>
+              <p className="text-xs text-gray-500 mt-0.5">Not the same as archiving from a project's Issues tab (which is reversible). This actually removes the row. Find the id from the issue detail's URL or a share link.</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <input

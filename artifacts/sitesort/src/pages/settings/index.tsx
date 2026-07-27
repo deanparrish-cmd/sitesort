@@ -403,7 +403,7 @@ function NotificationsTab() {
               <p className="font-medium text-sm">Browser notifications</p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {osPermission === "denied"
-                  ? "Blocked by your browser — allow in browser settings to enable."
+                  ? "Blocked by your browser. Allow in browser settings to enable."
                   : osPermission === "unsupported"
                   ? "Not supported in this browser."
                   : "Show OS-level notifications even when SiteSort is in the background."}
@@ -735,7 +735,7 @@ function BillingTab() {
             <span className="text-xs text-muted-foreground">No charge until your 14-day trial ends.</span>
           )}
           {company.subscriptionStatus === "past_due" && (
-            <span className="text-xs text-red-600 font-medium">Payment failed — please update your payment method via Stripe.</span>
+            <span className="text-xs text-red-600 font-medium">Payment failed. Please update your payment method via Stripe.</span>
           )}
           <ManageSubscriptionButton />
         </div>

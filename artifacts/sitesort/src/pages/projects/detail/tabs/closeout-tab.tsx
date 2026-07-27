@@ -103,7 +103,7 @@ export function CloseoutTab() {
                         ))}
                       </div>
                       <div className={cn("rounded-lg p-3 text-sm font-medium", closeout.ready ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700")}>
-                        {closeout.ready ? "Everything looks ready for close-out." : "Some items are still outstanding — you can proceed, but review them first."}
+                        {closeout.ready ? "Everything looks ready for close-out." : "Some items are still outstanding. You can proceed, but review them first."}
                       </div>
                       {caps.canManageProjects ? (
                         <Button variant="accent" onClick={openCloseout} disabled={isCancelled}>

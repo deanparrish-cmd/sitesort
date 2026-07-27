@@ -23,7 +23,7 @@ export function ReportDialog() {
 
   const reportShareText = (rep: NonNullable<typeof openReport>) => {
     const lines = [
-      `Daily site report — ${formatDate(rep.reportDate)}`,
+      `Daily site report · ${formatDate(rep.reportDate)}`,
       `Project: ${rep.projectName}`,
       `${rep.checkinCount} check-in${rep.checkinCount === 1 ? "" : "s"} · ${rep.documentEventCount} document update${rep.documentEventCount === 1 ? "" : "s"} · ${rep.photoCount} site photo${rep.photoCount === 1 ? "" : "s"}`,
       rep.managerReport ? "Includes a site diary entry." : "",
@@ -36,7 +36,7 @@ export function ReportDialog() {
     <>
       <Dialog open={!!openReport || reportLoading} onOpenChange={v => { if (!v) setOpenReport(null); }}>
         <DialogHeader>
-          <DialogTitle>{openReport ? `Daily site report — ${formatDate(openReport.reportDate)}` : "Loading report…"}</DialogTitle>
+          <DialogTitle>{openReport ? `Daily site report · ${formatDate(openReport.reportDate)}` : "Loading report…"}</DialogTitle>
         </DialogHeader>
         {openReport && openReport.id && (
           <div className="flex justify-end -mt-1 mb-1">
@@ -66,7 +66,7 @@ export function ReportDialog() {
           onClose={() => setShareOpen(false)}
           entityType="daily_report"
           entityId={openReport.id}
-          entityName={`Daily site report — ${formatDate(openReport.reportDate)} (${openReport.projectName})`}
+          entityName={`Daily site report · ${formatDate(openReport.reportDate)} (${openReport.projectName})`}
           projectId={projectId}
           shareText={reportShareText(openReport)}
         />

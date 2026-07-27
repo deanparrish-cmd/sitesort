@@ -59,7 +59,7 @@ export function PermitDialogs() {
           <div>
             <label className="text-sm font-semibold mb-1.5 block">Description / Reference</label>
             <Input
-              placeholder="e.g. Hot works on roof — contractor Jones Ltd"
+              placeholder="e.g. Hot works on roof, contractor Jones Ltd"
               value={newPermitDesc}
               onChange={e => setNewPermitDesc(e.target.value)}
             />
@@ -90,7 +90,7 @@ export function PermitDialogs() {
           <div>
             <label className="text-sm font-semibold mb-1.5 block">Action due by <span className="text-muted-foreground font-normal">(optional)</span></label>
             <Input type="date" value={newPermitDue} onChange={e => setNewPermitDue(e.target.value)} icon={<Calendar className="w-4 h-4" />} />
-            <p className="text-xs text-muted-foreground mt-1">When the responsible person must renew or action this — separate from the legal expiry date.</p>
+            <p className="text-xs text-muted-foreground mt-1">When the responsible person must renew or action this, separate from the legal expiry date.</p>
           </div>
           <div>
             <label className="text-sm font-semibold mb-1.5 block">Certificate / Document <span className="text-muted-foreground font-normal">(optional)</span></label>

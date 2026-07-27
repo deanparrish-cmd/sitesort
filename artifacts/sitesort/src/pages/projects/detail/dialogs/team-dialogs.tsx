@@ -62,7 +62,7 @@ export function TeamDialogs() {
     <>
       <Dialog open={!!scheduleTarget} onOpenChange={v => { if (!v) { setScheduleTarget(null); setScheduleError(null); } }}>
         <DialogHeader>
-          <DialogTitle>Site Schedule — {scheduleTarget?.name}</DialogTitle>
+          <DialogTitle>Site Schedule · {scheduleTarget?.name}</DialogTitle>
         </DialogHeader>
         {scheduleError && (
           <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm">{scheduleError}</div>
@@ -111,7 +111,7 @@ export function TeamDialogs() {
       <Dialog open={!!subNotesTarget} onOpenChange={open => { if (!open) { setSubNotesTarget(null); setSubNotesList([]); setSubNoteDraft(""); setSubNoteScope("general"); } }}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <StickyNote className="w-4 h-4 text-amber-600" /> Notes & Reminders — {subNotesTarget?.name}
+            <StickyNote className="w-4 h-4 text-amber-600" /> Notes & Reminders · {subNotesTarget?.name}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
@@ -136,7 +136,7 @@ export function TeamDialogs() {
                 </button>
               </div>
               <textarea
-                placeholder={subNoteScope === "general" ? "e.g. Insurance expires March 2027 — chase renewal…" : "e.g. Running 2 days behind on Block A…"}
+                placeholder={subNoteScope === "general" ? "e.g. Insurance expires March 2027, chase renewal…" : "e.g. Running 2 days behind on Block A…"}
                 rows={3}
                 value={subNoteDraft}
                 onChange={e => setSubNoteDraft(e.target.value)}
@@ -191,7 +191,7 @@ export function TeamDialogs() {
       <Dialog open={!!subDocsTarget} onOpenChange={open => { if (!open) { setSubDocsTarget(null); setSubDocsList([]); setSubDocScope("project"); } }}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <FileText className="w-4 h-4 text-primary" /> Documents — {subDocsTarget?.name}
+            <FileText className="w-4 h-4 text-primary" /> Documents · {subDocsTarget?.name}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
@@ -312,10 +312,10 @@ export function TeamDialogs() {
             </div>
           )}
           <ul className="text-sm text-muted-foreground list-disc pl-5 space-y-1">
-            {removeTarget?.isPortal && <li>Portal access is revoked immediately — any active session ends on their next request.</li>}
+            {removeTarget?.isPortal && <li>Portal access is revoked immediately. Any active session ends on their next request.</li>}
             {removeTarget?.isPortal && <li>Any pending portal invite is cancelled.</li>}
             <li>They'll disappear from team lists and share-target pickers for this project.</li>
-            <li>Their past activity, document views, sign-offs and distribution records for this project are kept — shown with a "(removed from project)" note.</li>
+            <li>Their past activity, document views, sign-offs and distribution records for this project are kept, shown with a "(removed from project)" note.</li>
           </ul>
           <p className="text-xs text-muted-foreground">This can be undone by adding them back to the project later.</p>
         </div>

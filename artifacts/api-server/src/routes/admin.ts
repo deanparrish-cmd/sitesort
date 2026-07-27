@@ -336,7 +336,7 @@ router.get("/admin/stats", authenticate, requireAdmin, async (req, res) => {
         signUps: { allTime: totalUsers, thisWeek: newThisWeek, lastWeek: newLastWeek, pctChange: pct(newThisWeek, newLastWeek) },
       },
       revenue: {
-        note: "No payment processor connected — showing subscription tier data",
+        note: "No payment processor connected. Showing subscription tier data.",
         totalCompanies,
         byTier: Object.fromEntries(companiesByTier.map(r => [r.tier, Number(r.c)])),
         paidTiers: companiesByTier.filter(r => r.tier !== "free").reduce((s, r) => s + Number(r.c), 0),
@@ -785,7 +785,7 @@ router.patch("/admin/companies/:id/beta-access", authenticate, requireAdmin, asy
           req.log.info({ companyId, cancelled: live.length }, "Beta granted — cancelled Stripe subscription(s)");
         } catch (err) {
           req.log.error({ err, companyId }, "Beta grant: failed to cancel Stripe subscription");
-          warning = "Beta access was set, but cancelling the existing Stripe subscription failed — cancel it manually in Stripe so they aren't billed.";
+          warning = "Beta access was set, but cancelling the existing Stripe subscription failed. Cancel it manually in Stripe so they aren't billed.";
         }
       }
       res.json({ id: req.params.id, betaAccess: true, ...(warning ? { warning } : {}) });

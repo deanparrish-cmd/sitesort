@@ -25,7 +25,7 @@ export function ArchiveIssueDialog({ photoId, onClose, archiveIssue, itemLabel =
     <Dialog open={!!photoId} onOpenChange={v => { if (!v) onClose(); }}>
       <DialogHeader><DialogTitle>Archive this {itemLabel}?</DialogTitle></DialogHeader>
       <div className="space-y-3">
-        <p className="text-sm text-muted-foreground">It's removed from the active list and counts, but stays on record — viewable under Archived, and can be restored any time.</p>
+        <p className="text-sm text-muted-foreground">It's removed from the active list and counts, but stays on record, viewable under Archived, and can be restored any time.</p>
         <Textarea value={reason} onChange={e => setReason(e.target.value)} placeholder="Reason (optional)" rows={3} />
       </div>
       <DialogFooter>

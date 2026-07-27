@@ -333,7 +333,7 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
                 </button>
                 <p className="flex items-start gap-1.5 text-xs text-muted-foreground mt-1.5">
                   <Lock className="w-3 h-3 mt-0.5 shrink-0" />
-                  Requires a SiteSort login to view — safe to send by email, message, or however you like.
+                  Requires a SiteSort login to view, safe to send by email, message, or however you like.
                 </p>
               </div>
             )}

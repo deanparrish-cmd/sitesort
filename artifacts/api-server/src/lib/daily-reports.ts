@@ -370,7 +370,7 @@ export async function generateDailyReportForProject(
         id: generateId(),
         userId: m.userId,
         type: "daily_report",
-        title: `Daily site report — ${projectName}`,
+        title: `Daily site report · ${projectName}`,
         message: `${dateLabel(reportDate)}: ${summary}`,
         relatedEntityId: reportId,
         relatedEntityType: "daily_report",

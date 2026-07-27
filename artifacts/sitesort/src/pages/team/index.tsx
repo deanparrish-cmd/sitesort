@@ -303,7 +303,7 @@ export default function TeamPage() {
     setAddSubmitting(false);
     // Existing SiteSort users are LINKED (no invite email); new people are invited.
     setAddSuccess(created.linked
-      ? `${created.name} was added to your team — they can switch to this company from their account.`
+      ? `${created.name} was added to your team. They can switch to this company from their account.`
       : `Invitation sent to ${created.email}.`);
     setTimeout(() => { setAddOpen(false); setAddSuccess(""); }, 2000);
   }
@@ -736,7 +736,7 @@ export default function TeamPage() {
                         )}
                         {status === "error" && (
                           <span className="flex items-center gap-1.5 text-xs text-destructive px-3 py-1.5">
-                            <X className="w-3.5 h-3.5" /> Failed — retry?
+                            <X className="w-3.5 h-3.5" /> Failed, retry?
                           </span>
                         )}
                       </div>
@@ -756,7 +756,7 @@ export default function TeamPage() {
       {/* Edit member dialog */}
       <Dialog open={!!editTarget} onOpenChange={open => { if (!open) setEditTarget(null); }}>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Pencil className="w-4 h-4 text-primary" /> Edit — {editTarget?.name}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><Pencil className="w-4 h-4 text-primary" /> Edit · {editTarget?.name}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div>
@@ -779,7 +779,7 @@ export default function TeamPage() {
               <option value="site_worker">Site Worker</option>
             </select>
           </div>
-          <p className="text-xs text-muted-foreground">Email can't be changed here — it's this person's login.</p>
+          <p className="text-xs text-muted-foreground">Email can't be changed here. It's this person's login.</p>
           {editError && <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{editError}</p>}
         </div>
         <DialogFooter>
@@ -796,7 +796,7 @@ export default function TeamPage() {
           <DialogTitle className="flex items-center gap-2 text-destructive"><Trash2 className="w-4 h-4" /> Remove {removeTarget?.name}?</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          This removes them from your company team and all of your projects. Their login account isn't deleted — they can be re-added later.
+          This removes them from your company team and all of your projects. Their login account isn't deleted, they can be re-added later.
         </p>
         {removeError && <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{removeError}</p>}
         <DialogFooter>

@@ -63,7 +63,7 @@ export function IssuesTab() {
               work_completed: "bg-teal-50 border-teal-200 text-teal-700",
             };
             const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
-              new:                 { label: "New — awaiting triage", cls: "bg-violet-50 border-violet-200 text-violet-700" },
+              new:                 { label: "New · awaiting triage", cls: "bg-violet-50 border-violet-200 text-violet-700" },
               open:                { label: "Open",                  cls: "bg-amber-50 border-amber-200 text-amber-700" },
               in_progress:         { label: "In Progress",            cls: "bg-blue-50 border-blue-200 text-blue-700" },
               pending_confirmation:{ label: "Pending confirmation",   cls: "bg-cyan-50 border-cyan-200 text-cyan-700" },
@@ -211,7 +211,7 @@ export function IssuesTab() {
                             onChange={e => setPhotoAssignee(e.target.value)}
                             className="flex h-11 w-full rounded-lg border-2 border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:border-primary [&>*]:min-w-0"
                           >
-                            <option value="">— Unassigned —</option>
+                            <option value="">Unassigned</option>
                             {((members as any[]) ?? []).filter(m => m.userId).map((m: any) => (
                               <option key={m.userId} value={m.userId}>{m.name}</option>
                             ))}

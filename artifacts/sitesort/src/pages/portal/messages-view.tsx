@@ -245,7 +245,7 @@ function ChannelThread() {
         <p className="font-semibold">Project channel</p>
       </div>
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 sm:px-0 py-3 space-y-3">
-        {isLoading ? <Loading /> : !data || data.messages.length === 0 ? <Empty>No messages yet — say hello.</Empty> : data.messages.map((m: any) => (
+        {isLoading ? <Loading /> : !data || data.messages.length === 0 ? <Empty>No messages yet, say hello.</Empty> : data.messages.map((m: any) => (
           <div key={m.id} className={cn("flex flex-col", m.mine ? "items-end" : "items-start")}>
             {!m.mine && <p className="text-[11px] text-muted-foreground mb-0.5 px-1">{m.senderName}{m.senderRemoved && " (removed from project)"}</p>}
             <div className={cn("max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words", m.mine ? "bg-primary text-primary-foreground" : "bg-muted")}>
@@ -299,7 +299,7 @@ function DmThread({ otherUserId }: { otherUserId: string }) {
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 sm:px-0 py-3 space-y-3">
         {isLoading ? <Loading /> : !data ? (
           <Empty>Couldn't load this conversation.</Empty>
-        ) : data.messages.length === 0 ? <Empty>No messages yet — say hello.</Empty> : data.messages.map((m: any) => (
+        ) : data.messages.length === 0 ? <Empty>No messages yet, say hello.</Empty> : data.messages.map((m: any) => (
           <div key={m.id} className={cn("flex flex-col", m.mine ? "items-end" : "items-start")}>
             <div className={cn("max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words", m.mine ? "bg-primary text-primary-foreground" : "bg-muted")}>
               {m.content}

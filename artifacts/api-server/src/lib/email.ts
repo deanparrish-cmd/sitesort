@@ -55,7 +55,7 @@ function layout(body: string): string {
 
 // Wrap plain-text bodies with a matching header and footer.
 function textLayout(body: string): string {
-  return `SiteSort — Construction Site Information Management
+  return `SiteSort · Construction Site Information Management
 ========================================================
 
 ${body.trim()}
@@ -137,7 +137,7 @@ export async function sendPasswordResetEmail(to: string, name: string, token: st
       ${p(`Hi ${greeting},`)}
       ${p("We received a request to reset the password on your SiteSort account. Click the button below to choose a new password.")}
       ${btn(link, "Reset Password")}
-      ${muted(`This link expires in 1 hour. If you didn't request this, your account is safe — just ignore this email.<br>Button not working? Copy and paste this link:<br><a href="${link}" style="color:#ea580c;word-break:break-all;">${link}</a>`)}
+      ${muted(`This link expires in 1 hour. If you didn't request this, your account is safe. Just ignore this email.<br>Button not working? Copy and paste this link:<br><a href="${link}" style="color:#ea580c;word-break:break-all;">${link}</a>`)}
     `),
     text: textLayout(`Password reset requested
 
@@ -148,7 +148,7 @@ We received a request to reset the password on your SiteSort account. Use the li
 Reset your password:
 ${link}
 
-This link expires in 1 hour. If you didn't request this, your account is safe — just ignore this email.`),
+This link expires in 1 hour. If you didn't request this, your account is safe. Just ignore this email.`),
   });
 }
 
@@ -165,7 +165,7 @@ export async function sendPinResetEmail(to: string, name: string, token: string,
       ${p(`Hi ${greeting},`)}
       ${p("We received a request to reset the 4-digit sign-off PIN on your SiteSort account. Click the button below to choose a new PIN.")}
       ${btn(link, "Reset PIN")}
-      ${muted(`This link expires in 1 hour. If you didn't request this, your account is safe — just ignore this email.<br>Button not working? Copy and paste this link:<br><a href="${link}" style="color:#ea580c;word-break:break-all;">${link}</a>`)}
+      ${muted(`This link expires in 1 hour. If you didn't request this, your account is safe. Just ignore this email.<br>Button not working? Copy and paste this link:<br><a href="${link}" style="color:#ea580c;word-break:break-all;">${link}</a>`)}
     `),
     text: textLayout(`Sign-off PIN reset requested
 
@@ -176,7 +176,7 @@ We received a request to reset the 4-digit sign-off PIN on your SiteSort account
 Reset your PIN:
 ${link}
 
-This link expires in 1 hour. If you didn't request this, your account is safe — just ignore this email.`),
+This link expires in 1 hour. If you didn't request this, your account is safe. Just ignore this email.`),
   });
 }
 
@@ -230,7 +230,7 @@ export async function sendInvitationEmail(
     subject: `You've been added to ${company} on SiteSort`,
     html: layout(`
       ${h(`Hi ${greeting}, you've been invited to SiteSort`)}
-      ${p(`${inviter} has added you to the <strong>${company}</strong> workspace on SiteSort — a construction site information management platform.`)}
+      ${p(`${inviter} has added you to the <strong>${company}</strong> workspace on SiteSort, a construction site information management platform.`)}
       ${box(`
         <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:8px;">Your login credentials</div>
         <div style="font-size:14px;color:#374151;margin-bottom:4px;">Email: <strong>${to}</strong></div>
@@ -241,7 +241,7 @@ export async function sendInvitationEmail(
     `),
     text: textLayout(`Hi ${greeting}, you've been invited to SiteSort
 
-${inviter} has added you to the ${company} workspace on SiteSort — a construction site information management platform.
+${inviter} has added you to the ${company} workspace on SiteSort, a construction site information management platform.
 
 Your login credentials:
 Email: ${to}
@@ -276,7 +276,7 @@ export async function sendDocumentNotificationEmail(
   const docName = documentName?.trim() || "A document";
   return send({
     to,
-    subject: `New document: ${docName} (v${version}) — ${project}`,
+    subject: `New document: ${docName} (v${version}) · ${project}`,
     html: layout(`
       ${h("New document shared with you")}
       ${p(`Hi ${greeting},`)}
@@ -319,7 +319,7 @@ export async function sendAcknowledgmentRequestEmail(
   const docName = documentName?.trim() || "A document";
   return send({
     to,
-    subject: `Action required: acknowledge ${docName} (v${version}) — ${project}`,
+    subject: `Action required: acknowledge ${docName} (v${version}) · ${project}`,
     html: layout(`
       ${h("Your acknowledgment is required")}
       ${p(`Hi ${greeting},`)}
@@ -415,8 +415,8 @@ export async function sendPermitExpiryEmail(
   const dayLabel = `${Math.abs(daysLeft)} day${Math.abs(daysLeft) !== 1 ? "s" : ""}`;
   const urgent = expired || daysLeft <= 7;
   const subject = expired
-    ? `🚨 Permit expired — ${project}`
-    : `${daysLeft <= 7 ? "🚨 Urgent:" : "⚠️"} Permit expiring in ${dayLabel} — ${project}`;
+    ? `🚨 Permit expired · ${project}`
+    : `${daysLeft <= 7 ? "🚨 Urgent:" : "⚠️"} Permit expiring in ${dayLabel} · ${project}`;
   const lead = expired
     ? (daysLeft === 0
         ? `A permit you are responsible for on <strong>${project}</strong> expires <strong>today</strong>.`
@@ -431,7 +431,7 @@ export async function sendPermitExpiryEmail(
     to,
     subject,
     html: layout(`
-      ${h(`Permit ${expired ? "expired" : "expiring soon"} — ${project}`)}
+      ${h(`Permit ${expired ? "expired" : "expiring soon"} · ${project}`)}
       ${p(`Hi ${greeting},`)}
       ${p(lead + " Please renew it to keep this project compliant.")}
       ${box(`
@@ -441,7 +441,7 @@ export async function sendPermitExpiryEmail(
       ${btn(link, "View Compliance")}
       ${muted("You can manage email notifications in your SiteSort account settings.")}
     `),
-    text: textLayout(`Permit ${expired ? "expired" : "expiring soon"} — ${project}
+    text: textLayout(`Permit ${expired ? "expired" : "expiring soon"} · ${project}
 
 Hi ${greeting},
 
@@ -473,7 +473,7 @@ export async function sendInsuranceExpiryEmail(
   const dayLabel = `${Math.abs(daysLeft)} day${Math.abs(daysLeft) !== 1 ? "s" : ""}`;
   const subject = expired
     ? `🚨 Insurance expired for ${sub}`
-    : `${daysLeft <= 7 ? "🚨 Urgent:" : "⚠️"} Insurance expiring in ${dayLabel} — ${sub}`;
+    : `${daysLeft <= 7 ? "🚨 Urgent:" : "⚠️"} Insurance expiring in ${dayLabel} · ${sub}`;
   const lead = expired
     ? `An insurance certificate for <strong>${sub}</strong> expired ${dayLabel} ago.`
     : `An insurance certificate for <strong>${sub}</strong> expires in <strong>${dayLabel}</strong>.`;
@@ -526,7 +526,7 @@ export async function sendPersonCertExpiryEmail(
   const dayLabel = `${Math.abs(daysLeft)} day${Math.abs(daysLeft) !== 1 ? "s" : ""}`;
   const subject = expired
     ? `🚨 Certification expired for ${person}`
-    : `${daysLeft <= 7 ? "🚨 Urgent:" : "⚠️"} Certification expiring in ${dayLabel} — ${person}`;
+    : `${daysLeft <= 7 ? "🚨 Urgent:" : "⚠️"} Certification expiring in ${dayLabel} · ${person}`;
   const lead = expired
     ? `A certification for <strong>${person}</strong> expired ${dayLabel} ago.`
     : `A certification for <strong>${person}</strong> expires in <strong>${dayLabel}</strong>.`;
@@ -578,9 +578,9 @@ export async function sendSafetyAlertEmail(
   const ref = referenceNumber?.trim() || "N/A";
   return send({
     to,
-    subject: `⚠️ ${label} logged — Ref: ${ref} · ${project}`,
+    subject: `⚠️ ${label} logged · Ref: ${ref} · ${project}`,
     html: layout(`
-      ${h(`⚠️ ${label} logged — ${project}`)}
+      ${h(`⚠️ ${label} logged · ${project}`)}
       ${p(`Hi ${greeting},`)}
       ${p(`A ${label.toLowerCase()} has been logged on <strong>${project}</strong> and requires your review.`)}
       ${box(`
@@ -589,7 +589,7 @@ export async function sendSafetyAlertEmail(
       `, "#fef2f2", "#fecaca")}
       ${btn(link, "Review on SiteSort")}
     `),
-    text: textLayout(`${label} logged — ${project}
+    text: textLayout(`${label} logged · ${project}
 
 Hi ${greeting},
 
@@ -631,7 +631,7 @@ export async function sendPortalInviteEmail(params: {
     html: layout(`
       ${h("You've been invited to a project portal")}
       ${p(`Hi ${greeting},`)}
-      ${p(`<strong>${inviter}</strong> (${company}) has invited you to the <strong>${project}</strong> site portal on SiteSort — where you can view the drawings, documents and site information shared with you.`)}
+      ${p(`<strong>${inviter}</strong> (${company}) has invited you to the <strong>${project}</strong> site portal on SiteSort, where you can view the drawings, documents and site information shared with you.`)}
       ${box(`
         <div style="font-size:14px;color:#374151;margin-bottom:4px;">Project: <strong>${project}</strong></div>
         <div style="font-size:14px;color:#374151;">Your role: <strong>${roleLabel}</strong></div>
@@ -641,13 +641,13 @@ export async function sendPortalInviteEmail(params: {
       ${muted(`Once you're set up, bookmark your portal to sign back in any time:<br><a href="${portalUrl}" style="color:#ea580c;word-break:break-all;">${portalUrl}</a>`)}
       ${h("Getting started")}
       ${guideExcerptItemsHtml()}
-      ${p(`<a href="${guideUrl}" style="color:#ea580c;">Read the full guide</a> — no login needed.`)}
+      ${p(`<a href="${guideUrl}" style="color:#ea580c;">Read the full guide</a>. No login needed.`)}
     `),
     text: textLayout(`You've been invited to a project portal
 
 Hi ${greeting},
 
-${inviter} (${company}) has invited you to the ${project} site portal on SiteSort — where you can view the drawings, documents and site information shared with you.
+${inviter} (${company}) has invited you to the ${project} site portal on SiteSort, where you can view the drawings, documents and site information shared with you.
 
 Project: ${project}
 Your role: ${roleLabel}

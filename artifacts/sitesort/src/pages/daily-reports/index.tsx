@@ -120,7 +120,7 @@ export default function DailyReportsPage() {
 
   const reportShareText = (rep: DailyReportDetailData) => {
     const lines = [
-      `Daily site report — ${formatDate(rep.reportDate)}`,
+      `Daily site report · ${formatDate(rep.reportDate)}`,
       `Project: ${rep.projectName}`,
       `${rep.checkinCount} check-in${rep.checkinCount === 1 ? "" : "s"} · ${rep.documentEventCount} document update${rep.documentEventCount === 1 ? "" : "s"} · ${rep.photoCount} site photo${rep.photoCount === 1 ? "" : "s"}`,
       rep.managerReport ? "Includes a site diary entry." : "",
@@ -144,7 +144,7 @@ export default function DailyReportsPage() {
         className="mb-8"
         icon={<ClipboardList className="w-7 h-7 text-primary" />}
         title="Daily Site Reports"
-        description="Every project's daily report in one place — auto-collated activity plus the site diary."
+        description="Every project's daily report in one place: auto-collated activity plus the site diary."
         actions={caps.isInternal && projects.length > 0 && (
           <Button variant="accent" onClick={() => setNewOpen(true)}>
             <Plus className="w-4 h-4 mr-1.5" />New site diary
@@ -252,7 +252,7 @@ export default function DailyReportsPage() {
       {/* Report detail / edit modal */}
       <Dialog open={!!openReport || reportLoading} onOpenChange={(v) => { if (!v) { setOpenReport(null); setInitialEditing(false); } }}>
         <DialogHeader>
-          <DialogTitle>{openReport ? `Daily site report — ${formatDate(openReport.reportDate)}` : "Loading report…"}</DialogTitle>
+          <DialogTitle>{openReport ? `Daily site report · ${formatDate(openReport.reportDate)}` : "Loading report…"}</DialogTitle>
         </DialogHeader>
         {openReport && openReport.id && (
           <div className="flex justify-end -mt-1 mb-1">
@@ -282,7 +282,7 @@ export default function DailyReportsPage() {
           onClose={() => setShareOpen(false)}
           entityType="daily_report"
           entityId={openReport.id}
-          entityName={`Daily site report — ${formatDate(openReport.reportDate)} (${openReport.projectName})`}
+          entityName={`Daily site report · ${formatDate(openReport.reportDate)} (${openReport.projectName})`}
           projectId={openReport.projectId}
           shareText={reportShareText(openReport)}
         />
