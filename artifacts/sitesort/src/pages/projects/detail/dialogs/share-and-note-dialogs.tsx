@@ -113,6 +113,7 @@ export function ShareAndNoteDialogs() {
         entityName={`Invoice — ${sharingInvoice?.counterpartyName ?? ""}`}
         fileUrl={sharingInvoice?.attachmentUrl ?? null}
         projectId={projectId}
+        secureViewUrl={sharingInvoice ? `${window.location.origin}/invoices?invoice=${sharingInvoice.id}` : null}
       />
     </>
   );

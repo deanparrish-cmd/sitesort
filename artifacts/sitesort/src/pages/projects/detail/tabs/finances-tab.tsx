@@ -19,6 +19,7 @@ export function FinancesTab() {
     invoiceFullUrl,
     markInvoiceUnpaid,
     caps,
+    isProjectApprover,
     setSharingDoc,
     setSharingInvoice,
   } = useDetail();
@@ -226,7 +227,7 @@ export function FinancesTab() {
                                   <Eye className="w-3.5 h-3.5" />Open
                                 </button>
                               )}
-                              {inv.attachmentUrl && (
+                              {inv.attachmentUrl && isProjectApprover && (
                                 <button
                                   type="button"
                                   onClick={() => setSharingInvoice(inv)}
