@@ -709,6 +709,27 @@ export const ListSubcontractorsResponseItem = zod.object({
   reliabilityRating: zod.number().nullish(),
   paymentHold: zod.boolean(),
   insuranceStatus: zod.enum(["valid", "expiring_soon", "expired", "none"]),
+  certifications: zod
+    .array(
+      zod
+        .object({
+          id: zod.string(),
+          personId: zod.string(),
+          name: zod.string(),
+          certNumber: zod.string().nullish(),
+          expiryDate: zod.date(),
+          status: zod.enum(["valid", "expiring_soon", "expired"]),
+          documentUrl: zod.string().nullish(),
+          createdAt: zod.date(),
+        })
+        .describe(
+          "An individual certification\/ticket held by a person (CSCS, SSSTS\/SMSTS, gas safe, plant tickets, etc.) — distinct from company-level PLI\/insurance.",
+        ),
+    )
+    .optional()
+    .describe(
+      'Active certifications filed against this contact\'s people (e.g. an approved Insurance document filed via \"Add to contact\"). Insurance-named certs also count towards insuranceStatus.',
+    ),
   archivedAt: zod.date().nullish(),
   createdAt: zod.date(),
 });
@@ -787,6 +808,27 @@ export const GetSubcontractorResponse = zod
     reliabilityRating: zod.number().nullish(),
     paymentHold: zod.boolean(),
     insuranceStatus: zod.enum(["valid", "expiring_soon", "expired", "none"]),
+    certifications: zod
+      .array(
+        zod
+          .object({
+            id: zod.string(),
+            personId: zod.string(),
+            name: zod.string(),
+            certNumber: zod.string().nullish(),
+            expiryDate: zod.date(),
+            status: zod.enum(["valid", "expiring_soon", "expired"]),
+            documentUrl: zod.string().nullish(),
+            createdAt: zod.date(),
+          })
+          .describe(
+            "An individual certification\/ticket held by a person (CSCS, SSSTS\/SMSTS, gas safe, plant tickets, etc.) — distinct from company-level PLI\/insurance.",
+          ),
+      )
+      .optional()
+      .describe(
+        'Active certifications filed against this contact\'s people (e.g. an approved Insurance document filed via \"Add to contact\"). Insurance-named certs also count towards insuranceStatus.',
+      ),
     archivedAt: zod.date().nullish(),
     createdAt: zod.date(),
   })
@@ -889,6 +931,27 @@ export const UpdateSubcontractorResponse = zod.object({
   reliabilityRating: zod.number().nullish(),
   paymentHold: zod.boolean(),
   insuranceStatus: zod.enum(["valid", "expiring_soon", "expired", "none"]),
+  certifications: zod
+    .array(
+      zod
+        .object({
+          id: zod.string(),
+          personId: zod.string(),
+          name: zod.string(),
+          certNumber: zod.string().nullish(),
+          expiryDate: zod.date(),
+          status: zod.enum(["valid", "expiring_soon", "expired"]),
+          documentUrl: zod.string().nullish(),
+          createdAt: zod.date(),
+        })
+        .describe(
+          "An individual certification\/ticket held by a person (CSCS, SSSTS\/SMSTS, gas safe, plant tickets, etc.) — distinct from company-level PLI\/insurance.",
+        ),
+    )
+    .optional()
+    .describe(
+      'Active certifications filed against this contact\'s people (e.g. an approved Insurance document filed via \"Add to contact\"). Insurance-named certs also count towards insuranceStatus.',
+    ),
   archivedAt: zod.date().nullish(),
   createdAt: zod.date(),
 });
@@ -3516,6 +3579,12 @@ export const GetPortalHsResponse = zod.object({
         .date()
         .nullish()
         .describe("When this viewer signed it off, if they have."),
+      myViewedAt: zod
+        .date()
+        .nullish()
+        .describe(
+          'When this viewer first opened the document, if they have (powers the \"Received\" label once a New item is opened).',
+        ),
     }),
   ),
   safety: zod.array(
@@ -3572,6 +3641,12 @@ export const GetPortalHsResponse = zod.object({
         .date()
         .nullish()
         .describe("When this viewer signed it off, if they have."),
+      myViewedAt: zod
+        .date()
+        .nullish()
+        .describe(
+          'When this viewer first opened the document, if they have (powers the \"Received\" label once a New item is opened).',
+        ),
     }),
   ),
   permits: zod.array(
@@ -3585,6 +3660,7 @@ export const GetPortalHsResponse = zod.object({
       documentUrl: zod.string().optional(),
       unseen: zod.boolean().optional(),
       sharedAt: zod.string().optional(),
+      myViewedAt: zod.date().nullish(),
     }),
   ),
 });
@@ -3647,6 +3723,12 @@ export const GetPortalSharedResponse = zod.object({
         .date()
         .nullish()
         .describe("When this viewer signed it off, if they have."),
+      myViewedAt: zod
+        .date()
+        .nullish()
+        .describe(
+          'When this viewer first opened the document, if they have (powers the \"Received\" label once a New item is opened).',
+        ),
     }),
   ),
   photos: zod.array(
@@ -3704,6 +3786,7 @@ export const GetPortalSharedResponse = zod.object({
       documentUrl: zod.string().optional(),
       unseen: zod.boolean().optional(),
       sharedAt: zod.string().optional(),
+      myViewedAt: zod.date().nullish(),
     }),
   ),
   dailyReports: zod.array(
@@ -3727,6 +3810,7 @@ export const GetPortalSharedResponse = zod.object({
           .nullish(),
         sharedAt: zod.date().optional(),
         unseen: zod.boolean().optional(),
+        myViewedAt: zod.date().nullish(),
       })
       .describe(
         "A daily report explicitly shared to the portal — the authored site diary only, never the auto-collated internal activity (check-ins, document views\/sign-offs, site photos) the dashboard's full report shows.",
@@ -3802,6 +3886,12 @@ export const GetPortalDrawingsResponseItem = zod.object({
     .date()
     .nullish()
     .describe("When this viewer signed it off, if they have."),
+  myViewedAt: zod
+    .date()
+    .nullish()
+    .describe(
+      'When this viewer first opened the document, if they have (powers the \"Received\" label once a New item is opened).',
+    ),
 });
 export const GetPortalDrawingsResponse = zod.array(
   GetPortalDrawingsResponseItem,
@@ -3867,6 +3957,12 @@ export const GetPortalDrawingResponse = zod.object({
     .date()
     .nullish()
     .describe("When this viewer signed it off, if they have."),
+  myViewedAt: zod
+    .date()
+    .nullish()
+    .describe(
+      'When this viewer first opened the document, if they have (powers the \"Received\" label once a New item is opened).',
+    ),
 });
 
 /**
@@ -3944,6 +4040,12 @@ export const ListMemberDocumentsResponseItem = zod.object({
   id: zod.string(),
   name: zod.string(),
   kind: zod.string(),
+  personId: zod
+    .string()
+    .optional()
+    .describe(
+      "The submitter's contact (person) id, when linked — enables filing the doc to their contact record.",
+    ),
   fileUrl: zod.string(),
   fileSize: zod.number(),
   status: zod.string().describe("pending | approved | rejected"),
@@ -4030,6 +4132,12 @@ export const GetPortalMethodStatementsResponseItem = zod.object({
     .date()
     .nullish()
     .describe("When this viewer signed it off, if they have."),
+  myViewedAt: zod
+    .date()
+    .nullish()
+    .describe(
+      'When this viewer first opened the document, if they have (powers the \"Received\" label once a New item is opened).',
+    ),
 });
 export const GetPortalMethodStatementsResponse = zod.array(
   GetPortalMethodStatementsResponseItem,
@@ -4095,6 +4203,12 @@ export const GetPortalMethodStatementResponse = zod.object({
     .date()
     .nullish()
     .describe("When this viewer signed it off, if they have."),
+  myViewedAt: zod
+    .date()
+    .nullish()
+    .describe(
+      'When this viewer first opened the document, if they have (powers the \"Received\" label once a New item is opened).',
+    ),
 });
 
 /**
@@ -4110,8 +4224,28 @@ export const GetPortalPermitsResponseItem = zod.object({
   documentUrl: zod.string().optional(),
   unseen: zod.boolean().optional(),
   sharedAt: zod.string().optional(),
+  myViewedAt: zod.date().nullish(),
 });
 export const GetPortalPermitsResponse = zod.array(GetPortalPermitsResponseItem);
+
+/**
+ * @summary Record that this member opened a permit shared with them
+ */
+export const ViewPortalPermitParams = zod.object({
+  permitId: zod.coerce.string(),
+});
+
+export const ViewPortalPermitResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * @summary Download a shared permit's attached document
+ */
+export const DownloadPortalPermitParams = zod.object({
+  permitId: zod.coerce.string(),
+});
 
 /**
  * @summary Safety documents
@@ -4169,6 +4303,12 @@ export const GetPortalSafetyResponseItem = zod.object({
     .date()
     .nullish()
     .describe("When this viewer signed it off, if they have."),
+  myViewedAt: zod
+    .date()
+    .nullish()
+    .describe(
+      'When this viewer first opened the document, if they have (powers the \"Received\" label once a New item is opened).',
+    ),
 });
 export const GetPortalSafetyResponse = zod.array(GetPortalSafetyResponseItem);
 
@@ -4230,6 +4370,12 @@ export const GetPortalGeneralResponse = zod.object({
         .date()
         .nullish()
         .describe("When this viewer signed it off, if they have."),
+      myViewedAt: zod
+        .date()
+        .nullish()
+        .describe(
+          'When this viewer first opened the document, if they have (powers the \"Received\" label once a New item is opened).',
+        ),
     }),
   ),
   notes: zod.array(
@@ -4489,6 +4635,17 @@ export const UpdatePersonBody = zod
       .describe("Must be a real 2+ character name after trimming whitespace."),
     showContactInPortal: zod.boolean().nullish(),
     roleTitle: zod.string().nullish(),
+    email: zod
+      .string()
+      .email()
+      .optional()
+      .describe(
+        "New contact email (trimmed + lowercased server-side). Cannot be blank.",
+      ),
+    phone: zod
+      .string()
+      .nullish()
+      .describe("Contact phone; null\/empty clears it."),
   })
   .describe(
     "Partial update; omit a field to leave it unchanged. showContactInPortal null = reset to role default.",

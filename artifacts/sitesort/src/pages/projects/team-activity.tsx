@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import {
   useListProjectInvites, useRevokeProjectInvite,
   useGetProjectActivity, useGetProjectActivitySummary,
-  useListMemberDocuments, useReviewMemberDocument,
+  useListMemberDocuments, useReviewMemberDocument, useCreatePersonCertification,
   getListProjectInvitesQueryKey, getGetProjectActivityQueryKey, getGetProjectActivitySummaryQueryKey,
   getListMemberDocumentsQueryKey,
 } from "@workspace/api-client-react";
@@ -17,7 +17,7 @@ import { formatBytes } from "@/lib/utils";
 import { SECTION_NAV } from "@/pages/portal/layout";
 import {
   UserPlus, Trash2, Activity, Eye, ShieldAlert, ShieldOff, Clock,
-  FileCheck, Check, X, ExternalLink,
+  FileCheck, Check, X, ExternalLink, UserRoundPlus,
 } from "lucide-react";
 
 function fmtRelative(iso?: string | null): string {
@@ -82,17 +82,52 @@ function MemberDocumentsReview({ projectId }: { projectId: string }) {
 
   const docs = docsQ.data ?? [];
   const pendingCount = docs.filter(d => d.status === "pending").length;
+  // Reject flow opens a proper dialog with a notes box (the note is stored on
+  // the doc and shown to the uploader in their portal "My documents" section).
+  const [rejectTarget, setRejectTarget] = useState<{ id: string; name: string; uploaderName: string } | null>(null);
+  const [rejectNote, setRejectNote] = useState("");
 
-  const doReview = async (id: string, action: "approve" | "reject") => {
-    let note: string | undefined;
-    if (action === "reject") {
-      const input = window.prompt("Reason for rejection (optional):") ?? "";
-      note = input.trim() || undefined;
+  // "Add to contact" — file an approved submission onto the sender's contact
+  // record as a certification/insurance entry (needs a name + expiry date).
+  const createCert = useCreatePersonCertification();
+  const [fileTarget, setFileTarget] = useState<{ docId: string; personId: string; fileUrl: string; docName: string; uploaderName: string } | null>(null);
+  const [certName, setCertName] = useState("");
+  const [certNumber, setCertNumber] = useState("");
+  const [certExpiry, setCertExpiry] = useState("");
+  const [filedIds, setFiledIds] = useState<Record<string, boolean>>({});
+
+  const doFile = async () => {
+    if (!fileTarget || !certName.trim() || !certExpiry) return;
+    const docId = fileTarget.docId;
+    try {
+      await createCert.mutateAsync({
+        personId: fileTarget.personId,
+        data: {
+          name: certName.trim(),
+          certNumber: certNumber.trim() || undefined,
+          expiryDate: certExpiry,
+          documentUrl: fileTarget.fileUrl,
+        },
+      });
+      setFiledIds(prev => ({ ...prev, [docId]: true }));
+      setFileTarget(null);
+      toast({ title: "Added to contact", description: `Saved to ${fileTarget.uploaderName}'s records — you'll find it on their contact page and in Compliance.` });
+      // The server now drops filed submissions from the review list — refetch
+      // so the row disappears from "Documents for review".
+      await docsQ.refetch();
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Couldn't add to contact", description: e?.data?.message ?? "Please try again." });
     }
+  };
+
+  const doReview = async (id: string, action: "approve" | "reject", note?: string) => {
     setBusyId(id);
     try {
-      await review.mutateAsync({ projectId, id, data: { action, note } });
-      toast({ title: action === "approve" ? "Document approved" : "Document rejected" });
+      await review.mutateAsync({ projectId, id, data: { action, note: note?.trim() || undefined } });
+      toast({
+        title: action === "approve" ? "Document approved" : "Document rejected",
+        description: action === "reject" ? "The sender will see the decision and your note in their portal." : undefined,
+      });
       await docsQ.refetch();
     } catch (e: any) {
       toast({ variant: "destructive", title: "Could not update", description: e?.data?.message ?? "Please try again." });
@@ -115,7 +150,10 @@ function MemberDocumentsReview({ projectId }: { projectId: string }) {
             {docs.map(d => (
               <div key={d.id} className="flex items-center justify-between gap-3 p-3 bg-card border border-border rounded-lg">
                 <div className="min-w-0">
-                  <p className="font-medium truncate">{d.name} <span className="text-xs text-muted-foreground font-normal">· {d.kind}</span></p>
+                  <p className="font-medium truncate flex items-center gap-2">
+                    <span className="truncate">{d.name}</span>
+                    <span className="shrink-0 px-2 py-0.5 rounded-full text-xs font-medium capitalize bg-muted text-muted-foreground">{d.kind}</span>
+                  </p>
                   <p className="text-xs text-muted-foreground truncate">
                     {d.uploaderName} · {formatBytes(d.fileSize)} · {fmtRelative(d.createdAt)}
                   </p>
@@ -125,11 +163,38 @@ function MemberDocumentsReview({ projectId }: { projectId: string }) {
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${MEMBER_DOC_BADGE[d.status] ?? "bg-muted text-muted-foreground"}`}>{d.status}</span>
-                  <button onClick={() => openDocument(d.fileUrl, d.name)} className="p-1.5 text-muted-foreground hover:text-primary rounded-lg hover:bg-muted" title="Open file"><ExternalLink className="w-4 h-4" /></button>
+                  <button onClick={() => openDocument(d.fileUrl, d.name)}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-primary/25 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/15 transition-colors">
+                    <ExternalLink className="w-3 h-3" />Open
+                  </button>
+                  {d.status === "approved" && d.personId && (
+                    filedIds[d.id] ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                        <Check className="w-3 h-3" />Added
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setCertName(d.name);
+                          setCertNumber("");
+                          setCertExpiry("");
+                          setFileTarget({ docId: d.id, personId: d.personId!, fileUrl: d.fileUrl, docName: d.name, uploaderName: d.uploaderName });
+                        }}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-primary/25 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/15 transition-colors">
+                        <UserRoundPlus className="w-3 h-3" />Add to contact
+                      </button>
+                    )
+                  )}
                   {d.status === "pending" && (
                     <>
-                      <Button size="sm" variant="outline" className="h-8 px-2 text-xs" isLoading={busyId === d.id && review.variables?.data.action === "approve"} disabled={busyId === d.id} onClick={() => doReview(d.id, "approve")}><Check className="w-3.5 h-3.5" /> Approve</Button>
-                      <Button size="sm" variant="outline" className="h-8 px-2 text-xs text-destructive hover:text-destructive" isLoading={busyId === d.id && review.variables?.data.action === "reject"} disabled={busyId === d.id} onClick={() => doReview(d.id, "reject")}><X className="w-3.5 h-3.5" /> Reject</Button>
+                      <button disabled={busyId === d.id} onClick={() => doReview(d.id, "approve")}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-success hover:bg-muted transition-colors disabled:opacity-50">
+                        {busyId === d.id && review.variables?.data.action === "approve" ? <Spinner className="size-3" /> : <Check className="w-3 h-3" />}Approve
+                      </button>
+                      <button disabled={busyId === d.id} onClick={() => { setRejectNote(""); setRejectTarget({ id: d.id, name: d.name, uploaderName: d.uploaderName }); }}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-destructive hover:bg-muted transition-colors disabled:opacity-50">
+                        <X className="w-3 h-3" />Reject
+                      </button>
                     </>
                   )}
                 </div>
@@ -138,6 +203,74 @@ function MemberDocumentsReview({ projectId }: { projectId: string }) {
           </div>
         )
       )}
+
+      {/* Reject-with-notes dialog — the note is saved on the document and shown
+          to the sender in their portal "My documents" list, plus a notification. */}
+      <Dialog open={!!rejectTarget} onOpenChange={v => { if (!v) setRejectTarget(null); }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-destructive"><X className="w-4 h-4" /> Reject "{rejectTarget?.name}"?</DialogTitle>
+          <p className="text-sm text-muted-foreground">Add a note explaining why, so {rejectTarget?.uploaderName ?? "the sender"} knows what to fix. They'll see the decision and your note in their portal.</p>
+        </DialogHeader>
+        <textarea
+          value={rejectNote}
+          onChange={e => setRejectNote(e.target.value)}
+          rows={3}
+          maxLength={500}
+          placeholder="e.g. Certificate has expired — please upload the current one"
+          className="w-full rounded-lg border-2 border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:border-primary resize-none"
+        />
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setRejectTarget(null)}>Cancel</Button>
+          <Button
+            variant="destructive"
+            isLoading={busyId === rejectTarget?.id}
+            onClick={async () => {
+              if (!rejectTarget) return;
+              await doReview(rejectTarget.id, "reject", rejectNote);
+              setRejectTarget(null);
+            }}
+          >
+            Reject document
+          </Button>
+        </DialogFooter>
+      </Dialog>
+
+      {/* Add-to-contact dialog — files the approved doc onto the sender's
+          contact record as a certification/insurance entry with an expiry date,
+          so it shows on their contact page and feeds compliance reminders. */}
+      <Dialog open={!!fileTarget} onOpenChange={v => { if (!v) setFileTarget(null); }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><UserRoundPlus className="w-4 h-4 text-primary" /> Add to {fileTarget?.uploaderName ?? "contact"}'s records</DialogTitle>
+          <p className="text-sm text-muted-foreground">The approved file will be saved to their contact record with an expiry date, so it appears in Compliance and expiry reminders.</p>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Name (e.g. Public Liability Insurance, CSCS card)</label>
+            <input value={certName} onChange={e => setCertName(e.target.value)} maxLength={120}
+              className="mt-1 w-full rounded-lg border-2 border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:border-primary" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Certificate / policy number (optional)</label>
+            <input value={certNumber} onChange={e => setCertNumber(e.target.value)} maxLength={80}
+              className="mt-1 w-full rounded-lg border-2 border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:border-primary" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Expiry date</label>
+            <input type="date" value={certExpiry} onChange={e => setCertExpiry(e.target.value)}
+              className="mt-1 w-full rounded-lg border-2 border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:border-primary" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setFileTarget(null)}>Cancel</Button>
+          <Button
+            disabled={!certName.trim() || !certExpiry}
+            isLoading={createCert.isPending}
+            onClick={() => void doFile()}
+          >
+            Add to contact
+          </Button>
+        </DialogFooter>
+      </Dialog>
     </section>
   );
 }

@@ -173,6 +173,8 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 
 **Test accounts:** `paul@acme.com` / `password123` (demo, Acme Construction, Free Plan — project-capped). `annabelleparrish@icloud.com` / `password123` (site_worker, "Test SiteSort"). Tip: `beta_access=true` on demo company bypasses plan cap for testing gated UI.
 
+**In-app User Guide (single shared source):** copy lives in `lib/user-guide/src/index.ts` (`PM_GUIDE`/`WORKER_GUIDE`/`FAQ`) and is read by three surfaces — the dashboard `/user-guide` page (sidebar, under Settings), the portal `/portal/help` page (Help, under Settings — worker section + `workerFaq()` only), and the "Invite to Portal" email excerpt in `artifacts/api-server/src/lib/email.ts` (plus its public, no-login `/guide` page link). If you change a user-facing flow, update the in-app User Guide to match — edit the content module once and all three surfaces stay in sync.
+
 ## Session Log
 
 Full session-by-session detail in CLAUDE_ARCHIVE.md. Recent sessions (newest first):

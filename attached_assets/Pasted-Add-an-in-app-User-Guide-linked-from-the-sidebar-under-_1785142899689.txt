@@ -1,0 +1,71 @@
+Add an in-app User Guide, linked from the sidebar under Settings.
+
+1. Add a "User Guide" (or "Help & Guide") item in the left sidebar,
+   directly below Settings.
+2. It opens a User Guide page inside the app. Use the content/structure
+   from the HTML I'll provide (I have a designed guide) — reproduce it as
+   a proper in-app page using our existing shared components and styling
+   (page header, cards) so it matches the rest of the dashboard, rather
+   than pasting raw HTML. Two sections: "For project managers" and "For
+   site workers", plus a short FAQ.
+3. Make it accessible to all dashboard users. Consider surfacing a
+   trimmed "how the portal works" version inside the member portal too
+   (a small Help link), since workers benefit from it most — but keep
+   that optional/secondary.
+4. Keep it easy to edit later — the guide text will change as the product
+   does, so structure it so copy can be updated without touching layout.
+5. typecheck + check:layout pass at 360px/768px. Republish when done.
+
+Two thoughts before you hand it over. First, I've written the guide to match the features as we built them — but you've made a lot of changes, so give it a read and flag anything that's drifted (e.g. if the portal home boxes ended up different from the five we specced, tweak that line). Second, a guide like this is only as good as it is current: the moment you change a flow, the guide can quietly go stale. So it's worth telling Claude Code to keep the guide copy somewhere easy to update — and adding a note to your CLAUDE.md that says "if you change a user-facing flow, update the in-app User Guide to match."
+
+The timing's good, too — a written guide is exactly the thing that makes a cold contractor test go smoothly, because it answers the "how do I..." questions before they become "this doesn't work" frustration. Good luck with the testing; this is the moment all the graft pays off.
+
+Sitesort user guide
+Code · HTML 
+
+should i ask replit to write my guide as it can see all features?
+
+Yes — that's genuinely the better call, and I'd have suggested it if you hadn't. Here's the honest reasoning:
+
+My guide is written from what we designed in these conversations — but you've made dozens of changes, corrections, and reversals along the way, and some things landed differently from the original spec (the portal home boxes, the permission model, the sign-off PIN rethink, sections that got moved or hidden). I can't see your actual running app, so my version is my best reconstruction, not ground truth. Claude Code can read the real codebase and describe what's actually there. For an instruction manual, accuracy beats everything — a guide that describes a button that isn't there is worse than no guide.
+
+So use Claude Code to write it, but give it good direction so it doesn't produce something dry and feature-listy. Two things make the difference: tell it to write for your two audiences separately, and tell it to describe features by what the user does, not by how the code works. Here's a prompt:
+
+Write an in-app User Guide for SiteSort and add it to the sidebar under
+Settings. You can see the real, current features — base the guide on what
+the app ACTUALLY does now, not on any older plan.
+
+STRUCTURE — two clearly separated audiences plus an FAQ:
+1. "For project managers" — running the dashboard: creating projects,
+   adding contacts/team, uploading & revision-controlling documents,
+   sharing to the portal (everyone/trade/individual), inviting workers,
+   granting the per-section portal permissions, the QR site board,
+   the activity log, and triaging site issues / sign-offs. Cover approver
+   cover-for-absence.
+2. "For site workers" — using the portal on a phone: accepting the invite
+   and setting a password, adding to home screen (with the iPhone Safari
+   step), finding what's shared with them, reading current vs superseded
+   drawings, messages, notifications, and — if granted — logging site
+   issues / plant / daily reports (save vs submit).
+3. FAQ — the practical "how do I..." questions (invite in spam, removing
+   someone's access, shared logins, what a worker sees by default, etc.).
+
+WRITING RULES:
+- Write from the USER's side of the screen: name things by what people
+  click and see, in plain site-friendly language — not by how it's built.
+  A worker "adds SiteSort to their home screen", not "installs the PWA".
+- Walk the actual current UI: use the real tab names, button labels and
+  section names as they exist in the app right now. If something in the
+  guide would describe a feature that isn't actually there, don't write
+  it.
+- Keep it skimmable: short steps, headings, no walls of text.
+- Match the existing dashboard styling (shared page-header/card
+  components), and make the copy easy to edit later.
+
+PLACEMENT: sidebar item under Settings opens the guide as an in-app page,
+accessible to all dashboard users. Optionally add a trimmed "how the
+portal works" help link inside the member portal too.
+
+Before writing, list the actual current features/flows you'll document so
+I can confirm nothing's missing or wrong. Then write it. typecheck +
+check:layout pass, Republish.

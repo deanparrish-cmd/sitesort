@@ -10,8 +10,14 @@
 - [Subcontractor notes](subcontractor-notes-history.md) — two concepts: static blurb vs append-only timestamped reminders log; tenant-scope log APIs.
 - [Giant component splits](giant-component-split.md) — safe recipe: single state hook + context provider + verbatim JSX slices; SiteSort detail page uses this (detail/ dir).
 - [e2e fixture roles](e2e-fixture-roles.md) — dashboard JWT role comes from company_members.role; fixtures must use admin/project_manager/site_worker or authz 403s fake a bug.
+- [iPad Safari detection](ipad-safari-detection.md) — iPads report as "Macintosh" in the UA (use maxTouchPoints>1); iPadOS push silently no-ops unless installed to Home Screen.
 - [Portal dictation STT](portal-dictation-stt.md) — never Web Speech API (silent fail in iOS standalone PWA); always MediaRecorder + server transcription via shared DictationButton.
 - [Portal read/write permissions](portal-read-vs-write-permissions.md) — flags gate visibility AND writes; content is submission-private (own/distributed only) until the PM shares. Apply the predicate to every read path incl. counts.
 - [Sign-off PIN gating](signoff-pin-gating.md) — PIN only for safety-critical types or per-doc toggle; policy computed server-side per doc, mutation routes must be role-gated.
 - [Tenant delete cascade](tenant-delete-cascade.md) — delete-company must track the full FK graph; scrub (not delete) cross-tenant users; drizzle ANY() needs `{a,b}`::text[] literals.
+- [Portal unseen badges](portal-unseen-badges.md) — one shared unseen source (computeUnseen); aggregate = sum of visible-section counts; privacy predicate applies to counts too.
+- [Portal share audience vs distribution](portal-share-audience.md) — share rules are per PERSON (pending invitees count in audience lists); emails/push/recipientCount need a user; don't gate Share on a file existing.
+- [JWT membership revalidation](jwt-membership-revalidation.md) — removing a member must also invalidate their long-lived JWTs; auth middleware re-checks membership with a 60s cache.
+- [Contact email identity](contact-email-identity.md) — never edit a login-linked contact's email via contact endpoints; keep people↔subcontractor mirror in sync; manager-gate reused PATCH routes.
+- [Team tab member dedupe](team-member-dedupe.md) — only userId+personId membership rows are enforced; legacy firm-only rows are hidden when a person-backed row for the same firm exists.
 - [Site-board check-in matching](site-board-checkin-matching.md) — QR check-in must cover all 3 project_members link types (user_id, subcontractor_id, person_id); sub-linked people need valid insurance.

@@ -50,7 +50,13 @@ export function pushSupported(): boolean {
 
 export function isIOS(): boolean {
   const ua = navigator.userAgent;
-  return /iphone|ipad|ipod/i.test(ua) && !(window as unknown as { MSStream?: unknown }).MSStream;
+  if (/iphone|ipad|ipod/i.test(ua) && !(window as unknown as { MSStream?: unknown }).MSStream) return true;
+  // iPad Safari defaults to "desktop mode" and reports itself as a Mac
+  // ("Macintosh; Intel Mac OS X"). Real Macs have no touch screen, so
+  // Mac UA + multi-touch = iPad. Without this, iPads skip the mandatory
+  // Add-to-Home-Screen step and end up with subscriptions Apple never
+  // delivers to.
+  return /Macintosh/i.test(ua) && navigator.maxTouchPoints > 1;
 }
 
 export function isStandalone(): boolean {
@@ -119,6 +125,47 @@ export async function isDeviceSubscribed(): Promise<boolean> {
   }
 }
 
+// Remembers an intentional toggle-off on this device so the auto-heal resync
+// doesn't silently re-enable alerts the member chose to turn off.
+const PUSH_DISABLED_KEY = "sitesort_portal_push_disabled";
+function userDisabledPush(): boolean {
+  try { return localStorage.getItem(PUSH_DISABLED_KEY) === "1"; } catch { return false; }
+}
+function setUserDisabledPush(v: boolean): void {
+  try { v ? localStorage.setItem(PUSH_DISABLED_KEY, "1") : localStorage.removeItem(PUSH_DISABLED_KEY); } catch { /* ignore */ }
+}
+
+// Self-heal on app open: iOS sometimes silently drops a web-push subscription
+// (around updates or inactivity), which used to leave the settings toggle OFF
+// until someone noticed. If the member has already granted permission and
+// hasn't intentionally turned alerts off, quietly re-subscribe and re-register
+// with the server (also heals a server-side prune after a 404/410 from Apple).
+// Never triggers a permission prompt — it only acts when permission is already
+// granted, so it's safe to run on load.
+export async function resyncPush(): Promise<void> {
+  if (!pushSupported() || Notification.permission !== "granted" || userDisabledPush()) return;
+  try {
+    const key = await fetchVapidKey();
+    if (!key) return;
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(key) as BufferSource });
+    }
+    const json = sub.toJSON();
+    // Idempotent upsert server-side — safe to repeat on every open.
+    await fetch("/api/portal/push/subscribe", {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({
+        endpoint: sub.endpoint,
+        keys: { p256dh: json.keys?.p256dh ?? bufToB64Url(sub.getKey("p256dh")), auth: json.keys?.auth ?? bufToB64Url(sub.getKey("auth")) },
+        userAgent: navigator.userAgent,
+      }),
+    }).catch(() => {});
+  } catch { /* best-effort — never disrupt app load */ }
+}
+
 export type EnableResult = "enabled" | "denied" | "unsupported" | "needs_install" | "error";
 
 // Request permission (fires the browser prompt — MUST be from a user gesture),
@@ -129,6 +176,7 @@ export async function enablePush(): Promise<EnableResult> {
   try {
     const permission = await Notification.requestPermission();
     if (permission !== "granted") return "denied";
+    setUserDisabledPush(false);
     const key = await fetchVapidKey();
     if (!key) return "error"; // push not configured on the server
     const reg = await navigator.serviceWorker.ready;
@@ -155,6 +203,7 @@ export async function enablePush(): Promise<EnableResult> {
 // Unsubscribe this device (settings toggle-off / logout). Best-effort both sides.
 export async function disablePush(): Promise<void> {
   if (!pushSupported()) return;
+  setUserDisabledPush(true);
   try {
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.getSubscription();

@@ -2876,6 +2876,57 @@ paths:
                 items:
                   $ref: "#/components/schemas/PortalPermit"
 
+  /portal/permits/{permitId}/view:
+    post:
+      operationId: viewPortalPermit
+      tags: [portal]
+      summary: Record that this member opened a permit shared with them
+      parameters:
+        - name: permitId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: View recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          description: Permit not found or not shared with this member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /portal/permits/{permitId}/download:
+    get:
+      operationId: downloadPortalPermit
+      tags: [portal]
+      summary: Download a shared permit's attached document
+      parameters:
+        - name: permitId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Permit file stream
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Permit not found, not shared, or has no file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /portal/safety:
     get:
       operationId: getPortalSafety
@@ -4090,6 +4141,11 @@ components:
         insuranceStatus:
           type: string
           enum: [valid, expiring_soon, expired, none]
+        certifications:
+          type: array
+          description: Active certifications filed against this contact's people (e.g. an approved Insurance document filed via "Add to contact"). Insurance-named certs also count towards insuranceStatus.
+          items:
+            $ref: "#/components/schemas/PersonCertification"
         archivedAt:
           type: string
           format: date-time
@@ -5619,6 +5675,11 @@ components:
           format: date-time
           nullable: true
           description: When this viewer signed it off, if they have.
+        myViewedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When this viewer first opened the document, if they have (powers the "Received" label once a New item is opened).
       required: [id, name, type, version, fileUrl, status]
 
     PortalMemberDocument:
@@ -5654,6 +5715,9 @@ components:
           type: string
         kind:
           type: string
+        personId:
+          type: string
+          description: The submitter's contact (person) id, when linked — enables filing the doc to their contact record.
         fileUrl:
           type: string
         fileSize:
@@ -5702,6 +5766,10 @@ components:
           type: boolean
         sharedAt:
           type: string
+        myViewedAt:
+          type: string
+          format: date-time
+          nullable: true
       required: [id, type, description, expiryDate, status]
 
     PortalEvent:
@@ -5829,6 +5897,10 @@ components:
           format: date-time
         unseen:
           type: boolean
+        myViewedAt:
+          type: string
+          format: date-time
+          nullable: true
       required: [id, reportDate]
 
     PortalShared:
@@ -6078,6 +6150,14 @@ components:
         roleTitle:
           type: string
           nullable: true
+        email:
+          type: string
+          format: email
+          description: "New contact email (trimmed + lowercased server-side). Cannot be blank."
+        phone:
+          type: string
+          nullable: true
+          description: "Contact phone; null/empty clears it."
 
     PersonCertification:
       type: object

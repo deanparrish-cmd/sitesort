@@ -12,10 +12,9 @@ import { authenticate } from "../middlewares/auth";
 import { expiryStatus } from "../lib/expiry";
 import { issueCategoryFilter } from "../lib/accountability";
 import { isPinLockedOut, recordFailedPinAttempt, clearPinAttempts } from "../lib/pin-attempts";
+import { isProjectApprover } from "../lib/project-authority";
 
 const router: IRouter = Router();
-
-const MANAGER_ROLES = ["admin", "project_manager"];
 
 // Verify the project exists and belongs to the caller's company.
 async function loadOwnedProject(projectId: string, companyId: string) {
@@ -116,8 +115,10 @@ router.get("/projects/:projectId/closeout", authenticate, async (req, res) => {
 // immutable handover record. Manager-only (admin / project_manager).
 router.post("/projects/:projectId/closeout", authenticate, async (req, res) => {
   try {
-    if (!MANAGER_ROLES.includes(req.user!.role)) {
-      res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can close out a project." });
+    // Approver authority on THIS project (company admin/PM, per-project PM
+    // cover, or platform admin) — not just a company-wide role.
+    if (!(await isProjectApprover(req.user!, req.params.projectId))) {
+      res.status(403).json({ error: "forbidden", message: "Only a project approver can close out a project." });
       return;
     }
     const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
@@ -188,8 +189,8 @@ router.post("/projects/:projectId/closeout", authenticate, async (req, res) => {
 // are kept (immutable history); a later re-close appends a new one.
 router.post("/projects/:projectId/closeout/reopen", authenticate, async (req, res) => {
   try {
-    if (!MANAGER_ROLES.includes(req.user!.role)) {
-      res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can re-open a project." });
+    if (!(await isProjectApprover(req.user!, req.params.projectId))) {
+      res.status(403).json({ error: "forbidden", message: "Only a project approver can re-open a project." });
       return;
     }
     const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);

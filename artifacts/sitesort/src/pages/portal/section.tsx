@@ -44,6 +44,7 @@ import { Bell, BellOff } from "lucide-react";
 import { useSignOffFlow } from "@/hooks/use-sign-off-flow";
 import { ClipboardList } from "lucide-react";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { WORKER_GUIDE, workerFaq } from "@workspace/user-guide";
 
 // Portal-authed binary download: the app's global fetch interceptor attaches the
 // portal bearer token to /api/portal/* requests, so a plain <a href> (which does
@@ -219,6 +220,17 @@ function NewPill() {
   return <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-primary text-primary-foreground px-1.5 py-0.5 rounded">New</span>;
 }
 
+// Once a shared document has been opened, "New" gives way to a quiet receipt:
+// when this member first viewed it (server-recorded viewed_at, or the moment
+// they opened it this session).
+function ReceivedPill({ at }: { at: string }) {
+  return (
+    <span className="shrink-0 text-[10px] font-semibold bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
+      Received {fmtDateTime(at)}
+    </span>
+  );
+}
+
 // A row for a document (drawing / method statement / safety / general doc). The
 // superseded badge reflects the last list fetch; opening re-checks live status.
 // FreshDoc extended to carry the superseded replacement (T003): the per-item
@@ -232,6 +244,10 @@ function DocRow({ doc, section, unseen, signOff }: { doc: any; section: string; 
   const cad = cadBadgeLabel(doc.fileUrl, doc.name);
   const [supersededNow, setSupersededNow] = useState(doc.status === "superseded");
   const [downloading, setDownloading] = useState(false);
+  // "Received" receipt: the server records first-view (viewed_at) when the doc
+  // is opened; openedAt covers the current session so the pill flips instantly.
+  const [openedAt, setOpenedAt] = useState<string | null>(null);
+  const receivedAt: string | null = openedAt ?? doc.myViewedAt ?? null;
   const active = signOff.target?.id === doc.id;
 
   // Open the live replacement of a superseded document: fetch its detail for the
@@ -248,10 +264,15 @@ function DocRow({ doc, section, unseen, signOff }: { doc: any; section: string; 
   };
 
   const open = () => {
-    openDocFile(doc);
+    const opened = openDocFile(doc);
     // Log the view for every doc type (not just drawings/method-statements) —
-    // opening never needs a PIN, only signing off does. Fire-and-forget.
-    void fetch(`/api/portal/documents/${doc.id}/view`, { method: "POST" });
+    // opening never needs a PIN, only signing off does. Fire-and-forget for the
+    // open itself, but the "Received" receipt only flips once the file actually
+    // opened AND the server confirmed it recorded the view — so the pill never
+    // claims a receipt the audit trail doesn't have.
+    void fetch(`/api/portal/documents/${doc.id}/view`, { method: "POST" }).then(r => {
+      if (opened && r.ok && !openedAt && !doc.myViewedAt) setOpenedAt(new Date().toISOString());
+    }).catch(() => {});
     if (!clickable) return;
     // Confirm current status at open (not from the cached list row).
     void fetchFreshDoc(section, doc.id).then(({ ok, doc: fresh }: { ok: boolean; doc: FreshDocFull }) => {
@@ -295,13 +316,21 @@ function DocRow({ doc, section, unseen, signOff }: { doc: any; section: string; 
 
   const needsSignOff = doc.requiresAcknowledgment && doc.myStatus !== "acknowledged";
   const signedOff = doc.requiresAcknowledgment && doc.myStatus === "acknowledged";
+  // "New" is PER-DOCUMENT, not per-visit: a document stays New until this member
+  // actually opens it (server-recorded viewed_at), then flips to a "Received
+  // <date time>" receipt. Section-level `unseen` alone used to drive this, which
+  // meant the pill vanished as soon as the feed refreshed — before anyone opened
+  // anything. `unseen` is kept only as a fallback for payloads without view
+  // tracking (myViewedAt key absent).
+  const tracksViews = "myViewedAt" in doc;
+  const isNewDoc = tracksViews ? !receivedAt : !!unseen;
 
   return (
-    <div className={cn("border-b border-border/60 last:border-0", unseen && "-mx-4 px-4 bg-primary/5")}>
+    <div className={cn("border-b border-border/60 last:border-0", isNewDoc && "-mx-4 px-4 bg-primary/5")}>
       <div className="flex items-center justify-between gap-3 py-2.5">
         <div className="min-w-0">
           <p className="font-medium truncate flex items-center gap-1.5">
-            {unseen && <NewPill />}
+            {receivedAt ? <ReceivedPill at={receivedAt} /> : isNewDoc && <NewPill />}
             <span className="truncate">{doc.name}</span>
             {supersededNow && (
               <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 px-1.5 py-0.5 rounded">Superseded</span>
@@ -418,13 +447,58 @@ function SignOffPinCard({ flow }: { flow: ReturnType<typeof useSignOffFlow> }) {
   );
 }
 function PermitRow({ p, unseen }: { p: any; unseen?: boolean }) {
+  const { toast } = useToast();
+  const [downloading, setDownloading] = useState(false);
+  // Same per-item receipt pattern as DocRow: New until THIS member opens it,
+  // then a permanent "Received <when>". openedAt covers the current session so
+  // the pill flips instantly; the server's viewed_at makes it stick.
+  const [openedAt, setOpenedAt] = useState<string | null>(null);
+  const receivedAt: string | null = openedAt ?? p.myViewedAt ?? null;
+  const tracksViews = "myViewedAt" in p;
+  const isNewPermit = tracksViews ? !receivedAt : !!unseen;
+
+  const view = async () => {
+    setDownloading(true);
+    try {
+      // Open the attached file INLINE in a new tab (same as documents) — the
+      // window must open synchronously from the click so popup blockers and
+      // iOS don't interfere. Forced blob-downloads on iPhone/iPad surface a
+      // useless "? Open in…" sheet, so never download here. A permit with no
+      // file is still "viewable" — its details are the row itself — so View
+      // just confirms receipt.
+      if (p.documentUrl) {
+        const href = fileHref(p.documentUrl);
+        if (href) window.open(href, "_blank", "noopener");
+      }
+      const r = await fetch(`/api/portal/permits/${p.id}/view`, { method: "POST" });
+      if (!r.ok) throw new Error();
+      if (!openedAt && !p.myViewedAt) setOpenedAt(new Date().toISOString());
+    } catch {
+      toast({ title: "Couldn't open permit", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   return (
-    <div className={cn("flex items-center justify-between gap-3 py-2.5 border-b border-border/60 last:border-0", unseen && "-mx-4 px-4 bg-primary/5")}>
+    <div className={cn("flex items-center justify-between gap-3 py-2.5 border-b border-border/60 last:border-0", isNewPermit && "-mx-4 px-4 bg-primary/5")}>
       <div className="min-w-0">
-        <p className="font-medium truncate flex items-center gap-1.5">{unseen && <NewPill />}<span className="truncate">{p.type}</span></p>
+        <p className="font-medium truncate flex items-center gap-1.5">
+          {receivedAt ? <ReceivedPill at={receivedAt} /> : isNewPermit && <NewPill />}
+          <span className="truncate">{p.type}</span>
+        </p>
         <p className="text-xs text-muted-foreground truncate">{p.description} · expires {fmtDate(p.expiryDate)}</p>
       </div>
-      <Badge label={p.status === "expiring_soon" ? "Expiring" : p.status === "expired" ? "Expired" : "Active"} className={PERMIT_BADGE[p.status]} />
+      <div className="shrink-0 flex items-center gap-2">
+        <Badge label={p.status === "expiring_soon" ? "Expiring" : p.status === "expired" ? "Expired" : "Active"} className={PERMIT_BADGE[p.status]} />
+        <button
+          onClick={view}
+          disabled={downloading}
+          className="min-h-9 px-3 rounded-lg border text-xs font-medium hover:bg-muted disabled:opacity-50"
+        >
+          {downloading ? "Opening…" : "View"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -1064,9 +1138,14 @@ function SharedView() {
   });
   const viewReport = useViewPortalSharedDailyReport();
   const [viewingReport, setViewingReport] = useState<{ id: string; reportDate: string; managerReport?: ManagerReportFields | null } | null>(null);
+  // Session-local receipts so the "Received" pill flips instantly on open;
+  // the server's recorded view (myViewedAt) makes it permanent.
+  const [reportOpened, setReportOpened] = useState<Record<string, string>>({});
   const openSharedReport = (r: { id: string; reportDate: string; managerReport?: ManagerReportFields | null }) => {
     setViewingReport(r);
-    viewReport.mutate({ reportId: r.id });
+    viewReport.mutate({ reportId: r.id }, {
+      onSuccess: () => setReportOpened(prev => prev[r.id] ? prev : { ...prev, [r.id]: new Date().toISOString() }),
+    });
   };
   // Site notes lived on the old (now-retired) General tab alongside general
   // documents — they're project-wide announcements, not gated/shared content,
@@ -1152,17 +1231,20 @@ function SharedView() {
       )}
       {showDailyReports && (
         <div><SectionTitle>Daily reports</SectionTitle><Card>
-          {dailyReports.map(r => (
-            <button
-              key={r.id}
-              onClick={() => openSharedReport(r)}
-              className="w-full flex items-center gap-3 px-3 py-3 min-h-[44px] text-left hover:bg-muted/60 transition-colors border-b border-border last:border-b-0"
-            >
-              {isNew(r.id) && <NewPill />}
-              <ClipboardList className="w-4 h-4 text-primary shrink-0" />
-              <span className="flex-1 min-w-0 text-sm font-medium truncate">Daily site report — {fmtDate(r.reportDate)}</span>
-            </button>
-          ))}
+          {dailyReports.map(r => {
+            const receivedAt = reportOpened[r.id] ?? (r as any).myViewedAt ?? null;
+            return (
+              <button
+                key={r.id}
+                onClick={() => openSharedReport(r)}
+                className="w-full flex items-center gap-3 px-3 py-3 min-h-[44px] text-left hover:bg-muted/60 transition-colors border-b border-border last:border-b-0"
+              >
+                {receivedAt ? <ReceivedPill at={receivedAt} /> : <NewPill />}
+                <ClipboardList className="w-4 h-4 text-primary shrink-0" />
+                <span className="flex-1 min-w-0 text-sm font-medium truncate">Daily site report — {fmtDate(r.reportDate)}</span>
+              </button>
+            );
+          })}
         </Card></div>
       )}
       {nothingInCategory && <Empty>Nothing in this category yet.</Empty>}
@@ -1785,7 +1867,10 @@ function MyDocumentsView() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="font-medium truncate">{d.name}</p>
-                      <p className="text-xs text-muted-foreground capitalize">{d.kind} · {fmtDate(d.createdAt)}</p>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                        <span className="px-2 py-0.5 rounded-full font-medium capitalize bg-muted text-muted-foreground">{d.kind}</span>
+                        {fmtDate(d.createdAt)}
+                      </p>
                     </div>
                     <Badge label={st.label} className={st.className} />
                   </div>
@@ -1934,24 +2019,60 @@ function SettingsView() {
               <div className="min-w-0">
                 <p className="font-medium">New content alerts</p>
                 <p className="text-xs text-muted-foreground">
-                  {subscribed ? "On — you'll be notified when new drawings or notices are shared." : perm === "denied" ? "Blocked in your browser settings for this site." : "Off — get a heads-up when something new is shared with you."}
+                  {subscribed ? "On — you'll be notified when new drawings or notices are shared." : perm === "denied" ? "Blocked in your browser settings. To fix: tap the padlock or settings icon by the address bar, set Notifications to Allow, then reload this page." : "Off — get a heads-up when something new is shared with you."}
                 </p>
               </div>
               {subscribed ? (
                 <button onClick={disable} disabled={busy} className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm font-medium hover:bg-muted disabled:opacity-50">
                   <BellOff className="w-4 h-4" /> Turn off
                 </button>
-              ) : (
-                <button onClick={enable} disabled={busy || perm === "denied"} className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50">
+              ) : perm !== "denied" ? (
+                <button onClick={enable} disabled={busy} className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50">
                   <Bell className="w-4 h-4" /> {busy ? "…" : "Turn on"}
                 </button>
-              )}
+              ) : null}
             </div>
           )}
         </Card>
       </div>
       <PortalPinSection />
       <AddToHomeScreenCard />
+    </div>
+  );
+}
+
+// Help — the worker half of the shared User Guide (dashboard has the full
+// PM+worker version). Same content source as the dashboard page and the
+// "Invite to Portal" email — edit lib/user-guide/src/index.ts to update all three.
+function HelpView() {
+  return (
+    <div className="space-y-5">
+      {WORKER_GUIDE.map((section) => (
+        <div key={section.id}>
+          <SectionTitle>{section.title}</SectionTitle>
+          <Card className="space-y-3">
+            {section.steps.map((step, i) => (
+              <div key={i}>
+                <p className="text-sm font-semibold">{step.heading}</p>
+                {step.body.map((line, j) => (
+                  <p key={j} className="text-sm text-muted-foreground mt-1">{line}</p>
+                ))}
+              </div>
+            ))}
+          </Card>
+        </div>
+      ))}
+      <div>
+        <SectionTitle>FAQ</SectionTitle>
+        <Card className="divide-y divide-border/60">
+          {workerFaq().map((item) => (
+            <div key={item.id} className="py-3 first:pt-0 last:pb-0">
+              <p className="text-sm font-semibold">{item.question}</p>
+              <p className="text-sm text-muted-foreground mt-1">{item.answer}</p>
+            </div>
+          ))}
+        </Card>
+      </div>
     </div>
   );
 }
@@ -2064,6 +2185,7 @@ function renderSection(section: string) {
     case "shared": return <SharedView />;
     case "my-documents": return <MyDocumentsView />;
     case "settings": return <SettingsView />;
+    case "help": return <HelpView />;
     case "site-issues": return <SiteIssuesView />;
     case "plant-materials": return <PlantMaterialsView />;
     case "daily-report": return <DailyReportView />;

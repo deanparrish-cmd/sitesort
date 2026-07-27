@@ -2,10 +2,11 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import {
   portalSharesTable, projectsTable, projectMembersTable, peopleTable,
-  subcontractorsTable, documentsTable, usersTable,
-  portalMemberDocumentsTable,
+  subcontractorsTable, documentsTable, usersTable, permitsTable,
+  photosTable, plantItemsTable, dailyReportsTable,
+  portalMemberDocumentsTable, personCertificationsTable,
 } from "@workspace/db/schema";
-import { and, eq, isNotNull, inArray, desc } from "drizzle-orm";
+import { and, eq, isNull, isNotNull, inArray, desc } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { enqueuePushForMembers } from "../lib/push-triggers";
@@ -40,6 +41,16 @@ async function ownedProject(req: import("express").Request): Promise<boolean> {
 // the trades of the firm they belong to. In-house people (no firm) carry no
 // trade and fall in the synthetic "Site Staff" bucket.
 async function acceptedMembers(projectId: string) {
+  const rows = await portalAudienceMembers(projectId);
+  return rows.filter(r => r.userId !== null).map(r => ({ ...r, userId: r.userId as string }));
+}
+
+// All person-linked project members, whether or not they've accepted their
+// portal invite yet (userId null = pending). Share rules are stored by PERSON,
+// so sharing with a pending member is meaningful — they see the item the
+// moment they accept. The share dialog therefore lists pending people too
+// (flagged), instead of claiming "no portal members" while people are invited.
+async function portalAudienceMembers(projectId: string) {
   const rows = await db.select({
     personId: projectMembersTable.personId,
     userId: projectMembersTable.userId,
@@ -51,11 +62,10 @@ async function acceptedMembers(projectId: string) {
     .where(and(
       eq(projectMembersTable.projectId, projectId),
       isNotNull(projectMembersTable.personId),
-      isNotNull(projectMembersTable.userId),
     ));
   return rows.map(r => ({
     personId: r.personId as string,
-    userId: r.userId as string,
+    userId: (r.userId ?? null) as string | null,
     trades: (r.trades ?? []) as string[],
   }));
 }
@@ -69,7 +79,7 @@ router.get("/projects/:projectId/portal-audience", authenticate, async (req, res
 
     const proj = await db.select({ trades: projectsTable.trades }).from(projectsTable)
       .where(eq(projectsTable.id, req.params.projectId)).limit(1);
-    const members = await acceptedMembers(req.params.projectId);
+    const members = await portalAudienceMembers(req.params.projectId);
 
     // Member names for the individual multi-select (sorted by surname). Company
     // + contact type let the picker show "Name · Company · Trade" (Feature:
@@ -80,7 +90,7 @@ router.get("/projects/:projectId/portal-audience", authenticate, async (req, res
     }).from(projectMembersTable)
       .innerJoin(peopleTable, eq(projectMembersTable.personId, peopleTable.id))
       .leftJoin(subcontractorsTable, eq(peopleTable.subcontractorId, subcontractorsTable.id))
-      .where(and(eq(projectMembersTable.projectId, req.params.projectId), isNotNull(projectMembersTable.userId)));
+      .where(and(eq(projectMembersTable.projectId, req.params.projectId), isNotNull(projectMembersTable.personId)));
     const nameByPerson = new Map(named.map(n => [n.personId as string, n.name]));
     const companyByPerson = new Map(named.map(n => [n.personId as string, n.contactType === "self_employed" ? "Self-employed" : n.companyName]));
     const surnameOf = (n: { name: string; lastName: string | null }) => (n.lastName?.trim() || n.name.trim().split(" ").slice(-1)[0] || n.name).toLowerCase();
@@ -97,7 +107,7 @@ router.get("/projects/:projectId/portal-audience", authenticate, async (req, res
     res.json({
       trades: [...tradeSet].sort().map(trade => ({ trade, memberCount: counts.get(trade) ?? 0 })),
       members: members
-        .map(m => ({ personId: m.personId, userId: m.userId, name: nameByPerson.get(m.personId) ?? "Unknown", companyName: companyByPerson.get(m.personId) ?? undefined, trades: m.trades }))
+        .map(m => ({ personId: m.personId, userId: m.userId, accepted: m.userId !== null, name: nameByPerson.get(m.personId) ?? "Unknown", companyName: companyByPerson.get(m.personId) ?? undefined, trades: m.trades }))
         .sort((a, b) => (surnameByPerson.get(a.personId) ?? "").localeCompare(surnameByPerson.get(b.personId) ?? "")),
     });
   } catch (err) {
@@ -146,6 +156,18 @@ router.post("/projects/:projectId/portal-shares", authenticate, async (req, res)
       return;
     }
 
+    // The item must actually belong to THIS project — otherwise a manager of
+    // one project could create share rules (and fire notifications) for
+    // another project's items just by guessing ids.
+    const ITEM_TABLE = {
+      document: documentsTable, photo: photosTable, permit: permitsTable,
+      plant_item: plantItemsTable, daily_report: dailyReportsTable,
+    } as const;
+    const table = ITEM_TABLE[itemType as keyof typeof ITEM_TABLE];
+    const owned = (await db.select({ id: table.id }).from(table)
+      .where(and(eq(table.id, itemId), eq(table.projectId, req.params.projectId))).limit(1))[0];
+    if (!owned) { res.status(404).json({ error: "not_found", message: "Item not found in this project" }); return; }
+
     for (const a of audiences) {
       if (a.type === "trade" && !a.trade) continue;
       if (a.type === "person" && !a.personId) continue;
@@ -171,19 +193,22 @@ router.post("/projects/:projectId/portal-shares", authenticate, async (req, res)
     // which a portal-only recipient couldn't actually see/sign off the doc
     // in-portal even though they'd been "allocated" it).
     let recipientCount = 0;
-    if (itemType === "document") {
-      const members = await acceptedMembers(req.params.projectId);
-      const targetUserIds = new Set<string>();
-      for (const a of audiences) {
-        if (a.type === "all") members.forEach(m => targetUserIds.add(m.userId));
-        else if (a.type === "person" && a.personId) members.filter(m => m.personId === a.personId).forEach(m => targetUserIds.add(m.userId));
-        else if (a.type === "trade" && a.trade) {
-          members.filter(m => m.trades.includes(a.trade!) || (m.trades.length === 0 && a.trade === SITE_STAFF))
-            .forEach(m => targetUserIds.add(m.userId));
-        }
+    // Resolve the exact accepted members this share reaches — same audience
+    // flattening for EVERY item type, so permits/photos notify just like
+    // documents (previously only documents pushed; a shared permit was silent).
+    const members = await acceptedMembers(req.params.projectId);
+    const targetUserIds = new Set<string>();
+    for (const a of audiences) {
+      if (a.type === "all") members.forEach(m => targetUserIds.add(m.userId));
+      else if (a.type === "person" && a.personId) members.filter(m => m.personId === a.personId).forEach(m => targetUserIds.add(m.userId));
+      else if (a.type === "trade" && a.trade) {
+        members.filter(m => m.trades.includes(a.trade!) || (m.trades.length === 0 && a.trade === SITE_STAFF))
+          .forEach(m => targetUserIds.add(m.userId));
       }
-      recipientCount = targetUserIds.size;
+    }
+    recipientCount = targetUserIds.size;
 
+    if (itemType === "document") {
       if (targetUserIds.size > 0) {
         const doc = (await db.select({ id: documentsTable.id, name: documentsTable.name, type: documentsTable.type, version: documentsTable.version, requiresAcknowledgment: documentsTable.requiresAcknowledgment }).from(documentsTable).where(eq(documentsTable.id, itemId)).limit(1))[0];
         const proj = (await db.select({ name: projectsTable.name }).from(projectsTable).where(eq(projectsTable.id, req.params.projectId)).limit(1))[0];
@@ -205,6 +230,24 @@ router.post("/projects/:projectId/portal-shares", authenticate, async (req, res)
           });
         }
       }
+    } else if (targetUserIds.size > 0) {
+      // Non-document items (permits, photos): push only — there's no
+      // distribution/email tracking for these, but recipients must still get
+      // an alert that something new landed in their portal.
+      const proj = (await db.select({ name: projectsTable.name }).from(projectsTable).where(eq(projectsTable.id, req.params.projectId)).limit(1))[0];
+      let title = "New item shared with you";
+      if (itemType === "permit") {
+        const p = (await db.select({ type: permitsTable.type }).from(permitsTable).where(eq(permitsTable.id, itemId)).limit(1))[0];
+        title = p?.type ? `New permit: ${p.type}` : "New permit shared with you";
+      } else if (itemType === "photo") {
+        title = "New site photo shared with you";
+      }
+      await enqueuePushForMembers([...targetUserIds], req.params.projectId, {
+        kind: "site_update", itemType, itemId,
+        title,
+        projectName: proj?.name ?? "SiteSort",
+        deepLink: "/portal/shared",
+      });
     }
 
     res.status(201).json({ success: true, recipientCount });
@@ -244,6 +287,7 @@ router.get("/projects/:projectId/member-documents", authenticate, async (req, re
       id: portalMemberDocumentsTable.id,
       name: portalMemberDocumentsTable.name,
       kind: portalMemberDocumentsTable.kind,
+      personId: portalMemberDocumentsTable.personId,
       fileUrl: portalMemberDocumentsTable.fileUrl,
       fileSize: portalMemberDocumentsTable.fileSize,
       status: portalMemberDocumentsTable.status,
@@ -253,10 +297,22 @@ router.get("/projects/:projectId/member-documents", authenticate, async (req, re
       uploaderName: usersTable.name,
     }).from(portalMemberDocumentsTable)
       .leftJoin(usersTable, eq(portalMemberDocumentsTable.userId, usersTable.id))
-      .where(eq(portalMemberDocumentsTable.projectId, req.params.projectId))
+      // Once a submission has been "Added to contact" (a person certification
+      // exists with this exact file), it's filed — drop it from the review
+      // list so the queue only shows items still needing attention.
+      .leftJoin(personCertificationsTable, and(
+        eq(personCertificationsTable.personId, portalMemberDocumentsTable.personId),
+        eq(personCertificationsTable.documentUrl, portalMemberDocumentsTable.fileUrl),
+        isNull(personCertificationsTable.archivedAt),
+      ))
+      .where(and(
+        eq(portalMemberDocumentsTable.projectId, req.params.projectId),
+        isNull(personCertificationsTable.id),
+      ))
       .orderBy(desc(portalMemberDocumentsTable.createdAt));
     res.json(rows.map(r => ({
-      id: r.id, name: r.name, kind: r.kind, fileUrl: r.fileUrl, fileSize: r.fileSize,
+      id: r.id, name: r.name, kind: r.kind, personId: r.personId ?? undefined,
+      fileUrl: r.fileUrl, fileSize: r.fileSize,
       status: r.status, reviewNote: r.reviewNote ?? undefined,
       reviewedAt: r.reviewedAt ? r.reviewedAt.toISOString() : undefined,
       createdAt: r.createdAt.toISOString(),
@@ -279,15 +335,38 @@ router.post("/projects/:projectId/member-documents/:id/review", authenticate, as
       res.status(400).json({ error: "validation_error", message: "action must be 'approve' or 'reject'." });
       return;
     }
-    const existing = (await db.select({ id: portalMemberDocumentsTable.id }).from(portalMemberDocumentsTable)
+    const existing = (await db.select({ id: portalMemberDocumentsTable.id, userId: portalMemberDocumentsTable.userId, name: portalMemberDocumentsTable.name })
+      .from(portalMemberDocumentsTable)
       .where(and(eq(portalMemberDocumentsTable.id, req.params.id), eq(portalMemberDocumentsTable.projectId, req.params.projectId))).limit(1))[0];
     if (!existing) { res.status(404).json({ error: "not_found", message: "Document not found" }); return; }
-    await db.update(portalMemberDocumentsTable).set({
+    // Pending-only guard: two managers reviewing at once must not flip the
+    // decision back and forth or double-notify — first decision wins.
+    const updated = await db.update(portalMemberDocumentsTable).set({
       status: action === "approve" ? "approved" : "rejected",
       reviewNote: typeof note === "string" && note.trim() ? note.trim() : null,
       reviewedByUserId: req.user!.id,
       reviewedAt: new Date(),
-    }).where(eq(portalMemberDocumentsTable.id, existing.id));
+    }).where(and(eq(portalMemberDocumentsTable.id, existing.id), eq(portalMemberDocumentsTable.status, "pending")))
+      .returning({ id: portalMemberDocumentsTable.id });
+    if (updated.length === 0) {
+      res.status(409).json({ error: "already_reviewed", message: "This document has already been reviewed." });
+      return;
+    }
+
+    // Tell the uploader the decision landed (push, debounced/batched like every
+    // other portal notification). The rejection note itself is shown on the doc
+    // row in "My documents"; the unseen badge on that section comes from
+    // computeUnseen reading reviewedAt. Don't notify a PM reviewing their own upload.
+    if (existing.userId !== req.user!.id) {
+      const proj = (await db.select({ name: projectsTable.name }).from(projectsTable)
+        .where(eq(projectsTable.id, req.params.projectId)).limit(1))[0];
+      await enqueuePushForMembers([existing.userId], req.params.projectId, {
+        kind: "member_document_review", itemType: "member_document", itemId: existing.id,
+        title: action === "approve" ? `Document approved: ${existing.name}` : `Document rejected: ${existing.name}`,
+        projectName: proj?.name ?? "SiteSort",
+        deepLink: "/portal/my-documents",
+      });
+    }
     res.json({ success: true });
   } catch (err) {
     req.log.error({ err }, "Review member document error");

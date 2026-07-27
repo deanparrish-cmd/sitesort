@@ -492,6 +492,29 @@ export const SubcontractorInsuranceStatus = {
   none: "none",
 } as const;
 
+export type PersonCertificationStatus =
+  (typeof PersonCertificationStatus)[keyof typeof PersonCertificationStatus];
+
+export const PersonCertificationStatus = {
+  valid: "valid",
+  expiring_soon: "expiring_soon",
+  expired: "expired",
+} as const;
+
+/**
+ * An individual certification/ticket held by a person (CSCS, SSSTS/SMSTS, gas safe, plant tickets, etc.) — distinct from company-level PLI/insurance.
+ */
+export interface PersonCertification {
+  id: string;
+  personId: string;
+  name: string;
+  certNumber?: string | null;
+  expiryDate: string;
+  status: PersonCertificationStatus;
+  documentUrl?: string | null;
+  createdAt: string;
+}
+
 export interface Subcontractor {
   id: string;
   companyId: string;
@@ -507,6 +530,8 @@ export interface Subcontractor {
   reliabilityRating?: number | null;
   paymentHold: boolean;
   insuranceStatus: SubcontractorInsuranceStatus;
+  /** Active certifications filed against this contact's people (e.g. an approved Insurance document filed via "Add to contact"). Insurance-named certs also count towards insuranceStatus. */
+  certifications?: PersonCertification[];
   archivedAt?: string | null;
   createdAt: string;
 }
@@ -1707,6 +1732,8 @@ export interface PortalDocument {
   myStatus?: PortalDocumentMyStatus;
   /** When this viewer signed it off, if they have. */
   mySignedOffAt?: string | null;
+  /** When this viewer first opened the document, if they have (powers the "Received" label once a New item is opened). */
+  myViewedAt?: string | null;
 }
 
 export interface PortalMemberDocument {
@@ -1726,6 +1753,8 @@ export interface MemberDocument {
   id: string;
   name: string;
   kind: string;
+  /** The submitter's contact (person) id, when linked — enables filing the doc to their contact record. */
+  personId?: string;
   fileUrl: string;
   fileSize: number;
   /** pending | approved | rejected */
@@ -1759,6 +1788,7 @@ export interface PortalPermit {
   documentUrl?: string;
   unseen?: boolean;
   sharedAt?: string;
+  myViewedAt?: string | null;
 }
 
 export interface PortalEvent {
@@ -1848,6 +1878,7 @@ export interface PortalSharedDailyReport {
   managerReport?: ManagerReportFields | null;
   sharedAt?: string;
   unseen?: boolean;
+  myViewedAt?: string | null;
 }
 
 export interface PortalShared {
@@ -2043,29 +2074,10 @@ export interface UpdatePersonRequest {
   lastName?: string;
   showContactInPortal?: boolean | null;
   roleTitle?: string | null;
-}
-
-export type PersonCertificationStatus =
-  (typeof PersonCertificationStatus)[keyof typeof PersonCertificationStatus];
-
-export const PersonCertificationStatus = {
-  valid: "valid",
-  expiring_soon: "expiring_soon",
-  expired: "expired",
-} as const;
-
-/**
- * An individual certification/ticket held by a person (CSCS, SSSTS/SMSTS, gas safe, plant tickets, etc.) — distinct from company-level PLI/insurance.
- */
-export interface PersonCertification {
-  id: string;
-  personId: string;
-  name: string;
-  certNumber?: string | null;
-  expiryDate: string;
-  status: PersonCertificationStatus;
-  documentUrl?: string | null;
-  createdAt: string;
+  /** New contact email (trimmed + lowercased server-side). Cannot be blank. */
+  email?: string;
+  /** Contact phone; null/empty clears it. */
+  phone?: string | null;
 }
 
 export interface CreatePersonCertificationRequest {

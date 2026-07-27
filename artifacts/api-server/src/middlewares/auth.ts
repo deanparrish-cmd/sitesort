@@ -3,8 +3,8 @@ import jwt from "jsonwebtoken";
 import { isTokenBlocked } from "../lib/token-blocklist";
 import { logActivity } from "../lib/activity";
 import { db } from "@workspace/db";
-import { usersTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { usersTable, companyMembersTable } from "@workspace/db/schema";
+import { eq, and } from "drizzle-orm";
 
 if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET environment variable is required");
 const JWT_SECRET: string = process.env.JWT_SECRET;
@@ -55,6 +55,18 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
       const invalidBefore = await getSessionsInvalidBefore(payload.id);
       if (invalidBefore && payload.iat * 1000 < invalidBefore.getTime()) {
         res.status(401).json({ error: "unauthorized", message: "Session expired — please sign in again." });
+        return;
+      }
+    }
+
+    // Membership revalidation: a dashboard JWT carries the companyId it was
+    // issued for, but the user may since have been REMOVED from that company's
+    // team. Re-check the membership (60s cache) so removal takes effect
+    // immediately instead of when the 30-day token expires. Portal tokens are
+    // governed by portal_sessions (revoked server-side), so skip them here.
+    if (payload.scope !== "portal") {
+      if (!(await hasMembership(payload.id, payload.companyId))) {
+        res.status(401).json({ error: "unauthorized", message: "You no longer have access to this company — please sign in again." });
         return;
       }
     }
@@ -110,6 +122,27 @@ async function getSessionsInvalidBefore(userId: string): Promise<Date | null> {
 
 export function bustSessionsInvalidBeforeCache(userId: string): void {
   invalidBeforeCache.delete(userId);
+}
+
+// 60s per-(user,company) cache over company_members existence — same pattern as
+// the reset cutoff above. Removal busts the local entry for immediate effect
+// in-process; other instances converge within the TTL.
+const membershipCache = new Map<string, { value: boolean; fetchedAt: number }>();
+const MEMBERSHIP_TTL_MS = 60 * 1000;
+
+async function hasMembership(userId: string, companyId: string): Promise<boolean> {
+  const key = `${userId}:${companyId}`;
+  const cached = membershipCache.get(key);
+  if (cached && Date.now() - cached.fetchedAt < MEMBERSHIP_TTL_MS) return cached.value;
+  const rows = await db.select({ userId: companyMembersTable.userId }).from(companyMembersTable)
+    .where(and(eq(companyMembersTable.userId, userId), eq(companyMembersTable.companyId, companyId))).limit(1);
+  const value = rows.length > 0;
+  membershipCache.set(key, { value, fetchedAt: Date.now() });
+  return value;
+}
+
+export function bustMembershipCache(userId: string, companyId: string): void {
+  membershipCache.delete(`${userId}:${companyId}`);
 }
 
 // A short label for a blocked out-of-scope path, for the audit feed.

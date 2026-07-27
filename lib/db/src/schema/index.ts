@@ -31,6 +31,7 @@ export * from "./daily_reports";
 export * from "./daily_notes";
 export * from "./qr_board_pins";
 export * from "./portal-shares";
+export * from "./portal_item_views";
 export * from "./portal_member_documents";
 export * from "./portal_sessions";
 export * from "./push_subscriptions";

@@ -32,4 +32,6 @@ export interface PortalDocument {
   myStatus?: PortalDocumentMyStatus;
   /** When this viewer signed it off, if they have. */
   mySignedOffAt?: Date | null;
+  /** When this viewer first opened the document, if they have (powers the "Received" label once a New item is opened). */
+  myViewedAt?: Date | null;
 }

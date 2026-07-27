@@ -5,12 +5,12 @@ import { useGetPortalContext, getGetPortalContextQueryKey, useGetPortalUnseen, g
 import { Spinner } from "@/components/ui/spinner";
 import { PortalInstallPrompt } from "@/components/portal-install-prompt";
 import { PortalNotifyPrompt } from "@/components/portal-notify-prompt";
-import { markPortalSession, disablePush } from "@/lib/portal-push";
+import { markPortalSession, disablePush, resyncPush } from "@/lib/portal-push";
 import { cn } from "@/lib/utils";
 import {
   Home, AlertTriangle,
   LogOut, Inbox, HardHat,
-  Settings, Menu, X, FolderUp, Wrench, ClipboardList, MessageSquare, QrCode, FileCheck,
+  Settings, Menu, X, FolderUp, Wrench, ClipboardList, MessageSquare, QrCode, FileCheck, HelpCircle,
 } from "lucide-react";
 
 // The fixed portal nav — order + labels + icons. `key` matches the URL segment
@@ -40,6 +40,7 @@ export const SECTION_NAV: { key: string; label: string; Icon: typeof Home; permi
   { key: "site-board", label: "Site Board", Icon: QrCode },
   { key: "permits", label: "Permits", Icon: FileCheck },
   { key: "settings", label: "Settings", Icon: Settings },
+  { key: "help", label: "Help", Icon: HelpCircle },
   { key: "site-issues", label: "Site Issues", Icon: AlertTriangle, permission: "canLogIssues" },
   { key: "plant-materials", label: "Plant & Materials", Icon: Wrench, permission: "canUpdatePlantMaterials" },
   { key: "daily-report", label: "Daily Report", Icon: ClipboardList, permission: "canEditDailyReport" },
@@ -74,7 +75,34 @@ export function PortalLayout({ active, children }: { active: string; children: R
   const counts = (unseen?.counts ?? {}) as Record<string, number>;
 
   // Count this app open once (drives when the "enable notifications" card may appear).
-  useEffect(() => { markPortalSession(); }, []);
+  useEffect(() => { markPortalSession(); resyncPush(); }, []);
+
+  // Clear-on-open: the server records the section view AFTER the section's own
+  // GET responds (so that request still sees the old badge state). Shortly after
+  // landing on a section, refetch the unseen counts — its badge and the
+  // aggregate clear together, from the same server response, with no manual
+  // refresh. The 60s poll remains the backstop.
+  useEffect(() => {
+    if (!token) return;
+    const timers = [1500, 4000].map(ms =>
+      setTimeout(() => void queryClient.invalidateQueries({ queryKey: getGetPortalUnseenQueryKey() }), ms));
+    return () => timers.forEach(clearTimeout);
+  }, [active, token, queryClient]);
+
+  // App-icon badge (installed PWA): mirror the SAME aggregate the nav uses via
+  // the Badging API where supported (Chrome/Edge desktop+Android, iOS 16.4+
+  // standalone). Best-effort — unsupported platforms just skip it.
+  useEffect(() => {
+    if (!data?.member) return; // don't clear/paint until permissions are known
+    const visible = SECTION_NAV.filter(s => !s.permission || !!data.member[s.permission]);
+    const c = (unseen?.counts ?? {}) as Record<string, number>;
+    const total = visible.reduce((sum, s) => sum + (c[s.key] ?? 0), 0);
+    const nav = navigator as Navigator & { setAppBadge?: (n?: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
+    try {
+      if (total > 0) void nav.setAppBadge?.(total)?.catch(() => {});
+      else void nav.clearAppBadge?.()?.catch(() => {});
+    } catch { /* Badging API unsupported */ }
+  }, [unseen, data]);
 
   // Focus-refetch fallback for standalone PWAs: React Query's own window-focus
   // handling can be unreliable when installed to the home screen, so when the
@@ -115,6 +143,10 @@ export function PortalLayout({ active, children }: { active: string; children: R
   // greyed) from the nav until the PM grants it on this member's project_members
   // row. No member data yet → show nothing gated rather than flash it briefly.
   const visibleNav = SECTION_NAV.filter(s => !s.permission || !!data?.member[s.permission]);
+  // Aggregate "something's new" = sum of the SAME per-section counts the nav
+  // badges render, restricted to sections this member can actually see — so
+  // the aggregate and per-section numbers can never disagree.
+  const totalUnseen = visibleNav.reduce((sum, s) => sum + (counts[s.key] ?? 0), 0);
 
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row">
@@ -125,8 +157,13 @@ export function PortalLayout({ active, children }: { active: string; children: R
         <Link href="/portal/overview" onClick={() => setIsMobileOpen(false)} className="shrink-0" aria-label="Portal home">
           <img src={logoSrc} alt="SiteSort" className="w-auto shrink-0 object-contain" style={{ height: "56px" }} />
         </Link>
-        <button onClick={() => setIsMobileOpen(o => !o)} className="p-2 text-primary" aria-label="Menu">
+        <button onClick={() => setIsMobileOpen(o => !o)} className="relative p-2 text-primary" aria-label="Menu">
           {isMobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          {/* Aggregate unseen indicator: the mobile menu hides the per-section
+              badges, so a closed menu shows one dot when ANYTHING is new. */}
+          {!isMobileOpen && totalUnseen > 0 && (
+            <span aria-label={`${totalUnseen} unseen`} className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-destructive ring-2 ring-card" />
+          )}
         </button>
       </div>
 

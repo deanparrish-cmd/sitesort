@@ -102,6 +102,11 @@ router.get("/projects/:projectId/members", authenticate, async (req, res) => {
       let avatarUrl: string | null = null;
       let pliCertUrl: string | null = null;
       let pliExpiryDate: string | null = null;
+      // The firm this card belongs to for grouping/PLI purposes: the member
+      // row's own subcontractorId, or (for person-backed rows) the person's
+      // firm. Lets the frontend group a firm's people together and lets us
+      // drop redundant legacy firm-only rows below.
+      let effectiveSubId: string | null = m.subcontractorId ?? null;
 
       if (m.personId) {
         // Person-first: every card sourced from a real `people` row, whether or
@@ -133,6 +138,7 @@ router.get("/projects/:projectId/members", authenticate, async (req, res) => {
         trades = p?.trades ?? [];
         avatarUrl = p?.avatarUrl ?? null;
         if (p?.subcontractorId) {
+          effectiveSubId = effectiveSubId ?? p.subcontractorId;
           const c = await companyCompliance(p.subcontractorId);
           complianceStatus = c.complianceStatus;
           pliCertUrl = c.pliCertUrl;
@@ -188,7 +194,7 @@ router.get("/projects/:projectId/members", authenticate, async (req, res) => {
         id: m.id,
         projectId: m.projectId,
         userId: m.userId ?? null,
-        subcontractorId: m.subcontractorId ?? null,
+        subcontractorId: effectiveSubId,
         personId: m.personId ?? null,
         name,
         contactName,
@@ -215,7 +221,17 @@ router.get("/projects/:projectId/members", authenticate, async (req, res) => {
       };
     }));
 
-    res.json(result);
+    // A firm's primary contact can end up on a project twice: once via the
+    // legacy firm-only link row (no person/user) and once as an individual
+    // person/user member. The person-backed row is the real one (portal
+    // permissions and PM authority are enforced against it), so hide the
+    // legacy firm-only row whenever any person-backed row for the same firm
+    // exists — the firm identity (name, trades, PLI, compliance) is already
+    // carried on the person card via effectiveSubId.
+    const personBackedSubIds = new Set(result.filter(r => r.personId && r.subcontractorId).map(r => r.subcontractorId));
+    const deduped = result.filter(r => !(r.subcontractorId && !r.personId && !r.userId && personBackedSubIds.has(r.subcontractorId)));
+
+    res.json(deduped);
   } catch (err) {
     req.log.error({ err }, "List members error");
     res.status(500).json({ error: "server_error", message: "Failed to list members" });
@@ -352,6 +368,18 @@ router.post("/projects/:projectId/members/person", authenticate, async (req, res
 
 router.post("/projects/:projectId/members/:memberId/insurance-cert", authenticate, async (req, res) => {
   try {
+    // Tenant + role gate: only a manager acting on their own company's project
+    // may write insurance records (this endpoint predates both checks).
+    if (!MANAGER_ROLES.includes(req.user!.role)) {
+      res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can save insurance certificates." });
+      return;
+    }
+    const ownedProject = await db.select({ id: projectsTable.id }).from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!ownedProject.length) {
+      res.status(404).json({ error: "not_found", message: "Project not found" }); return;
+    }
     const { certificateUrl, expiryDate } = req.body;
     if (!certificateUrl || !expiryDate) {
       res.status(400).json({ error: "validation_error", message: "certificateUrl and expiryDate are required" }); return;
@@ -359,10 +387,28 @@ router.post("/projects/:projectId/members/:memberId/insurance-cert", authenticat
     const memberRows = await db.select().from(projectMembersTable)
       .where(and(eq(projectMembersTable.id, req.params.memberId), eq(projectMembersTable.projectId, req.params.projectId)))
       .limit(1);
-    if (!memberRows.length || !memberRows[0].subcontractorId) {
+    if (!memberRows.length) {
       res.status(404).json({ error: "not_found", message: "Subcontractor member not found" }); return;
     }
-    const subId = memberRows[0].subcontractorId;
+    // Person-backed member cards carry their firm via the person row, not the
+    // membership row — fall back to the person's firm so the PLI zone works on
+    // merged cards too.
+    let subId = memberRows[0].subcontractorId;
+    if (!subId && memberRows[0].personId) {
+      const p = await db.select({ subcontractorId: peopleTable.subcontractorId }).from(peopleTable)
+        .where(and(eq(peopleTable.id, memberRows[0].personId), eq(peopleTable.companyId, req.user!.companyId))).limit(1);
+      subId = p[0]?.subcontractorId ?? null;
+    }
+    if (!subId) {
+      res.status(404).json({ error: "not_found", message: "Subcontractor member not found" }); return;
+    }
+    // Defense-in-depth: the target firm must belong to the caller's company.
+    const ownedSub = await db.select({ id: subcontractorsTable.id }).from(subcontractorsTable)
+      .where(and(eq(subcontractorsTable.id, subId), eq(subcontractorsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!ownedSub.length) {
+      res.status(404).json({ error: "not_found", message: "Subcontractor member not found" }); return;
+    }
     // Upsert: update existing PLI record or insert new one
     const existing = await db.select().from(insuranceRecordsTable)
       .where(and(eq(insuranceRecordsTable.subcontractorId, subId), eq(insuranceRecordsTable.type, "public_liability")))
@@ -386,16 +432,65 @@ router.post("/projects/:projectId/members/:memberId/insurance-cert", authenticat
 
 router.patch("/projects/:projectId/members/:memberId/contact", authenticate, async (req, res) => {
   try {
-    const { phone } = req.body;
+    // Tenant scope + role gate (this endpoint predates both; the Team tab only
+    // shows the pencil to managers, but the API must enforce it too).
+    if (!MANAGER_ROLES.includes(req.user!.role)) {
+      res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can edit contact details." });
+      return;
+    }
+    const proj = (await db.select({ id: projectsTable.id }).from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId))).limit(1))[0];
+    if (!proj) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+
+    const { phone, email } = req.body as { phone?: string | null; email?: string | null };
+    if (phone === undefined && email === undefined) {
+      res.status(400).json({ error: "validation_error", message: "Nothing to update." });
+      return;
+    }
+    const cleanEmail = typeof email === "string" ? email.trim().toLowerCase() : undefined;
+    if (cleanEmail !== undefined && !/^\S+@\S+\.\S+$/.test(cleanEmail)) {
+      res.status(400).json({ error: "validation_error", message: "Enter a valid email address." });
+      return;
+    }
     const memberRows = await db.select().from(projectMembersTable)
       .where(and(eq(projectMembersTable.id, req.params.memberId), eq(projectMembersTable.projectId, req.params.projectId)))
       .limit(1);
     if (!memberRows.length) { res.status(404).json({ error: "not_found", message: "Member not found" }); return; }
     const m = memberRows[0];
-    if (m.userId) {
+
+    // Where the details live, in priority order: the person record (the modern
+    // source of truth), then the legacy firm row. A login account's phone can be
+    // updated, but its EMAIL is their sign-in identity — never editable here,
+    // regardless of whether the member also has a person record (people.email
+    // must stay in sync with users.email for invite/login matching).
+    if (cleanEmail !== undefined && m.userId) {
+      res.status(400).json({ error: "validation_error", message: "This member signs in with their email — it can't be changed here." });
+      return;
+    }
+    if (m.personId) {
+      const patch: Record<string, unknown> = {};
+      if (phone !== undefined) patch.phone = phone || null;
+      if (cleanEmail !== undefined) patch.email = cleanEmail;
+      const person = (await db.select({ isPrimaryContact: peopleTable.isPrimaryContact, subcontractorId: peopleTable.subcontractorId })
+        .from(peopleTable).where(eq(peopleTable.id, m.personId)).limit(1))[0];
+      await db.update(peopleTable).set(patch).where(eq(peopleTable.id, m.personId));
+      // Keep the legacy firm-row mirror in sync for primary contacts.
+      if (person?.isPrimaryContact && person.subcontractorId) {
+        const subPatch: Record<string, unknown> = {};
+        if (phone !== undefined) subPatch.contactPhone = phone || null;
+        if (cleanEmail !== undefined) subPatch.contactEmail = cleanEmail;
+        await db.update(subcontractorsTable).set(subPatch).where(eq(subcontractorsTable.id, person.subcontractorId));
+      }
+      if (phone !== undefined && m.userId) {
+        await db.update(usersTable).set({ phone: phone || null }).where(eq(usersTable.id, m.userId));
+      }
+    } else if (m.userId) {
       await db.update(usersTable).set({ phone: phone || null }).where(eq(usersTable.id, m.userId));
     } else if (m.subcontractorId) {
-      await db.update(subcontractorsTable).set({ contactPhone: phone || null }).where(eq(subcontractorsTable.id, m.subcontractorId));
+      const subPatch: Record<string, unknown> = {};
+      if (phone !== undefined) subPatch.contactPhone = phone || null;
+      if (cleanEmail !== undefined) subPatch.contactEmail = cleanEmail;
+      await db.update(subcontractorsTable).set(subPatch).where(eq(subcontractorsTable.id, m.subcontractorId));
     }
     res.json({ success: true });
   } catch (err) {

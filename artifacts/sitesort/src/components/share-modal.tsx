@@ -15,7 +15,7 @@ type ShareLog = {
 };
 type Project = { id: string; name: string };
 type PortalTrade = { trade: string; memberCount: number };
-type PortalMemberOpt = { personId: string; userId: string; name: string; companyName?: string; trades?: string[] };
+type PortalMemberOpt = { personId: string; userId: string | null; accepted?: boolean; name: string; companyName?: string; trades?: string[] };
 type PortalShareRule = { id: string; audienceType: string; trade?: string; personId?: string; personName?: string };
 
 export interface ShareModalProps {
@@ -388,6 +388,7 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
                                 {(m.companyName || m.trades?.length) && (
                                   <span className="opacity-70"> · {[m.companyName, m.trades?.[0]].filter(Boolean).join(" · ")}</span>
                                 )}
+                                {m.accepted === false && <span className="opacity-70 italic"> · invite pending</span>}
                               </span>
                             </button>
                           );

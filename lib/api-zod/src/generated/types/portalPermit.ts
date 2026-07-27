@@ -16,4 +16,5 @@ export interface PortalPermit {
   documentUrl?: string;
   unseen?: boolean;
   sharedAt?: string;
+  myViewedAt?: Date | null;
 }

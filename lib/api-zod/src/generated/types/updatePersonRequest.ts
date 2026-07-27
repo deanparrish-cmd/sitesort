@@ -22,4 +22,8 @@ export interface UpdatePersonRequest {
   lastName?: string;
   showContactInPortal?: boolean | null;
   roleTitle?: string | null;
+  /** New contact email (trimmed + lowercased server-side). Cannot be blank. */
+  email?: string;
+  /** Contact phone; null/empty clears it. */
+  phone?: string | null;
 }

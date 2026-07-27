@@ -91,7 +91,21 @@ type Sub = {
   notes: string | null;
   insuranceStatus: InsuranceStatus;
   insuranceRecords: InsuranceRecord[];
+  certifications?: PersonCert[];
   archivedAt: string | null;
+  createdAt: string;
+};
+
+// A certification filed against this contact's person record (e.g. an approved
+// Insurance document filed via "Add to contact" in Team activity).
+type PersonCert = {
+  id: string;
+  personId: string;
+  name: string;
+  certNumber: string | null;
+  expiryDate: string;
+  status: "valid" | "expiring_soon" | "expired";
+  documentUrl: string | null;
   createdAt: string;
 };
 
@@ -887,6 +901,27 @@ export default function SubcontractorsPage() {
                                         </div>
                                       )}
                                       {expired && <span className="text-[9px] font-bold text-red-700 uppercase tracking-wide">Site access denied — new document required</span>}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            {(sub.certifications?.length ?? 0) > 0 && (
+                              <div className="mt-2 space-y-1">
+                                {sub.certifications!.map(c => {
+                                  const expired = c.status === "expired";
+                                  const expiring = c.status === "expiring_soon";
+                                  return (
+                                    <div key={c.id} className={cn("flex items-center gap-1.5 text-[10px] font-medium px-2 py-1.5 rounded-md border", expired ? "bg-red-50 border-red-300 text-red-700" : expiring ? "bg-yellow-50 border-yellow-200 text-yellow-700" : "bg-emerald-50 border-emerald-200 text-emerald-700")}>
+                                      <ShieldCheck className="w-3 h-3 shrink-0" />
+                                      <span className="truncate">
+                                        {c.name}{c.certNumber ? ` · ${c.certNumber}` : ""} — {expired ? "expired" : "expires"} {new Date(c.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                                      </span>
+                                      {c.documentUrl && (
+                                        <button onClick={() => window.open(normaliseUrl(c.documentUrl!), "_blank")} className="ml-auto shrink-0 hover:opacity-70" title="Open document">
+                                          <ExternalLink className="w-3 h-3" />
+                                        </button>
+                                      )}
                                     </div>
                                   );
                                 })}

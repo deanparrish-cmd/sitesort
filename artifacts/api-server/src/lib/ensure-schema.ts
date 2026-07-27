@@ -218,6 +218,20 @@ export async function ensureSchema(): Promise<void> {
     await pool.query(`CREATE INDEX IF NOT EXISTS portal_shares_project_idx ON portal_shares (project_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS portal_shares_item_idx ON portal_shares (item_type, item_id)`);
 
+    // Per-member open receipts for NON-document shared items (permits, daily
+    // reports) — first open wins; documents use document_distributions instead.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS portal_item_views (
+        id text PRIMARY KEY,
+        project_id text NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        item_type text NOT NULL,
+        item_id text NOT NULL,
+        viewed_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS portal_item_views_uq ON portal_item_views (user_id, item_type, item_id)`);
+
     // Team Portal member sessions — server-side lifetime (sliding 30d + 12h
     // inactivity + explicit-logout/revoke). Portal JWTs carry only a session id.
     await pool.query(`

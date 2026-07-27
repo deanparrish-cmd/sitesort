@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   Users,
   Settings,
+  HelpCircle,
   Receipt,
   Menu,
   X,
@@ -172,6 +173,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       ? [{ name: "Admin", href: "/admin", icon: ShieldAlert, badge: 0 }]
       : []),
     { name: "Settings", href: "/settings", icon: Settings, badge: 0 },
+    { name: "User Guide", href: "/user-guide", icon: HelpCircle, badge: 0 },
   ];
 
   if (isLoading) {

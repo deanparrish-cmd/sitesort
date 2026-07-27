@@ -10,6 +10,8 @@ export interface MemberDocument {
   id: string;
   name: string;
   kind: string;
+  /** The submitter's contact (person) id, when linked — enables filing the doc to their contact record. */
+  personId?: string;
   fileUrl: string;
   fileSize: number;
   /** pending | approved | rejected */

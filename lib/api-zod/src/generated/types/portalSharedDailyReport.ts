@@ -16,4 +16,5 @@ export interface PortalSharedDailyReport {
   managerReport?: ManagerReportFields | null;
   sharedAt?: Date;
   unseen?: boolean;
+  myViewedAt?: Date | null;
 }

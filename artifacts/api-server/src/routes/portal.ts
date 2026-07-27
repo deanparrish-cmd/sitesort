@@ -8,9 +8,9 @@ import {
   documentsTable, photosTable, permitsTable, milestonesTable, dailyNotesTable,
   qrBoardPinsTable, calendarEventsTable, subcontractorsTable, peopleTable,
   portalSharesTable, documentDistributionsTable, companiesTable, qrCodesTable,
-  portalMemberDocumentsTable, notificationsTable, companyMembersTable,
+  portalMemberDocumentsTable, notificationsTable, companyMembersTable, portalSubmissionNotesTable,
   plantItemsTable, plantItemAttachmentsTable, plantItemDistributionsTable, personCertificationsTable, dailyReportsTable,
-  messagesTable, channelMessagesTable, acknowledgmentAuditTable,
+  messagesTable, channelMessagesTable, acknowledgmentAuditTable, portalItemViewsTable,
 } from "@workspace/db/schema";
 import { and, eq, inArray, isNull, isNotNull, desc, asc, gte, lt, count, max, or, ne } from "drizzle-orm";
 import { buildSiteBoardPayload } from "../lib/site-board";
@@ -95,20 +95,21 @@ function serializeDoc(d: typeof documentsTable.$inferSelect) {
 // This viewer's own sign-off status for a batch of documents — merged onto
 // serializeDoc's output wherever a member might need to sign off (the PIN
 // gate itself is re-checked server-side regardless of what the client saw).
-async function myDocStatuses(userId: string, docIds: string[]): Promise<Map<string, { status: string; acknowledgedAt: Date | null }>> {
+async function myDocStatuses(userId: string, docIds: string[]): Promise<Map<string, { status: string; acknowledgedAt: Date | null; viewedAt: Date | null }>> {
   if (docIds.length === 0) return new Map();
   const rows = await db.select({
     documentId: documentDistributionsTable.documentId,
     status: documentDistributionsTable.status,
     acknowledgedAt: documentDistributionsTable.acknowledgedAt,
+    viewedAt: documentDistributionsTable.viewedAt,
   }).from(documentDistributionsTable)
     .where(and(inArray(documentDistributionsTable.documentId, docIds), eq(documentDistributionsTable.userId, userId)));
-  return new Map(rows.map(r => [r.documentId, { status: r.status, acknowledgedAt: r.acknowledgedAt }]));
+  return new Map(rows.map(r => [r.documentId, { status: r.status, acknowledgedAt: r.acknowledgedAt, viewedAt: r.viewedAt }]));
 }
-function withMyStatus<T extends { id: string }>(rows: T[], statuses: Map<string, { status: string; acknowledgedAt: Date | null }>): (T & { myStatus: string | null; mySignedOffAt: string | null })[] {
+function withMyStatus<T extends { id: string }>(rows: T[], statuses: Map<string, { status: string; acknowledgedAt: Date | null; viewedAt: Date | null }>): (T & { myStatus: string | null; mySignedOffAt: string | null; myViewedAt: string | null })[] {
   return rows.map(r => {
     const mine = statuses.get(r.id);
-    return { ...r, myStatus: mine?.status ?? null, mySignedOffAt: mine?.acknowledgedAt?.toISOString() ?? null };
+    return { ...r, myStatus: mine?.status ?? null, mySignedOffAt: mine?.acknowledgedAt?.toISOString() ?? null, myViewedAt: mine?.viewedAt?.toISOString() ?? null };
   });
 }
 function serializePermit(p: typeof permitsTable.$inferSelect) {
@@ -252,11 +253,13 @@ async function computeUnseen(userId: string, projectId: string): Promise<{ count
     db.select({
       canLogIssues: projectMembersTable.canLogIssues,
       canUpdatePlantMaterials: projectMembersTable.canUpdatePlantMaterials,
+      canEditDailyReport: projectMembersTable.canEditDailyReport,
     }).from(projectMembersTable)
       .where(and(eq(projectMembersTable.projectId, projectId), eq(projectMembersTable.userId, userId))).limit(1),
   ]);
   const canLogIssues = permRow[0]?.canLogIssues ?? false;
   const canUpdatePlantMaterials = permRow[0]?.canUpdatePlantMaterials ?? false;
+  const canEditDailyReport = permRow[0]?.canEditDailyReport ?? false;
   const lv = (s: string) => lastView.get(s);
   const counts: Record<string, number> = {};
   const bump = (s: string, n = 1) => { if (n) counts[s] = (counts[s] ?? 0) + n; };
@@ -278,6 +281,31 @@ async function computeUnseen(userId: string, projectId: string): Promise<{ count
   // badge itself would tip off gated content they can't open.
   if (canLogIssues) {
     for (const at of photoMap.values()) { if (isAfter(at, lv("shared"))) sharedCount++; if (isAfter(at, lv("site-issues"))) bump("site-issues"); }
+    // Updates on issues THIS member logged: triage/allocation edits stamp
+    // photos.updated_at, and PM notes land in portal_submission_notes. Both
+    // count as "new since last view" for the Site Issues badge — same
+    // last-view mark as above, so opening the section clears everything at once.
+    const myIssues = await db.select({ id: photosTable.id, updatedAt: photosTable.updatedAt })
+      .from(photosTable)
+      .where(and(
+        eq(photosTable.projectId, projectId),
+        issueCategoryFilter(),
+        isNull(photosTable.archivedAt),
+        or(eq(photosTable.uploadedBy, userId), eq(photosTable.submittedBy, userId)),
+      ));
+    for (const p of myIssues) if (isAfter(p.updatedAt, lv("site-issues"))) bump("site-issues");
+    const myIssueIds = myIssues.map(p => p.id);
+    if (myIssueIds.length) {
+      const issueNotes = await db.select({ createdAt: portalSubmissionNotesTable.createdAt })
+        .from(portalSubmissionNotesTable)
+        .where(and(
+          eq(portalSubmissionNotesTable.projectId, projectId),
+          eq(portalSubmissionNotesTable.itemType, "site_issue"),
+          inArray(portalSubmissionNotesTable.itemId, myIssueIds),
+          ne(portalSubmissionNotesTable.authorId, userId),
+        ));
+      for (const n of issueNotes) if (isAfter(n.createdAt, lv("site-issues"))) bump("site-issues");
+    }
   }
   for (const at of permitMap.values()) { if (isAfter(at, lv("shared"))) sharedCount++; }
   // Plant & Materials is its own gated section, not a shared-document type
@@ -299,6 +327,49 @@ async function computeUnseen(userId: string, projectId: string): Promise<{ count
       const at = p.lastUpdatedAt ?? p.createdAt;
       if (isAfter(at, lv("plant-materials"))) bump("plant-materials");
     }
+    // PM notes on plant items this member can see also count as new activity.
+    const visiblePlantIds = plantItems.filter(p => p.createdBy === userId || sharedIds.has(p.id)).map(p => p.id);
+    if (visiblePlantIds.length) {
+      const plantNotes = await db.select({ createdAt: portalSubmissionNotesTable.createdAt })
+        .from(portalSubmissionNotesTable)
+        .where(and(
+          eq(portalSubmissionNotesTable.projectId, projectId),
+          eq(portalSubmissionNotesTable.itemType, "plant_item"),
+          inArray(portalSubmissionNotesTable.itemId, visiblePlantIds),
+          ne(portalSubmissionNotesTable.authorId, userId),
+        ));
+      for (const n of plantNotes) if (isAfter(n.createdAt, lv("plant-materials"))) bump("plant-materials");
+    }
+  }
+
+  // Daily Report (gated on canEditDailyReport, same flag that shows the nav
+  // entry): new PM submission notes on this project's daily reports count as
+  // unseen — the member's own edits never bump their own badge.
+  if (canEditDailyReport) {
+    // Submission privacy: only notes on reports this member CONTRIBUTED to may
+    // count — the PM's private diary days must not leak activity, not even as
+    // a badge number. Contribution = an activity_log row for that report by
+    // this member (same source of truth as contributorsForReport).
+    const myReportRows = await db.select({ itemId: activityLogTable.itemId })
+      .from(activityLogTable)
+      .where(and(
+        eq(activityLogTable.projectId, projectId),
+        eq(activityLogTable.userId, userId),
+        eq(activityLogTable.itemType, "daily_report"),
+        isNotNull(activityLogTable.itemId),
+      ));
+    const myReportIds = Array.from(new Set(myReportRows.map(r => r.itemId as string)));
+    if (myReportIds.length) {
+      const reportNotes = await db.select({ createdAt: portalSubmissionNotesTable.createdAt })
+        .from(portalSubmissionNotesTable)
+        .where(and(
+          eq(portalSubmissionNotesTable.projectId, projectId),
+          eq(portalSubmissionNotesTable.itemType, "daily_report"),
+          inArray(portalSubmissionNotesTable.itemId, myReportIds),
+          ne(portalSubmissionNotesTable.authorId, userId),
+        ));
+      for (const n of reportNotes) if (isAfter(n.createdAt, lv("daily-report"))) bump("daily-report");
+    }
   }
 
   // Safety docs are always visible (never gated) → new ones count toward
@@ -309,8 +380,11 @@ async function computeUnseen(userId: string, projectId: string): Promise<{ count
   bump("shared", sharedCount);
 
   // Site updates (daily notes) drive Overview + General badges.
+  // ("general" was retired from the nav — badging it would desync the
+  // aggregate total from what the member can actually see, so only Overview
+  // counts site updates now.)
   const notes = await db.select({ createdAt: dailyNotesTable.createdAt }).from(dailyNotesTable).where(eq(dailyNotesTable.projectId, projectId));
-  for (const n of notes) { if (isAfter(n.createdAt, lv("overview"))) bump("overview"); if (isAfter(n.createdAt, lv("general"))) bump("general"); }
+  for (const n of notes) { if (isAfter(n.createdAt, lv("overview"))) bump("overview"); }
 
   // Messages: unseen = DMs received (not sent by me) + channel posts not
   // authored by me, newer than my last view of the Messages section. Not fed
@@ -323,6 +397,17 @@ async function computeUnseen(userId: string, projectId: string): Promise<{ count
   ]);
   for (const m of dmRows) if (isAfter(m.createdAt, lv("messages"))) bump("messages");
   for (const m of channelRows) if (isAfter(m.createdAt, lv("messages"))) bump("messages");
+
+  // My documents: a PM decision (approve/reject) on a doc THIS member uploaded
+  // counts as unseen until they open the section — the rejection note rides
+  // along on the doc row itself, so the badge is what tells them to look.
+  const myDocs = await db.select({ reviewedAt: portalMemberDocumentsTable.reviewedAt, reviewedByUserId: portalMemberDocumentsTable.reviewedByUserId })
+    .from(portalMemberDocumentsTable)
+    .where(and(eq(portalMemberDocumentsTable.projectId, projectId), eq(portalMemberDocumentsTable.userId, userId)));
+  for (const d of myDocs) {
+    if (d.reviewedByUserId === userId) continue;
+    if (isAfter(d.reviewedAt, lv("my-documents"))) bump("my-documents");
+  }
 
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   return { counts, total };
@@ -342,6 +427,33 @@ async function recordDocView(documentId: string, userId: string): Promise<void> 
       await db.update(documentDistributionsTable).set({ status: "viewed", viewedAt: new Date() }).where(eq(documentDistributionsTable.id, existing[0].id));
     }
   } catch { /* tracking is best-effort */ }
+}
+
+// Per-member open receipts for NON-document shared items (permits, daily
+// reports, photos) — documents use document_distributions.viewed_at instead
+// because the PM dashboard reads those counts. First open wins: the unique
+// index makes the insert a no-op on repeat opens, so "Received <when>" never
+// drifts. Best-effort like recordDocView.
+async function recordItemView(projectId: string, userId: string, itemType: string, itemId: string): Promise<void> {
+  try {
+    await db.insert(portalItemViewsTable)
+      .values({ id: generateId(), projectId, userId, itemType, itemId })
+      .onConflictDoNothing();
+  } catch { /* tracking is best-effort */ }
+}
+
+// itemId → viewedAt for this member, for stamping myViewedAt onto list payloads.
+async function myItemViews(userId: string, itemType: string, ids: string[]): Promise<Map<string, Date>> {
+  if (ids.length === 0) return new Map();
+  const rows = await db.select({ itemId: portalItemViewsTable.itemId, viewedAt: portalItemViewsTable.viewedAt })
+    .from(portalItemViewsTable)
+    .where(and(eq(portalItemViewsTable.userId, userId), eq(portalItemViewsTable.itemType, itemType), inArray(portalItemViewsTable.itemId, ids)));
+  return new Map(rows.map(r => [r.itemId, r.viewedAt]));
+}
+
+// Stamp myViewedAt onto already-serialized rows from a views map.
+function withMyView<T extends { id: string }>(rows: T[], views: Map<string, Date>): (T & { myViewedAt: string | null })[] {
+  return rows.map(r => ({ ...r, myViewedAt: views.get(r.id)?.toISOString() ?? null }));
 }
 
 // ==========================================================================
@@ -852,11 +964,16 @@ router.get("/portal/shared", ...portalGuards, async (req, res) => {
       .map(r => { const at = map.get(r.id); return { ...serialize(r), sharedAt: at?.toISOString(), _at: at?.getTime() ?? 0, unseen: isAfter(at, seenBefore) }; })
       .sort((a, b) => b._at - a._at)
       .map(({ _at, ...rest }) => rest);
+  // Non-document items get their own per-member open receipts (portal_item_views).
+  const [permitViews, reportViews] = await Promise.all([
+    myItemViews(req.user!.id, "permit", permits.map(p => p.id)),
+    myItemViews(req.user!.id, "daily_report", reportsWithContent.map(r => r.id)),
+  ]);
   res.json({
     documents: withMyStatus(annotate(docs, serializeDoc, docMapWithSafety), myStatuses),
     photos: annotate(photos, serializeIssue, photoMap),
-    permits: annotate(permits, serializePermit, permitMap),
-    dailyReports: annotate(reportsWithContent, serializeSharedReport, reportMap),
+    permits: withMyView(annotate(permits, serializePermit, permitMap), permitViews),
+    dailyReports: withMyView(annotate(reportsWithContent, serializeSharedReport, reportMap), reportViews),
   });
 });
 
@@ -870,6 +987,7 @@ router.post("/portal/daily-reports/:reportId/view", ...portalGuards, async (req,
   const ids = await visibleIds(pid, "daily_report", viewer);
   if (!ids.has(req.params.reportId)) { res.status(404).json({ error: "not_found", message: "Report not found" }); return; }
   void logActivity({ userId: req.user!.id, projectId: pid, companyId: req.user!.companyId, section: "shared", action: "view", itemType: "daily_report", itemId: req.params.reportId, req });
+  await recordItemView(pid, req.user!.id, "daily_report", req.params.reportId);
   res.json({ success: true });
 });
 
@@ -1471,7 +1589,52 @@ router.get("/portal/permits", ...portalGuards, async (req, res) => {
   const rows = await db.select().from(permitsTable)
     .where(and(eq(permitsTable.projectId, pid), isNull(permitsTable.archivedAt), inArray(permitsTable.id, [...ids])))
     .orderBy(asc(permitsTable.expiryDate));
-  res.json(rows.map(serializePermit));
+  const views = await myItemViews(req.user!.id, "permit", rows.map(r => r.id));
+  res.json(withMyView(rows.map(serializePermit), views));
+});
+
+// POST /api/portal/permits/:permitId/view — record that this member opened a
+// permit shared with them. Same open-receipt pattern as documents: fired from
+// the client on "View"; flips the New pill to "Received <when>".
+router.post("/portal/permits/:permitId/view", ...portalGuards, async (req, res) => {
+  const pid = req.portalProjectId!;
+  const viewer = await resolveViewer(req.user!.id, pid);
+  const ids = await visibleIds(pid, "permit", viewer);
+  if (!ids.has(req.params.permitId)) { res.status(404).json({ error: "not_found", message: "Permit not found" }); return; }
+  await recordItemView(pid, req.user!.id, "permit", req.params.permitId);
+  void logActivity({ userId: req.user!.id, projectId: pid, companyId: req.user!.companyId, section: "shared", action: "view", itemType: "permit", itemId: req.params.permitId, req });
+  res.json({ success: true });
+});
+
+// GET /api/portal/permits/:permitId/download — stream a shared permit's
+// attached document, mirroring the document download route (attachment
+// disposition; visibility-gated to what's shared with this member).
+router.get("/portal/permits/:permitId/download", ...portalGuards, async (req, res) => {
+  const pid = req.portalProjectId!;
+  const viewer = await resolveViewer(req.user!.id, pid);
+  const ids = await visibleIds(pid, "permit", viewer);
+  if (!ids.has(req.params.permitId)) { res.status(404).json({ error: "not_found", message: "Permit not found" }); return; }
+  const rows = await db.select().from(permitsTable)
+    .where(and(eq(permitsTable.id, req.params.permitId), eq(permitsTable.projectId, pid), isNull(permitsTable.archivedAt)))
+    .limit(1);
+  const permit = rows[0];
+  if (!permit?.documentUrl) { res.status(404).json({ error: "not_found", message: "This permit has no attached file" }); return; }
+  const filename = fileUrlToFilename(permit.documentUrl);
+  if (!filename) { res.status(404).json({ error: "not_found", message: "Permit file unavailable" }); return; }
+  // Strip path separators, quotes AND control chars (CR/LF would allow header injection).
+  let downloadName = permit.type.replace(/[/\\"]|[\r\n\t\x00-\x1f]/g, "-");
+  if (!/\.[a-z0-9]+$/i.test(downloadName)) {
+    downloadName += filename.match(/\.[a-z0-9]+$/i)?.[0] ?? "";
+  }
+  const stream = getBucket().file(objectKey(filename)).createReadStream();
+  stream.on("error", (err) => {
+    req.log.error({ err }, "Permit download error");
+    if (!res.headersSent) res.status(404).json({ error: "not_found", message: "Permit file unavailable" });
+    else res.destroy();
+  });
+  res.setHeader("Content-Type", "application/octet-stream");
+  res.setHeader("Content-Disposition", `attachment; filename="${downloadName}"`);
+  stream.pipe(res);
 });
 
 // ---- Plant & Materials ----

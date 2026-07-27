@@ -10,6 +10,7 @@ import { ShareModal } from "@/components/share-modal";
 import {
   Users, Search, Mail, Phone, ShieldCheck, Share2,
   MessageSquare, StickyNote, Send, Loader2, Clock, UserPlus, FolderOpen, Check,
+  Pencil, CheckCircle2, X, FolderPlus, Trash2, Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCapabilities } from "@/hooks/use-capabilities";
@@ -103,6 +104,108 @@ export default function TeamPage() {
   const [addSuccess, setAddSuccess] = useState("");
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjects, setSelectedProjects] = useState<Set<string>>(new Set());
+
+  // Inline phone edit (dashboard-level contact details for in-house members)
+  const [editingPhoneId, setEditingPhoneId] = useState<string | null>(null);
+  const [phoneInput, setPhoneInput] = useState("");
+  const [phoneSaving, setPhoneSaving] = useState(false);
+
+  async function savePhone(memberId: string) {
+    setPhoneSaving(true);
+    const res = await fetch(`/api/users/${memberId}`, {
+      method: "PATCH",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: phoneInput.trim() || null }),
+    });
+    setPhoneSaving(false);
+    if (res.ok) {
+      setMembers(prev => prev.map(m => m.id === memberId ? { ...m, phone: phoneInput.trim() || null } : m));
+      setEditingPhoneId(null);
+    }
+  }
+
+  // Add-to-project dialog (mirrors the Contacts page's "Add to a Project" flow)
+  const [projTarget, setProjTarget] = useState<TeamMember | null>(null);
+  const [projList, setProjList] = useState<{ id: string; name: string; address?: string }[]>([]);
+  const [projLoading, setProjLoading] = useState(false);
+  const [linkStatus, setLinkStatus] = useState<Record<string, "idle" | "loading" | "added" | "already" | "error">>({});
+
+  async function openAddToProject(member: TeamMember) {
+    setProjTarget(member);
+    setLinkStatus({});
+    setProjList([]);
+    setProjLoading(true);
+    const res = await fetch("/api/projects", { headers: authHeaders() });
+    if (res.ok) {
+      const data = await res.json();
+      setProjList((data.projects ?? data).map((p: { id: string; name: string; address?: string }) => ({ id: p.id, name: p.name, address: p.address })));
+    }
+    setProjLoading(false);
+  }
+
+  async function linkToProject(projectId: string) {
+    if (!projTarget) return;
+    setLinkStatus(prev => ({ ...prev, [projectId]: "loading" }));
+    const res = await fetch(`/api/projects/${projectId}/members`, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: projTarget.id, role: projTarget.role }),
+    });
+    setLinkStatus(prev => ({ ...prev, [projectId]: res.ok ? "added" : res.status === 409 ? "already" : "error" }));
+  }
+
+  // Edit member dialog (name / phone / role — like the Contacts page's Edit)
+  const [editTarget, setEditTarget] = useState<TeamMember | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editRole, setEditRole] = useState("site_worker");
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState("");
+
+  function openEdit(m: TeamMember) {
+    setEditTarget(m); setEditName(m.name); setEditPhone(m.phone ?? ""); setEditRole(m.role); setEditError("");
+  }
+
+  async function saveEdit() {
+    if (!editTarget) return;
+    if (!isFullName(editName)) { setEditError("Enter a first name and surname (2+ characters each)."); return; }
+    setEditSaving(true);
+    setEditError("");
+    const res = await fetch(`/api/users/${editTarget.id}`, {
+      method: "PATCH",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ name: editName.trim(), phone: editPhone.trim() || null, role: editRole }),
+    });
+    setEditSaving(false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setEditError(data.message ?? "Failed to save changes.");
+      return;
+    }
+    const updated = await res.json();
+    setMembers(prev => prev.map(m => m.id === editTarget.id ? { ...m, name: updated.name, phone: updated.phone, role: updated.role } : m));
+    setEditTarget(null);
+  }
+
+  // Remove-from-team confirm (removes membership in THIS company only)
+  const [removeTarget, setRemoveTarget] = useState<TeamMember | null>(null);
+  const [removing, setRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState("");
+
+  async function confirmRemove() {
+    if (!removeTarget) return;
+    setRemoving(true);
+    setRemoveError("");
+    const res = await fetch(`/api/users/${removeTarget.id}`, { method: "DELETE", headers: authHeaders() });
+    setRemoving(false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setRemoveError(data.message ?? "Failed to remove team member.");
+      return;
+    }
+    setMembers(prev => prev.filter(m => m.id !== removeTarget.id));
+    setRemoveTarget(null);
+  }
 
   // Notes dialog state
   const [sharingContact, setSharingContact] = useState<{ id: string; name: string; text: string } | null>(null);
@@ -286,10 +389,39 @@ export default function TeamPage() {
                           <a href={`mailto:${m.email}`} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors">
                             <Mail className="w-3 h-3 shrink-0" /><span className="truncate">{m.email}</span>
                           </a>
-                          {m.phone && (
-                            <a href={`tel:${m.phone}`} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors">
-                              <Phone className="w-3 h-3 shrink-0" /><span className="truncate">{m.phone}</span>
-                            </a>
+                          {editingPhoneId === m.id ? (
+                            <div className="flex items-center gap-1.5">
+                              <Phone className="w-3 h-3 shrink-0 text-muted-foreground" />
+                              <input
+                                autoFocus
+                                value={phoneInput}
+                                onChange={e => setPhoneInput(e.target.value)}
+                                onKeyDown={e => { if (e.key === "Enter") savePhone(m.id); if (e.key === "Escape") setEditingPhoneId(null); }}
+                                placeholder="+44 7700 000000"
+                                className="flex-1 text-xs bg-muted rounded px-2 py-0.5 outline-none focus:ring-2 focus:ring-primary/30 min-w-0"
+                              />
+                              <button onClick={() => savePhone(m.id)} disabled={phoneSaving} className="text-success hover:text-success/80 shrink-0" title="Save"><CheckCircle2 className="w-3.5 h-3.5" /></button>
+                              <button onClick={() => setEditingPhoneId(null)} className="text-muted-foreground hover:text-destructive shrink-0" title="Cancel"><X className="w-3.5 h-3.5" /></button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1 group/phone min-w-0">
+                              {m.phone ? (
+                                <a href={`tel:${m.phone}`} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors min-w-0">
+                                  <Phone className="w-3 h-3 shrink-0" /><span className="truncate">{m.phone}</span>
+                                </a>
+                              ) : caps.canManageTeam ? (
+                                <span className="flex items-center gap-1.5 text-xs text-muted-foreground italic">
+                                  <Phone className="w-3 h-3 shrink-0" />Add phone number
+                                </span>
+                              ) : null}
+                              {caps.canManageTeam && (
+                                <button
+                                  onClick={() => { setEditingPhoneId(m.id); setPhoneInput(m.phone ?? ""); }}
+                                  className="ml-0.5 opacity-100 lg:opacity-0 lg:group-hover/phone:opacity-100 transition-opacity text-muted-foreground hover:text-primary shrink-0"
+                                  title="Edit phone"
+                                ><Pencil className="w-3 h-3" /></button>
+                              )}
+                            </div>
                           )}
                         </div>
 
@@ -354,6 +486,37 @@ export default function TeamPage() {
                             >
                               <Share2 className="w-4 h-4" />
                             </button>
+
+                            {caps.canManageTeam && (
+                              <>
+                                {/* Add to project */}
+                                <button
+                                  onClick={() => openAddToProject(m)}
+                                  className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                                  title="Add to a project"
+                                >
+                                  <FolderPlus className="w-4 h-4" />
+                                </button>
+
+                                {/* Edit */}
+                                <button
+                                  onClick={() => openEdit(m)}
+                                  className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                                  title="Edit member"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </button>
+
+                                {/* Remove from team */}
+                                <button
+                                  onClick={() => { setRemoveError(""); setRemoveTarget(m); }}
+                                  className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                                  title="Remove from team"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </>
+                            )}
                           </div>
                         </div>
 
@@ -507,6 +670,140 @@ export default function TeamPage() {
         )}
         <DialogFooter>
           <Button variant="outline" onClick={closeNotes}>Close</Button>
+        </DialogFooter>
+      </Dialog>
+
+      {/* Add to project dialog (same flow as the Contacts page) */}
+      <Dialog open={!!projTarget} onOpenChange={open => { if (!open) setProjTarget(null); }}>
+        <DialogHeader>
+          <DialogTitle>Add to a Project</DialogTitle>
+        </DialogHeader>
+        {projTarget && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 px-4 py-3 bg-muted/40 rounded-xl">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                <span className="font-extrabold text-primary text-sm">
+                  {projTarget.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
+                </span>
+              </div>
+              <div className="min-w-0">
+                <p className="font-semibold text-sm">{projTarget.name}</p>
+                <p className="text-xs text-muted-foreground capitalize">{projTarget.role.replace(/_/g, " ")}</p>
+              </div>
+            </div>
+
+            <p className="text-sm text-muted-foreground">Select a project to add this team member to.</p>
+
+            {projLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : projList.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <Building2 className="w-8 h-8 text-muted-foreground/30 mb-2" />
+                <p className="text-sm text-muted-foreground">No projects found.</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                {projList.map(project => {
+                  const status = linkStatus[project.id] ?? "idle";
+                  return (
+                    <div key={project.id} className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border bg-card hover:bg-muted/20 transition-colors">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm truncate">{project.name}</p>
+                        {project.address && <p className="text-xs text-muted-foreground truncate">{project.address}</p>}
+                      </div>
+                      <div className="shrink-0">
+                        {status === "idle" && (
+                          <Button size="sm" variant="accent" onClick={() => linkToProject(project.id)}>
+                            <FolderPlus className="w-3.5 h-3.5 mr-1.5" /> Add
+                          </Button>
+                        )}
+                        {status === "loading" && (
+                          <span className="flex items-center gap-1.5 text-xs text-muted-foreground px-3 py-1.5">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Adding…
+                          </span>
+                        )}
+                        {status === "added" && (
+                          <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-semibold px-3 py-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Added
+                          </span>
+                        )}
+                        {status === "already" && (
+                          <span className="flex items-center gap-1.5 text-xs text-muted-foreground px-3 py-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Already on project
+                          </span>
+                        )}
+                        {status === "error" && (
+                          <span className="flex items-center gap-1.5 text-xs text-destructive px-3 py-1.5">
+                            <X className="w-3.5 h-3.5" /> Failed — retry?
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setProjTarget(null)}>Done</Button>
+            </DialogFooter>
+          </div>
+        )}
+      </Dialog>
+
+      {/* Edit member dialog */}
+      <Dialog open={!!editTarget} onOpenChange={open => { if (!open) setEditTarget(null); }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><Pencil className="w-4 h-4 text-primary" /> Edit — {editTarget?.name}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">Full name</label>
+            <Input value={editName} onChange={e => setEditName(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">Phone</label>
+            <Input type="tel" value={editPhone} onChange={e => setEditPhone(e.target.value)} placeholder="+44 7700 900000" />
+          </div>
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">Role</label>
+            <select
+              value={editRole}
+              onChange={e => setEditRole(e.target.value)}
+              className="w-full h-11 rounded-lg border-2 border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:border-primary"
+            >
+              <option value="admin">Admin</option>
+              <option value="project_manager">Project Manager</option>
+              <option value="site_worker">Site Worker</option>
+            </select>
+          </div>
+          <p className="text-xs text-muted-foreground">Email can't be changed here — it's this person's login.</p>
+          {editError && <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{editError}</p>}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setEditTarget(null)}>Cancel</Button>
+          <Button variant="accent" onClick={saveEdit} disabled={editSaving || !isFullName(editName)}>
+            {editSaving ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Saving…</> : "Save changes"}
+          </Button>
+        </DialogFooter>
+      </Dialog>
+
+      {/* Remove-from-team confirm */}
+      <Dialog open={!!removeTarget} onOpenChange={open => { if (!open) setRemoveTarget(null); }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-destructive"><Trash2 className="w-4 h-4" /> Remove {removeTarget?.name}?</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          This removes them from your company team and all of your projects. Their login account isn't deleted — they can be re-added later.
+        </p>
+        {removeError && <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{removeError}</p>}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setRemoveTarget(null)}>Cancel</Button>
+          <Button variant="destructive" onClick={confirmRemove} disabled={removing}>
+            {removing ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Removing…</> : "Remove from team"}
+          </Button>
         </DialogFooter>
       </Dialog>
 

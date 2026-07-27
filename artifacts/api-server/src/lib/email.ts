@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { WORKER_GUIDE } from "@workspace/user-guide";
 
 const FROM = "SiteSort <noreply@mail.sitesort.co.uk>";
 // Team Portal invites send from a dedicated address (env-overridable). The Resend
@@ -80,6 +81,25 @@ const muted = (t: string) =>
 
 const box = (inner: string, bg = "#f9fafb", border = "#e5e7eb") =>
   `<div style="background:${bg};border:1px solid ${border};border-radius:8px;padding:18px 20px;margin:16px 0;">${inner}</div>`;
+
+// Condensed "getting started" tips for the invite email, pulled live from the
+// same worker guide the portal's Help page and the dashboard's User Guide
+// page render — edit lib/user-guide/src/index.ts to change the copy
+// everywhere at once. Only a couple of the most useful sections are excerpted
+// here (the full guide is linked below); keep this list short for a mobile inbox.
+const INVITE_EMAIL_EXCERPT_SECTIONS = ["home-screen", "shared-with-me"];
+function guideExcerptItemsHtml(): string {
+  const items = WORKER_GUIDE
+    .filter(s => INVITE_EMAIL_EXCERPT_SECTIONS.includes(s.id))
+    .flatMap(s => s.steps.map(st => `<li style="margin-bottom:8px;"><strong>${st.heading}:</strong> ${st.body[0]}</li>`));
+  return `<ul style="margin:0 0 4px;padding-left:20px;color:#374151;font-size:14px;line-height:1.6;">${items.join("")}</ul>`;
+}
+function guideExcerptItemsText(): string {
+  return WORKER_GUIDE
+    .filter(s => INVITE_EMAIL_EXCERPT_SECTIONS.includes(s.id))
+    .flatMap(s => s.steps.map(st => `- ${st.heading}: ${st.body[0]}`))
+    .join("\n");
+}
 
 export async function sendVerificationEmail(to: string, name: string, token: string) {
   const link = `${APP_URL}/verify-email?token=${token}`;
@@ -603,6 +623,7 @@ export async function sendPortalInviteEmail(params: {
   const project = params.projectName?.trim() || "a project";
   const roleLabel = ROLE_LABEL[params.role] ?? "Site worker";
   const portalUrl = `${APP_URL}/portal/login`;
+  const guideUrl = `${APP_URL}/guide`;
   return send({
     from: INVITE_FROM,
     to: params.to,
@@ -618,6 +639,9 @@ export async function sendPortalInviteEmail(params: {
       ${btn(params.inviteUrl, "Set up your portal access")}
       ${muted(`This invite link expires in 7 days. Button not working? Copy and paste this link:<br><a href="${params.inviteUrl}" style="color:#ea580c;word-break:break-all;">${params.inviteUrl}</a>`)}
       ${muted(`Once you're set up, bookmark your portal to sign back in any time:<br><a href="${portalUrl}" style="color:#ea580c;word-break:break-all;">${portalUrl}</a>`)}
+      ${h("Getting started")}
+      ${guideExcerptItemsHtml()}
+      ${p(`<a href="${guideUrl}" style="color:#ea580c;">Read the full guide</a> — no login needed.`)}
     `),
     text: textLayout(`You've been invited to a project portal
 
@@ -634,6 +658,12 @@ ${params.inviteUrl}
 This invite link expires in 7 days.
 
 Once you're set up, bookmark your portal to sign back in any time:
-${portalUrl}`),
+${portalUrl}
+
+Getting started:
+${guideExcerptItemsText()}
+
+Read the full guide (no login needed):
+${guideUrl}`),
   });
 }

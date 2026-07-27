@@ -131,7 +131,7 @@ export function PhotoOverlay() {
                       <ExternalLink className="w-3.5 h-3.5" /><span className="hidden sm:inline">Open</span>
                     </button>
                   )}
-                  {photoUrl && (
+                  {(photoUrl || isIssue) && (
                     <button
                       onClick={() => {
                         const info = isIssue ? [
@@ -144,7 +144,13 @@ export function PhotoOverlay() {
                           `Logged: ${formatDate(viewingPhoto.takenAt)} by ${viewingPhoto.uploaderName}`,
                           (viewingPhoto.latitude && viewingPhoto.longitude) ? `GPS: ${Number(viewingPhoto.latitude).toFixed(5)}, ${Number(viewingPhoto.longitude).toFixed(5)}` : null,
                         ].filter(Boolean).join("\n") : undefined;
-                        setSharingDoc({ type: "photo", id: viewingPhoto.id, name: `Photo ${viewingPhoto.referenceNumber}`, version: null, fileUrl: viewingPhoto.photoUrl!, additionalInfo: info });
+                        setSharingDoc({
+                          type: "photo", id: viewingPhoto.id, name: `${isIssue ? "Issue" : "Photo"} ${viewingPhoto.referenceNumber}`, version: null,
+                          fileUrl: viewingPhoto.photoUrl ?? null, additionalInfo: info,
+                          // No file attached (issue logged without a photo, or photo removed):
+                          // email/WhatsApp share the issue details as plain text instead of a link.
+                          shareText: !viewingPhoto.photoUrl && isIssue ? `${CATEGORY_LABELS[viewingPhoto.category] ?? viewingPhoto.category} ${viewingPhoto.referenceNumber}` : undefined,
+                        });
                       }}
                       className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border bg-background hover:bg-muted transition-colors"
                     >

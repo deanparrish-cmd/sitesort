@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { subcontractorsTable, insuranceRecordsTable, projectMembersTable, projectsTable, subcontractorNotesTable, usersTable, peopleTable, subcontractorDocumentsTable } from "@workspace/db/schema";
-import { eq, and, desc, or, isNull, isNotNull, inArray } from "drizzle-orm";
+import { subcontractorsTable, insuranceRecordsTable, projectMembersTable, projectsTable, subcontractorNotesTable, usersTable, peopleTable, subcontractorDocumentsTable, personCertificationsTable } from "@workspace/db/schema";
+import { eq, and, desc, or, isNull, isNotNull, inArray, sql } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { expiryStatus } from "../lib/expiry";
@@ -28,6 +28,66 @@ function computeRecordStatus(expiryDate: string): "valid" | "expiring_soon" | "e
 }
 
 type InsuranceRow = typeof insuranceRecordsTable.$inferSelect;
+
+// Certifications filed against this contact's people (e.g. an approved
+// Insurance document filed via "Add to contact" in Team activity). Shown on
+// the contact card, and insurance-named ones also count towards the
+// insurance badge so a filed insurance cert clears "No Insurance".
+async function certificationsForSubcontractor(subcontractorId: string, companyId: string) {
+  // People directly linked to this subcontractor.
+  const linked = await db.select({
+    id: peopleTable.id, userId: peopleTable.userId, email: peopleTable.email,
+  }).from(peopleTable)
+    .where(and(eq(peopleTable.subcontractorId, subcontractorId), eq(peopleTable.companyId, companyId)));
+  if (linked.length === 0) return [];
+  // Duplicate person rows can exist for the same human (same user account or
+  // email) where only one is linked to the subcontractor. Certs filed onto a
+  // duplicate must still surface on the contact card, so expand to siblings.
+  const userIds = linked.map(p => p.userId).filter((v): v is string => !!v);
+  const emails = linked.map(p => p.email?.trim().toLowerCase()).filter((v): v is string => !!v);
+  const siblingConds = [] as ReturnType<typeof eq>[];
+  if (userIds.length) siblingConds.push(inArray(peopleTable.userId, userIds));
+  if (emails.length) siblingConds.push(inArray(sql`lower(trim(${peopleTable.email}))`, emails));
+  const siblings = siblingConds.length
+    ? await db.select({ id: peopleTable.id }).from(peopleTable)
+        .where(and(eq(peopleTable.companyId, companyId), or(...siblingConds)))
+    : [];
+  const personIds = Array.from(new Set([...linked.map(p => p.id), ...siblings.map(p => p.id)]));
+  const rows = await db.select({
+    id: personCertificationsTable.id,
+    personId: personCertificationsTable.personId,
+    name: personCertificationsTable.name,
+    certNumber: personCertificationsTable.certNumber,
+    expiryDate: personCertificationsTable.expiryDate,
+    documentUrl: personCertificationsTable.documentUrl,
+    createdAt: personCertificationsTable.createdAt,
+  }).from(personCertificationsTable)
+    .innerJoin(peopleTable, eq(peopleTable.id, personCertificationsTable.personId))
+    // companyId re-check is defense-in-depth: callers already verify the
+    // subcontractor belongs to the caller's company.
+    .where(and(inArray(personCertificationsTable.personId, personIds), eq(peopleTable.companyId, companyId), isNull(personCertificationsTable.archivedAt)))
+    .orderBy(desc(personCertificationsTable.createdAt));
+  return rows.map(c => ({
+    id: c.id,
+    personId: c.personId,
+    name: c.name,
+    certNumber: c.certNumber ?? null,
+    expiryDate: c.expiryDate,
+    status: computeRecordStatus(c.expiryDate),
+    documentUrl: c.documentUrl ?? null,
+    createdAt: c.createdAt.toISOString(),
+  }));
+}
+
+function isInsuranceCert(c: { name: string }): boolean {
+  return /insur/i.test(c.name);
+}
+
+// Insurance evidence = company-level insurance records PLUS any filed
+// insurance-named person certification (both carry an expiryDate).
+function combinedInsuranceStatus(insurance: Array<{ expiryDate: string }>, certs: Array<{ name: string; expiryDate: string }>) {
+  return computeInsuranceStatus([...insurance, ...certs.filter(isInsuranceCert)]);
+}
 
 // Serialize insurance records with assignee name + derived overdue flag. Names
 // are resolved in a single batched query to avoid an N+1 over the records.
@@ -68,6 +128,7 @@ router.get("/subcontractors", authenticate, async (req, res) => {
     const result = await Promise.all(subs.map(async (s) => {
       const insurance = await db.select().from(insuranceRecordsTable)
         .where(and(eq(insuranceRecordsTable.subcontractorId, s.id), isNull(insuranceRecordsTable.archivedAt)));
+      const certifications = await certificationsForSubcontractor(s.id, req.user!.companyId);
       return {
         id: s.id,
         companyId: s.companyId,
@@ -83,7 +144,8 @@ router.get("/subcontractors", authenticate, async (req, res) => {
         paymentHold: s.paymentHold,
         notes: s.notes ?? null,
         archivedAt: s.archivedAt ? s.archivedAt.toISOString() : null,
-        insuranceStatus: computeInsuranceStatus(insurance),
+        insuranceStatus: combinedInsuranceStatus(insurance, certifications),
+        certifications,
         insuranceRecords: await serializeInsuranceRecords(insurance),
         createdAt: s.createdAt.toISOString(),
       };
@@ -150,7 +212,7 @@ router.post("/subcontractors", authenticate, async (req, res) => {
       isPrimaryContact: true,
     });
 
-    res.status(201).json({ id, personId, companyId: req.user!.companyId, companyName, contactName, contactFirstName: firstName, contactLastName: lastName, contactEmail, contactPhone: contactPhone ?? null, contactType: type, trades: trades ?? [], reliabilityRating: null, paymentHold: false, notes: notes ?? null, archivedAt: null, insuranceStatus: "none", insuranceRecords: [], createdAt: new Date().toISOString() });
+    res.status(201).json({ id, personId, companyId: req.user!.companyId, companyName, contactName, contactFirstName: firstName, contactLastName: lastName, contactEmail, contactPhone: contactPhone ?? null, contactType: type, trades: trades ?? [], reliabilityRating: null, paymentHold: false, notes: notes ?? null, archivedAt: null, insuranceStatus: "none", certifications: [], insuranceRecords: [], createdAt: new Date().toISOString() });
   } catch (err) {
     req.log.error({ err }, "Create subcontractor error");
     res.status(500).json({ error: "server_error", message: "Failed to create subcontractor" });
@@ -171,6 +233,7 @@ router.get("/subcontractors/:subcontractorId", authenticate, async (req, res) =>
     const s = subs[0];
     const insurance = await db.select().from(insuranceRecordsTable)
       .where(and(eq(insuranceRecordsTable.subcontractorId, s.id), isNull(insuranceRecordsTable.archivedAt)));
+    const certifications = await certificationsForSubcontractor(s.id, req.user!.companyId);
     const memberRows = await db.select({ projectId: projectMembersTable.projectId }).from(projectMembersTable).where(eq(projectMembersTable.subcontractorId, s.id));
     const assignedProjects = await Promise.all(memberRows.map(async (m) => {
       const proj = await db.select({ id: projectsTable.id, name: projectsTable.name }).from(projectsTable).where(eq(projectsTable.id, m.projectId)).limit(1);
@@ -192,7 +255,8 @@ router.get("/subcontractors/:subcontractorId", authenticate, async (req, res) =>
       paymentHold: s.paymentHold,
       notes: s.notes ?? null,
       archivedAt: s.archivedAt ? s.archivedAt.toISOString() : null,
-      insuranceStatus: computeInsuranceStatus(insurance),
+      insuranceStatus: combinedInsuranceStatus(insurance, certifications),
+      certifications,
       createdAt: s.createdAt.toISOString(),
       insuranceRecords: await serializeInsuranceRecords(insurance),
       assignedProjects: assignedProjects.filter(Boolean),
@@ -270,8 +334,9 @@ router.patch("/subcontractors/:subcontractorId", authenticate, async (req, res) 
     const s = subs[0];
     const insurance = await db.select().from(insuranceRecordsTable)
       .where(and(eq(insuranceRecordsTable.subcontractorId, s.id), isNull(insuranceRecordsTable.archivedAt)));
+    const patchCerts = await certificationsForSubcontractor(s.id, req.user!.companyId);
 
-    res.json({ id: s.id, companyId: s.companyId, companyName: s.companyName, contactName: s.contactName, contactFirstName: s.contactFirstName ?? null, contactLastName: s.contactLastName ?? null, contactEmail: s.contactEmail, contactPhone: s.contactPhone ?? null, contactType: s.contactType ?? "subcontractor", trades: s.trades ?? [], reliabilityRating: s.reliabilityRating ? Number(s.reliabilityRating) : null, paymentHold: s.paymentHold, notes: s.notes ?? null, archivedAt: s.archivedAt ? s.archivedAt.toISOString() : null, insuranceStatus: computeInsuranceStatus(insurance), insuranceRecords: await serializeInsuranceRecords(insurance), createdAt: s.createdAt.toISOString() });
+    res.json({ id: s.id, companyId: s.companyId, companyName: s.companyName, contactName: s.contactName, contactFirstName: s.contactFirstName ?? null, contactLastName: s.contactLastName ?? null, contactEmail: s.contactEmail, contactPhone: s.contactPhone ?? null, contactType: s.contactType ?? "subcontractor", trades: s.trades ?? [], reliabilityRating: s.reliabilityRating ? Number(s.reliabilityRating) : null, paymentHold: s.paymentHold, notes: s.notes ?? null, archivedAt: s.archivedAt ? s.archivedAt.toISOString() : null, insuranceStatus: combinedInsuranceStatus(insurance, patchCerts), certifications: patchCerts, insuranceRecords: await serializeInsuranceRecords(insurance), createdAt: s.createdAt.toISOString() });
   } catch (err) {
     req.log.error({ err }, "Update subcontractor error");
     res.status(500).json({ error: "server_error", message: "Failed to update subcontractor" });

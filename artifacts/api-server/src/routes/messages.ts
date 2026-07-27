@@ -376,7 +376,7 @@ router.post("/messages", authenticate, async (req, res) => {
     }
 
     // Verify recipient is a member of the active company
-    const recipient = await db.select({ id: usersTable.id })
+    const recipient = await db.select({ id: companyMembersTable.userId })
       .from(companyMembersTable)
       .where(and(eq(companyMembersTable.userId, recipientId), eq(companyMembersTable.companyId, req.user!.companyId)))
       .limit(1);

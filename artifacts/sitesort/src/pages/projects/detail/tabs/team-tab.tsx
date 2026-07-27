@@ -93,7 +93,18 @@ function PersonCertifications({ personId, canManage }: { personId: string; canMa
     <div className="flex flex-wrap items-center gap-1.5">
       {(certs ?? []).map(c => (
         <span key={c.id} className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium border", statusColor(c.status))}>
-          <ShieldCheck className="w-3 h-3" />{c.name}
+          <ShieldCheck className="w-3 h-3" />
+          {c.name}
+          {c.expiryDate && (
+            <span className="opacity-80">
+              — {c.status === "expired" ? "expired" : "expires"} {new Date(c.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+            </span>
+          )}
+          {c.documentUrl && (
+            <button type="button" onClick={() => window.open(c.documentUrl!.startsWith("/uploads/") ? `/api${c.documentUrl}` : c.documentUrl!, "_blank", "noopener,noreferrer")} className="hover:opacity-70 shrink-0" title="Open document">
+              <ExternalLink className="w-3 h-3" />
+            </button>
+          )}
         </span>
       ))}
       {canManage && !open && (
@@ -161,6 +172,11 @@ export function TeamTab() {
     phoneInput,
     setPhoneInput,
     savePhone,
+    editingEmailId,
+    setEditingEmailId,
+    emailInput,
+    setEmailInput,
+    saveEmail,
     openFromDirectory,
     addPersonToProject,
     setSharingContact,
@@ -323,12 +339,51 @@ export function TeamTab() {
         )}
 
         <div className="flex flex-col gap-1.5 pt-1 border-t border-border/50">
-          {member.email && (
-            <a href={`mailto:${member.email}`} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors">
-              <Mail className="w-4 h-4 shrink-0" />
-              <span className="truncate">{member.email}</span>
-            </a>
-          )}
+          {/* Email: inline-editable like phone, but only for person/firm-backed
+              contacts — a login account's email is their sign-in identity. */}
+          {(() => {
+            // Login accounts sign in with their email — never editable here.
+            const emailEditable = caps.canManageTeam && !member.userId && (member.personId || member.subcontractorId);
+            if (editingEmailId === member.id) {
+              return (
+                <div className="flex items-center gap-2">
+                  <Mail className="w-4 h-4 shrink-0 text-muted-foreground" />
+                  <div className="flex items-center gap-1 flex-1">
+                    <input
+                      autoFocus
+                      type="email"
+                      value={emailInput}
+                      onChange={e => setEmailInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") saveEmail(member.id); if (e.key === "Escape") setEditingEmailId(null); }}
+                      placeholder="name@company.com"
+                      className="flex-1 text-sm bg-muted rounded px-2 py-0.5 outline-none focus:ring-2 focus:ring-primary/30 min-w-0"
+                    />
+                    <button onClick={() => saveEmail(member.id)} className="text-success hover:text-success/80 shrink-0"><CheckCircle2 className="w-4 h-4" /></button>
+                    <button onClick={() => setEditingEmailId(null)} className="text-muted-foreground hover:text-destructive shrink-0"><X className="w-4 h-4" /></button>
+                  </div>
+                </div>
+              );
+            }
+            if (!member.email && !emailEditable) return null;
+            return (
+              <div className="flex items-center gap-2">
+                <Mail className="w-4 h-4 shrink-0 text-muted-foreground" />
+                <div className="flex items-center gap-1 flex-1 min-w-0 group/email">
+                  {member.email ? (
+                    <a href={`mailto:${member.email}`} className="text-sm text-muted-foreground hover:text-primary transition-colors truncate">{member.email}</a>
+                  ) : (
+                    <span className="text-sm text-muted-foreground italic">Add email</span>
+                  )}
+                  {emailEditable && (
+                    <button
+                      onClick={() => { setEditingEmailId(member.id); setEmailInput(member.email ?? ""); }}
+                      className="ml-1 opacity-100 lg:opacity-0 lg:group-hover/email:opacity-100 transition-opacity text-muted-foreground hover:text-primary shrink-0"
+                    ><Pencil className="w-3 h-3" /></button>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
           <div className="flex items-center gap-2">
             <Phone className="w-4 h-4 shrink-0 text-muted-foreground" />
             {editingPhoneId === member.id ? (
@@ -360,7 +415,8 @@ export function TeamTab() {
               </div>
             )}
           </div>
-          {!member.email && !member.phone && editingPhoneId !== member.id && (
+          {!member.email && !member.phone && editingPhoneId !== member.id && editingEmailId !== member.id
+            && !(caps.canManageTeam && !member.userId && (member.personId || member.subcontractorId)) && (
             <p className="text-xs text-muted-foreground italic">No email on file</p>
           )}
         </div>

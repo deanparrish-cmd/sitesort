@@ -10,6 +10,7 @@ import { removedFromProjectUserIds } from "../lib/project-membership";
 import { isPinLockedOut, recordFailedPinAttempt, clearPinAttempts } from "../lib/pin-attempts";
 import { pinRequiredForDoc } from "../lib/signoff";
 import { distributeDocumentToUser } from "../lib/document-distribution";
+import { isProjectApprover } from "../lib/project-authority";
 
 const router: IRouter = Router();
 
@@ -514,12 +515,6 @@ router.get("/documents/:documentId/audit-log", authenticate, async (req, res) =>
 
 router.patch("/documents/:documentId", authenticate, async (req, res) => {
   try {
-    // Document edits (status/version/revision and the PIN sign-off policy toggle)
-    // are restricted to compliance-oversight roles — mirrors the frontend gating.
-    if (req.user!.role !== "admin" && req.user!.role !== "project_manager") {
-      res.status(403).json({ error: "forbidden", message: "Only admins and project managers can edit documents." });
-      return;
-    }
     const docs = await db.select().from(documentsTable).where(eq(documentsTable.id, req.params.documentId)).limit(1);
     if (!docs[0]) {
       res.status(404).json({ error: "not_found", message: "Document not found" });
@@ -530,6 +525,14 @@ router.patch("/documents/:documentId", authenticate, async (req, res) => {
       .limit(1);
     if (!project[0]) {
       res.status(404).json({ error: "not_found", message: "Document not found" });
+      return;
+    }
+    // Document edits (status/version/revision and the PIN sign-off policy toggle)
+    // require approver authority on THIS project — company admin/PM, a member
+    // granted per-project PM cover, or a platform admin. Checked server-side so a
+    // non-approver always gets 403 regardless of what the UI shows.
+    if (!(await isProjectApprover(req.user!, docs[0].projectId))) {
+      res.status(403).json({ error: "forbidden", message: "Only a project approver can edit documents." });
       return;
     }
 

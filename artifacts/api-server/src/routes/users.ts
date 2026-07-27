@@ -1,10 +1,10 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { companiesTable, usersTable, userNotesTable, companyMembersTable, notificationsTable } from "@workspace/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { companiesTable, usersTable, userNotesTable, companyMembersTable, notificationsTable, projectMembersTable, projectsTable } from "@workspace/db/schema";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { generateId } from "../lib/id";
-import { authenticate } from "../middlewares/auth";
+import { authenticate, bustMembershipCache } from "../middlewares/auth";
 import { sendInvitationEmail } from "../lib/email";
 import { addMembership, membershipRole } from "../lib/memberships";
 import { parseFullPersonName } from "../lib/name-validation";
@@ -109,7 +109,20 @@ router.post("/users", authenticate, async (req, res) => {
 
 router.patch("/users/:userId", authenticate, async (req, res) => {
   try {
+    // Manager-gated (self-edits of name/phone allowed): editing another member's
+    // details — and role changes in particular — is an admin/PM action. The UI
+    // only shows the controls to managers, but the API must enforce it too.
+    const isManager = ["admin", "project_manager"].includes(req.user!.role);
+    const isSelf = req.user!.id === req.params.userId;
+    if (!isManager && !isSelf) {
+      res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can edit other members." });
+      return;
+    }
     const { name, role, phone } = req.body;
+    if (role !== undefined && !isManager) {
+      res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can change roles." });
+      return;
+    }
     if (name !== undefined) {
       const nameParsed = parseFullPersonName(name);
       if (!nameParsed.success) {
@@ -142,6 +155,54 @@ router.patch("/users/:userId", authenticate, async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Update user error");
     res.status(500).json({ error: "server_error", message: "Failed to update user" });
+  }
+});
+
+// Remove a team member from THIS company (deletes their membership + project
+// memberships here — their login/account survives, and other companies are
+// untouched). Manager-only; you can't remove yourself or the last admin.
+router.delete("/users/:userId", authenticate, async (req, res) => {
+  try {
+    if (!["admin", "project_manager"].includes(req.user!.role)) {
+      res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can remove team members." });
+      return;
+    }
+    if (req.params.userId === req.user!.id) {
+      res.status(400).json({ error: "validation_error", message: "You can't remove yourself from the team." });
+      return;
+    }
+    const targetRole = await membershipRole(req.params.userId, req.user!.companyId);
+    if (targetRole === null) { res.status(404).json({ error: "not_found", message: "User not found" }); return; }
+    if (targetRole === "admin") {
+      const admins = await db.select({ id: companyMembersTable.userId }).from(companyMembersTable)
+        .where(and(eq(companyMembersTable.companyId, req.user!.companyId), eq(companyMembersTable.role, "admin")));
+      if (admins.length <= 1) {
+        res.status(400).json({ error: "validation_error", message: "You can't remove the only admin." });
+        return;
+      }
+    }
+
+    // Drop them from this company's projects too (their user-linked rows only).
+    const companyProjects = await db.select({ id: projectsTable.id }).from(projectsTable)
+      .where(eq(projectsTable.companyId, req.user!.companyId));
+    if (companyProjects.length > 0) {
+      await db.delete(projectMembersTable).where(and(
+        eq(projectMembersTable.userId, req.params.userId),
+        inArray(projectMembersTable.projectId, companyProjects.map(p => p.id)),
+      ));
+    }
+    await db.delete(companyMembersTable).where(and(
+      eq(companyMembersTable.userId, req.params.userId),
+      eq(companyMembersTable.companyId, req.user!.companyId),
+    ));
+    // Their existing dashboard tokens for THIS company die on the next request
+    // (authenticate re-checks the membership; bust the cache so it's instant).
+    bustMembershipCache(req.params.userId, req.user!.companyId);
+
+    res.json({ ok: true });
+  } catch (err) {
+    req.log.error({ err }, "Remove team member error");
+    res.status(500).json({ error: "server_error", message: "Failed to remove team member" });
   }
 });
 

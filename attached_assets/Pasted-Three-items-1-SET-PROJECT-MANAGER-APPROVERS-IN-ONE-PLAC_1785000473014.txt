@@ -1,0 +1,38 @@
+Three items:
+
+1. SET PROJECT MANAGER + APPROVERS IN ONE PLACE (Edit Project Details):
+   The Edit Project Details modal now has a "Site Manager" dropdown
+   (good). In the SAME modal, add:
+   - Confirmation that Site Manager = the portal-displayed contact
+     (unchanged).
+   - A "Project Managers / Approvers" control: select one OR MORE people
+     who hold approver authority on this project (triage site issues,
+     allocate, confirm two-step closures, approve submitted reports, and
+     sign off documents). Multi-select, so there's always cover.
+   - Only people who've accepted a portal/dashboard invite are
+     selectable (same rule as Site Manager).
+
+2. APPROVERS (incl. cover for an absent PM) CAN SIGN OFF + APPROVE:
+   Anyone with approver authority on the project — not just the original
+   PM — can perform the PM actions above, INCLUDING document sign-off
+   approval. So if the PM is sick/on holiday, another approver clears the
+   pending sign-off. SiteSort platform_admins also retain this ability.
+   Every such action stays individually attributed in the activity log
+   (which approver did it), so shared authority keeps full accountability.
+   Enforce server-side (a non-approver still gets 403).
+
+3. BUG — the "1 Alert" on the project card does nothing when clicked:
+   It corresponds to the pending document sign-off ("Needs Attention · 1
+   pending document sign-off"). Make the alert badge/card a working
+   deep-link to that pending sign-off (or the project's Needs Attention
+   view), using the SAME shared deep-link pattern as the Close-out card
+   and activity entries — not a new one. Whole target clickable, back
+   returns to the dashboard. Audit any other alert/count badges that
+   don't link and wire them the same way; list what you find.
+
+QUALITY: typecheck + check:layout pass at 360px. VERIFY: add a second
+approver in Edit Project Details; as that approver, clear the pending
+document sign-off and confirm it's attributed to them; confirm a
+non-approver gets 403; click the "1 Alert" on the project card and
+confirm it lands on the pending sign-off. Report the deep-link audit and
+Republish.
