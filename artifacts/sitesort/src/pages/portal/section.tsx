@@ -30,7 +30,7 @@ import {
   ExternalLink, MapPin, Calendar, Phone, Mail,
   FileText, AlertTriangle, StickyNote, Download,
   QrCode, Copy, Building2, ShieldCheck, X, Sparkles, UploadCloud, Share, Plus,
-  ChevronDown, Users, FileSignature, CheckCircle2,
+  ChevronDown, Users, FileSignature, CheckCircle2, HardHat,
 } from "lucide-react";
 import { isCadFile, cadBadgeLabel, downloadFile } from "@/lib/documents";
 import { useToast } from "@/hooks/use-toast";
@@ -46,6 +46,21 @@ import { ClipboardList } from "lucide-react";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { WORKER_GUIDE, workerFaq } from "@workspace/user-guide";
 import { GuideSectionGrid, GuideFaqAccordion } from "@/components/user-guide-view";
+import { PortalTile, PortalButton, type TileTheme } from "@/components/portal-ui";
+
+// Wayfinding colour per Home-screen quick-access tile — a distinct hue per
+// destination, never one of the green/amber/red status colours (those are
+// reserved for item status, e.g. a document's CURRENT/SUPERSEDED badge).
+const TILE_THEME: Record<string, TileTheme> = {
+  messages: "blue",
+  shared: "orange",
+  "my-documents": "violet",
+  "site-board": "teal",
+  permits: "indigo",
+  "site-issues": "rose",
+  "plant-materials": "amber",
+  "daily-report": "green",
+};
 
 // Portal-authed binary download: the app's global fetch interceptor attaches the
 // portal bearer token to /api/portal/* requests, so a plain <a href> (which does
@@ -117,13 +132,13 @@ function Loading() {
   return <div className="flex justify-center py-16"><Spinner className="size-7 text-primary" /></div>;
 }
 function Empty({ children }: { children: React.ReactNode }) {
-  return <div className="text-center py-12 text-muted-foreground text-sm">{children}</div>;
+  return <div className="text-center py-12 text-muted-foreground text-base">{children}</div>;
 }
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <div className={`bg-card border border-border rounded-xl p-4 ${className}`}>{children}</div>;
+  return <div className={`bg-card border border-border rounded-2xl p-5 ${className}`}>{children}</div>;
 }
 function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <h2 className="text-lg font-display font-bold mb-3">{children}</h2>;
+  return <h2 className="text-xl font-display font-extrabold mb-3">{children}</h2>;
 }
 // Small dismissible "filtered by …" chip; the clear link drops the query param.
 function FilterChip({ label, clearHref }: { label: string; clearHref: string }) {
@@ -137,23 +152,35 @@ function FilterChip({ label, clearHref }: { label: string; clearHref: string }) 
   );
 }
 
+// Solid, colour-filled status classes — status must be readable by colour
+// alone, before the label text registers. Green = good/current, amber =
+// needs attention, red = problem, blue = informational/in-review, grey =
+// inactive. Kept as plain className strings (not the StatusTone enum) so
+// each existing <Badge label className=MAP[status]/> call site needed zero
+// changes — only the colour values moved from pastel-100/800 to solid fills.
+const GOOD = "bg-success text-success-foreground";
+const WARNING = "bg-warning text-warning-foreground";
+const BAD = "bg-destructive text-destructive-foreground";
+const INFO = "bg-blue-600 text-white dark:bg-blue-500";
+const NEUTRAL = "bg-muted-foreground/70 text-white dark:bg-muted-foreground/50";
+
 const PERMIT_BADGE: Record<string, string> = {
-  active: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
-  expiring_soon: "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
-  expired: "bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300",
+  active: GOOD,
+  expiring_soon: WARNING,
+  expired: BAD,
 };
 const ISSUE_BADGE: Record<string, string> = {
-  new: "bg-violet-100 text-violet-800 dark:bg-violet-950/40 dark:text-violet-300",
-  open: "bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300",
-  in_progress: "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
-  pending_confirmation: "bg-cyan-100 text-cyan-800 dark:bg-cyan-950/40 dark:text-cyan-300",
-  resolved: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
+  new: INFO,
+  open: BAD,
+  in_progress: WARNING,
+  pending_confirmation: INFO,
+  resolved: GOOD,
 };
 const PLANT_STATUS_BADGE: Record<string, string> = {
-  on_site: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
-  on_order: "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
-  off_hired: "bg-muted text-muted-foreground",
-  depleted: "bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300",
+  on_site: GOOD,
+  on_order: WARNING,
+  off_hired: NEUTRAL,
+  depleted: BAD,
 };
 const PLANT_STATUS_OPTIONS = [
   { value: "on_site", label: "On site" },
@@ -161,8 +188,10 @@ const PLANT_STATUS_OPTIONS = [
   { value: "off_hired", label: "Off-hired" },
   { value: "depleted", label: "Depleted" },
 ];
+// Big, solid, colour-filled badge — a bold rounded-lg block, not a thin
+// outline pill, so status reads at a glance in sunlight or from arm's length.
 function Badge({ label, className }: { label: string; className?: string }) {
-  return <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${className ?? "bg-muted text-muted-foreground"}`}>{label}</span>;
+  return <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-bold uppercase tracking-wide whitespace-nowrap ${className ?? NEUTRAL}`}>{label}</span>;
 }
 
 // ── Save-vs-submit lifecycle (shared by Site Issues, Plant & Materials, Daily
@@ -182,9 +211,9 @@ function fmtRelativeShort(iso?: string | null): string {
 }
 function LifecycleBadge({ status, submittedAt, submittedByName }: { status: "draft" | "submitted"; submittedAt?: string | null; submittedByName?: string | null }) {
   if (status === "submitted") {
-    return <Badge label={`Submitted${submittedByName ? ` by ${submittedByName}` : ""}${submittedAt ? ` · ${fmtRelativeShort(submittedAt)}` : ""}`} className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300" />;
+    return <Badge label={`Submitted${submittedByName ? ` by ${submittedByName}` : ""}${submittedAt ? ` · ${fmtRelativeShort(submittedAt)}` : ""}`} className={GOOD} />;
   }
-  return <Badge label="Draft · not yet sent" className="bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300" />;
+  return <Badge label="Draft · not yet sent" className={WARNING} />;
 }
 type SubmissionNoteItem = { id: string; authorName: string; body: string; createdAt: string };
 function SubmissionNotesThread({ notes, onAdd, adding }: { notes: SubmissionNoteItem[]; onAdd: (body: string) => Promise<void>; adding?: boolean }) {
@@ -203,13 +232,13 @@ function SubmissionNotesThread({ notes, onAdd, adding }: { notes: SubmissionNote
         <input
           value={draft} onChange={e => setDraft(e.target.value)} placeholder="Add a note…"
           onKeyDown={e => { if (e.key === "Enter" && draft.trim() && !adding) { void onAdd(draft.trim()).then(() => setDraft("")); } }}
-          className="flex-1 min-h-9 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="flex-1 min-h-12 rounded-lg border-2 border-border bg-background px-4 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
         <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setDraft(d => (d.trim() ? d.trimEnd() + " " : "") + t)} />
         <button
           disabled={!draft.trim() || adding}
           onClick={() => { void onAdd(draft.trim()).then(() => setDraft("")); }}
-          className="px-3 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
+          className="px-4 min-h-12 rounded-lg bg-primary text-primary-foreground text-base font-bold disabled:opacity-50"
         >Add</button>
       </div>
     </div>
@@ -218,7 +247,7 @@ function SubmissionNotesThread({ notes, onAdd, adding }: { notes: SubmissionNote
 
 // Small "New" pill for unseen (newly-shared) items in "Shared with me".
 function NewPill() {
-  return <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-primary text-primary-foreground px-1.5 py-0.5 rounded">New</span>;
+  return <span className="shrink-0 text-xs font-bold uppercase tracking-wide bg-accent text-white px-2 py-0.5 rounded-md">New</span>;
 }
 
 // Once a shared document has been opened, "New" gives way to a quiet receipt:
@@ -226,7 +255,7 @@ function NewPill() {
 // they opened it this session).
 function ReceivedPill({ at }: { at: string }) {
   return (
-    <span className="shrink-0 text-[10px] font-semibold bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
+    <span className="shrink-0 text-xs font-semibold bg-muted text-muted-foreground px-2 py-0.5 rounded-md">
       Received {fmtDateTime(at)}
     </span>
   );
@@ -327,32 +356,32 @@ function DocRow({ doc, section, unseen, signOff }: { doc: any; section: string; 
   const isNewDoc = tracksViews ? !receivedAt : !!unseen;
 
   return (
-    <div className={cn("border-b border-border/60 last:border-0", isNewDoc && "-mx-4 px-4 bg-primary/5")}>
-      <div className="flex items-center justify-between gap-3 py-2.5">
-        <div className="min-w-0">
-          <p className="font-medium truncate flex items-center gap-1.5">
+    <div className={cn("border-b border-border/60 last:border-0 py-3", isNewDoc && "-mx-4 px-4 bg-accent/5")}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="font-bold text-base truncate flex items-center gap-1.5">
             {receivedAt ? <ReceivedPill at={receivedAt} /> : isNewDoc && <NewPill />}
             <span className="truncate">{doc.name}</span>
-            {supersededNow && (
-              <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 px-1.5 py-0.5 rounded">Superseded</span>
-            )}
           </p>
-          <p className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
+          <p className="text-sm text-muted-foreground flex items-center gap-1.5 flex-wrap mt-1">
             <span>{doc.revision ? `Rev ${doc.revision}` : `v${doc.version}`} · {fmtDate(doc.createdAt)}</span>
             {cad && <span className="font-mono bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 px-1.5 py-0.5 rounded text-[10px] font-bold">{cad}</span>}
             {signedOff && (
-              <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
-                <CheckCircle2 className="w-3 h-3" /> Signed off {doc.mySignedOffAt ? fmtDate(doc.mySignedOffAt) : ""}
+              <span className="inline-flex items-center gap-1 text-success font-semibold">
+                <CheckCircle2 className="w-4 h-4" /> Signed off {doc.mySignedOffAt ? fmtDate(doc.mySignedOffAt) : ""}
               </span>
             )}
           </p>
         </div>
-        <div className="shrink-0 flex items-center gap-1">
+        {/* Status readable by colour alone, before the name/date registers. */}
+        <Badge label={supersededNow ? "Superseded" : "Current"} className={supersededNow ? BAD : GOOD} />
+      </div>
+      <div className="flex items-center gap-1 mt-2 -ml-1">
           <button
             onClick={open}
-            className="inline-flex items-center gap-1 rounded-lg px-3 min-h-11 text-sm text-primary font-medium hover:bg-primary/10"
+            className="inline-flex items-center gap-1.5 rounded-xl px-4 min-h-11 text-base text-primary font-bold hover:bg-primary/10 active:scale-[0.98] transition-all"
           >
-            {cad ? <><Download className="w-4 h-4" /> Download</> : <><ExternalLink className="w-4 h-4" /> View</>}
+            {cad ? <><Download className="w-5 h-5" /> Download</> : <><ExternalLink className="w-5 h-5" /> View</>}
           </button>
           {!cad && (
             <button
@@ -367,12 +396,11 @@ function DocRow({ doc, section, unseen, signOff }: { doc: any; section: string; 
           {needsSignOff && !active && (
             <button
               onClick={() => signOff.open({ id: doc.id, name: doc.name, pinRequired: doc.pinRequired ?? true })}
-              className="inline-flex items-center gap-1 rounded-lg px-3 min-h-11 text-sm text-primary font-semibold hover:bg-primary/10"
+              className="inline-flex items-center gap-1.5 rounded-xl px-4 min-h-11 text-base text-accent font-bold hover:bg-accent/10 active:scale-[0.98] transition-all"
             >
-              <FileSignature className="w-4 h-4" /> Sign off
+              <FileSignature className="w-5 h-5" /> Sign off
             </button>
           )}
-        </div>
       </div>
       {active && (
         <div className="pb-3">
@@ -398,31 +426,31 @@ function SignOffPinCard({ flow }: { flow: ReturnType<typeof useSignOffFlow> }) {
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">Set a 4-digit sign-off PIN to continue. You'll use it to confirm future sign-offs.</p>
           <div>
-            <label className="text-xs font-medium text-muted-foreground">Account password</label>
+            <label className="text-sm font-bold text-muted-foreground">Account password</label>
             <input
               type="password" autoComplete="current-password" value={flow.password} onChange={e => flow.setPassword(e.target.value)}
               placeholder="Confirm it's you"
-              className="mt-1 w-full min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+              className="mt-1 w-full min-h-14 rounded-xl border-2 border-border bg-background px-4 text-base focus:outline-none focus:ring-2 focus:ring-primary/40"
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-muted-foreground">Choose a 4-digit PIN</label>
+            <label className="text-sm font-bold text-muted-foreground">Choose a 4-digit PIN</label>
             <input
               type="password" inputMode="numeric" value={flow.newPin} onChange={e => flow.setNewPin(flow.onlyDigits(e.target.value))}
               placeholder="••••"
-              className="mt-1 w-full min-h-11 rounded-xl border border-border bg-background px-3 text-sm tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-primary/40"
+              className="mt-1 w-full min-h-14 rounded-xl border-2 border-border bg-background px-4 text-xl font-bold tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-primary/40"
             />
           </div>
         </div>
       ) : (
         <div>
-          <label className="text-xs font-medium text-muted-foreground">Enter your 4-digit PIN</label>
+          <label className="text-sm font-bold text-muted-foreground">Enter your 4-digit PIN</label>
           <input
             type="password" inputMode="numeric" autoFocus value={flow.pin}
             onChange={e => flow.setPin(flow.onlyDigits(e.target.value))}
             onKeyDown={e => { if (e.key === "Enter") void flow.submit(); }}
             placeholder="••••"
-            className="mt-1 w-full min-h-11 rounded-xl border border-border bg-background px-3 text-sm tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-primary/40"
+            className="mt-1 w-full min-h-14 rounded-xl border-2 border-border bg-background px-4 text-xl font-bold tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-primary/40"
           />
           <button
             type="button"
@@ -438,11 +466,11 @@ function SignOffPinCard({ flow }: { flow: ReturnType<typeof useSignOffFlow> }) {
         <button
           onClick={() => void flow.submit()}
           disabled={flow.submitting}
-          className="flex-1 min-h-11 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50"
+          className="flex-1 min-h-14 rounded-xl bg-primary text-primary-foreground text-base font-bold hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50"
         >
           {flow.submitting ? "Signing off…" : !flow.target.pinRequired ? "Confirm & sign off" : flow.setPinMode ? "Set PIN & sign off" : "Sign off"}
         </button>
-        <button onClick={flow.close} className="min-h-11 px-4 rounded-xl border text-sm font-medium hover:bg-muted">Cancel</button>
+        <button onClick={flow.close} className="min-h-14 px-5 rounded-xl border-2 border-border text-base font-bold hover:bg-muted active:scale-[0.98] transition-all">Cancel</button>
       </div>
     </Card>
   );
@@ -482,24 +510,24 @@ function PermitRow({ p, unseen }: { p: any; unseen?: boolean }) {
   };
 
   return (
-    <div className={cn("flex items-center justify-between gap-3 py-2.5 border-b border-border/60 last:border-0", isNewPermit && "-mx-4 px-4 bg-primary/5")}>
-      <div className="min-w-0">
-        <p className="font-medium truncate flex items-center gap-1.5">
-          {receivedAt ? <ReceivedPill at={receivedAt} /> : isNewPermit && <NewPill />}
-          <span className="truncate">{p.type}</span>
-        </p>
-        <p className="text-xs text-muted-foreground truncate">{p.description} · expires {fmtDate(p.expiryDate)}</p>
-      </div>
-      <div className="shrink-0 flex items-center gap-2">
+    <div className={cn("py-3 border-b border-border/60 last:border-0", isNewPermit && "-mx-4 px-4 bg-accent/5")}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="font-bold text-base truncate flex items-center gap-1.5">
+            {receivedAt ? <ReceivedPill at={receivedAt} /> : isNewPermit && <NewPill />}
+            <span className="truncate">{p.type}</span>
+          </p>
+          <p className="text-sm text-muted-foreground truncate mt-1">{p.description} · expires {fmtDate(p.expiryDate)}</p>
+        </div>
         <Badge label={p.status === "expiring_soon" ? "Expiring" : p.status === "expired" ? "Expired" : "Active"} className={PERMIT_BADGE[p.status]} />
-        <button
-          onClick={view}
-          disabled={downloading}
-          className="min-h-9 px-3 rounded-lg border text-xs font-medium hover:bg-muted disabled:opacity-50"
-        >
-          {downloading ? "Opening…" : "View"}
-        </button>
       </div>
+      <button
+        onClick={view}
+        disabled={downloading}
+        className="mt-2 -ml-1 inline-flex items-center gap-1.5 rounded-xl px-4 min-h-11 text-base text-primary font-bold hover:bg-primary/10 active:scale-[0.98] transition-all disabled:opacity-50"
+      >
+        <ExternalLink className="w-5 h-5" /> {downloading ? "Opening…" : "View"}
+      </button>
     </div>
   );
 }
@@ -513,6 +541,51 @@ function UpdateCard({ n }: { n: { id: string; body: string; noteDate: string; au
       <p className="text-sm whitespace-pre-wrap break-words">{n.body}</p>
       <p className="text-xs text-muted-foreground mt-2">{n.authorName} · {fmtDate(n.noteDate)}</p>
     </Card>
+  );
+}
+
+// Portal home — 5-box redesign. Exactly five glanceable boxes: 1) Project info,
+// 2) Site manager, 3) Site Updates (the latest update only), 4) Past Updates
+// (older ones), 5) Team (collapsible). Everything else lives elsewhere: Site
+// Board + member-shared Permits moved to the second page (/portal/more, linked
+// prominently below the boxes AND in the nav); permission-gated work sections,
+// Messages and Shared with me are unchanged nav destinations. Old /portal/team
+// and /portal/progress deep links land here.
+// A colour-tinted icon "chip" used as the heading of a Home box — the same
+// visual language as the quick-access tiles above, so the whole home screen
+// reads as one consistent system of big coloured icon+label blocks.
+function BoxHeading({ Icon, theme, children }: { Icon: React.ComponentType<{ className?: string }>; theme: TileTheme; children: React.ReactNode }) {
+  const colors: Record<TileTheme, string> = {
+    orange: "bg-accent/10 text-accent", blue: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+    violet: "bg-violet-500/10 text-violet-600 dark:text-violet-400", teal: "bg-teal-500/10 text-teal-600 dark:text-teal-400",
+    indigo: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400", rose: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
+    amber: "bg-amber-500/10 text-amber-600 dark:text-amber-400", green: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+    slate: "bg-slate-500/10 text-slate-600 dark:text-slate-400", sky: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
+  };
+  return (
+    <p className="flex items-center gap-2.5 mb-2">
+      <span className={cn("w-9 h-9 rounded-lg flex items-center justify-center shrink-0", colors[theme])}><Icon className="w-5 h-5" /></span>
+      <span className="text-base font-display font-extrabold">{children}</span>
+    </p>
+  );
+}
+
+// Quick-access grid for the sections a worker jumps to most — big coloured
+// tiles (icon + label + unseen dot), the same "SECTION_NAV filtered by
+// permission" rule the sidebar uses, so what's tappable here always matches
+// what's actually visible in the nav. Settings/Help stay sidebar-only (they're
+// not day-to-day work destinations).
+const HOME_TILE_KEYS = new Set(["messages", "shared", "my-documents", "site-board", "permits", "site-issues", "plant-materials", "daily-report"]);
+function HomeQuickAccess({ member }: { member: Record<string, unknown> | undefined }) {
+  const { data: unseen } = useGetPortalUnseen({ query: { queryKey: getGetPortalUnseenQueryKey() } });
+  const counts = (unseen?.counts ?? {}) as Record<string, number>;
+  const tiles = SECTION_NAV.filter(s => HOME_TILE_KEYS.has(s.key) && (!s.permission || !!member?.[s.permission]));
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      {tiles.map(t => (
+        <PortalTile key={t.key} href={`/portal/${t.key}`} label={t.label} Icon={t.Icon} theme={TILE_THEME[t.key] ?? "slate"} unseen={counts[t.key] ?? 0} />
+      ))}
+    </div>
   );
 }
 
@@ -541,25 +614,28 @@ function HomeView() {
     : null;
   return (
     <div className="space-y-6">
+      {/* Quick access — big coloured tiles to where a worker needs to go. */}
+      <HomeQuickAccess member={ctx?.member as Record<string, unknown> | undefined} />
+
       {/* Box 1 — Project info */}
       <Card>
-        <h2 className="text-lg font-display font-bold truncate">{project?.name}</h2>
+        <h2 className="text-xl font-display font-extrabold truncate">{project?.name}</h2>
         {project?.address && (
-          <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
-            <MapPin className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{project.address}</span>
+          <p className="text-base text-muted-foreground flex items-center gap-1.5 mt-1.5">
+            <MapPin className="w-4 h-4 shrink-0" /><span className="truncate">{project.address}</span>
           </p>
         )}
         {dates && (
-          <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
-            <Calendar className="w-3.5 h-3.5 shrink-0" /><span>{dates}</span>
+          <p className="text-base text-muted-foreground flex items-center gap-1.5 mt-1.5">
+            <Calendar className="w-4 h-4 shrink-0" /><span>{dates}</span>
           </p>
         )}
         {typeof project?.progressPercent === "number" && (
-          <div className="flex items-center gap-2 mt-3">
-            <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-              <div className="h-full bg-emerald-500" style={{ width: `${project.progressPercent}%` }} />
+          <div className="flex items-center gap-3 mt-4">
+            <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
+              <div className="h-full bg-success" style={{ width: `${project.progressPercent}%` }} />
             </div>
-            <span className="text-sm font-bold">{project.progressPercent}%</span>
+            <span className="text-base font-extrabold shrink-0">{project.progressPercent}%</span>
           </div>
         )}
       </Card>
@@ -567,31 +643,31 @@ function HomeView() {
       {/* Box 2 — Site manager. A deliberate PM choice (never guessed) — shown
           as "Not set" rather than silently disappearing when unset. */}
       <Card>
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Site manager</p>
+        <BoxHeading Icon={HardHat} theme="blue">Site manager</BoxHeading>
         {sm ? (
           <>
-            <p className="font-medium truncate mt-1">{sm.name}</p>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 min-w-0">
-              {sm.phone && <a href={`tel:${sm.phone}`} className="inline-flex items-center gap-1 text-xs text-primary font-medium"><Phone className="w-3 h-3" /> {sm.phone}</a>}
-              {sm.email && <a href={`mailto:${sm.email}`} className="inline-flex items-center gap-1 text-xs text-primary font-medium min-w-0 max-w-full"><Mail className="w-3 h-3 shrink-0" /><span className="truncate">{sm.email}</span></a>}
+            <p className="font-bold text-base truncate">{sm.name}</p>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-1.5 min-w-0">
+              {sm.phone && <a href={`tel:${sm.phone}`} className="inline-flex items-center gap-1.5 text-base text-primary font-bold"><Phone className="w-4 h-4" /> {sm.phone}</a>}
+              {sm.email && <a href={`mailto:${sm.email}`} className="inline-flex items-center gap-1.5 text-base text-primary font-bold min-w-0 max-w-full"><Mail className="w-4 h-4 shrink-0" /><span className="truncate">{sm.email}</span></a>}
             </div>
           </>
         ) : (
-          <p className="text-sm text-muted-foreground mt-1">Not set</p>
+          <p className="text-base text-muted-foreground">Not set</p>
         )}
       </Card>
 
       {/* Box 3 — Site Updates (latest only) — the title lives INSIDE the card
           (like Box 2's "Site manager") so the box reads as one unit. */}
       <Card>
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Site updates</p>
+        <BoxHeading Icon={Sparkles} theme="orange">Site updates</BoxHeading>
         {latest ? (
           <>
-            <p className="text-sm whitespace-pre-wrap break-words">{latest.body}</p>
-            <p className="text-xs text-muted-foreground mt-2">{latest.authorName} · {fmtDate(latest.noteDate)}</p>
+            <p className="text-base whitespace-pre-wrap break-words">{latest.body}</p>
+            <p className="text-sm text-muted-foreground mt-2">{latest.authorName} · {fmtDate(latest.noteDate)}</p>
           </>
         ) : (
-          <p className="text-sm text-muted-foreground">No site updates posted yet.</p>
+          <p className="text-base text-muted-foreground">No site updates posted yet.</p>
         )}
       </Card>
 
@@ -600,9 +676,9 @@ function HomeView() {
         <button
           onClick={() => setPastOpen(o => !o)}
           aria-expanded={pastOpen}
-          className="w-full flex items-center justify-between gap-3 bg-card border rounded-xl px-4 py-3 hover:bg-muted/50 transition-colors"
+          className="w-full flex items-center justify-between gap-3 min-h-14 bg-card border border-border rounded-2xl px-4 py-3 hover:bg-muted/50 active:scale-[0.98] transition-all"
         >
-          <span className="flex items-center gap-2 font-display font-bold"><StickyNote className="w-5 h-5 text-primary" /> Past updates</span>
+          <span className="flex items-center gap-2.5 font-display font-extrabold text-base"><StickyNote className="w-5 h-5 text-primary" /> Past updates</span>
           <ChevronDown className={cn("w-5 h-5 text-muted-foreground transition-transform", pastOpen && "rotate-180")} />
         </button>
         {pastOpen && (
@@ -619,9 +695,9 @@ function HomeView() {
         <button
           onClick={() => setTeamOpen(o => !o)}
           aria-expanded={teamOpen}
-          className="w-full flex items-center justify-between gap-3 bg-card border rounded-xl px-4 py-3 hover:bg-muted/50 transition-colors"
+          className="w-full flex items-center justify-between gap-3 min-h-14 bg-card border border-border rounded-2xl px-4 py-3 hover:bg-muted/50 active:scale-[0.98] transition-all"
         >
-          <span className="flex items-center gap-2 font-display font-bold"><Users className="w-5 h-5 text-primary" /> Team</span>
+          <span className="flex items-center gap-2.5 font-display font-extrabold text-base"><Users className="w-5 h-5 text-primary" /> Team</span>
           <ChevronDown className={cn("w-5 h-5 text-muted-foreground transition-transform", teamOpen && "rotate-180")} />
         </button>
         {teamOpen && <div className="mt-3"><TeamView /></div>}
@@ -653,37 +729,37 @@ function TeamView() {
     <div className="space-y-3">
       {data.map((m, i) => (
         <Card key={i} className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold shrink-0">
+          <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center font-extrabold text-lg shrink-0">
             {m.name.charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="font-medium truncate">{m.name}</p>
-            <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
-              <Building2 className="w-3 h-3 shrink-0" /> {m.company}
+            <p className="font-bold text-base truncate">{m.name}</p>
+            <p className="text-sm text-muted-foreground truncate flex items-center gap-1.5 mt-0.5">
+              <Building2 className="w-4 h-4 shrink-0" /> {m.company}
             </p>
-            <p className="text-xs text-muted-foreground truncate capitalize">{m.jobTitle || m.role}</p>
+            <p className="text-sm text-muted-foreground truncate capitalize">{m.jobTitle || m.role}</p>
             {(m.phone || m.email) && (
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 min-w-0">
+              <div className="flex flex-wrap items-center gap-2 mt-2 min-w-0">
                 {m.phone && (
-                  <a href={`tel:${m.phone}`} className="inline-flex items-center gap-1 text-xs text-primary font-medium">
-                    <Phone className="w-3 h-3 shrink-0" /> {m.phone}
+                  <a href={`tel:${m.phone}`} className="inline-flex items-center gap-1.5 min-h-11 px-3 rounded-lg bg-primary/10 text-base text-primary font-bold active:scale-[0.98] transition-all">
+                    <Phone className="w-4 h-4 shrink-0" /> {m.phone}
                   </a>
                 )}
                 {m.email && (
-                  <a href={`mailto:${m.email}`} className="inline-flex items-center gap-1 text-xs text-primary font-medium min-w-0 max-w-full">
-                    <Mail className="w-3 h-3 shrink-0" /> <span className="truncate">{m.email}</span>
+                  <a href={`mailto:${m.email}`} className="inline-flex items-center gap-1.5 min-h-11 px-3 rounded-lg bg-primary/10 text-base text-primary font-bold min-w-0 max-w-full active:scale-[0.98] transition-all">
+                    <Mail className="w-4 h-4 shrink-0" /> <span className="truncate">{m.email}</span>
                   </a>
                 )}
               </div>
             )}
             {(m.certifications?.length ?? 0) > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-1.5">
+              <div className="flex flex-wrap gap-1.5 mt-2">
                 {m.certifications!.map((c, ci) => (
                   <span key={ci} className={cn(
-                    "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border",
-                    c.status === "expired" ? "bg-red-50 text-red-700 border-red-200" :
-                    c.status === "expiring_soon" ? "bg-amber-50 text-amber-700 border-amber-200" :
-                    "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    "inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold",
+                    c.status === "expired" ? BAD :
+                    c.status === "expiring_soon" ? WARNING :
+                    GOOD
                   )}>
                     {c.name}
                   </span>
@@ -730,33 +806,33 @@ function LogIssueForm({ onLogged }: { onLogged: () => void }) {
     <Card>
       <form onSubmit={submit} className="space-y-3">
         <div>
-          <label className="text-xs font-medium text-muted-foreground">Type</label>
-          <select value={type} onChange={e => setType(e.target.value as typeof type)} className="mt-1 w-full min-h-12 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+          <label className="text-sm font-bold text-muted-foreground">Type</label>
+          <select value={type} onChange={e => setType(e.target.value as typeof type)} className="mt-1 w-full min-h-14 rounded-xl border-2 border-border bg-background px-4 text-base focus:outline-none focus:ring-2 focus:ring-primary/40">
             <option value="snag">Snag</option>
             <option value="safety_concern">Safety Concern</option>
             <option value="work_completed">Work Completed</option>
           </select>
         </div>
         <div>
-          <label className="text-xs font-medium text-muted-foreground">Description</label>
+          <label className="text-sm font-bold text-muted-foreground">Description</label>
           <div className="mt-1 flex items-start gap-2">
-            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} placeholder="What's the issue?" className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} placeholder="What's the issue?" className="flex-1 rounded-xl border-2 border-border bg-background px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/40" />
             <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setDescription(d => (d.trim() ? d.trimEnd() + " " : "") + t)} />
           </div>
         </div>
         <div>
-          <label className="text-xs font-medium text-muted-foreground">Zone / location</label>
+          <label className="text-sm font-bold text-muted-foreground">Zone / location</label>
           <div className="mt-1 flex items-center gap-2">
-            <input value={zone} onChange={e => setZone(e.target.value)} placeholder="e.g. Level 2, East wing" className="flex-1 min-h-12 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+            <input value={zone} onChange={e => setZone(e.target.value)} placeholder="e.g. Level 2, East wing" className="flex-1 min-h-14 rounded-xl border-2 border-border bg-background px-4 text-base focus:outline-none focus:ring-2 focus:ring-primary/40" />
             <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setZone(z => (z.trim() ? z.trimEnd() + " " : "") + t)} />
           </div>
         </div>
         <div>
-          <label className="text-xs font-medium text-muted-foreground">Photo</label>
+          <label className="text-sm font-bold text-muted-foreground">Photo</label>
           <input ref={fileRef} type="file" accept="image/*" onChange={e => setFile(e.target.files?.[0] ?? null)}
-            className="mt-1 w-full text-sm file:mr-3 file:min-h-10 file:rounded-lg file:border-0 file:bg-primary/10 file:px-4 file:text-sm file:font-medium file:text-primary" />
+            className="mt-1 w-full text-sm file:mr-3 file:min-h-12 file:rounded-lg file:border-0 file:bg-primary/10 file:px-4 file:text-base file:font-bold file:text-primary" />
         </div>
-        <button type="submit" disabled={create.isPending} className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary min-h-12 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+        <button type="submit" disabled={create.isPending} className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary min-h-14 text-base font-bold text-primary-foreground hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50">
           <AlertTriangle className="w-4 h-4" /> {create.isPending ? "Logging…" : "Log issue"}
         </button>
       </form>
@@ -786,32 +862,32 @@ function IssueDraftEditPanel({ issue, onDone }: { issue: { id: string; category:
   return (
     <div className="mt-3 pt-3 border-t border-border/60 space-y-3">
       <div>
-        <label className="text-xs font-medium text-muted-foreground">Type</label>
-        <select value={type} onChange={e => setType(e.target.value as typeof type)} className="mt-1 w-full min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+        <label className="text-sm font-bold text-muted-foreground">Type</label>
+        <select value={type} onChange={e => setType(e.target.value as typeof type)} className="mt-1 w-full min-h-14 rounded-xl border-2 border-border bg-background px-4 text-base focus:outline-none focus:ring-2 focus:ring-primary/40">
           <option value="snag">Snag</option>
           <option value="safety_concern">Safety Concern</option>
           <option value="work_completed">Work Completed</option>
         </select>
       </div>
       <div>
-        <label className="text-xs font-medium text-muted-foreground">Description</label>
+        <label className="text-sm font-bold text-muted-foreground">Description</label>
         <div className="mt-1 flex items-start gap-2">
-          <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+          <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} className="flex-1 rounded-xl border-2 border-border bg-background px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/40" />
           <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setDescription(d => (d.trim() ? d.trimEnd() + " " : "") + t)} />
         </div>
       </div>
       <div>
-        <label className="text-xs font-medium text-muted-foreground">Zone / location</label>
+        <label className="text-sm font-bold text-muted-foreground">Zone / location</label>
         <div className="mt-1 flex items-center gap-2">
-          <input value={zone} onChange={e => setZone(e.target.value)} className="flex-1 min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+          <input value={zone} onChange={e => setZone(e.target.value)} className="flex-1 min-h-14 rounded-xl border-2 border-border bg-background px-4 text-base focus:outline-none focus:ring-2 focus:ring-primary/40" />
           <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setZone(z => (z.trim() ? z.trimEnd() + " " : "") + t)} />
         </div>
       </div>
       <div className="flex gap-2">
-        <button onClick={save} disabled={edit.isPending} className="flex-1 min-h-11 rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+        <button onClick={save} disabled={edit.isPending} className="flex-1 min-h-14 rounded-xl bg-primary text-base font-bold text-primary-foreground hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50">
           {edit.isPending ? "Saving…" : "Save draft"}
         </button>
-        <button onClick={onDone} className="min-h-11 px-4 rounded-xl border text-sm font-medium hover:bg-muted">Cancel</button>
+        <button onClick={onDone} className="min-h-14 px-5 rounded-xl border-2 border-border text-base font-bold hover:bg-muted active:scale-[0.98] transition-all">Cancel</button>
       </div>
     </div>
   );
@@ -860,9 +936,9 @@ function SiteIssuesView() {
         showForm ? (
           <LogIssueForm onLogged={() => { setShowForm(false); void invalidate(); }} />
         ) : (
-          <button onClick={() => setShowForm(true)} className="w-full inline-flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border min-h-12 text-sm font-semibold text-primary hover:bg-primary/5">
-            <AlertTriangle className="w-4 h-4" /> Log an issue
-          </button>
+          <PortalButton tone="outline" onClick={() => setShowForm(true)} icon={<AlertTriangle className="w-5 h-5" />} className="border-dashed border-accent/50 text-accent hover:bg-accent/5">
+            Log an issue
+          </PortalButton>
         )
       )}
       {openOnly && <FilterChip label="Open issues only" clearHref="/portal/site-issues" />}
@@ -879,18 +955,18 @@ function SiteIssuesView() {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-                  <span className="font-medium">{ISSUE_TYPE_LABEL[issue.category] ?? issue.category}</span>
-                  <span className="text-xs text-muted-foreground">#{issue.referenceNumber}</span>
+                  <AlertTriangle className="w-5 h-5 text-warning shrink-0" />
+                  <span className="font-bold text-base">{ISSUE_TYPE_LABEL[issue.category] ?? issue.category}</span>
+                  <span className="text-sm text-muted-foreground">#{issue.referenceNumber}</span>
                   {reportedByMe && <LifecycleBadge status={isDraft ? "draft" : "submitted"} submittedAt={issue.submittedAt} />}
                 </div>
-                {issue.description && <p className="text-sm mt-1 break-words">{issue.description}</p>}
-                <p className="text-xs text-muted-foreground mt-1">
+                {issue.description && <p className="text-base mt-1.5 break-words">{issue.description}</p>}
+                <p className="text-sm text-muted-foreground mt-1.5">
                   {issue.zone ? `${issue.zone} · ` : ""}{fmtDate(issue.takenAt)}
                   {reportedByMe ? ` · reported by you` : ""}
                 </p>
               </div>
-              <Badge label={(issue.status ?? "open").replace(/_/g, " ")} className={ISSUE_BADGE[issue.status ?? "open"] ?? "bg-muted text-muted-foreground"} />
+              <Badge label={(issue.status ?? "open").replace(/_/g, " ")} className={ISSUE_BADGE[issue.status ?? "open"] ?? NEUTRAL} />
             </div>
             {issue.photoUrl && (
               <img src={fileHref(issue.photoUrl)} alt="" className="mt-3 rounded-lg w-full max-h-56 object-cover" loading="lazy" />
@@ -901,11 +977,11 @@ function SiteIssuesView() {
               ) : (
                 <div className="mt-3 flex gap-2">
                   <button onClick={() => doSubmit(issue.id)} disabled={submitIssue.isPending}
-                    className="flex-1 min-h-11 rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+                    className="flex-1 min-h-14 rounded-xl bg-primary text-base font-bold text-primary-foreground hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50">
                     {submitIssue.isPending ? "Submitting…" : "Submit to PM"}
                   </button>
                   <button onClick={() => setEditingDraftId(issue.id)}
-                    className="min-h-11 px-4 rounded-xl border text-sm font-medium hover:bg-muted">Edit draft</button>
+                    className="min-h-14 px-5 rounded-xl border-2 border-border text-base font-bold hover:bg-muted active:scale-[0.98] transition-all">Edit draft</button>
                 </div>
               )
             )}
@@ -925,7 +1001,7 @@ function SiteIssuesView() {
             )}
             {canMarkDone && (
               <button onClick={() => doMarkDone(issue.id)} disabled={markDone.isPending}
-                className="mt-3 w-full inline-flex items-center justify-center gap-2 rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 min-h-11 text-sm font-semibold hover:bg-cyan-100 disabled:opacity-50">
+                className="mt-3 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 text-white min-h-14 text-base font-bold hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-50">
                 Mark as done, awaiting confirmation
               </button>
             )}
@@ -949,15 +1025,15 @@ function SiteBoardView({ embedded }: { embedded?: boolean }) {
   const pinnedDocs = pins.filter(p => p.itemType === "document");
   const pinnedPermits = pins.filter(p => p.itemType === "permit");
   const pinnedPhotos = pins.filter(p => p.itemType === "photo");
-  const permitBadge = (s?: string) => s === "expired" ? "bg-rose-100 text-rose-800" : s === "expiring_soon" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800";
+  const permitBadge = (s?: string) => s === "expired" ? BAD : s === "expiring_soon" ? WARNING : GOOD;
   return (
     <div className="space-y-5">
       {/* Project (skipped when embedded — Home shows it at the top) */}
       {!embedded && (
         <Card>
-          <h2 className="text-lg font-display font-bold truncate">{data.project.name}</h2>
-          <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1"><MapPin className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{data.project.address}</span></p>
-          <span className="inline-block mt-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-muted capitalize">{data.project.status}</span>
+          <h2 className="text-xl font-display font-extrabold truncate">{data.project.name}</h2>
+          <p className="text-base text-muted-foreground flex items-center gap-1.5 mt-1.5"><MapPin className="w-4 h-4 shrink-0" /><span className="truncate">{data.project.address}</span></p>
+          <span className="inline-block mt-2"><Badge label={data.project.status} className={NEUTRAL} /></span>
         </Card>
       )}
 
@@ -966,10 +1042,10 @@ function SiteBoardView({ embedded }: { embedded?: boolean }) {
         <Card className="flex flex-col items-center text-center">
           <SectionTitle>Site board QR code</SectionTitle>
           <div className="p-3 bg-white rounded-xl border"><QRCodeSVG value={siteUrl} size={168} level="H" includeMargin /></div>
-          <p className="text-xs text-muted-foreground break-all mt-2 px-2 max-w-full">{siteUrl}</p>
+          <p className="text-sm text-muted-foreground break-all mt-2 px-2 max-w-full">{siteUrl}</p>
           <div className="flex gap-2 mt-3">
-            <a href={siteUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium hover:bg-muted"><QrCode className="w-4 h-4" /> Open</a>
-            <button onClick={() => { navigator.clipboard.writeText(siteUrl).catch(() => {}); }} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium hover:bg-muted"><Copy className="w-4 h-4" /> Copy link</button>
+            <a href={siteUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 min-h-12 px-4 rounded-xl border-2 border-border text-base font-bold hover:bg-muted active:scale-[0.98] transition-all"><QrCode className="w-5 h-5" /> Open</a>
+            <button onClick={() => { navigator.clipboard.writeText(siteUrl).catch(() => {}); }} className="inline-flex items-center gap-1.5 min-h-12 px-4 rounded-xl border-2 border-border text-base font-bold hover:bg-muted active:scale-[0.98] transition-all"><Copy className="w-5 h-5" /> Copy link</button>
           </div>
         </Card>
       )}
@@ -981,14 +1057,14 @@ function SiteBoardView({ embedded }: { embedded?: boolean }) {
           <Card>
             {data.siteManager ? (
               <>
-                <p className="font-medium truncate">{data.siteManager.name}</p>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 min-w-0">
-                  {data.siteManager.phone && <a href={`tel:${data.siteManager.phone}`} className="inline-flex items-center gap-1 text-xs text-primary font-medium"><Phone className="w-3 h-3" /> {data.siteManager.phone}</a>}
-                  {data.siteManager.email && <a href={`mailto:${data.siteManager.email}`} className="inline-flex items-center gap-1 text-xs text-primary font-medium min-w-0 max-w-full"><Mail className="w-3 h-3 shrink-0" /><span className="truncate">{data.siteManager.email}</span></a>}
+                <p className="font-bold text-base truncate">{data.siteManager.name}</p>
+                <div className="flex flex-wrap items-center gap-2 mt-2 min-w-0">
+                  {data.siteManager.phone && <a href={`tel:${data.siteManager.phone}`} className="inline-flex items-center gap-1.5 min-h-11 px-3 rounded-lg bg-primary/10 text-base text-primary font-bold active:scale-[0.98] transition-all"><Phone className="w-4 h-4" /> {data.siteManager.phone}</a>}
+                  {data.siteManager.email && <a href={`mailto:${data.siteManager.email}`} className="inline-flex items-center gap-1.5 min-h-11 px-3 rounded-lg bg-primary/10 text-base text-primary font-bold min-w-0 max-w-full active:scale-[0.98] transition-all"><Mail className="w-4 h-4 shrink-0" /><span className="truncate">{data.siteManager.email}</span></a>}
                 </div>
               </>
             ) : (
-              <p className="text-sm text-muted-foreground">Not set</p>
+              <p className="text-base text-muted-foreground">Not set</p>
             )}
           </Card>
         </div>
@@ -1000,9 +1076,9 @@ function SiteBoardView({ embedded }: { embedded?: boolean }) {
           <SectionTitle>Permits</SectionTitle>
           <Card>
             {data.permits.map(p => (
-              <div key={p.id} className="flex items-center justify-between gap-3 py-2.5 border-b border-border/60 last:border-0">
-                <div className="min-w-0"><p className="font-medium truncate capitalize">{p.type}</p>{p.description && <p className="text-xs text-muted-foreground truncate">{p.description}</p>}</div>
-                <span className="text-xs text-muted-foreground shrink-0">Expires {fmtDate(p.expiryDate)}</span>
+              <div key={p.id} className="flex items-center justify-between gap-3 py-3 border-b border-border/60 last:border-0">
+                <div className="min-w-0"><p className="font-bold text-base truncate capitalize">{p.type}</p>{p.description && <p className="text-sm text-muted-foreground truncate mt-0.5">{p.description}</p>}</div>
+                <span className="text-sm text-muted-foreground shrink-0">Expires {fmtDate(p.expiryDate)}</span>
               </div>
             ))}
           </Card>
@@ -1015,9 +1091,9 @@ function SiteBoardView({ embedded }: { embedded?: boolean }) {
           <SectionTitle>Documents on display</SectionTitle>
           <Card>
             {data.documents.map(d => (
-              <div key={d.id} className="flex items-center gap-3 py-2.5 border-b border-border/60 last:border-0">
-                <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
-                <div className="min-w-0"><p className="font-medium truncate">{d.name}</p><p className="text-xs text-muted-foreground capitalize">{d.type} · v{d.version}</p></div>
+              <div key={d.id} className="flex items-center gap-3 py-3 border-b border-border/60 last:border-0">
+                <FileText className="w-5 h-5 text-muted-foreground shrink-0" />
+                <div className="min-w-0"><p className="font-bold text-base truncate">{d.name}</p><p className="text-sm text-muted-foreground capitalize">{d.type} · v{d.version}</p></div>
               </div>
             ))}
           </Card>
@@ -1029,7 +1105,7 @@ function SiteBoardView({ embedded }: { embedded?: boolean }) {
         <div>
           <SectionTitle>Trades on site</SectionTitle>
           <div className="flex flex-wrap gap-1.5">
-            {data.project.trades.map(t => <span key={t} className="inline-flex max-w-full px-2.5 py-1 rounded-full bg-muted text-xs font-medium"><span className="truncate">{t}</span></span>)}
+            {data.project.trades.map(t => <span key={t} className="inline-flex max-w-full px-3 py-1.5 rounded-full bg-muted text-sm font-bold"><span className="truncate">{t}</span></span>)}
           </div>
         </div>
       )}
@@ -1039,9 +1115,9 @@ function SiteBoardView({ embedded }: { embedded?: boolean }) {
         <div>
           <SectionTitle>Pinned documents</SectionTitle>
           <Card>{pinnedDocs.map(d => (
-            <div key={d.id} className="flex items-center justify-between gap-3 py-2.5 border-b border-border/60 last:border-0">
-              <div className="min-w-0"><p className="font-medium truncate flex items-center gap-1.5"><span className="truncate">{d.name}</span>{d.superseded && <span className="shrink-0 text-[10px] font-bold uppercase bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Superseded</span>}</p><p className="text-xs text-muted-foreground capitalize">{d.type} · v{d.version}</p></div>
-              {d.fileUrl && <button onClick={() => window.open(fileHref(d.fileUrl), "_blank", "noopener")} className="shrink-0 text-sm text-primary font-medium">View</button>}
+            <div key={d.id} className="flex items-center justify-between gap-3 py-3 border-b border-border/60 last:border-0">
+              <div className="min-w-0"><p className="font-bold text-base truncate flex items-center gap-1.5"><span className="truncate">{d.name}</span>{d.superseded && <Badge label="Superseded" className={BAD} />}</p><p className="text-sm text-muted-foreground capitalize mt-0.5">{d.type} · v{d.version}</p></div>
+              {d.fileUrl && <button onClick={() => window.open(fileHref(d.fileUrl), "_blank", "noopener")} className="shrink-0 min-h-11 px-3 rounded-lg text-base text-primary font-bold hover:bg-primary/10 active:scale-[0.98] transition-all">View</button>}
             </div>
           ))}</Card>
         </div>
@@ -1050,9 +1126,9 @@ function SiteBoardView({ embedded }: { embedded?: boolean }) {
         <div>
           <SectionTitle>Pinned permits</SectionTitle>
           <Card>{pinnedPermits.map(p => (
-            <div key={p.id} className="flex items-center justify-between gap-3 py-2.5 border-b border-border/60 last:border-0">
-              <div className="min-w-0"><p className="font-medium truncate capitalize">{p.type}</p>{p.description && <p className="text-xs text-muted-foreground truncate">{p.description}</p>}</div>
-              <span className={`shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full ${permitBadge(p.status)}`}>{p.status === "expiring_soon" ? "Expiring" : p.status === "expired" ? "Expired" : "Active"}</span>
+            <div key={p.id} className="flex items-center justify-between gap-3 py-3 border-b border-border/60 last:border-0">
+              <div className="min-w-0"><p className="font-bold text-base truncate capitalize">{p.type}</p>{p.description && <p className="text-sm text-muted-foreground truncate mt-0.5">{p.description}</p>}</div>
+              <Badge label={p.status === "expiring_soon" ? "Expiring" : p.status === "expired" ? "Expired" : "Active"} className={permitBadge(p.status)} />
             </div>
           ))}</Card>
         </div>
@@ -1072,9 +1148,9 @@ function SiteBoardView({ embedded }: { embedded?: boolean }) {
           <SectionTitle>Upcoming events</SectionTitle>
           <Card>
             {data.upcomingEvents.map(e => (
-              <div key={e.id} className="flex items-center gap-3 py-2 border-b border-border/60 last:border-0">
-                <Calendar className="w-4 h-4 text-primary shrink-0" />
-                <div className="min-w-0"><p className="font-medium truncate">{e.title}</p><p className="text-xs text-muted-foreground">{fmtDate(e.eventDate)}{e.note ? ` · ${e.note}` : ""}</p></div>
+              <div key={e.id} className="flex items-center gap-3 py-3 border-b border-border/60 last:border-0">
+                <Calendar className="w-5 h-5 text-primary shrink-0" />
+                <div className="min-w-0"><p className="font-bold text-base truncate">{e.title}</p><p className="text-sm text-muted-foreground mt-0.5">{fmtDate(e.eventDate)}{e.note ? ` · ${e.note}` : ""}</p></div>
               </div>
             ))}
           </Card>
@@ -1184,7 +1260,7 @@ function SharedView() {
             key={c.key}
             onClick={() => setCategory(c.key)}
             className={cn(
-              "px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors",
+              "min-h-11 px-4 rounded-full text-sm font-bold border-2 transition-all active:scale-[0.98]",
               category === c.key ? "bg-primary text-primary-foreground border-primary" : "bg-background text-muted-foreground border-border hover:bg-muted",
             )}
           >
@@ -1204,16 +1280,16 @@ function SharedView() {
             <Card key={issue.id} className={cn(isNew(issue.id) && "ring-1 ring-primary/40")}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     {isNew(issue.id) && <NewPill />}
-                    <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-                    <span className="font-medium">{issue.category === "safety_concern" ? "Safety concern" : "Snag"}</span>
-                    <span className="text-xs text-muted-foreground">#{issue.referenceNumber}</span>
+                    <AlertTriangle className="w-5 h-5 text-warning shrink-0" />
+                    <span className="font-bold text-base">{issue.category === "safety_concern" ? "Safety concern" : "Snag"}</span>
+                    <span className="text-sm text-muted-foreground">#{issue.referenceNumber}</span>
                   </div>
-                  {issue.description && <p className="text-sm mt-1 break-words">{issue.description}</p>}
-                  <p className="text-xs text-muted-foreground mt-1">{issue.zone ? `${issue.zone} · ` : ""}{fmtDate(issue.takenAt)}</p>
+                  {issue.description && <p className="text-base mt-1.5 break-words">{issue.description}</p>}
+                  <p className="text-sm text-muted-foreground mt-1.5">{issue.zone ? `${issue.zone} · ` : ""}{fmtDate(issue.takenAt)}</p>
                 </div>
-                <Badge label={(issue.status ?? "open").replace("_", " ")} className={ISSUE_BADGE[issue.status ?? "open"]} />
+                <Badge label={(issue.status ?? "open").replace("_", " ")} className={ISSUE_BADGE[issue.status ?? "open"] ?? NEUTRAL} />
               </div>
               {issue.photoUrl && <img src={fileHref(issue.photoUrl)} alt="" className="mt-3 rounded-lg w-full max-h-56 object-cover" loading="lazy" />}
             </Card>
@@ -1238,11 +1314,11 @@ function SharedView() {
               <button
                 key={r.id}
                 onClick={() => openSharedReport(r)}
-                className="w-full flex items-center gap-3 px-3 py-3 min-h-[44px] text-left hover:bg-muted/60 transition-colors border-b border-border last:border-b-0"
+                className="w-full flex items-center gap-3 px-3 min-h-14 text-left hover:bg-muted/60 active:scale-[0.98] transition-all border-b border-border last:border-b-0"
               >
                 {receivedAt ? <ReceivedPill at={receivedAt} /> : <NewPill />}
-                <ClipboardList className="w-4 h-4 text-primary shrink-0" />
-                <span className="flex-1 min-w-0 text-sm font-medium truncate">Daily site report · {fmtDate(r.reportDate)}</span>
+                <ClipboardList className="w-5 h-5 text-primary shrink-0" />
+                <span className="flex-1 min-w-0 text-base font-bold truncate">Daily site report · {fmtDate(r.reportDate)}</span>
               </button>
             );
           })}
@@ -1270,9 +1346,9 @@ function SharedView() {
 }
 
 const MY_DOC_STATUS: Record<string, { label: string; className: string }> = {
-  pending: { label: "Pending review", className: "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300" },
-  approved: { label: "Approved", className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300" },
-  rejected: { label: "Rejected", className: "bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300" },
+  pending: { label: "Pending review", className: WARNING },
+  approved: { label: "Approved", className: GOOD },
+  rejected: { label: "Rejected", className: BAD },
 };
 const MY_DOC_KINDS = [
   { value: "insurance", label: "Insurance" },
@@ -1343,41 +1419,41 @@ function PlantItemEditPanel({ item, onClose }: { item: PlantItemRow; onClose: ()
   return (
     <div className="mt-3 pt-3 border-t border-border/60 space-y-3">
       <div>
-        <label className="text-xs font-medium text-muted-foreground">Status</label>
-        <select value={status} onChange={e => setStatus(e.target.value as typeof status)} className="mt-1 w-full min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+        <label className="text-sm font-bold text-muted-foreground">Status</label>
+        <select value={status} onChange={e => setStatus(e.target.value as typeof status)} className="mt-1 w-full min-h-14 rounded-xl border-2 border-border bg-background px-4 text-base focus:outline-none focus:ring-2 focus:ring-primary/40">
           {PLANT_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
       </div>
       <div>
-        <label className="text-xs font-medium text-muted-foreground">Location on site</label>
+        <label className="text-sm font-bold text-muted-foreground">Location on site</label>
         <div className="mt-1 flex items-center gap-2">
-          <input value={location} onChange={e => setLocation(e.target.value)} className="flex-1 min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+          <input value={location} onChange={e => setLocation(e.target.value)} className="flex-1 min-h-14 rounded-xl border-2 border-border bg-background px-4 text-base focus:outline-none focus:ring-2 focus:ring-primary/40" />
           <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setLocation(l => (l.trim() ? l.trimEnd() + " " : "") + t)} />
         </div>
       </div>
       <div>
-        <label className="text-xs font-medium text-muted-foreground">Notes</label>
+        <label className="text-sm font-bold text-muted-foreground">Notes</label>
         <div className="mt-1 flex items-start gap-2">
-          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} className="flex-1 rounded-xl border-2 border-border bg-background px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/40" />
           <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setNotes(n => (n.trim() ? n.trimEnd() + " " : "") + t)} />
         </div>
       </div>
       <div>
-        <label className="text-xs font-medium text-muted-foreground">Add a photo</label>
+        <label className="text-sm font-bold text-muted-foreground">Add a photo</label>
         <div className="mt-1 flex items-center gap-2">
           <input ref={fileRef} type="file" accept="image/*" onChange={e => setFile(e.target.files?.[0] ?? null)}
-            className="flex-1 text-sm file:mr-3 file:min-h-10 file:rounded-lg file:border-0 file:bg-primary/10 file:px-3 file:text-sm file:font-medium file:text-primary" />
+            className="flex-1 text-base file:mr-3 file:min-h-12 file:rounded-lg file:border-0 file:bg-primary/10 file:px-3 file:text-base file:font-bold file:text-primary" />
           <button type="button" onClick={uploadPhoto} disabled={!file || uploadingPhoto}
-            className="shrink-0 min-h-10 px-3 rounded-lg border text-sm font-medium hover:bg-muted disabled:opacity-50">
+            className="shrink-0 min-h-12 px-4 rounded-lg border-2 border-border text-base font-bold hover:bg-muted disabled:opacity-50">
             {uploadingPhoto ? "Adding…" : "Add"}
           </button>
         </div>
       </div>
       <div className="flex gap-2">
-        <button onClick={save} disabled={update.isPending} className="flex-1 min-h-11 rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+        <button onClick={save} disabled={update.isPending} className="flex-1 min-h-14 rounded-xl bg-primary text-base font-bold text-primary-foreground hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50">
           {update.isPending ? "Saving…" : "Save changes"}
         </button>
-        <button onClick={onClose} className="min-h-11 px-4 rounded-xl border text-sm font-medium hover:bg-muted">Cancel</button>
+        <button onClick={onClose} className="min-h-14 px-5 rounded-xl border-2 border-border text-base font-bold hover:bg-muted active:scale-[0.98] transition-all">Cancel</button>
       </div>
     </div>
   );
@@ -1422,19 +1498,19 @@ function AddPlantItemForm({ onDone }: { onDone: () => void }) {
       <p className="font-medium mb-3">Log a new item</p>
       <div className="space-y-3">
         <div>
-          <label className="text-xs font-medium text-muted-foreground">Name</label>
+          <label className="text-sm font-bold text-muted-foreground">Name</label>
           <div className="mt-1 flex items-center gap-2">
             <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Excavator, Cement bags"
-              className="flex-1 min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+              className="flex-1 min-h-14 rounded-xl border-2 border-border bg-background px-4 text-base focus:outline-none focus:ring-2 focus:ring-primary/40" />
             <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setName(n => (n.trim() ? n.trimEnd() + " " : "") + t)} />
           </div>
         </div>
         <div>
-          <label className="text-xs font-medium text-muted-foreground">Type</label>
+          <label className="text-sm font-bold text-muted-foreground">Type</label>
           <div className="mt-1 flex gap-2">
             {([["plant_equipment", "Plant / equipment"], ["materials", "Materials"]] as const).map(([val, label]) => (
               <button key={val} type="button" onClick={() => setCategory(val)}
-                className={cn("flex-1 min-h-11 rounded-xl border text-sm font-medium",
+                className={cn("flex-1 min-h-14 rounded-xl border-2 text-base font-bold active:scale-[0.98] transition-all",
                   category === val ? "bg-primary text-primary-foreground border-primary" : "bg-background text-muted-foreground border-border hover:bg-muted")}>
                 {label}
               </button>
@@ -1442,34 +1518,34 @@ function AddPlantItemForm({ onDone }: { onDone: () => void }) {
           </div>
         </div>
         <div>
-          <label className="text-xs font-medium text-muted-foreground">Status</label>
+          <label className="text-sm font-bold text-muted-foreground">Status</label>
           <select value={itemStatus} onChange={e => setItemStatus(e.target.value as typeof itemStatus)}
-            className="mt-1 w-full min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+            className="mt-1 w-full min-h-14 rounded-xl border-2 border-border bg-background px-4 text-base focus:outline-none focus:ring-2 focus:ring-primary/40">
             {PLANT_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
         <div>
-          <label className="text-xs font-medium text-muted-foreground">Location on site</label>
+          <label className="text-sm font-bold text-muted-foreground">Location on site</label>
           <div className="mt-1 flex items-center gap-2">
             <input value={location} onChange={e => setLocation(e.target.value)}
-              className="flex-1 min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+              className="flex-1 min-h-14 rounded-xl border-2 border-border bg-background px-4 text-base focus:outline-none focus:ring-2 focus:ring-primary/40" />
             <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setLocation(l => (l.trim() ? l.trimEnd() + " " : "") + t)} />
           </div>
         </div>
         <div>
-          <label className="text-xs font-medium text-muted-foreground">Notes</label>
+          <label className="text-sm font-bold text-muted-foreground">Notes</label>
           <div className="mt-1 flex items-start gap-2">
             <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
-              className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+              className="flex-1 rounded-xl border-2 border-border bg-background px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/40" />
             <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setNotes(n => (n.trim() ? n.trimEnd() + " " : "") + t)} />
           </div>
         </div>
         <div className="flex gap-2">
           <button onClick={create} disabled={saving}
-            className="flex-1 min-h-11 rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+            className="flex-1 min-h-14 rounded-xl bg-primary text-base font-bold text-primary-foreground hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50">
             {saving ? "Logging…" : "Log item"}
           </button>
-          <button onClick={onDone} className="min-h-11 px-4 rounded-xl border text-sm font-medium hover:bg-muted">Cancel</button>
+          <button onClick={onDone} className="min-h-14 px-5 rounded-xl border-2 border-border text-base font-bold hover:bg-muted active:scale-[0.98] transition-all">Cancel</button>
         </div>
       </div>
     </Card>
@@ -1510,7 +1586,7 @@ function PlantMaterialsView() {
           <AddPlantItemForm onDone={async () => { setAdding(false); await invalidate(); }} />
         ) : (
           <button onClick={() => setAdding(true)}
-            className="w-full min-h-11 rounded-xl border border-dashed border-primary/50 text-sm font-semibold text-primary hover:bg-primary/5">
+            className="w-full min-h-14 rounded-xl border-2 border-dashed border-accent/50 text-base font-bold text-accent hover:bg-accent/5 active:scale-[0.98] transition-all">
             + Log a new item
           </button>
         )
@@ -1520,11 +1596,11 @@ function PlantMaterialsView() {
         <Card key={item.id}>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="font-medium truncate">{item.name}</p>
-              <p className="text-xs text-muted-foreground capitalize">{item.category.replace("_", " ")}{item.location ? ` · ${item.location}` : ""}</p>
-              {item.notes && <p className="text-sm mt-1 break-words">{item.notes}</p>}
+              <p className="font-bold text-base truncate">{item.name}</p>
+              <p className="text-sm text-muted-foreground capitalize mt-1">{item.category.replace("_", " ")}{item.location ? ` · ${item.location}` : ""}</p>
+              {item.notes && <p className="text-base mt-1.5 break-words">{item.notes}</p>}
               {item.lastUpdatedByName && (
-                <p className="text-xs text-muted-foreground mt-1">Last updated by {item.lastUpdatedByName}, {fmtDateTime(item.lastUpdatedAt)}</p>
+                <p className="text-sm text-muted-foreground mt-1.5">Last updated by {item.lastUpdatedByName}, {fmtDateTime(item.lastUpdatedAt)}</p>
               )}
             </div>
             <Badge label={PLANT_STATUS_OPTIONS.find(o => o.value === item.status)?.label ?? item.status} className={PLANT_STATUS_BADGE[item.status]} />
@@ -1554,10 +1630,10 @@ function PlantMaterialsView() {
               </p>
               <div className="flex gap-2">
                 <button onClick={() => doSubmit(item.id)} disabled={submitItem.isPending}
-                  className="flex-1 min-h-11 rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+                  className="flex-1 min-h-14 rounded-xl bg-primary text-base font-bold text-primary-foreground hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50">
                   {submitItem.isPending ? "Submitting…" : "Submit to PM"}
                 </button>
-                <button onClick={() => setEditingId(item.id)} className="min-h-11 px-4 rounded-xl border text-sm font-medium hover:bg-muted">Edit draft</button>
+                <button onClick={() => setEditingId(item.id)} className="min-h-14 px-5 rounded-xl border-2 border-border text-base font-bold hover:bg-muted active:scale-[0.98] transition-all">Edit draft</button>
               </div>
             </div>
           )}
@@ -1565,7 +1641,7 @@ function PlantMaterialsView() {
             editingId === item.id ? (
               <PlantItemEditPanel item={item} onClose={() => setEditingId(null)} />
             ) : !item.draft ? (
-              <button onClick={() => setEditingId(item.id)} className="mt-3 text-sm font-medium text-primary hover:underline">Update</button>
+              <button onClick={() => setEditingId(item.id)} className="mt-3 min-h-11 px-3 -ml-3 rounded-lg text-base font-bold text-primary hover:bg-primary/10 active:scale-[0.98] transition-all">Update</button>
             ) : null
           )}
           {canEdit && (
@@ -1664,15 +1740,15 @@ function DailyReportView() {
   return (
     <div className="space-y-4">
       <Card>
-        <div className="flex items-center justify-between gap-2 mb-1">
-          <p className="font-semibold">{fmtReportDate(today.reportDate)}</p>
+        <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
+          <p className="font-extrabold text-lg font-display">{fmtReportDate(today.reportDate)}</p>
           <div className="flex items-center gap-1.5">
             {present && <LifecycleBadge status={isSubmitted ? "submitted" : "draft"} submittedAt={today.submittedAt} submittedByName={today.submittedByName} />}
-            {today.locked && <Badge label="Locked" className="bg-muted text-muted-foreground" />}
+            {today.locked && <Badge label="Locked" className={NEUTRAL} />}
           </div>
         </div>
         {today.contributors.length > 0 && (
-          <p className="text-xs text-muted-foreground mb-3">
+          <p className="text-sm text-muted-foreground mb-3">
             Contributors: {today.contributors.map(c => c.name).join(", ")}
           </p>
         )}
@@ -1681,41 +1757,41 @@ function DailyReportView() {
           <div className="space-y-3">
             {DIARY_FIELDS.map(f => (
               <div key={f.key}>
-                <label className="text-xs font-medium text-muted-foreground">{f.label}</label>
+                <label className="text-sm font-bold text-muted-foreground">{f.label}</label>
                 <div className="mt-1 flex items-start gap-2">
                   {f.multiline ? (
                     <textarea value={form[f.key] ?? ""} onChange={e => setField(f.key, e.target.value)} placeholder={f.placeholder} rows={2}
-                      className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+                      className="flex-1 rounded-xl border-2 border-border bg-background px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/40" />
                   ) : (
                     <input value={form[f.key] ?? ""} onChange={e => setField(f.key, e.target.value)} placeholder={f.placeholder}
-                      className="flex-1 min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+                      className="flex-1 min-h-14 rounded-xl border-2 border-border bg-background px-4 text-base focus:outline-none focus:ring-2 focus:ring-primary/40" />
                   )}
                   <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => appendField(f.key, t)} />
                 </div>
               </div>
             ))}
             <div className="flex gap-2 pt-1">
-              <button onClick={save} disabled={update.isPending} className="flex-1 min-h-11 rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+              <button onClick={save} disabled={update.isPending} className="flex-1 min-h-14 rounded-xl bg-primary text-base font-bold text-primary-foreground hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50">
                 {update.isPending ? "Saving…" : "Save"}
               </button>
-              <button onClick={() => { setForm(today.managerReport ?? {}); setEditing(false); }} className="min-h-11 px-4 rounded-xl border text-sm font-medium hover:bg-muted">Cancel</button>
+              <button onClick={() => { setForm(today.managerReport ?? {}); setEditing(false); }} className="min-h-14 px-5 rounded-xl border-2 border-border text-base font-bold hover:bg-muted active:scale-[0.98] transition-all">Cancel</button>
             </div>
           </div>
         ) : present ? (
           <div className="space-y-3">
             {DIARY_FIELDS.filter(f => (today.managerReport?.[f.key] ?? "").trim()).map(f => (
               <div key={f.key}>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">{f.label}</p>
-                <p className="text-sm whitespace-pre-wrap break-words">{today.managerReport?.[f.key]}</p>
+                <p className="text-sm font-bold text-muted-foreground uppercase tracking-wide mb-0.5">{f.label}</p>
+                <p className="text-base whitespace-pre-wrap break-words">{today.managerReport?.[f.key]}</p>
               </div>
             ))}
             {today.canEdit && !isSubmitted && (
               <div className="flex gap-2 pt-1">
                 <button onClick={doSubmitReport} disabled={submitReport.isPending}
-                  className="flex-1 min-h-11 rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+                  className="flex-1 min-h-14 rounded-xl bg-primary text-base font-bold text-primary-foreground hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50">
                   {submitReport.isPending ? "Submitting…" : "Submit to PM"}
                 </button>
-                <button onClick={() => setEditing(true)} className="min-h-11 px-4 rounded-xl border text-sm font-medium hover:bg-muted">Edit</button>
+                <button onClick={() => setEditing(true)} className="min-h-14 px-5 rounded-xl border-2 border-border text-base font-bold hover:bg-muted active:scale-[0.98] transition-all">Edit</button>
               </div>
             )}
             {isSubmitted && (
@@ -1734,13 +1810,13 @@ function DailyReportView() {
             )}
           </div>
         ) : today.canEdit ? (
-          <button onClick={() => setEditing(true)} className="text-sm font-medium text-primary hover:underline">+ Add today's report</button>
+          <button onClick={() => setEditing(true)} className="min-h-11 px-3 -ml-3 rounded-lg text-base font-bold text-primary hover:bg-primary/10 active:scale-[0.98] transition-all">+ Add today's report</button>
         ) : (
           <p className="text-sm text-muted-foreground">No report yet for today.</p>
         )}
       </Card>
 
-      <button onClick={() => setShowHistory(v => !v)} className="text-sm font-medium text-muted-foreground hover:text-foreground">
+      <button onClick={() => setShowHistory(v => !v)} className="min-h-11 px-3 -ml-3 rounded-lg text-base font-bold text-muted-foreground hover:text-foreground hover:bg-muted active:scale-[0.98] transition-all">
         {showHistory ? "Hide" : "Show"} past reports (last 14 days)
       </button>
       {showHistory && (
@@ -1818,37 +1894,37 @@ function MyDocumentsView() {
         <Card>
           <form onSubmit={submit} className="space-y-3">
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Document name</label>
+              <label className="text-sm font-bold text-muted-foreground">Document name</label>
               <input
                 value={name}
                 onChange={e => setName(e.target.value)}
                 placeholder="e.g. Public liability insurance"
-                className="mt-1 w-full min-h-12 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className="mt-1 w-full min-h-14 rounded-xl border-2 border-border bg-background px-4 text-base focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Type</label>
+              <label className="text-sm font-bold text-muted-foreground">Type</label>
               <select
                 value={kind}
                 onChange={e => setKind(e.target.value)}
-                className="mt-1 w-full min-h-12 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className="mt-1 w-full min-h-14 rounded-xl border-2 border-border bg-background px-4 text-base focus:outline-none focus:ring-2 focus:ring-primary/40"
               >
                 {MY_DOC_KINDS.map(k => <option key={k.value} value={k.value}>{k.label}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground">File</label>
+              <label className="text-sm font-bold text-muted-foreground">File</label>
               <input
                 ref={fileRef}
                 type="file"
                 onChange={e => setFile(e.target.files?.[0] ?? null)}
-                className="mt-1 w-full text-sm file:mr-3 file:min-h-10 file:rounded-lg file:border-0 file:bg-primary/10 file:px-4 file:text-sm file:font-medium file:text-primary"
+                className="mt-1 w-full text-sm file:mr-3 file:min-h-12 file:rounded-lg file:border-0 file:bg-primary/10 file:px-4 file:text-base file:font-bold file:text-primary"
               />
             </div>
             <button
               type="submit"
               disabled={uploading}
-              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary min-h-12 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary min-h-14 text-base font-bold text-primary-foreground hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50"
             >
               <UploadCloud className="w-4 h-4" /> {uploading ? "Uploading…" : "Upload for review"}
             </button>
@@ -1867,23 +1943,23 @@ function MyDocumentsView() {
                 <div key={d.id} className="py-3 border-b border-border/60 last:border-0">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="font-medium truncate">{d.name}</p>
-                      <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                        <span className="px-2 py-0.5 rounded-full font-medium capitalize bg-muted text-muted-foreground">{d.kind}</span>
+                      <p className="font-bold text-base truncate">{d.name}</p>
+                      <p className="text-sm text-muted-foreground flex items-center gap-1.5 mt-1">
+                        <span className="px-2 py-0.5 rounded-full font-semibold capitalize bg-muted text-muted-foreground">{d.kind}</span>
                         {fmtDate(d.createdAt)}
                       </p>
                     </div>
                     <Badge label={st.label} className={st.className} />
                   </div>
                   {d.status === "rejected" && d.reviewNote && (
-                    <p className="mt-2 text-xs text-rose-700 dark:text-rose-300 break-words">Reason: {d.reviewNote}</p>
+                    <p className="mt-2 text-sm text-destructive break-words">Reason: {d.reviewNote}</p>
                   )}
-                  <div className="mt-2">
+                  <div className="mt-2 -ml-1">
                     <button
                       onClick={() => window.open(fileHref(d.fileUrl), "_blank", "noopener")}
-                      className="inline-flex items-center gap-1 rounded-lg px-3 min-h-11 text-sm text-primary font-medium hover:bg-primary/10"
+                      className="inline-flex items-center gap-1.5 rounded-xl px-4 min-h-11 text-base text-primary font-bold hover:bg-primary/10 active:scale-[0.98] transition-all"
                     >
-                      <ExternalLink className="w-4 h-4" /> View
+                      <ExternalLink className="w-5 h-5" /> View
                     </button>
                   </div>
                 </div>
@@ -1967,7 +2043,7 @@ function AddToHomeScreenCard() {
         ) : (
           <button
             onClick={() => void install()}
-            className="mt-3 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary min-h-12 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+            className="mt-3 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary min-h-14 text-base font-bold text-primary-foreground hover:bg-primary/90 active:scale-[0.98] transition-all"
           >
             <Download className="w-4 h-4" /> Install app
           </button>
@@ -2005,31 +2081,31 @@ function SettingsView() {
         <SectionTitle>Notifications</SectionTitle>
         <Card>
           {!pushSupported() && !needsInstall ? (
-            <p className="text-sm text-muted-foreground">This device or browser doesn't support notifications.</p>
+            <p className="text-base text-muted-foreground">This device or browser doesn't support notifications.</p>
           ) : needsInstall ? (
             <div className="space-y-2">
-              <p className="text-sm font-medium">Add SiteSort to your Home Screen to get notifications</p>
-              <ol className="space-y-1.5 text-xs text-foreground">
+              <p className="text-base font-bold">Add SiteSort to your Home Screen to get notifications</p>
+              <ol className="space-y-1.5 text-sm text-foreground">
                 <li>1. Tap the Share icon in Safari</li>
                 <li>2. Choose “Add to Home Screen”</li>
                 <li>3. Open SiteSort from your Home Screen, then come back here to enable</li>
               </ol>
             </div>
           ) : (
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
               <div className="min-w-0">
-                <p className="font-medium">New content alerts</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="font-bold text-base">New content alerts</p>
+                <p className="text-sm text-muted-foreground mt-0.5">
                   {subscribed ? "On. You'll be notified when new drawings or notices are shared." : perm === "denied" ? "Blocked in your browser settings. To fix: tap the padlock or settings icon by the address bar, set Notifications to Allow, then reload this page." : "Off. Get a heads-up when something new is shared with you."}
                 </p>
               </div>
               {subscribed ? (
-                <button onClick={disable} disabled={busy} className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm font-medium hover:bg-muted disabled:opacity-50">
-                  <BellOff className="w-4 h-4" /> Turn off
+                <button onClick={disable} disabled={busy} className="shrink-0 inline-flex items-center gap-1.5 min-h-12 px-4 rounded-xl border-2 border-border text-base font-bold hover:bg-muted active:scale-[0.98] transition-all disabled:opacity-50">
+                  <BellOff className="w-5 h-5" /> Turn off
                 </button>
               ) : perm !== "denied" ? (
-                <button onClick={enable} disabled={busy} className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50">
-                  <Bell className="w-4 h-4" /> {busy ? "…" : "Turn on"}
+                <button onClick={enable} disabled={busy} className="shrink-0 inline-flex items-center gap-1.5 min-h-12 px-4 rounded-xl bg-primary text-primary-foreground text-base font-bold hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50">
+                  <Bell className="w-5 h-5" /> {busy ? "…" : "Turn on"}
                 </button>
               ) : null}
             </div>
@@ -2109,28 +2185,28 @@ function PortalPinSection() {
         </p>
         <div className="space-y-3">
           <div>
-            <label className="text-xs font-medium text-muted-foreground">Account password</label>
+            <label className="text-sm font-bold text-muted-foreground">Account password</label>
             <input
               type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)}
               placeholder="Confirm it's you"
-              className="mt-1 w-full min-h-11 rounded-xl border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+              className="mt-1 w-full min-h-14 rounded-xl border-2 border-border bg-background px-4 text-base focus:outline-none focus:ring-2 focus:ring-primary/40"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-medium text-muted-foreground">{hasPin ? "New PIN" : "Choose PIN"}</label>
+              <label className="text-sm font-bold text-muted-foreground">{hasPin ? "New PIN" : "Choose PIN"}</label>
               <input
                 type="password" inputMode="numeric" value={pin} onChange={e => setPin(onlyDigits(e.target.value))}
                 placeholder="••••"
-                className="mt-1 w-full min-h-11 rounded-xl border border-border bg-background px-3 text-sm tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className="mt-1 w-full min-h-14 rounded-xl border-2 border-border bg-background px-4 text-xl font-bold tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Confirm PIN</label>
+              <label className="text-sm font-bold text-muted-foreground">Confirm PIN</label>
               <input
                 type="password" inputMode="numeric" value={confirmPin} onChange={e => setConfirmPin(onlyDigits(e.target.value))}
                 placeholder="••••"
-                className="mt-1 w-full min-h-11 rounded-xl border border-border bg-background px-3 text-sm tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className="mt-1 w-full min-h-14 rounded-xl border-2 border-border bg-background px-4 text-xl font-bold tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
             </div>
           </div>
@@ -2138,7 +2214,7 @@ function PortalPinSection() {
           <button
             onClick={() => void save()}
             disabled={saving}
-            className="w-full min-h-11 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50"
+            className="w-full min-h-14 rounded-xl bg-primary text-primary-foreground text-base font-bold hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50"
           >
             {saving ? "Saving…" : hasPin ? "Update PIN" : "Set PIN"}
           </button>
