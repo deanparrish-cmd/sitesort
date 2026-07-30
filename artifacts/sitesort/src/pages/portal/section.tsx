@@ -23,14 +23,14 @@ import {
 import { DictationButton } from "@/components/ui/dictation-button";
 import { MessagesView } from "./messages-view";
 import { QRCodeSVG } from "qrcode.react";
-import { PortalLayout, SECTION_NAV } from "./layout";
+import { PortalLayout, SECTION_NAV, portalLogout } from "./layout";
 import { portalQueryClient, PORTAL_LIVE_REFETCH } from "./query-client";
 import { Spinner } from "@/components/ui/spinner";
 import {
   ExternalLink, MapPin, Calendar, Phone, Mail,
   FileText, AlertTriangle, StickyNote, Download,
   QrCode, Copy, Building2, ShieldCheck, X, Sparkles, UploadCloud, Share, Plus,
-  ChevronDown, Users, FileSignature, CheckCircle2, HardHat,
+  ChevronDown, Users, FileSignature, CheckCircle2, HardHat, LogOut, ListChecks, HelpCircle,
 } from "lucide-react";
 import { isCadFile, cadBadgeLabel, downloadFile } from "@/lib/documents";
 import { useToast } from "@/hooks/use-toast";
@@ -46,7 +46,7 @@ import { ClipboardList } from "lucide-react";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { WORKER_GUIDE, workerFaq } from "@workspace/user-guide";
 import { GuideSectionGrid, GuideFaqAccordion } from "@/components/user-guide-view";
-import { PortalTile, PortalButton, type TileTheme } from "@/components/portal-ui";
+import { PortalTile, PortalLinkRow, PortalButton, type TileTheme } from "@/components/portal-ui";
 
 // Wayfinding colour per Home-screen quick-access tile — a distinct hue per
 // destination, never one of the green/amber/red status colours (those are
@@ -60,6 +60,8 @@ const TILE_THEME: Record<string, TileTheme> = {
   "site-issues": "rose",
   "plant-materials": "amber",
   "daily-report": "green",
+  "site-tasks": "rose",
+  settings: "slate",
 };
 
 // Portal-authed binary download: the app's global fetch interceptor attaches the
@@ -570,20 +572,52 @@ function BoxHeading({ Icon, theme, children }: { Icon: React.ComponentType<{ cla
   );
 }
 
-// Quick-access grid for the sections a worker jumps to most — big coloured
-// tiles (icon + label + unseen dot), the same "SECTION_NAV filtered by
-// permission" rule the sidebar uses, so what's tappable here always matches
-// what's actually visible in the nav. Settings/Help stay sidebar-only (they're
-// not day-to-day work destinations).
-const HOME_TILE_KEYS = new Set(["messages", "shared", "my-documents", "site-board", "permits", "site-issues", "plant-materials", "daily-report"]);
+// Navigation-cleanup redesign: there is no hamburger/sidebar any more — this
+// grid IS the entire portal nav. Every destination lives in EXACTLY one
+// place here:
+//   - the 5 everyday sections, each its own tile
+//   - "Site Tasks" — ONE tile grouping Site Issues/Plant & Materials/Daily
+//     Report (see SiteTasksView below), shown only when the member has been
+//     granted at least one of the three; absent entirely otherwise (never a
+//     box with nothing behind it)
+//   - "Settings" — ONE tile for the utility items (profile, notifications,
+//     sign-off PIN, Help/User Guide, log out) that must NOT compete with the
+//     work sections above as their own boxes
+const HOME_TILE_KEYS = new Set(["messages", "shared", "my-documents", "site-board", "permits"]);
+const SITE_TASK_KEYS = ["site-issues", "plant-materials", "daily-report"] as const;
 function HomeQuickAccess({ member }: { member: Record<string, unknown> | undefined }) {
   const { data: unseen } = useGetPortalUnseen({ query: { queryKey: getGetPortalUnseenQueryKey() } });
   const counts = (unseen?.counts ?? {}) as Record<string, number>;
-  const tiles = SECTION_NAV.filter(s => HOME_TILE_KEYS.has(s.key) && (!s.permission || !!member?.[s.permission]));
+  const tiles = SECTION_NAV.filter(s => HOME_TILE_KEYS.has(s.key));
+  const grantedTasks = SITE_TASK_KEYS.filter(k => !!member?.[SECTION_NAV.find(s => s.key === k)!.permission as string]);
+  const siteTasksUnseen = grantedTasks.reduce((sum, k) => sum + (counts[k] ?? 0), 0);
   return (
     <div className="grid grid-cols-2 gap-3">
       {tiles.map(t => (
         <PortalTile key={t.key} href={`/portal/${t.key}`} label={t.label} Icon={t.Icon} theme={TILE_THEME[t.key] ?? "slate"} unseen={counts[t.key] ?? 0} />
+      ))}
+      {grantedTasks.length > 0 && (
+        <PortalTile href="/portal/site-tasks" label="Site Tasks" Icon={ListChecks} theme={TILE_THEME["site-tasks"]} unseen={siteTasksUnseen} />
+      )}
+      <PortalTile href="/portal/settings" label="Settings" Icon={SECTION_NAV.find(s => s.key === "settings")!.Icon} theme={TILE_THEME.settings} />
+    </div>
+  );
+}
+
+// Hub behind the single "Site Tasks" tile — shows ONLY the sections this
+// member has actually been granted, as big tap rows (never all three
+// greyed out). Site Issues/Plant & Materials/Daily Report are no longer
+// individually reachable anywhere else.
+function SiteTasksView() {
+  const { data: ctx, isLoading } = useGetPortalContext();
+  if (isLoading) return <Loading />;
+  const member = ctx?.member as Record<string, unknown> | undefined;
+  const granted = SITE_TASK_KEYS.map(key => SECTION_NAV.find(s => s.key === key)!).filter(s => !!member?.[s.permission as string]);
+  if (granted.length === 0) return <Empty>Nothing to report or update here yet.</Empty>;
+  return (
+    <div className="space-y-3">
+      {granted.map(s => (
+        <PortalLinkRow key={s.key} href={`/portal/${s.key}`} label={s.label} Icon={s.Icon} theme={TILE_THEME[s.key] ?? "slate"} />
       ))}
     </div>
   );
@@ -1117,7 +1151,10 @@ function SiteBoardView({ embedded }: { embedded?: boolean }) {
           <Card>{pinnedDocs.map(d => (
             <div key={d.id} className="flex items-center justify-between gap-3 py-3 border-b border-border/60 last:border-0">
               <div className="min-w-0"><p className="font-bold text-base truncate flex items-center gap-1.5"><span className="truncate">{d.name}</span>{d.superseded && <Badge label="Superseded" className={BAD} />}</p><p className="text-sm text-muted-foreground capitalize mt-0.5">{d.type} · v{d.version}</p></div>
-              {d.fileUrl && <button onClick={() => window.open(fileHref(d.fileUrl), "_blank", "noopener")} className="shrink-0 min-h-11 px-3 rounded-lg text-base text-primary font-bold hover:bg-primary/10 active:scale-[0.98] transition-all">View</button>}
+              {/* CAD files (DWG/DXF/…) can't render in a browser tab — must download
+                  instead of a raw window.open, which left a blank tab. Same helper
+                  DocRow uses for regular (non-pinned) documents. */}
+              {d.fileUrl && <button onClick={() => openDocFile(d)} className="shrink-0 min-h-11 px-3 rounded-lg text-base text-primary font-bold hover:bg-primary/10 active:scale-[0.98] transition-all">View</button>}
             </div>
           ))}</Card>
         </div>
@@ -2056,10 +2093,13 @@ function AddToHomeScreenCard() {
 // Portal member Settings — notification preferences (per member, per device).
 function SettingsView() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
+  const { data: ctx } = useGetPortalContext();
   const [subscribed, setSubscribed] = useState(false);
   const [perm, setPerm] = useState<NotificationPermission | "unsupported">("default");
   const [busy, setBusy] = useState(false);
   const needsInstall = iosNeedsInstall();
+  const initial = (ctx?.member.name ?? "?").charAt(0).toUpperCase();
 
   const refresh = () => { setPerm(permissionState()); isDeviceSubscribed().then(setSubscribed); };
   useEffect(() => { refresh(); }, []);
@@ -2077,6 +2117,15 @@ function SettingsView() {
 
   return (
     <div className="space-y-5">
+      {/* Profile — was the sidebar footer; consolidated here since the
+          hamburger/sidebar is gone. */}
+      <Card className="flex items-center gap-3">
+        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-extrabold text-lg shrink-0">{initial}</div>
+        <div className="min-w-0">
+          <p className="text-base font-bold text-foreground truncate">{ctx?.member.name}</p>
+          <p className="text-sm text-muted-foreground capitalize truncate">{ctx?.member.role}</p>
+        </div>
+      </Card>
       <div>
         <SectionTitle>Notifications</SectionTitle>
         <Card>
@@ -2114,6 +2163,13 @@ function SettingsView() {
       </div>
       <PortalPinSection />
       <AddToHomeScreenCard />
+      {/* Help/User Guide — reached FROM here, not its own top-level tile
+          (navigation-cleanup redesign: utility items live in one consistent
+          place, not competing boxes on Home). */}
+      <PortalLinkRow href="/portal/help" label="Help & User Guide" Icon={HelpCircle} theme="sky" />
+      <PortalButton tone="danger-outline" icon={<LogOut className="w-5 h-5" />} onClick={() => portalLogout(setLocation)}>
+        Log out
+      </PortalButton>
     </div>
   );
 }
@@ -2242,6 +2298,7 @@ function renderSection(section: string) {
     case "my-documents": return <MyDocumentsView />;
     case "settings": return <SettingsView />;
     case "help": return <HelpView />;
+    case "site-tasks": return <SiteTasksView />;
     case "site-issues": return <SiteIssuesView />;
     case "plant-materials": return <PlantMaterialsView />;
     case "daily-report": return <DailyReportView />;
