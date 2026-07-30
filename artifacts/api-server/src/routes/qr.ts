@@ -1,11 +1,12 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db } from "@workspace/db";
-import { qrCodesTable, qrBoardPinsTable, documentsTable, projectsTable, projectMembersTable, usersTable, permitsTable, photosTable, invoicesTable, siteCheckinsTable, subcontractorsTable, insuranceRecordsTable, calendarEventsTable, companyMembersTable, notificationsTable, peopleTable } from "@workspace/db/schema";
-import { eq, and, or, desc, asc, inArray, isNull, gte } from "drizzle-orm";
+import { qrCodesTable, qrBoardPinsTable, documentsTable, projectsTable, projectMembersTable, usersTable, permitsTable, photosTable, invoicesTable, siteCheckinsTable, subcontractorsTable, calendarEventsTable, companyMembersTable, notificationsTable, peopleTable } from "@workspace/db/schema";
+import { eq, and, or, desc, asc, inArray, isNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { expiryStatus } from "../lib/expiry";
 import { buildSiteBoardPayload } from "../lib/site-board";
+import { subcontractorInsuranceStatus } from "../lib/insurance";
 import { randomBytes } from "crypto";
 import multer from "multer";
 import path from "path";
@@ -335,18 +336,16 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
       }
 
       if (insuranceSubId) {
-        const today = new Date().toISOString().split("T")[0];
-        const validInsurance = await db
-          .select({ id: insuranceRecordsTable.id })
-          .from(insuranceRecordsTable)
-          .where(and(
-            eq(insuranceRecordsTable.subcontractorId, insuranceSubId),
-            isNull(insuranceRecordsTable.archivedAt),
-            gte(insuranceRecordsTable.expiryDate, today),
-          ))
-          .limit(1);
+        // Same source the Contacts directory's "Insurance OK" badge reads
+        // (company-level insurance_records PLUS any filed insurance-named
+        // person certification) — a contact shown as insured on their card
+        // must pass here too. "expiring_soon" still passes (not yet expired);
+        // only "expired" or "none" blocks.
+        const project = await db.select({ companyId: projectsTable.companyId }).from(projectsTable)
+          .where(eq(projectsTable.id, qr.projectId)).limit(1);
+        const status = project[0] ? await subcontractorInsuranceStatus(insuranceSubId, project[0].companyId) : "none";
 
-        if (validInsurance.length === 0) {
+        if (status === "expired" || status === "none") {
           await notifyBlockedCheckin(qr.projectId, workerName.trim(), companyName.trim(), "no_valid_insurance");
           res.status(403).json({ error: "check_in_blocked", reason: "no_valid_insurance" });
           return;

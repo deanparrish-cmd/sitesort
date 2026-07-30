@@ -1,5 +1,9 @@
 # SiteSort – Session Log Archive
 
+## Feature #92 full detail (condensed to summary in CLAUDE.md, 2026-07-30)
+
+92. **In-app User Guide (dashboard, portal, invite email) + colorful restyle** — single shared content source `lib/user-guide/src/index.ts` (`PM_GUIDE`/`WORKER_GUIDE`/`FAQ`; edit once, all surfaces update — see the standing rule below) rendered by three surfaces: dashboard `/user-guide` (sidebar item under Settings, PM/Worker tabs + FAQ), portal `/portal/help` (Help under Settings, worker section + `workerFaq()` only), and a public no-login `/guide` page linked from the "Invite to Portal" email (which also gets a short excerpt of `WORKER_GUIDE` inline). Restyled after user feedback that the first pass looked "boring": accent-orange numbered step badges, colored tip/note callout asides, and audience pills via a new shared `components/user-guide-view.tsx`, using the app's existing `--accent` (safety orange) design token rather than inventing new colors. New workspace package `lib/user-guide` (consumed by both `artifacts/api-server` and `artifacts/sitesort`); `scripts/src/check-layout.ts` extended to cover the 3 new routes. **DEPLOYED+prod-verified** (2026-07-27, `main → d496603c`): `typecheck` clean, `check:layout` 102/102; public `/guide` and authenticated `/user-guide` (both audience tabs) confirmed live on `www.sitesort.co.uk` via a real login round-trip, zero console/page errors.
+
 ## Features #70, #84, #85, #89, #91 full detail (condensed to summaries in CLAUDE.md, 2026-07-30)
 
 70. **Notification alert-viewer (Next/Previous)** — clicking a notification opens a shared `<AlertViewer>` dialog instead of navigating away (Previous/Next, keyboard/swipe, marks-read-on-view). **DEPLOYED+prod-verified** (2026-07-17).

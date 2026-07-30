@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRoute } from "wouter";
 import { MapPin, Calendar, FileText, HardHat, ShieldCheck, AlertTriangle, Users, Mail, Phone, Clock, Camera, CheckCircle2, Loader2, Pin, XCircle, Building2 } from "lucide-react";
+import { openDocument } from "@/lib/documents";
 
 async function stampPhoto(file: File, projectName: string, workerName: string): Promise<Blob> {
   return new Promise((resolve, reject) => {
@@ -605,7 +606,10 @@ export default function SiteBoard() {
                           </div>
                         </div>
                         {doc.fileUrl && (
-                          <button onClick={() => window.open(doc.fileUrl)} className="shrink-0 text-orange-600 text-xs font-semibold hover:underline">View</button>
+                          // CAD files (DWG/DXF/…) can't render in a browser tab — a raw
+                          // window.open() left a blank tab; download them instead, same
+                          // as every other document view in the app.
+                          <button onClick={() => openDocument(doc.fileUrl, doc.name)} className="shrink-0 text-orange-600 text-xs font-semibold hover:underline">View</button>
                         )}
                       </div>
                     ))}

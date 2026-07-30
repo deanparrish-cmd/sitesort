@@ -1117,7 +1117,10 @@ function SiteBoardView({ embedded }: { embedded?: boolean }) {
           <Card>{pinnedDocs.map(d => (
             <div key={d.id} className="flex items-center justify-between gap-3 py-3 border-b border-border/60 last:border-0">
               <div className="min-w-0"><p className="font-bold text-base truncate flex items-center gap-1.5"><span className="truncate">{d.name}</span>{d.superseded && <Badge label="Superseded" className={BAD} />}</p><p className="text-sm text-muted-foreground capitalize mt-0.5">{d.type} · v{d.version}</p></div>
-              {d.fileUrl && <button onClick={() => window.open(fileHref(d.fileUrl), "_blank", "noopener")} className="shrink-0 min-h-11 px-3 rounded-lg text-base text-primary font-bold hover:bg-primary/10 active:scale-[0.98] transition-all">View</button>}
+              {/* CAD files (DWG/DXF/…) can't render in a browser tab — must download
+                  instead of a raw window.open, which left a blank tab. Same helper
+                  DocRow uses for regular (non-pinned) documents. */}
+              {d.fileUrl && <button onClick={() => openDocFile(d)} className="shrink-0 min-h-11 px-3 rounded-lg text-base text-primary font-bold hover:bg-primary/10 active:scale-[0.98] transition-all">View</button>}
             </div>
           ))}</Card>
         </div>
