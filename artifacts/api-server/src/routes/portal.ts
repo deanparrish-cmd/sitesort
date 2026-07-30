@@ -692,13 +692,17 @@ router.post("/portal/invite/:token/accept", async (req, res) => {
     // which can never match an existing row) so accepting UPDATES that row in
     // place — preserving any section permissions a PM already granted while
     // the invite was pending — instead of inserting a second, duplicate row.
-    const existingMember = (await db.select({ id: projectMembersTable.id }).from(projectMembersTable)
+    const existingMember = (await db.select({ id: projectMembersTable.id, personId: projectMembersTable.personId }).from(projectMembersTable)
       .where(and(
         eq(projectMembersTable.projectId, inv.projectId),
         inv.personId ? or(eq(projectMembersTable.userId, userId), eq(projectMembersTable.personId, inv.personId)) : eq(projectMembersTable.userId, userId),
       )).limit(1))[0];
     if (existingMember) {
-      await db.update(projectMembersTable).set({ personId: inv.personId ?? null, userId }).where(eq(projectMembersTable.id, existingMember.id));
+      // Never overwrite an already-linked person with null — this is the exact
+      // shape of the "invite list says Accepted, login says not added" bug: an
+      // invite lacking person_id (e.g. a legacy/dormant accept path) must not
+      // wipe out a good link a previous accept already established.
+      await db.update(projectMembersTable).set({ personId: inv.personId ?? existingMember.personId, userId }).where(eq(projectMembersTable.id, existingMember.id));
     } else {
       await db.insert(projectMembersTable)
         .values({ id: generateId(), projectId: inv.projectId, userId, personId: inv.personId ?? null, role: inv.role })
