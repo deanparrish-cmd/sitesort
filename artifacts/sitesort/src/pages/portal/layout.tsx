@@ -157,12 +157,12 @@ export function PortalLayout({ active, children }: { active: string; children: R
         <Link href="/portal/overview" onClick={() => setIsMobileOpen(false)} className="shrink-0" aria-label="Portal home">
           <img src={logoSrc} alt="SiteSort" className="w-auto shrink-0 object-contain" style={{ height: "56px" }} />
         </Link>
-        <button onClick={() => setIsMobileOpen(o => !o)} className="relative p-2 text-primary" aria-label="Menu">
-          {isMobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+        <button onClick={() => setIsMobileOpen(o => !o)} className="relative min-w-14 min-h-14 flex items-center justify-center text-primary active:scale-[0.95] transition-transform" aria-label="Menu">
+          {isMobileOpen ? <X className="w-7 h-7" /> : <Menu className="w-7 h-7" />}
           {/* Aggregate unseen indicator: the mobile menu hides the per-section
               badges, so a closed menu shows one dot when ANYTHING is new. */}
           {!isMobileOpen && totalUnseen > 0 && (
-            <span aria-label={`${totalUnseen} unseen`} className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-destructive ring-2 ring-card" />
+            <span aria-label={`${totalUnseen} unseen`} className="absolute top-2 right-2 w-3 h-3 rounded-full bg-accent ring-2 ring-card" />
           )}
         </button>
       </div>
@@ -189,7 +189,7 @@ export function PortalLayout({ active, children }: { active: string; children: R
         </div>
 
         <nav className="flex-1 px-4 py-6 overflow-y-auto">
-          <div className="space-y-1">
+          <div className="space-y-2">
             {visibleNav.map(({ key, label, Icon }) => {
               const isActive = key === active;
               const badge = counts[key] ?? 0;
@@ -199,20 +199,20 @@ export function PortalLayout({ active, children }: { active: string; children: R
                   href={`/portal/${key}`}
                   onClick={() => setIsMobileOpen(false)}
                   className={cn(
-                    "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200",
+                    "flex items-center gap-3 min-h-14 px-4 py-3 rounded-xl text-base font-bold transition-all duration-150 active:scale-[0.98]",
                     isActive
                       ? "bg-primary text-primary-foreground shadow-md shadow-primary/10"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground",
                   )}
                 >
-                  <Icon className={cn("w-5 h-5", isActive ? "text-primary-foreground" : "text-muted-foreground")} />
+                  <Icon className={cn("w-6 h-6 shrink-0", isActive ? "text-primary-foreground" : "text-muted-foreground")} />
                   <span className="flex-1">{label}</span>
                   {badge > 0 && (
                     <span
                       aria-label={`${badge} unseen`}
                       className={cn(
-                        "shrink-0 min-w-[1.25rem] h-5 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center",
-                        isActive ? "bg-primary-foreground/20 text-primary-foreground" : "bg-primary text-primary-foreground",
+                        "shrink-0 min-w-[1.5rem] h-6 px-1.5 rounded-full text-xs font-bold flex items-center justify-center",
+                        isActive ? "bg-primary-foreground/20 text-primary-foreground" : "bg-accent text-white",
                       )}
                     >
                       {badge > 99 ? "99+" : badge}
@@ -227,17 +227,17 @@ export function PortalLayout({ active, children }: { active: string; children: R
         {/* Member footer + logout */}
         <div className="p-4 border-t">
           <div className="flex items-center gap-3 mb-4 px-2">
-            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold shrink-0">{initial}</div>
+            <div className="w-11 h-11 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg shrink-0">{initial}</div>
             <div className="min-w-0">
-              <p className="text-sm font-bold text-foreground truncate">{data?.member.name}</p>
-              <p className="text-xs text-muted-foreground capitalize truncate">{data?.member.role}</p>
+              <p className="text-base font-bold text-foreground truncate">{data?.member.name}</p>
+              <p className="text-sm text-muted-foreground capitalize truncate">{data?.member.role}</p>
             </div>
           </div>
           <button
             onClick={() => portalLogout(setLocation)}
-            className="flex w-full items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+            className="flex w-full items-center gap-3 min-h-14 px-4 py-3 rounded-xl text-base font-bold text-destructive hover:bg-destructive/10 active:scale-[0.98] transition-all duration-150"
           >
-            <LogOut className="w-5 h-5" /> Log out
+            <LogOut className="w-6 h-6" /> Log out
           </button>
         </div>
       </div>
