@@ -209,28 +209,30 @@ export default function IssuesPage() {
         description="All snags and safety concerns logged across your projects."
       />
 
-      {/* Summary cards */}
+      {/* Summary cards — each names a specific status bucket, so clicking one
+          filters the list below to it and scrolls there (same rule as the
+          Invoices Overdue card: a count naming specific items must lead to them). */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-        <Card className="p-4 border-violet-200 bg-violet-50 dark:bg-violet-950/20 dark:border-violet-900">
-          <p className="text-xs font-medium text-violet-700 mb-1">New</p>
-          <p className="text-2xl font-extrabold text-violet-700">{newCount}</p>
-        </Card>
-        <Card className="p-4 border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900">
-          <p className="text-xs font-medium text-amber-700 mb-1">Open</p>
-          <p className="text-2xl font-extrabold text-amber-700">{openCount}</p>
-        </Card>
-        <Card className="p-4 border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-900">
-          <p className="text-xs font-medium text-blue-700 mb-1">In Progress</p>
-          <p className="text-2xl font-extrabold text-blue-700">{inProgressCount}</p>
-        </Card>
-        <Card className="p-4 border-cyan-200 bg-cyan-50 dark:bg-cyan-950/20 dark:border-cyan-900">
-          <p className="text-xs font-medium text-cyan-700 mb-1">Pending confirmation</p>
-          <p className="text-2xl font-extrabold text-cyan-700">{pendingConfirmationCount}</p>
-        </Card>
-        <Card className="p-4 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-900">
-          <p className="text-xs font-medium text-emerald-700 mb-1">Resolved</p>
-          <p className="text-2xl font-extrabold text-emerald-700">{resolvedCount}</p>
-        </Card>
+        {([
+          { key: "new", label: "New", count: newCount, cls: "border-violet-200 bg-violet-50 dark:bg-violet-950/20 dark:border-violet-900", text: "text-violet-700" },
+          { key: "open", label: "Open", count: openCount, cls: "border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900", text: "text-amber-700" },
+          { key: "in_progress", label: "In Progress", count: inProgressCount, cls: "border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-900", text: "text-blue-700" },
+          { key: "pending_confirmation", label: "Pending confirmation", count: pendingConfirmationCount, cls: "border-cyan-200 bg-cyan-50 dark:bg-cyan-950/20 dark:border-cyan-900", text: "text-cyan-700" },
+          { key: "resolved", label: "Resolved", count: resolvedCount, cls: "border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-900", text: "text-emerald-700" },
+        ] as const).map(s => (
+          <button
+            key={s.key}
+            type="button"
+            aria-pressed={statusFilter === s.key}
+            onClick={() => { setStatusFilter(s.key); document.getElementById("issue-list")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+            className="text-left"
+          >
+            <Card className={cn("p-4 transition-shadow hover:ring-2 hover:ring-primary/30 cursor-pointer", s.cls, statusFilter === s.key && "ring-2 ring-offset-1 ring-primary/50")}>
+              <p className={cn("text-xs font-medium mb-1", s.text)}>{s.label}</p>
+              <p className={cn("text-2xl font-extrabold", s.text)}>{s.count}</p>
+            </Card>
+          </button>
+        ))}
       </div>
 
       {/* Filters */}
@@ -264,7 +266,7 @@ export default function IssuesPage() {
       </div>
 
       {/* List */}
-      <Card className="overflow-hidden">
+      <Card id="issue-list" className="overflow-hidden scroll-mt-24">
         {loading ? (
           <div className="divide-y">
             {[...Array(5)].map((_, i) => (
@@ -484,7 +486,7 @@ export default function IssuesPage() {
                   )}
                   <div>
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Project</p>
-                    <p className="text-sm font-medium">{viewingIssue.projectName ?? "—"}</p>
+                    <p className="text-sm font-medium">{viewingIssue.projectName ?? "N/A"}</p>
                   </div>
                   <div>
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 flex items-center gap-2">Assignment {viewingIssue.overdue && <OverdueBadge />}</p>

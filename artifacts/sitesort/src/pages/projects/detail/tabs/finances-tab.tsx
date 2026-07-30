@@ -94,7 +94,7 @@ export function FinancesTab() {
                               )}
                               <button
                                 type="button"
-                                onClick={() => setSharingDoc({ type: "permit", id: p.id, name: `${p.type} – ${p.description}`, version: null, fileUrl: p.documentUrl ?? "" })}
+                                onClick={() => setSharingDoc({ type: "permit", id: p.id, name: `${p.type}: ${p.description}`, version: null, fileUrl: p.documentUrl ?? "" })}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-xs font-medium text-foreground hover:bg-muted transition-colors"
                                 title="Share permit"
                               >

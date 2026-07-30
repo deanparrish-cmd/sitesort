@@ -105,19 +105,19 @@ function usePlatformAdminUsers(q: string) {
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
 function fmt(n: number | null | undefined): string {
-  if (n == null) return "—";
+  if (n == null) return "N/A";
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return String(n);
 }
 
 function fmtDate(iso: string | null | undefined): string {
-  if (!iso) return "—";
+  if (!iso) return "N/A";
   return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
 function fmtTime(iso: string | null | undefined): string {
-  if (!iso) return "—";
+  if (!iso) return "N/A";
   return new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
@@ -618,7 +618,7 @@ export default function AdminDashboard() {
             <BigStat label="Total Companies" value={s?.revenue?.totalCompanies ?? 0} loading={loading} />
             <BigStat label="Paid Plans" value={s?.revenue?.paidTiers ?? 0} sub="Pro / Enterprise" loading={loading} accent />
             <BigStat label="Free Tier" value={(s?.revenue?.byTier?.free ?? 0)} sub="companies" loading={loading} />
-            <BigStat label="ARPU" value="—" sub="Connect Stripe to track" loading={false} />
+            <BigStat label="ARPU" value="N/A" sub="Connect Stripe to track" loading={false} />
           </div>
           <Card>
             <p className="text-gray-500 text-xs mb-3 font-medium">Subscription Tier Breakdown</p>
@@ -665,7 +665,7 @@ export default function AdminDashboard() {
                       ? s.speedMetrics.avgHoursToFirstAction < 1
                         ? `${Math.round(s.speedMetrics.avgHoursToFirstAction * 60)}m`
                         : `${s.speedMetrics.avgHoursToFirstAction}h`
-                      : "—"}
+                      : "N/A"}
                   </p>
                   <p className="text-gray-500 text-xs">Avg hours from signup → first upload</p>
                 </>
@@ -679,7 +679,7 @@ export default function AdminDashboard() {
               <div className="flex items-center gap-2 mb-3">
                 <UserX className="w-4 h-4 text-yellow-500" />
                 <p className="text-yellow-400 text-sm font-semibold">At-Risk Users</p>
-                <span className="text-gray-500 text-xs">were active, now quiet for 7–30 days</span>
+                <span className="text-gray-500 text-xs">were active, now quiet for 7 to 30 days</span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -797,7 +797,7 @@ export default function AdminDashboard() {
                           ? f.avgDays < 1
                             ? `${Math.round(f.avgDays * 24)}h`
                             : `${f.avgDays}d`
-                          : "—"}
+                          : "N/A"}
                       </p>
                       <p className="text-gray-500 text-xs mt-1">avg to first use</p>
                     </div>
@@ -986,7 +986,7 @@ export default function AdminDashboard() {
 
         {/* ── Lapsed This Week ── */}
         <section>
-          <SectionTitle icon={UserX} title="Active Last Week · Gone This Week" sub="Users who were active 7–14 days ago but haven't logged in since" />
+          <SectionTitle icon={UserX} title="Active Last Week · Gone This Week" sub="Users who were active 7 to 14 days ago but haven't logged in since" />
           {lapsedLoading ? (
             <div className="space-y-2">
               {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}

@@ -466,7 +466,7 @@ export default function CompliancePage() {
                                   <ExternalLink className="w-3 h-3" /> Open
                                 </button>
                                 <button
-                                  onClick={() => setShareItem({ entityType: "insurance", entityId: ins.subcontractorId, entityName: `${ins.subcontractorName} – ${ins.insuranceType.replace(/_/g, " ")}`, fileUrl: ins.certificateUrl })}
+                                  onClick={() => setShareItem({ entityType: "insurance", entityId: ins.subcontractorId, entityName: `${ins.subcontractorName}: ${ins.insuranceType.replace(/_/g, " ")}`, fileUrl: ins.certificateUrl })}
                                   className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
                                   title="Share certificate"
                                 >
@@ -513,7 +513,7 @@ export default function CompliancePage() {
                             <ExternalLink className="w-3 h-3" /> Open
                           </button>
                           <button
-                            onClick={() => setShareItem({ entityType: "insurance", entityId: ins.id, entityName: `${ins.subcontractorName} – ${ins.insuranceType.replace(/_/g, " ")}`, fileUrl: ins.certificateUrl })}
+                            onClick={() => setShareItem({ entityType: "insurance", entityId: ins.id, entityName: `${ins.subcontractorName}: ${ins.insuranceType.replace(/_/g, " ")}`, fileUrl: ins.certificateUrl })}
                             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
                           >
                             <Share2 className="w-3 h-3" /> Share
@@ -565,7 +565,7 @@ export default function CompliancePage() {
                               <ExternalLink className="w-3 h-3" /> Open
                             </button>
                             <button
-                              onClick={() => setShareItem({ entityType: "person_certification", entityId: c.id, entityName: `${c.personName} – ${c.certName}`, fileUrl: c.documentUrl })}
+                              onClick={() => setShareItem({ entityType: "person_certification", entityId: c.id, entityName: `${c.personName}: ${c.certName}`, fileUrl: c.documentUrl })}
                               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
                               title="Share"
                             >
@@ -610,7 +610,7 @@ export default function CompliancePage() {
                             <ExternalLink className="w-3 h-3" /> Open
                           </button>
                           <button
-                            onClick={() => setShareItem({ entityType: "person_certification", entityId: c.id, entityName: `${c.personName} – ${c.certName}`, fileUrl: c.documentUrl })}
+                            onClick={() => setShareItem({ entityType: "person_certification", entityId: c.id, entityName: `${c.personName}: ${c.certName}`, fileUrl: c.documentUrl })}
                             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
                           >
                             <Share2 className="w-3 h-3" /> Share
@@ -666,7 +666,7 @@ export default function CompliancePage() {
                           );
                         })()}
                         <button
-                          onClick={() => setShareItem({ entityType: "permit", entityId: p.permitId, entityName: `${p.permitType} – ${p.projectName}`, fileUrl: p.documentUrl, projectId: p.projectId })}
+                          onClick={() => setShareItem({ entityType: "permit", entityId: p.permitId, entityName: `${p.permitType}: ${p.projectName}`, fileUrl: p.documentUrl, projectId: p.projectId })}
                           className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
                           title="Share permit"
                         >
@@ -709,7 +709,7 @@ export default function CompliancePage() {
                             <ExternalLink className="w-3 h-3" /> Open
                           </button>
                           <button
-                            onClick={() => setShareItem({ entityType: "permit", entityId: p.id, entityName: `${p.permitType} – ${p.projectName}`, fileUrl: p.documentUrl, projectId: p.projectId })}
+                            onClick={() => setShareItem({ entityType: "permit", entityId: p.id, entityName: `${p.permitType}: ${p.projectName}`, fileUrl: p.documentUrl, projectId: p.projectId })}
                             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
                           >
                             <Share2 className="w-3 h-3" /> Share

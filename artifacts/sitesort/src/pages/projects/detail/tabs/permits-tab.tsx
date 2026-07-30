@@ -59,7 +59,7 @@ export function PermitsTab() {
                       {p.overdue && <OverdueBadge />}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5 truncate">{p.description}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{fmtDate(p.startDate)} – {fmtDate(p.expiryDate)}{p.responsibleName ? ` · ${p.responsibleName}` : ""}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{fmtDate(p.startDate)} to {fmtDate(p.expiryDate)}{p.responsibleName ? ` · ${p.responsibleName}` : ""}</p>
                     {p.dueDate && (
                       <p className={`text-xs mt-0.5 flex items-center gap-1 ${p.overdue ? "text-red-600 font-semibold" : "text-muted-foreground"}`}>
                         <Calendar className="w-3 h-3 shrink-0" />Action due {fmtDate(p.dueDate)}
@@ -90,7 +90,7 @@ export function PermitsTab() {
                       );
                     })()}
                     <button
-                      onClick={() => setSharingDoc({ type: "permit", id: p.id, name: `${p.type} – ${p.description}`, version: null, fileUrl: p.documentUrl ?? "" })}
+                      onClick={() => setSharingDoc({ type: "permit", id: p.id, name: `${p.type}: ${p.description}`, version: null, fileUrl: p.documentUrl ?? "" })}
                       className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors"
                       title="Share"
                     >

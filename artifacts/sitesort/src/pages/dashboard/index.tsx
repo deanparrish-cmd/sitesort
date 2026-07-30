@@ -1169,7 +1169,7 @@ export default function Dashboard() {
         onClose={() => setShareInvoice(null)}
         entityType="invoice"
         entityId={shareInvoice?.id ?? ""}
-        entityName={shareInvoice ? `Invoice – ${shareInvoice.counterpartyName}` : ""}
+        entityName={shareInvoice ? `Invoice: ${shareInvoice.counterpartyName}` : ""}
         fileUrl={shareInvoice?.attachmentUrl ?? undefined}
         projectId={shareInvoice?.projectId}
       />
