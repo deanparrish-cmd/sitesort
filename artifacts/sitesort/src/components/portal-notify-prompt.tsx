@@ -58,7 +58,7 @@ export function PortalNotifyPrompt() {
             <p className="font-semibold text-sm">Get notified when new drawings or notices are shared with you</p>
             <p className="text-xs text-muted-foreground mt-0.5">
               {needsInstall
-                ? "On iPhone, add the portal to your Home Screen first — then you can turn on notifications."
+                ? "On iPhone, add the portal to your Home Screen first, then you can turn on notifications."
                 : "A quick heads-up whenever your project manager shares something new."}
             </p>
           </div>

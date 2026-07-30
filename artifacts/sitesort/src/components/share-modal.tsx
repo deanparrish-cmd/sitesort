@@ -6,7 +6,7 @@ import { QRCodeCanvas } from "qrcode.react";
 import { cn } from "@/lib/utils";
 import {
   Share2, Mail, MessageCircle, Users, ExternalLink, X,
-  Download, Clock, Loader2, CheckCircle2, Pin, PinOff, QrCode, ChevronDown,
+  Download, Clock, Loader2, CheckCircle2, Pin, PinOff, QrCode, ChevronDown, Link2, Lock,
 } from "lucide-react";
 
 type ShareLog = {
@@ -30,6 +30,16 @@ export interface ShareModalProps {
   additionalInfo?: string | null;
   /** Plain text to share when there is no fileUrl (e.g. a daily note). */
   shareText?: string | null;
+  /**
+   * An authenticated in-app URL to send instead of the raw (unauthenticated
+   * capability-URL) fileUrl — for entities where the recipient must already
+   * have access to view it (e.g. invoices: financial data must never travel
+   * as a public link). When set: Email/WhatsApp/the new "Copy secure link"
+   * button all use this URL, and the QR Code tab (which only ever renders
+   * the raw fileUrl) is hidden, since a scannable QR of a private link
+   * defeats the point of it being private.
+   */
+  secureViewUrl?: string | null;
 }
 
 function normaliseUrl(url: string) {
@@ -56,8 +66,9 @@ function shareRuleLabel(s: PortalShareRule): string {
   return s.personName ?? "A team member";
 }
 
-export function ShareModal({ open, onClose, entityType, entityId, entityName, fileUrl, projectId, version, additionalInfo, shareText }: ShareModalProps) {
+export function ShareModal({ open, onClose, entityType, entityId, entityName, fileUrl, projectId, version, additionalInfo, shareText, secureViewUrl }: ShareModalProps) {
   const [tab, setTab] = useState<"share" | "qr" | "history">("share");
+  const [linkCopied, setLinkCopied] = useState(false);
   const [history, setHistory] = useState<ShareLog[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   // Team Portal sharing state
@@ -86,11 +97,15 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
   const fullUrl = fileUrl ? normaliseUrl(fileUrl) : null;
   const isPortalEntity = PORTAL_ENTITY_TYPES.has(entityType);
   const canPin = isPortalEntity && !!projectId;
-  const hasContent = !!(fullUrl || shareText);
+  // The link actually sent to a recipient: prefer the secure in-app URL when
+  // supplied, so a raw unauthenticated file link is never emailed/messaged
+  // for entities that opt into secureViewUrl.
+  const linkForSharing = secureViewUrl ?? fullUrl;
+  const hasContent = !!(linkForSharing || shareText);
 
   useEffect(() => {
     if (!open) {
-      setTab("share"); setIsPinned(false);
+      setTab("share"); setIsPinned(false); setLinkCopied(false);
       setSiteBoardUrl(null); setSelectedProjectId("");
       setPortalMode("all"); setSelTrades([]); setSelPersons([]);
       setPortalTrades([]); setPortalMembers([]); setExistingShares([]); setPortalMsg(null);
@@ -168,9 +183,9 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
     if (!hasContent) return;
     const subject = encodeURIComponent(`${entityName}${versionSuffix}`);
     const details = additionalInfo ? `\n\n${additionalInfo}` : "";
-    const body = shareText && !fullUrl
+    const body = shareText && !linkForSharing
       ? encodeURIComponent(`${shareText}${details}`)
-      : encodeURIComponent(`Hi,\n\nPlease find "${entityName}"${versionSuffix} here:\n\n${fullUrl}${details}`);
+      : encodeURIComponent(`Hi,\n\nPlease find "${entityName}"${versionSuffix} here:\n\n${linkForSharing}${details}`);
     window.open(`mailto:?subject=${subject}&body=${body}`);
     logShare("email");
   };
@@ -178,11 +193,19 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
   const shareWhatsApp = () => {
     if (!hasContent) return;
     const details = additionalInfo ? `\n\n${additionalInfo}` : "";
-    const text = shareText && !fullUrl
+    const text = shareText && !linkForSharing
       ? encodeURIComponent(`${shareText}${details}`)
-      : encodeURIComponent(`${entityName}${versionSuffix}\n${fullUrl}${details}`);
+      : encodeURIComponent(`${entityName}${versionSuffix}\n${linkForSharing}${details}`);
     window.open(`https://wa.me/?text=${text}`, "_blank");
     logShare("whatsapp");
+  };
+
+  const copySecureLink = () => {
+    if (!secureViewUrl) return;
+    navigator.clipboard.writeText(secureViewUrl).then(() => {
+      setLinkCopied(true);
+      logShare("secure_link");
+    }).catch(() => {});
   };
 
   const toggleTrade = (t: string) => setSelTrades(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
@@ -261,7 +284,7 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
 
         {/* Tabs */}
         <div className="flex border-b -mx-4 sm:-mx-6 px-4 sm:px-6">
-          {(["share", "qr", "history"] as const).map(t => (
+          {(["share", "qr", "history"] as const).filter(t => t !== "qr" || !secureViewUrl).map(t => (
             <button
               key={t}
               onClick={() => { setTab(t); setPortalMsg(null); }}
@@ -294,6 +317,26 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
                 </button>
               </div>
             </div>
+
+            {/* Private secure link — only for entities that opt in (e.g. invoices).
+                Sent link resolves to an in-app page requiring the recipient to be
+                signed in, never a raw public file URL. */}
+            {secureViewUrl && (
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Private link</p>
+                <button
+                  onClick={copySecureLink}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg border border-border bg-background hover:bg-muted transition-colors text-sm font-medium"
+                >
+                  {linkCopied ? <CheckCircle2 className="w-4 h-4 text-green-500" /> : <Link2 className="w-4 h-4 text-primary" />}
+                  {linkCopied ? "Link copied" : "Copy secure link"}
+                </button>
+                <p className="flex items-start gap-1.5 text-xs text-muted-foreground mt-1.5">
+                  <Lock className="w-3 h-3 mt-0.5 shrink-0" />
+                  Requires a SiteSort login to view, safe to send by email, message, or however you like.
+                </p>
+              </div>
+            )}
 
             {/* Team Portal — only for portal-shareable entities (document/photo/permit) */}
             {isPortalEntity && (

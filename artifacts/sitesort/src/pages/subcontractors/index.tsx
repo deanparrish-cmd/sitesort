@@ -431,7 +431,7 @@ export default function SubcontractorsPage() {
         toast({
           title: body.archived ? "Contact archived" : "Contact deleted",
           description: body.archived
-            ? `${deleteTarget.contactName} was archived — restore it any time from the Archived filter.`
+            ? `${deleteTarget.contactName} was archived. Restore it any time from the Archived filter.`
             : `${deleteTarget.contactName} was removed.`,
         });
         setDeleteTarget(null);
@@ -695,7 +695,7 @@ export default function SubcontractorsPage() {
       <PageHeader
         className="mb-8"
         title="Contacts"
-        description="Directory of all your contacts — subcontractors, merchants, suppliers and more."
+        description="Directory of all your contacts: subcontractors, merchants, suppliers and more."
         actions={caps.canManageSubcontractors && (
           <Button variant="accent" onClick={() => { setAddOpen(true); setAddError(null); reset(); setSelectedTradesAdd([]); }}>
             <Plus className="w-4 h-4 mr-2" /> Add Contact
@@ -883,7 +883,7 @@ export default function SubcontractorsPage() {
                                     <div key={r.id} className={cn("flex flex-col gap-0.5 text-[10px] font-medium px-2 py-1.5 rounded-md border", expired ? "bg-red-50 border-red-300 text-red-700" : expiring ? "bg-yellow-50 border-yellow-200 text-yellow-700" : "bg-emerald-50 border-emerald-200 text-emerald-700")}>
                                       <div className="flex items-center gap-1.5">
                                         <FileText className="w-3 h-3 shrink-0" />
-                                        <span className="truncate">{r.type} — {expired ? "expired" : "expires"} {new Date(r.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
+                                        <span className="truncate">{r.type} · {expired ? "expired" : "expires"} {new Date(r.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
                                         {r.overdue && <span className="shrink-0 text-[9px] font-bold text-red-700 bg-red-100 border border-red-300 rounded px-1 py-px uppercase tracking-wide">Overdue</span>}
                                         <button onClick={() => window.open(normaliseUrl(r.certificateUrl), "_blank")} className="ml-auto shrink-0 hover:opacity-70" title="Open certificate">
                                           <ExternalLink className="w-3 h-3" />
@@ -900,7 +900,7 @@ export default function SubcontractorsPage() {
                                           {r.dueDate && <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" />Due {new Date(r.dueDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>}
                                         </div>
                                       )}
-                                      {expired && <span className="text-[9px] font-bold text-red-700 uppercase tracking-wide">Site access denied — new document required</span>}
+                                      {expired && <span className="text-[9px] font-bold text-red-700 uppercase tracking-wide">Site access denied · new document required</span>}
                                     </div>
                                   );
                                 })}
@@ -915,7 +915,7 @@ export default function SubcontractorsPage() {
                                     <div key={c.id} className={cn("flex items-center gap-1.5 text-[10px] font-medium px-2 py-1.5 rounded-md border", expired ? "bg-red-50 border-red-300 text-red-700" : expiring ? "bg-yellow-50 border-yellow-200 text-yellow-700" : "bg-emerald-50 border-emerald-200 text-emerald-700")}>
                                       <ShieldCheck className="w-3 h-3 shrink-0" />
                                       <span className="truncate">
-                                        {c.name}{c.certNumber ? ` · ${c.certNumber}` : ""} — {expired ? "expired" : "expires"} {new Date(c.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                                        {c.name}{c.certNumber ? ` · ${c.certNumber}` : ""} · {expired ? "expired" : "expires"} {new Date(c.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                                       </span>
                                       {c.documentUrl && (
                                         <button onClick={() => window.open(normaliseUrl(c.documentUrl!), "_blank")} className="ml-auto shrink-0 hover:opacity-70" title="Open document">
@@ -1109,7 +1109,7 @@ export default function SubcontractorsPage() {
 
           <div>
             <label className="text-sm font-medium mb-2 block">Certifications (optional)</label>
-            <p className="text-xs text-muted-foreground mb-2">CSCS, SSSTS/SMSTS, gas safe, plant tickets, etc. — attached to this contact and tracked for expiry.</p>
+            <p className="text-xs text-muted-foreground mb-2">CSCS, SSSTS/SMSTS, gas safe, plant tickets, etc., attached to this contact and tracked for expiry.</p>
             {newCerts.length > 0 && (
               <div className="space-y-1.5 mb-2">
                 {newCerts.map((c, i) => (
@@ -1230,7 +1230,7 @@ export default function SubcontractorsPage() {
                         )}
                         {status === "error" && (
                           <span className="flex items-center gap-1.5 text-xs text-destructive px-3 py-1.5">
-                            <X className="w-3.5 h-3.5" /> Failed — retry?
+                            <X className="w-3.5 h-3.5" /> Failed, retry?
                           </span>
                         )}
                       </div>
@@ -1250,7 +1250,7 @@ export default function SubcontractorsPage() {
       {/* Edit modal */}
       <Dialog open={!!editTarget} onOpenChange={open => { if (!open) { setEditTarget(null); setEditError(null); } }}>
         <DialogHeader>
-          <DialogTitle>Edit — {editTarget && companyLabel(editTarget) === "Self-employed" ? editTarget.contactName : editTarget?.companyName}</DialogTitle>
+          <DialogTitle>Edit · {editTarget && companyLabel(editTarget) === "Self-employed" ? editTarget.contactName : editTarget?.companyName}</DialogTitle>
         </DialogHeader>
         <form onSubmit={editSubmit(onEdit)} className="space-y-4 pt-2">
           <div>
@@ -1581,7 +1581,7 @@ export default function SubcontractorsPage() {
           <div className="space-y-4">
             <div className="text-sm text-muted-foreground">
               <span className="font-medium text-foreground">{insTarget.sub.companyName}</span>
-              {" — "}{insTarget.record.type} cert, expires {new Date(insTarget.record.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+              {" · "}{insTarget.record.type} cert, expires {new Date(insTarget.record.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
             </div>
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Assign to</label>
@@ -1599,7 +1599,7 @@ export default function SubcontractorsPage() {
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Action due by (optional)</label>
               <Input type="date" value={insDueDate} onChange={e => setInsDueDate(e.target.value)} />
-              <p className="text-[11px] text-muted-foreground mt-1">The deadline to chase the renewal — distinct from the cert's expiry. Past-due shows an OVERDUE flag.</p>
+              <p className="text-[11px] text-muted-foreground mt-1">The deadline to chase the renewal, distinct from the cert's expiry. Past-due shows an OVERDUE flag.</p>
             </div>
             {insError && <p className="text-destructive text-sm">{insError}</p>}
           </div>
@@ -1629,7 +1629,7 @@ export default function SubcontractorsPage() {
             Remove <span className="font-semibold">{deleteTarget?.contactName}</span> from your Contacts directory?
           </p>
           <p className="text-xs text-muted-foreground">
-            Blocked if they're currently on an active project. If they have any history (past projects, documents, sign-offs), they'll be archived instead of deleted — restorable any time from the Archived filter. Otherwise they're removed for good.
+            Blocked if they're currently on an active project. If they have any history (past projects, documents, sign-offs), they'll be archived instead of deleted, restorable any time from the Archived filter. Otherwise they're removed for good.
           </p>
         </div>
         <DialogFooter>

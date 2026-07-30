@@ -62,7 +62,7 @@ export class ErrorBoundary extends Component<Props, State> {
             </div>
             <h1 className="text-lg font-semibold">Something went wrong</h1>
             <p className="text-sm text-muted-foreground">
-              This part of SiteSort hit an unexpected problem. Your data is safe — try again, or reload the page.
+              This part of SiteSort hit an unexpected problem. Your data is safe. Try again, or reload the page.
             </p>
             <div className="flex items-center justify-center gap-3">
               <Button variant="outline" onClick={this.handleRetry}>Try again</Button>

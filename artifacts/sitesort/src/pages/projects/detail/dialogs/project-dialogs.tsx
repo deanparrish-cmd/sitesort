@@ -123,7 +123,7 @@ export function ProjectDialogs() {
           <div>
             <label className="text-sm font-semibold mb-1 block">Project Managers / Approvers</label>
             {accepted.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No members have accepted an invite yet — invite people from the Team tab first.</p>
+              <p className="text-xs text-muted-foreground">No members have accepted an invite yet. Invite people from the Team tab first.</p>
             ) : (
               <div className="space-y-1.5 max-h-44 overflow-y-auto rounded-lg border-2 border-input p-2">
                 {accepted.map(m => (
@@ -144,7 +144,7 @@ export function ProjectDialogs() {
               </div>
             )}
             <p className="text-xs text-muted-foreground mt-1">
-              Approvers can triage site issues, allocate, confirm two-step closures, approve submitted reports and documents, and sign off — so there's always cover if a PM is away. Pick one or more. Company admins and project managers always have this authority. Every action is still recorded against the individual who did it.
+              Approvers can triage site issues, allocate, confirm two-step closures, approve submitted reports and documents, and sign off, so there's always cover if a PM is away. Pick one or more. Company admins and project managers always have this authority. Every action is still recorded against the individual who did it.
             </p>
           </div>
           <DialogFooter>

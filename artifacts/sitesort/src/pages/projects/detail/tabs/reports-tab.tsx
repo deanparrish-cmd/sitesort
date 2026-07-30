@@ -32,7 +32,7 @@ export function ReportsTab() {
             <p className="text-sm text-muted-foreground mb-6">Auto-generated each evening (~18:00), collating the day's check-ins, document activity and tagged site photos. Add a site diary any time to record weather, labour, work done, delays and H&amp;S.</p>
             {reports.length === 0 ? (
               <Card><CardContent className="py-12 text-center text-muted-foreground text-sm">
-                No daily reports yet. The first one appears after today's site activity is collated this evening — or add today's site diary now.
+                No daily reports yet. The first one appears after today's site activity is collated this evening, or add today's site diary now.
               </CardContent></Card>
             ) : (
               <div className="space-y-2">

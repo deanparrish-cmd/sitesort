@@ -64,7 +64,7 @@ function ProjectQrCard({ project }: { project: any }) {
     if (!win || !svgRef.current) return;
     const svg = svgRef.current.querySelector("svg");
     win.document.write(`
-      <html><head><title>${project.name} — Site Board QR</title>
+      <html><head><title>${project.name} · Site Board QR</title>
       <style>
         body { font-family: system-ui, sans-serif; margin: 0; padding: 40px; text-align: center; background: white; }
         h2 { font-size: 24px; font-weight: 800; margin-bottom: 4px; color: #1f2937; }
@@ -73,7 +73,7 @@ function ProjectQrCard({ project }: { project: any }) {
         .badge { display: inline-block; background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; border-radius: 9999px; padding: 4px 12px; font-size: 12px; font-weight: 600; margin-bottom: 20px; }
         svg { margin: 20px auto; display: block; }
       </style></head><body>
-      <span class="badge">SiteSort — Site Board</span>
+      <span class="badge">SiteSort · Site Board</span>
       <h2>${project.name}</h2>
       <p>${project.address}</p>
       ${svg?.outerHTML ?? ""}
@@ -156,7 +156,7 @@ export default function QrPage() {
       <PageHeader
         className="mb-8"
         title="QR Code Site Boards"
-        description="The QR codes created in each project, all in one place. Print and post them on site — workers can scan to view live site information without needing an account."
+        description="The QR codes created in each project, all in one place. Print and post them on site. Workers can scan to view live site information without needing an account."
       />
 
       {isLoading ? (
@@ -167,7 +167,7 @@ export default function QrPage() {
         <Card className="p-12 text-center border-dashed border-2">
           <Building2 className="w-12 h-12 mx-auto text-muted-foreground mb-4 opacity-40" />
           <h3 className="text-lg font-bold">No active projects</h3>
-          <p className="text-muted-foreground">Create a project first — its QR code will show here once created in the project.</p>
+          <p className="text-muted-foreground">Create a project first. Its QR code will show here once created in the project.</p>
         </Card>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">

@@ -237,7 +237,7 @@ function SiteCalendar({ events, alerts, canManage, projects, onCreate, onDelete 
                 key={key}
                 type="button"
                 onClick={() => setSelectedDate(key)}
-                aria-label={`${day}${hasEvents ? ` — ${dayEvents.length} event${dayEvents.length > 1 ? "s" : ""}` : ""}`}
+                aria-label={`${day}${hasEvents ? `, ${dayEvents.length} event${dayEvents.length > 1 ? "s" : ""}` : ""}`}
                 className={cn(
                   "flex flex-col items-center py-1 gap-0.5 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
                   hasEvents ? "cursor-pointer hover:bg-muted" : "hover:bg-muted/50",
@@ -489,15 +489,15 @@ export default function Dashboard() {
     }
     for (const ins of (compliance?.expiringInsurance ?? []) as ExpiringInsuranceItem[]) {
       const date = ins.expiryDate.slice(0, 10);
-      events.push({ date, label: `${ins.subcontractorName} — ${ins.insuranceType}`, type: "insurance" });
+      events.push({ date, label: `${ins.subcontractorName} · ${ins.insuranceType}`, type: "insurance" });
       const daysLeft = Math.ceil((new Date(date).getTime() - todayMs) / 86400000);
-      alerts.push({ label: `${ins.subcontractorName} — ${ins.insuranceType}`, expiryDate: date, kind: "insurance", daysLeft });
+      alerts.push({ label: `${ins.subcontractorName} · ${ins.insuranceType}`, expiryDate: date, kind: "insurance", daysLeft });
     }
     for (const permit of (compliance?.expiringPermits ?? []) as ExpiringPermitItem[]) {
       const date = permit.expiryDate.slice(0, 10);
-      events.push({ date, label: `${permit.projectName} — ${permit.permitType}`, type: "permit", href: `/projects/${permit.projectId}?tab=permits` });
+      events.push({ date, label: `${permit.projectName} · ${permit.permitType}`, type: "permit", href: `/projects/${permit.projectId}?tab=permits` });
       const daysLeft = Math.ceil((new Date(date).getTime() - todayMs) / 86400000);
-      alerts.push({ label: `${permit.projectName} — ${permit.permitType}`, expiryDate: date, kind: "permit", daysLeft });
+      alerts.push({ label: `${permit.projectName} · ${permit.permitType}`, expiryDate: date, kind: "permit", daysLeft });
     }
     for (const inv of invoices) {
       if (inv.status === "paid") continue;
@@ -505,7 +505,7 @@ export default function Dashboard() {
       const type: CalEvent["type"] = inv.direction === "outbound" ? "invoice-out" : "invoice-in";
       const prefix = inv.direction === "outbound" ? "Pay" : "Receive";
       const amount = `${inv.currency} ${Number(inv.amount).toLocaleString("en-GB", { minimumFractionDigits: 2 })}`;
-      events.push({ date, label: `${prefix}: ${inv.counterpartyName} — ${amount}`, type, href: `/invoices?invoice=${inv.id}` });
+      events.push({ date, label: `${prefix}: ${inv.counterpartyName} · ${amount}`, type, href: `/invoices?invoice=${inv.id}` });
     }
     for (const ce of customEvents) {
       events.push({ date: ce.eventDate.slice(0, 10), label: ce.title, type: "custom", id: ce.id, note: ce.note, projectId: ce.projectId });
@@ -607,8 +607,8 @@ export default function Dashboard() {
 
     // Expired compliance
     for (const a of expiryAlerts) {
-      if (a.daysLeft < 0) items.push({ icon: <ShieldAlert className="w-4 h-4" />, label: `${a.label} — expired`, href: "/compliance?filter=expiring", severity: "critical" });
-      else if (a.daysLeft <= 3) items.push({ icon: <ShieldAlert className="w-4 h-4" />, label: `${a.label} — expires in ${a.daysLeft}d`, href: "/compliance?filter=expiring", severity: "critical" });
+      if (a.daysLeft < 0) items.push({ icon: <ShieldAlert className="w-4 h-4" />, label: `${a.label} · expired`, href: "/compliance?filter=expiring", severity: "critical" });
+      else if (a.daysLeft <= 3) items.push({ icon: <ShieldAlert className="w-4 h-4" />, label: `${a.label} · expires in ${a.daysLeft}d`, href: "/compliance?filter=expiring", severity: "critical" });
     }
 
     // Overdue invoices
@@ -1085,7 +1085,7 @@ export default function Dashboard() {
           </div>
           {nextPlan && (
             <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm">
-              <p className="font-semibold text-primary">{nextPlan.name} plan — {nextPlan.projects}</p>
+              <p className="font-semibold text-primary">{nextPlan.name} plan · {nextPlan.projects}</p>
               <p className="text-muted-foreground mt-0.5">{nextPlan.price} · More projects, team collaboration, advanced compliance &amp; more.</p>
             </div>
           )}

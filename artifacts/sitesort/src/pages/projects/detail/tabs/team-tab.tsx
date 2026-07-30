@@ -97,7 +97,7 @@ function PersonCertifications({ personId, canManage }: { personId: string; canMa
           {c.name}
           {c.expiryDate && (
             <span className="opacity-80">
-              — {c.status === "expired" ? "expired" : "expires"} {new Date(c.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+              · {c.status === "expired" ? "expired" : "expires"} {new Date(c.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
             </span>
           )}
           {c.documentUrl && (

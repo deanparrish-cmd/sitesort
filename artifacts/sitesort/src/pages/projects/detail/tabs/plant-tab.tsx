@@ -93,7 +93,7 @@ export function PlantTab() {
 
   const itemShareText = (item: PlantItem) => {
     const lines = [
-      `Plant & Materials — ${item.name}`,
+      `Plant & Materials · ${item.name}`,
       `Category: ${item.category.replace("_", " ")}`,
       `Status: ${STATUS_LABEL[item.status] ?? item.status}`,
       item.quantity ? `Quantity: ${item.quantity}${item.unit ? ` ${item.unit}` : ""}` : "",
@@ -119,7 +119,7 @@ export function PlantTab() {
       <PageHeader
         level="section"
         title="Plant & Materials"
-        description="What's on site — plant, equipment, and materials."
+        description="What's on site: plant, equipment, and materials."
         actions={caps.isInternal && (
           <Button size="sm" onClick={() => setEditingItem("new")}>
             <Plus className="w-4 h-4 mr-1.5" /> Add item

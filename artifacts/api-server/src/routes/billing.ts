@@ -14,17 +14,17 @@ const APP_URL =
 const PLANS = {
   solo: {
     name: "SiteSort Solo",
-    description: "1 project — monthly subscription",
+    description: "1 project · monthly subscription",
     priceId: process.env.STRIPE_PRICE_SOLO,
   },
   team: {
     name: "SiteSort Team",
-    description: "Up to 5 projects — monthly subscription",
+    description: "Up to 5 projects · monthly subscription",
     priceId: process.env.STRIPE_PRICE_TEAM,
   },
   pro: {
     name: "SiteSort Pro",
-    description: "Unlimited projects — monthly subscription",
+    description: "Unlimited projects · monthly subscription",
     priceId: process.env.STRIPE_PRICE_PRO,
   },
 } as const;

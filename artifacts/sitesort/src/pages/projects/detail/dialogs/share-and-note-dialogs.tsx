@@ -88,7 +88,7 @@ export function ShareAndNoteDialogs() {
         onClose={() => setSharingNote(null)}
         entityType="daily_note"
         entityId={sharingNote?.id ?? ""}
-        entityName={`Site update — ${sharingNote?.authorName ?? ""}`}
+        entityName={`Site update · ${sharingNote?.authorName ?? ""}`}
         fileUrl={null}
         projectId={projectId}
         shareText={sharingNote?.body ?? null}
@@ -110,9 +110,10 @@ export function ShareAndNoteDialogs() {
         onClose={() => setSharingInvoice(null)}
         entityType="invoice"
         entityId={sharingInvoice?.id ?? ""}
-        entityName={`Invoice — ${sharingInvoice?.counterpartyName ?? ""}`}
+        entityName={`Invoice · ${sharingInvoice?.counterpartyName ?? ""}`}
         fileUrl={sharingInvoice?.attachmentUrl ?? null}
         projectId={projectId}
+        secureViewUrl={sharingInvoice ? `${window.location.origin}/invoices?invoice=${sharingInvoice.id}` : null}
       />
     </>
   );

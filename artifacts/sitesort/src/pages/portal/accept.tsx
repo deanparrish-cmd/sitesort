@@ -129,7 +129,7 @@ export default function PortalAccept() {
               ) : (
                 <div className="space-y-4">
                   <p className="text-sm text-muted-foreground">
-                    You already have a SiteSort account for <span className="font-medium text-foreground">{invite.data.email}</span>. Join this project's portal with your existing login — no new password needed.
+                    You already have a SiteSort account for <span className="font-medium text-foreground">{invite.data.email}</span>. Join this project's portal with your existing login, no new password needed.
                   </p>
                   <Button type="button" className="w-full" size="lg" isLoading={accept.isPending} onClick={joinWithExisting}>
                     Join project portal

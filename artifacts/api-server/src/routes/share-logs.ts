@@ -4,6 +4,7 @@ import { shareLogsTable, usersTable, projectsTable } from "@workspace/db/schema"
 import { eq, and, desc } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
+import { isProjectApprover, COMPANY_MANAGER_ROLES } from "../lib/project-authority";
 
 const router: IRouter = Router();
 
@@ -23,6 +24,16 @@ router.post("/share-logs", authenticate, async (req, res) => {
         .limit(1);
       if (!project[0]) {
         res.status(404).json({ error: "not_found", message: "Project not found" });
+        return;
+      }
+    }
+
+    // Invoices are financial data — sharing them is restricted to company
+    // admin/PM, or a per-project approver on the invoice's project (if any).
+    if (entityType === "invoice" && !COMPANY_MANAGER_ROLES.includes(req.user!.role)) {
+      const allowed = projectId ? await isProjectApprover(req.user!, projectId) : false;
+      if (!allowed) {
+        res.status(403).json({ error: "forbidden", message: "Not authorized to share invoices" });
         return;
       }
     }

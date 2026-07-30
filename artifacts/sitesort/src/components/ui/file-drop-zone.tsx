@@ -145,7 +145,7 @@ export function FileDropZone({ onUploaded, onCleared, accept = ACCEPTED_EXTS, cl
             </div>
             <div className="text-center">
               <p className="font-semibold text-sm">Drop file here or <span className="text-primary underline">browse</span></p>
-              <p className="text-xs text-muted-foreground mt-1">PDF, images, Word, Excel, DWG, DXF, DWF — up to 100MB</p>
+              <p className="text-xs text-muted-foreground mt-1">PDF, images, Word, Excel, DWG, DXF, DWF · up to 100MB</p>
             </div>
           </>
         )}

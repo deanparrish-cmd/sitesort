@@ -54,7 +54,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     if (typeof payload.iat === "number" && !payload.sid) {
       const invalidBefore = await getSessionsInvalidBefore(payload.id);
       if (invalidBefore && payload.iat * 1000 < invalidBefore.getTime()) {
-        res.status(401).json({ error: "unauthorized", message: "Session expired — please sign in again." });
+        res.status(401).json({ error: "unauthorized", message: "Session expired. Please sign in again." });
         return;
       }
     }
@@ -66,7 +66,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     // governed by portal_sessions (revoked server-side), so skip them here.
     if (payload.scope !== "portal") {
       if (!(await hasMembership(payload.id, payload.companyId))) {
-        res.status(401).json({ error: "unauthorized", message: "You no longer have access to this company — please sign in again." });
+        res.status(401).json({ error: "unauthorized", message: "You no longer have access to this company. Please sign in again." });
         return;
       }
     }

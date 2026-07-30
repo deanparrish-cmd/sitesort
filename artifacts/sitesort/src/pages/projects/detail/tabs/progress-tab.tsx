@@ -176,7 +176,7 @@ export function ProgressTab() {
                                 key={m.id}
                                 className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-20"
                                 style={{ left: `${pos}%` }}
-                                title={`${m.title} — ${new Date(m.dueDate).toLocaleDateString("en-GB")}`}
+                                title={`${m.title} · ${new Date(m.dueDate).toLocaleDateString("en-GB")}`}
                               >
                                 <div className={cn(
                                   "w-4 h-4 rotate-45 border-2 transition-colors",

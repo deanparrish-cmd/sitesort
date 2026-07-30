@@ -510,7 +510,7 @@ router.post("/portal/login", async (req, res) => {
       if (user.portalOnly) {
         res.status(403).json({ error: "no_projects", message: "You haven't been added to any project yet. Ask your project manager for an invite." });
       } else {
-        res.status(403).json({ error: "use_dashboard", message: "This is a full SiteSort account — please use the main login." });
+        res.status(403).json({ error: "use_dashboard", message: "This is a full SiteSort account. Please use the main login." });
       }
       return;
     }
@@ -1185,7 +1185,7 @@ router.patch("/portal/site-issues/:issueId/edit", authenticate, requirePortalSes
     if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Issue not found" }); return; }
     const issue = rows[0];
     if (issue.uploadedBy !== req.user!.id) { res.status(403).json({ error: "forbidden", message: "Only the reporter can edit this issue." }); return; }
-    if (issue.submittedAt) { res.status(403).json({ error: "forbidden", message: "This issue has already been submitted — add a note instead." }); return; }
+    if (issue.submittedAt) { res.status(403).json({ error: "forbidden", message: "This issue has already been submitted. Add a note instead." }); return; }
 
     const { type, description, zone } = req.body as { type?: string; description?: string; zone?: string };
     const updates: Partial<typeof photosTable.$inferInsert> = {};
@@ -1230,7 +1230,7 @@ router.post("/portal/site-issues/:issueId/submit", authenticate, requirePortalSe
       if (!m.userId) continue;
       await db.insert(notificationsTable).values({
         id: generateId(), userId: m.userId, type: "portal_issue_logged",
-        title: `New — awaiting triage: ${issue.referenceNumber}`,
+        title: `New, awaiting triage: ${issue.referenceNumber}`,
         message: `${reporter?.name ?? "A member"} logged a ${issue.category.replace("_", " ")} at ${proj?.name ?? "your project"}.`,
         relatedEntityId: issue.id, relatedEntityType: "photo", read: false,
       });
@@ -2003,11 +2003,11 @@ router.patch("/portal/daily-report/:date", authenticate, requirePortalSession, r
   const date = req.params.date;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { res.status(400).json({ error: "validation_error", message: "date must be YYYY-MM-DD" }); return; }
   if (date > londonDateStr(new Date())) { res.status(400).json({ error: "validation_error", message: "Cannot edit a future date" }); return; }
-  if (isReportLocked(date)) { res.status(403).json({ error: "locked", message: "This day's report is locked — ask your project manager to amend it from the dashboard." }); return; }
+  if (isReportLocked(date)) { res.status(403).json({ error: "locked", message: "This day's report is locked. Ask your project manager to amend it from the dashboard." }); return; }
   try {
     const existing = await db.select({ id: dailyReportsTable.id, submittedAt: dailyReportsTable.submittedAt, managerReport: dailyReportsTable.managerReport }).from(dailyReportsTable)
       .where(and(eq(dailyReportsTable.projectId, pid), eq(dailyReportsTable.reportDate, date))).limit(1);
-    if (existing[0]?.submittedAt) { res.status(403).json({ error: "submitted", message: "This report has already been submitted — add a note instead." }); return; }
+    if (existing[0]?.submittedAt) { res.status(403).json({ error: "submitted", message: "This report has already been submitted. Add a note instead." }); return; }
     // Submission privacy: a member can't edit a day the PM (or someone else)
     // already started unless they contributed to it — prevents both blind
     // overwrites and leaking the PM's private diary content via a save.

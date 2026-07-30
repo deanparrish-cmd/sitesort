@@ -43,7 +43,7 @@ export function PhotoOverlay() {
           work_completed: "bg-teal-50 border-teal-200 text-teal-700",
         };
         const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
-          new: { label: "New — awaiting triage", cls: "bg-violet-50 border-violet-200 text-violet-700" },
+          new: { label: "New · awaiting triage", cls: "bg-violet-50 border-violet-200 text-violet-700" },
           open: { label: "Open", cls: "bg-amber-50 border-amber-200 text-amber-700" },
           in_progress: { label: "In Progress", cls: "bg-blue-50 border-blue-200 text-blue-700" },
           pending_confirmation: { label: "Pending confirmation", cls: "bg-cyan-50 border-cyan-200 text-cyan-700" },
@@ -198,7 +198,7 @@ export function PhotoOverlay() {
                             onChange={e => patchPhoto(viewingPhoto.id, { assignedToUserId: e.target.value || null }, "Couldn't update assignee")}
                             className="flex h-10 w-full rounded-lg border-2 border-input bg-background px-3 py-1.5 text-sm focus-visible:outline-none focus-visible:border-primary"
                           >
-                            <option value="">— Unassigned —</option>
+                            <option value="">Unassigned</option>
                             {((members as any[]) ?? []).filter(m => m.userId).map((m: any) => (
                               <option key={m.userId} value={m.userId}>{m.name}</option>
                             ))}
@@ -252,7 +252,7 @@ export function PhotoOverlay() {
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Update Status</p>
                       {(viewingPhoto.status === "new" || viewingPhoto.status === "pending_confirmation") && (
                         <p className="text-xs text-muted-foreground italic">
-                          {viewingPhoto.status === "new" ? "Assign to trigger triage, or use the header actions above." : "Awaiting PM confirmation — use \"Confirm resolved\" above."}
+                          {viewingPhoto.status === "new" ? "Assign to trigger triage, or use the header actions above." : "Awaiting PM confirmation. Use \"Confirm resolved\" above."}
                         </p>
                       )}
                       {(["open", "in_progress", "resolved"] as const).map(s => (

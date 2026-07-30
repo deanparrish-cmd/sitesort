@@ -28,11 +28,11 @@ import builtForBeam from "@assets/built_for_beam_nobg.webp";
 const faqs = [
   {
     q: "Do I need to install anything on site?",
-    a: "No. SiteSort runs in any browser on phone, tablet or desktop. Site teams and subcontractors scan a QR code to open the latest documents — no app download required.",
+    a: "No. SiteSort runs in any browser on phone, tablet or desktop. Site teams and subcontractors scan a QR code to open the latest documents, no app download required.",
   },
   {
     q: "How do digital sign-offs work?",
-    a: "You choose which documents need signing off. Most take a single tap — \"I confirm I have read and understood\" — recorded with the person's name and the time. Safety-critical documents like RAMS, permits and safety packs always require the signer's personal 4-digit PIN — and you can switch PIN protection on for any other document too. Every sign-off is kept in a tamper-proof audit trail.",
+    a: "You choose which documents need signing off. Most take a single tap, \"I confirm I have read and understood\", recorded with the person's name and the time. Safety-critical documents like RAMS, permits and safety packs always require the signer's personal 4-digit PIN, and you can switch PIN protection on for any other document too. Every sign-off is kept in a tamper-proof audit trail.",
   },
   {
     q: "How does the free trial work?",
@@ -48,7 +48,7 @@ const faqs = [
   },
   {
     q: "What do my site team and subcontractors see?",
-    a: "They get their own team portal — a simple mobile view with just their documents to sign off, site issues, plant and materials, and the site diary. They only ever see what you've shared with them, never your whole project.",
+    a: "They get their own team portal: a simple mobile view with just their documents to sign off, site issues, plant and materials, and the site diary. They only ever see what you've shared with them, never your whole project.",
   },
   {
     q: "Is my data secure?",
@@ -116,7 +116,7 @@ export default function LandingPage() {
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-800 to-orange-400">site information.</span>
             </h1>
             <p className="text-lg md:text-xl text-muted-foreground mb-10 leading-relaxed max-w-2xl mx-auto">
-              Drawings, RAMS, sign-offs, daily reports and compliance — all in one place,
+              Drawings, RAMS, sign-offs, daily reports and compliance, all in one place,
               for the office and the site team. Distribute the right documents, track
               progress without the paperwork headache, and never work from the wrong
               drawing again.
@@ -202,7 +202,7 @@ export default function LandingPage() {
                 points: [
                   "Never build from the wrong drawing again",
                   "Revision history with automatic superseded warnings",
-                  "Tracked distribution — see who's viewed and who's pending",
+                  "Tracked distribution: see who's viewed and who's pending",
                 ],
               },
               {
@@ -236,7 +236,7 @@ export default function LandingPage() {
                 icon: NotebookPen,
                 title: "Site diary & daily reports",
                 points: [
-                  "Daily reports from site — draft, then submit to the PM",
+                  "Daily reports from site: draft, then submit to the PM",
                   "Dictate notes on the go, transcribed automatically",
                   "Photos, site updates and progress in one record",
                 ],
@@ -246,7 +246,7 @@ export default function LandingPage() {
                 title: "Issues, plant & materials",
                 points: [
                   "Log site issues with photos, track new to resolved",
-                  "Plant & materials register — on site, on order, off-hired",
+                  "Plant & materials register: on site, on order, off-hired",
                   "Invoices, project finances and close-out when the job wraps up",
                 ],
               },
@@ -281,14 +281,14 @@ export default function LandingPage() {
               </h2>
               <p className="text-muted-foreground text-lg leading-relaxed mb-8">
                 Workers and subcontractors log in to a stripped-back mobile portal built for
-                muddy hands and patchy signal — just what they need, nothing they don't. You
+                muddy hands and patchy signal, just what they need, nothing they don't. You
                 stay in control of exactly what each person can see and do.
               </p>
               <ul className="space-y-4">
                 {[
-                  { icon: ClipboardCheck, text: "Documents to read and sign off — with PIN protection on safety-critical ones" },
+                  { icon: ClipboardCheck, text: "Documents to read and sign off, with PIN protection on safety-critical ones" },
                   { icon: AlertTriangle, text: "Raise site issues with photos, straight from the phone" },
-                  { icon: Mic, text: "Dictate daily report notes — transcribed automatically" },
+                  { icon: Mic, text: "Dictate daily report notes, transcribed automatically" },
                   { icon: Wrench, text: "Check plant & materials and flag what's running low" },
                   { icon: Users, text: "Site board, messages and everything shared with them" },
                 ].map(item => (
@@ -315,7 +315,7 @@ export default function LandingPage() {
                 </div>
                 <ul className="space-y-3 text-sm">
                   {[
-                    "Works on any phone — nothing to install",
+                    "Works on any phone, nothing to install",
                     "Each person only sees what you've shared",
                     "Sign-offs recorded with name, time and version",
                     "Daily reports flow straight back to the office",
@@ -355,13 +355,13 @@ export default function LandingPage() {
                 icon: QrCode,
                 step: "02",
                 title: "Invite your site team",
-                body: "Add your team and subcontractors, print your QR site boards, and distribute documents for sign-off — all from your phone, tablet or desktop.",
+                body: "Add your team and subcontractors, print your QR site boards, and distribute documents for sign-off, all from your phone, tablet or desktop.",
               },
               {
                 icon: BellRing,
                 step: "03",
                 title: "Stay ahead of everything",
-                body: "Daily reports and site issues flow in from site. Automated alerts fire before insurance or permits lapse — nothing slips through.",
+                body: "Daily reports and site issues flow in from site. Automated alerts fire before insurance or permits lapse, so nothing slips through.",
               },
             ].map(item => (
               <div key={item.step} className="relative p-8 rounded-2xl border bg-card shadow-sm">
@@ -383,7 +383,7 @@ export default function LandingPage() {
           <div className="text-center mb-4">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium mb-6">
               <Sparkles className="w-3.5 h-3.5" />
-              14-day free trial on every plan — no charge until it ends
+              14-day free trial on every plan, no charge until it ends
             </div>
             <h2 className="text-3xl md:text-4xl font-bold text-primary mb-4">Simple, transparent pricing</h2>
             <p className="text-muted-foreground max-w-xl mx-auto text-lg">Pick the plan that fits your workload. Upgrade or cancel any time.</p>

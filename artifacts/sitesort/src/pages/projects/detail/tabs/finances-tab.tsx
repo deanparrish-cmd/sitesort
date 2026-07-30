@@ -19,6 +19,7 @@ export function FinancesTab() {
     invoiceFullUrl,
     markInvoiceUnpaid,
     caps,
+    isProjectApprover,
     setSharingDoc,
     setSharingInvoice,
   } = useDetail();
@@ -42,7 +43,7 @@ export function FinancesTab() {
             const statusLabel = (days: number, paid = false) => {
               if (paid) return "Paid";
               if (days < 0) return "Overdue";
-              if (days <= 7) return `${days}d — urgent`;
+              if (days <= 7) return `${days}d · urgent`;
               if (days <= 30) return `${days}d`;
               return `${days}d`;
             };
@@ -226,7 +227,7 @@ export function FinancesTab() {
                                   <Eye className="w-3.5 h-3.5" />Open
                                 </button>
                               )}
-                              {inv.attachmentUrl && (
+                              {inv.attachmentUrl && isProjectApprover && (
                                 <button
                                   type="button"
                                   onClick={() => setSharingInvoice(inv)}

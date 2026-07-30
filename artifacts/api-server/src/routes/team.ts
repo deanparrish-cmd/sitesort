@@ -464,7 +464,7 @@ router.patch("/projects/:projectId/members/:memberId/contact", authenticate, asy
     // regardless of whether the member also has a person record (people.email
     // must stay in sync with users.email for invite/login matching).
     if (cleanEmail !== undefined && m.userId) {
-      res.status(400).json({ error: "validation_error", message: "This member signs in with their email — it can't be changed here." });
+      res.status(400).json({ error: "validation_error", message: "This member signs in with their email, so it can't be changed here." });
       return;
     }
     if (m.personId) {

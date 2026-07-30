@@ -383,7 +383,7 @@ export default function CompliancePage() {
           <p className="text-muted-foreground flex-1">
             {highlightUpload
               ? <span className="font-semibold text-primary">Tap here to select your compliance document</span>
-              : <><span className="font-semibold text-foreground">Drag &amp; drop</span> insurance certs or documents from your desktop, email or WhatsApp — or{" "}<span className="text-primary underline font-medium">browse files</span>. Paste (⌘V) also works.</>
+              : <><span className="font-semibold text-foreground">Drag &amp; drop</span> insurance certs or documents from your desktop, email or WhatsApp, or{" "}<span className="text-primary underline font-medium">browse files</span>. Paste (⌘V) also works.</>
             }
           </p>
           <input
@@ -914,7 +914,7 @@ export default function CompliancePage() {
                   >
                     <option value="">Select contact…</option>
                     {subs.map(s => (
-                      <option key={s.id} value={s.id}>{s.companyName} — {s.contactName}</option>
+                      <option key={s.id} value={s.id}>{s.companyName} · {s.contactName}</option>
                     ))}
                   </select>
                   {assignSubId && contactProjects.length > 0 && (
@@ -1015,7 +1015,7 @@ export default function CompliancePage() {
             ) : signOff.setPinMode ? (
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  Set a 4-digit sign-off PIN to continue — you'll use it to confirm future sign-offs.
+                  Set a 4-digit sign-off PIN to continue. You'll use it to confirm future sign-offs.
                 </p>
                 <div className="space-y-1.5">
                   <label className="text-sm font-semibold block">Account password</label>

@@ -4,6 +4,7 @@ import { invoicesTable, projectsTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
 import { randomUUID } from "crypto";
+import { isProjectApprover, COMPANY_MANAGER_ROLES } from "../lib/project-authority";
 
 const router: IRouter = Router();
 
@@ -70,7 +71,14 @@ router.patch("/invoices/:id", authenticate, async (req, res) => {
     const updates: Record<string, unknown> = {};
     if (status !== undefined) updates.status = status;
     if (attachmentUrl !== undefined) updates.attachmentUrl = attachmentUrl;
+
     if (projectId !== undefined) {
+      const [existing] = await db
+        .select({ projectId: invoicesTable.projectId })
+        .from(invoicesTable)
+        .where(and(eq(invoicesTable.id, req.params.id), eq(invoicesTable.companyId, req.user!.companyId)));
+      if (!existing) { res.status(404).json({ error: "not_found" }); return; }
+
       if (projectId) {
         const [project] = await db
           .select({ id: projectsTable.id })
@@ -78,8 +86,21 @@ router.patch("/invoices/:id", authenticate, async (req, res) => {
           .where(and(eq(projectsTable.id, projectId), eq(projectsTable.companyId, req.user!.companyId)));
         if (!project) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
       }
+
+      // Allocating/re-allocating/un-allocating an invoice touches financial
+      // data — restrict to company admin/PM, or a per-project approver on
+      // whichever project is actually involved (the invoice's current
+      // project when un-allocating/moving away from it, the target project
+      // when allocating/moving into it).
+      if (!COMPANY_MANAGER_ROLES.includes(req.user!.role)) {
+        const relevantProjectId = projectId || existing.projectId;
+        const allowed = relevantProjectId ? await isProjectApprover(req.user!, relevantProjectId) : false;
+        if (!allowed) { res.status(403).json({ error: "forbidden", message: "Not authorized to allocate this invoice" }); return; }
+      }
+
       updates.projectId = projectId || null;
     }
+
     if (Object.keys(updates).length === 0) { res.status(400).json({ error: "validation_error", message: "Nothing to update" }); return; }
     const [updated] = await db
       .update(invoicesTable)

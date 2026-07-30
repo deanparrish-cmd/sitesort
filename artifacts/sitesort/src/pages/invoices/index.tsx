@@ -10,7 +10,7 @@ import { ShareModal } from "@/components/share-modal";
 import {
   Plus, Search, ArrowDownCircle, ArrowUpCircle, CheckCircle2, Clock,
   AlertTriangle, Receipt, Paperclip, Upload, Loader2, X,
-  Share2, Eye, ExternalLink, FileText, Image, Download, Trash2,
+  Share2, Eye, ExternalLink, FileText, Image, Download, Trash2, Building2,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { useListProjects } from "@workspace/api-client-react";
@@ -177,12 +177,14 @@ export default function InvoicesPage() {
 
   async function markUnpaid(id: string) {
     if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
-    const res = await apiFetch(`/api/invoices/${id}`, { method: "PATCH", body: JSON.stringify({ status: "pending", projectId: null }) });
+    // Paid/unpaid status and project allocation are independent — marking an
+    // invoice unpaid no longer un-allocates it. Use Allocate/Un-allocate for that.
+    const res = await apiFetch(`/api/invoices/${id}`, { method: "PATCH", body: JSON.stringify({ status: "pending" }) });
     if (!res.ok) {
       toast({ title: "Couldn't update invoice", description: "Please try again.", variant: "destructive" });
       return;
     }
-    setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, status: "pending", projectId: null } : inv));
+    setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, status: "pending" } : inv));
   }
 
   async function moveToProject(invoiceId: string, projectId: string) {
@@ -193,10 +195,24 @@ export default function InvoicesPage() {
     if (res.ok) {
       setInvoices(prev => prev.map(inv => inv.id === invoiceId ? { ...inv, projectId } : inv));
       const projectName = projects?.find(p => p.id === projectId)?.name ?? "project";
-      toast({ title: "Invoice moved", description: `Invoice moved to ${projectName}.` });
+      toast({ title: "Invoice allocated", description: `Invoice allocated to ${projectName}.` });
       setMoveToInvoice(null);
     } else {
-      toast({ title: "Couldn't move invoice", description: "Please try again.", variant: "destructive" });
+      toast({ title: "Couldn't allocate invoice", description: "Please try again.", variant: "destructive" });
+    }
+  }
+
+  async function unallocateInvoice(invoiceId: string) {
+    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
+    setMovingProject(true);
+    const res = await apiFetch(`/api/invoices/${invoiceId}`, { method: "PATCH", body: JSON.stringify({ projectId: null }) });
+    setMovingProject(false);
+    if (res.ok) {
+      setInvoices(prev => prev.map(inv => inv.id === invoiceId ? { ...inv, projectId: null } : inv));
+      toast({ title: "Invoice un-allocated", description: "No longer linked to a project." });
+      setMoveToInvoice(null);
+    } else {
+      toast({ title: "Couldn't un-allocate invoice", description: "Please try again.", variant: "destructive" });
     }
   }
 
@@ -506,13 +522,22 @@ export default function InvoicesPage() {
                       >
                         <Eye className="w-3.5 h-3.5" />Open
                       </button>
-                      {inv.attachmentUrl && (
+                      {inv.attachmentUrl && caps.canManageInvoices && (
                         <button
                           type="button"
                           onClick={() => setShareItem({ id: inv.id, name: `Invoice – ${inv.counterpartyName}`, fileUrl: inv.attachmentUrl!, projectId: inv.projectId })}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-sm font-medium text-foreground hover:bg-muted transition-colors"
                         >
                           <Share2 className="w-3.5 h-3.5" />Share
+                        </button>
+                      )}
+                      {caps.canManageInvoices && (
+                        <button
+                          type="button"
+                          onClick={() => setMoveToInvoice(inv)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-sm font-medium text-foreground hover:bg-muted transition-colors"
+                        >
+                          <Building2 className="w-3.5 h-3.5" />{inv.projectId ? "Re-allocate" : "Allocate"}
                         </button>
                       )}
                       {inv.status !== "paid" && caps.canManageInvoices && (
@@ -617,13 +642,15 @@ export default function InvoicesPage() {
                               <Paperclip className="w-3.5 h-3.5" />
                               Open
                             </button>
-                            <button
-                              title="Share"
-                              className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs"
-                              onClick={e => { e.stopPropagation(); setShareItem({ id: inv.id, name: `Invoice – ${inv.counterpartyName}`, fileUrl: inv.attachmentUrl!, projectId: inv.projectId }); }}
-                            >
-                              <Share2 className="w-3.5 h-3.5" /> Share
-                            </button>
+                            {caps.canManageInvoices && (
+                              <button
+                                title="Share"
+                                className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs"
+                                onClick={e => { e.stopPropagation(); setShareItem({ id: inv.id, name: `Invoice – ${inv.counterpartyName}`, fileUrl: inv.attachmentUrl!, projectId: inv.projectId }); }}
+                              >
+                                <Share2 className="w-3.5 h-3.5" /> Share
+                              </button>
+                            )}
                             {caps.canManageInvoices && (
                               <button
                                 title="Remove attachment"
@@ -662,13 +689,22 @@ export default function InvoicesPage() {
                           >
                             <Eye className="w-3.5 h-3.5" />Open
                           </button>
-                          {inv.attachmentUrl && (
+                          {inv.attachmentUrl && caps.canManageInvoices && (
                             <button
                               type="button"
                               onClick={e => { e.stopPropagation(); setShareItem({ id: inv.id, name: `Invoice – ${inv.counterpartyName}`, fileUrl: inv.attachmentUrl!, projectId: inv.projectId }); }}
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-sm font-medium text-foreground hover:bg-muted transition-colors"
                             >
                               <Share2 className="w-3.5 h-3.5" />Share
+                            </button>
+                          )}
+                          {caps.canManageInvoices && (
+                            <button
+                              type="button"
+                              onClick={e => { e.stopPropagation(); setMoveToInvoice(inv); }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-sm font-medium text-foreground hover:bg-muted transition-colors"
+                            >
+                              <Building2 className="w-3.5 h-3.5" />{inv.projectId ? "Re-allocate" : "Allocate"}
                             </button>
                           )}
                           {inv.status !== "paid" && caps.canManageInvoices && (
@@ -729,12 +765,20 @@ export default function InvoicesPage() {
                     <ExternalLink className="w-3.5 h-3.5" /><span className="hidden sm:inline">Open in new tab</span>
                   </button>
                 )}
-                {viewingInvoice.attachmentUrl && (
+                {viewingInvoice.attachmentUrl && caps.canManageInvoices && (
                   <button
                     onClick={() => setShareItem({ id: viewingInvoice.id, name: `Invoice – ${viewingInvoice.counterpartyName}`, fileUrl: viewingInvoice.attachmentUrl!, projectId: viewingInvoice.projectId })}
                     className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border bg-background hover:bg-muted transition-colors"
                   >
                     <Share2 className="w-3.5 h-3.5" /><span className="hidden sm:inline">Share</span>
+                  </button>
+                )}
+                {caps.canManageInvoices && (
+                  <button
+                    onClick={() => setMoveToInvoice(viewingInvoice)}
+                    className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border bg-background hover:bg-muted transition-colors"
+                  >
+                    <Building2 className="w-3.5 h-3.5" /><span className="hidden sm:inline">{viewingInvoice.projectId ? "Re-allocate" : "Allocate"}</span>
                   </button>
                 )}
                 {viewingInvoice.status !== "paid" && (
@@ -937,7 +981,7 @@ export default function InvoicesPage() {
 
             <div>
               <label className="text-sm font-medium mb-1.5 block">Description</label>
-              <Input placeholder="e.g. Materials — Site A" {...register("description", { required: true })} />
+              <Input placeholder="e.g. Materials · Site A" {...register("description", { required: true })} />
               {errors.description && <p className="text-xs text-destructive mt-1">Required</p>}
             </div>
 
@@ -973,7 +1017,7 @@ export default function InvoicesPage() {
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Link to Project <span className="text-muted-foreground font-normal">(optional)</span></label>
                 <select {...register("projectId")} className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
-                  <option value="">— No project —</option>
+                  <option value="">No project</option>
                   {projects?.filter(p => p.status === "active").map(p => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
@@ -992,9 +1036,11 @@ export default function InvoicesPage() {
 
       <Dialog open={!!moveToInvoice} onOpenChange={open => { if (!open) setMoveToInvoice(null); }}>
         <DialogHeader>
-          <DialogTitle>Move to</DialogTitle>
+          <DialogTitle>{moveToInvoice?.projectId ? "Re-allocate invoice" : "Allocate to a project"}</DialogTitle>
           <p className="text-sm text-muted-foreground">
-            Invoice marked as paid. Choose a project to move it to.
+            {moveToInvoice?.projectId
+              ? <>Currently allocated to <span className="font-medium text-foreground">{projects?.find(p => p.id === moveToInvoice.projectId)?.name ?? "a project"}</span>. Choose a different project, or un-allocate.</>
+              : "Choose a project to allocate this invoice to. It will appear under that project's Finances tab."}
           </p>
         </DialogHeader>
         <div className="max-h-80 overflow-y-auto -mx-1 px-1 space-y-1">
@@ -1017,9 +1063,20 @@ export default function InvoicesPage() {
             </button>
           ))}
         </div>
-        <DialogFooter>
+        <DialogFooter className="flex-wrap gap-2">
+          {moveToInvoice?.projectId && (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={movingProject}
+              onClick={() => moveToInvoice && unallocateInvoice(moveToInvoice.id)}
+              className="text-destructive hover:text-destructive"
+            >
+              {movingProject ? "Un-allocating…" : "Un-allocate"}
+            </Button>
+          )}
           <Button type="button" variant="outline" onClick={() => setMoveToInvoice(null)}>
-            {movingProject ? "Moving…" : "Skip"}
+            {movingProject ? "Moving…" : "Cancel"}
           </Button>
         </DialogFooter>
       </Dialog>
@@ -1032,6 +1089,7 @@ export default function InvoicesPage() {
         entityName={shareItem?.name ?? ""}
         fileUrl={shareItem?.fileUrl}
         projectId={shareItem?.projectId}
+        secureViewUrl={shareItem ? `${window.location.origin}/invoices?invoice=${shareItem.id}` : null}
       />
     </SidebarLayout>
   );

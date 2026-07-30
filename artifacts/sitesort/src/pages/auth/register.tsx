@@ -221,13 +221,13 @@ export default function Register() {
             Click it to confirm your email, then log in to start your free trial.
           </p>
           <p className="text-muted-foreground text-xs mt-3">
-            Don't see it within a minute or two? Check your spam or junk folder — and
+            Don't see it within a minute or two? Check your spam or junk folder, and
             mark it "not spam" so future emails reach your inbox.
           </p>
 
           {resent && (
             <p className="mt-5 text-sm text-emerald-600 font-medium">
-              Verification email sent — check your inbox again.
+              Verification email sent. Check your inbox again.
             </p>
           )}
 
@@ -294,7 +294,7 @@ export default function Register() {
               </h1>
               <p className="text-muted-foreground mt-2 text-center">
                 {selectedPlan
-                  ? `SiteSort ${plan!.name} — ${plan!.price}/month`
+                  ? `SiteSort ${plan!.name} · ${plan!.price}/month`
                   : "Choose your plan, then add your details"}
               </p>
             </>
@@ -499,7 +499,7 @@ export default function Register() {
                 Create account
               </Button>
               <p className="text-center text-xs text-muted-foreground -mt-1">
-                We'll email a link to verify your address. No charge for 14 days — then {plan!.price}/month. Cancel any time.
+                We'll email a link to verify your address. No charge for 14 days, then {plan!.price}/month. Cancel any time.
               </p>
             </form>
           </>

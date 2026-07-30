@@ -808,7 +808,7 @@ export default function MessagesPage() {
                     {viewAllProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
                   <p className="text-[10px] text-muted-foreground px-0.5">
-                    Read-only oversight — reading a conversation you're not part of is logged. You can only reply where you're a participant.
+                    Read-only oversight. Reading a conversation you're not part of is logged. You can only reply where you're a participant.
                   </p>
                 </div>
               )}
@@ -1721,7 +1721,7 @@ export default function MessagesPage() {
                 </div>
               ) : (
                 <div className="p-3 border-t bg-muted/20 text-center">
-                  <p className="text-xs text-muted-foreground">Read-only — manager view</p>
+                  <p className="text-xs text-muted-foreground">Read-only · manager view</p>
                 </div>
               )}
             </div>

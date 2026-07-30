@@ -46,7 +46,7 @@ function InviteEmailStatus({ projectId, portal, onDone }: { projectId: string; p
   return (
     <span className="inline-flex items-center gap-1.5 text-[11px] leading-tight flex-wrap">
       {portal.emailStatus === "failed" ? (
-        <span className="inline-flex items-center gap-0.5 text-destructive font-medium"><AlertTriangle className="w-3 h-3" /> Email failed — use copy link or resend</span>
+        <span className="inline-flex items-center gap-0.5 text-destructive font-medium"><AlertTriangle className="w-3 h-3" /> Email failed, use copy link or resend</span>
       ) : portal.emailStatus === "sent" ? (
         <span className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="w-3 h-3" /> Email sent {fmtRelative(portal.emailLastSentAt)}</span>
       ) : (
@@ -113,8 +113,8 @@ export function PermissionTogglePill({ label, checked, disabled, note, onToggle 
           : "border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted"
       )}
       title={(checked
-        ? `${label}: granted — click to remove access to just this section (their portal login stays active)`
-        : `${label}: not granted — click to give access to just this section`) + (note ?? "")}
+        ? `${label}: granted, click to remove access to just this section (their portal login stays active)`
+        : `${label}: not granted, click to give access to just this section`) + (note ?? "")}
     >
       {checked ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Circle className="w-3.5 h-3.5" />} {label}
     </button>
@@ -185,7 +185,7 @@ function usePortalMembership({
         // silent no-op unless we say so explicitly.
         toast({
           title: "Already has a SiteSort account",
-          description: `${useEmail} already has a SiteSort login, so portal access was granted to that account — no invite email is needed. They sign in at the portal with their existing email and password (or "Forgot password" if they can't remember it).`,
+          description: `${useEmail} already has a SiteSort login, so portal access was granted to that account, no invite email is needed. They sign in at the portal with their existing email and password (or "Forgot password" if they can't remember it).`,
         });
       }
       refresh();
@@ -262,7 +262,7 @@ export function PortalStatusPill({
           type="button"
           onClick={() => setConfirmRevoke("member")}
           className={cn(PILL, "border-emerald-200 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800 hover:border-emerald-400")}
-          title={`Last active ${fmtRelative(portal.lastActiveAt)} — click to remove this person's portal login entirely`}
+          title={`Last active ${fmtRelative(portal.lastActiveAt)} · click to remove this person's portal login entirely`}
         >
           <ShieldCheck className="w-3.5 h-3.5" /> Portal member
         </button>
@@ -275,7 +275,7 @@ export function PortalStatusPill({
           <div className="space-y-2 text-sm">
             <p>This ends any active portal session immediately and cancels any pending invite for them.</p>
             <p className="text-muted-foreground">
-              This is different from the Site Issues / Plant &amp; Materials / Daily Report toggles on this card — unticking one of those removes access to that section only. This removes{" "}
+              This is different from the Site Issues / Plant &amp; Materials / Daily Report toggles on this card. Unticking one of those removes access to that section only. This removes{" "}
               <span className="font-semibold text-foreground">their whole portal login</span>.
             </p>
             <p className="text-muted-foreground">You can re-invite {personName} to the portal afterwards.</p>
@@ -352,7 +352,7 @@ export function PortalPermissionToggles({
 }) {
   const { portal, togglePermission, updatePermissions } = usePortalMembership({ projectId, personName, personEmail, source, canManage });
   if (!canManage || (portal.status !== "member" && portal.status !== "invited")) return null;
-  const pendingNote = portal.status === "invited" ? " — applies as soon as they accept" : "";
+  const pendingNote = portal.status === "invited" ? " · applies as soon as they accept" : "";
   return (
     <>
       <PermissionTogglePill

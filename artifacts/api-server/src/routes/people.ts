@@ -354,7 +354,7 @@ router.patch("/people/:personId", authenticate, async (req, res) => {
     if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Person not found" }); return; }
 
     const parsed = UpdatePersonBody.safeParse(req.body);
-    if (!parsed.success) { res.status(400).json({ error: "validation_error", message: "Invalid update — a first name and surname must be at least 2 characters each." }); return; }
+    if (!parsed.success) { res.status(400).json({ error: "validation_error", message: "Invalid update: a first name and surname must be at least 2 characters each." }); return; }
     const { showContactInPortal, roleTitle, firstName, lastName, email, phone } = parsed.data;
     if ((firstName !== undefined) !== (lastName !== undefined)) {
       res.status(400).json({ error: "validation_error", message: "Provide both first name and surname together." });
@@ -378,7 +378,7 @@ router.patch("/people/:personId", authenticate, async (req, res) => {
       // the person copy would desync it from users.email and break invite/login
       // matching, so it's refused here just like on the project Team tab.
       if (rows[0].userId) {
-        res.status(400).json({ error: "validation_error", message: "This contact signs in with their email — it can't be changed here." });
+        res.status(400).json({ error: "validation_error", message: "This contact signs in with their email, so it can't be changed here." });
         return;
       }
       const cleanEmail = (email ?? "").trim().toLowerCase();
@@ -624,7 +624,7 @@ router.post("/projects/:projectId/portal-invites/:inviteId/resend", authenticate
     if (inv.status !== "pending") { res.status(409).json({ error: "not_pending", message: "This invite is no longer pending." }); return; }
     if (inv.emailLastSentAt && Date.now() - inv.emailLastSentAt.getTime() < RESEND_COOLDOWN_MS) {
       const waitS = Math.ceil((RESEND_COOLDOWN_MS - (Date.now() - inv.emailLastSentAt.getTime())) / 1000);
-      res.status(429).json({ error: "rate_limited", message: `Please wait before resending — try again in about ${Math.max(1, Math.ceil(waitS / 60))} min.`, retryAfterSeconds: waitS });
+      res.status(429).json({ error: "rate_limited", message: `Please wait before resending. Try again in about ${Math.max(1, Math.ceil(waitS / 60))} min.`, retryAfterSeconds: waitS });
       return;
     }
     const rawToken = randomBytes(32).toString("hex");

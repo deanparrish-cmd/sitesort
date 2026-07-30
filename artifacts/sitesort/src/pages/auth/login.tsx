@@ -85,7 +85,7 @@ export default function Login() {
         {checkoutParam === "success" && !error && !unverifiedEmail && (
           <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-lg dark:bg-emerald-950/30 dark:border-emerald-800">
             <p className="text-emerald-800 dark:text-emerald-300 text-sm font-semibold mb-1">
-              Registration successful — your 14-day free trial has started!
+              Registration successful! Your 14-day free trial has started!
             </p>
             <p className="text-emerald-700 dark:text-emerald-400 text-sm">
               Log in below to access your SiteSort account. No charge will be made during your trial.
@@ -108,7 +108,7 @@ export default function Login() {
               Check your inbox at <span className="font-semibold">{unverifiedEmail}</span> for a verification link.
             </p>
             {resendState === "sent" ? (
-              <p className="text-green-700 dark:text-green-400 text-sm font-medium">Verification email sent — check your inbox.</p>
+              <p className="text-green-700 dark:text-green-400 text-sm font-medium">Verification email sent. Check your inbox.</p>
             ) : (
               <button
                 onClick={handleResend}
