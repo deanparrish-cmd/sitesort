@@ -671,7 +671,7 @@ export default function SiteBoard() {
         {/* Footer */}
         <div className="text-center text-xs text-gray-400 pb-4 pt-2">
           <p>Powered by <span className="font-semibold text-orange-500">SiteSort</span></p>
-          <p className="mt-0.5">Last updated {generatedAt ? new Date(generatedAt).toLocaleString("en-GB") : "—"}</p>
+          <p className="mt-0.5">Last updated {generatedAt ? new Date(generatedAt).toLocaleString("en-GB") : "N/A"}</p>
         </div>
       </div>
     </div>

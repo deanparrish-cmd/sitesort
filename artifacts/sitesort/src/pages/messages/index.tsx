@@ -111,7 +111,7 @@ const QUICK_REPLIES: { category: string; items: string[] }[] = [
   { category: "Acknowledge", items: ["Got it, thanks ✓", "Received ✓", "Will do", "On it"] },
   { category: "Status", items: ["On my way", "On site now", "Leaving site now", "Job complete ✓", "Running ~10 mins late"] },
   { category: "Requests", items: ["Need more supplies", "Call me when you can", "Can you clarify?", "Need assistance here"] },
-  { category: "Safety", items: ["Area is clear ✓", "Hazard identified – please advise", "All PPE in use", "Permit checked ✓"] },
+  { category: "Safety", items: ["Area is clear ✓", "Hazard identified, please advise", "All PPE in use", "Permit checked ✓"] },
 ];
 
 const ROLE_COLOURS: Record<string, string> = {

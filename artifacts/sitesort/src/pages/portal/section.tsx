@@ -120,14 +120,14 @@ async function fetchFreshDoc(section: string, id: string): Promise<{ ok: boolean
 }
 
 function fmtDate(d?: string | null): string {
-  if (!d) return "—";
+  if (!d) return "N/A";
   const dt = new Date(d.length <= 10 ? `${d}T00:00:00` : d);
-  return isNaN(dt.getTime()) ? "—" : dt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  return isNaN(dt.getTime()) ? "N/A" : dt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 function fmtDateTime(d?: string | null): string {
-  if (!d) return "—";
+  if (!d) return "N/A";
   const dt = new Date(d);
-  return isNaN(dt.getTime()) ? "—" : dt.toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  return isNaN(dt.getTime()) ? "N/A" : dt.toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
 function Loading() {
@@ -644,7 +644,7 @@ function HomeView() {
   const latest = notes[0];
   const past = notes.slice(1);
   const dates = project?.startDate || project?.targetEndDate
-    ? [project?.startDate ? fmtDate(project.startDate) : "TBC", project?.targetEndDate ? fmtDate(project.targetEndDate) : "TBC"].join(" – ")
+    ? [project?.startDate ? fmtDate(project.startDate) : "TBC", project?.targetEndDate ? fmtDate(project.targetEndDate) : "TBC"].join(" to ")
     : null;
   return (
     <div className="space-y-6">

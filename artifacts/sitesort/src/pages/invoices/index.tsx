@@ -543,7 +543,7 @@ export default function InvoicesPage() {
                       {inv.attachmentUrl && caps.canManageInvoices && (
                         <button
                           type="button"
-                          onClick={() => setShareItem({ id: inv.id, name: `Invoice – ${inv.counterpartyName}`, fileUrl: inv.attachmentUrl!, projectId: inv.projectId })}
+                          onClick={() => setShareItem({ id: inv.id, name: `Invoice: ${inv.counterpartyName}`, fileUrl: inv.attachmentUrl!, projectId: inv.projectId })}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-sm font-medium text-foreground hover:bg-muted transition-colors"
                         >
                           <Share2 className="w-3.5 h-3.5" />Share
@@ -664,7 +664,7 @@ export default function InvoicesPage() {
                               <button
                                 title="Share"
                                 className="flex items-center gap-1 px-1.5 py-1 rounded text-muted-foreground hover:text-primary transition-colors text-xs"
-                                onClick={e => { e.stopPropagation(); setShareItem({ id: inv.id, name: `Invoice – ${inv.counterpartyName}`, fileUrl: inv.attachmentUrl!, projectId: inv.projectId }); }}
+                                onClick={e => { e.stopPropagation(); setShareItem({ id: inv.id, name: `Invoice: ${inv.counterpartyName}`, fileUrl: inv.attachmentUrl!, projectId: inv.projectId }); }}
                               >
                                 <Share2 className="w-3.5 h-3.5" /> Share
                               </button>
@@ -710,7 +710,7 @@ export default function InvoicesPage() {
                           {inv.attachmentUrl && caps.canManageInvoices && (
                             <button
                               type="button"
-                              onClick={e => { e.stopPropagation(); setShareItem({ id: inv.id, name: `Invoice – ${inv.counterpartyName}`, fileUrl: inv.attachmentUrl!, projectId: inv.projectId }); }}
+                              onClick={e => { e.stopPropagation(); setShareItem({ id: inv.id, name: `Invoice: ${inv.counterpartyName}`, fileUrl: inv.attachmentUrl!, projectId: inv.projectId }); }}
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-sm font-medium text-foreground hover:bg-muted transition-colors"
                             >
                               <Share2 className="w-3.5 h-3.5" />Share
@@ -785,7 +785,7 @@ export default function InvoicesPage() {
                 )}
                 {viewingInvoice.attachmentUrl && caps.canManageInvoices && (
                   <button
-                    onClick={() => setShareItem({ id: viewingInvoice.id, name: `Invoice – ${viewingInvoice.counterpartyName}`, fileUrl: viewingInvoice.attachmentUrl!, projectId: viewingInvoice.projectId })}
+                    onClick={() => setShareItem({ id: viewingInvoice.id, name: `Invoice: ${viewingInvoice.counterpartyName}`, fileUrl: viewingInvoice.attachmentUrl!, projectId: viewingInvoice.projectId })}
                     className="flex items-center gap-1.5 text-xs font-medium px-2 sm:px-3 py-1.5 rounded-lg border bg-background hover:bg-muted transition-colors"
                   >
                     <Share2 className="w-3.5 h-3.5" /><span className="hidden sm:inline">Share</span>

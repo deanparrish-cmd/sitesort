@@ -44,7 +44,7 @@ export const PM_GUIDE: GuideSection[] = [
       {
         heading: "Start a new project",
         body: [
-          "Go to Projects in the sidebar and click New Project. Add the project name, address and dates — you can edit these any time from the project's Overview tab.",
+          "Go to Projects in the sidebar and click New Project. Add the project name, address and dates. You can edit these any time from the project's Overview tab.",
         ],
       },
     ],
@@ -74,7 +74,7 @@ export const PM_GUIDE: GuideSection[] = [
       {
         heading: "Upload to a project",
         body: [
-          "From a project's Documents tab, upload a file and choose its type. If it replaces an earlier version of the same document, pick it in the \"supersedes\" list — the old one is automatically marked SUPERSEDED and stays visible for reference.",
+          "From a project's Documents tab, upload a file and choose its type. If it replaces an earlier version of the same document, pick it in the \"supersedes\" list, and the old one is automatically marked SUPERSEDED and stays visible for reference.",
         ],
       },
     ],
@@ -86,7 +86,7 @@ export const PM_GUIDE: GuideSection[] = [
       {
         heading: "Share a document, photo or permit",
         body: [
-          "Click Share on any document, photo or permit. Choose Everyone, one or more trades, or specific people. This both notifies the recipients and makes the item visible to them in their portal — one action does both.",
+          "Click Share on any document, photo or permit. Choose Everyone, one or more trades, or specific people. This both notifies the recipients and makes the item visible to them in their portal: one action does both.",
         ],
         callout: {
           tone: "tip",
@@ -137,13 +137,13 @@ export const PM_GUIDE: GuideSection[] = [
       {
         heading: "Generate and print",
         body: [
-          "QR Codes in the sidebar lists a QR code per project — download or print it for site signage.",
+          "QR Codes in the sidebar lists a QR code per project. Download or print it for site signage.",
         ],
       },
       {
         heading: "Pin what's on display",
         body: [
-          "From a project's own QR tab, pin documents, permits or photos so they show on the public board anyone can see by scanning the code — no login needed.",
+          "From a project's own QR tab, pin documents, permits or photos so they show on the public board anyone can see by scanning the code. No login needed.",
         ],
       },
     ],
@@ -173,7 +173,7 @@ export const PM_GUIDE: GuideSection[] = [
       {
         heading: "Sign-offs",
         body: [
-          "Pending Sign-offs (on the dashboard and in Compliance) shows documents waiting for someone's confirmation. Sign-off is PIN-based — the signer enters their 4-digit PIN to confirm they've read and understood the document.",
+          "Pending Sign-offs (on the dashboard and in Compliance) shows documents waiting for someone's confirmation. Sign-off is PIN-based: the signer enters their 4-digit PIN to confirm they've read and understood the document.",
         ],
       },
     ],
@@ -185,11 +185,11 @@ export const PM_GUIDE: GuideSection[] = [
       {
         heading: "Delegate approver authority for one project",
         body: [
-          "If you're away, grant the Project Manager pill to someone else on that project's Team tab. It gives them the same authority as a PM on that project only — triaging issues, sharing to the portal, managing permissions — without changing their company-wide role.",
+          "If you're away, grant the Project Manager pill to someone else on that project's Team tab. It gives them the same authority as a PM on that project only (triaging issues, sharing to the portal, managing permissions) without changing their company-wide role.",
         ],
         callout: {
           tone: "note",
-          text: "Revoke it the same way when you're back — access ends immediately.",
+          text: "Revoke it the same way when you're back. Access ends immediately.",
         },
       },
     ],
@@ -204,7 +204,7 @@ export const WORKER_GUIDE: GuideSection[] = [
       {
         heading: "Set up your access",
         body: [
-          "Open the link in your invite email (or the link your project manager sent you) and set a password. If you already have a SiteSort login, you can join with that instead — just confirm it's you.",
+          "Open the link in your invite email (or the link your project manager sent you) and set a password. If you already have a SiteSort login, you can join with that instead. Just confirm it's you.",
         ],
       },
       {
@@ -222,7 +222,7 @@ export const WORKER_GUIDE: GuideSection[] = [
       {
         heading: "Android",
         body: [
-          "You'll usually see an Install prompt — tap it to add SiteSort as an app icon.",
+          "You'll usually see an Install prompt: tap it to add SiteSort as an app icon.",
         ],
       },
       {
@@ -240,7 +240,7 @@ export const WORKER_GUIDE: GuideSection[] = [
       {
         heading: "Scan the site board",
         body: [
-          "Scan the QR code posted on site (or open it from Site Board in the portal). Complete your check-in — your details are matched against the project's contacts — then take a photo when prompted. It's automatically stamped with your name, the date and the project.",
+          "Scan the QR code posted on site (or open it from Site Board in the portal). Complete your check-in (your details are matched against the project's contacts), then take a photo when prompted. It's automatically stamped with your name, the date and the project.",
         ],
         callout: {
           tone: "tip",
@@ -256,7 +256,7 @@ export const WORKER_GUIDE: GuideSection[] = [
       {
         heading: "Shared with me",
         body: [
-          "Everything your project manager has shared with you — drawings, method statements, safety documents, permits and more — is in Shared with me. Use the category filter to narrow it down.",
+          "Everything your project manager has shared with you (drawings, method statements, safety documents, permits and more) is in Shared with me. Use the category filter to narrow it down.",
         ],
       },
     ],
@@ -286,7 +286,7 @@ export const WORKER_GUIDE: GuideSection[] = [
       {
         heading: "Notifications",
         body: [
-          "New shares, messages and updates show up here — tap one to jump straight to it.",
+          "New shares, messages and updates show up here. Tap one to jump straight to it.",
         ],
       },
     ],
@@ -325,7 +325,7 @@ export const FAQ: FaqItem[] = [
   {
     id: "check-in-how",
     question: "How do I check in on site?",
-    answer: "Scan the QR code on the site board (or open Site Board in the portal), complete your check-in details, then take the photo when prompted — it's stamped automatically. No portal login is needed for this step.",
+    answer: "Scan the QR code on the site board (or open Site Board in the portal), complete your check-in details, then take the photo when prompted. It's stamped automatically. No portal login is needed for this step.",
     audience: "worker",
   },
   {
@@ -349,7 +349,7 @@ export const FAQ: FaqItem[] = [
   {
     id: "shared-logins",
     question: "Can two people share one login?",
-    answer: "No — each person needs their own invite and login. Sign-offs, activity and check-ins are all recorded against the individual, so a shared login would make that record wrong.",
+    answer: "No, each person needs their own invite and login. Sign-offs, activity and check-ins are all recorded against the individual, so a shared login would make that record wrong.",
     audience: "both",
   },
 ];

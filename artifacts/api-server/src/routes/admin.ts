@@ -517,10 +517,10 @@ router.get("/admin/activity", authenticate, requireAdmin, async (req, res) => {
       ...recentDocs.map(r => ({ id: r.id, type: "Document uploaded", userName: userMap.get(r.userId) ?? "Unknown", detail: r.detail, subDetail: r.subDetail, ts: r.ts!.toISOString() })),
       ...recentSignOffs.map(r => ({ id: r.id, type: "Sign-off completed", userName: userMap.get(r.userId) ?? "Unknown", detail: r.detail, subDetail: r.subDetail, ts: (r.ts as Date | null)?.toISOString() ?? "" })),
       ...recentPermits.map(r => ({ id: r.id, type: "Permit created", userName: userMap.get(r.userId) ?? "Unknown", detail: r.detail, subDetail: r.subDetail, ts: r.ts!.toISOString() })),
-      ...recentQr.map(r => ({ id: r.id, type: "QR code generated", userName: "—", detail: r.detail, subDetail: r.subDetail, ts: r.ts!.toISOString() })),
+      ...recentQr.map(r => ({ id: r.id, type: "QR code generated", userName: "Unknown", detail: r.detail, subDetail: r.subDetail, ts: r.ts!.toISOString() })),
       ...recentPhotos.map(r => ({ id: r.id, type: "Photo uploaded", userName: userMap.get(r.userId) ?? "Unknown", detail: r.detail, subDetail: r.subDetail, ts: r.ts!.toISOString() })),
       ...recentUsers.map(r => ({ id: r.id, type: "User registered", userName: r.detail, detail: r.detail, subDetail: r.subDetail, ts: r.ts!.toISOString() })),
-      ...recentInsurance.map(r => ({ id: r.id, type: "Insurance uploaded", userName: "—", detail: r.detail, subDetail: String(r.subDetail), ts: r.ts!.toISOString() })),
+      ...recentInsurance.map(r => ({ id: r.id, type: "Insurance uploaded", userName: "Unknown", detail: r.detail, subDetail: String(r.subDetail), ts: r.ts!.toISOString() })),
     ].filter(r => r.ts).sort((a, b) => b.ts.localeCompare(a.ts)).slice(0, 50);
 
     res.json(combined);

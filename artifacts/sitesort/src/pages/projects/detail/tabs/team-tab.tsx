@@ -440,7 +440,7 @@ export function TeamTab() {
                   </div>
                 )}
                 {member.siteStartTime && member.siteEndTime && (
-                  <span className="text-xs text-muted-foreground">{member.siteStartTime.slice(0,5)}–{member.siteEndTime.slice(0,5)}</span>
+                  <span className="text-xs text-muted-foreground">{member.siteStartTime.slice(0,5)} to {member.siteEndTime.slice(0,5)}</span>
                 )}
               </div>
             ) : (

@@ -161,7 +161,7 @@ function ProfileTab({ user, onSaved, isCancelled }: { user: { id: string; name: 
           )}
         </div>
         <div>
-          <p className="font-semibold text-foreground truncate max-w-[200px]">{name || "—"}</p>
+          <p className="font-semibold text-foreground truncate max-w-[200px]">{name || "N/A"}</p>
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}

@@ -299,6 +299,7 @@ export default function SubcontractorsPage() {
   const [certDraft, setCertDraft] = useState({ name: "", expiryDate: "", documentUrl: null as string | null });
   const [certUploading, setCertUploading] = useState(false);
   const [typeFilter, setTypeFilter] = useState<ContactType | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "insurance_issue" | "payment_hold">("all");
   const [showArchived, setShowArchived] = useState(false);
   const [restoringId, setRestoringId] = useState<string | null>(null);
 
@@ -484,6 +485,8 @@ export default function SubcontractorsPage() {
     const q = search.toLowerCase();
     const filtered = subs.filter(s => {
       if (typeFilter !== "all" && (s.contactType ?? "subcontractor") !== typeFilter) return false;
+      if (statusFilter === "insurance_issue" && !(s.insuranceStatus === "expired" || s.insuranceStatus === "expiring_soon")) return false;
+      if (statusFilter === "payment_hold" && !s.paymentHold) return false;
       return (
         s.companyName.toLowerCase().includes(q) ||
         s.contactName.toLowerCase().includes(q) ||
@@ -508,7 +511,7 @@ export default function SubcontractorsPage() {
     const unknownTradeKeys = Object.keys(map).filter(t => !TRADE_CATEGORIES.includes(t) && !Object.values(CONTACT_TYPE_GROUP_LABELS).includes(t)).sort();
     const typeGroupKeys = Object.values(CONTACT_TYPE_GROUP_LABELS).filter(g => map[g]);
     return { map, orderedKeys: [...tradeKeys, ...unknownTradeKeys, ...typeGroupKeys] };
-  }, [subs, search, typeFilter]);
+  }, [subs, search, typeFilter, statusFilter]);
 
   const toggleTrade = (trade: string) =>
     setOpenTrades(prev => ({ ...prev, [trade]: !(prev[trade] ?? true) }));
@@ -703,21 +706,46 @@ export default function SubcontractorsPage() {
         )}
       />
 
-      {/* Summary */}
+      {/* Summary — Insurance Issues / Payment Hold each name a specific set of
+          contacts, so clicking one filters the directory below to it (click
+          again to clear), same rule as the Invoices Overdue card. */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <Card className="p-4">
           <div className="flex items-center gap-2 mb-1"><Users className="w-4 h-4 text-primary" /><p className="text-xs font-medium text-muted-foreground">Total</p></div>
           <p className="text-2xl font-extrabold">{totalSubs}</p>
         </Card>
-        <Card className={cn("p-4", insuranceIssues > 0 && "border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20")}>
-          <div className="flex items-center gap-2 mb-1"><ShieldAlert className="w-4 h-4 text-yellow-600" /><p className="text-xs font-medium text-muted-foreground">Insurance Issues</p></div>
-          <p className={cn("text-2xl font-extrabold", insuranceIssues > 0 ? "text-yellow-700" : "")}>{insuranceIssues}</p>
-        </Card>
-        <Card className={cn("p-4", holdCount > 0 && "border-red-300 bg-red-50 dark:bg-red-950/20")}>
-          <div className="flex items-center gap-2 mb-1"><AlertTriangle className="w-4 h-4 text-destructive" /><p className="text-xs font-medium text-muted-foreground">Payment Hold</p></div>
-          <p className={cn("text-2xl font-extrabold", holdCount > 0 ? "text-destructive" : "")}>{holdCount}</p>
-        </Card>
+        <button
+          type="button"
+          onClick={() => { setStatusFilter(v => v === "insurance_issue" ? "all" : "insurance_issue"); document.getElementById("contacts-list")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+          disabled={insuranceIssues === 0}
+          className="text-left disabled:cursor-default"
+        >
+          <Card className={cn("p-4 transition-shadow", insuranceIssues > 0 && "border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20 hover:ring-2 hover:ring-yellow-400/50 cursor-pointer", statusFilter === "insurance_issue" && "ring-2 ring-yellow-500")}>
+            <div className="flex items-center gap-2 mb-1"><ShieldAlert className="w-4 h-4 text-yellow-600" /><p className="text-xs font-medium text-muted-foreground">Insurance Issues</p></div>
+            <p className={cn("text-2xl font-extrabold", insuranceIssues > 0 ? "text-yellow-700" : "")}>{insuranceIssues}</p>
+          </Card>
+        </button>
+        <button
+          type="button"
+          onClick={() => { setStatusFilter(v => v === "payment_hold" ? "all" : "payment_hold"); document.getElementById("contacts-list")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+          disabled={holdCount === 0}
+          className="text-left disabled:cursor-default"
+        >
+          <Card className={cn("p-4 transition-shadow", holdCount > 0 && "border-red-300 bg-red-50 dark:bg-red-950/20 hover:ring-2 hover:ring-red-400/50 cursor-pointer", statusFilter === "payment_hold" && "ring-2 ring-red-500")}>
+            <div className="flex items-center gap-2 mb-1"><AlertTriangle className="w-4 h-4 text-destructive" /><p className="text-xs font-medium text-muted-foreground">Payment Hold</p></div>
+            <p className={cn("text-2xl font-extrabold", holdCount > 0 ? "text-destructive" : "")}>{holdCount}</p>
+          </Card>
+        </button>
       </div>
+      {statusFilter !== "all" && (
+        <button
+          type="button"
+          onClick={() => setStatusFilter("all")}
+          className="mb-4 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border bg-foreground text-background border-foreground"
+        >
+          Filtering: {statusFilter === "insurance_issue" ? "Insurance Issues" : "Payment Hold"} - clear
+        </button>
+      )}
 
       {/* Search + type filter */}
       <div className="flex flex-col sm:flex-row gap-3 mb-6">
@@ -763,6 +791,7 @@ export default function SubcontractorsPage() {
       </div>
 
       {/* Directory */}
+      <div id="contacts-list" className="scroll-mt-24" />
       {loading ? (
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => <div key={i} className="h-16 bg-muted rounded-xl animate-pulse" />)}
