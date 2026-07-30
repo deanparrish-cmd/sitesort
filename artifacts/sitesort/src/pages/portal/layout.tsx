@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useGetPortalContext, getGetPortalContextQueryKey, useGetPortalUnseen, getGetPortalUnseenQueryKey } from "@workspace/api-client-react";
@@ -6,37 +6,29 @@ import { Spinner } from "@/components/ui/spinner";
 import { PortalInstallPrompt } from "@/components/portal-install-prompt";
 import { PortalNotifyPrompt } from "@/components/portal-notify-prompt";
 import { markPortalSession, disablePush, resyncPush } from "@/lib/portal-push";
-import { cn } from "@/lib/utils";
 import {
   Home, AlertTriangle,
-  LogOut, Inbox, HardHat,
-  Settings, Menu, X, FolderUp, Wrench, ClipboardList, MessageSquare, QrCode, FileCheck, HelpCircle,
+  Inbox, HardHat,
+  Settings, FolderUp, Wrench, ClipboardList, MessageSquare, QrCode, FileCheck, HelpCircle,
 } from "lucide-react";
 
-// The fixed portal nav — order + labels + icons. `key` matches the URL segment
-// (/portal/:key) AND the server section allowlist.
-//
-// Minimal-portal redesign: H&S/Drawings/Method Statements/Permits/Safety/
-// General were retired as standalone tabs — that content now surfaces only
-// inside "Shared with me" (with a category filter), since it was always just
-// a differently-sliced view of the same shared documents/permits. Site
-// Issues, Plant & Materials, and Daily Report are fully absent from nav
-// (not just greyed) for any member the PM hasn't granted the matching
-// project_members permission flag to — see `permission` below, enforced
-// server-side too by `requirePortalPermission` on both GET and write routes.
-// Simplified-portal redesign (2 pages): "Home" is the single landing page
-// (project details + site manager contact + Team + Overview + Site Board all
-// on one scrollable page — Overview/Progress/Team/Site Board tabs retired,
-// their old URLs land on Home). The rest of the menu is the member's own
-// workspace, with the permission-gated work sections at the BOTTOM.
+// The canonical list of every portal destination — order + labels + icons.
+// `key` matches the URL segment (/portal/:key) AND the server section
+// allowlist. This is DATA, not a rendered nav list: navigation-cleanup
+// redesign removed the hamburger/sidebar entirely — every entry here is
+// reached from exactly ONE place, a big tile on Home (section.tsx's
+// HomeQuickAccess). "settings" and "help" are consolidated behind the
+// single Settings tile/page (Help is a link FROM there, not a top-level
+// tile); "site-issues"/"plant-materials"/"daily-report" are consolidated
+// behind the single conditional "Site Tasks" tile (section.tsx's
+// SiteTasksView) — never individually top-level. This array remains the
+// one source of truth for label/icon/permission so tile-gating, the Site
+// Tasks hub, and the PWA unseen-badge total can never disagree.
 export const SECTION_NAV: { key: string; label: string; Icon: typeof Home; permission?: "canLogIssues" | "canUpdatePlantMaterials" | "canEditDailyReport" }[] = [
   { key: "overview", label: "Home", Icon: Home },
   { key: "messages", label: "Messages", Icon: MessageSquare },
   { key: "shared", label: "Shared with me", Icon: Inbox },
   { key: "my-documents", label: "My documents", Icon: FolderUp },
-  // 5-box-home redesign: Site Board + member-shared Permits moved off Home
-  // into this "page 2" workspace menu; user asked for them to sit below
-  // "My documents" in the menu order.
   { key: "site-board", label: "Site Board", Icon: QrCode },
   { key: "permits", label: "Permits", Icon: FileCheck },
   { key: "settings", label: "Settings", Icon: Settings },
@@ -59,20 +51,21 @@ export function portalLogout(setLocation: (to: string) => void) {
   setLocation("/portal/login");
 }
 
-// Member-facing shell for ONE project. Mirrors the main app shell (logo + left
-// sidebar with rounded active-primary nav on desktop, a hamburger drawer on
-// mobile) using the same shared palette — but scoped to a single project, with
-// no project switcher, dashboard link or company nav.
+// Member-facing shell for ONE project — a single unified header (logo +
+// project name), no hamburger/sidebar. Navigation is entirely the big tiles
+// on Home (see section.tsx's HomeQuickAccess); this shell only supplies the
+// "back to everything" logo link and the shared unseen/badge plumbing.
 export function PortalLayout({ active, children }: { active: string; children: React.ReactNode }) {
   const [, setLocation] = useLocation();
-  const [isMobileOpen, setIsMobileOpen] = useState(false);
   const queryClient = useQueryClient();
   const token = typeof window !== "undefined" ? localStorage.getItem("sitesort_portal_token") : null;
   const { data, isLoading, isError } = useGetPortalContext({ query: { enabled: !!token, retry: false, queryKey: getGetPortalContextQueryKey() } });
-  // Unseen counts per section for the nav badges (polled + refetched on focus by
-  // the portal query client). Silent on error → no badges rather than a broken nav.
+  // Unseen counts per section — feeds the PWA app-icon badge below and each
+  // tile's own unseen dot (fetched independently by HomeQuickAccess/the Site
+  // Tasks hub, which need it before this shell has mounted its children).
+  // Polled + refetched on focus by the portal query client. Silent on error
+  // → no badges rather than a broken screen.
   const { data: unseen } = useGetPortalUnseen({ query: { enabled: !!token, retry: false, refetchInterval: 60_000, queryKey: getGetPortalUnseenQueryKey() } });
-  const counts = (unseen?.counts ?? {}) as Record<string, number>;
 
   // Count this app open once (drives when the "enable notifications" card may appear).
   useEffect(() => { markPortalSession(); resyncPush(); }, []);
@@ -138,121 +131,34 @@ export function PortalLayout({ active, children }: { active: string; children: R
   }
 
   const logoSrc = `${import.meta.env.BASE_URL}images/logo.webp?v=5`;
-  const initial = (data?.member.name ?? "?").charAt(0).toUpperCase();
-  // Minimal-portal redesign: a permission-tagged entry is entirely absent (not
-  // greyed) from the nav until the PM grants it on this member's project_members
-  // row. No member data yet → show nothing gated rather than flash it briefly.
-  const visibleNav = SECTION_NAV.filter(s => !s.permission || !!data?.member[s.permission]);
-  // Aggregate "something's new" = sum of the SAME per-section counts the nav
-  // badges render, restricted to sections this member can actually see — so
-  // the aggregate and per-section numbers can never disagree.
-  const totalUnseen = visibleNav.reduce((sum, s) => sum + (counts[s.key] ?? 0), 0);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col md:flex-row">
-      {/* Mobile header — safe-area top so it clears the status bar / notch in standalone */}
-      <div className="md:hidden flex items-center justify-between px-4 pb-4 border-b bg-card pt-[calc(1rem+env(safe-area-inset-top))]">
-        {/* Tapping the logo always returns to the portal home (project overview) —
-            never the marketing site or dashboard login. Works in standalone PWA. */}
-        <Link href="/portal/overview" onClick={() => setIsMobileOpen(false)} className="shrink-0" aria-label="Portal home">
-          <img src={logoSrc} alt="SiteSort" className="w-auto shrink-0 object-contain" style={{ height: "56px" }} />
+    <div className="min-h-screen bg-background flex flex-col">
+      {/* Single unified header, mobile AND desktop — no hamburger, no sidebar.
+          Every destination is reached from a big tile on Home instead (see
+          section.tsx's HomeQuickAccess); tapping the logo always returns
+          there, so it doubles as the one consistent "back to everything"
+          affordance. Safe-area top so it clears the status bar/notch in
+          standalone PWA mode. */}
+      <header className="flex items-center gap-3 px-4 py-3 border-b bg-card pt-[calc(0.75rem+env(safe-area-inset-top))]">
+        <Link href="/portal/overview" className="shrink-0" aria-label="Portal home">
+          <img src={logoSrc} alt="SiteSort" className="w-auto shrink-0 object-contain" style={{ height: "48px" }} />
         </Link>
-        <button onClick={() => setIsMobileOpen(o => !o)} className="relative min-w-14 min-h-14 flex items-center justify-center text-primary active:scale-[0.95] transition-transform" aria-label="Menu">
-          {isMobileOpen ? <X className="w-7 h-7" /> : <Menu className="w-7 h-7" />}
-          {/* Aggregate unseen indicator: the mobile menu hides the per-section
-              badges, so a closed menu shows one dot when ANYTHING is new. */}
-          {!isMobileOpen && totalUnseen > 0 && (
-            <span aria-label={`${totalUnseen} unseen`} className="absolute top-2 right-2 w-3 h-3 rounded-full bg-accent ring-2 ring-card" />
-          )}
-        </button>
-      </div>
-
-      {/* Sidebar — safe-area insets so the drawer content clears system UI in standalone */}
-      <div className={cn(
-        "fixed inset-y-0 left-0 z-40 w-72 bg-card border-r flex flex-col transition-transform duration-300 ease-in-out md:translate-x-0 md:static md:w-64 lg:w-72",
-        "pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] md:pt-0 md:pb-0",
-        isMobileOpen ? "translate-x-0" : "-translate-x-full",
-      )}>
-        <div className="p-6 hidden md:flex items-center">
-          <Link href="/portal/overview" className="inline-flex" aria-label="Portal home">
-            <img src={logoSrc} alt="SiteSort" className="h-[6.25rem] w-auto" />
-          </Link>
-        </div>
-
-        {/* Project identity (single project — no switcher) */}
-        <div className="px-6 pt-5 md:pt-0 pb-1">
-          <div className="flex items-center gap-2 text-primary">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 text-primary">
             <HardHat className="w-4 h-4 shrink-0" />
             <span className="font-display font-bold truncate">{data?.project.name}</span>
           </div>
-          <p className="text-xs text-muted-foreground mt-0.5">Team Portal</p>
+          <p className="text-xs text-muted-foreground">Team Portal</p>
         </div>
-
-        <nav className="flex-1 px-4 py-6 overflow-y-auto">
-          <div className="space-y-2">
-            {visibleNav.map(({ key, label, Icon }) => {
-              const isActive = key === active;
-              const badge = counts[key] ?? 0;
-              return (
-                <Link
-                  key={key}
-                  href={`/portal/${key}`}
-                  onClick={() => setIsMobileOpen(false)}
-                  className={cn(
-                    "flex items-center gap-3 min-h-14 px-4 py-3 rounded-xl text-base font-bold transition-all duration-150 active:scale-[0.98]",
-                    isActive
-                      ? "bg-primary text-primary-foreground shadow-md shadow-primary/10"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                  )}
-                >
-                  <Icon className={cn("w-6 h-6 shrink-0", isActive ? "text-primary-foreground" : "text-muted-foreground")} />
-                  <span className="flex-1">{label}</span>
-                  {badge > 0 && (
-                    <span
-                      aria-label={`${badge} unseen`}
-                      className={cn(
-                        "shrink-0 min-w-[1.5rem] h-6 px-1.5 rounded-full text-xs font-bold flex items-center justify-center",
-                        isActive ? "bg-primary-foreground/20 text-primary-foreground" : "bg-accent text-white",
-                      )}
-                    >
-                      {badge > 99 ? "99+" : badge}
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
-          </div>
-        </nav>
-
-        {/* Member footer + logout */}
-        <div className="p-4 border-t">
-          <div className="flex items-center gap-3 mb-4 px-2">
-            <div className="w-11 h-11 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg shrink-0">{initial}</div>
-            <div className="min-w-0">
-              <p className="text-base font-bold text-foreground truncate">{data?.member.name}</p>
-              <p className="text-sm text-muted-foreground capitalize truncate">{data?.member.role}</p>
-            </div>
-          </div>
-          <button
-            onClick={() => portalLogout(setLocation)}
-            className="flex w-full items-center gap-3 min-h-14 px-4 py-3 rounded-xl text-base font-bold text-destructive hover:bg-destructive/10 active:scale-[0.98] transition-all duration-150"
-          >
-            <LogOut className="w-6 h-6" /> Log out
-          </button>
-        </div>
-      </div>
+      </header>
 
       {/* Main content — same container + overflow safety net as the main app shell */}
-      <div className="flex-1 flex flex-col min-w-0 max-h-screen overflow-y-auto">
+      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         <main className="flex-1 p-4 md:p-8 min-w-0 overflow-x-clip">
           <div className="max-w-4xl mx-auto slide-up min-w-0 [&>*]:min-w-0">{children}</div>
         </main>
       </div>
-
-      {/* Mobile backdrop */}
-      {isMobileOpen && (
-        <div className="fixed inset-0 bg-primary/20 backdrop-blur-sm z-30 md:hidden" onClick={() => setIsMobileOpen(false)} />
-      )}
 
       <PortalNotifyPrompt />
       <PortalInstallPrompt />
