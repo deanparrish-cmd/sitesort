@@ -18,5 +18,7 @@ export interface Project {
   createdAt: Date;
   memberCount: number;
   alertCount: number;
+  /** Set only when every pending sign-off recipient counted in alertCount belongs to the SAME document — lets the "N Alerts" badge deep-link straight to it. Null when alerts span multiple documents (or there are none). */
+  alertDocumentId?: string | null;
   progressPercent: number;
 }

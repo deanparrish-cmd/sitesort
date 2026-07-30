@@ -15,6 +15,22 @@ async function computeProgress(projectId: string): Promise<number> {
   return Math.round((done / rows.length) * 100);
 }
 
+// The "N Alerts" badge counts PENDING document-sign-off recipients, not
+// distinct documents (matches compliance.ts's pendingAcknowledgments
+// semantics). When every pending recipient belongs to the SAME document,
+// that document's id is returned so the badge can deep-link straight to it
+// instead of just the tab (Bug: badges naming a specific thing must link to
+// it — see CLAUDE.md's deep-link rule). Ambiguous (multiple documents) →
+// null, and the tab-level link is the correct fallback.
+async function docAlertsFor(projectId: string): Promise<{ alertCount: number; alertDocumentId: string | null }> {
+  const rows = await db.select({ documentId: documentDistributionsTable.documentId })
+    .from(documentDistributionsTable)
+    .innerJoin(documentsTable, eq(documentsTable.id, documentDistributionsTable.documentId))
+    .where(and(eq(documentsTable.projectId, projectId), eq(documentDistributionsTable.status, "pending")));
+  const uniqueDocIds = [...new Set(rows.map(r => r.documentId))];
+  return { alertCount: rows.length, alertDocumentId: uniqueDocIds.length === 1 ? uniqueDocIds[0] : null };
+}
+
 type ActivityItem = { id: string; type: string; description: string; userId: string | null; userName: string | null; createdAt: string };
 
 async function getRecentActivity(projectId: string, limit = 8): Promise<ActivityItem[]> {
@@ -73,9 +89,7 @@ router.get("/projects", authenticate, async (req, res) => {
 
     const result = await Promise.all(projects.map(async (p) => {
       const [memberCount] = await db.select({ count: count() }).from(projectMembersTable).where(eq(projectMembersTable.projectId, p.id));
-      const [docAlerts] = await db.select({ count: count() }).from(documentDistributionsTable)
-        .innerJoin(documentsTable, eq(documentsTable.id, documentDistributionsTable.documentId))
-        .where(and(eq(documentsTable.projectId, p.id), eq(documentDistributionsTable.status, "pending")));
+      const { alertCount, alertDocumentId } = await docAlertsFor(p.id);
 
       const progressPercent = await computeProgress(p.id);
       return {
@@ -88,7 +102,8 @@ router.get("/projects", authenticate, async (req, res) => {
         targetEndDate: p.targetEndDate ?? null,
         createdAt: p.createdAt.toISOString(),
         memberCount: Number(memberCount.count),
-        alertCount: Number(docAlerts.count),
+        alertCount,
+        alertDocumentId,
         progressPercent,
       };
     }));
@@ -169,9 +184,7 @@ router.get("/projects/:projectId", authenticate, async (req, res) => {
 
     const p = projects[0];
     const [memberCount] = await db.select({ count: count() }).from(projectMembersTable).where(eq(projectMembersTable.projectId, p.id));
-    const [docAlerts] = await db.select({ count: count() }).from(documentDistributionsTable)
-      .innerJoin(documentsTable, eq(documentsTable.id, documentDistributionsTable.documentId))
-      .where(and(eq(documentsTable.projectId, p.id), eq(documentDistributionsTable.status, "pending")));
+    const { alertCount, alertDocumentId } = await docAlertsFor(p.id);
 
     const progressPercent = await computeProgress(p.id);
     const recentActivity = await getRecentActivity(p.id);
@@ -188,7 +201,8 @@ router.get("/projects/:projectId", authenticate, async (req, res) => {
       targetEndDate: p.targetEndDate ?? null,
       createdAt: p.createdAt.toISOString(),
       memberCount: Number(memberCount.count),
-      alertCount: Number(docAlerts.count),
+      alertCount,
+      alertDocumentId,
       progressPercent,
       trades: p.trades ?? [],
       recentActivity,

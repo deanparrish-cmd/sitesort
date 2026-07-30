@@ -400,18 +400,36 @@ export default function InvoicesPage() {
           </p>
           <p className="text-xs text-rose-600/70 mt-0.5">unpaid outbound</p>
         </Card>
-        <Card className="p-5">
-          <div className="flex items-center gap-3 mb-1">
-            <AlertTriangle className="w-5 h-5 text-destructive" />
-            <p className="text-sm font-medium text-muted-foreground">Overdue</p>
-          </div>
-          <p className="text-2xl font-extrabold text-destructive">{overdue}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">invoice{overdue !== 1 ? "s" : ""} past due</p>
-        </Card>
+        {/* A count that names a specific set of invoices must lead to them,
+            not sit there as a static number — same rule as the dashboard's
+            "N overdue invoices" tile (Bug: badges naming a specific thing
+            weren't tappable). Single overdue invoice opens it directly. */}
+        <button
+          type="button"
+          onClick={() => {
+            if (overdue === 1) {
+              const inv = unassigned.find(i => i.status !== "paid" && daysUntil(i.dueDate) < 0);
+              if (inv) { setViewingInvoice(inv); return; }
+            }
+            setFilter("overdue");
+            document.getElementById("invoice-list")?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }}
+          disabled={overdue === 0}
+          className="text-left disabled:cursor-default"
+        >
+          <Card className={cn("p-5 transition-shadow", overdue > 0 && "hover:ring-2 hover:ring-destructive/30 cursor-pointer")}>
+            <div className="flex items-center gap-3 mb-1">
+              <AlertTriangle className="w-5 h-5 text-destructive" />
+              <p className="text-sm font-medium text-muted-foreground">Overdue</p>
+            </div>
+            <p className="text-2xl font-extrabold text-destructive">{overdue}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">invoice{overdue !== 1 ? "s" : ""} past due</p>
+          </Card>
+        </button>
       </div>
 
       {/* Filters & search */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+      <div id="invoice-list" className="flex flex-col sm:flex-row gap-3 mb-4 scroll-mt-24">
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
           <Input
