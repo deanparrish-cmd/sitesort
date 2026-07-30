@@ -232,7 +232,8 @@
       "Bash(python3 -c \"import bcrypt; print\\('ok'\\)\")",
       "Bash(lsof -i :8080 -sTCP:LISTEN -t)",
       "Bash(fuser 8080/tcp)",
-      "Bash(kill 387 388)"
+      "Bash(kill 387 388)",
+      "Bash(kill 398 399)"
     ]
   },
   "hooks": {
