@@ -236,7 +236,8 @@
       "Bash(kill 398 399)",
       "Bash(PORT=18299 pnpm --filter @workspace/sitesort run build)",
       "Bash(ps -p 408 -o pid,ppid,cmd)",
-      "Bash(kill 408)"
+      "Bash(kill 408)",
+      "Bash(awk 'length > 500 {print NR\": \"length}' /home/runner/workspace/CLAUDE.md)"
     ]
   },
   "hooks": {
