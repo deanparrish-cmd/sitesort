@@ -623,7 +623,88 @@ export async function ensureSchema(): Promise<void> {
     // project — see lib/project-authority.ts and project_members.ts's comment.
     await pool.query(`ALTER TABLE project_members ADD COLUMN IF NOT EXISTS is_project_manager boolean NOT NULL DEFAULT false`);
 
-    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols + portal_shares + portal_sessions + push_subscriptions + pending_pushes + subcontractor_documents + subcontractors/people.archived_at + people.first_name/last_name + subcontractors.contact_first_name/contact_last_name + project_members write-permission cols + activity_log.metadata + photos closure/updated_at cols + plant_items/plant_item_attachments/plant_item_distributions + people.is_primary_contact + person_certifications + primary-contact/project_members backfill + project_members.can_edit_daily_report + messages.project_id + photos archive/photo-removal cols + primary-contact name self-heal ready + photos/daily_reports submitted_at+submitted_by + plant_items portal_draft cols + portal_submission_notes table + submitted-backfill ready + users.platform_admin + Dean/Amy seeded ready + pin_audit_log table ready + documents.require_pin_signoff ready + projects.site_manager_id ready + project_members.is_project_manager ready");
+    // Bug: portal login rejects an already-accepted invite (reported for Dean
+    // Parrish/Annabelle Parrish/Amy Parrish, among others). Root cause: the
+    // PM's invite list and the portal LOGIN gate read TWO DIFFERENT sources
+    // that can drift. The list reads project_invites.status ("accepted" is
+    // written once, at accept time, and never revisited). The login gate reads
+    // project_members.person_id IS NOT NULL — a requirement added by "in-house
+    // members access the portal with their existing login" (2026-07-14) that
+    // NO migration ever reconciled against invites/memberships that predate it
+    // (project_invites.person_id and project_members.person_id are both
+    // documented as nullable specifically for pre-existing legacy rows — see
+    // their column comments). Result: an invite can say Accepted forever while
+    // its member 403s "you haven't been added to a project yet." Self-heals on
+    // every boot, so the two views can't drift for more than one deploy cycle,
+    // and repairs prod without anyone needing to be re-invited.
+
+    // Step 1: truly legacy accepted invites (person_id NULL on the invite
+    // itself, predating the per-person restructure) have no person row to
+    // propagate at all. Materialise one from the invite's own denormalised
+    // name/email, deduping against an existing in-house person with the same
+    // email via the same unique index the app's own invite-creation path
+    // relies on (people_company_inhouse_email_uq).
+    await pool.query(`
+      INSERT INTO people (id, company_id, subcontractor_id, user_id, name, first_name, last_name, email, created_at)
+      SELECT DISTINCT ON (pi.company_id, lower(pi.email))
+        gen_random_uuid()::text, pi.company_id, NULL, pi.accepted_user_id, pi.name,
+        split_part(trim(pi.name), ' ', 1),
+        CASE WHEN position(' ' in trim(pi.name)) > 0
+          THEN trim(substring(trim(pi.name) from position(' ' in trim(pi.name)) + 1))
+          ELSE '' END,
+        pi.email, now()
+      FROM project_invites pi
+      WHERE pi.status = 'accepted' AND pi.person_id IS NULL AND pi.accepted_user_id IS NOT NULL
+      ON CONFLICT (company_id, email) WHERE subcontractor_id IS NULL
+      DO UPDATE SET user_id = COALESCE(people.user_id, EXCLUDED.user_id)
+    `);
+    const legacyInviteLink = await pool.query(`
+      UPDATE project_invites pi
+      SET person_id = p.id
+      FROM people p
+      WHERE pi.status = 'accepted' AND pi.person_id IS NULL AND pi.accepted_user_id IS NOT NULL
+        AND p.company_id = pi.company_id AND lower(p.email) = lower(pi.email) AND p.subcontractor_id IS NULL
+      RETURNING pi.id, pi.project_id, pi.email
+    `);
+    if (legacyInviteLink.rows.length > 0) {
+      logger.info({ fixed: legacyInviteLink.rows }, `ensureSchema: materialised a person record for ${legacyInviteLink.rows.length} legacy accepted invite(s) that predated the per-person portal model`);
+    }
+
+    // Step 2: reconcile project_members.person_id FROM every accepted invite —
+    // covers invites that already had person_id, and the ones Step 1 just fixed.
+    const memberPersonIdBackfill = await pool.query(`
+      UPDATE project_members pm
+      SET person_id = pi.person_id
+      FROM project_invites pi
+      WHERE pi.status = 'accepted' AND pi.person_id IS NOT NULL AND pi.accepted_user_id IS NOT NULL
+        AND pi.accepted_user_id = pm.user_id AND pi.project_id = pm.project_id
+        AND pm.person_id IS NULL
+      RETURNING pm.id, pm.project_id, pm.user_id
+    `);
+    if (memberPersonIdBackfill.rows.length > 0) {
+      logger.info({ fixed: memberPersonIdBackfill.rows }, `ensureSchema: relinked ${memberPersonIdBackfill.rows.length} accepted portal member(s) whose project_members.person_id was missing — portal login was incorrectly rejecting them even though the invite list showed Accepted`);
+    }
+
+    // Step 3: an accepted invite whose project_members row is missing entirely
+    // (e.g. deleted by a revoke that ran before a later re-accept, or never
+    // created) — recreate it so login has something to find.
+    const memberRecreate = await pool.query(`
+      INSERT INTO project_members (id, project_id, user_id, person_id, role, added_at)
+      SELECT gen_random_uuid()::text, pi.project_id, pi.accepted_user_id, pi.person_id, pi.role, now()
+      FROM project_invites pi
+      WHERE pi.status = 'accepted' AND pi.person_id IS NOT NULL AND pi.accepted_user_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM project_members pm2
+          WHERE pm2.project_id = pi.project_id AND pm2.user_id = pi.accepted_user_id
+        )
+      ON CONFLICT (project_id, user_id) WHERE user_id IS NOT NULL DO NOTHING
+      RETURNING id, project_id, user_id
+    `);
+    if (memberRecreate.rows.length > 0) {
+      logger.info({ fixed: memberRecreate.rows }, `ensureSchema: recreated ${memberRecreate.rows.length} missing project_members row(s) for an accepted portal invite`);
+    }
+
+    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols + portal_shares + portal_sessions + push_subscriptions + pending_pushes + subcontractor_documents + subcontractors/people.archived_at + people.first_name/last_name + subcontractors.contact_first_name/contact_last_name + project_members write-permission cols + activity_log.metadata + photos closure/updated_at cols + plant_items/plant_item_attachments/plant_item_distributions + people.is_primary_contact + person_certifications + primary-contact/project_members backfill + project_members.can_edit_daily_report + messages.project_id + photos archive/photo-removal cols + primary-contact name self-heal ready + photos/daily_reports submitted_at+submitted_by + plant_items portal_draft cols + portal_submission_notes table + submitted-backfill ready + users.platform_admin + Dean/Amy seeded ready + pin_audit_log table ready + documents.require_pin_signoff ready + projects.site_manager_id ready + project_members.is_project_manager ready + accepted-invite/project_members.person_id self-heal ready");
   } catch (err) {
     // Don't crash the server — membership lookups fall back to the home company.
     logger.error({ err }, "ensureSchema failed (continuing with home-company fallback)");
