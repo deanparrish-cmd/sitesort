@@ -194,7 +194,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 ## Session Log
 
 Full session-by-session detail in CLAUDE_ARCHIVE.md. Recent sessions (newest first):
-- **2026-07-30 (3) — shipped #98** (em/en-dash sweep + dead-badge audit, 2 new CLAUDE.md rules). Sequential forks, not parallel (avoids edit clobbering on shared files). DEPLOYED+prod-verified.
+- **2026-07-30 (3) — shipped #98** (em/en-dash sweep + dead-badge audit, 2 new CLAUDE.md rules). Sequential forks, not parallel (avoids edit clobbering on shared files). Committed+pushed (`main → d0a9d290`), user Published, re-verified live against `www.sitesort.co.uk`: public `/guide` + in-app `/user-guide` both 0 dashes, Issues/Contacts filter cards work. DEPLOYED+prod-verified.
 - **2026-07-30 (2) — housekeeping + shipped #97** (deep-link project/expiry alerts + overdue invoices). DEPLOYED+prod-verified.
 - **2026-07-30 (1) — shipped #94/#95/#96** (portal visual redesign; check-in insurance fix; hamburger removed). Published, prod-verified. **Standing gotcha:** local api-server on `:8080` is a plain `node dist/index.mjs` left running, NOT auto-restarted — rebuild + kill+restart after backend changes before trusting `check:layout`/manual checks.
 - **2026-07-27 and earlier:** see feature list above + CLAUDE_ARCHIVE.md. Local `git pull` fails — `origin` is a synthetic API-pushed mirror, not shared history; use `push-robust.ts`.
