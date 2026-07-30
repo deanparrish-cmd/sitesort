@@ -13,6 +13,7 @@ import { useSubscription } from "@/contexts/subscription";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { formatDate } from "@/lib/utils";
+import { itemDeepLink } from "@/lib/deep-link";
 import { useCapabilities } from "@/hooks/use-capabilities";
 
 const PLAN_LIMITS: Record<string, number> = { free: 1, solo: 1, team: 5, pro: Infinity };
@@ -382,7 +383,10 @@ export default function ProjectsList() {
                   {project.alertCount > 0 && (
                     <button
                       type="button"
-                      onClick={e => { e.preventDefault(); e.stopPropagation(); setLocation(`/projects/${project.id}?tab=documents`); }}
+                      onClick={e => {
+                        e.preventDefault(); e.stopPropagation();
+                        setLocation(itemDeepLink(project.id, "document", project.alertDocumentId ?? undefined) ?? `/projects/${project.id}?tab=documents`);
+                      }}
                       className="cursor-pointer"
                       aria-label="View pending document sign-offs"
                     >
@@ -439,7 +443,10 @@ export default function ProjectsList() {
                       {project.alertCount > 0 && (
                          <button
                            type="button"
-                           onClick={e => { e.stopPropagation(); setLocation(`/projects/${project.id}?tab=documents`); }}
+                           onClick={e => {
+                             e.stopPropagation();
+                             setLocation(itemDeepLink(project.id, "document", project.alertDocumentId ?? undefined) ?? `/projects/${project.id}?tab=documents`);
+                           }}
                            className="cursor-pointer"
                            aria-label="View pending document sign-offs"
                          >

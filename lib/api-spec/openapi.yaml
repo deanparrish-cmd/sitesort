@@ -3660,6 +3660,10 @@ components:
           type: integer
         alertCount:
           type: integer
+        alertDocumentId:
+          type: string
+          nullable: true
+          description: Set only when every pending sign-off recipient counted in alertCount belongs to the SAME document — lets the "N Alerts" badge deep-link straight to it. Null when alerts span multiple documents (or there are none).
         progressPercent:
           type: integer
       required: [id, companyId, name, address, status, startDate, createdAt, memberCount, alertCount, progressPercent]

@@ -233,7 +233,10 @@
       "Bash(lsof -i :8080 -sTCP:LISTEN -t)",
       "Bash(fuser 8080/tcp)",
       "Bash(kill 387 388)",
-      "Bash(kill 398 399)"
+      "Bash(kill 398 399)",
+      "Bash(PORT=18299 pnpm --filter @workspace/sitesort run build)",
+      "Bash(ps -p 408 -o pid,ppid,cmd)",
+      "Bash(kill 408)"
     ]
   },
   "hooks": {

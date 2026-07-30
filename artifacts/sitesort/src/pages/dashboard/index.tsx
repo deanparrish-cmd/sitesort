@@ -18,7 +18,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { ShareModal } from "@/components/share-modal";
 import { AlertViewer } from "@/components/alert-viewer";
-import { navigateToNotification } from "@/lib/deep-link";
+import { navigateToNotification, itemDeepLink } from "@/lib/deep-link";
 import { useToast } from "@/hooks/use-toast";
 import { useListProjects, useGetComplianceOverview } from "@workspace/api-client-react";
 import type { ExpiringInsuranceItem, ExpiringPermitItem } from "@workspace/api-client-react";
@@ -28,7 +28,12 @@ import { useSubscription } from "@/contexts/subscription";
 
 type CalEvent = { date: string; label: string; type: "project-start" | "project-end" | "permit" | "insurance" | "invoice-out" | "invoice-in" | "custom"; href?: string; id?: string; note?: string | null; projectId?: string | null };
 type CustomEvent = { id: string; title: string; eventDate: string; note: string | null; projectId: string | null };
-type ExpiryAlert = { label: string; expiryDate: string; kind: "permit" | "insurance"; daysLeft: number };
+type ExpiryAlert = {
+  label: string; expiryDate: string; kind: "permit" | "insurance"; daysLeft: number;
+  // Enough to build a specific deep-link (Bug: an expiry alert must link to
+  // the record it names, not just the Compliance page in general).
+  permitId?: string; projectId?: string; subcontractorId?: string;
+};
 type Notification = { id: string; type: string; title: string; message: string; read: boolean; createdAt: string; relatedEntityId?: string; relatedEntityType?: string };
 type Invoice = { id: string; direction: string; counterpartyName: string; description: string; amount: string; currency: string; dueDate: string; status: string; reference?: string; attachmentUrl?: string | null; projectId?: string | null };
 
@@ -491,13 +496,13 @@ export default function Dashboard() {
       const date = ins.expiryDate.slice(0, 10);
       events.push({ date, label: `${ins.subcontractorName} · ${ins.insuranceType}`, type: "insurance" });
       const daysLeft = Math.ceil((new Date(date).getTime() - todayMs) / 86400000);
-      alerts.push({ label: `${ins.subcontractorName} · ${ins.insuranceType}`, expiryDate: date, kind: "insurance", daysLeft });
+      alerts.push({ label: `${ins.subcontractorName} · ${ins.insuranceType}`, expiryDate: date, kind: "insurance", daysLeft, subcontractorId: ins.subcontractorId });
     }
     for (const permit of (compliance?.expiringPermits ?? []) as ExpiringPermitItem[]) {
       const date = permit.expiryDate.slice(0, 10);
       events.push({ date, label: `${permit.projectName} · ${permit.permitType}`, type: "permit", href: `/projects/${permit.projectId}?tab=permits` });
       const daysLeft = Math.ceil((new Date(date).getTime() - todayMs) / 86400000);
-      alerts.push({ label: `${permit.projectName} · ${permit.permitType}`, expiryDate: date, kind: "permit", daysLeft });
+      alerts.push({ label: `${permit.projectName} · ${permit.permitType}`, expiryDate: date, kind: "permit", daysLeft, permitId: permit.permitId, projectId: permit.projectId });
     }
     for (const inv of invoices) {
       if (inv.status === "paid") continue;
@@ -605,21 +610,47 @@ export default function Dashboard() {
   const attentionItems = useMemo(() => {
     const items: { icon: React.ReactNode; label: string; href: string; severity: "critical" | "warning" }[] = [];
 
-    // Expired compliance
+    // Expired compliance — each alert names ONE specific insurance cert or
+    // permit, so it must link to that record, not just the Compliance page
+    // in general. A permit has its own project-detail deep-link (same
+    // itemDeepLink helper as everywhere else); an insurance cert's home is
+    // the Compliance page's insurance section, so at minimum it must land
+    // on the RIGHT section (kind=insurance), not whichever the code happened
+    // to default to.
+    const expiryHref = (a: ExpiryAlert): string =>
+      a.kind === "permit" && a.projectId && a.permitId
+        ? (itemDeepLink(a.projectId, "permit", a.permitId) ?? "/compliance?filter=expiring&kind=permit")
+        : "/compliance?filter=expiring&kind=insurance";
     for (const a of expiryAlerts) {
-      if (a.daysLeft < 0) items.push({ icon: <ShieldAlert className="w-4 h-4" />, label: `${a.label} · expired`, href: "/compliance?filter=expiring", severity: "critical" });
-      else if (a.daysLeft <= 3) items.push({ icon: <ShieldAlert className="w-4 h-4" />, label: `${a.label} · expires in ${a.daysLeft}d`, href: "/compliance?filter=expiring", severity: "critical" });
+      if (a.daysLeft < 0) items.push({ icon: <ShieldAlert className="w-4 h-4" />, label: `${a.label} · expired`, href: expiryHref(a), severity: "critical" });
+      else if (a.daysLeft <= 3) items.push({ icon: <ShieldAlert className="w-4 h-4" />, label: `${a.label} · expires in ${a.daysLeft}d`, href: expiryHref(a), severity: "critical" });
     }
 
-    // Overdue invoices
+    // Overdue invoices — link straight to the one invoice when there's only
+    // one; a filtered list is the reasonable landing spot when there are several.
     const overdue = invoices.filter(inv => inv.status !== "paid" && inv.dueDate.slice(0, 10) < todayStr);
     if (overdue.length > 0)
-      items.push({ icon: <FileText className="w-4 h-4" />, label: `${overdue.length} overdue invoice${overdue.length > 1 ? "s" : ""}`, href: "/invoices?status=overdue", severity: "critical" });
+      items.push({
+        icon: <FileText className="w-4 h-4" />,
+        label: `${overdue.length} overdue invoice${overdue.length > 1 ? "s" : ""}`,
+        href: overdue.length === 1 ? `/invoices?invoice=${overdue[0].id}` : "/invoices?status=overdue",
+        severity: "critical",
+      });
 
-    // Pending sign-offs
-    const pending = compliance?.pendingAcknowledgments?.reduce((a, c) => a + c.pendingCount, 0) ?? 0;
+    // Pending sign-offs — pendingAcknowledgments is one row per DOCUMENT
+    // (pendingCount is how many people are pending on it); when only one
+    // document has anyone pending, go straight to it.
+    const pendingDocs = compliance?.pendingAcknowledgments ?? [];
+    const pending = pendingDocs.reduce((a, c) => a + c.pendingCount, 0);
     if (pending > 0)
-      items.push({ icon: <FileSignature className="w-4 h-4" />, label: `${pending} pending document sign-off${pending > 1 ? "s" : ""}`, href: "/compliance?filter=signoffs", severity: "warning" });
+      items.push({
+        icon: <FileSignature className="w-4 h-4" />,
+        label: `${pending} pending document sign-off${pending > 1 ? "s" : ""}`,
+        href: pendingDocs.length === 1
+          ? (itemDeepLink(pendingDocs[0].projectId, "document", pendingDocs[0].documentId) ?? "/compliance?filter=signoffs")
+          : "/compliance?filter=signoffs",
+        severity: "warning",
+      });
 
     // Unread messages
     if (unreadMessages > 0)
@@ -922,14 +953,18 @@ export default function Dashboard() {
                           <div className="flex items-center gap-2 mb-0.5">
                             <Badge variant="success" className="text-xs">Active</Badge>
                             {project.alertCount > 0 && (
-                              // Deep-links to the project's Documents tab (the
-                              // alerts are pending document sign-offs) — same
-                              // ?tab= pattern the Close-out card and activity
-                              // entries use. Stops propagation so it wins over
+                              // Deep-links straight to the one pending document when
+                              // every alert belongs to it (itemDeepLink, the same
+                              // helper the Close-out card and activity entries use);
+                              // falls back to the Documents tab when alerts span
+                              // multiple documents. Stops propagation so it wins over
                               // the card's own link to the project overview.
                               <button
                                 type="button"
-                                onClick={e => { e.preventDefault(); e.stopPropagation(); navigate(`/projects/${project.id}?tab=documents`); }}
+                                onClick={e => {
+                                  e.preventDefault(); e.stopPropagation();
+                                  navigate(itemDeepLink(project.id, "document", project.alertDocumentId ?? undefined) ?? `/projects/${project.id}?tab=documents`);
+                                }}
                                 className="cursor-pointer"
                                 aria-label={`View ${project.alertCount} pending document sign-off${project.alertCount > 1 ? "s" : ""}`}
                               >

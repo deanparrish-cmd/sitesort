@@ -182,6 +182,12 @@ export const ListProjectsResponseItem = zod.object({
   createdAt: zod.date(),
   memberCount: zod.number(),
   alertCount: zod.number(),
+  alertDocumentId: zod
+    .string()
+    .nullish()
+    .describe(
+      'Set only when every pending sign-off recipient counted in alertCount belongs to the SAME document — lets the \"N Alerts\" badge deep-link straight to it. Null when alerts span multiple documents (or there are none).',
+    ),
   progressPercent: zod.number(),
 });
 export const ListProjectsResponse = zod.array(ListProjectsResponseItem);
@@ -215,6 +221,12 @@ export const GetProjectResponse = zod
     createdAt: zod.date(),
     memberCount: zod.number(),
     alertCount: zod.number(),
+    alertDocumentId: zod
+      .string()
+      .nullish()
+      .describe(
+        'Set only when every pending sign-off recipient counted in alertCount belongs to the SAME document — lets the \"N Alerts\" badge deep-link straight to it. Null when alerts span multiple documents (or there are none).',
+      ),
     progressPercent: zod.number(),
   })
   .and(
@@ -265,6 +277,12 @@ export const UpdateProjectResponse = zod.object({
   createdAt: zod.date(),
   memberCount: zod.number(),
   alertCount: zod.number(),
+  alertDocumentId: zod
+    .string()
+    .nullish()
+    .describe(
+      'Set only when every pending sign-off recipient counted in alertCount belongs to the SAME document — lets the \"N Alerts\" badge deep-link straight to it. Null when alerts span multiple documents (or there are none).',
+    ),
   progressPercent: zod.number(),
 });
 
