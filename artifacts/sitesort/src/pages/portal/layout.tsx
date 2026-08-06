@@ -151,6 +151,17 @@ export function PortalLayout({ active, children }: { active: string; children: R
           </div>
           <p className="text-xs text-muted-foreground">Team Portal</p>
         </div>
+        {active !== "overview" && (
+          <Link
+            href="/portal/overview"
+            aria-label="Back to Home"
+            data-testid="link-portal-home"
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-md border bg-background px-3 min-h-11 text-sm font-medium text-foreground hover:bg-accent hover:text-accent-foreground active:bg-accent"
+          >
+            <Home className="w-4 h-4 shrink-0" />
+            <span>Home</span>
+          </Link>
+        )}
       </header>
 
       {/* Main content — same container + overflow safety net as the main app shell */}
