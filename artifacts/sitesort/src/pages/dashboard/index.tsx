@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
-  Building2, AlertTriangle, ChevronLeft, ChevronRight, ArrowRight,
+  Building2, AlertTriangle, ChevronLeft, ChevronRight, ArrowRight, ArrowDown,
   ShieldAlert, FileSignature, Users, Bell, Search,
   MessageSquare, Camera, FilePlus, Plus, AlertCircle, CreditCard,
   FileText, CheckCircle2, Clock, TrendingUp, Zap, X, Circle, ClipboardCheck,
@@ -610,7 +610,7 @@ export default function Dashboard() {
   const outstandingCount = invoices.filter(inv => inv.status !== "paid").length;
 
   const attentionItems = useMemo(() => {
-    const items: { icon: React.ReactNode; label: string; href: string; severity: "critical" | "warning" }[] = [];
+    const items: { icon: React.ReactNode; label: string; href?: string; scrollTo?: string; severity: "critical" | "warning" }[] = [];
 
     // Expired compliance — each alert names ONE specific insurance cert or
     // permit, so it must link to that record, not just the Compliance page
@@ -628,14 +628,17 @@ export default function Dashboard() {
       else if (a.daysLeft <= 3) items.push({ icon: <ShieldAlert className="w-4 h-4" />, label: `${a.label} · expires in ${a.daysLeft}d`, href: expiryHref(a), severity: "critical" });
     }
 
-    // Overdue invoices — link straight to the one invoice when there's only
-    // one; a filtered list is the reasonable landing spot when there are several.
+    // Overdue invoices — the count includes invoices filed to projects, which
+    // the standalone /invoices page deliberately HIDES (they live under each
+    // project's Finances tab), so linking there can show fewer than the count
+    // says. The dashboard's own Outstanding Invoices card lists every one of
+    // them, so the alert scrolls down to that card instead of navigating away.
     const overdue = invoices.filter(inv => inv.status !== "paid" && inv.dueDate.slice(0, 10) < todayStr);
     if (overdue.length > 0)
       items.push({
         icon: <FileText className="w-4 h-4" />,
         label: `${overdue.length} overdue invoice${overdue.length > 1 ? "s" : ""}`,
-        href: overdue.length === 1 ? `/invoices?invoice=${overdue[0].id}` : "/invoices?status=overdue",
+        scrollTo: "outstanding-invoices",
         severity: "critical",
       });
 
@@ -822,27 +825,32 @@ export default function Dashboard() {
             <Zap className="w-4 h-4" /> Needs Attention
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {attentionItems.map((item, i) => (
-              <Link key={i} href={item.href}>
-                <div className={cn(
-                  "flex items-center gap-2 px-3 py-2 rounded-lg border text-sm cursor-pointer transition-all hover:shadow-sm",
-                  item.severity === "critical"
-                    ? "bg-destructive/10 border-destructive/30 text-destructive hover:bg-destructive/15"
-                    : "bg-orange-100 border-orange-300 text-orange-800 hover:bg-orange-200"
-                )}>
+            {attentionItems.map((item, i) => {
+              const row = (
+                <div
+                  onClick={item.scrollTo ? () => document.getElementById(item.scrollTo!)?.scrollIntoView({ behavior: "smooth", block: "start" }) : undefined}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-2 rounded-lg border text-sm cursor-pointer transition-all hover:shadow-sm",
+                    item.severity === "critical"
+                      ? "bg-destructive/10 border-destructive/30 text-destructive hover:bg-destructive/15"
+                      : "bg-orange-100 border-orange-300 text-orange-800 hover:bg-orange-200"
+                  )}>
                   {item.icon}
                   <span className="font-medium truncate">{item.label}</span>
-                  <ArrowRight className="w-3.5 h-3.5 ml-auto flex-shrink-0 opacity-60" />
+                  {item.scrollTo
+                    ? <ArrowDown className="w-3.5 h-3.5 ml-auto flex-shrink-0 opacity-60" />
+                    : <ArrowRight className="w-3.5 h-3.5 ml-auto flex-shrink-0 opacity-60" />}
                 </div>
-              </Link>
-            ))}
+              );
+              return item.href ? <Link key={i} href={item.href}>{row}</Link> : <div key={i}>{row}</div>;
+            })}
           </div>
         </div>
       )}
 
       {/* Outstanding invoices */}
       {outstandingInvoices.length > 0 && (
-        <Card className="mb-6">
+        <Card className="mb-6 scroll-mt-4" id="outstanding-invoices">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between gap-3">
               <CardTitle className="text-base flex items-center gap-2">
