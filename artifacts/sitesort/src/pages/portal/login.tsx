@@ -19,19 +19,16 @@ export default function PortalLogin() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [projects, setProjects] = useState<{ id: string; name: string }[] | null>(null);
   const login = usePortalLogin();
 
-  const doLogin = async (projectId?: string) => {
+  // One login for the whole portal: the server lands the member in the project
+  // they last worked in; switching projects happens INSIDE the portal (Home).
+  const doLogin = async () => {
     setError(null);
     try {
       const res = await login.mutateAsync({
-        data: { email: email.trim().toLowerCase(), password, ...(projectId ? { projectId } : {}) },
+        data: { email: email.trim().toLowerCase(), password },
       });
-      if (res.requiresProjectChoice) {
-        setProjects(res.projects ?? []);
-        return;
-      }
       if (res.token) {
         localStorage.setItem("sitesort_portal_token", res.token);
         setLocation(dest);
@@ -57,7 +54,7 @@ export default function PortalLogin() {
             <HardHat className="w-6 h-6 text-primary-foreground" />
           </div>
           <h1 className="text-3xl font-display font-bold text-primary text-center">Team Portal</h1>
-          <p className="text-muted-foreground mt-2 text-center">Log in to your project</p>
+          <p className="text-muted-foreground mt-2 text-center">Log in to your portal</p>
         </div>
 
         {error && (
@@ -66,33 +63,10 @@ export default function PortalLogin() {
           </div>
         )}
 
-        {projects ? (
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground text-center mb-4">Choose your project to continue</p>
-            {projects.map(p => (
-              <Button
-                key={p.id}
-                variant="outline"
-                className="w-full justify-start"
-                size="lg"
-                isLoading={login.isPending}
-                onClick={() => doLogin(p.id)}
-              >
-                {p.name}
-              </Button>
-            ))}
-            <button
-              onClick={() => { setProjects(null); setError(null); }}
-              className="w-full text-sm text-muted-foreground hover:text-foreground mt-2"
-            >
-              ← Back
-            </button>
-          </div>
-        ) : (
-          <form
-            onSubmit={(e) => { e.preventDefault(); void doLogin(); }}
-            className="space-y-5"
-          >
+        <form
+          onSubmit={(e) => { e.preventDefault(); void doLogin(); }}
+          className="space-y-5"
+        >
             <Input
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -130,7 +104,6 @@ export default function PortalLogin() {
               </Link>
             </p>
           </form>
-        )}
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
           Invited to a project? Use the link your manager shared to set your password.

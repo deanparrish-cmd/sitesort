@@ -20,7 +20,7 @@ import { authenticate, generatePortalToken } from "../middlewares/auth";
 import { requirePortalMember, requirePortalSession, autoLogPortalActivity, requirePortalPermission } from "../middlewares/portal";
 import { createPortalSession, revokePortalSession, claimPortalSession } from "../lib/portal-sessions";
 import { getVapidPublicKey } from "../lib/web-push";
-import { pushSubscriptionsTable, activityLogTable } from "@workspace/db/schema";
+import { pushSubscriptionsTable, activityLogTable, portalSessionsTable } from "@workspace/db/schema";
 import { PortalPushSubscribeBody, PortalPushUnsubscribeBody } from "@workspace/api-zod";
 import { isLockedOut, recordFailedAttempt, clearAttempts } from "../lib/login-attempts";
 import { pinRequiredForDoc } from "../lib/signoff";
@@ -524,8 +524,22 @@ router.post("/portal/login", async (req, res) => {
       }
       target = found;
     } else if (memberships.length > 1) {
-      res.json({ requiresProjectChoice: true, projects: memberships.map(m => ({ id: m.projectId, name: m.name })) });
-      return;
+      // One login for the whole portal: never ask at login time. Land the
+      // member in the project they last worked in (their most recent portal
+      // session among current memberships); switching happens IN the portal
+      // via the Home project switcher. Falls back to the first membership for
+      // a first-ever login.
+      const [lastSession] = await db
+        .select({ projectId: portalSessionsTable.projectId })
+        .from(portalSessionsTable)
+        .where(and(
+          eq(portalSessionsTable.userId, user.id),
+          inArray(portalSessionsTable.projectId, memberships.map(m => m.projectId)),
+        ))
+        .orderBy(desc(portalSessionsTable.lastActiveAt))
+        .limit(1);
+      const recent = lastSession && memberships.find(m => m.projectId === lastSession.projectId);
+      if (recent) target = recent;
     }
 
     await db.update(usersTable).set({ lastActiveAt: new Date() }).where(eq(usersTable.id, user.id));
