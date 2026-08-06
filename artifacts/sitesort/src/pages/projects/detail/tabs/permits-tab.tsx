@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
@@ -11,6 +12,47 @@ import { formatDate, formatBytes, cn } from "@/lib/utils";
 import { daysUntilExpiry } from "@/lib/expiry";
 import { useDetail } from "../context";
 import { docRev, PermitItem } from "../use-project-detail";
+
+function FolderSection({ id, icon, title, count, titleClass, actions, defaultOpen = false, children }: {
+  id?: string;
+  icon: React.ReactNode;
+  title: string;
+  count?: number;
+  titleClass?: string;
+  actions?: React.ReactNode;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  // Deep links (e.g. closeout checklist) broadcast the target section id so a
+  // collapsed folder opens itself before the page scrolls to it.
+  useEffect(() => {
+    if (!id) return;
+    const handler = (e: Event) => {
+      if ((e as CustomEvent).detail === id) setOpen(true);
+    };
+    window.addEventListener("sitesort:open-section", handler);
+    return () => window.removeEventListener("sitesort:open-section", handler);
+  }, [id]);
+  return (
+    <section id={id} className={id ? "scroll-mt-24" : undefined}>
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-card px-4 py-3">
+        <button
+          onClick={() => setOpen(v => !v)}
+          className="flex items-center gap-2 flex-1 min-w-0 text-left"
+          aria-expanded={open}
+        >
+          {open ? <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
+          {icon}
+          <h3 className={cn("font-bold text-sm uppercase tracking-wide", titleClass ?? "text-muted-foreground")}>{title}</h3>
+          {typeof count === "number" && <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{count}</span>}
+        </button>
+        {actions && <div className="shrink-0">{actions}</div>}
+      </div>
+      {open && <div className="mt-3">{children}</div>}
+    </section>
+  );
+}
 
 export function PermitsTab() {
   const {
@@ -144,48 +186,34 @@ export function PermitsTab() {
                 ) : (
                   <div className="space-y-6">
                     {expired.length > 0 && (
-                      <section id="section-expired" className="scroll-mt-24">
-                        <div className="flex items-center gap-2 mb-3">
-                          <AlertTriangle className="w-4 h-4 text-destructive" />
-                          <h3 className="font-bold text-sm uppercase tracking-wide text-destructive">Expired</h3>
-                          <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{expired.length}</span>
-                        </div>
+                      <FolderSection id="section-expired" icon={<AlertTriangle className="w-4 h-4 text-destructive" />} title="Expired" count={expired.length} titleClass="text-destructive" defaultOpen>
                         <div className="space-y-2">{expired.map(p => permitRow(p, "bg-red-50 border-red-200"))}</div>
-                      </section>
+                      </FolderSection>
                     )}
                     {expiring.length > 0 && (
-                      <section>
-                        <div className="flex items-center gap-2 mb-3">
-                          <Clock className="w-4 h-4 text-orange-600" />
-                          <h3 className="font-bold text-sm uppercase tracking-wide text-orange-600">Expiring Soon</h3>
-                          <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{expiring.length}</span>
-                        </div>
+                      <FolderSection icon={<Clock className="w-4 h-4 text-orange-600" />} title="Expiring Soon" count={expiring.length} titleClass="text-orange-600" defaultOpen>
                         <div className="space-y-2">{expiring.map(p => permitRow(p, "bg-orange-50 border-orange-200"))}</div>
-                      </section>
+                      </FolderSection>
                     )}
                     {active.length > 0 && (
-                      <section>
-                        <div className="flex items-center gap-2 mb-3">
-                          <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                          <h3 className="font-bold text-sm uppercase tracking-wide text-emerald-600">Active</h3>
-                          <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{active.length}</span>
-                        </div>
+                      <FolderSection icon={<ShieldCheck className="w-4 h-4 text-emerald-600" />} title="Active" count={active.length} titleClass="text-emerald-600">
                         <div className="space-y-2">{active.map(p => permitRow(p, "bg-emerald-50 border-emerald-200"))}</div>
-                      </section>
+                      </FolderSection>
                     )}
                     {supersededPermits.length > 0 && (
                       <section>
                         <button
                           onClick={() => setShowSupersededPermits(v => !v)}
-                          className="flex items-center gap-2 mb-3 text-muted-foreground hover:text-foreground transition-colors w-full text-left"
+                          className="flex items-center gap-2 w-full text-left rounded-xl border bg-card px-4 py-3 text-muted-foreground hover:text-foreground transition-colors"
+                          aria-expanded={showSupersededPermits}
                         >
+                          {showSupersededPermits ? <ChevronDown className="w-4 h-4 shrink-0" /> : <ChevronRight className="w-4 h-4 shrink-0" />}
                           <Archive className="w-4 h-4" />
                           <span className="font-bold text-sm uppercase tracking-wide">Superseded</span>
                           <span className="text-xs font-semibold bg-muted px-2 py-0.5 rounded-full">{supersededPermits.length}</span>
-                          {showSupersededPermits ? <ChevronUp className="w-4 h-4 ml-auto" /> : <ChevronDown className="w-4 h-4 ml-auto" />}
                         </button>
                         {showSupersededPermits && (
-                          <div className="space-y-2">{supersededPermits.map(p => permitRow(p, "bg-muted/30 border-border opacity-70"))}</div>
+                          <div className="space-y-2 mt-3">{supersededPermits.map(p => permitRow(p, "bg-muted/30 border-border opacity-70"))}</div>
                         )}
                       </section>
                     )}
@@ -236,37 +264,30 @@ export function PermitsTab() {
                   return docGroups.map(g => {
                     const docs = (documents ?? []).filter(d => d.type === g.key);
                     return (
-                      <section key={g.key}>
-                        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <FileText className="w-4 h-4 text-primary" />
-                            <h3 className="font-bold text-sm uppercase tracking-wide text-muted-foreground">{g.label}</h3>
-                            <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{docs.length}</span>
-                          </div>
-                          {caps.canUploadDocument && (
-                            <Button variant="ghost" size="sm" onClick={() => { setValue("type", g.key); setIsUploadOpen(true); }}>
-                              <Upload className="w-3.5 h-3.5 mr-1.5" /> Upload
-                            </Button>
-                          )}
-                        </div>
+                      <FolderSection
+                        key={g.key}
+                        icon={<FileText className="w-4 h-4 text-primary" />}
+                        title={g.label}
+                        count={docs.length}
+                        actions={caps.canUploadDocument && (
+                          <Button variant="ghost" size="sm" onClick={() => { setValue("type", g.key); setIsUploadOpen(true); }}>
+                            <Upload className="w-3.5 h-3.5 mr-1.5" /> Upload
+                          </Button>
+                        )}
+                      >
                         {docs.length === 0 ? (
                           <p className="text-sm text-muted-foreground px-4 py-3 border border-dashed rounded-xl">No {g.label.toLowerCase()} yet.</p>
                         ) : (
                           <div className="space-y-2">{docs.map(renderDocRow)}</div>
                         )}
-                      </section>
+                      </FolderSection>
                     );
                   });
                 })()}
 
                 {/* Team Insurance */}
                 {members && (members as any[]).length > 0 && (
-                  <section id="section-insurance" className="scroll-mt-24">
-                    <div className="flex items-center gap-2 mb-3">
-                      <UserCheck className="w-4 h-4 text-primary" />
-                      <h3 className="font-bold text-sm uppercase tracking-wide text-muted-foreground">Team Insurance</h3>
-                      <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{(members as any[]).length}</span>
-                    </div>
+                  <FolderSection id="section-insurance" icon={<UserCheck className="w-4 h-4 text-primary" />} title="Team Insurance" count={(members as any[]).length}>
                     <div className="space-y-2">
                       {(members as any[]).map((m: any) => (
                         <div key={m.id} className={`flex items-center justify-between gap-3 px-4 py-3 rounded-xl border ${m.complianceStatus === "hold" ? "bg-red-50 border-red-200" : m.complianceStatus === "warning" ? "bg-orange-50 border-orange-200" : "bg-card border-border"}`}>
@@ -292,21 +313,20 @@ export function PermitsTab() {
                         </div>
                       ))}
                     </div>
-                  </section>
+                  </FolderSection>
                 )}
                 {/* Project Share Log */}
-                <section>
-                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <History className="w-4 h-4 text-primary" />
-                      <h3 className="font-bold text-sm uppercase tracking-wide text-muted-foreground">Share Activity Log</h3>
-                      {projectShareLog.length > 0 && <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{projectShareLog.length}</span>}
-                    </div>
+                <FolderSection
+                  icon={<History className="w-4 h-4 text-primary" />}
+                  title="Share Activity Log"
+                  count={projectShareLog.length > 0 ? projectShareLog.length : undefined}
+                  actions={
                     <Button variant="ghost" size="sm" onClick={loadProjectShareLog} disabled={projectShareLogLoading}>
                       {projectShareLogLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                       <span className="ml-1.5">{projectShareLog.length === 0 && !projectShareLogLoading ? "Load" : "Refresh"}</span>
                     </Button>
-                  </div>
+                  }
+                >
                   {projectShareLog.length === 0 && !projectShareLogLoading ? (
                     <div className="border-2 border-dashed rounded-xl p-6 text-center">
                       <History className="w-7 h-7 mx-auto text-muted-foreground/30 mb-2" />
@@ -334,7 +354,7 @@ export function PermitsTab() {
                       ))}
                     </div>
                   )}
-                </section>
+                </FolderSection>
               </div>
             );
           })()}

@@ -159,7 +159,14 @@ export function useProjectDetailState() {
     if (params) for (const [k, v] of Object.entries(params)) sp.set(k, v);
     navigate(`${window.location.pathname}?${sp.toString()}`);
     if (scrollId) {
-      setTimeout(() => document.getElementById(scrollId)?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+      // Ask any collapsible folder with this id to open itself before we scroll,
+      // so deep links never land on a closed header with hidden content. The
+      // dispatch waits for the target tab to mount, and the scroll waits a
+      // frame so the folder's content is laid out first.
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("sitesort:open-section", { detail: scrollId }));
+        requestAnimationFrame(() => document.getElementById(scrollId)?.scrollIntoView({ behavior: "smooth", block: "start" }));
+      }, 80);
     }
   };
 
