@@ -10,7 +10,7 @@ import { ShareModal } from "@/components/share-modal";
 import {
   Users, Search, Mail, Phone, ShieldCheck, Share2,
   MessageSquare, StickyNote, Send, Loader2, Clock, UserPlus, FolderOpen, Check,
-  Pencil, CheckCircle2, X, FolderPlus, Trash2, Building2,
+  Pencil, CheckCircle2, X, FolderPlus, Trash2, Building2, ChevronDown, ChevronRight, Archive,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCapabilities } from "@/hooks/use-capabilities";
@@ -50,6 +50,12 @@ const ROLE_STYLES: Record<string, string> = {
   site_worker: "bg-emerald-100 text-emerald-700 border-emerald-200",
   subcontractor: "bg-orange-100 text-orange-700 border-orange-200",
 };
+
+// Accounts scrubbed on deletion keep a tombstone email like
+// "deleted-<id>@removed.invalid" — retained for history, not live members.
+function isDeletedAccountEmail(email: string): boolean {
+  return /^deleted-.*@removed\.invalid$/i.test(email);
+}
 
 function RoleBadge({ role }: { role: string }) {
   return (
@@ -92,6 +98,7 @@ export default function TeamPage() {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [deletedOpen, setDeletedOpen] = useState(false);
 
   // Add member dialog state
   const [addOpen, setAddOpen] = useState(false);
@@ -308,14 +315,193 @@ export default function TeamPage() {
     setTimeout(() => { setAddOpen(false); setAddSuccess(""); }, 2000);
   }
 
+  const renderMemberCard = (m: TeamMember) => {
+                    const cleanPhone = m.phone?.replace(/\D/g, "") ?? null;
+                    // Deleted (scrubbed) accounts are read-only history: no
+                    // editing, sharing or project actions, and their tombstone
+                    // email is not a real address so no mailto links either.
+                    const isDeleted = isDeletedAccountEmail(m.email);
+                    return (
+                      <Card key={m.id} className="p-4 hover:shadow-md transition-shadow">
+                        {/* Header row: avatar + name + role badge */}
+                        <div className="flex items-start gap-3 mb-3">
+                          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                            <span className="font-extrabold text-primary text-sm">
+                              {m.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
+                            </span>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-bold text-sm truncate">{m.name}</p>
+                            <RoleBadge role={m.role} />
+                          </div>
+                        </div>
+
+                        {/* Contact details */}
+                        <div className="space-y-1 mb-3">
+                          {isDeleted ? (
+                            <span className="flex items-center gap-1.5 text-xs text-muted-foreground italic">
+                              <Mail className="w-3 h-3 shrink-0" /><span className="truncate">Account deleted</span>
+                            </span>
+                          ) : (
+                            <a href={`mailto:${m.email}`} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors">
+                              <Mail className="w-3 h-3 shrink-0" /><span className="truncate">{m.email}</span>
+                            </a>
+                          )}
+                          {editingPhoneId === m.id ? (
+                            <div className="flex items-center gap-1.5">
+                              <Phone className="w-3 h-3 shrink-0 text-muted-foreground" />
+                              <input
+                                autoFocus
+                                value={phoneInput}
+                                onChange={e => setPhoneInput(e.target.value)}
+                                onKeyDown={e => { if (e.key === "Enter") savePhone(m.id); if (e.key === "Escape") setEditingPhoneId(null); }}
+                                placeholder="+44 7700 000000"
+                                className="flex-1 text-xs bg-muted rounded px-2 py-0.5 outline-none focus:ring-2 focus:ring-primary/30 min-w-0"
+                              />
+                              <button onClick={() => savePhone(m.id)} disabled={phoneSaving} className="text-success hover:text-success/80 shrink-0" title="Save"><CheckCircle2 className="w-3.5 h-3.5" /></button>
+                              <button onClick={() => setEditingPhoneId(null)} className="text-muted-foreground hover:text-destructive shrink-0" title="Cancel"><X className="w-3.5 h-3.5" /></button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1 group/phone min-w-0">
+                              {m.phone ? (
+                                <a href={`tel:${m.phone}`} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors min-w-0">
+                                  <Phone className="w-3 h-3 shrink-0" /><span className="truncate">{m.phone}</span>
+                                </a>
+                              ) : caps.canManageTeam && !isDeleted ? (
+                                <span className="flex items-center gap-1.5 text-xs text-muted-foreground italic">
+                                  <Phone className="w-3 h-3 shrink-0" />Add phone number
+                                </span>
+                              ) : null}
+                              {caps.canManageTeam && !isDeleted && (
+                                <button
+                                  onClick={() => { setEditingPhoneId(m.id); setPhoneInput(m.phone ?? ""); }}
+                                  className="ml-0.5 opacity-100 lg:opacity-0 lg:group-hover/phone:opacity-100 transition-opacity text-muted-foreground hover:text-primary shrink-0"
+                                  title="Edit phone"
+                                ><Pencil className="w-3 h-3" /></button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex items-center justify-between gap-1 border-t pt-2.5">
+                          <div className="flex items-center gap-0.5">
+                            {m.phone && (
+                              <>
+                                <a
+                                  href={`tel:${m.phone}`}
+                                  title={`Call ${m.phone}`}
+                                  className="p-1.5 rounded-lg text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors"
+                                >
+                                  <Phone className="w-4 h-4" />
+                                </a>
+                                <a
+                                  href={`sms:${m.phone}`}
+                                  title={`Text ${m.phone}`}
+                                  className="p-1.5 rounded-lg text-muted-foreground hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
+                                >
+                                  <MessageSquare className="w-4 h-4" />
+                                </a>
+                                <a
+                                  href={`https://wa.me/${cleanPhone}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  title={`WhatsApp ${m.phone}`}
+                                  className="p-1.5 rounded-lg text-muted-foreground hover:text-[#25D366] hover:bg-green-50 dark:hover:bg-green-950/30 transition-colors"
+                                >
+                                  <WhatsAppIcon className="w-4 h-4" />
+                                </a>
+                              </>
+                            )}
+                            {!isDeleted && (
+                              <a
+                                href={`mailto:${m.email}`}
+                                title={`Email ${m.email}`}
+                                className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                              >
+                                <Mail className="w-4 h-4" />
+                              </a>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-0.5">
+                            {/* Notes */}
+                            <button
+                              onClick={() => openNotes(m)}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
+                              title="Notes & reminders"
+                            >
+                              <StickyNote className="w-4 h-4" />
+                            </button>
+
+                            {/* Share */}
+                            {!isDeleted && (
+                            <button
+                              onClick={() => setSharingContact({
+                                id: m.id,
+                                name: m.name,
+                                text: `${m.name} (${m.role.replace(/_/g, " ")})\nEmail: ${m.email}${m.phone ? `\nPhone: ${m.phone}` : ""}`,
+                              })}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                              title="Share contact"
+                            >
+                              <Share2 className="w-4 h-4" />
+                            </button>
+                            )}
+
+                            {caps.canManageTeam && !isDeleted && (
+                              <>
+                                {/* Add to project */}
+                                <button
+                                  onClick={() => openAddToProject(m)}
+                                  className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                                  title="Add to a project"
+                                >
+                                  <FolderPlus className="w-4 h-4" />
+                                </button>
+
+                                {/* Edit */}
+                                <button
+                                  onClick={() => openEdit(m)}
+                                  className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                                  title="Edit member"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </button>
+
+                                {/* Remove from team */}
+                                <button
+                                  onClick={() => { setRemoveError(""); setRemoveTarget(m); }}
+                                  className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                                  title="Remove from team"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+
+                        <p className="text-[10px] text-muted-foreground/60 mt-2.5">Last active: {formatLastActive(m.lastActiveAt)}</p>
+                      </Card>
+                    );
+  };
+
   const q = search.toLowerCase();
   const filtered = members.filter(m =>
     !q || m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q) || m.role.toLowerCase().includes(q)
   );
 
-  const byRole = (role: string) => filtered.filter(m => m.role === role);
+  // Accounts scrubbed on deletion keep a tombstone email like
+  // "deleted-<id>@removed.invalid" — they're retained for history but
+  // shouldn't sit among the live team, so they collapse into a folder below.
+  const active = filtered.filter(m => !isDeletedAccountEmail(m.email));
+  const deleted = filtered.filter(m => isDeletedAccountEmail(m.email));
+  const activeTotal = members.filter(m => !isDeletedAccountEmail(m.email)).length;
+
+  const byRole = (role: string) => active.filter(m => m.role === role);
   const ROLES = ["admin", "project_manager", "site_worker", "subcontractor"];
-  const otherRoles = Array.from(new Set(filtered.map(m => m.role).filter(r => !ROLES.includes(r))));
+  const otherRoles = Array.from(new Set(active.map(m => m.role).filter(r => !ROLES.includes(r))));
 
   return (
     <SidebarLayout>
@@ -325,7 +511,7 @@ export default function TeamPage() {
         description="All staff and users in your company account."
         actions={<>
           <span className="text-sm font-semibold text-muted-foreground bg-muted px-3 py-1.5 rounded-full border whitespace-nowrap">
-            {members.length} {members.length === 1 ? "member" : "members"}
+            {activeTotal} {activeTotal === 1 ? "member" : "members"}
           </span>
           {caps.canManageTeam && (
             <Button variant="accent" onClick={openAdd}>
@@ -367,167 +553,34 @@ export default function TeamPage() {
                   <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{group.length}</span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {group.map(m => {
-                    const cleanPhone = m.phone?.replace(/\D/g, "") ?? null;
-                    return (
-                      <Card key={m.id} className="p-4 hover:shadow-md transition-shadow">
-                        {/* Header row: avatar + name + role badge */}
-                        <div className="flex items-start gap-3 mb-3">
-                          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                            <span className="font-extrabold text-primary text-sm">
-                              {m.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
-                            </span>
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="font-bold text-sm truncate">{m.name}</p>
-                            <RoleBadge role={m.role} />
-                          </div>
-                        </div>
-
-                        {/* Contact details */}
-                        <div className="space-y-1 mb-3">
-                          <a href={`mailto:${m.email}`} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors">
-                            <Mail className="w-3 h-3 shrink-0" /><span className="truncate">{m.email}</span>
-                          </a>
-                          {editingPhoneId === m.id ? (
-                            <div className="flex items-center gap-1.5">
-                              <Phone className="w-3 h-3 shrink-0 text-muted-foreground" />
-                              <input
-                                autoFocus
-                                value={phoneInput}
-                                onChange={e => setPhoneInput(e.target.value)}
-                                onKeyDown={e => { if (e.key === "Enter") savePhone(m.id); if (e.key === "Escape") setEditingPhoneId(null); }}
-                                placeholder="+44 7700 000000"
-                                className="flex-1 text-xs bg-muted rounded px-2 py-0.5 outline-none focus:ring-2 focus:ring-primary/30 min-w-0"
-                              />
-                              <button onClick={() => savePhone(m.id)} disabled={phoneSaving} className="text-success hover:text-success/80 shrink-0" title="Save"><CheckCircle2 className="w-3.5 h-3.5" /></button>
-                              <button onClick={() => setEditingPhoneId(null)} className="text-muted-foreground hover:text-destructive shrink-0" title="Cancel"><X className="w-3.5 h-3.5" /></button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1 group/phone min-w-0">
-                              {m.phone ? (
-                                <a href={`tel:${m.phone}`} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors min-w-0">
-                                  <Phone className="w-3 h-3 shrink-0" /><span className="truncate">{m.phone}</span>
-                                </a>
-                              ) : caps.canManageTeam ? (
-                                <span className="flex items-center gap-1.5 text-xs text-muted-foreground italic">
-                                  <Phone className="w-3 h-3 shrink-0" />Add phone number
-                                </span>
-                              ) : null}
-                              {caps.canManageTeam && (
-                                <button
-                                  onClick={() => { setEditingPhoneId(m.id); setPhoneInput(m.phone ?? ""); }}
-                                  className="ml-0.5 opacity-100 lg:opacity-0 lg:group-hover/phone:opacity-100 transition-opacity text-muted-foreground hover:text-primary shrink-0"
-                                  title="Edit phone"
-                                ><Pencil className="w-3 h-3" /></button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Action buttons */}
-                        <div className="flex items-center justify-between gap-1 border-t pt-2.5">
-                          <div className="flex items-center gap-0.5">
-                            {m.phone && (
-                              <>
-                                <a
-                                  href={`tel:${m.phone}`}
-                                  title={`Call ${m.phone}`}
-                                  className="p-1.5 rounded-lg text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors"
-                                >
-                                  <Phone className="w-4 h-4" />
-                                </a>
-                                <a
-                                  href={`sms:${m.phone}`}
-                                  title={`Text ${m.phone}`}
-                                  className="p-1.5 rounded-lg text-muted-foreground hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
-                                >
-                                  <MessageSquare className="w-4 h-4" />
-                                </a>
-                                <a
-                                  href={`https://wa.me/${cleanPhone}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  title={`WhatsApp ${m.phone}`}
-                                  className="p-1.5 rounded-lg text-muted-foreground hover:text-[#25D366] hover:bg-green-50 dark:hover:bg-green-950/30 transition-colors"
-                                >
-                                  <WhatsAppIcon className="w-4 h-4" />
-                                </a>
-                              </>
-                            )}
-                            <a
-                              href={`mailto:${m.email}`}
-                              title={`Email ${m.email}`}
-                              className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                            >
-                              <Mail className="w-4 h-4" />
-                            </a>
-                          </div>
-
-                          <div className="flex items-center gap-0.5">
-                            {/* Notes */}
-                            <button
-                              onClick={() => openNotes(m)}
-                              className="p-1.5 rounded-lg text-muted-foreground hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
-                              title="Notes & reminders"
-                            >
-                              <StickyNote className="w-4 h-4" />
-                            </button>
-
-                            {/* Share */}
-                            <button
-                              onClick={() => setSharingContact({
-                                id: m.id,
-                                name: m.name,
-                                text: `${m.name} (${m.role.replace(/_/g, " ")})\nEmail: ${m.email}${m.phone ? `\nPhone: ${m.phone}` : ""}`,
-                              })}
-                              className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                              title="Share contact"
-                            >
-                              <Share2 className="w-4 h-4" />
-                            </button>
-
-                            {caps.canManageTeam && (
-                              <>
-                                {/* Add to project */}
-                                <button
-                                  onClick={() => openAddToProject(m)}
-                                  className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                                  title="Add to a project"
-                                >
-                                  <FolderPlus className="w-4 h-4" />
-                                </button>
-
-                                {/* Edit */}
-                                <button
-                                  onClick={() => openEdit(m)}
-                                  className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                                  title="Edit member"
-                                >
-                                  <Pencil className="w-4 h-4" />
-                                </button>
-
-                                {/* Remove from team */}
-                                <button
-                                  onClick={() => { setRemoveError(""); setRemoveTarget(m); }}
-                                  className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                                  title="Remove from team"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-
-                        <p className="text-[10px] text-muted-foreground/60 mt-2.5">Last active: {formatLastActive(m.lastActiveAt)}</p>
-                      </Card>
-                    );
-                  })}
+                  {group.map(renderMemberCard)}
                 </div>
               </section>
             );
           })}
+
+          {/* Deleted accounts live in a folder, not among the live team */}
+          {deleted.length > 0 && (
+            <section>
+              <button
+                onClick={() => setDeletedOpen(o => !o)}
+                className="w-full flex items-center gap-2 mb-3 text-left group"
+              >
+                {deletedOpen ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+                <Archive className="w-4 h-4 text-muted-foreground" />
+                <h2 className="font-bold text-sm uppercase tracking-wide text-muted-foreground group-hover:text-foreground transition-colors">Deleted accounts</h2>
+                <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{deleted.length}</span>
+              </button>
+              {deletedOpen && (
+                <>
+                  <p className="text-xs text-muted-foreground mb-3">These accounts were deleted. They're kept here so past activity still has a name against it.</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 opacity-70">
+                    {deleted.map(renderMemberCard)}
+                  </div>
+                </>
+              )}
+            </section>
+          )}
         </div>
       )}
 
