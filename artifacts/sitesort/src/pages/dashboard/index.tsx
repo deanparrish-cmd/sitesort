@@ -13,7 +13,7 @@ import {
   ShieldAlert, FileSignature, Users, Bell, Search,
   MessageSquare, Camera, FilePlus, Plus, AlertCircle, CreditCard,
   FileText, CheckCircle2, Clock, TrendingUp, Zap, X, Circle, ClipboardCheck,
-  Lock, Sparkles, Trash2, Receipt, ArrowDownCircle, ArrowUpCircle, Eye, Share2,
+  Lock, Sparkles, Trash2, Receipt, ArrowDownCircle, ArrowUpCircle, Eye, Share2, UserCheck,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { ShareModal } from "@/components/share-modal";
@@ -67,6 +67,8 @@ function notifIcon(type: string) {
     case "member_document_uploaded": return <FileText className="w-4 h-4 text-indigo-500" />;
     case "safety_concern": return <AlertTriangle className="w-4 h-4 text-amber-500" />;
     case "daily_report":   return <ClipboardCheck className="w-4 h-4 text-teal-500" />;
+    case "check_in":         return <UserCheck className="w-4 h-4 text-green-600" />;
+    case "check_in_blocked": return <AlertTriangle className="w-4 h-4 text-red-500" />;
     case "trial_ending":   return <CreditCard className="w-4 h-4 text-orange-500" />;
     case "payment_failed": return <CreditCard className="w-4 h-4 text-red-500" />;
     default:               return <Bell className="w-4 h-4 text-muted-foreground" />;

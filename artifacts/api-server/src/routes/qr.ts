@@ -28,6 +28,28 @@ const router: IRouter = Router();
 // project_manager role) when a worker is turned away at check-in, so a blocked
 // arrival never goes unseen. Never throws — a failed alert must not fail the
 // check-in response.
+// Who hears about check-in activity on a project: the owner company's
+// admins / project managers PLUS the project's designated site manager
+// (projects.site_manager_id — a designation, not a role, so they're included
+// even when their company role is site_worker). Deduped.
+async function checkinRecipients(projectId: string): Promise<{ projectName: string; userIds: string[] } | null> {
+  const proj = (await db.select({
+    name: projectsTable.name,
+    companyId: projectsTable.companyId,
+    siteManagerId: projectsTable.siteManagerId,
+  }).from(projectsTable).where(eq(projectsTable.id, projectId)).limit(1))[0];
+  if (!proj) return null;
+  const managers = await db.select({ userId: companyMembersTable.userId })
+    .from(companyMembersTable)
+    .where(and(
+      eq(companyMembersTable.companyId, proj.companyId),
+      inArray(companyMembersTable.role, ["admin", "project_manager"]),
+    ));
+  const ids = new Set(managers.map(m => m.userId));
+  if (proj.siteManagerId) ids.add(proj.siteManagerId);
+  return { projectName: proj.name, userIds: [...ids] };
+}
+
 async function notifyBlockedCheckin(
   projectId: string,
   workerName: string,
@@ -35,26 +57,47 @@ async function notifyBlockedCheckin(
   reason: "not_registered" | "no_valid_insurance",
 ): Promise<void> {
   try {
-    const proj = (await db.select({ name: projectsTable.name, companyId: projectsTable.companyId })
-      .from(projectsTable).where(eq(projectsTable.id, projectId)).limit(1))[0];
-    if (!proj) return;
-    const managers = await db.select({ userId: companyMembersTable.userId })
-      .from(companyMembersTable)
-      .where(and(
-        eq(companyMembersTable.companyId, proj.companyId),
-        inArray(companyMembersTable.role, ["admin", "project_manager"]),
-      ));
+    const rec = await checkinRecipients(projectId);
+    if (!rec) return;
     const reasonText = reason === "not_registered"
       ? "they are not registered on this project"
       : "they have no valid insurance on file";
-    const managerIds = [...new Set(managers.map(m => m.userId))];
-    for (const userId of managerIds) {
+    for (const userId of rec.userIds) {
       await db.insert(notificationsTable).values({
         id: generateId(),
         userId,
         type: "check_in_blocked",
-        title: `Check-in blocked at ${proj.name}`,
+        title: `Check-in blocked at ${rec.projectName}`,
         message: `${workerName} (${companyName}) was blocked from checking in: ${reasonText}.`,
+        relatedEntityId: projectId,
+        relatedEntityType: "project",
+        read: false,
+      });
+    }
+  } catch {
+    /* alerting is best-effort */
+  }
+}
+
+// Best-effort: tell the same audience (managers + site manager) who arrived
+// and when, each time a worker successfully checks in via the QR board.
+async function notifySuccessfulCheckin(
+  projectId: string,
+  workerName: string,
+  companyName: string,
+  checkedInAt: Date,
+): Promise<void> {
+  try {
+    const rec = await checkinRecipients(projectId);
+    if (!rec) return;
+    const timeStr = checkedInAt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
+    for (const userId of rec.userIds) {
+      await db.insert(notificationsTable).values({
+        id: generateId(),
+        userId,
+        type: "check_in",
+        title: `Check-in at ${rec.projectName}`,
+        message: `${workerName} (${companyName}) checked in on site at ${timeStr}.`,
         relatedEntityId: projectId,
         relatedEntityType: "project",
         read: false,
@@ -373,6 +416,10 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
       lat: lat ? parseFloat(lat) : null,
       lng: lng ? parseFloat(lng) : null,
     }).returning();
+
+    // Fire-and-forget: the worker's check-in must not wait on (or fail with)
+    // the notification fan-out.
+    void notifySuccessfulCheckin(qr.projectId, workerName.trim(), companyName.trim(), checkin.checkedInAt);
 
     res.status(201).json({
       ...checkin,
