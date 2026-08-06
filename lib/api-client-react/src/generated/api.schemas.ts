@@ -2295,6 +2295,11 @@ export type AdminDeletePhoto200 = {
   success?: boolean;
 };
 
+export type AcceptPortalPendingInviteBody = {
+  /** The member's 4-digit sign-off PIN. */
+  pin: string;
+};
+
 export type CreatePortalSiteIssueBodyType =
   (typeof CreatePortalSiteIssueBodyType)[keyof typeof CreatePortalSiteIssueBodyType];
 

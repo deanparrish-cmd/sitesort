@@ -18,6 +18,7 @@ import type {
 
 import type {
   AcceptInviteRequest,
+  AcceptPortalPendingInviteBody,
   AcknowledgeRequest,
   AddInsuranceRequest,
   AddMemberRequest,
@@ -8689,7 +8690,7 @@ export function useGetPortalPendingInvites<
 }
 
 /**
- * @summary Accept a project invitation from inside the portal
+ * @summary Accept a project invitation from inside the portal (requires the member's 4-digit sign-off PIN)
  */
 export const getAcceptPortalPendingInviteUrl = (id: string) => {
   return `/api/portal/invites/${id}/accept`;
@@ -8697,6 +8698,7 @@ export const getAcceptPortalPendingInviteUrl = (id: string) => {
 
 export const acceptPortalPendingInvite = async (
   id: string,
+  acceptPortalPendingInviteBody: AcceptPortalPendingInviteBody,
   options?: RequestInit,
 ): Promise<PortalAcceptPendingInviteResponse> => {
   return customFetch<PortalAcceptPendingInviteResponse>(
@@ -8704,6 +8706,8 @@ export const acceptPortalPendingInvite = async (
     {
       ...options,
       method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(acceptPortalPendingInviteBody),
     },
   );
 };
@@ -8715,14 +8719,14 @@ export const getAcceptPortalPendingInviteMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof acceptPortalPendingInvite>>,
     TError,
-    { id: string },
+    { id: string; data: BodyType<AcceptPortalPendingInviteBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof acceptPortalPendingInvite>>,
   TError,
-  { id: string },
+  { id: string; data: BodyType<AcceptPortalPendingInviteBody> },
   TContext
 > => {
   const mutationKey = ["acceptPortalPendingInvite"];
@@ -8736,11 +8740,11 @@ export const getAcceptPortalPendingInviteMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof acceptPortalPendingInvite>>,
-    { id: string }
+    { id: string; data: BodyType<AcceptPortalPendingInviteBody> }
   > = (props) => {
-    const { id } = props ?? {};
+    const { id, data } = props ?? {};
 
-    return acceptPortalPendingInvite(id, requestOptions);
+    return acceptPortalPendingInvite(id, data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -8749,11 +8753,12 @@ export const getAcceptPortalPendingInviteMutationOptions = <
 export type AcceptPortalPendingInviteMutationResult = NonNullable<
   Awaited<ReturnType<typeof acceptPortalPendingInvite>>
 >;
-
+export type AcceptPortalPendingInviteMutationBody =
+  BodyType<AcceptPortalPendingInviteBody>;
 export type AcceptPortalPendingInviteMutationError = ErrorType<ErrorResponse>;
 
 /**
- * @summary Accept a project invitation from inside the portal
+ * @summary Accept a project invitation from inside the portal (requires the member's 4-digit sign-off PIN)
  */
 export const useAcceptPortalPendingInvite = <
   TError = ErrorType<ErrorResponse>,
@@ -8762,14 +8767,14 @@ export const useAcceptPortalPendingInvite = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof acceptPortalPendingInvite>>,
     TError,
-    { id: string },
+    { id: string; data: BodyType<AcceptPortalPendingInviteBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof acceptPortalPendingInvite>>,
   TError,
-  { id: string },
+  { id: string; data: BodyType<AcceptPortalPendingInviteBody> },
   TContext
 > => {
   return useMutation(getAcceptPortalPendingInviteMutationOptions(options));

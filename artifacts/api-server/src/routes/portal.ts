@@ -680,12 +680,38 @@ router.get("/portal/invites", ...portalGuards, async (req, res) => {
 
 // POST /api/portal/invites/:id/accept — accept a project invitation from
 // inside the portal (no email token needed: the member is already
-// authenticated and the invite matches their login). Mirrors the email-link
-// accept flow: link the person record, upsert the membership preserving any
-// permissions a PM pre-set, and mark the invite accepted.
+// authenticated and the invite matches their login). Requires the member's
+// 4-digit sign-off PIN — joining a project grants real access, so it gets the
+// same deliberate-confirmation bar as safety-critical sign-offs (same lockout
+// rules too). Mirrors the email-link accept flow: link the person record,
+// upsert the membership preserving any permissions a PM pre-set, and mark the
+// invite accepted.
 router.post("/portal/invites/:id/accept", ...portalGuards, async (req, res) => {
   try {
     const userId = req.user!.id;
+
+    if (await isPinLockedOut(userId)) {
+      res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
+      return;
+    }
+    const pinRow = await db.select({ pinHash: usersTable.pinHash }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+    const pinHash = pinRow[0]?.pinHash ?? null;
+    if (!pinHash) {
+      res.status(400).json({ error: "pin_not_set", message: "You need to set a sign-off PIN before accepting an invitation." });
+      return;
+    }
+    const pin = req.body?.pin;
+    if (!pin || !/^\d{4}$/.test(String(pin))) {
+      res.status(400).json({ error: "validation_error", message: "Your 4-digit PIN is required to accept this invitation." });
+      return;
+    }
+    if (!(await bcrypt.compare(String(pin), pinHash))) {
+      const { locked, remaining } = await recordFailedPinAttempt(userId);
+      if (locked) res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
+      else res.status(401).json({ error: "invalid_pin", message: "Incorrect PIN", attemptsRemaining: remaining });
+      return;
+    }
+    await clearPinAttempts(userId);
     const result = await db.transaction(async (tx) => {
       // Lock and match the invite in one step, then CLAIM it with a
       // conditional update. Two parallel accepts can't both win: only the

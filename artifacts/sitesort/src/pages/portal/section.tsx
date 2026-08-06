@@ -20,7 +20,7 @@ import {
   getGetPortalDailyReportQueryKey, getGetPortalDailyReportHistoryQueryKey,
   getGetPortalContextQueryKey,
   useGetPortalMyProjects, usePortalSwitchProject,
-  useGetPortalPendingInvites, useAcceptPortalPendingInvite,
+  useGetPortalPendingInvites,
   getGetPortalMyProjectsQueryKey, getGetPortalPendingInvitesQueryKey,
 } from "@workspace/api-client-react";
 import { DictationButton } from "@/components/ui/dictation-button";
@@ -420,7 +420,9 @@ function DocRow({ doc, section, unseen, signOff }: { doc: any; section: string; 
 // Inline (no modal) PIN entry for a portal sign-off — mobile-first, matches the
 // rest of the portal's "expand in place" pattern (e.g. AddPlantItemForm) rather
 // than the dashboard's dialog-based flow.
-function SignOffPinCard({ flow }: { flow: ReturnType<typeof useSignOffFlow> }) {
+function SignOffPinCard({ flow, actionLabel = "Sign off", busyLabel = "Signing off…" }: {
+  flow: ReturnType<typeof useSignOffFlow>; actionLabel?: string; busyLabel?: string;
+}) {
   if (!flow.target) return null;
   return (
     <Card className="border-primary/30 bg-primary/5">
@@ -474,7 +476,7 @@ function SignOffPinCard({ flow }: { flow: ReturnType<typeof useSignOffFlow> }) {
           disabled={flow.submitting}
           className="flex-1 min-h-14 rounded-xl bg-primary text-primary-foreground text-base font-bold hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50"
         >
-          {flow.submitting ? "Signing off…" : !flow.target.pinRequired ? "Confirm & sign off" : flow.setPinMode ? "Set PIN & sign off" : "Sign off"}
+          {flow.submitting ? busyLabel : !flow.target.pinRequired ? `Confirm & ${actionLabel.toLowerCase()}` : flow.setPinMode ? `Set PIN & ${actionLabel.toLowerCase()}` : actionLabel}
         </button>
         <button onClick={flow.close} className="min-h-14 px-5 rounded-xl border-2 border-border text-base font-bold hover:bg-muted active:scale-[0.98] transition-all">Cancel</button>
       </div>
@@ -632,13 +634,14 @@ function SiteTasksView() {
 // one-tap switch to it. Hidden entirely when there are none.
 function PendingInvitesCard() {
   const { data } = useGetPortalPendingInvites({ query: { queryKey: getGetPortalPendingInvitesQueryKey() } });
-  const accept = useAcceptPortalPendingInvite();
+  const { data: ctx } = useGetPortalContext();
   const switchProject = usePortalSwitchProject();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
-  const invites = data?.invites ?? [];
-  if (invites.length === 0) return null;
+  // The invite currently in the PIN step — captured in a ref so onSigned (a
+  // stable callback inside the flow) sees the right one, not a stale closure.
+  const pendingRef = useRef<{ projectId: string; projectName: string } | null>(null);
 
   const doSwitch = async (projectId: string) => {
     try {
@@ -652,24 +655,35 @@ function PendingInvitesCard() {
       toast({ variant: "destructive", title: "Couldn't open that project", description: e?.data?.message ?? "Please log in to it from the login page." });
     }
   };
-  const doAccept = async (inviteId: string, projectName: string) => {
-    try {
-      const res = await accept.mutateAsync({ id: inviteId });
+
+  // Accepting an invitation grants project access, so it runs through the
+  // same PIN confirmation flow as safety-critical document sign-offs
+  // (including first-time set-PIN and forgot-PIN paths).
+  const flow = useSignOffFlow({
+    hasPin: !!ctx?.member.hasPin,
+    acknowledgeUrl: id => `/api/portal/invites/${id}/accept`,
+    setPinUrl: "/api/portal/pin",
+    onPinSet: () => queryClient.invalidateQueries({ queryKey: getGetPortalContextQueryKey() }),
+    onSigned: () => {
+      const joined = pendingRef.current;
+      pendingRef.current = null;
       queryClient.invalidateQueries({ queryKey: getGetPortalPendingInvitesQueryKey() });
       queryClient.invalidateQueries({ queryKey: getGetPortalMyProjectsQueryKey() });
-      toast({
-        title: `You've joined ${projectName}`,
-        action: (
-          <ToastAction altText="Go to project" onClick={() => { void doSwitch(res.project.id); }}>
-            Go there now
-          </ToastAction>
-        ),
-      });
-    } catch (e: any) {
-      toast({ variant: "destructive", title: "Couldn't accept", description: e?.data?.message ?? "Please try again." });
-      queryClient.invalidateQueries({ queryKey: getGetPortalPendingInvitesQueryKey() });
-    }
-  };
+      if (joined) {
+        toast({
+          title: `You've joined ${joined.projectName}`,
+          action: (
+            <ToastAction altText="Go to project" onClick={() => { void doSwitch(joined.projectId); }}>
+              Go there now
+            </ToastAction>
+          ),
+        });
+      }
+    },
+  });
+
+  const invites = data?.invites ?? [];
+  if (invites.length === 0) return null;
 
   return (
     <Card className="border-accent/40 bg-accent/5">
@@ -679,18 +693,29 @@ function PendingInvitesCard() {
       </div>
       <div className="space-y-3">
         {invites.map(inv => (
-          <div key={inv.id} className="flex items-center gap-3 min-w-0" data-testid={`row-pending-invite-${inv.id}`}>
-            <div className="min-w-0 flex-1">
-              <p className="font-semibold truncate">{inv.projectName}</p>
-              <p className="text-xs text-muted-foreground truncate">{inv.companyName}</p>
+          <div key={inv.id} className="min-w-0" data-testid={`row-pending-invite-${inv.id}`}>
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold truncate">{inv.projectName}</p>
+                <p className="text-xs text-muted-foreground truncate">{inv.companyName}</p>
+              </div>
+              <PortalButton
+                onClick={() => {
+                  pendingRef.current = { projectId: inv.projectId, projectName: inv.projectName };
+                  flow.open({ id: inv.id, name: inv.projectName, pinRequired: true });
+                }}
+                disabled={flow.submitting || switchProject.isPending}
+                full={false}
+              >
+                Accept
+              </PortalButton>
             </div>
-            <PortalButton
-              onClick={() => doAccept(inv.id, inv.projectName)}
-              disabled={accept.isPending || switchProject.isPending}
-              full={false}
-            >
-              Accept
-            </PortalButton>
+            {flow.target?.id === inv.id && (
+              <div className="mt-3">
+                <p className="text-sm text-muted-foreground mb-2">Enter your sign-off PIN to confirm you're joining {inv.projectName}.</p>
+                <SignOffPinCard flow={flow} actionLabel="Accept invitation" busyLabel="Accepting…" />
+              </div>
+            )}
           </div>
         ))}
       </div>

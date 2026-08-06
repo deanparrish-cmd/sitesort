@@ -7,6 +7,7 @@
  */
 
 export * from "./acceptInviteRequest";
+export * from "./acceptPortalPendingInviteBody";
 export * from "./acknowledgeRequest";
 export * from "./ackRecipient";
 export * from "./ackRecipientStatus";

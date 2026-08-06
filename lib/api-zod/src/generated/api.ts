@@ -3190,10 +3190,14 @@ export const GetPortalPendingInvitesResponse = zod.object({
 });
 
 /**
- * @summary Accept a project invitation from inside the portal
+ * @summary Accept a project invitation from inside the portal (requires the member's 4-digit sign-off PIN)
  */
 export const AcceptPortalPendingInviteParams = zod.object({
   id: zod.coerce.string(),
+});
+
+export const AcceptPortalPendingInviteBody = zod.object({
+  pin: zod.string().describe("The member's 4-digit sign-off PIN."),
 });
 
 export const AcceptPortalPendingInviteResponse = zod.object({

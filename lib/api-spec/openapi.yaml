@@ -2303,13 +2303,24 @@ paths:
     post:
       operationId: acceptPortalPendingInvite
       tags: [portal]
-      summary: Accept a project invitation from inside the portal
+      summary: Accept a project invitation from inside the portal (requires the member's 4-digit sign-off PIN)
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pin:
+                  type: string
+                  description: The member's 4-digit sign-off PIN.
+              required: [pin]
       responses:
         "200":
           description: Joined the project
