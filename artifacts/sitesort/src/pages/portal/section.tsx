@@ -34,7 +34,7 @@ import {
   FileText, AlertTriangle, StickyNote, Download,
   QrCode, Copy, Building2, ShieldCheck, X, Sparkles, UploadCloud, Share, Plus,
   ChevronDown, ChevronRight, Users, FileSignature, CheckCircle2, HardHat, LogOut, ListChecks, HelpCircle,
-  Inbox, FolderUp,
+  Inbox, FolderUp, Receipt,
 } from "lucide-react";
 import { isCadFile, cadBadgeLabel, downloadFile } from "@/lib/documents";
 import { useToast } from "@/hooks/use-toast";
@@ -1447,12 +1447,13 @@ function SharedView() {
   // while the member is still reading the page. The nav badge still clears.
   const unseenIds = useRef<Set<string> | null>(null);
   if (data && unseenIds.current === null) {
-    unseenIds.current = new Set<string>([...data.documents, ...data.permits, ...data.photos, ...(data.dailyReports ?? [])].filter((i: any) => i.unseen).map((i: any) => i.id));
+    unseenIds.current = new Set<string>([...data.documents, ...data.permits, ...data.photos, ...(data.dailyReports ?? []), ...(data.invoices ?? [])].filter((i: any) => i.unseen).map((i: any) => i.id));
   }
   const isNew = (id: string) => unseenIds.current?.has(id) ?? false;
   if (isLoading) return <Loading />;
   const dailyReports = data?.dailyReports ?? [];
-  const empty = !data || (!data.documents.length && !data.photos.length && !data.permits.length && !notes.length && !dailyReports.length);
+  const invoices = data?.invoices ?? [];
+  const empty = !data || (!data.documents.length && !data.photos.length && !data.permits.length && !notes.length && !dailyReports.length && !invoices.length);
   if (empty) return <Empty>Nothing has been shared with you yet. Your project manager will share drawings, documents and updates here.</Empty>;
 
   const filteredDocs = data!.documents.filter(d => docMatchesCategory(d, category));
@@ -1460,6 +1461,7 @@ function SharedView() {
   const showPhotos = category === "all" && data!.photos.length > 0;
   const showNotes = (category === "all" || category === "general") && notes.length > 0;
   const showDailyReports = category === "all" && dailyReports.length > 0;
+  const showInvoices = category === "all" && invoices.length > 0;
   const nothingInCategory = category !== "all" && filteredDocs.length === 0 && !showPermits && !(category === "general" && showNotes);
 
   return (
@@ -1533,6 +1535,38 @@ function SharedView() {
             );
           })}
         </Card></div>
+      )}
+      {showInvoices && (
+        <div><SectionTitle>Invoices</SectionTitle><div className="space-y-3">
+          {invoices.map(inv => (
+            <Card key={inv.id} className={cn(isNew(inv.id) && "ring-1 ring-primary/40")}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {isNew(inv.id) && <NewPill />}
+                    <Receipt className="w-5 h-5 text-primary shrink-0" />
+                    <span className="font-bold text-base truncate">{inv.counterpartyName}</span>
+                    {inv.reference && <span className="text-sm text-muted-foreground">#{inv.reference}</span>}
+                  </div>
+                  {inv.description && <p className="text-base mt-1.5 break-words">{inv.description}</p>}
+                  <p className="text-sm text-muted-foreground mt-1.5">
+                    {inv.currency} {Number(inv.amount).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {inv.dueDate ? ` · Due ${fmtDate(inv.dueDate)}` : ""}
+                  </p>
+                </div>
+                <Badge label={inv.status} className={inv.status === "paid" ? GOOD : inv.status === "overdue" ? BAD : NEUTRAL} />
+              </div>
+              {inv.attachmentUrl && (
+                <button
+                  onClick={() => window.open(fileHref(inv.attachmentUrl!), "_blank", "noopener")}
+                  className="mt-3 min-h-11 px-4 rounded-lg border-2 border-border text-sm font-bold hover:bg-muted active:scale-[0.98] transition-all"
+                >
+                  View invoice file
+                </button>
+              )}
+            </Card>
+          ))}
+        </div></div>
       )}
       {nothingInCategory && <Empty>Nothing in this category yet.</Empty>}
 

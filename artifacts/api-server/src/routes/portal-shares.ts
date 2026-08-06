@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import {
   portalSharesTable, projectsTable, projectMembersTable, peopleTable,
   subcontractorsTable, documentsTable, usersTable, permitsTable,
-  photosTable, plantItemsTable, dailyReportsTable,
+  photosTable, plantItemsTable, dailyReportsTable, invoicesTable,
   portalMemberDocumentsTable, personCertificationsTable,
 } from "@workspace/db/schema";
 import { and, eq, isNull, isNotNull, inArray, desc } from "drizzle-orm";
@@ -27,7 +27,7 @@ async function requireProjectApprover(req: import("express").Request, res: impor
 }
 
 const SITE_STAFF = "Site Staff";
-const ITEM_TYPES = new Set(["document", "photo", "permit", "plant_item", "daily_report"]);
+const ITEM_TYPES = new Set(["document", "photo", "permit", "plant_item", "daily_report", "invoice"]);
 
 async function ownedProject(req: import("express").Request): Promise<boolean> {
   const rows = await db.select({ id: projectsTable.id }).from(projectsTable)
@@ -159,9 +159,17 @@ router.post("/projects/:projectId/portal-shares", authenticate, async (req, res)
     // The item must actually belong to THIS project — otherwise a manager of
     // one project could create share rules (and fire notifications) for
     // another project's items just by guessing ids.
+    // Invoices are financial data: they may only ever be shared with named
+    // individuals, never broadcast to everyone or a whole trade.
+    if (itemType === "invoice" && audiences.some(a => a.type !== "person")) {
+      res.status(400).json({ error: "validation_error", message: "Invoices can only be shared with individual people." });
+      return;
+    }
+
     const ITEM_TABLE = {
       document: documentsTable, photo: photosTable, permit: permitsTable,
       plant_item: plantItemsTable, daily_report: dailyReportsTable,
+      invoice: invoicesTable,
     } as const;
     const table = ITEM_TABLE[itemType as keyof typeof ITEM_TABLE];
     const owned = (await db.select({ id: table.id }).from(table)
@@ -241,6 +249,10 @@ router.post("/projects/:projectId/portal-shares", authenticate, async (req, res)
         title = p?.type ? `New permit: ${p.type}` : "New permit shared with you";
       } else if (itemType === "photo") {
         title = "New site photo shared with you";
+      } else if (itemType === "invoice") {
+        // Deliberately generic — no amounts or counterparty names in a push
+        // notification that shows on a lock screen.
+        title = "An invoice has been shared with you";
       }
       await enqueuePushForMembers([...targetUserIds], req.params.projectId, {
         kind: "site_update", itemType, itemId,

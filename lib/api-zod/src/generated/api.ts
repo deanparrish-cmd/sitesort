@@ -3929,6 +3929,26 @@ export const GetPortalSharedResponse = zod.object({
         "A daily report explicitly shared to the portal — the authored site diary only, never the auto-collated internal activity (check-ins, document views\/sign-offs, site photos) the dashboard's full report shows.",
       ),
   ),
+  invoices: zod.array(
+    zod
+      .object({
+        id: zod.string(),
+        direction: zod.string(),
+        counterpartyName: zod.string(),
+        description: zod.string().optional(),
+        amount: zod.string(),
+        currency: zod.string(),
+        dueDate: zod.string().optional(),
+        status: zod.string(),
+        reference: zod.string().optional(),
+        attachmentUrl: zod.string().optional(),
+        sharedAt: zod.date().optional(),
+        unseen: zod.boolean().optional(),
+      })
+      .describe(
+        "An invoice shared privately with THIS member (invoices are only ever shared person-by-person, never to everyone or a trade).",
+      ),
+  ),
 });
 
 /**

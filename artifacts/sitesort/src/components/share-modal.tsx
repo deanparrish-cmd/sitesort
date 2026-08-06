@@ -50,7 +50,10 @@ function normaliseUrl(url: string) {
 // Portal-shareable entity types (things portal members can actually open). Also
 // the set that can be pinned to the Site Board (daily reports have no fileUrl,
 // so the QR/Pin tab naturally has nothing to show them regardless).
-const PORTAL_ENTITY_TYPES = new Set(["document", "photo", "permit", "plant_item", "daily_report"]);
+const PORTAL_ENTITY_TYPES = new Set(["document", "photo", "permit", "plant_item", "daily_report", "invoice"]);
+// Financial entities may only ever be shared with named individuals — the
+// Everyone/Trades broadcast modes are hidden and the server rejects them too.
+const PERSON_ONLY_ENTITY_TYPES = new Set(["invoice"]);
 
 function methodLabel(method: string) {
   const map: Record<string, string> = {
@@ -72,7 +75,7 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
   const [history, setHistory] = useState<ShareLog[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   // Team Portal sharing state
-  const [portalMode, setPortalMode] = useState<"all" | "trade" | "person">("all");
+  const [portalMode, setPortalMode] = useState<"all" | "trade" | "person">(PERSON_ONLY_ENTITY_TYPES.has(entityType) ? "person" : "all");
   const [selTrades, setSelTrades] = useState<string[]>([]);
   const [selPersons, setSelPersons] = useState<string[]>([]);
   const [portalTrades, setPortalTrades] = useState<PortalTrade[]>([]);
@@ -96,7 +99,8 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
 
   const fullUrl = fileUrl ? normaliseUrl(fileUrl) : null;
   const isPortalEntity = PORTAL_ENTITY_TYPES.has(entityType);
-  const canPin = isPortalEntity && !!projectId;
+  const personOnly = PERSON_ONLY_ENTITY_TYPES.has(entityType);
+  const canPin = isPortalEntity && !personOnly && !!projectId;
   // The link actually sent to a recipient: prefer the secure in-app URL when
   // supplied, so a raw unauthenticated file link is never emailed/messaged
   // for entities that opt into secureViewUrl.
@@ -107,7 +111,7 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
     if (!open) {
       setTab("share"); setIsPinned(false); setLinkCopied(false);
       setSiteBoardUrl(null); setSelectedProjectId("");
-      setPortalMode("all"); setSelTrades([]); setSelPersons([]);
+      setPortalMode(personOnly ? "person" : "all"); setSelTrades([]); setSelPersons([]);
       setPortalTrades([]); setPortalMembers([]); setExistingShares([]); setPortalMsg(null);
     }
   }, [open]);
@@ -366,20 +370,26 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
                         </button>
                       </div>
                     )}
-                    <p className="text-xs text-muted-foreground">Portal members see only what's shared with them. Trade shares also reach people invited later.</p>
+                    <p className="text-xs text-muted-foreground">
+                      {personOnly
+                        ? "Shared privately, person by person — only the people you pick can see this in their portal."
+                        : "Portal members see only what's shared with them. Trade shares also reach people invited later."}
+                    </p>
 
-                    {/* Audience mode */}
-                    <div className="flex gap-1 p-1 rounded-lg bg-muted">
-                      {([["all", "Everyone"], ["trade", "Trades"], ["person", "People"]] as const).map(([m, label]) => (
-                        <button
-                          key={m}
-                          onClick={() => { setPortalMode(m); setPortalMsg(null); }}
-                          className={cn("flex-1 py-1.5 rounded-md text-xs font-semibold transition-colors", portalMode === m ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground")}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
+                    {/* Audience mode — person-only entities (invoices) never broadcast */}
+                    {!personOnly && (
+                      <div className="flex gap-1 p-1 rounded-lg bg-muted">
+                        {([["all", "Everyone"], ["trade", "Trades"], ["person", "People"]] as const).map(([m, label]) => (
+                          <button
+                            key={m}
+                            onClick={() => { setPortalMode(m); setPortalMsg(null); }}
+                            className={cn("flex-1 py-1.5 rounded-md text-xs font-semibold transition-colors", portalMode === m ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground")}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
 
                     {portalMode === "all" && (
                       <p className="text-xs text-muted-foreground">Everyone on this project's portal will be able to see it.</p>

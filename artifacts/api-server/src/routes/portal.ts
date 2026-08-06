@@ -11,6 +11,7 @@ import {
   portalMemberDocumentsTable, notificationsTable, companyMembersTable, portalSubmissionNotesTable,
   plantItemsTable, plantItemAttachmentsTable, plantItemDistributionsTable, personCertificationsTable, dailyReportsTable,
   messagesTable, channelMessagesTable, acknowledgmentAuditTable, portalItemViewsTable,
+  invoicesTable,
 } from "@workspace/db/schema";
 import { and, eq, inArray, isNull, isNotNull, desc, asc, gte, lt, count, max, or, ne, sql } from "drizzle-orm";
 import { buildSiteBoardPayload } from "../lib/site-board";
@@ -245,10 +246,11 @@ const isAfter = (d: Date | null | undefined, since: Date | undefined): boolean =
 // whose share/create time is newer than the member's last view of that section.
 async function computeUnseen(userId: string, projectId: string): Promise<{ counts: Record<string, number>; total: number }> {
   const viewer = await resolveViewer(userId, projectId);
-  const [docMap, photoMap, permitMap, lastView, permRow] = await Promise.all([
+  const [docMap, photoMap, permitMap, invoiceMap, lastView, permRow] = await Promise.all([
     visibleShareMap(projectId, "document", viewer),
     visibleShareMap(projectId, "photo", viewer),
     visibleShareMap(projectId, "permit", viewer),
+    visibleShareMap(projectId, "invoice", viewer),
     lastViewedBySection(userId, projectId),
     db.select({
       canLogIssues: projectMembersTable.canLogIssues,
@@ -308,6 +310,8 @@ async function computeUnseen(userId: string, projectId: string): Promise<{ count
     }
   }
   for (const at of permitMap.values()) { if (isAfter(at, lv("shared"))) sharedCount++; }
+  // Shared invoices land in "Shared with me" too — count them the same way.
+  for (const at of invoiceMap.values()) { if (isAfter(at, lv("shared"))) sharedCount++; }
   // Plant & Materials is its own gated section, not a shared-document type
   // (see the sharing-bug fix above) — its badge counts every project plant
   // item's latest activity, not a portal_shares timestamp.
@@ -1181,24 +1185,26 @@ function serializeSharedReport(r: { id: string; reportDate: string; managerRepor
 router.get("/portal/shared", ...portalGuards, async (req, res) => {
   const pid = req.portalProjectId!;
   const viewer = await resolveViewer(req.user!.id, pid);
-  const [docMap, photoMap, permitMap, reportMap, lastView, permRow] = await Promise.all([
+  const [docMap, photoMap, permitMap, reportMap, invoiceMap, lastView, permRow] = await Promise.all([
     visibleShareMap(pid, "document", viewer),
     visibleShareMap(pid, "photo", viewer),
     visibleShareMap(pid, "permit", viewer),
     visibleShareMap(pid, "daily_report", viewer),
+    visibleShareMap(pid, "invoice", viewer),
     lastViewedBySection(req.user!.id, pid),
     db.select({ canLogIssues: projectMembersTable.canLogIssues }).from(projectMembersTable)
       .where(and(eq(projectMembersTable.projectId, pid), eq(projectMembersTable.userId, req.user!.id))).limit(1),
   ]);
   const canLogIssues = permRow[0]?.canLogIssues ?? false;
   const seenBefore = lastView.get("shared");
-  const docIds = [...docMap.keys()], photoIds = canLogIssues ? [...photoMap.keys()] : [], permitIds = [...permitMap.keys()], reportIds = [...reportMap.keys()];
-  const [gatedDocs, safetyDocs, photos, permits, reports] = await Promise.all([
+  const docIds = [...docMap.keys()], photoIds = canLogIssues ? [...photoMap.keys()] : [], permitIds = [...permitMap.keys()], reportIds = [...reportMap.keys()], invoiceIds = [...invoiceMap.keys()];
+  const [gatedDocs, safetyDocs, photos, permits, reports, invoices] = await Promise.all([
     docIds.length ? db.select().from(documentsTable).where(and(eq(documentsTable.projectId, pid), inArray(documentsTable.id, docIds), inArray(documentsTable.status, ["current", "superseded"]))) : Promise.resolve([]),
     db.select().from(documentsTable).where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, "safety"), eq(documentsTable.status, "current"))),
     photoIds.length ? db.select().from(photosTable).where(and(eq(photosTable.projectId, pid), inArray(photosTable.id, photoIds))) : Promise.resolve([]),
     permitIds.length ? db.select().from(permitsTable).where(and(eq(permitsTable.projectId, pid), isNull(permitsTable.archivedAt), inArray(permitsTable.id, permitIds))) : Promise.resolve([]),
     reportIds.length ? db.select().from(dailyReportsTable).where(and(eq(dailyReportsTable.projectId, pid), inArray(dailyReportsTable.id, reportIds))) : Promise.resolve([] as (typeof dailyReportsTable.$inferSelect)[]),
+    invoiceIds.length ? db.select().from(invoicesTable).where(and(eq(invoicesTable.projectId, pid), inArray(invoicesTable.id, invoiceIds))) : Promise.resolve([] as (typeof invoicesTable.$inferSelect)[]),
   ]);
   // Safety docs bypass portal_shares entirely, so they have no entry in docMap —
   // fold their own createdAt in as a synthetic "shared at" for ordering/unseen.
@@ -1221,11 +1227,26 @@ router.get("/portal/shared", ...portalGuards, async (req, res) => {
     myItemViews(req.user!.id, "permit", permits.map(p => p.id)),
     myItemViews(req.user!.id, "daily_report", reportsWithContent.map(r => r.id)),
   ]);
+  // Invoices are only ever shared person-by-person (enforced at share time) —
+  // the amounts and counterparty are intended for exactly that recipient.
+  const serializeSharedInvoice = (inv: typeof invoicesTable.$inferSelect) => ({
+    id: inv.id,
+    direction: inv.direction,
+    counterpartyName: inv.counterpartyName,
+    description: inv.description ?? undefined,
+    amount: inv.amount,
+    currency: inv.currency,
+    dueDate: inv.dueDate ?? undefined,
+    status: inv.status,
+    reference: inv.reference ?? undefined,
+    attachmentUrl: inv.attachmentUrl ?? undefined,
+  });
   res.json({
     documents: withMyStatus(annotate(docs, serializeDoc, docMapWithSafety), myStatuses),
     photos: annotate(photos, serializeIssue, photoMap),
     permits: withMyView(annotate(permits, serializePermit, permitMap), permitViews),
     dailyReports: withMyView(annotate(reportsWithContent, serializeSharedReport, reportMap), reportViews),
+    invoices: annotate(invoices, serializeSharedInvoice, invoiceMap),
   });
 });
 

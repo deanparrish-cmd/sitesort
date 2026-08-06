@@ -1916,11 +1916,30 @@ export interface PortalSharedDailyReport {
   myViewedAt?: string | null;
 }
 
+/**
+ * An invoice shared privately with THIS member (invoices are only ever shared person-by-person, never to everyone or a trade).
+ */
+export interface PortalSharedInvoice {
+  id: string;
+  direction: string;
+  counterpartyName: string;
+  description?: string;
+  amount: string;
+  currency: string;
+  dueDate?: string;
+  status: string;
+  reference?: string;
+  attachmentUrl?: string;
+  sharedAt?: string;
+  unseen?: boolean;
+}
+
 export interface PortalShared {
   documents: PortalDocument[];
   photos: PortalIssue[];
   permits: PortalPermit[];
   dailyReports: PortalSharedDailyReport[];
+  invoices: PortalSharedInvoice[];
 }
 
 export interface PortalGeneral {
