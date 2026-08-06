@@ -3,6 +3,7 @@ import { TabsContent } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { QrCode, Share2, FolderOpen, ChevronDown, ChevronRight } from "lucide-react";
+import { MonthFolder, splitByMonth, monthLabel } from "@/components/ui/month-folder";
 import { useDetail } from "../context";
 
 type Checkin = {
@@ -53,9 +54,12 @@ export function CheckinsTab() {
   const [openDays, setOpenDays] = useState<Record<string, boolean>>({});
 
   const todayKey = new Date().toDateString();
+  // This month's earlier days stay visible as individual day folders; whole
+  // previous months collapse into one folder per month (June 2026, ...).
+  const { current: thisMonth, byMonth } = splitByMonth(checkins as Checkin[], ci => ci.checkedInAt);
   const today: Checkin[] = [];
   const byDay = new Map<string, Checkin[]>(); // insertion order = newest first (API sorts desc)
-  for (const ci of checkins as Checkin[]) {
+  for (const ci of thisMonth) {
     const key = new Date(ci.checkedInAt).toDateString();
     if (key === todayKey) today.push(ci);
     else {
@@ -135,6 +139,20 @@ export function CheckinsTab() {
                         </div>
                       );
                     })}
+                  </div>
+                </div>
+              )}
+              {byMonth.size > 0 && (
+                <div>
+                  <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wide mb-3">Previous months</h3>
+                  <div className="space-y-2">
+                    {[...byMonth.entries()].map(([key, list]) => (
+                      <MonthFolder key={key} label={monthLabel(key)} count={list.length} countLabel="check-in" testId={`button-checkin-month-${key}`}>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 p-4 pt-1">
+                          {list.map(ci => <CheckinCard key={ci.id} ci={ci} setSharingDoc={setSharingDoc} />)}
+                        </div>
+                      </MonthFolder>
+                    ))}
                   </div>
                 </div>
               )}

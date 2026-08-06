@@ -8,6 +8,7 @@ import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { OverdueBadge } from "@/components/ui/overdue-badge";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDate, formatBytes, cn } from "@/lib/utils";
+import { MonthFolder, splitByMonth, monthLabel } from "@/components/ui/month-folder";
 import { useDetail } from "../context";
 import { CloseInvalidDialog } from "../dialogs/close-issue-dialog";
 import { ArchiveIssueDialog } from "../dialogs/archive-issue-dialog";
@@ -282,9 +283,17 @@ export function IssuesTab() {
                     <div className="flex flex-col items-center justify-center py-12 text-center px-4">
                       <p className="font-semibold text-muted-foreground">No issues match your filters.</p>
                     </div>
-                  ) : (
-                    <div className="divide-y">
-                      {filtered.map(issue => {
+                  ) : (() => {
+                      // An issue only files away into a month folder once it's
+                      // RESOLVED and that happened in a previous month —
+                      // anything still live stays visible here no matter how
+                      // old it is.
+                      const { current: live, byMonth } = splitByMonth(
+                        filtered,
+                        issue => issue.resolvedAt ?? issue.takenAt,
+                        issue => issue.status !== "resolved",
+                      );
+                      const issueRow = (issue: typeof filtered[number]) => {
                         const photoUrl = issue.photoUrl?.replace(/^\/uploads\//, "/api/uploads/") ?? null;
                         const statusInfo = STATUS_BADGE[issue.status ?? "open"] ?? STATUS_BADGE.open;
                         return (
@@ -338,9 +347,33 @@ export function IssuesTab() {
                             )}
                           </div>
                         );
-                      })}
-                    </div>
-                  )}
+                      };
+                      return (
+                        <>
+                          {live.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-8 text-center px-4">
+                              <p className="text-sm text-muted-foreground">No live issues — resolved ones are filed in the month folders below.</p>
+                            </div>
+                          ) : (
+                            <div className="divide-y">
+                              {live.map(issueRow)}
+                            </div>
+                          )}
+                          {byMonth.size > 0 && (
+                            <div className="p-3 pt-2 space-y-2 border-t">
+                              <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wide px-1">Resolved in previous months</h4>
+                              {[...byMonth.entries()].map(([key, list]) => (
+                                <MonthFolder key={key} label={monthLabel(key)} count={list.length} countLabel="issue" testId={`button-issue-month-${key}`}>
+                                  <div className="divide-y border-t">
+                                    {list.map(issueRow)}
+                                  </div>
+                                </MonthFolder>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                 </Card>
                 </>
                 )}
