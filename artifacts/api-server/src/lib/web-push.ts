@@ -37,6 +37,38 @@ export type PushPayload = {
   tag?: string;  // collapses same-tag notifications on the device
 };
 
+// Send to EVERY device this user has subscribed across ALL their projects.
+// Used for cross-project events (e.g. an invitation to a NEW project, where a
+// project-scoped subscription for it can't exist yet). Same best-effort
+// semantics as sendPushToMember.
+export async function sendPushToUser(userId: string, payload: PushPayload): Promise<number> {
+  if (!configured) return 0;
+  const subs = await db.select().from(pushSubscriptionsTable)
+    .where(eq(pushSubscriptionsTable.userId, userId));
+  if (subs.length === 0) return 0;
+  const body = JSON.stringify(payload);
+  let delivered = 0;
+  // Two projects can share a device endpoint — dedupe so one phone gets one ping.
+  const seen = new Set<string>();
+  await Promise.all(subs.map(async (s) => {
+    if (seen.has(s.endpoint)) return;
+    seen.add(s.endpoint);
+    try {
+      await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, body);
+      delivered++;
+    } catch (err: any) {
+      const status = err?.statusCode;
+      if (status === 404 || status === 410) {
+        await db.delete(pushSubscriptionsTable).where(eq(pushSubscriptionsTable.id, s.id)).catch(() => {});
+      } else {
+        logger.warn({ err, endpoint: s.endpoint.slice(0, 40) }, "web-push: send failed");
+      }
+    }
+  }));
+  logger.info({ userId, devices: seen.size, delivered, tag: payload.tag }, "web-push: user send");
+  return delivered;
+}
+
 // Send a payload to every device a member has subscribed. Best-effort: a 404/410
 // means the browser dropped that subscription → prune it so we stop trying. Never
 // throws. Returns how many devices were successfully delivered to.

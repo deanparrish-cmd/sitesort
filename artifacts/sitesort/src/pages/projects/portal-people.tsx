@@ -17,7 +17,7 @@ import {
 
 type PortalStatus = {
   status: "not_invited" | "invited" | "member"; role?: string; inviteId?: string; lastActiveAt?: string;
-  emailStatus?: "sent" | "failed"; emailLastSentAt?: string;
+  emailStatus?: "sent" | "failed" | "portal"; emailLastSentAt?: string;
   memberId?: string; canLogIssues?: boolean; canUpdatePlantMaterials?: boolean; canEditDailyReport?: boolean;
 };
 
@@ -47,6 +47,8 @@ function InviteEmailStatus({ projectId, portal, onDone }: { projectId: string; p
     <span className="inline-flex items-center gap-1.5 text-[11px] leading-tight flex-wrap">
       {portal.emailStatus === "failed" ? (
         <span className="inline-flex items-center gap-0.5 text-destructive font-medium"><AlertTriangle className="w-3 h-3" /> Email failed, use copy link or resend</span>
+      ) : portal.emailStatus === "portal" ? (
+        <span className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="w-3 h-3" /> Invited via their portal {fmtRelative(portal.emailLastSentAt)}</span>
       ) : portal.emailStatus === "sent" ? (
         <span className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="w-3 h-3" /> Email sent {fmtRelative(portal.emailLastSentAt)}</span>
       ) : (

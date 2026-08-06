@@ -74,6 +74,7 @@ import type {
   PlantItem,
   PlantItemAttachment,
   PlantItemDistribution,
+  PortalAcceptPendingInviteResponse,
   PortalContext,
   PortalDailyReport,
   PortalDailyReportHistoryItem,
@@ -92,7 +93,9 @@ import type {
   PortalMessageReaction,
   PortalMessageThread,
   PortalMessagesSummary,
+  PortalMyProjectsResponse,
   PortalOverview,
+  PortalPendingInvitesResponse,
   PortalPermit,
   PortalPlantItem,
   PortalProgress,
@@ -101,6 +104,7 @@ import type {
   PortalPushUnsubscribeRequest,
   PortalShared,
   PortalSiteBoard,
+  PortalSwitchProjectRequest,
   PortalTeamMember,
   PortalUnseen,
   Project,
@@ -8441,6 +8445,334 @@ export const useAcceptPortalInvite = <
   TContext
 > => {
   return useMutation(getAcceptPortalInviteMutationOptions(options));
+};
+
+/**
+ * @summary Every project the signed-in member can enter (for the in-portal switcher)
+ */
+export const getGetPortalMyProjectsUrl = () => {
+  return `/api/portal/my-projects`;
+};
+
+export const getPortalMyProjects = async (
+  options?: RequestInit,
+): Promise<PortalMyProjectsResponse> => {
+  return customFetch<PortalMyProjectsResponse>(getGetPortalMyProjectsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPortalMyProjectsQueryKey = () => {
+  return [`/api/portal/my-projects`] as const;
+};
+
+export const getGetPortalMyProjectsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPortalMyProjects>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalMyProjects>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPortalMyProjectsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPortalMyProjects>>
+  > = ({ signal }) => getPortalMyProjects({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalMyProjects>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPortalMyProjectsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPortalMyProjects>>
+>;
+export type GetPortalMyProjectsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Every project the signed-in member can enter (for the in-portal switcher)
+ */
+
+export function useGetPortalMyProjects<
+  TData = Awaited<ReturnType<typeof getPortalMyProjects>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalMyProjects>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPortalMyProjectsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Switch the portal session to another project the member belongs to
+ */
+export const getPortalSwitchProjectUrl = () => {
+  return `/api/portal/switch-project`;
+};
+
+export const portalSwitchProject = async (
+  portalSwitchProjectRequest: PortalSwitchProjectRequest,
+  options?: RequestInit,
+): Promise<PortalLoginResponse> => {
+  return customFetch<PortalLoginResponse>(getPortalSwitchProjectUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(portalSwitchProjectRequest),
+  });
+};
+
+export const getPortalSwitchProjectMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof portalSwitchProject>>,
+    TError,
+    { data: BodyType<PortalSwitchProjectRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof portalSwitchProject>>,
+  TError,
+  { data: BodyType<PortalSwitchProjectRequest> },
+  TContext
+> => {
+  const mutationKey = ["portalSwitchProject"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof portalSwitchProject>>,
+    { data: BodyType<PortalSwitchProjectRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return portalSwitchProject(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PortalSwitchProjectMutationResult = NonNullable<
+  Awaited<ReturnType<typeof portalSwitchProject>>
+>;
+export type PortalSwitchProjectMutationBody =
+  BodyType<PortalSwitchProjectRequest>;
+export type PortalSwitchProjectMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Switch the portal session to another project the member belongs to
+ */
+export const usePortalSwitchProject = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof portalSwitchProject>>,
+    TError,
+    { data: BodyType<PortalSwitchProjectRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof portalSwitchProject>>,
+  TError,
+  { data: BodyType<PortalSwitchProjectRequest> },
+  TContext
+> => {
+  return useMutation(getPortalSwitchProjectMutationOptions(options));
+};
+
+/**
+ * @summary Pending project invitations addressed to the signed-in member
+ */
+export const getGetPortalPendingInvitesUrl = () => {
+  return `/api/portal/invites`;
+};
+
+export const getPortalPendingInvites = async (
+  options?: RequestInit,
+): Promise<PortalPendingInvitesResponse> => {
+  return customFetch<PortalPendingInvitesResponse>(
+    getGetPortalPendingInvitesUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetPortalPendingInvitesQueryKey = () => {
+  return [`/api/portal/invites`] as const;
+};
+
+export const getGetPortalPendingInvitesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPortalPendingInvites>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalPendingInvites>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPortalPendingInvitesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPortalPendingInvites>>
+  > = ({ signal }) => getPortalPendingInvites({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalPendingInvites>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPortalPendingInvitesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPortalPendingInvites>>
+>;
+export type GetPortalPendingInvitesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Pending project invitations addressed to the signed-in member
+ */
+
+export function useGetPortalPendingInvites<
+  TData = Awaited<ReturnType<typeof getPortalPendingInvites>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPortalPendingInvites>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPortalPendingInvitesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Accept a project invitation from inside the portal
+ */
+export const getAcceptPortalPendingInviteUrl = (id: string) => {
+  return `/api/portal/invites/${id}/accept`;
+};
+
+export const acceptPortalPendingInvite = async (
+  id: string,
+  options?: RequestInit,
+): Promise<PortalAcceptPendingInviteResponse> => {
+  return customFetch<PortalAcceptPendingInviteResponse>(
+    getAcceptPortalPendingInviteUrl(id),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAcceptPortalPendingInviteMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof acceptPortalPendingInvite>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof acceptPortalPendingInvite>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["acceptPortalPendingInvite"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof acceptPortalPendingInvite>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return acceptPortalPendingInvite(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AcceptPortalPendingInviteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof acceptPortalPendingInvite>>
+>;
+
+export type AcceptPortalPendingInviteMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Accept a project invitation from inside the portal
+ */
+export const useAcceptPortalPendingInvite = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof acceptPortalPendingInvite>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof acceptPortalPendingInvite>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAcceptPortalPendingInviteMutationOptions(options));
 };
 
 /**

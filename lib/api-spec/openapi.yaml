@@ -2248,6 +2248,82 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /portal/my-projects:
+    get:
+      operationId: getPortalMyProjects
+      tags: [portal]
+      summary: Every project the signed-in member can enter (for the in-portal switcher)
+      responses:
+        "200":
+          description: Project list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalMyProjectsResponse"
+
+  /portal/switch-project:
+    post:
+      operationId: portalSwitchProject
+      tags: [portal]
+      summary: Switch the portal session to another project the member belongs to
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PortalSwitchProjectRequest"
+      responses:
+        "200":
+          description: New project-scoped token issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalLoginResponse"
+        "403":
+          description: Not a member of that project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /portal/invites:
+    get:
+      operationId: getPortalPendingInvites
+      tags: [portal]
+      summary: Pending project invitations addressed to the signed-in member
+      responses:
+        "200":
+          description: Pending invitations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalPendingInvitesResponse"
+
+  /portal/invites/{id}/accept:
+    post:
+      operationId: acceptPortalPendingInvite
+      tags: [portal]
+      summary: Accept a project invitation from inside the portal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Joined the project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalAcceptPendingInviteResponse"
+        "404":
+          description: Invitation not found or no longer valid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   # ---- Team Portal: member-facing read-only sections (portal token) ----
   /portal/me:
     get:
@@ -5392,6 +5468,64 @@ components:
           items:
             $ref: "#/components/schemas/PortalProjectRef"
       required: [requiresProjectChoice]
+
+    PortalMyProjectsResponse:
+      type: object
+      properties:
+        currentProjectId:
+          type: string
+        projects:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              companyName:
+                type: string
+            required: [id, name, companyName]
+      required: [currentProjectId, projects]
+
+    PortalSwitchProjectRequest:
+      type: object
+      properties:
+        projectId:
+          type: string
+      required: [projectId]
+
+    PortalPendingInvitesResponse:
+      type: object
+      properties:
+        invites:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              role:
+                type: string
+              projectId:
+                type: string
+              projectName:
+                type: string
+              companyName:
+                type: string
+              createdAt:
+                type: string
+            required: [id, role, projectId, projectName, companyName]
+      required: [invites]
+
+    PortalAcceptPendingInviteResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        project:
+          $ref: "#/components/schemas/PortalProjectRef"
+      required: [success, project]
 
     PortalInviteInfo:
       type: object

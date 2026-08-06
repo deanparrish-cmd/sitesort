@@ -62,6 +62,17 @@ export async function checkAndTouchSession(sid: string, userId: string, projectI
 }
 
 // Explicit logout — kill one session immediately, server-side.
+// Conditionally CLAIM (revoke) a live session. Returns true only for the one
+// caller that actually flipped it — concurrent claims of the same sid lose.
+// Used by project switching so two parallel switch requests can't both mint a
+// replacement session off the same old token.
+export async function claimPortalSession(sid: string): Promise<boolean> {
+  const rows = await db.update(portalSessionsTable).set({ revokedAt: new Date() })
+    .where(and(eq(portalSessionsTable.id, sid), isNull(portalSessionsTable.revokedAt)))
+    .returning({ id: portalSessionsTable.id });
+  return rows.length > 0;
+}
+
 export async function revokePortalSession(sid: string): Promise<void> {
   await db.update(portalSessionsTable).set({ revokedAt: new Date() })
     .where(and(eq(portalSessionsTable.id, sid), isNull(portalSessionsTable.revokedAt)));

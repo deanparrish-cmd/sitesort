@@ -1531,6 +1531,39 @@ export interface PortalLoginResponse {
   projects?: PortalProjectRef[];
 }
 
+export type PortalMyProjectsResponseProjectsItem = {
+  id: string;
+  name: string;
+  companyName: string;
+};
+
+export interface PortalMyProjectsResponse {
+  currentProjectId: string;
+  projects: PortalMyProjectsResponseProjectsItem[];
+}
+
+export interface PortalSwitchProjectRequest {
+  projectId: string;
+}
+
+export type PortalPendingInvitesResponseInvitesItem = {
+  id: string;
+  role: string;
+  projectId: string;
+  projectName: string;
+  companyName: string;
+  createdAt?: string;
+};
+
+export interface PortalPendingInvitesResponse {
+  invites: PortalPendingInvitesResponseInvitesItem[];
+}
+
+export interface PortalAcceptPendingInviteResponse {
+  success: boolean;
+  project: PortalProjectRef;
+}
+
 export interface PortalInviteInfo {
   valid: boolean;
   name: string;

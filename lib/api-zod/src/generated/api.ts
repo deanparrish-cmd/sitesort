@@ -3114,6 +3114,97 @@ export const AcceptPortalInviteResponse = zod.object({
 });
 
 /**
+ * @summary Every project the signed-in member can enter (for the in-portal switcher)
+ */
+export const GetPortalMyProjectsResponse = zod.object({
+  currentProjectId: zod.string(),
+  projects: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      companyName: zod.string(),
+    }),
+  ),
+});
+
+/**
+ * @summary Switch the portal session to another project the member belongs to
+ */
+export const PortalSwitchProjectBody = zod.object({
+  projectId: zod.string(),
+});
+
+export const PortalSwitchProjectResponse = zod.object({
+  requiresProjectChoice: zod.boolean(),
+  requiresLogin: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Set on invite-accept when the email already has a SiteSort account — access was granted; the person must now sign in at \/portal\/login with their existing password (no token is issued here).",
+    ),
+  token: zod.string().optional(),
+  project: zod
+    .object({
+      id: zod.string(),
+      name: zod.string(),
+    })
+    .optional(),
+  member: zod
+    .object({
+      userId: zod.string(),
+      name: zod.string(),
+      role: zod.string(),
+      email: zod.string(),
+      canLogIssues: zod.boolean(),
+      canUpdatePlantMaterials: zod.boolean(),
+      canEditDailyReport: zod.boolean(),
+      hasPin: zod
+        .boolean()
+        .describe("Whether this member has already set their sign-off PIN."),
+    })
+    .optional(),
+  projects: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        name: zod.string(),
+      }),
+    )
+    .optional(),
+});
+
+/**
+ * @summary Pending project invitations addressed to the signed-in member
+ */
+export const GetPortalPendingInvitesResponse = zod.object({
+  invites: zod.array(
+    zod.object({
+      id: zod.string(),
+      role: zod.string(),
+      projectId: zod.string(),
+      projectName: zod.string(),
+      companyName: zod.string(),
+      createdAt: zod.string().optional(),
+    }),
+  ),
+});
+
+/**
+ * @summary Accept a project invitation from inside the portal
+ */
+export const AcceptPortalPendingInviteParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AcceptPortalPendingInviteResponse = zod.object({
+  success: zod.boolean(),
+  project: zod.object({
+    id: zod.string(),
+    name: zod.string(),
+  }),
+});
+
+/**
  * @summary The signed-in member's project + allowed sections
  */
 export const GetPortalContextResponse = zod.object({

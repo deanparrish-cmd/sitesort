@@ -12,13 +12,13 @@ import {
   plantItemsTable, plantItemAttachmentsTable, plantItemDistributionsTable, personCertificationsTable, dailyReportsTable,
   messagesTable, channelMessagesTable, acknowledgmentAuditTable, portalItemViewsTable,
 } from "@workspace/db/schema";
-import { and, eq, inArray, isNull, isNotNull, desc, asc, gte, lt, count, max, or, ne } from "drizzle-orm";
+import { and, eq, inArray, isNull, isNotNull, desc, asc, gte, lt, count, max, or, ne, sql } from "drizzle-orm";
 import { buildSiteBoardPayload } from "../lib/site-board";
 import { generateId } from "../lib/id";
 import { logActivity } from "../lib/activity";
 import { authenticate, generatePortalToken } from "../middlewares/auth";
 import { requirePortalMember, requirePortalSession, autoLogPortalActivity, requirePortalPermission } from "../middlewares/portal";
-import { createPortalSession, revokePortalSession } from "../lib/portal-sessions";
+import { createPortalSession, revokePortalSession, claimPortalSession } from "../lib/portal-sessions";
 import { getVapidPublicKey } from "../lib/web-push";
 import { pushSubscriptionsTable, activityLogTable } from "@workspace/db/schema";
 import { PortalPushSubscribeBody, PortalPushUnsubscribeBody } from "@workspace/api-zod";
@@ -540,6 +540,214 @@ router.post("/portal/login", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Portal login error");
     res.status(500).json({ error: "server_error", message: "Login failed" });
+  }
+});
+
+// ==========================================================================
+// Multi-project portal: a contractor can belong to several projects (even for
+// different builders). These routes let a signed-in member see every project
+// they're linked to, switch between them without logging out, and accept new
+// project invitations delivered straight into the portal.
+// ==========================================================================
+
+// GET /api/portal/my-projects — every project the signed-in member can enter,
+// for the in-portal switcher. Same predicate as login: a project_members row
+// with BOTH userId and personId (the enforced portal grant).
+router.get("/portal/my-projects", ...portalGuards, async (req, res) => {
+  try {
+    const rows = await db
+      .select({
+        id: projectsTable.id,
+        name: projectsTable.name,
+        companyName: companiesTable.name,
+      })
+      .from(projectMembersTable)
+      .innerJoin(projectsTable, eq(projectMembersTable.projectId, projectsTable.id))
+      .innerJoin(companiesTable, eq(projectsTable.companyId, companiesTable.id))
+      .where(and(eq(projectMembersTable.userId, req.user!.id), isNotNull(projectMembersTable.personId)));
+    res.json({ currentProjectId: req.portalProjectId!, projects: rows });
+  } catch (err) {
+    req.log.error({ err }, "Portal my-projects error");
+    res.status(500).json({ error: "server_error", message: "Failed to load your projects" });
+  }
+});
+
+// POST /api/portal/switch-project — swap the session to another project the
+// member belongs to. Issues a fresh project-scoped token + session and revokes
+// the old session (one live session per device, no orphans).
+router.post("/portal/switch-project", ...portalGuards, async (req, res) => {
+  try {
+    const projectId = typeof req.body?.projectId === "string" ? req.body.projectId : "";
+    if (!projectId) { res.status(400).json({ error: "validation_error", message: "projectId is required." }); return; }
+    const membership = await db
+      .select({ role: projectMembersTable.role, name: projectsTable.name })
+      .from(projectMembersTable)
+      .innerJoin(projectsTable, eq(projectMembersTable.projectId, projectsTable.id))
+      .where(and(
+        eq(projectMembersTable.projectId, projectId),
+        eq(projectMembersTable.userId, req.user!.id),
+        isNotNull(projectMembersTable.personId),
+      )).limit(1);
+    if (!membership[0]) { res.status(403).json({ error: "forbidden", message: "You are not a member of that project." }); return; }
+    // CLAIM (revoke) the old session before issuing new credentials. The claim
+    // is conditional, so of two concurrent switch requests on the same token
+    // only one wins and mints a replacement; the loser gets session_expired
+    // and the app sends them back to login. Never two live sessions.
+    if (!req.user!.sid || !(await claimPortalSession(req.user!.sid))) {
+      res.status(401).json({ error: "session_expired", message: "Please sign in again." });
+      return;
+    }
+    const sid = await createPortalSession(req.user!.id, projectId);
+    const token = generatePortalToken({
+      id: req.user!.id, email: req.user!.email, companyId: req.user!.companyId,
+      projectId, role: membership[0].role, sid,
+    });
+    res.json({
+      requiresProjectChoice: false,
+      token,
+      project: { id: projectId, name: membership[0].name },
+      member: { name: (await nameForPortalUser(req.user!.id)) ?? "", role: membership[0].role, email: req.user!.email },
+    });
+  } catch (err) {
+    req.log.error({ err }, "Portal switch-project error");
+    res.status(500).json({ error: "server_error", message: "Failed to switch project" });
+  }
+});
+
+// Which pending invites belong to this signed-in member? Two matches, both
+// safe because acceptance is an explicit member action (same consent as
+// clicking an email link):
+//   • the invite's person record is already linked to this login, OR
+//   • the invite email equals the login email (case-insensitive).
+function pendingInviteMatch(userId: string, email: string) {
+  return and(
+    eq(projectInvitesTable.status, "pending"),
+    gte(projectInvitesTable.expiresAt, new Date()),
+    or(
+      sql`lower(${projectInvitesTable.email}) = ${email.trim().toLowerCase()}`,
+      inArray(
+        projectInvitesTable.personId,
+        db.select({ id: peopleTable.id }).from(peopleTable).where(eq(peopleTable.userId, userId)),
+      ),
+    ),
+    // Identity guard: if the invite's person record is already linked to a
+    // DIFFERENT login, an email-matched account must not be able to accept it
+    // (the person, not the email string, is the invited identity).
+    or(
+      isNull(projectInvitesTable.personId),
+      inArray(
+        projectInvitesTable.personId,
+        db.select({ id: peopleTable.id }).from(peopleTable)
+          .where(or(isNull(peopleTable.userId), eq(peopleTable.userId, userId))),
+      ),
+    ),
+  );
+}
+
+// GET /api/portal/invites — pending project invitations for the signed-in
+// member, shown as an "You've been invited" card on the portal Home.
+router.get("/portal/invites", ...portalGuards, async (req, res) => {
+  try {
+    const rows = await db
+      .select({
+        id: projectInvitesTable.id,
+        role: projectInvitesTable.role,
+        projectId: projectInvitesTable.projectId,
+        projectName: projectsTable.name,
+        companyName: companiesTable.name,
+        createdAt: projectInvitesTable.createdAt,
+      })
+      .from(projectInvitesTable)
+      .innerJoin(projectsTable, eq(projectInvitesTable.projectId, projectsTable.id))
+      .innerJoin(companiesTable, eq(projectInvitesTable.companyId, companiesTable.id))
+      .where(pendingInviteMatch(req.user!.id, req.user!.email))
+      .orderBy(desc(projectInvitesTable.createdAt));
+    // Hide invites for projects the member has already joined (e.g. accepted
+    // by email link in another tab) — accepting twice would be confusing.
+    const memberProjects = new Set((await db.select({ projectId: projectMembersTable.projectId })
+      .from(projectMembersTable)
+      .where(and(eq(projectMembersTable.userId, req.user!.id), isNotNull(projectMembersTable.personId))))
+      .map(r => r.projectId));
+    res.json({ invites: rows.filter(r => !memberProjects.has(r.projectId)).map(r => ({
+      id: r.id, role: r.role, projectId: r.projectId, projectName: r.projectName,
+      companyName: r.companyName, createdAt: iso(r.createdAt),
+    })) });
+  } catch (err) {
+    req.log.error({ err }, "Portal invites list error");
+    res.status(500).json({ error: "server_error", message: "Failed to load invitations" });
+  }
+});
+
+// POST /api/portal/invites/:id/accept — accept a project invitation from
+// inside the portal (no email token needed: the member is already
+// authenticated and the invite matches their login). Mirrors the email-link
+// accept flow: link the person record, upsert the membership preserving any
+// permissions a PM pre-set, and mark the invite accepted.
+router.post("/portal/invites/:id/accept", ...portalGuards, async (req, res) => {
+  try {
+    const userId = req.user!.id;
+    const result = await db.transaction(async (tx) => {
+      // Lock and match the invite in one step, then CLAIM it with a
+      // conditional update. Two parallel accepts can't both win: only the
+      // request whose UPDATE flips pending→accepted proceeds.
+      const rows = await tx.select().from(projectInvitesTable)
+        .where(and(eq(projectInvitesTable.id, req.params.id), pendingInviteMatch(userId, req.user!.email)))
+        .for("update")
+        .limit(1);
+      const inv = rows[0];
+      if (!inv) return { status: 404 as const };
+      const claimed = await tx.update(projectInvitesTable)
+        .set({ status: "accepted", acceptedUserId: userId, acceptedAt: new Date() })
+        .where(and(eq(projectInvitesTable.id, inv.id), eq(projectInvitesTable.status, "pending")))
+        .returning({ id: projectInvitesTable.id });
+      if (claimed.length === 0) return { status: 404 as const };
+
+      if (inv.personId) {
+        await tx.update(peopleTable).set({ userId })
+          .where(and(eq(peopleTable.id, inv.personId), isNull(peopleTable.userId)));
+      }
+      // Reconcile memberships. Two rows can legitimately pre-exist for this
+      // project: a person-backed row a PM pre-configured (holding permissions)
+      // and a user-backed row from an earlier link. Keep the person-backed row
+      // (its permissions win), remove the duplicate, never violate the
+      // project+user unique index.
+      const existing = await tx.select().from(projectMembersTable)
+        .where(and(
+          eq(projectMembersTable.projectId, inv.projectId),
+          or(
+            eq(projectMembersTable.userId, userId),
+            inv.personId ? eq(projectMembersTable.personId, inv.personId) : undefined,
+          ),
+        ));
+      const personRow = inv.personId ? existing.find(r => r.personId === inv.personId) : undefined;
+      const userRow = existing.find(r => r.userId === userId);
+      if (personRow && userRow && personRow.id !== userRow.id) {
+        await tx.delete(projectMembersTable).where(eq(projectMembersTable.id, userRow.id));
+        await tx.update(projectMembersTable).set({ userId }).where(eq(projectMembersTable.id, personRow.id));
+      } else if (personRow) {
+        await tx.update(projectMembersTable).set({ userId }).where(eq(projectMembersTable.id, personRow.id));
+      } else if (userRow) {
+        await tx.update(projectMembersTable)
+          .set(inv.personId ? { personId: inv.personId } : {})
+          .where(eq(projectMembersTable.id, userRow.id));
+      } else {
+        await tx.insert(projectMembersTable).values({
+          id: generateId(), projectId: inv.projectId, userId,
+          personId: inv.personId, role: inv.role,
+        });
+      }
+      const proj = await tx.select({ name: projectsTable.name }).from(projectsTable)
+        .where(eq(projectsTable.id, inv.projectId)).limit(1);
+      return { status: 200 as const, projectId: inv.projectId, projectName: proj[0]?.name ?? "" };
+    });
+    if (result.status === 404) {
+      res.status(404).json({ error: "not_found", message: "Invitation not found or no longer valid." });
+      return;
+    }
+    res.json({ success: true, project: { id: result.projectId, name: result.projectName } });
+  } catch (err) {
+    req.log.error({ err }, "Portal invite accept error");
+    res.status(500).json({ error: "server_error", message: "Failed to accept invitation" });
   }
 });
 

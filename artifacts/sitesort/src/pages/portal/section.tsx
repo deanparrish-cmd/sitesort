@@ -19,6 +19,9 @@ import {
   getGetPortalPlantMaterialsQueryKey,
   getGetPortalDailyReportQueryKey, getGetPortalDailyReportHistoryQueryKey,
   getGetPortalContextQueryKey,
+  useGetPortalMyProjects, usePortalSwitchProject,
+  useGetPortalPendingInvites, useAcceptPortalPendingInvite,
+  getGetPortalMyProjectsQueryKey, getGetPortalPendingInvitesQueryKey,
 } from "@workspace/api-client-react";
 import { DictationButton } from "@/components/ui/dictation-button";
 import { MessagesView } from "./messages-view";
@@ -30,7 +33,8 @@ import {
   ExternalLink, MapPin, Calendar, Phone, Mail,
   FileText, AlertTriangle, StickyNote, Download,
   QrCode, Copy, Building2, ShieldCheck, X, Sparkles, UploadCloud, Share, Plus,
-  ChevronDown, Users, FileSignature, CheckCircle2, HardHat, LogOut, ListChecks, HelpCircle,
+  ChevronDown, ChevronRight, Users, FileSignature, CheckCircle2, HardHat, LogOut, ListChecks, HelpCircle,
+  Inbox, FolderUp,
 } from "lucide-react";
 import { isCadFile, cadBadgeLabel, downloadFile } from "@/lib/documents";
 import { useToast } from "@/hooks/use-toast";
@@ -623,6 +627,144 @@ function SiteTasksView() {
   );
 }
 
+// "You've been invited" — pending project invitations delivered straight into
+// the portal (no email link needed). Accepting joins the project and offers a
+// one-tap switch to it. Hidden entirely when there are none.
+function PendingInvitesCard() {
+  const { data } = useGetPortalPendingInvites({ query: { queryKey: getGetPortalPendingInvitesQueryKey() } });
+  const accept = useAcceptPortalPendingInvite();
+  const switchProject = usePortalSwitchProject();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [, setLocation] = useLocation();
+  const invites = data?.invites ?? [];
+  if (invites.length === 0) return null;
+
+  const doSwitch = async (projectId: string) => {
+    try {
+      const res = await switchProject.mutateAsync({ data: { projectId } });
+      if (res.token) {
+        localStorage.setItem("sitesort_portal_token", res.token);
+        queryClient.clear();
+        setLocation("/portal/overview");
+      }
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Couldn't open that project", description: e?.data?.message ?? "Please log in to it from the login page." });
+    }
+  };
+  const doAccept = async (inviteId: string, projectName: string) => {
+    try {
+      const res = await accept.mutateAsync({ id: inviteId });
+      queryClient.invalidateQueries({ queryKey: getGetPortalPendingInvitesQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetPortalMyProjectsQueryKey() });
+      toast({
+        title: `You've joined ${projectName}`,
+        action: (
+          <ToastAction altText="Go to project" onClick={() => { void doSwitch(res.project.id); }}>
+            Go there now
+          </ToastAction>
+        ),
+      });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Couldn't accept", description: e?.data?.message ?? "Please try again." });
+      queryClient.invalidateQueries({ queryKey: getGetPortalPendingInvitesQueryKey() });
+    }
+  };
+
+  return (
+    <Card className="border-accent/40 bg-accent/5">
+      <div className="flex items-center gap-2 mb-3">
+        <Inbox className="w-5 h-5 text-accent shrink-0" />
+        <h2 className="text-lg font-display font-bold">You've been invited</h2>
+      </div>
+      <div className="space-y-3">
+        {invites.map(inv => (
+          <div key={inv.id} className="flex items-center gap-3 min-w-0" data-testid={`row-pending-invite-${inv.id}`}>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold truncate">{inv.projectName}</p>
+              <p className="text-xs text-muted-foreground truncate">{inv.companyName}</p>
+            </div>
+            <PortalButton
+              onClick={() => doAccept(inv.id, inv.projectName)}
+              disabled={accept.isPending || switchProject.isPending}
+              full={false}
+            >
+              Accept
+            </PortalButton>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+// In-portal project switcher — shown only when the member belongs to MORE than
+// one project. Switching issues a fresh project-scoped session server-side and
+// reloads everything for the chosen project.
+function ProjectSwitcherCard() {
+  const { data } = useGetPortalMyProjects({ query: { queryKey: getGetPortalMyProjectsQueryKey() } });
+  const switchProject = usePortalSwitchProject();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [, setLocation] = useLocation();
+  const [open, setOpen] = useState(false);
+  const projects = data?.projects ?? [];
+  if (projects.length < 2) return null;
+  const current = projects.find(p => p.id === data?.currentProjectId);
+  const others = projects.filter(p => p.id !== data?.currentProjectId);
+
+  const doSwitch = async (projectId: string) => {
+    try {
+      const res = await switchProject.mutateAsync({ data: { projectId } });
+      if (res.token) {
+        localStorage.setItem("sitesort_portal_token", res.token);
+        queryClient.clear();
+        setOpen(false);
+        setLocation("/portal/overview");
+      }
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Couldn't switch project", description: e?.data?.message ?? "Please try again." });
+    }
+  };
+
+  return (
+    <Card>
+      <button
+        className="w-full flex items-center gap-2 min-h-11 text-left"
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        data-testid="button-project-switcher"
+      >
+        <FolderUp className="w-5 h-5 text-primary shrink-0" />
+        <span className="min-w-0 flex-1">
+          <span className="block text-xs text-muted-foreground">Your projects</span>
+          <span className="block font-semibold truncate">{current?.name ?? "Current project"}</span>
+        </span>
+        <ChevronDown className={cn("w-5 h-5 text-muted-foreground shrink-0 transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className="mt-3 space-y-2">
+          {others.map(p => (
+            <button
+              key={p.id}
+              onClick={() => doSwitch(p.id)}
+              disabled={switchProject.isPending}
+              className="w-full flex items-center gap-3 rounded-lg border px-3 py-3 min-h-11 text-left hover:bg-accent/10 active:bg-accent/10 disabled:opacity-50"
+              data-testid={`button-switch-project-${p.id}`}
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block font-semibold truncate">{p.name}</span>
+                <span className="block text-xs text-muted-foreground truncate">{p.companyName}</span>
+              </span>
+              {switchProject.isPending ? <Spinner className="size-4" /> : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // Portal home — 5-box redesign. Exactly five glanceable boxes: 1) Project info,
 // 2) Site manager, 3) Site Updates (the latest update only), 4) Past Updates
 // (older ones), 5) Team (collapsible). Everything else lives elsewhere: Site
@@ -648,8 +790,14 @@ function HomeView() {
     : null;
   return (
     <div className="space-y-6">
+      {/* New project invitations first — the one thing that must not be missed. */}
+      <PendingInvitesCard />
+
       {/* Quick access — big coloured tiles to where a worker needs to go. */}
       <HomeQuickAccess member={ctx?.member as Record<string, unknown> | undefined} />
+
+      {/* Switch between projects (only shown when the member has more than one). */}
+      <ProjectSwitcherCard />
 
       {/* Box 1 — Project info */}
       <Card>

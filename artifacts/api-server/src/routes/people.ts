@@ -6,10 +6,11 @@ import {
   projectInvitesTable, usersTable, companyMembersTable, companiesTable,
   documentDistributionsTable, notificationsTable,
 } from "@workspace/db/schema";
-import { and, eq, desc, inArray, isNull, isNotNull } from "drizzle-orm";
+import { and, eq, desc, inArray, isNull, isNotNull, sql } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { sendProjectInviteEmail } from "../lib/invite-email";
+import { sendPushToUser } from "../lib/web-push";
 import { CreateSubcontractorPersonBody, CreatePortalInviteBody, UpdatePersonBody } from "@workspace/api-zod";
 import { activeProjectsForPerson, hasAnyHistoricalFootprint } from "../lib/contact-removal";
 import { canonicalPersonName } from "../lib/person-name";
@@ -569,6 +570,29 @@ router.post("/projects/:projectId/portal-invites", authenticate, async (req, res
       return;
     }
 
+    // If this person already has a PORTAL login (linked directly, or a users row
+    // matching their email), deliver the invitation INTO their portal instead of
+    // by email token: they get a push + an "You've been invited" card on their
+    // portal Home and accept it there. This is how one contractor works across
+    // several projects (even for different builders) with a single login. Safe
+    // without an email round-trip because acceptance is still an explicit action
+    // by the already-authenticated account — the same consent as clicking the
+    // email link. The copyable link stays available as a fallback.
+    let portalUser: typeof usersTable.$inferSelect | undefined;
+    if (person.userId) {
+      portalUser = (await db.select().from(usersTable).where(eq(usersTable.id, person.userId)).limit(1))[0];
+    }
+    if (!portalUser) {
+      portalUser = (await db.select().from(usersTable)
+        .where(sql`lower(${usersTable.email}) = ${person.email.trim().toLowerCase()}`).limit(1))[0];
+    }
+    let portalUserHasAccess = false;
+    if (portalUser) {
+      const anyMembership = await db.select({ id: projectMembersTable.id }).from(projectMembersTable)
+        .where(and(eq(projectMembersTable.userId, portalUser.id), isNotNull(projectMembersTable.personId))).limit(1);
+      portalUserHasAccess = anyMembership.length > 0;
+    }
+
     // Otherwise (external person, no dashboard account): create or ROTATE a pending
     // invite + link; they set a password on accept → a portalOnly account.
     const rawToken = randomBytes(32).toString("hex");
@@ -590,9 +614,30 @@ router.post("/projects/:projectId/portal-invites", authenticate, async (req, res
       });
     }
     const inviteUrl = `${inviteBaseUrl()}/portal/accept/${rawToken}`;
+    const { inviterName, companyName } = await inviteContext(req.user!.id, req.user!.companyId);
+
+    if (portalUser && portalUserHasAccess) {
+      // Existing portal member: deliver in-portal. Link the person to the login
+      // (if not already) so the invite shows on their portal Home, and ping
+      // every device they've enabled push on. No email token round-trip needed.
+      if (!person.userId) {
+        await db.update(peopleTable).set({ userId: portalUser.id }).where(eq(peopleTable.id, person.id));
+      }
+      await db.update(projectInvitesTable)
+        .set({ emailStatus: "portal", emailLastSentAt: new Date() })
+        .where(eq(projectInvitesTable.id, inviteId));
+      await sendPushToUser(portalUser.id, {
+        title: "New project invitation",
+        body: `${inviterName} invited you to ${project.name} (${companyName}). Open your portal to accept.`,
+        url: "/portal/overview",
+        tag: `invite-${inviteId}`,
+      }).catch(() => {});
+      res.status(201).json({ status: "invited", person: serializePerson({ ...person, userId: portalUser.id }), inviteUrl, emailStatus: "portal" });
+      return;
+    }
+
     // Send the invite email now and record delivery state. Never blocks success:
     // even a failed send leaves the invite + copyable link intact.
-    const { inviterName, companyName } = await inviteContext(req.user!.id, req.user!.companyId);
     const emailStatus = await deliverInvite({
       inviteId, email: person.email, name: person.name, role,
       inviterName, companyName, projectName: project.name, inviteUrl,
