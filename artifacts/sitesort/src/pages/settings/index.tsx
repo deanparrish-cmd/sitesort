@@ -307,7 +307,7 @@ function SignOffPinSection({ isCancelled }: { isCancelled: boolean }) {
           : <Badge className="bg-amber-100 text-amber-700 border-amber-200">Not set</Badge>}
       </div>
       <p className="text-sm text-muted-foreground -mt-3">
-        A 4-digit PIN you enter to confirm sign-off on critical documents (drawings, method statements and safety docs).
+        A 4-digit PIN you enter to confirm sign-off on safety-critical documents (method statements, permits and safety docs), and any document flagged to require a PIN.
       </p>
       <StatusBanner status={status} />
       <div className="grid gap-4 max-w-md">
