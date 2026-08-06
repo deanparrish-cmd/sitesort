@@ -6,6 +6,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { PortalInstallPrompt } from "@/components/portal-install-prompt";
 import { PortalNotifyPrompt } from "@/components/portal-notify-prompt";
 import { markPortalSession, disablePush, resyncPush } from "@/lib/portal-push";
+import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import {
   Home, AlertTriangle,
   Inbox, HardHat,
@@ -69,6 +71,31 @@ export function PortalLayout({ active, children }: { active: string; children: R
 
   // Count this app open once (drives when the "enable notifications" card may appear).
   useEffect(() => { markPortalSession(); resyncPush(); }, []);
+
+  // In-app alert for pushes that arrive while the app is OPEN: iOS suppresses
+  // the system notification banner when the PWA is foregrounded, so the service
+  // worker also relays the payload here and we show our own banner (toast) with
+  // a tap-through, and refresh portal data so the related card appears at once.
+  const { toast } = useToast();
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    const onMessage = (event: MessageEvent) => {
+      const d = event.data;
+      if (!d || d.kind !== "push") return;
+      void queryClient.invalidateQueries();
+      toast({
+        title: String(d.title ?? "SiteSort"),
+        description: d.body ? String(d.body) : undefined,
+        action: d.url ? (
+          <ToastAction altText="Open" onClick={() => setLocation(String(d.url).replace(/^https?:\/\/[^/]+/, ""))}>
+            Open
+          </ToastAction>
+        ) : undefined,
+      });
+    };
+    navigator.serviceWorker.addEventListener("message", onMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", onMessage);
+  }, [queryClient, toast, setLocation]);
 
   // Clear-on-open: the server records the section view AFTER the section's own
   // GET responds (so that request still sees the old badge state). Shortly after

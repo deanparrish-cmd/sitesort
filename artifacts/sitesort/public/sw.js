@@ -6,7 +6,7 @@
 // shell + its current asset hashes when online); immutable /assets/* build files
 // are cache-first (fast, and safe because their filename hash changes on rebuild);
 // everything else same-origin is network-first with a cache fallback.
-const CACHE = "sitesort-portal-v3";
+const CACHE = "sitesort-portal-v4";
 const SHELL = ["/index.html", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {
@@ -44,7 +44,17 @@ self.addEventListener("push", (event) => {
     tag: data.tag || undefined,
     data: { url: data.url || "/portal/overview" },
   };
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil((async () => {
+    // iOS suppresses the notification banner while the PWA is in the
+    // foreground, so ALSO hand the payload to any open window — the app shows
+    // its own in-app banner. The system notification is still posted for the
+    // lock screen / notification centre.
+    try {
+      const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const w of wins) w.postMessage({ kind: "push", title: title, body: options.body, url: options.data.url });
+    } catch (e) { /* best-effort */ }
+    await self.registration.showNotification(title, options);
+  })());
 });
 
 self.addEventListener("notificationclick", (event) => {
