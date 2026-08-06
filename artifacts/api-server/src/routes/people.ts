@@ -677,6 +677,26 @@ router.post("/projects/:projectId/portal-invites/:inviteId/resend", authenticate
     await db.update(projectInvitesTable).set({ tokenHash: hashToken(rawToken), expiresAt }).where(eq(projectInvitesTable.id, inv.id));
     const inviteUrl = `${inviteBaseUrl()}/portal/accept/${rawToken}`;
     const { inviterName, companyName } = await inviteContext(req.user!.id, req.user!.companyId);
+
+    // In-portal invites (existing portal members) are reminded the same way
+    // they were invited: a push to their devices, pointing at the invite card
+    // on their portal Home. No email token round-trip — they accept in-portal.
+    if (inv.emailStatus === "portal" && inv.personId) {
+      const [person] = await db.select({ userId: peopleTable.userId }).from(peopleTable)
+        .where(eq(peopleTable.id, inv.personId)).limit(1);
+      if (person?.userId) {
+        await db.update(projectInvitesTable).set({ emailLastSentAt: new Date() }).where(eq(projectInvitesTable.id, inv.id));
+        await sendPushToUser(person.userId, {
+          title: "Reminder: project invitation",
+          body: `${inviterName} invited you to ${project.name} (${companyName}). Open your portal to accept.`,
+          url: "/portal/overview",
+          tag: `invite-${inv.id}`,
+        }).catch(() => {});
+        res.json({ success: true, emailStatus: "portal", inviteUrl });
+        return;
+      }
+    }
+
     const emailStatus = await deliverInvite({
       inviteId: inv.id, email: inv.email, name: inv.name, role: inv.role,
       inviterName, companyName, projectName: project.name, inviteUrl,

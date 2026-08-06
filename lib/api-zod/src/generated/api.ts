@@ -5163,7 +5163,7 @@ export const ResendPortalInviteParams = zod.object({
 
 export const ResendPortalInviteResponse = zod.object({
   success: zod.boolean(),
-  emailStatus: zod.enum(["sent", "failed"]),
+  emailStatus: zod.enum(["sent", "failed", "portal"]),
   inviteUrl: zod.string().optional(),
 });
 

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import {
-  useListProjectInvites, useRevokeProjectInvite,
+  useListProjectInvites, useRevokeProjectInvite, useResendPortalInvite,
   useGetProjectActivity, useGetProjectActivitySummary,
   useListMemberDocuments, useReviewMemberDocument, useCreatePersonCertification,
   getListProjectInvitesQueryKey, getGetProjectActivityQueryKey, getGetProjectActivitySummaryQueryKey,
@@ -17,7 +17,8 @@ import { formatBytes } from "@/lib/utils";
 import { SECTION_NAV } from "@/pages/portal/layout";
 import {
   UserPlus, Trash2, Activity, Eye, ShieldAlert, ShieldOff, Clock,
-  FileCheck, Check, X, ExternalLink, UserRoundPlus,
+  FileCheck, Check, X, ExternalLink, UserRoundPlus, ChevronDown, ChevronRight as ChevronRightIcon,
+  BellRing, FolderCheck, FolderX,
 } from "lucide-react";
 
 function fmtRelative(iso?: string | null): string {
@@ -282,6 +283,28 @@ export function ProjectTeamActivity({ projectId }: { projectId: string }) {
   // only manages the resulting invites — one source of truth, no duplicate form.
   const invitesQ = useListProjectInvites(projectId, { query: { retry: false, queryKey: getListProjectInvitesQueryKey(projectId) } });
   const revokeInvite = useRevokeProjectInvite();
+  const resendInvite = useResendPortalInvite();
+  const { toast } = useToast();
+  // Anyone pending stays in a flat list (they need action); accepted and
+  // revoked are tucked into collapsible folders to keep the page short.
+  const [openFolder, setOpenFolder] = useState<"accepted" | "revoked" | null>(null);
+  const [remindingId, setRemindingId] = useState<string | null>(null);
+  const remind = async (inviteId: string, name: string) => {
+    setRemindingId(inviteId);
+    try {
+      const res = await resendInvite.mutateAsync({ projectId, inviteId });
+      toast({
+        title: "Reminder sent",
+        description: res.emailStatus === "portal"
+          ? `${name} has been pinged in their portal.`
+          : `A fresh invite email is on its way to ${name}.`,
+      });
+    } catch (err: any) {
+      toast({ title: "Couldn't send reminder", description: err?.data?.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setRemindingId(null);
+    }
+  };
   // Whole-portal-login revoke — same endpoint + same confirm-first pattern as
   // the "Portal member" pill on the Team tab card (portal-people.tsx). "accepted"
   // means an active member: revoking here ends any live session immediately.
@@ -323,32 +346,79 @@ export function ProjectTeamActivity({ projectId }: { projectId: string }) {
         </p>
 
         <div className="mt-1">
-          {invitesQ.isLoading ? <div className="flex justify-center py-6"><Spinner className="size-5 text-primary" /></div> : (
-            (invitesQ.data ?? []).length === 0 ? <p className="text-sm text-muted-foreground">No invites yet.</p> : (
-              <div className="space-y-2">
-                {(invitesQ.data ?? []).map(inv => (
-                  <div key={inv.id} className="flex items-center justify-between gap-3 p-3 bg-card border border-border rounded-lg">
-                    <div className="min-w-0">
-                      <p className="font-medium truncate">{inv.name} <span className="text-xs text-muted-foreground font-normal">· {inv.email}</span></p>
-                      <p className="text-xs text-muted-foreground capitalize">{inv.role} · invited {fmtRelative(inv.createdAt)}</p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${INVITE_BADGE[inv.status]}`}>{inv.status}</span>
-                      {inv.status !== "revoked" && (
-                        <button
-                          onClick={() => setConfirmTarget({ id: inv.id, name: inv.name, status: inv.status })}
-                          className="p-1.5 text-muted-foreground hover:text-destructive rounded-lg hover:bg-muted"
-                          title={inv.status === "accepted" ? "Remove portal access" : "Cancel invite"}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
+          {invitesQ.isLoading ? <div className="flex justify-center py-6"><Spinner className="size-5 text-primary" /></div> : (() => {
+            const all = invitesQ.data ?? [];
+            if (all.length === 0) return <p className="text-sm text-muted-foreground">No invites yet.</p>;
+            const pending = all.filter(i => i.status === "pending");
+            const accepted = all.filter(i => i.status === "accepted");
+            const revoked = all.filter(i => i.status === "revoked");
+
+            const row = (inv: typeof all[number]) => (
+              <div key={inv.id} className="flex items-center justify-between gap-3 p-3 bg-card border border-border rounded-lg">
+                <div className="min-w-0">
+                  <p className="font-medium truncate">{inv.name} <span className="text-xs text-muted-foreground font-normal">· {inv.email}</span></p>
+                  <p className="text-xs text-muted-foreground capitalize">{inv.role} · invited {fmtRelative(inv.createdAt)}</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {inv.status === "pending" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5"
+                      isLoading={remindingId === inv.id}
+                      onClick={() => void remind(inv.id, inv.name)}
+                    >
+                      <BellRing className="w-3.5 h-3.5" /> Remind
+                    </Button>
+                  )}
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${INVITE_BADGE[inv.status]}`}>{inv.status}</span>
+                  {inv.status !== "revoked" && (
+                    <button
+                      onClick={() => setConfirmTarget({ id: inv.id, name: inv.name, status: inv.status })}
+                      className="p-1.5 text-muted-foreground hover:text-destructive rounded-lg hover:bg-muted"
+                      title={inv.status === "accepted" ? "Remove portal access" : "Cancel invite"}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               </div>
-            )
-          )}
+            );
+
+            const folder = (key: "accepted" | "revoked", label: string, Icon: typeof FolderCheck, items: typeof all) => (
+              items.length === 0 ? null : (
+                <div className="border border-border rounded-lg overflow-hidden">
+                  <button
+                    onClick={() => setOpenFolder(openFolder === key ? null : key)}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 bg-muted/40 hover:bg-muted/70 transition-colors text-sm font-medium"
+                  >
+                    {openFolder === key ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRightIcon className="w-4 h-4 text-muted-foreground" />}
+                    <Icon className={`w-4 h-4 ${key === "accepted" ? "text-emerald-600" : "text-muted-foreground"}`} />
+                    {label}
+                    <span className="text-xs font-normal text-muted-foreground">({items.length})</span>
+                  </button>
+                  {openFolder === key && (
+                    <div className="p-2 space-y-2 bg-background">
+                      {items.map(row)}
+                    </div>
+                  )}
+                </div>
+              )
+            );
+
+            return (
+              <div className="space-y-2">
+                {pending.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Awaiting acceptance</p>
+                    {pending.map(row)}
+                  </div>
+                )}
+                {folder("accepted", "Accepted on this project", FolderCheck, accepted)}
+                {folder("revoked", "Revoked from this project", FolderX, revoked)}
+              </div>
+            );
+          })()}
         </div>
       </section>
 

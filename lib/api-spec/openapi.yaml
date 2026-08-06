@@ -6383,7 +6383,7 @@ components:
           type: boolean
         emailStatus:
           type: string
-          enum: [sent, failed]
+          enum: [sent, failed, portal]
         inviteUrl:
           type: string
       required: [success, emailStatus]

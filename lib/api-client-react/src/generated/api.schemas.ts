@@ -2172,6 +2172,7 @@ export type ResendInviteResponseEmailStatus =
 export const ResendInviteResponseEmailStatus = {
   sent: "sent",
   failed: "failed",
+  portal: "portal",
 } as const;
 
 export interface ResendInviteResponse {
