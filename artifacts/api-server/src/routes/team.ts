@@ -229,7 +229,15 @@ router.get("/projects/:projectId/members", authenticate, async (req, res) => {
     // exists — the firm identity (name, trades, PLI, compliance) is already
     // carried on the person card via effectiveSubId.
     const personBackedSubIds = new Set(result.filter(r => r.personId && r.subcontractorId).map(r => r.subcontractorId));
-    const deduped = result.filter(r => !(r.subcontractorId && !r.personId && !r.userId && personBackedSubIds.has(r.subcontractorId)));
+    let deduped = result.filter(r => !(r.subcontractorId && !r.personId && !r.userId && personBackedSubIds.has(r.subcontractorId)));
+
+    // The same PERSON can also end up with two membership rows (e.g. added
+    // individually with their login, then again through their firm). The
+    // user-backed row is the real one — portal permissions and PM authority
+    // are enforced against userId — so when a person has a row with a userId,
+    // hide any duplicate rows for the same person without one.
+    const userBackedPersonIds = new Set(deduped.filter(r => r.personId && r.userId).map(r => r.personId));
+    deduped = deduped.filter(r => !(r.personId && !r.userId && userBackedPersonIds.has(r.personId)));
 
     res.json(deduped);
   } catch (err) {
@@ -261,6 +269,24 @@ router.post("/projects/:projectId/members", authenticate, async (req, res) => {
       if (existing.length > 0) {
         res.status(409).json({ error: "conflict", message: "User is already a member of this project" });
         return;
+      }
+      // The same human may already be on the project through their person
+      // record (e.g. added via their firm before they had a login). Upgrade
+      // that row with the userId instead of inserting a duplicate card.
+      const person = (await db.select().from(peopleTable)
+        .where(and(eq(peopleTable.userId, userId), eq(peopleTable.companyId, req.user!.companyId))).limit(1))[0];
+      if (person) {
+        const personRow = (await db.select().from(projectMembersTable)
+          .where(and(
+            eq(projectMembersTable.projectId, req.params.projectId),
+            eq(projectMembersTable.personId, person.id),
+          )).limit(1))[0];
+        if (personRow) {
+          await db.update(projectMembersTable).set({ userId, role }).where(eq(projectMembersTable.id, personRow.id));
+          const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+          res.status(201).json({ id: personRow.id, projectId: req.params.projectId, userId, subcontractorId: personRow.subcontractorId, role, name: userRows[0]?.name ?? "Unknown" });
+          return;
+        }
       }
     } else if (subcontractorId) {
       const existing = await db.select().from(projectMembersTable)

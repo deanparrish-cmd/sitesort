@@ -6,7 +6,7 @@ The same person can appear on a project twice: a legacy firm-only membership row
 
 **Rule:** the person/user-backed row is the real one — portal permission enforcement and PM authority only read rows with userId+personId. Flags toggled on a firm-only row are never enforced (dead toggles).
 
-**How it's handled:** GET project members reports each person card's firm via the person's subcontractorId (effectiveSubId) and drops firm-only rows when a person-backed row for the same firm exists. The insurance-cert (PLI) endpoint falls back to the person's firm when the membership row lacks subcontractorId.
+**How it's handled:** GET project members reports each person card's firm via the person's subcontractorId (effectiveSubId) and drops firm-only rows when a person-backed row for the same firm exists. The insurance-cert (PLI) endpoint falls back to the person's firm when the membership row lacks subcontractorId. A second dedupe pass drops rows sharing a personId with a user-backed row (same-person duplicates, e.g. added via firm before they had a login). The add-by-user route upgrades an existing person row (sets userId+role, keeps flags/schedule/firm) instead of inserting a duplicate.
 
 **Why:** prod had a subcontractor primary contact who was also invited individually — two cards, and the PM had toggled portal permissions on the dead firm card.
 
