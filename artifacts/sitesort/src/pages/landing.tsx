@@ -31,28 +31,43 @@ import builtForBeam from "@assets/built_for_beam_nobg.webp";
  */
 function BeforeAfterSlider() {
   const [pos, setPos] = useState(50); // % of the width where the divider sits
-  const [animating, setAnimating] = useState(false);
   const [dragging, setDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const playedRef = useRef(false);
+  const rafRef = useRef<number | null>(null);
+  const stoppedRef = useRef(false);
 
-  // One professional sweep when the slider first scrolls into view.
+  const stopAuto = () => {
+    stoppedRef.current = true;
+    if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+  };
+
+  // Gentle continuous back-and-forth sweep while on screen; the visitor taking
+  // over (drag or keyboard) stops it so the handle stays where they put it.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    let start: number | null = null;
+    const tick = (now: number) => {
+      if (stoppedRef.current) return;
+      if (start === null) start = now;
+      const t = (now - start) / 1000;
+      // Smooth sine sweep between ~14% and ~86%, one full pass every 8 seconds.
+      setPos(50 + 36 * Math.sin((t * Math.PI * 2) / 8));
+      rafRef.current = requestAnimationFrame(tick);
+    };
     const io = new IntersectionObserver(([entry]) => {
-      if (!entry.isIntersecting || playedRef.current) return;
-      playedRef.current = true;
-      io.disconnect();
-      setAnimating(true);
-      setPos(88);
-      const t1 = setTimeout(() => setPos(14), 900);
-      const t2 = setTimeout(() => setPos(50), 1800);
-      const t3 = setTimeout(() => setAnimating(false), 2700);
-      return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
-    }, { threshold: 0.45 });
+      if (stoppedRef.current) return;
+      if (entry.isIntersecting && rafRef.current === null) {
+        start = null;
+        rafRef.current = requestAnimationFrame(tick);
+      } else if (!entry.isIntersecting && rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    }, { threshold: 0.25 });
     io.observe(el);
-    return () => io.disconnect();
+    return () => { io.disconnect(); if (rafRef.current !== null) cancelAnimationFrame(rafRef.current); };
   }, []);
 
   const updateFromClientX = (clientX: number) => {
@@ -65,9 +80,9 @@ function BeforeAfterSlider() {
   return (
     <div
       ref={containerRef}
-      className="relative mx-auto w-full max-w-lg sm:max-w-xl rounded-2xl shadow-2xl border border-border/50 overflow-hidden select-none touch-none cursor-ew-resize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+      className="relative mx-auto w-full max-w-xl sm:max-w-2xl rounded-2xl shadow-2xl border border-border/50 overflow-hidden select-none touch-none cursor-ew-resize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
       style={{ aspectRatio: "616 / 625" }}
-      onPointerDown={e => { setDragging(true); setAnimating(false); (e.target as HTMLElement).setPointerCapture?.(e.pointerId); updateFromClientX(e.clientX); }}
+      onPointerDown={e => { setDragging(true); stopAuto(); (e.target as HTMLElement).setPointerCapture?.(e.pointerId); updateFromClientX(e.clientX); }}
       onPointerMove={e => { if (dragging) updateFromClientX(e.clientX); }}
       onPointerUp={() => setDragging(false)}
       onPointerCancel={() => setDragging(false)}
@@ -78,11 +93,11 @@ function BeforeAfterSlider() {
       aria-valuenow={Math.round(pos)}
       tabIndex={0}
       onKeyDown={e => {
-        const step = (delta: number) => { setAnimating(false); setPos(p => Math.min(96, Math.max(4, p + delta))); };
+        const step = (delta: number) => { stopAuto(); setPos(p => Math.min(96, Math.max(4, p + delta))); };
         if (e.key === "ArrowLeft") { e.preventDefault(); step(-5); }
         else if (e.key === "ArrowRight") { e.preventDefault(); step(5); }
-        else if (e.key === "Home") { e.preventDefault(); setAnimating(false); setPos(4); }
-        else if (e.key === "End") { e.preventDefault(); setAnimating(false); setPos(96); }
+        else if (e.key === "Home") { e.preventDefault(); stopAuto(); setPos(4); }
+        else if (e.key === "End") { e.preventDefault(); stopAuto(); setPos(96); }
       }}
     >
       <img
@@ -94,10 +109,7 @@ function BeforeAfterSlider() {
       />
       <div
         className="absolute inset-0"
-        style={{
-          clipPath: `inset(0 0 0 ${pos}%)`,
-          transition: animating ? "clip-path 0.9s cubic-bezier(0.4, 0, 0.2, 1)" : "none",
-        }}
+        style={{ clipPath: `inset(0 0 0 ${pos}%)` }}
       >
         <img
           src={`${import.meta.env.BASE_URL}images/after-sitesort.webp`}
@@ -110,10 +122,7 @@ function BeforeAfterSlider() {
       {/* Divider + handle */}
       <div
         className="absolute inset-y-0 w-0.5 bg-white shadow-[0_0_8px_rgba(0,0,0,0.35)]"
-        style={{
-          left: `${pos}%`,
-          transition: animating ? "left 0.9s cubic-bezier(0.4, 0, 0.2, 1)" : "none",
-        }}
+        style={{ left: `${pos}%` }}
       >
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white shadow-lg border border-border flex items-center justify-center gap-0.5 text-muted-foreground">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 6-6 6 6 6" /><path d="m15 6 6 6-6 6" /></svg>
