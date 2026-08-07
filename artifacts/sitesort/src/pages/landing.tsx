@@ -65,7 +65,7 @@ function BeforeAfterSlider() {
   return (
     <div
       ref={containerRef}
-      className="relative mx-auto w-full max-w-md sm:max-w-lg rounded-2xl shadow-2xl border border-border/50 overflow-hidden select-none touch-none cursor-ew-resize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+      className="relative mx-auto w-full max-w-lg sm:max-w-xl rounded-2xl shadow-2xl border border-border/50 overflow-hidden select-none touch-none cursor-ew-resize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
       style={{ aspectRatio: "616 / 625" }}
       onPointerDown={e => { setDragging(true); setAnimating(false); (e.target as HTMLElement).setPointerCapture?.(e.pointerId); updateFromClientX(e.clientX); }}
       onPointerMove={e => { if (dragging) updateFromClientX(e.clientX); }}
@@ -251,16 +251,7 @@ export default function LandingPage() {
           />
           <div className="mt-8 sm:mt-10 relative mx-auto max-w-5xl fade-in" style={{ animationDelay: "0.2s", animationFillMode: "both" }}>
             <div className="absolute -inset-1 bg-gradient-to-r from-accent/30 to-primary/30 rounded-2xl blur-2xl opacity-50"></div>
-            <div className="relative grid lg:grid-cols-2 gap-6 items-center">
-              <img
-                src={`${import.meta.env.BASE_URL}images/construction-hero.webp`}
-                alt="A steel-frame construction site at dusk, managed with SiteSort"
-                className="rounded-2xl shadow-2xl border border-border/50 object-cover w-full h-full max-h-[560px] hidden lg:block"
-                fetchPriority="high"
-                decoding="async"
-              />
-              <BeforeAfterSlider />
-            </div>
+            <BeforeAfterSlider />
             <p className="text-center text-sm text-muted-foreground mt-4">Drag the handle to see the difference SiteSort makes.</p>
           </div>
         </div>
