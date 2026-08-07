@@ -261,7 +261,6 @@ export default function LandingPage() {
           <div className="mt-8 sm:mt-10 relative mx-auto max-w-5xl fade-in" style={{ animationDelay: "0.2s", animationFillMode: "both" }}>
             <div className="absolute -inset-1 bg-gradient-to-r from-accent/30 to-primary/30 rounded-2xl blur-2xl opacity-50"></div>
             <BeforeAfterSlider />
-            <p className="text-center text-sm text-muted-foreground mt-4">Drag the handle to see the difference SiteSort makes.</p>
           </div>
         </div>
       </main>
