@@ -261,6 +261,9 @@ export default function LandingPage() {
           <div className="mt-8 sm:mt-10 relative mx-auto max-w-5xl fade-in" style={{ animationDelay: "0.2s", animationFillMode: "both" }}>
             <div className="absolute -inset-1 bg-gradient-to-r from-accent/30 to-primary/30 rounded-2xl blur-2xl opacity-50"></div>
             <BeforeAfterSlider />
+            <p className="relative mt-4 text-center text-sm text-muted-foreground italic">
+              No site offices were burgled in the making of this image. That's just SiteSort.
+            </p>
           </div>
         </div>
       </main>
