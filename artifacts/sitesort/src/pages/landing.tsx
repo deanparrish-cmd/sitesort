@@ -616,6 +616,7 @@ export default function LandingPage() {
               <a href="#how-it-works" className="hover:text-foreground transition-colors">How it works</a>
               <a href="#pricing" className="hover:text-foreground transition-colors">Pricing</a>
               <a href="#faq" className="hover:text-foreground transition-colors">FAQ</a>
+              <Link href="/sales" className="hover:text-foreground transition-colors">Why SiteSort</Link>
               <Link href={loginHref} className="hover:text-foreground transition-colors">Sign in</Link>
             </nav>
           </div>
