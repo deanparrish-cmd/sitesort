@@ -48,7 +48,7 @@ function lazyWithRetry<T extends { default: ComponentType<any> }>(factory: () =>
 
 // Pages — lazy-loaded so each route ships as its own chunk (code splitting).
 const LandingPage = lazyWithRetry(() => import("@/pages/landing"));
-const SalesPage = lazyWithRetry(() => import("@/pages/sales"));
+const InfoPage = lazyWithRetry(() => import("@/pages/info"));
 const Login = lazyWithRetry(() => import("@/pages/auth/login"));
 const Register = lazyWithRetry(() => import("@/pages/auth/register"));
 const VerifyEmail = lazyWithRetry(() => import("@/pages/auth/verify-email"));
@@ -114,7 +114,7 @@ function Router() {
       <Switch>
       {/* Public Routes */}
       <Route path="/" component={LandingPage} />
-      <Route path="/sales" component={SalesPage} />
+      <Route path="/info" component={InfoPage} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
       <Route path="/verify-email" component={VerifyEmail} />

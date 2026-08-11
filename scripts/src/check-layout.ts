@@ -117,7 +117,7 @@ async function setupFixtures(appToken: string) {
 function buildRoutes(projectId: string, hasPortal: boolean): RouteSpec[] {
   const routes: RouteSpec[] = [
     { path: "/", label: "landing", auth: "none" },
-    { path: "/sales", label: "sales", auth: "none" },
+    { path: "/info", label: "info", auth: "none" },
     { path: "/login", label: "login", auth: "none" },
     { path: "/register", label: "register", auth: "none" },
     { path: "/forgot-password", label: "forgot-password", auth: "none" },
