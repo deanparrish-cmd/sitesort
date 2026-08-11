@@ -100,14 +100,34 @@ async function main() {
   const failedCount = raw.length - treeItems.length;
   console.log(`  ${treeItems.length} blobs created${failedCount ? `, ${failedCount} skipped (oversized)` : ""}.`);
 
-  console.log("Creating tree…");
-  const tree = await api(`/repos/${OWNER}/${REPO}/git/trees`, "POST", { tree: treeItems, base_tree: baseTreeSha });
-  if (!tree.body?.sha) throw new Error("tree failed: " + JSON.stringify(tree.body).slice(0, 200));
+  // A single create-tree call with ~2000+ entries reliably 502s (GitHub's tree
+  // endpoint chokes on the payload, retries don't help). Build the tree
+  // incrementally instead: each batch's base_tree is the previous batch's
+  // resulting sha, so the final tree still contains every entry.
+  console.log("Creating tree (chunked)…");
+  const CHUNK = 300;
+  let currentBaseTree = baseTreeSha;
+  let treeSha: string | undefined;
+  for (let start = 0; start < treeItems.length; start += CHUNK) {
+    const batch = treeItems.slice(start, start + CHUNK);
+    let result = { status: 0, body: undefined as any };
+    for (let i = 0; i < 5; i++) {
+      result = await api(`/repos/${OWNER}/${REPO}/git/trees`, "POST", { tree: batch, base_tree: currentBaseTree });
+      if (result.body?.sha) break;
+      console.warn(`  ⚠️  tree batch ${start}-${start + batch.length} attempt ${i + 1} failed (HTTP ${result.status}): ${JSON.stringify(result.body).slice(0, 150)}`);
+      await new Promise(res => setTimeout(res, 1500 * (i + 1)));
+    }
+    if (!result.body?.sha) throw new Error(`tree batch ${start}-${start + batch.length} failed after retries: HTTP ${result.status} ` + JSON.stringify(result.body).slice(0, 200));
+    treeSha = result.body.sha as string;
+    currentBaseTree = treeSha;
+    console.log(`  tree batch ${start + batch.length}/${treeItems.length} -> ${treeSha.slice(0, 8)}`);
+  }
+  if (!treeSha) throw new Error("no tree items to commit");
 
   console.log("Creating commit…");
   const commit = await api(`/repos/${OWNER}/${REPO}/git/commits`, "POST", {
     message: "chore: sync workspace — calendar events, site board, check-in fixes",
-    tree: tree.body.sha,
+    tree: treeSha,
     parents: [baseSha],
   });
   if (!commit.body?.sha) throw new Error("commit failed: " + JSON.stringify(commit.body).slice(0, 200));
