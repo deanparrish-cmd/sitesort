@@ -237,7 +237,10 @@
       "Bash(PORT=18299 pnpm --filter @workspace/sitesort run build)",
       "Bash(ps -p 408 -o pid,ppid,cmd)",
       "Bash(kill 408)",
-      "Bash(awk 'length > 500 {print NR\": \"length}' /home/runner/workspace/CLAUDE.md)"
+      "Bash(awk 'length > 500 {print NR\": \"length}' /home/runner/workspace/CLAUDE.md)",
+      "Bash(pkill -f \"node dist/index.mjs\")",
+      "Bash(cp /tmp/claude-1000/-home-runner-workspace/5014ccf5-cf84-4ec9-bcd1-6de92e7f433d/scratchpad/mobile-check.mjs /home/runner/workspace/.claude/skills/browser-check/mobile-check.mjs)",
+      "Bash(rm mobile-check.mjs)"
     ]
   },
   "hooks": {
