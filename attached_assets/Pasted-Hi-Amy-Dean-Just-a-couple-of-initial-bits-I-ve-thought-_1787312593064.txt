@@ -1,0 +1,27 @@
+Hi Amy / Dean,
+
+Just a couple of initial bits I've thought about when using Site Sort which might need to be concidered,
+
+First one is I have signed up to use the free trial using my Concept email and It hasn't asked me to input any payment details (to be used when the free trial runs out), wasn't sure if this is right or that it will ask for them when the trial expires?.
+
+First thing I have thought is the progress tab is good and I like being ablet to input milestones, a thought though is would it be worth being able to upload & link a copy of the programme that the customer has / uses (this could be in Microsoft Project or Excell) then if that could import the programme to upload the milestones anyway (don't think that's as imperative but certainty if the programme could be there even if it's just in PDF).
+
+Plant & Materials Section, is it able to run off reports? (like say a weekly on hire Plant report).
+
+On the H&S section, this only references Method Statements, ideally it would be Risk Assessments & Method Statements (RAMS), probably just me being anal but it's just the terminology as they are 2 separate documents that then forms a RAMS.
+
+On the Finances and Expiry section / tab, what is the main purpose of the invoices section?, I only say it as looking at it there is no inputting of the main project value or any subcontractor order values within it (both of which change throughout the project with omission and additions etc), as such having invoices on their doesn't seem to add up for me (if that's what it was for?) it terms of what your tracking the invoices against, my past experiences are I would say that the world of a system managing construction project finances is very complex and bespoke (I've been at a couple of previous companies that have spent serious amounts of money trying to get that right), with the platform seeming to be more heavily towards compliance monitoring and document checking / recording would it need to have invoicing on there? (hey I might have totally missed the target with what that section is for so if I have apologies 🙂).
+
+Add a Team Member - Role option has 3 main options to pick from, would it be possible to have a subcategory where you add in their actual job role (Site Manager, Assistant Site Manager, Labourer, Contracts Manager, QS etc) on the team member I did create I added Site Manager in the notes but you can't see it on the contact card once created, I think.
+
+When adding a contact and using the Subcontractor option, it gives you a range of Trades you can select from for what they are, when you select "Other" you aren't then able to then add a note as to what there Trade actually is (say for instance they are Concrete Staircase installers), as someone else then using the system that doesn't know them wouldn't be sure what their trade actually is?.
+
+On Contacts I have created an electrical contractor, but I cannot easily see where I add their insurances, on the documents dropdown there is various options you can pick from but not Insurances (I couldn't easily see it anyway), then on the main screen where you see all the contacts it says No Insurance that's all.
+
+On Contacts - Similar to point above, if you select Professional Services or Supplier or Self Employed - should there be the option of a subcategory or note as to what they are
+.
+On the above Self Employed, might be worth this being "Self Employed / Labour Only" , as covers both bases then.
+
+Daily Site Reports - Could it have the option to upload photos to that report (as normally the site manager would probably take some photos etc on that day for the report).
+
+Projects - H&S - What is the Team Insurances section bit for? (it shows the team members you have entered for the job, is it more where their certifications if they have them, would be?, if so should it be "Team Certifications/Compliance" (as insurances threw me as to what that would be for).
