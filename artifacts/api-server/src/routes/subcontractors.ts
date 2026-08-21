@@ -49,6 +49,12 @@ router.get("/subcontractors", authenticate, async (req, res) => {
         eq(subcontractorsTable.companyId, req.user!.companyId),
         wantArchived ? isNotNull(subcontractorsTable.archivedAt) : isNull(subcontractorsTable.archivedAt),
       ));
+    // Bulk lookup of each contact's primary-person roleTitle (one query, not N+1).
+    const primaryContacts = subs.length
+      ? await db.select({ subcontractorId: peopleTable.subcontractorId, roleTitle: peopleTable.roleTitle }).from(peopleTable)
+          .where(and(inArray(peopleTable.subcontractorId, subs.map(s => s.id)), eq(peopleTable.isPrimaryContact, true)))
+      : [];
+    const roleTitleBySub = new Map(primaryContacts.map(p => [p.subcontractorId, p.roleTitle]));
     const result = await Promise.all(subs.map(async (s) => {
       const insurance = await db.select().from(insuranceRecordsTable)
         .where(and(eq(insuranceRecordsTable.subcontractorId, s.id), isNull(insuranceRecordsTable.archivedAt)));
@@ -63,6 +69,7 @@ router.get("/subcontractors", authenticate, async (req, res) => {
         contactEmail: s.contactEmail,
         contactPhone: s.contactPhone ?? null,
         contactType: s.contactType ?? "subcontractor",
+        roleTitle: roleTitleBySub.get(s.id) ?? null,
         trades: s.trades ?? [],
         reliabilityRating: s.reliabilityRating ? Number(s.reliabilityRating) : null,
         paymentHold: s.paymentHold,
@@ -85,7 +92,7 @@ router.post("/subcontractors", authenticate, async (req, res) => {
   try {
     const parsed = CreateSubcontractorBody.safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ error: "validation_error", message: "A first name and surname (2+ chars each) and contactEmail are required" }); return; }
-    const { contactFirstName, contactLastName, contactEmail, contactPhone, contactType, trades, notes } = parsed.data;
+    const { contactFirstName, contactLastName, contactEmail, contactPhone, contactType, roleTitle, trades, notes } = parsed.data;
     // The Zod minLength above checks the RAW value, so e.g. "  " (whitespace-only)
     // slips through — trim first, then re-check, so a name that's empty once
     // trimmed is caught with a clear message instead of silently stored blank.
@@ -104,6 +111,7 @@ router.post("/subcontractors", authenticate, async (req, res) => {
     const companyName = parsed.data.companyName?.trim() || (type === "self_employed" ? contactName : undefined);
     if (!companyName) { res.status(400).json({ error: "validation_error", message: "companyName is required unless contactType is self_employed" }); return; }
 
+    const trimmedRoleTitle = roleTitle?.trim() || null;
     const id = generateId();
     const personId = generateId();
     await db.insert(subcontractorsTable).values({
@@ -133,10 +141,11 @@ router.post("/subcontractors", authenticate, async (req, res) => {
       lastName,
       email: contactEmail,
       phone: contactPhone ?? null,
+      roleTitle: trimmedRoleTitle,
       isPrimaryContact: true,
     });
 
-    res.status(201).json({ id, personId, companyId: req.user!.companyId, companyName, contactName, contactFirstName: firstName, contactLastName: lastName, contactEmail, contactPhone: contactPhone ?? null, contactType: type, trades: trades ?? [], reliabilityRating: null, paymentHold: false, notes: notes ?? null, archivedAt: null, insuranceStatus: "none", certifications: [], insuranceRecords: [], createdAt: new Date().toISOString() });
+    res.status(201).json({ id, personId, companyId: req.user!.companyId, companyName, contactName, contactFirstName: firstName, contactLastName: lastName, contactEmail, contactPhone: contactPhone ?? null, contactType: type, roleTitle: trimmedRoleTitle, trades: trades ?? [], reliabilityRating: null, paymentHold: false, notes: notes ?? null, archivedAt: null, insuranceStatus: "none", certifications: [], insuranceRecords: [], createdAt: new Date().toISOString() });
   } catch (err) {
     req.log.error({ err }, "Create subcontractor error");
     res.status(500).json({ error: "server_error", message: "Failed to create subcontractor" });
@@ -163,6 +172,8 @@ router.get("/subcontractors/:subcontractorId", authenticate, async (req, res) =>
       const proj = await db.select({ id: projectsTable.id, name: projectsTable.name }).from(projectsTable).where(eq(projectsTable.id, m.projectId)).limit(1);
       return proj[0] ?? null;
     }));
+    const primaryContact = await db.select({ roleTitle: peopleTable.roleTitle }).from(peopleTable)
+      .where(and(eq(peopleTable.subcontractorId, s.id), eq(peopleTable.isPrimaryContact, true))).limit(1);
 
     res.json({
       id: s.id,
@@ -174,6 +185,7 @@ router.get("/subcontractors/:subcontractorId", authenticate, async (req, res) =>
       contactEmail: s.contactEmail,
       contactPhone: s.contactPhone ?? null,
       contactType: s.contactType ?? "subcontractor",
+      roleTitle: primaryContact[0]?.roleTitle ?? null,
       trades: s.trades ?? [],
       reliabilityRating: s.reliabilityRating ? Number(s.reliabilityRating) : null,
       paymentHold: s.paymentHold,
@@ -193,9 +205,21 @@ router.get("/subcontractors/:subcontractorId", authenticate, async (req, res) =>
 
 router.patch("/subcontractors/:subcontractorId", authenticate, async (req, res) => {
   try {
+    // Verify ownership BEFORE writing anything — the peopleTable mirror-write
+    // below is scoped only by subcontractorId (it has no companyId column of
+    // its own to check), so this gate is what stops a caller from a different
+    // company mutating another company's primary contact via a guessed id.
+    const owned = await db.select({ id: subcontractorsTable.id }).from(subcontractorsTable)
+      .where(and(eq(subcontractorsTable.id, req.params.subcontractorId), eq(subcontractorsTable.companyId, req.user!.companyId)))
+      .limit(1);
+    if (!owned[0]) {
+      res.status(404).json({ error: "not_found", message: "Subcontractor not found" });
+      return;
+    }
+
     const parsed = UpdateSubcontractorBody.safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ error: "validation_error", message: "Invalid update: a first name and surname must be at least 2 characters each." }); return; }
-    const { companyName, contactFirstName, contactLastName, contactEmail, contactPhone, contactType, trades, reliabilityRating, paymentHold, notes } = parsed.data;
+    const { companyName, contactFirstName, contactLastName, contactEmail, contactPhone, contactType, roleTitle, trades, reliabilityRating, paymentHold, notes } = parsed.data;
     // Name is stored as two parts + a derived display string; if only one of
     // first/last is given, require the other too so contactName never drifts
     // out of sync with the parts.
@@ -228,8 +252,12 @@ router.patch("/subcontractors/:subcontractorId", authenticate, async (req, res) 
     if (paymentHold !== undefined) updates.paymentHold = paymentHold;
     if (notes !== undefined) updates.notes = notes;
 
-    await db.update(subcontractorsTable).set(updates)
-      .where(and(eq(subcontractorsTable.id, req.params.subcontractorId), eq(subcontractorsTable.companyId, req.user!.companyId)));
+    // A roleTitle-only patch (or any future person-only field) leaves this
+    // object empty — drizzle rejects an empty .set(), so skip the no-op write.
+    if (Object.keys(updates).length > 0) {
+      await db.update(subcontractorsTable).set(updates)
+        .where(and(eq(subcontractorsTable.id, req.params.subcontractorId), eq(subcontractorsTable.companyId, req.user!.companyId)));
+    }
 
     // Mirror name/email/phone changes onto the linked primary-contact `people`
     // row so it never drifts from these subcontructors columns (Feature:
@@ -243,6 +271,8 @@ router.patch("/subcontractors/:subcontractorId", authenticate, async (req, res) 
     }
     if (contactEmail !== undefined) personUpdates.email = contactEmail;
     if (contactPhone !== undefined) personUpdates.phone = contactPhone;
+    // null clears a previously-set role title (same convention as reliabilityRating).
+    if (roleTitle !== undefined) personUpdates.roleTitle = roleTitle?.trim() || null;
     if (Object.keys(personUpdates).length > 0) {
       await db.update(peopleTable).set(personUpdates)
         .where(and(eq(peopleTable.subcontractorId, req.params.subcontractorId), eq(peopleTable.isPrimaryContact, true)));
@@ -259,8 +289,10 @@ router.patch("/subcontractors/:subcontractorId", authenticate, async (req, res) 
     const insurance = await db.select().from(insuranceRecordsTable)
       .where(and(eq(insuranceRecordsTable.subcontractorId, s.id), isNull(insuranceRecordsTable.archivedAt)));
     const patchCerts = await certificationsForSubcontractor(s.id, req.user!.companyId);
+    const patchPrimaryContact = await db.select({ roleTitle: peopleTable.roleTitle }).from(peopleTable)
+      .where(and(eq(peopleTable.subcontractorId, s.id), eq(peopleTable.isPrimaryContact, true))).limit(1);
 
-    res.json({ id: s.id, companyId: s.companyId, companyName: s.companyName, contactName: s.contactName, contactFirstName: s.contactFirstName ?? null, contactLastName: s.contactLastName ?? null, contactEmail: s.contactEmail, contactPhone: s.contactPhone ?? null, contactType: s.contactType ?? "subcontractor", trades: s.trades ?? [], reliabilityRating: s.reliabilityRating ? Number(s.reliabilityRating) : null, paymentHold: s.paymentHold, notes: s.notes ?? null, archivedAt: s.archivedAt ? s.archivedAt.toISOString() : null, insuranceStatus: combinedInsuranceStatus(insurance, patchCerts), certifications: patchCerts, insuranceRecords: await serializeInsuranceRecords(insurance), createdAt: s.createdAt.toISOString() });
+    res.json({ id: s.id, companyId: s.companyId, companyName: s.companyName, contactName: s.contactName, contactFirstName: s.contactFirstName ?? null, contactLastName: s.contactLastName ?? null, contactEmail: s.contactEmail, contactPhone: s.contactPhone ?? null, contactType: s.contactType ?? "subcontractor", roleTitle: patchPrimaryContact[0]?.roleTitle ?? null, trades: s.trades ?? [], reliabilityRating: s.reliabilityRating ? Number(s.reliabilityRating) : null, paymentHold: s.paymentHold, notes: s.notes ?? null, archivedAt: s.archivedAt ? s.archivedAt.toISOString() : null, insuranceStatus: combinedInsuranceStatus(insurance, patchCerts), certifications: patchCerts, insuranceRecords: await serializeInsuranceRecords(insurance), createdAt: s.createdAt.toISOString() });
   } catch (err) {
     req.log.error({ err }, "Update subcontractor error");
     res.status(500).json({ error: "server_error", message: "Failed to update subcontractor" });

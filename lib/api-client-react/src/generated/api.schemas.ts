@@ -530,6 +530,8 @@ export interface Subcontractor {
   contactEmail: string;
   contactPhone?: string | null;
   contactType?: SubcontractorContactType;
+  /** Job role/trade/specialism for this contact's primary person (e.g. "Carpenter", "Site Supervisor"). Mirrors the linked people row's roleTitle. */
+  roleTitle?: string | null;
   trades: string[];
   reliabilityRating?: number | null;
   paymentHold: boolean;
@@ -613,6 +615,8 @@ export interface CreateSubcontractorRequest {
   contactPhone?: string;
   /** 'self_employed' means the person IS the entity — companyName is optional (server defaults it to the contact's name if omitted). */
   contactType?: CreateSubcontractorRequestContactType;
+  /** Job role/trade/specialism for this contact's primary person (e.g. "Carpenter", "Site Supervisor"). */
+  roleTitle?: string;
   trades: string[];
   notes?: string;
 }
@@ -644,6 +648,8 @@ export interface UpdateSubcontractorRequest {
   contactEmail?: string;
   contactPhone?: string;
   contactType?: UpdateSubcontractorRequestContactType;
+  /** Job role/trade/specialism for this contact's primary person. null clears a previously-set value. */
+  roleTitle?: string | null;
   trades?: string[];
   notes?: string;
   /** null clears a previously-set rating — the edit form sends null when the field is left empty. */

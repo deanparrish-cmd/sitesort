@@ -726,6 +726,12 @@ export const ListSubcontractorsResponseItem = zod.object({
       "other",
     ])
     .optional(),
+  roleTitle: zod
+    .string()
+    .nullish()
+    .describe(
+      'Job role\/trade\/specialism for this contact\'s primary person (e.g. \"Carpenter\", \"Site Supervisor\"). Mirrors the linked people row\'s roleTitle.',
+    ),
   trades: zod.array(zod.string()),
   reliabilityRating: zod.number().nullish(),
   paymentHold: zod.boolean(),
@@ -790,6 +796,12 @@ export const CreateSubcontractorBody = zod.object({
     .describe(
       "'self_employed' means the person IS the entity — companyName is optional (server defaults it to the contact's name if omitted).",
     ),
+  roleTitle: zod
+    .string()
+    .optional()
+    .describe(
+      'Job role\/trade\/specialism for this contact\'s primary person (e.g. \"Carpenter\", \"Site Supervisor\").',
+    ),
   trades: zod.array(zod.string()),
   notes: zod.string().optional(),
 });
@@ -825,6 +837,12 @@ export const GetSubcontractorResponse = zod
         "other",
       ])
       .optional(),
+    roleTitle: zod
+      .string()
+      .nullish()
+      .describe(
+        'Job role\/trade\/specialism for this contact\'s primary person (e.g. \"Carpenter\", \"Site Supervisor\"). Mirrors the linked people row\'s roleTitle.',
+      ),
     trades: zod.array(zod.string()),
     reliabilityRating: zod.number().nullish(),
     paymentHold: zod.boolean(),
@@ -914,6 +932,12 @@ export const UpdateSubcontractorBody = zod.object({
       "other",
     ])
     .optional(),
+  roleTitle: zod
+    .string()
+    .nullish()
+    .describe(
+      "Job role\/trade\/specialism for this contact's primary person. null clears a previously-set value.",
+    ),
   trades: zod.array(zod.string()).optional(),
   notes: zod.string().optional(),
   reliabilityRating: zod
@@ -948,6 +972,12 @@ export const UpdateSubcontractorResponse = zod.object({
       "other",
     ])
     .optional(),
+  roleTitle: zod
+    .string()
+    .nullish()
+    .describe(
+      'Job role\/trade\/specialism for this contact\'s primary person (e.g. \"Carpenter\", \"Site Supervisor\"). Mirrors the linked people row\'s roleTitle.',
+    ),
   trades: zod.array(zod.string()),
   reliabilityRating: zod.number().nullish(),
   paymentHold: zod.boolean(),

@@ -1311,6 +1311,14 @@ router.get("/portal/team", ...portalGuards, async (req, res) => {
   const subById = new Map(subs.map(s => [s.id, s]));
   const personById = new Map(people.map(p => [p.id, p]));
   const userById = new Map(users.map(u => [u.id, u]));
+  // Company-link-only members (no personId on the membership row) still have a
+  // real primary-contact person with a roleTitle — look it up so their portal
+  // row shows a job title too, instead of always blank.
+  const primaryContacts = subIds.length
+    ? await db.select({ subcontractorId: peopleTable.subcontractorId, roleTitle: peopleTable.roleTitle }).from(peopleTable)
+        .where(and(inArray(peopleTable.subcontractorId, subIds), eq(peopleTable.isPrimaryContact, true)))
+    : [];
+  const roleTitleBySubId = new Map(primaryContacts.map(p => [p.subcontractorId, p.roleTitle]));
 
   // Contact details are shown per-person only when allowed: the person's explicit
   // flag, else the role default (managers ON, everyone else OFF). When OFF the row
@@ -1347,7 +1355,7 @@ router.get("/portal/team", ...portalGuards, async (req, res) => {
     const sub = m.subcontractorId ? subById.get(m.subcontractorId) : undefined;
     if (sub) {
       const contact = showsContact(null, "subcontractor");
-      return { name: sub.contactName, sortKey: surnameOf(sub.contactName, sub.contactLastName), company: sub.companyName, jobTitle: undefined, role: "subcontractor", trades: sub.trades ?? [], ...(contact ? { email: sub.contactEmail ?? undefined, phone: sub.contactPhone ?? undefined } : {}) };
+      return { name: sub.contactName, sortKey: surnameOf(sub.contactName, sub.contactLastName), company: sub.companyName, jobTitle: roleTitleBySubId.get(sub.id) ?? undefined, role: "subcontractor", trades: sub.trades ?? [], ...(contact ? { email: sub.contactEmail ?? undefined, phone: sub.contactPhone ?? undefined } : {}) };
     }
     const user = m.userId ? userById.get(m.userId) : undefined;
     const contact = showsContact(null, m.role);

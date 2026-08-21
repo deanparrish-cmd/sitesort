@@ -85,6 +85,7 @@ type Sub = {
   contactEmail: string;
   contactPhone: string | null;
   contactType: ContactType;
+  roleTitle: string | null;
   trades: string[];
   reliabilityRating: number | null;
   paymentHold: boolean;
@@ -271,6 +272,7 @@ type AddFormData = {
   contactEmail: string;
   contactPhone: string;
   contactType: ContactType;
+  roleTitle: string;
   trades: string[];
   notes: string;
 };
@@ -374,6 +376,57 @@ export default function SubcontractorsPage() {
     if (!res.ok) { setInsError("Failed to save. Please try again."); return; }
     setInsTarget(null);
     await load();
+  };
+
+  // Add/renew insurance dialog (Task #43) — reuses the existing insurance
+  // backend (POST /subcontractors/:id/insurance), the same endpoint the
+  // Compliance Centre and Team Insurance & Site Access already write through.
+  // Refetches just this contact afterwards so insuranceStatus/insuranceRecords
+  // (both server-computed) are current and the badge flips instantly, without
+  // a full page reload.
+  const [insAddTarget, setInsAddTarget] = useState<Sub | null>(null);
+  const [insAddType, setInsAddType] = useState("public_liability");
+  const [insAddExpiry, setInsAddExpiry] = useState("");
+  const [insAddFile, setInsAddFile] = useState<{ url: string; name: string } | null>(null);
+  const [insAddFileZoneKey, setInsAddFileZoneKey] = useState(0);
+  const [insAddSubmitting, setInsAddSubmitting] = useState(false);
+  const [insAddError, setInsAddError] = useState<string | null>(null);
+
+  const openInsAdd = (sub: Sub) => {
+    setInsAddTarget(sub);
+    setInsAddType("public_liability");
+    setInsAddExpiry("");
+    setInsAddFile(null);
+    setInsAddFileZoneKey(k => k + 1);
+    setInsAddError(null);
+  };
+
+  const saveInsAdd = async () => {
+    if (!insAddTarget) return;
+    if (isCancelled) { toast({ variant: "destructive", title: "Subscription inactive", description: "Reactivate to make changes." }); return; }
+    if (!insAddFile) { setInsAddError("Please upload a certificate."); return; }
+    if (!insAddExpiry) { setInsAddError("Please set an expiry date."); return; }
+    setInsAddSubmitting(true);
+    setInsAddError(null);
+    const targetId = insAddTarget.id;
+    const res = await apiFetch(`/api/subcontractors/${targetId}/insurance`, {
+      method: "POST",
+      body: JSON.stringify({ type: insAddType, certificateUrl: insAddFile.url, expiryDate: insAddExpiry }),
+    });
+    if (!res.ok) {
+      setInsAddSubmitting(false);
+      const e = await res.json().catch(() => ({}));
+      setInsAddError(e.message ?? "Failed to save. Please try again.");
+      return;
+    }
+    const refreshed = await apiFetch(`/api/subcontractors/${targetId}`);
+    if (refreshed.ok) {
+      const updated = await refreshed.json();
+      setSubs(prev => prev.map(s => s.id === targetId ? { ...s, ...updated } : s));
+    }
+    setInsAddSubmitting(false);
+    setInsAddTarget(null);
+    toast({ title: "Insurance saved", description: "The contact's insurance badge is up to date." });
   };
 
   useEffect(() => {
@@ -654,6 +707,7 @@ export default function SubcontractorsPage() {
       contactEmail: sub.contactEmail,
       contactPhone: sub.contactPhone ?? "",
       contactType: sub.contactType ?? "subcontractor",
+      roleTitle: sub.roleTitle ?? "",
       reliabilityRating: sub.reliabilityRating != null ? String(sub.reliabilityRating) : "",
       paymentHold: sub.paymentHold,
       notes: sub.notes ?? "",
@@ -879,8 +933,10 @@ export default function SubcontractorsPage() {
                                 <Badge variant="warning" className="text-[10px] shrink-0">Surname missing</Badge>
                               )}
                             </div>
-                            {showCompanySubline(sub) && (
-                              <p className="text-xs text-muted-foreground truncate">{sub.companyName}</p>
+                            {(showCompanySubline(sub) || sub.roleTitle) && (
+                              <p className="text-xs text-muted-foreground truncate">
+                                {[showCompanySubline(sub) ? sub.companyName : null, sub.roleTitle].filter(Boolean).join(" · ")}
+                              </p>
                             )}
                             <div className="flex flex-col gap-0.5 mt-0.5">
                               {sub.contactPhone && (
@@ -992,6 +1048,9 @@ export default function SubcontractorsPage() {
                                 </button>
                                 {caps.canManageSubcontractors && (
                                   <>
+                                    <button onClick={() => openInsAdd(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors" title="Add / renew insurance">
+                                      <ShieldCheck className="w-3.5 h-3.5" />
+                                    </button>
                                     <button onClick={() => setShareTarget(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Add to a project">
                                       <FolderPlus className="w-3.5 h-3.5" />
                                     </button>
@@ -1046,6 +1105,9 @@ export default function SubcontractorsPage() {
                                 </button>
                                 {caps.canManageSubcontractors && (
                                   <>
+                                    <button onClick={() => openInsAdd(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors" title="Add / renew insurance">
+                                      <ShieldCheck className="w-3.5 h-3.5" />
+                                    </button>
                                     <button onClick={() => setShareTarget(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Add to a project">
                                       <FolderPlus className="w-3.5 h-3.5" />
                                     </button>
@@ -1112,6 +1174,10 @@ export default function SubcontractorsPage() {
               <label className="text-sm font-medium mb-1.5 block">Email</label>
               <Input type="email" placeholder="john@example.com" {...register("contactEmail", { required: true })} />
               {errors.contactEmail && <p className="text-xs text-destructive mt-1">Required</p>}
+            </div>
+            <div className="col-span-2">
+              <label className="text-sm font-medium mb-1.5 block">Job Role / Trade</label>
+              <Input placeholder="e.g. Carpenter, Site Supervisor" {...register("roleTitle")} />
             </div>
           </div>
 
@@ -1315,6 +1381,10 @@ export default function SubcontractorsPage() {
             <div className="col-span-2">
               <label className="text-sm font-medium mb-1.5 block">Email</label>
               <Input type="email" {...editReg("contactEmail", { required: true })} />
+            </div>
+            <div className="col-span-2">
+              <label className="text-sm font-medium mb-1.5 block">Job Role / Trade</label>
+              <Input placeholder="e.g. Carpenter, Site Supervisor" {...editReg("roleTitle")} />
             </div>
           </div>
 
@@ -1636,6 +1706,61 @@ export default function SubcontractorsPage() {
         <DialogFooter>
           <Button variant="outline" onClick={() => { setInsTarget(null); setInsError(null); }}>Cancel</Button>
           <Button variant="accent" onClick={saveInsAssign} isLoading={insSubmitting}>Save</Button>
+        </DialogFooter>
+      </Dialog>
+
+      {/* Add / renew insurance (Task #43) — writes through the same endpoint
+          used by the Compliance Centre and Team Insurance & Site Access. */}
+      <Dialog open={!!insAddTarget} onOpenChange={open => { if (!open) { setInsAddTarget(null); setInsAddError(null); } }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-emerald-600" /> Add / Renew Insurance
+          </DialogTitle>
+        </DialogHeader>
+        {insAddTarget && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/40">
+              <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                {insAddTarget.contactName.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <p className="font-semibold text-sm truncate">{insAddTarget.contactName}</p>
+                <p className="text-xs text-muted-foreground truncate">{companyLabel(insAddTarget)}</p>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Uploading a new certificate of the same type replaces the current one on record for this contact and updates the insurance badge everywhere it's shown, including this project's Team Insurance & Site Access.
+            </p>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Insurance type</label>
+              <select
+                value={insAddType}
+                onChange={e => setInsAddType(e.target.value)}
+                className="flex h-11 w-full rounded-lg border-2 border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/10"
+              >
+                <option value="public_liability">Public Liability</option>
+                <option value="employers_liability">Employer's Liability</option>
+                <option value="professional_indemnity">Professional Indemnity</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Expiry date</label>
+              <Input type="date" value={insAddExpiry} onChange={e => setInsAddExpiry(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Certificate</label>
+              <FileDropZone
+                key={insAddFileZoneKey}
+                onUploaded={f => setInsAddFile({ url: f.url, name: f.originalName })}
+                onCleared={() => setInsAddFile(null)}
+              />
+            </div>
+            {insAddError && <p className="text-destructive text-sm">{insAddError}</p>}
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => { setInsAddTarget(null); setInsAddError(null); }}>Cancel</Button>
+          <Button variant="accent" onClick={saveInsAdd} isLoading={insAddSubmitting}>Save</Button>
         </DialogFooter>
       </Dialog>
 

@@ -22,6 +22,8 @@ export interface UpdateSubcontractorRequest {
   contactEmail?: string;
   contactPhone?: string;
   contactType?: UpdateSubcontractorRequestContactType;
+  /** Job role/trade/specialism for this contact's primary person. null clears a previously-set value. */
+  roleTitle?: string | null;
   trades?: string[];
   notes?: string;
   /** null clears a previously-set rating — the edit form sends null when the field is left empty. */

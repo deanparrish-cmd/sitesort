@@ -23,6 +23,8 @@ export interface CreateSubcontractorRequest {
   contactPhone?: string;
   /** 'self_employed' means the person IS the entity — companyName is optional (server defaults it to the contact's name if omitted). */
   contactType?: CreateSubcontractorRequestContactType;
+  /** Job role/trade/specialism for this contact's primary person (e.g. "Carpenter", "Site Supervisor"). */
+  roleTitle?: string;
   trades: string[];
   notes?: string;
 }

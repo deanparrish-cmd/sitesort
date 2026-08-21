@@ -20,6 +20,8 @@ export interface Subcontractor {
   contactEmail: string;
   contactPhone?: string | null;
   contactType?: SubcontractorContactType;
+  /** Job role/trade/specialism for this contact's primary person (e.g. "Carpenter", "Site Supervisor"). Mirrors the linked people row's roleTitle. */
+  roleTitle?: string | null;
   trades: string[];
   reliabilityRating?: number | null;
   paymentHold: boolean;
