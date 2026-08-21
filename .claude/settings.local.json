@@ -241,7 +241,9 @@
       "Bash(pkill -f \"node dist/index.mjs\")",
       "Bash(cp /tmp/claude-1000/-home-runner-workspace/5014ccf5-cf84-4ec9-bcd1-6de92e7f433d/scratchpad/mobile-check.mjs /home/runner/workspace/.claude/skills/browser-check/mobile-check.mjs)",
       "Bash(rm mobile-check.mjs)",
-      "Bash(git mv *)"
+      "Bash(git mv *)",
+      "Bash(git show *)",
+      "Bash(gh issue *)"
     ]
   },
   "hooks": {
