@@ -734,7 +734,7 @@ export default function Dashboard() {
         const steps = [
           { key: "hasProject",       done: onboarding.hasProject,       title: "Create your first project",         desc: "Set up a project with a name, address, and start date.",  href: "/projects?new=1",       cta: "Create project" },
           { key: "hasTeamMember",    done: onboarding.hasTeamMember,    title: "Invite an in house team member",    desc: "Add a colleague to one of your projects.",                 href: "/subcontractors?new=1", cta: "Add to directory" },
-          { key: "hasDocument",      done: onboarding.hasDocument,      title: "Upload your first document",        desc: "Share a drawing, method statement, or compliance doc.",    href: "/compliance?upload=1",  cta: "Upload document" },
+          { key: "hasDocument",      done: onboarding.hasDocument,      title: "Upload your first document",        desc: "Share a drawing, RAMS, or compliance doc.",               href: "/compliance?upload=1",  cta: "Upload document" },
           { key: "hasSubcontractor", done: onboarding.hasSubcontractor, title: "Add a contact",                    desc: "Build your directory of contacts with trade info.",         href: "/subcontractors",       cta: "Add contact" },
           { key: "hasMilestone",     done: onboarding.hasMilestone,     title: "Set milestones on a project",      desc: "Track progress with key dates and completion markers.",     href: "/projects",             cta: "Go to projects" },
         ];

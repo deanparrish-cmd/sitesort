@@ -94,7 +94,7 @@ export default function ProjectsList() {
   }, [safetyOpen, projects, safetyProjectId]);
 
   // ── Permit modal state ──
-  const PERMIT_TYPES = ["CSCS Check", "IPAF Certificate", "Hot Works", "Working at Heights", "Scaffolding Inspection", "Confined Space Entry", "Excavation", "Electrical Isolation", "Demolition", "Asbestos", "Method Statement", "Other"];
+  const PERMIT_TYPES = ["CSCS Check", "IPAF Certificate", "Hot Works", "Working at Heights", "Scaffolding Inspection", "Confined Space Entry", "Excavation", "Electrical Isolation", "Demolition", "Asbestos", "RAMS", "Other"];
 
   const [permitOpen, setPermitOpen] = useState(false);
   const [permitProjectId, setPermitProjectId] = useState("");

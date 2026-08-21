@@ -39,7 +39,7 @@ export function OverviewTab() {
           <div className="space-y-6">
             <RecentActivityGlance projectId={projectId} canManage={caps.canManageProjects} />
             {(caps.canLogPhoto || caps.canUploadDocument) && (
-              <Card>
+              <Card id="section-post-update" className="scroll-mt-24">
                 <CardContent className="pt-5 space-y-3">
                   <h3 className="font-semibold text-sm text-foreground">Post an update</h3>
                   <Textarea

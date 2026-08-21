@@ -3840,7 +3840,7 @@ components:
           type: string
         type:
           type: string
-          enum: [drawing, method_statement, permit, safety, general]
+          enum: [drawing, method_statement, permit, safety, programme, general]
         version:
           type: integer
         revision:
@@ -3908,7 +3908,7 @@ components:
           type: string
         type:
           type: string
-          enum: [drawing, method_statement, permit, safety, general]
+          enum: [drawing, method_statement, permit, safety, programme, general]
         fileUrl:
           type: string
         fileSize:
@@ -4090,7 +4090,7 @@ components:
         companyName:
           type: string
           nullable: true
-          description: Set when this card belongs to a subcontractor-linked person or company row — "Self-employed" is shown client-side in place of this when contactType is self_employed.
+          description: Set when this card belongs to a subcontractor-linked person or company row. "Self-employed / Labour Only" is shown client-side in place of this when contactType is self_employed.
         contactType:
           type: string
           nullable: true
@@ -6283,7 +6283,7 @@ components:
         companyName:
           type: string
           nullable: true
-          description: Populated when subcontractorId is set — "Self-employed" is shown client-side in place of this when the firm's contactType is self_employed.
+          description: Populated when subcontractorId is set. "Self-employed / Labour Only" is shown client-side in place of this when the firm's contactType is self_employed.
         contactType:
           type: string
           nullable: true

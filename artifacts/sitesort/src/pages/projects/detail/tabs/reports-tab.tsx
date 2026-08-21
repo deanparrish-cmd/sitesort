@@ -8,12 +8,18 @@ import { useDetail } from "../context";
 
 export function ReportsTab() {
   const {
-    photos,
     reports,
     openReportDetail,
     openTodaysDiary,
+    openTab,
+    setOvPhotoOpen,
     caps,
   } = useDetail();
+
+  const openSitePhotoUpload = () => {
+    setOvPhotoOpen(true);
+    openTab("overview", undefined, "section-post-update");
+  };
 
   return (
     <>
@@ -24,13 +30,18 @@ export function ReportsTab() {
                 <ClipboardCheck className="w-5 h-5 text-primary" />
                 <h3 className="font-bold text-lg">Daily Site Reports</h3>
               </div>
-              {caps.isInternal && (
+              <div className="flex flex-wrap gap-2">
+                {caps.canLogPhoto && (
+                  <Button variant="outline" size="sm" onClick={openSitePhotoUpload} className="shrink-0">
+                    <Camera className="w-4 h-4 mr-1.5" />Add site photos
+                  </Button>
+                )}
                 <Button variant="accent" size="sm" onClick={openTodaysDiary} className="shrink-0">
                   <Plus className="w-4 h-4 mr-1.5" />Today's site diary
                 </Button>
-              )}
+              </div>
             </div>
-            <p className="text-sm text-muted-foreground mb-6">Auto-generated each evening (~18:00), collating the day's check-ins, document activity and tagged site photos. Add a site diary any time to record weather, labour, work done, delays and H&amp;S.</p>
+            <p className="text-sm text-muted-foreground mb-6">Auto-generated each evening at about 18:00, collating the day's check-ins, document activity and site photos logged through Overview or Site Issues. Add a site diary any time to record weather, labour, work done, delays and H&amp;S.</p>
             {reports.length === 0 ? (
               <Card><CardContent className="py-12 text-center text-muted-foreground text-sm">
                 No daily reports yet. The first one appears after today's site activity is collated this evening, or add today's site diary now.

@@ -160,7 +160,7 @@ export function PermitsTab() {
                   badge={overdueCount > 0 && (
                     <Pill className="bg-red-100 text-red-700" icon={<AlertTriangle className="w-3 h-3" />}>{overdueCount} overdue</Pill>
                   )}
-                  description="Permits, method statements, safety documents and insurance for this project."
+                  description="Permits, RAMS, safety documents and insurance for this project."
                   actions={<>
                     {caps.canUploadDocument && (
                       <Button variant="outline" size="sm" onClick={() => { setValue("type", "permit"); setIsUploadOpen(true); }}>
@@ -257,7 +257,7 @@ export function PermitsTab() {
                     );
                   };
                   const docGroups: { key: string; label: string }[] = [
-                    { key: "method_statement", label: "Method Statements (RAMS)" },
+                    { key: "method_statement", label: "Risk Assessments & Method Statements (RAMS)" },
                     { key: "permit", label: "Permit Documents" },
                     { key: "safety", label: "Safety Documents" },
                   ];
@@ -285,9 +285,10 @@ export function PermitsTab() {
                   });
                 })()}
 
-                {/* Team Insurance */}
+                {/* Team Insurance & Site Access */}
                 {members && (members as any[]).length > 0 && (
-                  <FolderSection id="section-insurance" icon={<UserCheck className="w-4 h-4 text-primary" />} title="Team Insurance" count={(members as any[]).length}>
+                  <FolderSection id="section-insurance" icon={<UserCheck className="w-4 h-4 text-primary" />} title="Team Insurance & Site Access" count={(members as any[]).length}>
+                    <p className="text-xs text-muted-foreground px-1 pb-2">Shows each team member's public liability insurance (PLI) status. A missing or expired PLI certificate triggers a site access hold for that person.</p>
                     <div className="space-y-2">
                       {(members as any[]).map((m: any) => (
                         <div key={m.id} className={`flex items-center justify-between gap-3 px-4 py-3 rounded-xl border ${m.complianceStatus === "hold" ? "bg-red-50 border-red-200" : m.complianceStatus === "warning" ? "bg-orange-50 border-orange-200" : "bg-card border-border"}`}>

@@ -1392,7 +1392,7 @@ const SHARED_CATEGORIES: { key: SharedCategory; label: string }[] = [
   { key: "drawings", label: "Drawings" },
   { key: "hs", label: "H&S" },
   { key: "permits", label: "Permits" },
-  { key: "method-statements", label: "Method Statements" },
+  { key: "method-statements", label: "RAMS" },
   { key: "safety", label: "Safety" },
   { key: "general", label: "General" },
 ];

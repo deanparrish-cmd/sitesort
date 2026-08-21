@@ -24,6 +24,15 @@ import { formatDate, formatBytes, cn } from "@/lib/utils";
 import { useDetail } from "../context";
 import { docRev } from "../use-project-detail";
 
+const DOCUMENT_TYPE_LABELS: Record<string, string> = {
+  drawing: "Drawing",
+  method_statement: "RAMS",
+  permit: "Permit",
+  safety: "Safety",
+  programme: "Construction Programme",
+  general: "General",
+};
+
 export function DocumentsTab() {
   const {
     documents,
@@ -83,7 +92,7 @@ export function DocumentsTab() {
                   onClick={() => setSelectedDocType(type)}
                   className="shrink-0 capitalize"
                 >
-                  {({ drawing: 'Drawings', method_statement: 'Method Statements', permit: 'Permits', safety: 'Safety', general: 'General' } as Record<string,string>)[type] ?? type.replace('_', ' ')}
+                  {type === "drawing" ? "Drawings" : type === "permit" ? "Permits" : DOCUMENT_TYPE_LABELS[type] ?? type.replaceAll("_", " ")}
                 </Button>
               ))}
               <div className="shrink-0 w-px h-6 bg-border mx-1" />
@@ -127,7 +136,7 @@ export function DocumentsTab() {
                         : <Badge variant="success" className="text-[10px]">CURRENT</Badge>
                       }
                       {cadBadge && <span className="font-mono bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 px-2 py-0.5 rounded text-[10px] font-bold">{cadBadge}</span>}
-                      <span className="text-xs text-muted-foreground capitalize">{doc.type.replace('_', ' ')}</span>
+                      <span className="text-xs text-muted-foreground">{DOCUMENT_TYPE_LABELS[doc.type] ?? doc.type.replaceAll("_", " ")}</span>
                       <span className="text-xs text-muted-foreground">· {formatDate(doc.createdAt)}</span>
                     </div>
                     <div className="flex items-center gap-3 text-xs mb-3">
@@ -221,7 +230,7 @@ export function DocumentsTab() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 capitalize">{doc.type.replace('_', ' ')}</td>
+                      <td className="px-6 py-4">{DOCUMENT_TYPE_LABELS[doc.type] ?? doc.type.replaceAll("_", " ")}</td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           <span className="font-mono bg-muted px-2 py-0.5 rounded text-xs font-bold">{docRev(doc)}</span>

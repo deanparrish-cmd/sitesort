@@ -41,7 +41,7 @@ const faqs = [
   },
   {
     q: "Can I control who sees which documents?",
-    a: "Yes. You choose exactly who each document is distributed to, what's published to public site boards and what stays internal. Distribution tracking shows who has viewed and signed off every drawing or method statement.",
+    a: "Yes. You choose exactly who each document is distributed to, what's published to public site boards and what stays internal. Distribution tracking shows who has viewed and signed off every drawing or RAMS.",
   },
   {
     q: "What happens when a drawing is superseded?",

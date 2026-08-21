@@ -22,3 +22,4 @@
 - [Team tab member dedupe](team-member-dedupe.md) — only userId+personId membership rows are enforced; legacy firm-only rows are hidden when a person-backed row for the same firm exists.
 - [AI watermark removal](ai-watermark-removal.md) — inpaint smears soft-glow sparkles on wood; use seamlessClone with a same-row texture sample from the pristine source, never stack edits.
 - [Site-board check-in matching](site-board-checkin-matching.md) — QR check-in must cover all 3 project_members link types (user_id, subcontractor_id, person_id); sub-linked people need valid insurance.
+- [First-use scope boundaries](first-use-scope-boundaries.md) — preserve the intentional trial, programme, invoice and daily-report boundaries when improving discoverability.

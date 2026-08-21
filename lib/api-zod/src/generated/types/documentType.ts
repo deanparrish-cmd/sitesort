@@ -13,5 +13,6 @@ export const DocumentType = {
   method_statement: "method_statement",
   permit: "permit",
   safety: "safety",
+  programme: "programme",
   general: "general",
 } as const;

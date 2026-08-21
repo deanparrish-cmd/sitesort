@@ -1336,7 +1336,7 @@ router.get("/portal/team", ...portalGuards, async (req, res) => {
       return {
         name: canonical.name,
         sortKey: surnameOf(canonical.name, canonical.lastName),
-        company: sub ? (sub.contactType === "self_employed" ? "Self-employed" : sub.companyName) : ourCompany,
+        company: sub ? (sub.contactType === "self_employed" ? "Self-employed / Labour Only" : sub.companyName) : ourCompany,
         jobTitle: person.roleTitle ?? undefined,
         role: m.role,
         trades: sub?.trades ?? [],

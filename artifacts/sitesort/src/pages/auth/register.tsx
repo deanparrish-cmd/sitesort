@@ -218,8 +218,12 @@ export default function Register() {
           <p className="text-muted-foreground text-sm">
             We've sent a verification link to{" "}
             <span className="font-semibold text-foreground break-words">{registeredEmail}</span>.
-            Click it to confirm your email, then log in to start your free trial.
           </p>
+          <ol className="mt-3 text-sm text-muted-foreground text-left space-y-1 list-decimal list-inside">
+            <li>Click the link in the email to verify your address.</li>
+            <li>Log in to SiteSort.</li>
+            <li>Add your payment details to activate your 14-day free trial.</li>
+          </ol>
           <p className="text-muted-foreground text-xs mt-3">
             Don't see it within a minute or two? Check your spam or junk folder, and
             mark it "not spam" so future emails reach your inbox.
@@ -499,7 +503,7 @@ export default function Register() {
                 Create account
               </Button>
               <p className="text-center text-xs text-muted-foreground -mt-1">
-                We'll email a link to verify your address. No charge for 14 days, then {plan!.price}/month. Cancel any time.
+                We'll email a verification link. Once verified, log in and add payment details to start your 14-day free trial. No charge until it ends, then {plan!.price}/month. Cancel any time.
               </p>
             </form>
           </>

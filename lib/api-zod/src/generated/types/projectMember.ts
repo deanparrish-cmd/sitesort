@@ -18,7 +18,7 @@ export interface ProjectMember {
   name: string;
   /** Legacy company-row field — the firm's primary contact name (company rows only; superseded by personId rows post-backfill). */
   contactName?: string | null;
-  /** Set when this card belongs to a subcontractor-linked person or company row — "Self-employed" is shown client-side in place of this when contactType is self_employed. */
+  /** Set when this card belongs to a subcontractor-linked person or company row. "Self-employed / Labour Only" is shown client-side in place of this when contactType is self_employed. */
   companyName?: string | null;
   contactType?: ProjectMemberContactType;
   roleTitle?: string | null;

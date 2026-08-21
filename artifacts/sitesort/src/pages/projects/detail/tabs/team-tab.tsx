@@ -12,9 +12,9 @@ import { formatDate, formatBytes, cn } from "@/lib/utils";
 import { useDetail } from "../context";
 
 // Wherever a company name would render, self-employed contacts show
-// "Self-employed" instead — the person IS the entity (Feature: self-employed contacts).
+// "Self-employed / Labour Only" instead — the person IS the entity (Feature: self-employed contacts).
 function companyLabel(member: any): string {
-  return member.contactType === "self_employed" ? "Self-employed" : (member.companyName ?? "");
+  return member.contactType === "self_employed" ? "Self-employed / Labour Only" : (member.companyName ?? "");
 }
 
 // Bad legacy contact data can leave a subcontractor's company name identical to

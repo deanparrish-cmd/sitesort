@@ -25,7 +25,7 @@ const PAGE_SIZE = 50;
 // "Self-employed" / "In-house" / the firm's name — same rule as team-tab.tsx's
 // companyLabel(), computed server-side so the picker never needs to reimplement it.
 function companyLabel(contactType: string | null, companyName: string | null): string {
-  if (contactType === "self_employed") return "Self-employed";
+  if (contactType === "self_employed") return "Self-employed / Labour Only";
   if (!companyName) return "In-house";
   return companyName;
 }

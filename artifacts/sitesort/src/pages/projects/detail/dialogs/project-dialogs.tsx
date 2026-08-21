@@ -192,7 +192,7 @@ export function ProjectDialogs() {
                 {[...groups.entries()].map(([groupName, people]) => (
                   <div key={groupName}>
                     <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 px-1">
-                      {people[0].contactType === "self_employed" ? "Self-employed" : groupName}
+                      {people[0].contactType === "self_employed" ? "Self-employed / Labour Only" : groupName}
                     </p>
                     <div className="space-y-2">
                       {people.map((person: any) => {

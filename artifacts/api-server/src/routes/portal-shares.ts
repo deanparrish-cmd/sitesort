@@ -92,7 +92,7 @@ router.get("/projects/:projectId/portal-audience", authenticate, async (req, res
       .leftJoin(subcontractorsTable, eq(peopleTable.subcontractorId, subcontractorsTable.id))
       .where(and(eq(projectMembersTable.projectId, req.params.projectId), isNotNull(projectMembersTable.personId)));
     const nameByPerson = new Map(named.map(n => [n.personId as string, n.name]));
-    const companyByPerson = new Map(named.map(n => [n.personId as string, n.contactType === "self_employed" ? "Self-employed" : n.companyName]));
+    const companyByPerson = new Map(named.map(n => [n.personId as string, n.contactType === "self_employed" ? "Self-employed / Labour Only" : n.companyName]));
     const surnameOf = (n: { name: string; lastName: string | null }) => (n.lastName?.trim() || n.name.trim().split(" ").slice(-1)[0] || n.name).toLowerCase();
     const surnameByPerson = new Map(named.map(n => [n.personId as string, surnameOf(n)]));
 

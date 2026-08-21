@@ -309,6 +309,7 @@ export const ListDocumentsResponseItem = zod.object({
     "method_statement",
     "permit",
     "safety",
+    "programme",
     "general",
   ]),
   version: zod.number(),
@@ -358,6 +359,7 @@ export const UploadDocumentBody = zod.object({
     "method_statement",
     "permit",
     "safety",
+    "programme",
     "general",
   ]),
   fileUrl: zod.string(),
@@ -389,6 +391,7 @@ export const GetDocumentResponse = zod
       "method_statement",
       "permit",
       "safety",
+      "programme",
       "general",
     ]),
     version: zod.number(),
@@ -548,7 +551,7 @@ export const ListProjectMembersResponseItem = zod.object({
     .string()
     .nullish()
     .describe(
-      'Set when this card belongs to a subcontractor-linked person or company row — \"Self-employed\" is shown client-side in place of this when contactType is self_employed.',
+      'Set when this card belongs to a subcontractor-linked person or company row. \"Self-employed \/ Labour Only\" is shown client-side in place of this when contactType is self_employed.',
     ),
   contactType: zod
     .enum([
@@ -2927,6 +2930,7 @@ export const GetQrContentResponse = zod.object({
         "method_statement",
         "permit",
         "safety",
+        "programme",
         "general",
       ]),
       version: zod.number(),
@@ -4653,7 +4657,7 @@ export const ListSubcontractorPeopleResponseItem = zod
       .string()
       .nullish()
       .describe(
-        'Populated when subcontractorId is set — \"Self-employed\" is shown client-side in place of this when the firm\'s contactType is self_employed.',
+        'Populated when subcontractorId is set. \"Self-employed \/ Labour Only\" is shown client-side in place of this when the firm\'s contactType is self_employed.',
       ),
     contactType: zod
       .enum([
@@ -4817,7 +4821,7 @@ export const UpdatePersonResponse = zod
       .string()
       .nullish()
       .describe(
-        'Populated when subcontractorId is set — \"Self-employed\" is shown client-side in place of this when the firm\'s contactType is self_employed.',
+        'Populated when subcontractorId is set. \"Self-employed \/ Labour Only\" is shown client-side in place of this when the firm\'s contactType is self_employed.',
       ),
     contactType: zod
       .enum([
@@ -4971,7 +4975,7 @@ export const ListAllPeopleResponseItem = zod
       .string()
       .nullish()
       .describe(
-        'Populated when subcontractorId is set — \"Self-employed\" is shown client-side in place of this when the firm\'s contactType is self_employed.',
+        'Populated when subcontractorId is set. \"Self-employed \/ Labour Only\" is shown client-side in place of this when the firm\'s contactType is self_employed.',
       ),
     contactType: zod
       .enum([
@@ -5069,7 +5073,7 @@ export const ListInHousePeopleResponseItem = zod
       .string()
       .nullish()
       .describe(
-        'Populated when subcontractorId is set — \"Self-employed\" is shown client-side in place of this when the firm\'s contactType is self_employed.',
+        'Populated when subcontractorId is set. \"Self-employed \/ Labour Only\" is shown client-side in place of this when the firm\'s contactType is self_employed.',
       ),
     contactType: zod
       .enum([

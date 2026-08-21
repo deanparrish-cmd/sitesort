@@ -43,7 +43,7 @@ async function stampPhoto(file: File, projectName: string, workerName: string): 
 
 const TYPE_LABELS: Record<string, string> = {
   drawing: "Drawing",
-  method_statement: "Method Statement / RAMS",
+  method_statement: "RAMS",
   permit: "Permit",
   safety: "Safety Document",
   general: "General",

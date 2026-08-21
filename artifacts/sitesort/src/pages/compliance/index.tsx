@@ -36,7 +36,7 @@ type ContactProject = { id: string; name: string };
 
 const DOCUMENT_TYPES = [
   { value: "insurance_certificate", label: "Insurance Certificate" },
-  { value: "method_statement",      label: "Method Statement" },
+  { value: "method_statement",      label: "Risk Assessment & Method Statement (RAMS)" },
   { value: "risk_assessment",       label: "Risk Assessment" },
   { value: "permit",                label: "Permit to Work" },
   { value: "certificate",           label: "Compliance Certificate" },

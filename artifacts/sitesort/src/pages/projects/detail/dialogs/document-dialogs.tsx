@@ -324,9 +324,10 @@ export function DocumentDialogs() {
             <label className="text-sm font-semibold mb-1 block">Category</label>
             <select {...register("type")} className="flex h-11 w-full rounded-lg border-2 border-input bg-background px-3 py-2 text-sm">
               <option value="drawing">Drawing</option>
-              <option value="method_statement">Method Statement (RAMS)</option>
+              <option value="method_statement">Risk Assessment &amp; Method Statement (RAMS)</option>
               <option value="permit">Permit</option>
               <option value="safety">Safety Document</option>
+              <option value="programme">Construction Programme</option>
               <option value="general">General</option>
             </select>
           </div>

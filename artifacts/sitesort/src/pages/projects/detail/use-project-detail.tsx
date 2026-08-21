@@ -52,7 +52,7 @@ export type DailyReportData = {
 export type ReportDetail = ReportSummary & { projectId: string; projectName: string; data: DailyReportData; managerReport?: ManagerReport | null; authorName?: string | null; authoredAt?: string | null };
 export type DailyNote = { id: string; body: string; source: string; noteDate: string; photoUrl: string | null; authorName: string; createdAt: string };
 
-export const PERMIT_TYPES = ["CSCS Check", "IPAF Certificate", "Hot Works", "Working at Heights", "Scaffolding Inspection", "Confined Space Entry", "Excavation", "Electrical Isolation", "Demolition", "Asbestos", "Method Statement", "Other"];
+export const PERMIT_TYPES = ["CSCS Check", "IPAF Certificate", "Hot Works", "Working at Heights", "Scaffolding Inspection", "Confined Space Entry", "Excavation", "Electrical Isolation", "Demolition", "Asbestos", "RAMS", "Other"];
 
 export type ShareLog = { id: string; entityType: string; entityId: string; entityName: string; method: string; recipientInfo: string | null; sentByName: string; createdAt: string };
 

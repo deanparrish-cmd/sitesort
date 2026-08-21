@@ -31,14 +31,14 @@ const CONTACT_TYPE_LABELS: Record<ContactType, string> = {
   merchant: "Merchant",
   supplier: "Supplier",
   professional: "Professional Services",
-  self_employed: "Self-employed",
+  self_employed: "Self-employed / Labour Only",
   other: "Other",
 };
 
-// Wherever a company name would render, self-employed contacts show "Self-employed"
+// Wherever a company name would render, self-employed contacts show "Self-employed / Labour Only"
 // instead — the person IS the entity (Feature: self-employed contacts).
 function companyLabel(sub: { companyName: string; contactType?: ContactType }): string {
-  return sub.contactType === "self_employed" ? "Self-employed" : sub.companyName;
+  return sub.contactType === "self_employed" ? "Self-employed / Labour Only" : sub.companyName;
 }
 
 // Bad legacy contact data can leave a subcontractor's company name identical to
@@ -1279,7 +1279,7 @@ export default function SubcontractorsPage() {
       {/* Edit modal */}
       <Dialog open={!!editTarget} onOpenChange={open => { if (!open) { setEditTarget(null); setEditError(null); } }}>
         <DialogHeader>
-          <DialogTitle>Edit · {editTarget && companyLabel(editTarget) === "Self-employed" ? editTarget.contactName : editTarget?.companyName}</DialogTitle>
+          <DialogTitle>Edit · {editTarget && editTarget.contactType === "self_employed" ? editTarget.contactName : editTarget?.companyName}</DialogTitle>
         </DialogHeader>
         <form onSubmit={editSubmit(onEdit)} className="space-y-4 pt-2">
           <div>

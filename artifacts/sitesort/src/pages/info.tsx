@@ -83,7 +83,7 @@ const whatYouGet = [
   {
     icon: ClipboardCheck,
     title: "Digital sign-offs",
-    body: "Know exactly who's read the method statement or acknowledged the drawing, with a record to show for it.",
+    body: "Know exactly who's read the RAMS or acknowledged the drawing, with a record to show for it.",
   },
   {
     icon: ShieldCheck,
@@ -269,7 +269,7 @@ export default function InfoPage() {
           </div>
           <div className="space-y-5 text-lg text-foreground leading-relaxed">
             <p>
-              SiteSort gives every job one home. Drawings, method statements, permits,
+              SiteSort gives every job one home. Drawings, RAMS, permits,
               insurance certificates, sign-offs, all in one place, all version-controlled,
               all pointing at what's current.
             </p>

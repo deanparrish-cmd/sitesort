@@ -370,7 +370,7 @@ export default function InvoicesPage() {
       <PageHeader
         className="mb-8"
         title="Invoices"
-        description="Track payments in and out."
+        description="Lightweight tracking of incoming and outgoing payments. Assigning a project is optional. This is not for valuations or job costing."
         actions={caps.canManageInvoices && (
           <Button variant="accent" onClick={() => setModalOpen(true)}>
             <Plus className="w-4 h-4 mr-2" /> New Invoice
@@ -488,7 +488,7 @@ export default function InvoicesPage() {
           <div className="flex flex-col items-center justify-center py-16 text-center px-4">
             <Receipt className="w-10 h-10 text-muted-foreground/30 mb-3" />
             <p className="font-semibold text-muted-foreground">No invoices found</p>
-            <p className="text-sm text-muted-foreground/70 mt-1">Add your first invoice to track payments. Invoices moved to a project appear under that project's Finances tab.</p>
+            <p className="text-sm text-muted-foreground/70 mt-1">Record incoming or outgoing payments here. Project assignment is optional. This is not for valuations or job costing.</p>
           </div>
         ) : (
           <>
