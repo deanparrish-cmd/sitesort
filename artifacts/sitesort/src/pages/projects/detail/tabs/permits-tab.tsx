@@ -13,10 +13,11 @@ import { daysUntilExpiry } from "@/lib/expiry";
 import { useDetail } from "../context";
 import { docRev, PermitItem } from "../use-project-detail";
 
-function FolderSection({ id, icon, title, count, titleClass, actions, defaultOpen = false, children }: {
+function FolderSection({ id, icon, title, description, count, titleClass, actions, defaultOpen = false, children }: {
   id?: string;
   icon: React.ReactNode;
   title: string;
+  description?: string;
   count?: number;
   titleClass?: string;
   actions?: React.ReactNode;
@@ -48,6 +49,7 @@ function FolderSection({ id, icon, title, count, titleClass, actions, defaultOpe
           {typeof count === "number" && <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{count}</span>}
         </button>
         {actions && <div className="shrink-0">{actions}</div>}
+        {description && <p className="w-full text-xs text-muted-foreground">{description}</p>}
       </div>
       {open && <div className="mt-3">{children}</div>}
     </section>
@@ -285,10 +287,9 @@ export function PermitsTab() {
                   });
                 })()}
 
-                {/* Team Insurance & Site Access */}
+                {/* Team Compliance & Site Access */}
                 {members && (members as any[]).length > 0 && (
-                  <FolderSection id="section-insurance" icon={<UserCheck className="w-4 h-4 text-primary" />} title="Team Insurance & Site Access" count={(members as any[]).length}>
-                    <p className="text-xs text-muted-foreground px-1 pb-2">Shows each team member's public liability insurance (PLI) status. A missing or expired PLI certificate triggers a site access hold for that person.</p>
+                  <FolderSection id="section-insurance" icon={<UserCheck className="w-4 h-4 text-primary" />} title="Team Compliance & Site Access" description="Review team members’ insurance-based compliance, public liability certificate expiry dates and flagged site-access restrictions." count={(members as any[]).length}>
                     <div className="space-y-2">
                       {(members as any[]).map((m: any) => (
                         <div key={m.id} className={`flex items-center justify-between gap-3 px-4 py-3 rounded-xl border ${m.complianceStatus === "hold" ? "bg-red-50 border-red-200" : m.complianceStatus === "warning" ? "bg-orange-50 border-orange-200" : "bg-card border-border"}`}>

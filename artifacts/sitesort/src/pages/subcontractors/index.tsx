@@ -380,7 +380,7 @@ export default function SubcontractorsPage() {
 
   // Add/renew insurance dialog (Task #43) — reuses the existing insurance
   // backend (POST /subcontractors/:id/insurance), the same endpoint the
-  // Compliance Centre and Team Insurance & Site Access already write through.
+  // Compliance Centre and Team Compliance & Site Access already write through.
   // Refetches just this contact afterwards so insuranceStatus/insuranceRecords
   // (both server-computed) are current and the badge flips instantly, without
   // a full page reload.
@@ -1710,7 +1710,7 @@ export default function SubcontractorsPage() {
       </Dialog>
 
       {/* Add / renew insurance (Task #43) — writes through the same endpoint
-          used by the Compliance Centre and Team Insurance & Site Access. */}
+          used by the Compliance Centre and Team Compliance & Site Access. */}
       <Dialog open={!!insAddTarget} onOpenChange={open => { if (!open) { setInsAddTarget(null); setInsAddError(null); } }}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -1729,7 +1729,7 @@ export default function SubcontractorsPage() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Uploading a new certificate of the same type replaces the current one on record for this contact and updates the insurance badge everywhere it's shown, including this project's Team Insurance & Site Access.
+              Uploading a new certificate of the same type replaces the current one on record for this contact and updates the insurance badge everywhere it's shown, including this project's Team Compliance & Site Access.
             </p>
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Insurance type</label>

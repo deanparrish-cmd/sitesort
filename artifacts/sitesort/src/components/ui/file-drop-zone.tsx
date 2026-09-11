@@ -16,7 +16,7 @@ interface FileDropZoneProps {
   className?: string;
 }
 
-const ACCEPTED_EXTS = ".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.dwg,.dxf,.dwf,.rvt,.ifc";
+const ACCEPTED_EXTS = ".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.dwg,.dxf,.dwf,.rvt,.ifc,.mpp";
 
 export function FileDropZone({ onUploaded, onCleared, accept = ACCEPTED_EXTS, className }: FileDropZoneProps) {
   const [isDragging, setIsDragging] = useState(false);
@@ -145,7 +145,7 @@ export function FileDropZone({ onUploaded, onCleared, accept = ACCEPTED_EXTS, cl
             </div>
             <div className="text-center">
               <p className="font-semibold text-sm">Drop file here or <span className="text-primary underline">browse</span></p>
-              <p className="text-xs text-muted-foreground mt-1">PDF, images, Word, Excel, DWG, DXF, DWF · up to 100MB</p>
+              <p className="text-xs text-muted-foreground mt-1">PDF, images, Word, Excel, MS Project, DWG, DXF, DWF · up to 100MB</p>
             </div>
           </>
         )}

@@ -20,10 +20,12 @@ const upload = multer({
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "application/vnd.dwg", "image/vnd.dwg", "application/acad",
       "application/dxf", "image/vnd.dxf", "model/vnd.dwf", "drawing/x-dwf",
+      "application/vnd.ms-project",
     ];
-    // Validate by EXTENSION as well as MIME: browsers commonly send CAD files as
-    // application/octet-stream, so the mimetype list alone would reject them.
-    if (allowed.includes(file.mimetype) || file.originalname.match(/\.(dwg|dxf|dwf|rvt|ifc)$/i)) {
+    // Validate by EXTENSION as well as MIME: browsers commonly send CAD files
+    // (and MS Project schedules) as application/octet-stream, so the mimetype
+    // list alone would reject them.
+    if (allowed.includes(file.mimetype) || file.originalname.match(/\.(dwg|dxf|dwf|rvt|ifc|mpp)$/i)) {
       cb(null, true);
     } else {
       cb(new Error(`File type not allowed: ${file.mimetype}`));

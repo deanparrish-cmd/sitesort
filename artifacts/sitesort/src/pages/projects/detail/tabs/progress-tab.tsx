@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronUp, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, PinOff, StickyNote, Send, Loader2, History, Archive, Paperclip } from "lucide-react";
 import { formatDate, formatBytes, cn } from "@/lib/utils";
+import { openDocument, cadBadgeLabel } from "@/lib/documents";
 import { useDetail } from "../context";
 
 export function ProgressTab() {
@@ -22,7 +23,14 @@ export function ProgressTab() {
     isCancelled,
     toast,
     caps,
+    documents,
+    setIsUploadOpen,
+    setValue,
+    setActiveTab,
+    setSelectedDocType,
   } = useDetail();
+
+  const programmeDocs = (documents ?? []).filter(d => d.type === "programme" && d.status === "current");
 
   return (
     <>
@@ -62,6 +70,57 @@ export function ProgressTab() {
                     <p className="text-sm text-muted-foreground mt-2">
                       {done} of {total} milestone{total !== 1 ? "s" : ""} completed
                     </p>
+                  </CardContent>
+                </Card>
+
+                {/* Construction Programme document */}
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+                      <h3 className="font-bold text-lg flex items-center gap-2">
+                        <FileText className="w-5 h-5 text-primary" /> Construction Programme
+                      </h3>
+                      {!isCancelled && caps.canUploadDocument && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => { setValue("type", "programme"); setIsUploadOpen(true); }}
+                        >
+                          <Upload className="w-4 h-4 mr-2" /> {programmeDocs.length > 0 ? "Replace" : "Upload"} Programme
+                        </Button>
+                      )}
+                    </div>
+                    {programmeDocs.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No construction programme uploaded yet. Upload a PDF, Excel, or MS Project file to keep it alongside your milestones.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {programmeDocs.map(doc => (
+                          <div key={doc.id} className="flex items-center justify-between gap-3 p-3 rounded-lg border bg-card">
+                            <div className="min-w-0 flex items-center gap-3">
+                              <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                                <FileText className="w-4 h-4" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-medium text-sm truncate">{doc.name}</p>
+                                <p className="text-xs text-muted-foreground">{formatBytes(doc.fileSize)} · Uploaded {formatDate(doc.createdAt)}</p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => openDocument(doc.fileUrl, doc.name)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-primary/25 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/15 transition-colors shrink-0"
+                            >
+                              {cadBadgeLabel(doc.fileUrl, doc.name) ? <><Download className="w-3.5 h-3.5" />Download</> : <><ExternalLink className="w-3.5 h-3.5" />Open</>}
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          onClick={() => { setSelectedDocType("programme"); setActiveTab("documents"); }}
+                          className="text-xs text-primary hover:underline"
+                        >
+                          View programme history in Documents
+                        </button>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
 
