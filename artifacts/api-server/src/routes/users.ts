@@ -27,6 +27,7 @@ router.get("/users", authenticate, async (req, res) => {
       name: u.name,
       role,
       phone: u.phone ?? null,
+      roleTitle: u.roleTitle ?? null,
       createdAt: u.createdAt.toISOString(),
       lastActiveAt: u.lastActiveAt?.toISOString() ?? null,
     })));
@@ -38,7 +39,7 @@ router.get("/users", authenticate, async (req, res) => {
 
 router.post("/users", authenticate, async (req, res) => {
   try {
-    const { email, role, phone } = req.body;
+    const { email, role, phone, roleTitle } = req.body;
     if (!email || !role) {
       res.status(400).json({ error: "validation_error", message: "email, name, role required" });
       return;
@@ -73,7 +74,7 @@ router.post("/users", authenticate, async (req, res) => {
         message: `You've been added to ${companyName} as ${role.replace("_", " ")}. Switch companies from the menu to view it.`,
         relatedEntityType: "company",
       });
-      res.status(201).json({ id: linkedUser.id, companyId: req.user!.companyId, email: linkedUser.email, name: linkedUser.name, role, phone: linkedUser.phone ?? null, linked: true, createdAt: linkedUser.createdAt.toISOString(), lastActiveAt: linkedUser.lastActiveAt?.toISOString() ?? null });
+      res.status(201).json({ id: linkedUser.id, companyId: req.user!.companyId, email: linkedUser.email, name: linkedUser.name, role, phone: linkedUser.phone ?? null, roleTitle: linkedUser.roleTitle ?? null, linked: true, createdAt: linkedUser.createdAt.toISOString(), lastActiveAt: linkedUser.lastActiveAt?.toISOString() ?? null });
       return;
     }
 
@@ -90,6 +91,7 @@ router.post("/users", authenticate, async (req, res) => {
       name,
       role,
       phone: phone ?? null,
+      roleTitle: roleTitle?.trim() || null,
     });
     await addMembership(id, req.user!.companyId, role);
 
@@ -100,7 +102,7 @@ router.post("/users", authenticate, async (req, res) => {
       req.log.error({ err }, "Failed to send invitation email"),
     );
 
-    res.status(201).json({ id, companyId: req.user!.companyId, email, name, role, phone: phone ?? null, linked: false, createdAt: new Date().toISOString(), lastActiveAt: null });
+    res.status(201).json({ id, companyId: req.user!.companyId, email, name, role, phone: phone ?? null, roleTitle: roleTitle?.trim() || null, linked: false, createdAt: new Date().toISOString(), lastActiveAt: null });
   } catch (err) {
     req.log.error({ err }, "Invite user error");
     res.status(500).json({ error: "server_error", message: "Failed to invite user" });
@@ -118,7 +120,7 @@ router.patch("/users/:userId", authenticate, async (req, res) => {
       res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can edit other members." });
       return;
     }
-    const { name, role, phone } = req.body;
+    const { name, role, phone, roleTitle } = req.body;
     if (role !== undefined && !isManager) {
       res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can change roles." });
       return;
@@ -145,13 +147,14 @@ router.patch("/users/:userId", authenticate, async (req, res) => {
     const idUpdates: Record<string, unknown> = {};
     if (name !== undefined) idUpdates.name = name.trim();
     if (phone !== undefined) idUpdates.phone = phone;
+    if (roleTitle !== undefined) idUpdates.roleTitle = roleTitle?.trim() || null;
     if (Object.keys(idUpdates).length > 0) {
       await db.update(usersTable).set(idUpdates).where(and(eq(usersTable.id, req.params.userId), eq(usersTable.companyId, req.user!.companyId)));
     }
 
     const users = await db.select().from(usersTable).where(eq(usersTable.id, req.params.userId)).limit(1);
     const u = users[0];
-    res.json({ id: u.id, companyId: req.user!.companyId, email: u.email, name: u.name, role: role !== undefined ? role : currentRole, phone: u.phone ?? null, createdAt: u.createdAt.toISOString(), lastActiveAt: u.lastActiveAt?.toISOString() ?? null });
+    res.json({ id: u.id, companyId: req.user!.companyId, email: u.email, name: u.name, role: role !== undefined ? role : currentRole, phone: u.phone ?? null, roleTitle: u.roleTitle ?? null, createdAt: u.createdAt.toISOString(), lastActiveAt: u.lastActiveAt?.toISOString() ?? null });
   } catch (err) {
     req.log.error({ err }, "Update user error");
     res.status(500).json({ error: "server_error", message: "Failed to update user" });

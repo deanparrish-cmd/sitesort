@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-11T11:39:29.974Z",
+  "generatedAt": "2026-09-11T14:49:34.890Z",
   "target": "http://localhost:8080",
   "viewports": [
     360,
@@ -220,7 +220,7 @@
         "auth": "none"
       },
       {
-        "path": "/portal/accept/39e3a691f98d054012e8f2d0a6564312b8fe68b24d244e57c1ce8526b62eeab7",
+        "path": "/portal/accept/d039f89520ce62f5431cec58bc504f2e30dd61467220622be1a0df9abf96c5f1",
         "label": "portal-accept",
         "auth": "none"
       },
@@ -1852,9 +1852,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/39e3a691f98d054012e8f2d0a6564312b8fe68b24d244e57c1ce8526b62eeab7",
+      "path": "/portal/accept/d039f89520ce62f5431cec58bc504f2e30dd61467220622be1a0df9abf96c5f1",
       "width": 360,
-      "finalPath": "/portal/accept/39e3a691f98d054012e8f2d0a6564312b8fe68b24d244e57c1ce8526b62eeab7",
+      "finalPath": "/portal/accept/d039f89520ce62f5431cec58bc504f2e30dd61467220622be1a0df9abf96c5f1",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -5116,9 +5116,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/39e3a691f98d054012e8f2d0a6564312b8fe68b24d244e57c1ce8526b62eeab7",
+      "path": "/portal/accept/d039f89520ce62f5431cec58bc504f2e30dd61467220622be1a0df9abf96c5f1",
       "width": 390,
-      "finalPath": "/portal/accept/39e3a691f98d054012e8f2d0a6564312b8fe68b24d244e57c1ce8526b62eeab7",
+      "finalPath": "/portal/accept/d039f89520ce62f5431cec58bc504f2e30dd61467220622be1a0df9abf96c5f1",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -8545,9 +8545,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/39e3a691f98d054012e8f2d0a6564312b8fe68b24d244e57c1ce8526b62eeab7",
+      "path": "/portal/accept/d039f89520ce62f5431cec58bc504f2e30dd61467220622be1a0df9abf96c5f1",
       "width": 768,
-      "finalPath": "/portal/accept/39e3a691f98d054012e8f2d0a6564312b8fe68b24d244e57c1ce8526b62eeab7",
+      "finalPath": "/portal/accept/d039f89520ce62f5431cec58bc504f2e30dd61467220622be1a0df9abf96c5f1",
       "ok": true,
       "reasons": [],
       "metrics": {

@@ -75,6 +75,8 @@ export interface User {
   name: string;
   role: UserRole;
   phone?: string | null;
+  /** Free-text job title (e.g. "Site Manager", "QS", "Labourer"). Distinct from `role`, which is the permission level. */
+  roleTitle?: string | null;
   createdAt: string;
   lastActiveAt?: string | null;
   avatarUrl?: string | null;
@@ -109,6 +111,8 @@ export interface InviteUserRequest {
   name: string;
   role: InviteUserRequestRole;
   phone?: string;
+  /** Free-text job title (e.g. "Site Manager", "QS", "Labourer"). */
+  roleTitle?: string;
 }
 
 export type UpdateUserRequestRole =
@@ -126,6 +130,8 @@ export interface UpdateUserRequest {
   name?: string;
   role?: UpdateUserRequestRole;
   phone?: string;
+  /** Free-text job title. Pass null to clear. */
+  roleTitle?: string | null;
 }
 
 export type ProjectStatus = (typeof ProjectStatus)[keyof typeof ProjectStatus];

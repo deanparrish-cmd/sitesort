@@ -13,4 +13,6 @@ export interface InviteUserRequest {
   name: string;
   role: InviteUserRequestRole;
   phone?: string;
+  /** Free-text job title (e.g. "Site Manager", "QS", "Labourer"). */
+  roleTitle?: string;
 }

@@ -14,6 +14,8 @@ export interface User {
   name: string;
   role: UserRole;
   phone?: string | null;
+  /** Free-text job title (e.g. "Site Manager", "QS", "Labourer"). Distinct from `role`, which is the permission level. */
+  roleTitle?: string | null;
   createdAt: Date;
   lastActiveAt?: Date | null;
   avatarUrl?: string | null;

@@ -12,4 +12,6 @@ export interface UpdateUserRequest {
   name?: string;
   role?: UpdateUserRequestRole;
   phone?: string;
+  /** Free-text job title. Pass null to clear. */
+  roleTitle?: string | null;
 }

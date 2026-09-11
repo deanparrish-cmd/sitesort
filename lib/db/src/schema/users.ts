@@ -11,6 +11,10 @@ export const usersTable = pgTable("users", {
   name: text("name").notNull(),
   role: text("role").notNull().default("site_worker"),
   phone: text("phone"),
+  // Free-text job title (e.g. "Site Manager", "QS", "Labourer") — the person's
+  // actual job role, distinct from `role`, which is the permission level
+  // (admin/project_manager/site_worker). Same pattern as people.roleTitle.
+  roleTitle: text("role_title"),
   pinHash: text("pin_hash"),
   avatarUrl: text("avatar_url"),
   emailVerified: boolean("email_verified").notNull().default(false),

@@ -28,6 +28,7 @@ type TeamMember = {
   email: string;
   role: string;
   phone: string | null;
+  roleTitle: string | null;
   createdAt: string;
   lastActiveAt: string | null;
 };
@@ -105,6 +106,7 @@ export default function TeamPage() {
   const [addName, setAddName] = useState("");
   const [addEmail, setAddEmail] = useState("");
   const [addRole, setAddRole] = useState("site_worker");
+  const [addRoleTitle, setAddRoleTitle] = useState("");
   const [addPhone, setAddPhone] = useState("");
   const [addSubmitting, setAddSubmitting] = useState(false);
   const [addError, setAddError] = useState("");
@@ -166,11 +168,12 @@ export default function TeamPage() {
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [editRole, setEditRole] = useState("site_worker");
+  const [editRoleTitle, setEditRoleTitle] = useState("");
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState("");
 
   function openEdit(m: TeamMember) {
-    setEditTarget(m); setEditName(m.name); setEditPhone(m.phone ?? ""); setEditRole(m.role); setEditError("");
+    setEditTarget(m); setEditName(m.name); setEditPhone(m.phone ?? ""); setEditRole(m.role); setEditRoleTitle(m.roleTitle ?? ""); setEditError("");
   }
 
   async function saveEdit() {
@@ -181,7 +184,7 @@ export default function TeamPage() {
     const res = await fetch(`/api/users/${editTarget.id}`, {
       method: "PATCH",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ name: editName.trim(), phone: editPhone.trim() || null, role: editRole }),
+      body: JSON.stringify({ name: editName.trim(), phone: editPhone.trim() || null, role: editRole, roleTitle: editRoleTitle.trim() || null }),
     });
     setEditSaving(false);
     if (!res.ok) {
@@ -190,7 +193,7 @@ export default function TeamPage() {
       return;
     }
     const updated = await res.json();
-    setMembers(prev => prev.map(m => m.id === editTarget.id ? { ...m, name: updated.name, phone: updated.phone, role: updated.role } : m));
+    setMembers(prev => prev.map(m => m.id === editTarget.id ? { ...m, name: updated.name, phone: updated.phone, role: updated.role, roleTitle: updated.roleTitle } : m));
     setEditTarget(null);
   }
 
@@ -262,7 +265,7 @@ export default function TeamPage() {
   }
 
   async function openAdd() {
-    setAddName(""); setAddEmail(""); setAddRole("site_worker"); setAddPhone(""); setAddError(""); setAddSuccess("");
+    setAddName(""); setAddEmail(""); setAddRole("site_worker"); setAddRoleTitle(""); setAddPhone(""); setAddError(""); setAddSuccess("");
     setSelectedProjects(new Set());
     setAddOpen(true);
     const res = await fetch("/api/projects", { headers: authHeaders() });
@@ -287,7 +290,7 @@ export default function TeamPage() {
     const res = await fetch("/api/users", {
       method: "POST",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ name: addName.trim(), email: addEmail.trim(), role: addRole, phone: addPhone.trim() || null }),
+      body: JSON.stringify({ name: addName.trim(), email: addEmail.trim(), role: addRole, phone: addPhone.trim() || null, roleTitle: addRoleTitle.trim() || null }),
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
@@ -332,6 +335,7 @@ export default function TeamPage() {
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className="font-bold text-sm truncate">{m.name}</p>
+                            {m.roleTitle && <p className="text-xs text-muted-foreground truncate">{m.roleTitle}</p>}
                             <RoleBadge role={m.role} />
                           </div>
                         </div>
@@ -618,6 +622,10 @@ export default function TeamPage() {
               </select>
             </div>
             <div>
+              <label className="text-sm font-medium mb-1.5 block">Job Title <span className="text-muted-foreground text-xs">(optional)</span></label>
+              <Input value={addRoleTitle} onChange={e => setAddRoleTitle(e.target.value)} placeholder="e.g. Site Manager, QS, Labourer" />
+            </div>
+            <div>
               <label className="text-sm font-medium mb-1.5 block">Phone <span className="text-muted-foreground text-xs">(optional)</span></label>
               <Input type="tel" value={addPhone} onChange={e => setAddPhone(e.target.value)} placeholder="+44 7700 900000" />
             </div>
@@ -831,6 +839,10 @@ export default function TeamPage() {
               <option value="project_manager">Project Manager</option>
               <option value="site_worker">Site Worker</option>
             </select>
+          </div>
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">Job Title <span className="text-muted-foreground text-xs">(optional)</span></label>
+            <Input value={editRoleTitle} onChange={e => setEditRoleTitle(e.target.value)} placeholder="e.g. Site Manager, QS, Labourer" />
           </div>
           <p className="text-xs text-muted-foreground">Email can't be changed here. It's this person's login.</p>
           {editError && <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{editError}</p>}

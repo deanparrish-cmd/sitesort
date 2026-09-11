@@ -3697,6 +3697,10 @@ components:
         phone:
           type: string
           nullable: true
+        roleTitle:
+          type: string
+          nullable: true
+          description: "Free-text job title (e.g. \"Site Manager\", \"QS\", \"Labourer\"). Distinct from `role`, which is the permission level."
         createdAt:
           type: string
           format: date-time
@@ -3728,6 +3732,9 @@ components:
           enum: [admin, project_manager, site_worker, subcontractor]
         phone:
           type: string
+        roleTitle:
+          type: string
+          description: "Free-text job title (e.g. \"Site Manager\", \"QS\", \"Labourer\")."
       required: [email, name, role]
 
     UpdateUserRequest:
@@ -3741,6 +3748,10 @@ components:
           enum: [admin, project_manager, site_worker, subcontractor]
         phone:
           type: string
+        roleTitle:
+          type: string
+          nullable: true
+          description: "Free-text job title. Pass null to clear."
 
     Project:
       type: object

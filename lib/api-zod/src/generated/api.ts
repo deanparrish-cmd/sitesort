@@ -50,6 +50,12 @@ export const LoginResponse = zod.object({
       "subcontractor",
     ]),
     phone: zod.string().nullish(),
+    roleTitle: zod
+      .string()
+      .nullish()
+      .describe(
+        'Free-text job title (e.g. \"Site Manager\", \"QS\", \"Labourer\"). Distinct from `role`, which is the permission level.',
+      ),
     createdAt: zod.date(),
     lastActiveAt: zod.date().nullish(),
     avatarUrl: zod.string().nullish(),
@@ -82,6 +88,12 @@ export const GetMeResponse = zod.object({
   name: zod.string(),
   role: zod.enum(["admin", "project_manager", "site_worker", "subcontractor"]),
   phone: zod.string().nullish(),
+  roleTitle: zod
+    .string()
+    .nullish()
+    .describe(
+      'Free-text job title (e.g. \"Site Manager\", \"QS\", \"Labourer\"). Distinct from `role`, which is the permission level.',
+    ),
   createdAt: zod.date(),
   lastActiveAt: zod.date().nullish(),
   avatarUrl: zod.string().nullish(),
@@ -2883,6 +2895,12 @@ export const ListUsersResponseItem = zod.object({
   name: zod.string(),
   role: zod.enum(["admin", "project_manager", "site_worker", "subcontractor"]),
   phone: zod.string().nullish(),
+  roleTitle: zod
+    .string()
+    .nullish()
+    .describe(
+      'Free-text job title (e.g. \"Site Manager\", \"QS\", \"Labourer\"). Distinct from `role`, which is the permission level.',
+    ),
   createdAt: zod.date(),
   lastActiveAt: zod.date().nullish(),
   avatarUrl: zod.string().nullish(),
@@ -2908,6 +2926,12 @@ export const InviteUserBody = zod.object({
     ),
   role: zod.enum(["admin", "project_manager", "site_worker", "subcontractor"]),
   phone: zod.string().optional(),
+  roleTitle: zod
+    .string()
+    .optional()
+    .describe(
+      'Free-text job title (e.g. \"Site Manager\", \"QS\", \"Labourer\").',
+    ),
 });
 
 /**
@@ -2928,6 +2952,10 @@ export const UpdateUserBody = zod.object({
     .enum(["admin", "project_manager", "site_worker", "subcontractor"])
     .optional(),
   phone: zod.string().optional(),
+  roleTitle: zod
+    .string()
+    .nullish()
+    .describe("Free-text job title. Pass null to clear."),
 });
 
 export const UpdateUserResponse = zod.object({
@@ -2937,6 +2965,12 @@ export const UpdateUserResponse = zod.object({
   name: zod.string(),
   role: zod.enum(["admin", "project_manager", "site_worker", "subcontractor"]),
   phone: zod.string().nullish(),
+  roleTitle: zod
+    .string()
+    .nullish()
+    .describe(
+      'Free-text job title (e.g. \"Site Manager\", \"QS\", \"Labourer\"). Distinct from `role`, which is the permission level.',
+    ),
   createdAt: zod.date(),
   lastActiveAt: zod.date().nullish(),
   avatarUrl: zod.string().nullish(),
