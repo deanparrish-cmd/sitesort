@@ -2,8 +2,13 @@ import { useMemo, useState } from "react";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, FileDown, ShieldCheck, AlertTriangle, RotateCcw, HelpCircle, Loader2 } from "lucide-react";
-import { useListPlantItems, getListPlantItemsQueryKey, type PlantItem } from "@workspace/api-client-react";
+import { useGetPlantWeeklyReport, getGetPlantWeeklyReportQueryKey, type PlantItem } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
+import {
+  buildPlantWeeklyReportHtml,
+  PLANT_WEEKLY_BUCKET_LABELS,
+  type PlantWeeklyBucket,
+} from "./plant-weekly-report-export";
 
 // Monday-start week containing `d`.
 function startOfWeek(d: Date): Date {
@@ -29,11 +34,10 @@ function fmtRange(startIso: string, endIso: string): string {
   return `${sFmt} to ${eFmt}`;
 }
 
-type Bucket = "active" | "overdue" | "returned";
-const BUCKET_META: Record<Bucket, { label: string; icon: typeof ShieldCheck; cls: string }> = {
-  active: { label: "Active", icon: ShieldCheck, cls: "bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/30" },
-  overdue: { label: "Overdue", icon: AlertTriangle, cls: "bg-red-50 border-red-200 text-red-800 dark:bg-red-950/30" },
-  returned: { label: "Returned", icon: RotateCcw, cls: "bg-muted border-border text-muted-foreground" },
+const BUCKET_META: Record<PlantWeeklyBucket, { label: string; icon: typeof ShieldCheck; cls: string }> = {
+  active: { label: PLANT_WEEKLY_BUCKET_LABELS.active, icon: ShieldCheck, cls: "bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/30" },
+  overdue: { label: PLANT_WEEKLY_BUCKET_LABELS.overdue, icon: AlertTriangle, cls: "bg-red-50 border-red-200 text-red-800 dark:bg-red-950/30" },
+  returned: { label: PLANT_WEEKLY_BUCKET_LABELS.returned, icon: RotateCcw, cls: "bg-muted border-border text-muted-foreground" },
 };
 
 function itemLine(item: PlantItem): string {
@@ -45,8 +49,8 @@ function itemLine(item: PlantItem): string {
   return parts.join(" · ");
 }
 
-export function PlantWeeklyReportDialog({ open, onClose, projectId, projectName }: {
-  open: boolean; onClose: () => void; projectId: string; projectName: string;
+export function PlantWeeklyReportDialog({ open, onClose, projectId, projectName, canAccess }: {
+  open: boolean; onClose: () => void; projectId: string; projectName: string; canAccess: boolean;
 }) {
   const [anchorDate, setAnchorDate] = useState(() => toISODate(new Date()));
   const weekStart = useMemo(() => toISODate(startOfWeek(new Date(anchorDate + "T12:00:00"))), [anchorDate]);
@@ -57,11 +61,9 @@ export function PlantWeeklyReportDialog({ open, onClose, projectId, projectName 
   }, [anchorDate]);
   const todayISO = toISODate(new Date());
 
-  const listParams = { category: "plant_equipment" } as const;
-  const { data, isLoading } = useListPlantItems(
+  const { data, isLoading } = useGetPlantWeeklyReport(
     projectId,
-    listParams,
-    { query: { enabled: open && !!projectId, queryKey: getListPlantItemsQueryKey(projectId, listParams) } },
+    { query: { enabled: canAccess && open && !!projectId, queryKey: getGetPlantWeeklyReportQueryKey(projectId) } },
   );
   const items = (data as PlantItem[]) ?? [];
 
@@ -72,7 +74,7 @@ export function PlantWeeklyReportDialog({ open, onClose, projectId, projectName 
       i.onSiteDate && i.expectedOffHireDate &&
       i.onSiteDate <= weekEnd && i.expectedOffHireDate >= weekStart,
     );
-    const buckets: Record<Bucket, PlantItem[]> = {
+    const buckets: Record<PlantWeeklyBucket, PlantItem[]> = {
       active: inWeek.filter(i => i.status !== "off_hired" && (i.expectedOffHireDate as string) >= todayISO),
       overdue: inWeek.filter(i => i.status !== "off_hired" && (i.expectedOffHireDate as string) < todayISO),
       returned: inWeek.filter(i => i.status === "off_hired"),
@@ -87,46 +89,16 @@ export function PlantWeeklyReportDialog({ open, onClose, projectId, projectName 
   };
 
   const exportReport = () => {
+    if (!canAccess) return;
     const now = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" } as Intl.DateTimeFormatOptions);
-    const section = (bucket: Bucket) => {
-      const list = buckets[bucket];
-      const meta = BUCKET_META[bucket];
-      const rows = list.map(i => `<tr><td>${i.name}</td><td>${i.quantity ?? "-"}${i.unit ? ` ${i.unit}` : ""}</td><td>${i.location ?? "-"}</td><td>${i.supplierOwnerText ?? i.supplierContactName ?? "-"}</td><td>${i.onSiteDate ? fmtShort(i.onSiteDate) : "-"}</td><td>${i.expectedOffHireDate ? fmtShort(i.expectedOffHireDate) : "-"}</td></tr>`).join("");
-      return `<section><h2>${meta.label}<span class="count">${list.length}</span></h2>${list.length ? `<table><thead><tr><th>Item</th><th>Qty</th><th>Location</th><th>Supplier/Owner</th><th>On site</th><th>Expected off-hire</th></tr></thead><tbody>${rows}</tbody></table>` : `<p class="empty">None this week.</p>`}</section>`;
-    };
-    const missingRows = missing.map(i => `<tr><td>${i.name}</td><td>${i.quantity ?? "-"}${i.unit ? ` ${i.unit}` : ""}</td><td>${i.location ?? "-"}</td><td>${i.onSiteDate ? fmtShort(i.onSiteDate) : "Missing"}</td><td>${i.expectedOffHireDate ? fmtShort(i.expectedOffHireDate) : "Missing"}</td></tr>`).join("");
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/>
-<title>${projectName} · Hired Plant Weekly Report</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:11px;color:#1a1a1a;background:white}
-.page{max-width:900px;margin:0 auto;padding:32px}
-.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;padding-bottom:14px;border-bottom:2px solid #e5e7eb}
-.logo{font-size:20px;font-weight:800;color:#ea6c0a;letter-spacing:-0.5px}
-.report-label{font-size:10px;color:#6b7280}
-.hero{margin-bottom:24px;padding:18px;background:#fff7ed;border-left:4px solid #ea6c0a;border-radius:4px}
-.hero h1{font-size:20px;font-weight:800;color:#1f2937;margin-bottom:2px}
-.hero .range{color:#6b7280;font-size:12px}
-section{margin-bottom:22px}
-section h2{font-size:12px;font-weight:700;color:#ea6c0a;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid #f3f4f6}
-.count{background:#f3f4f6;color:#6b7280;font-size:9px;font-weight:700;padding:1px 6px;border-radius:99px;margin-left:6px}
-table{width:100%;border-collapse:collapse}
-th{text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#9ca3af;padding:5px 8px;border-bottom:1px solid #e5e7eb;background:#f9fafb}
-td{padding:5px 8px;border-bottom:1px solid #f3f4f6;vertical-align:top}
-tr:last-child td{border-bottom:none}
-.empty{color:#9ca3af;font-style:italic;padding:8px}
-.footer{margin-top:28px;padding-top:10px;border-top:1px solid #e5e7eb;display:flex;justify-content:space-between;color:#9ca3af;font-size:9px}
-@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}.page{max-width:100%;padding:16px}section{page-break-inside:avoid}}
-</style></head><body><div class="page">
-<div class="header"><span class="logo">SiteSort</span><span class="report-label">Hired Plant Weekly Report · Generated ${now}</span></div>
-<div class="hero"><h1>${projectName}</h1><p class="range">Week of ${fmtRange(weekStart, weekEnd)}</p></div>
-${section("active")}
-${section("overdue")}
-${section("returned")}
-<section><h2>Missing hire details<span class="count">${missing.length}</span></h2>
-${missing.length ? `<table><thead><tr><th>Item</th><th>Qty</th><th>Location</th><th>On site</th><th>Expected off-hire</th></tr></thead><tbody>${missingRows}</tbody></table>` : `<p class="empty">None.</p>`}</section>
-<div class="footer"><span>${projectName} · SiteSort</span><span>Generated ${now}</span></div>
-</div></body></html>`;
+    const html = buildPlantWeeklyReportHtml({
+      projectName,
+      weekLabel: fmtRange(weekStart, weekEnd),
+      generatedLabel: now,
+      buckets,
+      missing,
+      formatDate: fmtShort,
+    });
 
     const win = window.open("", "_blank");
     if (!win) return;
@@ -135,6 +107,8 @@ ${missing.length ? `<table><thead><tr><th>Item</th><th>Qty</th><th>Location</th>
     win.focus();
     setTimeout(() => win.print(), 400);
   };
+
+  if (!canAccess) return null;
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
@@ -162,7 +136,7 @@ ${missing.length ? `<table><thead><tr><th>Item</th><th>Qty</th><th>Location</th>
           </div>
         ) : (
           <div className="space-y-4 max-h-96 overflow-y-auto -mr-1 pr-1">
-            {(["active", "overdue", "returned"] as Bucket[]).map(bucket => {
+            {(["active", "overdue", "returned"] as PlantWeeklyBucket[]).map(bucket => {
               const meta = BUCKET_META[bucket];
               const Icon = meta.icon;
               const list = buckets[bucket];

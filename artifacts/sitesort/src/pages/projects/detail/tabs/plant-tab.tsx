@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { useDetail } from "../context";
 import { PlantItemDialogs } from "../dialogs/plant-dialogs";
 import { PlantWeeklyReportDialog } from "../dialogs/plant-weekly-report";
+import { canAccessPlantWeeklyReport } from "../dialogs/plant-weekly-report-export";
 import { useListPlantItems, useDeletePlantItem, getListPlantItemsQueryKey, type PlantItem } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -42,7 +43,7 @@ function fmtUpdated(iso?: string | null): string {
 }
 
 export function PlantTab() {
-  const { projectId, project, caps } = useDetail();
+  const { projectId, project, caps, isProjectApprover } = useDetail();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [category, setCategory] = useState<string>("all");
@@ -53,6 +54,7 @@ export function PlantTab() {
   const [archivingItemId, setArchivingItemId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [weeklyReportOpen, setWeeklyReportOpen] = useState(false);
+  const canAccessWeeklyReport = canAccessPlantWeeklyReport(isProjectApprover);
 
   const params = { category: category === "all" ? undefined : category, status: status === "all" ? undefined : status, ...(showArchived ? { archived: "true" } : {}) } as any;
   const { data, isLoading } = useListPlantItems(projectId, params, { query: { enabled: !!projectId, queryKey: getListPlantItemsQueryKey(projectId, params) } });
@@ -123,9 +125,11 @@ export function PlantTab() {
         title="Plant & Materials"
         description="What's on site: plant, equipment, and materials."
         actions={<>
-          <Button size="sm" variant="outline" onClick={() => setWeeklyReportOpen(true)}>
-            <CalendarRange className="w-4 h-4 mr-1.5" /> Weekly Report
-          </Button>
+          {canAccessWeeklyReport && (
+            <Button size="sm" variant="outline" onClick={() => setWeeklyReportOpen(true)}>
+              <CalendarRange className="w-4 h-4 mr-1.5" /> Weekly Report
+            </Button>
+          )}
           {caps.isInternal && (
             <Button size="sm" onClick={() => setEditingItem("new")}>
               <Plus className="w-4 h-4 mr-1.5" /> Add item
@@ -243,10 +247,11 @@ export function PlantTab() {
         shareText={sharingItem ? itemShareText(sharingItem) : undefined}
       />
       <PlantWeeklyReportDialog
-        open={weeklyReportOpen}
+        open={canAccessWeeklyReport && weeklyReportOpen}
         onClose={() => setWeeklyReportOpen(false)}
         projectId={projectId}
         projectName={project.name}
+        canAccess={canAccessWeeklyReport}
       />
     </TabsContent>
   );

@@ -10,6 +10,7 @@ import { authenticate } from "../middlewares/auth";
 import { logActivity } from "../lib/activity";
 import { CreatePlantItemBody, UpdatePlantItemBody, CreatePlantItemAttachmentBody } from "@workspace/api-zod";
 import { notesFor, addNote } from "../lib/portal-submission-notes";
+import { isProjectApprover } from "../lib/project-authority";
 
 const router: IRouter = Router();
 
@@ -120,6 +121,28 @@ router.get("/projects/:projectId/plant-items", authenticate, async (req, res) =>
   } catch (err) {
     req.log.error({ err }, "List plant items error");
     res.status(500).json({ error: "server_error", message: "Failed to list Plant & Materials items" });
+  }
+});
+
+// GET /api/projects/:projectId/plant-items/weekly-report
+router.get("/projects/:projectId/plant-items/weekly-report", authenticate, async (req, res) => {
+  try {
+    const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
+    if (!project) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+    if (!(await isProjectApprover(req.user!, project.id))) {
+      res.status(403).json({ error: "forbidden", message: "Only a project approver can view the weekly hired-plant report" });
+      return;
+    }
+
+    const items = await db.select().from(plantItemsTable).where(and(
+      eq(plantItemsTable.projectId, project.id),
+      eq(plantItemsTable.category, "plant_equipment"),
+      isNull(plantItemsTable.archivedAt),
+    ));
+    res.json(await serializeItems(items));
+  } catch (err) {
+    req.log.error({ err }, "Weekly hired-plant report error");
+    res.status(500).json({ error: "server_error", message: "Failed to load the weekly hired-plant report" });
   }
 });
 

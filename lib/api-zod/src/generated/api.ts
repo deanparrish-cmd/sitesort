@@ -1275,6 +1275,43 @@ export const CreatePlantItemBody = zod.object({
 });
 
 /**
+ * @summary List hired plant for the manager-only weekly report
+ */
+export const GetPlantWeeklyReportParams = zod.object({
+  projectId: zod.coerce.string(),
+});
+
+export const GetPlantWeeklyReportResponseItem = zod.object({
+  id: zod.string(),
+  projectId: zod.string(),
+  name: zod.string(),
+  category: zod.enum(["plant_equipment", "materials"]),
+  quantity: zod.string().nullish(),
+  unit: zod.string().nullish(),
+  supplierOwnerText: zod.string().nullish(),
+  supplierContactId: zod.string().nullish(),
+  supplierContactName: zod.string().nullish(),
+  location: zod.string().nullish(),
+  status: zod.enum(["on_site", "on_order", "off_hired", "depleted"]),
+  notes: zod.string().nullish(),
+  onSiteDate: zod.string().nullish(),
+  expectedOffHireDate: zod.string().nullish(),
+  createdBy: zod.string(),
+  lastUpdatedByName: zod
+    .string()
+    .nullish()
+    .describe(
+      'First Surname of the last editor, for the \"last updated by\" line.',
+    ),
+  lastUpdatedAt: zod.date().nullish(),
+  attachmentCount: zod.number(),
+  createdAt: zod.date(),
+});
+export const GetPlantWeeklyReportResponse = zod.array(
+  GetPlantWeeklyReportResponseItem,
+);
+
+/**
  * @summary Update a Plant & Materials item (manager/site-worker gated)
  */
 export const UpdatePlantItemParams = zod.object({

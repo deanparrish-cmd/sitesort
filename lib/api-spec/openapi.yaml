@@ -1060,6 +1060,29 @@ paths:
               schema:
                 $ref: "#/components/schemas/PlantItem"
 
+  /projects/{projectId}/plant-items/weekly-report:
+    get:
+      operationId: getPlantWeeklyReport
+      tags: [plant-items]
+      summary: List hired plant for the manager-only weekly report
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Hired plant items available to a project approver
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlantItem"
+        "403":
+          description: User does not have project-management authority
+
   /projects/{projectId}/plant-items/{itemId}:
     patch:
       operationId: updatePlantItem

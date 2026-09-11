@@ -4067,6 +4067,95 @@ export const useCreatePlantItem = <
 };
 
 /**
+ * @summary List hired plant for the manager-only weekly report
+ */
+export const getGetPlantWeeklyReportUrl = (projectId: string) => {
+  return `/api/projects/${projectId}/plant-items/weekly-report`;
+};
+
+export const getPlantWeeklyReport = async (
+  projectId: string,
+  options?: RequestInit,
+): Promise<PlantItem[]> => {
+  return customFetch<PlantItem[]>(getGetPlantWeeklyReportUrl(projectId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPlantWeeklyReportQueryKey = (projectId: string) => {
+  return [`/api/projects/${projectId}/plant-items/weekly-report`] as const;
+};
+
+export const getGetPlantWeeklyReportQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPlantWeeklyReport>>,
+  TError = ErrorType<void>,
+>(
+  projectId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPlantWeeklyReport>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPlantWeeklyReportQueryKey(projectId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPlantWeeklyReport>>
+  > = ({ signal }) =>
+    getPlantWeeklyReport(projectId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!projectId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPlantWeeklyReport>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPlantWeeklyReportQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPlantWeeklyReport>>
+>;
+export type GetPlantWeeklyReportQueryError = ErrorType<void>;
+
+/**
+ * @summary List hired plant for the manager-only weekly report
+ */
+
+export function useGetPlantWeeklyReport<
+  TData = Awaited<ReturnType<typeof getPlantWeeklyReport>>,
+  TError = ErrorType<void>,
+>(
+  projectId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPlantWeeklyReport>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPlantWeeklyReportQueryOptions(projectId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * @summary Update a Plant & Materials item (manager/site-worker gated)
  */
 export const getUpdatePlantItemUrl = (projectId: string, itemId: string) => {

@@ -10,7 +10,7 @@ describe("project detail tab gating", () => {
   it("admin sees closeout, reports and teamportal", () => {
     const caps = capsFor("admin");
     expect(values(buildManagementTabs(caps, 0))).toContain("closeout");
-    const activity = values(buildActivityTabs(caps, 0));
+    const activity = values(buildActivityTabs(caps, 0, true));
     expect(activity).toContain("reports");
     expect(activity).toContain("teamportal");
   });
@@ -18,7 +18,7 @@ describe("project detail tab gating", () => {
   it("project_manager sees closeout, reports and teamportal", () => {
     const caps = capsFor("project_manager");
     expect(values(buildManagementTabs(caps, 0))).toContain("closeout");
-    const activity = values(buildActivityTabs(caps, 0));
+    const activity = values(buildActivityTabs(caps, 0, true));
     expect(activity).toContain("reports");
     expect(activity).toContain("teamportal");
   });
@@ -26,7 +26,7 @@ describe("project detail tab gating", () => {
   it("site_worker sees reports but NOT closeout or teamportal", () => {
     const caps = capsFor("site_worker");
     expect(values(buildManagementTabs(caps, 0))).not.toContain("closeout");
-    const activity = values(buildActivityTabs(caps, 0));
+    const activity = values(buildActivityTabs(caps, 0, false));
     expect(activity).toContain("reports");
     expect(activity).not.toContain("teamportal");
   });
@@ -34,7 +34,7 @@ describe("project detail tab gating", () => {
   it("subcontractor sees neither reports, teamportal nor closeout", () => {
     const caps = capsFor("subcontractor");
     expect(values(buildManagementTabs(caps, 0))).not.toContain("closeout");
-    const activity = values(buildActivityTabs(caps, 0));
+    const activity = values(buildActivityTabs(caps, 0, false));
     expect(activity).not.toContain("reports");
     expect(activity).not.toContain("teamportal");
   });
@@ -46,7 +46,7 @@ describe("project detail tab gating", () => {
       for (const v of ["overview", "progress", "team", "issues", "qr", "documents", "permits"]) {
         expect(mgmt).toContain(v);
       }
-      const activity = values(buildActivityTabs(caps, 0));
+      const activity = values(buildActivityTabs(caps, 0, false));
       expect(activity).toContain("finances");
       expect(activity).toContain("checkins");
     }
@@ -56,7 +56,7 @@ describe("project detail tab gating", () => {
     const caps = capsFor("admin");
     expect(buildManagementTabs(caps, 3).find(t => t.value === "issues")?.label).toBe("Site Issues (3)");
     expect(buildManagementTabs(caps, 0).find(t => t.value === "issues")?.label).toBe("Site Issues");
-    expect(buildActivityTabs(caps, 2).find(t => t.value === "checkins")?.label).toBe("Check-ins (2)");
-    expect(buildActivityTabs(caps, 0).find(t => t.value === "checkins")?.label).toBe("Check-ins");
+    expect(buildActivityTabs(caps, 2, true).find(t => t.value === "checkins")?.label).toBe("Check-ins (2)");
+    expect(buildActivityTabs(caps, 0, true).find(t => t.value === "checkins")?.label).toBe("Check-ins");
   });
 });
