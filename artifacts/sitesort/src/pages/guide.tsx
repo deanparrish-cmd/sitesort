@@ -10,7 +10,7 @@ export default function Guide() {
   return (
     <div className="min-h-screen bg-background">
       <div className="border-b bg-card relative overflow-hidden">
-        <div className="absolute -top-16 -right-16 w-56 h-56 bg-accent/10 rounded-full blur-3xl" />
+        <div aria-hidden="true" data-layout-decoration className="absolute -top-16 -right-16 w-56 h-56 bg-accent/10 rounded-full blur-3xl" />
         <div className="max-w-2xl mx-auto px-4 py-6 flex items-center gap-3 relative">
           <img src={`${import.meta.env.BASE_URL}images/logo.webp?v=5`} alt="SiteSort" className="h-12 w-auto" />
           <div>

@@ -54,12 +54,14 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T | v
 }
 
 async function start(): Promise<void> {
-  await logDbStatus();
-  // Ensure required schema exists (idempotent) before serving — then listen
-  // regardless, so a migration hiccup can't take the server down.
-  await withTimeout(ensureSchema(), 30_000, "ensureSchema");
-
   // Explicit host 0.0.0.0 so the server is reachable behind Replit's router.
+  // Listen FIRST, before any DB/schema work: on an autoscale cold start the
+  // instance isn't accepting connections at all until app.listen() fires, and
+  // the platform proxy does not indefinitely queue requests during that gap —
+  // a request landing in it fails client-side as "Failed to fetch" rather
+  // than waiting or getting a slow response. ensureSchema() alone runs ~117
+  // sequential queries, so blocking listen() behind it turned a cold start
+  // into a multi-second window where login could hit nothing at all.
   const server = app.listen(port, "0.0.0.0", () => {
     logger.info({ port, host: "0.0.0.0" }, "Server listening");
     schedulePermitReminders();
@@ -70,6 +72,12 @@ async function start(): Promise<void> {
     logger.error({ err }, "HTTP server error (failed to bind / listen)");
     process.exit(1);
   });
+
+  // Schema convergence is idempotent and steady-state is a no-op, so it's
+  // safe to finish after the server is already accepting traffic. /api/health
+  // checks the DB live per-request (not off this), so it isn't blocked by this.
+  await logDbStatus();
+  await withTimeout(ensureSchema(), 30_000, "ensureSchema");
 }
 
 start().catch((err) => {

@@ -712,6 +712,9 @@ importers:
       '@replit/connectors-sdk':
         specifier: ^0.3.0
         version: 0.3.0
+      bcryptjs:
+        specifier: ^3.0.3
+        version: 3.0.3
       jimp:
         specifier: ^1.6.1
         version: 1.6.1

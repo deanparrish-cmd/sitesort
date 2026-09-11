@@ -1,6 +1,4 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
-import { randomBytes } from "node:crypto";
-import Stripe from "stripe";
 import { db } from "@workspace/db";
 import {
   usersTable,
@@ -25,9 +23,13 @@ import {
   siteCheckinsTable,
   qrBoardPinsTable,
   acknowledgmentAuditTable,
+  companyMembersTable,
+  failedStripeCancellationsTable,
 } from "@workspace/db/schema";
-import { eq, gte, lt, and, desc, sql, count, isNotNull, inArray } from "drizzle-orm";
+import { eq, gte, lt, and, desc, sql, count, isNotNull, inArray, isNull } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
+import { cancelLiveStripeSubscriptions } from "../lib/stripe-cancellation";
+import { runCompanyDeletionQueries } from "../lib/company-deletion";
 
 const router: IRouter = Router();
 
@@ -756,7 +758,7 @@ router.patch("/admin/companies/:id/beta-access", authenticate, requireAdmin, asy
       return;
     }
     const companyId = req.params.id as string;
-    const rows = await db.select({ id: companiesTable.id, stripeCustomerId: companiesTable.stripeCustomerId })
+    const rows = await db.select({ id: companiesTable.id, name: companiesTable.name, stripeCustomerId: companiesTable.stripeCustomerId })
       .from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
     if (!rows[0]) {
       res.status(404).json({ error: "not_found", message: "Company not found" });
@@ -773,21 +775,13 @@ router.patch("/admin/companies/:id/beta-access", authenticate, requireAdmin, asy
         .where(eq(companiesTable.id, companyId));
 
       // Then cancel any live Stripe subscription so they can never be charged.
-      let warning: string | undefined;
-      const apiKey = process.env.STRIPE_SECRET_KEY;
-      const customerId = rows[0].stripeCustomerId;
-      if (apiKey && customerId) {
-        try {
-          const stripe = new Stripe(apiKey);
-          const subs = await stripe.subscriptions.list({ customer: customerId, status: "all", limit: 100 });
-          const live = subs.data.filter(s => s.status === "active" || s.status === "trialing");
-          for (const s of live) await stripe.subscriptions.cancel(s.id);
-          req.log.info({ companyId, cancelled: live.length }, "Beta granted — cancelled Stripe subscription(s)");
-        } catch (err) {
-          req.log.error({ err, companyId }, "Beta grant: failed to cancel Stripe subscription");
-          warning = "Beta access was set, but cancelling the existing Stripe subscription failed. Cancel it manually in Stripe so they aren't billed.";
-        }
-      }
+      // Failures are logged loudly and recorded in failed_stripe_cancellations
+      // (not just returned as a warning that's easy to miss) — see
+      // lib/stripe-cancellation.ts.
+      const { failed } = await cancelLiveStripeSubscriptions(companyId, rows[0].name, rows[0].stripeCustomerId, req.log);
+      const warning = failed > 0
+        ? "Beta access was set, but cancelling the existing Stripe subscription failed. See Stripe Cancellation Failures in the admin panel — cancel it manually in Stripe so they aren't billed."
+        : undefined;
       res.json({ id: req.params.id, betaAccess: true, ...(warning ? { warning } : {}) });
       return;
     }
@@ -824,152 +818,159 @@ router.patch("/admin/companies/:id/beta-access", authenticate, requireAdmin, asy
 router.delete("/admin/companies/:id", authenticate, requireAdmin, async (req, res) => {
   try {
     const companyId = req.params.id as string;
-    const rows = await db.select({ id: companiesTable.id })
+    const exists = await db.select({ id: companiesTable.id })
       .from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
-    if (!rows[0]) {
+    if (!exists[0]) {
       res.status(404).json({ error: "not_found", message: "Company not found" });
       return;
     }
 
-    const projects = await db.select({ id: projectsTable.id }).from(projectsTable).where(eq(projectsTable.companyId, companyId));
-    const P = projects.map(p => p.id);
-    const subs = await db.select({ id: subcontractorsTable.id }).from(subcontractorsTable).where(eq(subcontractorsTable.companyId, companyId));
-    const S = subs.map(s => s.id);
-    const companyUsers = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.companyId, companyId));
-    const U = companyUsers.map(u => u.id);
-    // node-postgres/drizzle doesn't auto-serialise JS arrays for ANY(); pass
-    // an explicit Postgres array literal instead (ids are UUIDs — no escaping
-    // concerns).
-    const pgArr = (ids: string[]) => `{${ids.join(",")}}`;
-    // Fallback home for scrubbed accounts: another company the user belongs
-    // to — captured BEFORE we delete company_members rows below.
-    const fallbackCompany = new Map<string, string>();
-    if (U.length) {
-      const others = await db.execute(sql`
-        select user_id, company_id from company_members
-        where user_id = any(${pgArr(U)}::text[]) and company_id <> ${companyId}`);
-      for (const r of others.rows as { user_id: string; company_id: string }[]) {
-        if (!fallbackCompany.has(r.user_id)) fallbackCompany.set(r.user_id, r.company_id);
-      }
-    }
+    const { companyName, stripeCustomerId, scrubbedUsers } = await db.transaction(tx => runCompanyDeletionQueries(tx, companyId));
 
-    const scrubbed: string[] = [];
-    await db.transaction(async (tx) => {
-      // ── 1. Project-scoped data (children first) ──────────────────────────
-      if (P.length) {
-        await tx.execute(sql`delete from plant_item_attachments where plant_item_id in (select id from plant_items where project_id = any(${pgArr(P)}::text[]))`);
-        await tx.execute(sql`delete from plant_item_distributions where plant_item_id in (select id from plant_items where project_id = any(${pgArr(P)}::text[]))`);
-        await tx.execute(sql`delete from document_distributions where document_id in (select id from documents where project_id = any(${pgArr(P)}::text[]))`);
-        await tx.execute(sql`delete from acknowledgment_audit_log where document_id in (select id from documents where project_id = any(${pgArr(P)}::text[]))`);
-        await tx.execute(sql`delete from message_reactions where message_id in (select id from messages where project_id = any(${pgArr(P)}::text[]))`);
-        await tx.execute(sql`delete from channel_message_reactions where channel_message_id in (select id from channel_messages where project_id = any(${pgArr(P)}::text[]))`);
-        for (const t of [
-          "activity_log", "calendar_events", "channel_reads", "channel_messages",
-          "daily_notes", "daily_reports", "documents", "invoices", "messages",
-          "milestones", "pending_pushes", "permits", "photos", "plant_items",
-          "portal_member_documents", "portal_sessions", "portal_shares",
-          "portal_submission_notes", "project_closeouts", "project_invites",
-          "project_members", "push_subscriptions", "qr_board_pins", "qr_codes",
-          "share_logs", "site_checkins", "subcontractor_documents",
-          "subcontractor_notes",
-        ]) {
-          await tx.execute(sql`delete from ${sql.identifier(t)} where project_id = any(${pgArr(P)}::text[])`);
-        }
-      }
+    // Only cancel Stripe AFTER the deletion transaction has committed — see
+    // lib/stripe-cancellation.ts's comment on why that ordering matters.
+    const { failed } = await cancelLiveStripeSubscriptions(companyId, companyName, stripeCustomerId, req.log);
+    const warning = failed > 0
+      ? "Company deleted, but cancelling the Stripe subscription failed. See Stripe Cancellation Failures in the admin panel — cancel it manually in Stripe so they aren't billed."
+      : undefined;
 
-      // ── 2. Subcontractor-scoped ──────────────────────────────────────────
-      if (S.length) {
-        await tx.execute(sql`delete from insurance_records where subcontractor_id = any(${pgArr(S)}::text[])`);
-        await tx.execute(sql`delete from subcontractor_notes where subcontractor_id = any(${pgArr(S)}::text[])`);
-        await tx.execute(sql`delete from subcontractor_documents where subcontractor_id = any(${pgArr(S)}::text[])`);
-        await tx.execute(sql`delete from project_members where subcontractor_id = any(${pgArr(S)}::text[])`);
-        // Cross-tenant safety: nullable references from surviving rows.
-        await tx.execute(sql`update plant_items set supplier_contact_id = null where supplier_contact_id = any(${pgArr(S)}::text[])`);
-        await tx.execute(sql`update people set subcontractor_id = null where subcontractor_id = any(${pgArr(S)}::text[])`);
-      }
-
-      // ── 3. People (the company's contact records) ────────────────────────
-      await tx.execute(sql`delete from person_certifications where person_id in (select id from people where company_id = ${companyId})`);
-      for (const t of ["portal_member_documents", "portal_shares", "project_invites", "project_members"]) {
-        await tx.execute(sql`delete from ${sql.identifier(t)} where person_id in (select id from people where company_id = ${companyId})`);
-      }
-      await tx.execute(sql`delete from people where company_id = ${companyId}`);
-
-      // ── 4. Remaining company-scoped rows ─────────────────────────────────
-      await tx.execute(sql`delete from message_reactions where message_id in (select id from messages where company_id = ${companyId})`);
-      await tx.execute(sql`delete from channel_message_reactions where channel_message_id in (select id from channel_messages where company_id = ${companyId})`);
-      for (const t of ["calendar_events", "channel_messages", "messages", "invoices", "project_invites", "share_logs", "company_members"]) {
-        await tx.execute(sql`delete from ${sql.identifier(t)} where company_id = ${companyId}`);
-      }
-
-      // ── 5. This company's user accounts — clean their footprints anywhere ─
-      if (U.length) {
-        // Rows that are purely about the user (any tenant): safe to delete.
-        for (const t of [
-          "notifications", "credential_reset_tokens", "channel_reads",
-          "channel_message_reactions", "message_reactions", "pin_audit_log",
-          "push_subscriptions", "pending_pushes", "portal_sessions",
-          "document_distributions", "plant_item_distributions",
-          "acknowledgment_audit_log", "portal_member_documents",
-          "project_members", "company_members",
-        ]) {
-          await tx.execute(sql`delete from ${sql.identifier(t)} where user_id = any(${pgArr(U)}::text[])`);
-        }
-        await tx.execute(sql`delete from user_notes where user_id = any(${pgArr(U)}::text[]) or author_id = any(${pgArr(U)}::text[])`);
-        await tx.execute(sql`delete from person_certifications where created_by = any(${pgArr(U)}::text[])`);
-        await tx.execute(sql`delete from project_invites where invited_by_user_id = any(${pgArr(U)}::text[])`);
-        // Nullable references in other tenants' content: detach, don't delete.
-        await tx.execute(sql`update people set user_id = null where user_id = any(${pgArr(U)}::text[])`);
-        await tx.execute(sql`update photos set assigned_to_user_id = null where assigned_to_user_id = any(${pgArr(U)}::text[])`);
-        await tx.execute(sql`update photos set submitted_by = null where submitted_by = any(${pgArr(U)}::text[])`);
-        await tx.execute(sql`update photos set archived_by = null where archived_by = any(${pgArr(U)}::text[])`);
-        await tx.execute(sql`update photos set photo_removed_by = null where photo_removed_by = any(${pgArr(U)}::text[])`);
-        await tx.execute(sql`update daily_reports set submitted_by = null where submitted_by = any(${pgArr(U)}::text[])`);
-        await tx.execute(sql`update daily_reports set authored_by = null where authored_by = any(${pgArr(U)}::text[])`);
-        await tx.execute(sql`update plant_items set last_updated_by = null where last_updated_by = any(${pgArr(U)}::text[])`);
-        await tx.execute(sql`update plant_items set archived_by = null where archived_by = any(${pgArr(U)}::text[])`);
-        await tx.execute(sql`update plant_items set portal_draft_updated_by = null where portal_draft_updated_by = any(${pgArr(U)}::text[])`);
-        await tx.execute(sql`update insurance_records set assigned_to_user_id = null where assigned_to_user_id = any(${pgArr(U)}::text[])`);
-        await tx.execute(sql`update portal_shares set shared_by_user_id = null where shared_by_user_id = any(${pgArr(U)}::text[])`);
-        await tx.execute(sql`update share_logs set sent_by_user_id = null where sent_by_user_id = any(${pgArr(U)}::text[])`);
-        await tx.execute(sql`update portal_member_documents set reviewed_by_user_id = null where reviewed_by_user_id = any(${pgArr(U)}::text[])`);
-        await tx.execute(sql`update project_invites set accepted_user_id = null where accepted_user_id = any(${pgArr(U)}::text[])`);
-
-        // Try to delete each account; if it still owns NON-nullable content in
-        // another tenant (messages they sent, files they uploaded…), scrub it
-        // instead so the email is freed without destroying that tenant's data.
-        for (const uid of U) {
-          try {
-            await tx.execute(sql`savepoint del_user`);
-            await tx.execute(sql`delete from users where id = ${uid}`);
-            await tx.execute(sql`release savepoint del_user`);
-          } catch {
-            await tx.execute(sql`rollback to savepoint del_user`);
-            const home = fallbackCompany.get(uid);
-            const tombstone = `deleted-${uid}@removed.invalid`;
-            if (home) {
-              await tx.execute(sql`update users set email = ${tombstone}, password_hash = ${randomBytes(32).toString("hex")}, portal_only = true, company_id = ${home} where id = ${uid}`);
-            } else {
-              // No surviving membership to re-home to — keep their current
-              // company_id valid by leaving the company row in place is not an
-              // option (we're deleting it), so park them on the oldest company.
-              await tx.execute(sql`update users set email = ${tombstone}, password_hash = ${randomBytes(32).toString("hex")}, portal_only = true, company_id = (select id from companies where id <> ${companyId} order by created_at asc limit 1) where id = ${uid}`);
-            }
-            scrubbed.push(uid);
-          }
-        }
-      }
-
-      // ── 6. Projects, subcontractors, company ─────────────────────────────
-      if (P.length) await tx.execute(sql`delete from projects where id = any(${pgArr(P)}::text[])`);
-      if (S.length) await tx.execute(sql`delete from subcontractors where id = any(${pgArr(S)}::text[])`);
-      await tx.execute(sql`delete from companies where id = ${companyId}`);
-    });
-
-    res.json({ success: true, scrubbedUsers: scrubbed.length });
+    res.json({ success: true, scrubbedUsers, ...(warning ? { warning } : {}) });
   } catch (err) {
     req.log.error({ err }, "Admin delete company error");
     res.status(500).json({ error: "server_error", message: "Failed to delete company" });
+  }
+});
+
+// DELETE /api/admin/users/:id — delete a single user account.
+//
+// If they're the LAST person left in their (home) company, this cascades into
+// the same full company-deletion logic as the route above (including Stripe
+// cancellation) — a solo tester's account really is their whole tenant. If
+// other people remain in the company, only this one user's login + footprint
+// is removed; the company, its other users, and its betaAccess flag are
+// completely untouched.
+//
+// The "still has users" check reads company_members — the authoritative
+// membership table (lib/memberships.ts), not just users.companyId, since a
+// user's home company can differ from companies they've also joined — and it
+// runs AFTER this user's own membership row is deleted, inside the SAME
+// transaction, so nothing can race it.
+router.delete("/admin/users/:id", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const targetUserId = req.params.id as string;
+    const target = await db.select({ id: usersTable.id, companyId: usersTable.companyId })
+      .from(usersTable).where(eq(usersTable.id, targetUserId)).limit(1);
+    if (!target[0]) {
+      res.status(404).json({ error: "not_found", message: "User not found" });
+      return;
+    }
+    const homeCompanyId = target[0].companyId;
+
+    const result = await db.transaction(async (tx) => {
+      // This user's own footprint: purely-personal rows deleted, nullable
+      // cross-tenant references cleared, then the users row itself. Mirrors
+      // step 5 of runCompanyDeletionQueries but for exactly one user.
+      for (const t of [
+        "notifications", "credential_reset_tokens", "channel_reads",
+        "channel_message_reactions", "message_reactions", "pin_audit_log",
+        "push_subscriptions", "pending_pushes", "portal_sessions",
+        "document_distributions", "plant_item_distributions",
+        "acknowledgment_audit_log", "portal_member_documents",
+        "project_members", "company_members",
+      ]) {
+        await tx.execute(sql`delete from ${sql.identifier(t)} where user_id = ${targetUserId}`);
+      }
+      await tx.execute(sql`delete from user_notes where user_id = ${targetUserId} or author_id = ${targetUserId}`);
+      await tx.execute(sql`delete from person_certifications where created_by = ${targetUserId}`);
+      await tx.execute(sql`delete from project_invites where invited_by_user_id = ${targetUserId}`);
+      await tx.execute(sql`update people set user_id = null where user_id = ${targetUserId}`);
+      await tx.execute(sql`update photos set assigned_to_user_id = null where assigned_to_user_id = ${targetUserId}`);
+      await tx.execute(sql`update photos set submitted_by = null where submitted_by = ${targetUserId}`);
+      await tx.execute(sql`update photos set archived_by = null where archived_by = ${targetUserId}`);
+      await tx.execute(sql`update photos set photo_removed_by = null where photo_removed_by = ${targetUserId}`);
+      await tx.execute(sql`update daily_reports set submitted_by = null where submitted_by = ${targetUserId}`);
+      await tx.execute(sql`update daily_reports set authored_by = null where authored_by = ${targetUserId}`);
+      await tx.execute(sql`update plant_items set last_updated_by = null where last_updated_by = ${targetUserId}`);
+      await tx.execute(sql`update plant_items set archived_by = null where archived_by = ${targetUserId}`);
+      await tx.execute(sql`update plant_items set portal_draft_updated_by = null where portal_draft_updated_by = ${targetUserId}`);
+      await tx.execute(sql`update insurance_records set assigned_to_user_id = null where assigned_to_user_id = ${targetUserId}`);
+      await tx.execute(sql`update portal_shares set shared_by_user_id = null where shared_by_user_id = ${targetUserId}`);
+      await tx.execute(sql`update share_logs set sent_by_user_id = null where sent_by_user_id = ${targetUserId}`);
+      await tx.execute(sql`update portal_member_documents set reviewed_by_user_id = null where reviewed_by_user_id = ${targetUserId}`);
+      await tx.execute(sql`update project_invites set accepted_user_id = null where accepted_user_id = ${targetUserId}`);
+      await tx.execute(sql`delete from users where id = ${targetUserId}`);
+
+      // MULTI-USER SAFETY CHECK: company_members is the authoritative "who's
+      // in this company" table, checked AFTER this user's own membership row
+      // is already gone, inside this same transaction. If anyone remains,
+      // stop here — company/other users/betaAccess are untouched.
+      const remaining = await tx.select({ n: sql<number>`count(*)` })
+        .from(companyMembersTable).where(eq(companyMembersTable.companyId, homeCompanyId));
+      if (Number(remaining[0]?.n ?? 0) > 0) {
+        return { companyDeleted: false as const };
+      }
+
+      const { companyName, stripeCustomerId } = await runCompanyDeletionQueries(tx, homeCompanyId);
+      return { companyDeleted: true as const, companyId: homeCompanyId, companyName, stripeCustomerId };
+    });
+
+    if (!result.companyDeleted) {
+      res.json({ success: true, companyDeleted: false });
+      return;
+    }
+
+    // Only cancel Stripe AFTER the deletion transaction has committed.
+    const { failed } = await cancelLiveStripeSubscriptions(result.companyId, result.companyName, result.stripeCustomerId, req.log);
+    const warning = failed > 0
+      ? "User (and their now-empty company) deleted, but cancelling the Stripe subscription failed. See Stripe Cancellation Failures in the admin panel — cancel it manually in Stripe so they aren't billed."
+      : undefined;
+    res.json({ success: true, companyDeleted: true, ...(warning ? { warning } : {}) });
+  } catch (err) {
+    req.log.error({ err }, "Admin delete user error");
+    res.status(500).json({ error: "server_error", message: "Failed to delete user" });
+  }
+});
+
+// GET /api/admin/failed-stripe-cancellations — unresolved-first list of
+// Stripe subscription cancellations that failed during a company deletion or
+// beta-access grant. See lib/stripe-cancellation.ts.
+router.get("/admin/failed-stripe-cancellations", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const rows = await db.select().from(failedStripeCancellationsTable)
+      .orderBy(sql`${failedStripeCancellationsTable.resolvedAt} is not null, ${failedStripeCancellationsTable.createdAt} desc`);
+    res.json(rows.map(r => ({
+      id: r.id,
+      companyId: r.companyId,
+      companyName: r.companyName,
+      stripeCustomerId: r.stripeCustomerId,
+      subscriptionId: r.subscriptionId,
+      errorMessage: r.errorMessage,
+      createdAt: r.createdAt.toISOString(),
+      resolvedAt: r.resolvedAt?.toISOString() ?? null,
+    })));
+  } catch (err) {
+    req.log.error({ err }, "List failed Stripe cancellations error");
+    res.status(500).json({ error: "server_error", message: "Failed to load failed Stripe cancellations" });
+  }
+});
+
+// PATCH /api/admin/failed-stripe-cancellations/:id/resolve — mark handled
+// once you've cancelled the subscription manually in Stripe. Never deleted,
+// so the fact it happened is never lost, only cleared from the active list.
+router.patch("/admin/failed-stripe-cancellations/:id/resolve", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const rows = await db.update(failedStripeCancellationsTable)
+      .set({ resolvedAt: new Date(), resolvedByUserId: req.user!.id })
+      .where(and(eq(failedStripeCancellationsTable.id, req.params.id), isNull(failedStripeCancellationsTable.resolvedAt)))
+      .returning({ id: failedStripeCancellationsTable.id });
+    if (!rows[0]) {
+      res.status(404).json({ error: "not_found", message: "Not found, or already resolved" });
+      return;
+    }
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Resolve failed Stripe cancellation error");
+    res.status(500).json({ error: "server_error", message: "Failed to resolve" });
   }
 });
 

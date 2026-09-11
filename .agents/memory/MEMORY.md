@@ -24,3 +24,4 @@
 - [Site-board check-in matching](site-board-checkin-matching.md) — QR check-in must cover all 3 project_members link types (user_id, subcontractor_id, person_id); sub-linked people need valid insurance.
 - [First-use scope boundaries](first-use-scope-boundaries.md) — preserve the intentional trial, programme, invoice and daily-report boundaries when improving discoverability.
 - [Company storage allowances](company-storage-allowances.md) — future storage plans belong to the company account and should align with the three existing price tiers.
+- [Layout validation trust](layout-validation-trust.md) — route navigation is not content coverage; permission errors and intentional menu blocking need explicit handling.

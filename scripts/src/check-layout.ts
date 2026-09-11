@@ -20,6 +20,8 @@
  *   LAYOUT_VIEWPORTS=360,390,768
  *   LAYOUT_REPORT_PATH=reports/layout-check.json
  */
+import { randomUUID } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -62,6 +64,8 @@ const DEMO_EMAIL = "paul@acme.com";
 const DEMO_PASSWORD = "password123";
 const FIXTURE_EMAIL = "layout-checker@sitesort.test";
 const FIXTURE_PASSWORD = "LayoutCheck123!";
+const ADMIN_FIXTURE_PASSWORD = "LayoutAdminCheck123!";
+const BCRYPT_MODULE = "bcryptjs";
 
 type AuthMode = "none" | "app" | "portal";
 type RouteSpec = { path: string; label: string; auth: AuthMode };
@@ -70,6 +74,16 @@ type FixtureData = {
   portalToken: string;
   inviteToken: string;
   siteToken: string;
+};
+
+type AdminFixture = {
+  companyId: string;
+  userId: string;
+  token: string;
+};
+
+type BcryptModule = {
+  default: { hash(value: string, rounds: number): Promise<string> };
 };
 
 type FailureReason =
@@ -271,6 +285,83 @@ async function apiLogin(email: string, password: string): Promise<{ token: strin
   return { token, companyId: body.user.companyId };
 }
 
+/**
+ * The production admin API deliberately has no bootstrap endpoint: only a
+ * platform admin can grant platform-admin.  The layout gate therefore creates
+ * a short-lived internal-staff row directly in the local development database.
+ * It never changes the authority of the demo account (or any existing user),
+ * and is removed in main's finally block even when a layout assertion fails.
+ */
+async function setupAdminFixture(): Promise<AdminFixture> {
+  if (!process.env.DATABASE_URL) {
+    throw new Error(
+      "DATABASE_URL is required to create the dedicated local platform-admin layout fixture; refusing to downgrade /admin coverage.",
+    );
+  }
+  const suffix = randomUUID();
+  const companyId = `layout-check-admin-company-${suffix}`;
+  const userId = `layout-check-admin-user-${suffix}`;
+  const memberId = `layout-check-admin-member-${suffix}`;
+  const email = `layout-check-admin-${suffix}@sitesort.test`;
+  // Keep the package name indirect so this script can be typechecked before
+  // a newly declared workspace dependency is linked by pnpm.
+  const bcrypt = await import(BCRYPT_MODULE) as BcryptModule;
+  const passwordHash = await bcrypt.default.hash(ADMIN_FIXTURE_PASSWORD, 10);
+
+  try {
+    runFixtureSql(`
+      INSERT INTO companies (id, name, subscription_status)
+      VALUES ('${companyId}', 'Layout Check Platform Admin', 'active');
+      INSERT INTO users (id, company_id, email, password_hash, name, role, email_verified, platform_admin)
+      VALUES ('${userId}', '${companyId}', '${email}', '${passwordHash}', 'Layout Check Platform Admin', 'admin', true, true);
+      INSERT INTO company_members (id, user_id, company_id, role)
+      VALUES ('${memberId}', '${userId}', '${companyId}', 'admin');
+    `);
+    const login = await apiLogin(email, ADMIN_FIXTURE_PASSWORD);
+    if (!login.token || login.companyId !== companyId) {
+      throw new Error("Dedicated platform-admin fixture login did not return its own authenticated company context.");
+    }
+    return { companyId, userId, token: login.token };
+  } catch (error) {
+    await cleanupAdminFixture({ companyId, userId }).catch(() => {});
+    throw error;
+  }
+}
+
+async function cleanupAdminFixture(fixture: Pick<AdminFixture, "companyId" | "userId">): Promise<void> {
+  // These IDs are generated exclusively above. Delete the identity first so
+  // its cascading company-membership row cannot leave a company FK behind.
+  runFixtureSql(`
+    DELETE FROM users WHERE id = '${fixture.userId}';
+    DELETE FROM companies WHERE id = '${fixture.companyId}';
+  `);
+}
+
+function runFixtureSql(sql: string): void {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) throw new Error("DATABASE_URL is required for the local layout fixture database connection.");
+  const database = new URL(databaseUrl);
+  const result = spawnSync(
+    "psql",
+    ["--no-psqlrc", "--set=ON_ERROR_STOP=1", "-q", "-c", sql],
+    {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PGHOST: database.hostname,
+        PGPORT: database.port || "5432",
+        PGUSER: decodeURIComponent(database.username),
+        PGPASSWORD: decodeURIComponent(database.password),
+        PGDATABASE: decodeURIComponent(database.pathname.replace(/^\//, "")),
+        ...(database.searchParams.get("sslmode") ? { PGSSLMODE: database.searchParams.get("sslmode")! } : {}),
+      },
+    },
+  );
+  if (result.error || result.status !== 0) {
+    throw new Error(`Could not manage the dedicated platform-admin layout fixture: ${result.error?.message ?? result.stderr.trim()}`);
+  }
+}
+
 async function apiJson(path: string, token: string, init: RequestInit = {}): Promise<any> {
   const res = await fetch(`${APP_URL}${path}`, {
     ...init,
@@ -424,15 +515,20 @@ function describeElement(el: Element): string {
 }
 
 /**
- * Checks the whole rendered tree, not only document.scrollWidth. Shared
- * layouts intentionally clip a page-level safety net, so a child that sticks
- * out of that clipped region must still be reported. Visible-intersection
- * elementFromPoint samples catch a second class of bugs where an action
- * remains geometrically present but is covered by another stacking layer and
- * cannot be tapped.
+ * Checks the whole rendered tree, not only document.scrollWidth. A child that
+ * sticks past a page boundary is reported even if a higher-level layout
+ * prevents document scroll. The only clipped descendants exempted from that
+ * check are explicitly marked decorative elements and horizontal scroller
+ * contents.
+ * Visible-intersection elementFromPoint samples catch a second class of bugs
+ * where an action remains geometrically present but is covered by another
+ * stacking layer and cannot be tapped.
  */
-async function inspectLayout(page: import("playwright-core").Page): Promise<LayoutMetrics> {
-  return page.evaluate(() => {
+async function inspectLayout(
+  page: import("playwright-core").Page,
+  options: { ignorePersistentChromeOverlap?: boolean } = {},
+): Promise<LayoutMetrics> {
+  return page.evaluate(({ ignorePersistentChromeOverlap }) => {
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     const scrolling = document.scrollingElement ?? document.documentElement;
@@ -499,9 +595,9 @@ async function inspectLayout(page: import("playwright-core").Page): Promise<Layo
       const rect = (el as HTMLElement).getBoundingClientRect();
       const region = visibleRegion(el);
       if (!region) continue;
-      // A clipped decorative child can have a large un-clipped rect, but the
-      // visible intersection never reaches the viewport edge. Only report
-      // overflow that can actually be seen/tapped outside the page boundary.
+      // A shared overflow-x-clip safety net must not conceal a content/action
+      // layout defect. Only explicit visual decoration may extend beyond a
+      // clipping boundary; horizontal scroller contents are handled below.
       const visibleAtLeftEdge = region.left <= 1 && rect.left < -1;
       const visibleAtRightEdge = region.right >= viewportWidth - 1 && rect.right > viewportWidth + 1;
       if (visibleAtLeftEdge || visibleAtRightEdge) {
@@ -517,7 +613,8 @@ async function inspectLayout(page: import("playwright-core").Page): Promise<Layo
           }
           scrollContainer = scrollContainer.parentElement;
         }
-        if (!intentionallyScrollable) {
+        const decorative = !!el.closest("[data-layout-decoration]");
+        if (!intentionallyScrollable && !decorative) {
           overflowElements.push({ element: describe(el), left: Math.round(rect.left), right: Math.round(rect.right) });
         }
       }
@@ -538,8 +635,28 @@ async function inspectLayout(page: import("playwright-core").Page): Promise<Layo
     }
 
     const hitTargets = Array.from(document.querySelectorAll(
-      '[data-ll="pill"], [data-ll="actionbar"], a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [role="button"]',
-    )).filter(visible);
+      '[data-ll="pill"], [data-ll="actionbar"], a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [role="button"], [role="menuitem"]:not([data-disabled]), [role="option"]:not([aria-disabled="true"])',
+    )).filter((target) => visible(target) && getComputedStyle(target).pointerEvents !== "none");
+    const inlineTargetCanDelegateToAncestor = (target: Element, hit: Element): boolean => {
+      // Inline links have a union bounding box that includes glyph gaps.
+      // elementFromPoint correctly reports their text container in those gaps;
+      // that is not an overlay or a blocked link.
+      const display = getComputedStyle(target).display;
+      return (display === "inline" || display.startsWith("inline-")) && hit.contains(target);
+    };
+    const isCoveredByPersistentChrome = (target: Element, hit: Element): boolean => {
+      if (!ignorePersistentChromeOverlap) return false;
+      const chrome = hit.closest("header, nav, [data-layout-sticky-header]");
+      if (!chrome) return false;
+      const style = getComputedStyle(chrome);
+      if (style.position !== "fixed" && style.position !== "sticky") return false;
+      const targetRect = (target as HTMLElement).getBoundingClientRect();
+      const chromeRect = (chrome as HTMLElement).getBoundingClientRect();
+      return targetRect.top < chromeRect.bottom &&
+        targetRect.bottom > chromeRect.top &&
+        targetRect.right > chromeRect.left &&
+        targetRect.left < chromeRect.right;
+    };
     for (const target of hitTargets) {
       const rect = visibleRegion(target);
       if (!rect) continue;
@@ -553,17 +670,20 @@ async function inspectLayout(page: import("playwright-core").Page): Promise<Layo
         [Math.min(rect.right - 2, rect.left + 8), Math.max(rect.top + 2, rect.bottom - 8)],
         [Math.max(rect.left + 2, rect.right - 8), Math.max(rect.top + 2, rect.bottom - 8)],
       ];
-      const blocked = points.find(([rawX, rawY]) => {
+      const hits = points.map(([rawX, rawY]) => {
         const x = Math.max(0, Math.min(viewportWidth - 1, rawX));
         const y = Math.max(0, Math.min(viewportHeight - 1, rawY));
         const top = document.elementFromPoint(x, y);
-        return !!top && top !== target && !target.contains(top);
+        return { x, y, top };
       });
-      if (blocked) {
-        const x = Math.max(0, Math.min(viewportWidth - 1, blocked[0]));
-        const y = Math.max(0, Math.min(viewportHeight - 1, blocked[1]));
-        const top = document.elementFromPoint(x, y);
-        if (top) stacking.push({ target: describe(target), hit: describe(top), x: Math.round(x), y: Math.round(y) });
+      const receivesHit = (hit: Element | null): boolean =>
+        !!hit && (hit === target || target.contains(hit) || inlineTargetCanDelegateToAncestor(target, hit));
+      // Rounded controls legitimately have transparent corners. A control is
+      // blocked only if none of its meaningful center/inset samples receives
+      // the event, rather than if a single rounded-corner sample misses it.
+      const blocked = hits.find((hit) => hit.top && !receivesHit(hit.top));
+      if (blocked && !hits.some((hit) => receivesHit(hit.top)) && blocked.top && !isCoveredByPersistentChrome(target, blocked.top)) {
+        stacking.push({ target: describe(target), hit: describe(blocked.top), x: Math.round(blocked.x), y: Math.round(blocked.y) });
       }
     }
 
@@ -575,7 +695,7 @@ async function inspectLayout(page: import("playwright-core").Page): Promise<Layo
       overlaps: overlaps.slice(0, 50),
       stacking: stacking.slice(0, 50),
     };
-  });
+  }, options);
 }
 
 async function scrollForProbe(page: import("playwright-core").Page): Promise<void> {
@@ -674,27 +794,30 @@ async function main() {
   }
 
   const { token: appToken } = await apiLogin(DEMO_EMAIL, DEMO_PASSWORD);
-  const fixtures = await setupFixtures(appToken);
-  const routes = buildRoutes(fixtures);
-  if (routes.length === 0) throw new Error("Route discovery produced zero concrete routes.");
-
-  console.log(`Discovered ${appRoutes.length} router templates, ${projectTabs.length} project tabs, ${portalSections.length} portal sections.`);
-  console.log(`Concrete sweep: ${routes.length} routes × ${VIEWPORTS.length} viewports.`);
-
-  const browser = await chromium.launch({ executablePath: exec, args: ["--no-sandbox"] });
-  const results: Result[] = [];
+  const adminFixture = await setupAdminFixture();
+  let browser: import("playwright-core").Browser | undefined;
   try {
+    const fixtures = await setupFixtures(appToken);
+    const routes = buildRoutes(fixtures);
+    if (routes.length === 0) throw new Error("Route discovery produced zero concrete routes.");
+
+    console.log(`Discovered ${appRoutes.length} router templates, ${projectTabs.length} project tabs, ${portalSections.length} portal sections.`);
+    console.log(`Concrete sweep: ${routes.length} routes × ${VIEWPORTS.length} viewports.`);
+
+    browser = await chromium.launch({ executablePath: exec, args: ["--no-sandbox"] });
+    const results: Result[] = [];
+    try {
     for (const width of VIEWPORTS) {
       const page = await browser.newPage();
       await page.setViewportSize({ width, height: 900 });
       // tsx preserves function names using this helper inside serialized callbacks.
       await page.addInitScript("window.__name = (fn) => fn;");
       await page.addInitScript(
-        ({ appToken: seededAppToken, portalToken }) => {
-          localStorage.setItem("sitesort_token", seededAppToken);
+        ({ appToken: seededAppToken, adminToken, portalToken }) => {
+          localStorage.setItem("sitesort_token", window.location.pathname === "/admin" ? adminToken : seededAppToken);
           localStorage.setItem("sitesort_portal_token", portalToken);
         },
-        { appToken, portalToken: fixtures.portalToken },
+        { appToken, adminToken: adminFixture.token, portalToken: fixtures.portalToken },
       );
 
       for (const route of routes) {
@@ -730,7 +853,7 @@ async function main() {
           addMetricReasons(reasons, metrics, "initial");
 
           await scrollForProbe(page);
-          const scrolledMetrics = await inspectLayout(page);
+          const scrolledMetrics = await inspectLayout(page, { ignorePersistentChromeOverlap: true });
           probes.push({ name: "scrolled", metrics: scrolledMetrics });
           addMetricReasons(reasons, scrolledMetrics, "scrolled");
 
@@ -783,12 +906,13 @@ async function main() {
       await page.close();
     }
   } finally {
-    await browser.close();
-  }
+      await browser.close();
+      browser = undefined;
+    }
 
-  const failures = results.filter((result) => !result.ok);
-  const passes = results.filter((result) => result.ok);
-  const report = {
+    const failures = results.filter((result) => !result.ok);
+    const passes = results.filter((result) => result.ok);
+    const report = {
     generatedAt: new Date().toISOString(),
     target: APP_URL,
     viewports: VIEWPORTS,
@@ -813,16 +937,17 @@ async function main() {
       limitations: [
         "The long-string probe mutates rendered DOM text rather than server fixtures and does not cover text that is only revealed after an application-specific interaction.",
         "Only generic ARIA menu/listbox triggers are opened; custom controls without those attributes are not automatically discoverable.",
-        "Element hit-testing samples the visible intersection of a target. Controls with less than 8px of visible width or height are reported by overflow checks but omitted from stacking samples because a point there is not a meaningful tap target.",
+        "Element hit-testing samples center and inset points in the visible intersection. Controls with less than 8px of visible width or height are reported by overflow checks but omitted from stacking samples because a point there is not a meaningful tap target. A target is reported only when no sample receives its event; transparent rounded corners and inline text-glyph gaps are not treated as blocked controls.",
+        "When a menu uses modal pointer-event locking, background controls inherit pointer-events:none and are excluded while the menu foreground remains inspected. On the scrolled probe, controls temporarily behind fixed/sticky header or nav chrome are not treated as a page overlap.",
         "API failures are collected for same-origin /api responses with HTTP status 400 or higher; browser console errors and cross-origin requests are outside this gate.",
       ],
     },
     results,
     summary: { passed: passes.length, failed: failures.length, total: results.length },
-  };
-  writeReport(report);
+    };
+    writeReport(report);
 
-  console.log(`\n${"PATH".padEnd(36)} ${"WIDTH".padEnd(8)} RESULT`);
+    console.log(`\n${"PATH".padEnd(36)} ${"WIDTH".padEnd(8)} RESULT`);
   console.log("-".repeat(72));
   for (const result of results) {
     console.log(`${result.label.padEnd(36)} ${String(result.width).padEnd(8)} ${result.ok ? "PASS" : "FAIL"}`);
@@ -844,9 +969,15 @@ async function main() {
   }
   console.log(`\n${passes.length}/${results.length} checks passed.`);
   console.log(`Full per-route report: ${REPORT_PATH}`);
-  if (failures.length > 0) {
-    console.error(`${failures.length} layout check(s) failed.`);
-    process.exit(1);
+    if (failures.length > 0) {
+      console.error(`${failures.length} layout check(s) failed.`);
+      // Do not terminate here: the finally block must remove the dedicated
+      // platform-admin fixture before the process returns a failing status.
+      process.exitCode = 1;
+    }
+  } finally {
+    if (browser) await browser.close();
+    await cleanupAdminFixture(adminFixture);
   }
 }
 

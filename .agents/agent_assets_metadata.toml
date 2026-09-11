@@ -6,3 +6,18 @@ id = "af4gUO4O9dAB4Z6ZbRHxF"
 uri = "file://attached_assets/generated_audio/dictation_test.mp3"
 type = "audio"
 title = "dictation test phrase"
+logical_id = "755e455e-f850-4525-a5d8-4ca2b7350c47"
+
+[[outputs]]
+id = "pXUK7wisyGCN0wNgo1zZO"
+uri = "file://reports/layout-results.html"
+type = "text"
+title = "Per-route layout results"
+description = "192/192 checks passed across all 64 routes and three screen widths."
+logical_id = "e2db0572-bb53-4259-9220-a91ee7c2bcfe"
+content_hash = "sha256:90015d3aab189e810c3f79ca5365f421ef728c51f9c2df8ffed27b6a83e1dfc8"
+size = 5356
+mtime_ms = 1789126837021
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:90ee6957-4e85-4996-8aec-3f8d82d8a668/e2db0572-bb53-4259-9220-a91ee7c2bcfe/4a88d9df-46c6-46c2-a6f7-1d99ee1b95ff"
+storage_version_token = "1789126837979232"
+content_type = "text/html"

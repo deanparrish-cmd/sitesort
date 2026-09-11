@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useState, Fragment } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -102,6 +102,19 @@ function usePlatformAdminUsers(q: string) {
   });
 }
 
+type FailedStripeCancellation = {
+  id: string; companyId: string; companyName: string; stripeCustomerId: string;
+  subscriptionId: string | null; errorMessage: string; createdAt: string; resolvedAt: string | null;
+};
+function useFailedStripeCancellations() {
+  return useQuery({
+    queryKey: ["admin-failed-stripe-cancellations"],
+    queryFn: () => apiFetch("/api/admin/failed-stripe-cancellations") as Promise<FailedStripeCancellation[]>,
+    refetchInterval: 60_000,
+    staleTime: 10_000,
+  });
+}
+
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
 function fmt(n: number | null | undefined): string {
@@ -147,7 +160,7 @@ function Trend({ pct }: { pct: number | undefined }) {
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`bg-gray-900 border border-gray-800 rounded-xl p-5 ${className}`}>
+    <div className={`min-w-0 bg-gray-900 border border-gray-800 rounded-xl p-5 ${className}`}>
       {children}
     </div>
   );
@@ -155,13 +168,13 @@ function Card({ children, className = "" }: { children: React.ReactNode; classNa
 
 function SectionTitle({ icon: Icon, title, sub }: { icon: React.ComponentType<{ className?: string }>; title: string; sub?: string }) {
   return (
-    <div className="flex items-center gap-3 mb-5">
+    <div className="flex items-center gap-3 mb-5 min-w-0">
       <div className="w-8 h-8 rounded-lg bg-orange-500/20 flex items-center justify-center flex-shrink-0">
         <Icon className="w-4 h-4 text-orange-500" />
       </div>
-      <div>
-        <h2 className="text-white font-semibold text-base leading-tight">{title}</h2>
-        {sub && <p className="text-gray-500 text-xs mt-0.5">{sub}</p>}
+      <div className="min-w-0">
+        <h2 className="text-white font-semibold text-base leading-tight break-words">{title}</h2>
+        {sub && <p className="text-gray-500 text-xs mt-0.5 break-words">{sub}</p>}
       </div>
     </div>
   );
@@ -174,10 +187,10 @@ function BigStat({
 }) {
   return (
     <Card className={accent ? "border-orange-500/40 bg-orange-950/20" : ""}>
-      <p className="text-gray-400 text-xs font-medium uppercase tracking-wide mb-2">{label}</p>
+      <p className="text-gray-400 text-xs font-medium uppercase tracking-wide mb-2 break-words">{label}</p>
       {loading
         ? <Skeleton className="h-9 w-24 mb-1" />
-        : <p className={`text-4xl font-extrabold ${accent ? "text-orange-400" : "text-white"} leading-none mb-1`}>{fmt(Number(value))}</p>
+        : <p className={`text-4xl font-extrabold ${accent ? "text-orange-400" : "text-white"} leading-none mb-1 break-words`}>{fmt(Number(value))}</p>
       }
       <div className="flex items-center gap-2 min-h-[18px]">
         {sub && <span className="text-gray-500 text-xs">{sub}</span>}
@@ -194,10 +207,10 @@ function FeatureStatCard({
 }) {
   return (
     <Card>
-      <p className="text-gray-400 text-xs font-medium uppercase tracking-wide mb-3">{label}</p>
+      <p className="text-gray-400 text-xs font-medium uppercase tracking-wide mb-3 break-words">{label}</p>
       {loading
         ? <Skeleton className="h-7 w-16 mb-3" />
-        : <p className="text-3xl font-bold text-white mb-3">{fmt(allTime)}</p>
+        : <p className="text-3xl font-bold text-white mb-3 break-words">{fmt(allTime)}</p>
       }
       <div className="grid grid-cols-2 gap-2 text-xs">
         <div className="bg-gray-800 rounded-lg p-2">
@@ -236,9 +249,9 @@ function ActivityBadge({ type }: { type: string }) {
 function FunnelStep({ label, count, total, sub }: { label: string; count: number; total: number; sub?: string }) {
   const pct = total > 0 ? Math.round((count / total) * 100) : 0;
   return (
-    <div className="flex items-center gap-4">
-      <div className="w-28 text-right text-gray-400 text-xs flex-shrink-0">{label}</div>
-      <div className="flex-1 bg-gray-800 rounded-full h-6 overflow-hidden">
+    <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-4">
+      <div className="text-gray-400 text-xs sm:w-28 sm:text-right sm:flex-shrink-0">{label}</div>
+      <div className="min-w-0 flex-1 bg-gray-800 rounded-full h-6 overflow-hidden">
         <div
           className="h-full bg-gradient-to-r from-orange-700 to-orange-500 rounded-full flex items-center pl-3 transition-all duration-700"
           style={{ width: `${Math.max(pct, 4)}%` }}
@@ -246,8 +259,8 @@ function FunnelStep({ label, count, total, sub }: { label: string; count: number
           <span className="text-white text-xs font-bold">{fmt(count)}</span>
         </div>
       </div>
-      <div className="w-14 text-gray-400 text-xs flex-shrink-0">{pct}%</div>
-      {sub && <div className="text-gray-600 text-xs flex-shrink-0">{sub}</div>}
+      <div className="self-end text-gray-400 text-xs sm:self-auto sm:w-14 sm:flex-shrink-0">{pct}%</div>
+      {sub && <div className="text-gray-600 text-xs sm:flex-shrink-0">{sub}</div>}
     </div>
   );
 }
@@ -338,7 +351,65 @@ export default function AdminDashboard() {
     setConfirmDeleteId(null);
     await refetchCompanies();
     queryClient.invalidateQueries({ queryKey: ["admin-stats"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-failed-stripe-cancellations"] });
     setDeletingCompanyId(null);
+  }
+
+  // Delete a single user account. If they were the last person in their
+  // company, the company (and its betaAccess flag) is deleted with them —
+  // otherwise only this user is removed and the company is untouched.
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [confirmDeleteUserId, setConfirmDeleteUserId] = useState<string | null>(null);
+  const [deleteUserResult, setDeleteUserResult] = useState<{ userId: string; message: string } | null>(null);
+
+  async function deleteUser(userId: string) {
+    setDeletingUserId(userId);
+    setDeleteUserResult(null);
+    const token = localStorage.getItem("sitesort_token");
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const body = await res.json().catch(() => null);
+      if (res.ok) {
+        setDeleteUserResult({
+          userId,
+          message: body?.companyDeleted
+            ? "User deleted. They were the last person in their company, so the company (and its beta access) was deleted too."
+            : "User deleted. Other people remain in their company, so it was left untouched.",
+        });
+        if (body?.warning) setDeleteUserResult({ userId, message: body.warning });
+      } else {
+        setDeleteUserResult({ userId, message: body?.message ?? `Failed (${res.status}).` });
+      }
+    } catch {
+      setDeleteUserResult({ userId, message: "Request failed." });
+    } finally {
+      setConfirmDeleteUserId(null);
+      await Promise.all([refetchAdminUsers(), refetchCompanies()]);
+      queryClient.invalidateQueries({ queryKey: ["admin-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-failed-stripe-cancellations"] });
+      setDeletingUserId(null);
+    }
+  }
+
+  // Stripe cancellation failures — see lib/stripe-cancellation.ts. Never
+  // auto-hidden; a PM/platform-admin must explicitly mark one resolved once
+  // they've cancelled it manually in Stripe.
+  const { data: failedCancellations, refetch: refetchFailedCancellations } = useFailedStripeCancellations();
+  const unresolvedCancellations = (failedCancellations ?? []).filter(f => !f.resolvedAt);
+  const [resolvingCancellationId, setResolvingCancellationId] = useState<string | null>(null);
+
+  async function resolveCancellation(id: string) {
+    setResolvingCancellationId(id);
+    const token = localStorage.getItem("sitesort_token");
+    await fetch(`/api/admin/failed-stripe-cancellations/${id}/resolve`, {
+      method: "PATCH",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    await refetchFailedCancellations();
+    setResolvingCancellationId(null);
   }
 
   // Danger zone: genuine, unrecoverable delete for a single photo/site-issue
@@ -433,7 +504,7 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-gray-950 text-gray-100">
       {/* ── Header ── */}
       <header className="border-b border-gray-800 bg-gray-900/80 backdrop-blur sticky top-0 z-40">
-        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 min-h-14 py-3 sm:h-14 sm:py-0 flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center sm:gap-4">
           <div className="flex items-center gap-3">
             <button onClick={() => setLocation("/dashboard")} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
               <div className="w-7 h-7 bg-gradient-to-br from-orange-700 to-orange-500 rounded-lg flex items-center justify-center">
@@ -464,6 +535,17 @@ export default function AdminDashboard() {
       </header>
 
       <main className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-8 space-y-10">
+
+        {/* ── Stripe cancellation failure banner — deliberately hard to miss: a
+            missed one could mean a deleted company keeps silently billing. ── */}
+        {unresolvedCancellations.length > 0 && (
+          <a href="#stripe-cancellation-failures" className="flex items-center gap-3 px-4 py-3 rounded-xl border border-red-700 bg-red-950/60 text-red-200 hover:bg-red-950/80 transition-colors" data-ll="actionbar">
+            <AlertTriangle className="w-5 h-5 shrink-0 text-red-400" />
+            <p className="text-sm font-semibold">
+              {unresolvedCancellations.length} Stripe subscription cancellation{unresolvedCancellations.length === 1 ? "" : "s"} failed and may still be billing. Review now.
+            </p>
+          </a>
+        )}
 
         {/* ── Alerts ── */}
         <div className="flex flex-wrap gap-2">
@@ -1220,6 +1302,7 @@ export default function AdminDashboard() {
                     <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 hidden md:table-cell">Email</th>
                     <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 hidden md:table-cell">Company role</th>
                     <th className="text-center text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3">Platform Admin</th>
+                    <th className="text-center text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3">Delete</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-800">
@@ -1230,13 +1313,15 @@ export default function AdminDashboard() {
                         <td className="px-5 py-3 hidden md:table-cell"><Skeleton className="h-4 w-40" /></td>
                         <td className="px-5 py-3 hidden md:table-cell"><Skeleton className="h-4 w-20" /></td>
                         <td className="px-5 py-3"><Skeleton className="h-6 w-12 mx-auto rounded-full" /></td>
+                        <td className="px-5 py-3"><Skeleton className="h-6 w-8 mx-auto rounded" /></td>
                       </tr>
                     ))
                   ) : (adminUsers ?? []).length === 0 ? (
-                    <tr><td colSpan={4} className="px-5 py-8 text-center text-gray-600 text-sm">No matching users.</td></tr>
+                    <tr><td colSpan={5} className="px-5 py-8 text-center text-gray-600 text-sm">No matching users.</td></tr>
                   ) : (
                     (adminUsers ?? []).map(u => (
-                      <tr key={u.id} className="hover:bg-gray-900/40 transition-colors">
+                      <Fragment key={u.id}>
+                      <tr className="hover:bg-gray-900/40 transition-colors">
                         <td className="px-5 py-3 font-medium text-gray-200">{u.name}</td>
                         <td className="px-5 py-3 text-gray-400 hidden md:table-cell">{u.email}</td>
                         <td className="px-5 py-3 hidden md:table-cell">
@@ -1258,13 +1343,103 @@ export default function AdminDashboard() {
                             }`} />
                           </button>
                         </td>
+                        <td className="px-5 py-3 text-center">
+                          {confirmDeleteUserId === u.id ? (
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                onClick={() => deleteUser(u.id)}
+                                disabled={deletingUserId === u.id}
+                                className="px-2 py-1 rounded text-[11px] font-semibold bg-red-600 hover:bg-red-500 text-white transition-colors disabled:opacity-50"
+                              >
+                                {deletingUserId === u.id ? <Loader2 className="w-3 h-3 animate-spin" /> : "Confirm"}
+                              </button>
+                              <button
+                                onClick={() => setConfirmDeleteUserId(null)}
+                                className="px-2 py-1 rounded text-[11px] font-semibold bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setConfirmDeleteUserId(u.id)}
+                              disabled={!!deletingUserId}
+                              className="p-1.5 rounded text-gray-600 hover:text-red-400 hover:bg-red-900/20 transition-colors disabled:opacity-30"
+                              title="Delete this user (deletes their company too if they're the last person in it)"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </td>
                       </tr>
+                      {deleteUserResult?.userId === u.id && (
+                        <tr>
+                          <td colSpan={5} className="px-5 py-2 text-xs text-gray-400 bg-gray-900/40">{deleteUserResult.message}</td>
+                        </tr>
+                      )}
+                      </Fragment>
                     ))
                   )}
                 </tbody>
               </table>
             </div>
           </div>
+        </section>
+
+        {/* ── Stripe Cancellation Failures ── */}
+        <section id="stripe-cancellation-failures">
+          <SectionTitle icon={AlertTriangle} title="Stripe Cancellation Failures" sub="Cancellations that failed during a company deletion or beta grant — resolve once handled manually in Stripe" />
+          {(failedCancellations ?? []).length === 0 ? (
+            <Card><p className="text-gray-400 text-sm">No cancellation failures on record.</p></Card>
+          ) : (
+            <div className="rounded-xl border border-gray-800 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-800 bg-gray-900/60">
+                      <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3">Company</th>
+                      <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 hidden md:table-cell">Error</th>
+                      <th className="text-left text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3 hidden md:table-cell">When</th>
+                      <th className="text-center text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3">Stripe</th>
+                      <th className="text-center text-gray-500 text-xs font-medium uppercase tracking-wide px-5 py-3">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-800">
+                    {(failedCancellations ?? []).map(f => (
+                      <tr key={f.id} className={`hover:bg-gray-900/40 transition-colors ${!f.resolvedAt ? "bg-red-950/20" : ""}`}>
+                        <td className="px-5 py-3 font-medium text-gray-200">{f.companyName}</td>
+                        <td className="px-5 py-3 text-gray-400 hidden md:table-cell max-w-xs truncate" title={f.errorMessage}>{f.errorMessage}</td>
+                        <td className="px-5 py-3 text-gray-500 text-xs hidden md:table-cell">{fmtDate(f.createdAt)}</td>
+                        <td className="px-5 py-3 text-center">
+                          <a
+                            href={`https://dashboard.stripe.com/customers/${f.stripeCustomerId}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-orange-400 hover:text-orange-300 text-xs font-medium underline"
+                          >
+                            View in Stripe
+                          </a>
+                        </td>
+                        <td className="px-5 py-3 text-center">
+                          {f.resolvedAt ? (
+                            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-900/40 text-emerald-400">Resolved</span>
+                          ) : (
+                            <button
+                              onClick={() => resolveCancellation(f.id)}
+                              disabled={resolvingCancellationId === f.id}
+                              className="px-2.5 py-1 rounded text-[11px] font-semibold bg-gray-800 hover:bg-emerald-900/40 hover:text-emerald-400 text-gray-300 transition-colors disabled:opacity-50"
+                            >
+                              {resolvingCancellationId === f.id ? <Loader2 className="w-3 h-3 animate-spin mx-auto" /> : "Mark resolved"}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </section>
 
         {/* ── Data Export ── */}

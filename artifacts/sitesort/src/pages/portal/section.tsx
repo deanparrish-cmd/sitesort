@@ -234,17 +234,17 @@ function SubmissionNotesThread({ notes, onAdd, adding }: { notes: SubmissionNote
           <p className="text-[11px] text-muted-foreground mt-0.5">{n.authorName} · {fmtRelativeShort(n.createdAt)}</p>
         </div>
       ))}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <input
           value={draft} onChange={e => setDraft(e.target.value)} placeholder="Add a note…"
           onKeyDown={e => { if (e.key === "Enter" && draft.trim() && !adding) { void onAdd(draft.trim()).then(() => setDraft("")); } }}
-          className="flex-1 min-h-12 rounded-lg border-2 border-border bg-background px-4 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="flex-1 min-w-0 basis-40 min-h-12 rounded-lg border-2 border-border bg-background px-4 text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
         <DictationButton transcribeUrl="/api/portal/transcribe" onTranscript={t => setDraft(d => (d.trim() ? d.trimEnd() + " " : "") + t)} />
         <button
           disabled={!draft.trim() || adding}
           onClick={() => { void onAdd(draft.trim()).then(() => setDraft("")); }}
-          className="px-4 min-h-12 rounded-lg bg-primary text-primary-foreground text-base font-bold disabled:opacity-50"
+          className="inline-flex shrink-0 items-center justify-center whitespace-nowrap px-4 min-h-12 rounded-full bg-primary text-primary-foreground text-base font-bold disabled:opacity-50"
         >Add</button>
       </div>
     </div>
@@ -1688,7 +1688,7 @@ function PlantItemEditPanel({ item, onClose }: { item: PlantItemRow; onClose: ()
           <input ref={fileRef} type="file" accept="image/*" onChange={e => setFile(e.target.files?.[0] ?? null)}
             className="flex-1 text-base file:mr-3 file:min-h-12 file:rounded-lg file:border-0 file:bg-primary/10 file:px-3 file:text-base file:font-bold file:text-primary" />
           <button type="button" onClick={uploadPhoto} disabled={!file || uploadingPhoto}
-            className="shrink-0 min-h-12 px-4 rounded-lg border-2 border-border text-base font-bold hover:bg-muted disabled:opacity-50">
+            className="inline-flex shrink-0 items-center justify-center whitespace-nowrap min-h-12 px-4 rounded-full border-2 border-border text-base font-bold hover:bg-muted disabled:opacity-50">
             {uploadingPhoto ? "Adding…" : "Add"}
           </button>
         </div>

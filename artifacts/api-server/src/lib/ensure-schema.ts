@@ -704,7 +704,27 @@ export async function ensureSchema(): Promise<void> {
       logger.info({ fixed: memberRecreate.rows }, `ensureSchema: recreated ${memberRecreate.rows.length} missing project_members row(s) for an accepted portal invite`);
     }
 
-    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols + portal_shares + portal_sessions + push_subscriptions + pending_pushes + subcontractor_documents + subcontractors/people.archived_at + people.first_name/last_name + subcontractors.contact_first_name/contact_last_name + project_members write-permission cols + activity_log.metadata + photos closure/updated_at cols + plant_items/plant_item_attachments/plant_item_distributions + people.is_primary_contact + person_certifications + primary-contact/project_members backfill + project_members.can_edit_daily_report + messages.project_id + photos archive/photo-removal cols + primary-contact name self-heal ready + photos/daily_reports submitted_at+submitted_by + plant_items portal_draft cols + portal_submission_notes table + submitted-backfill ready + users.platform_admin + Dean/Amy seeded ready + pin_audit_log table ready + documents.require_pin_signoff ready + projects.site_manager_id ready + project_members.is_project_manager ready + accepted-invite/project_members.person_id self-heal ready");
+    // Persistent, admin-reviewable record of a Stripe subscription cancellation
+    // that failed during company deletion or a beta-access grant — deliberately
+    // no FK to companies (the row it refers to is usually deleted in the same
+    // operation), so this is the one thing guaranteed to survive and be found
+    // later instead of a missed cancellation silently billing forever.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS failed_stripe_cancellations (
+        id text PRIMARY KEY,
+        company_id text NOT NULL,
+        company_name text NOT NULL,
+        stripe_customer_id text NOT NULL,
+        subscription_id text,
+        error_message text NOT NULL,
+        created_at timestamp NOT NULL DEFAULT now(),
+        resolved_at timestamp,
+        resolved_by_user_id text
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS failed_stripe_cancellations_unresolved_idx ON failed_stripe_cancellations (resolved_at)`);
+
+    logger.info("ensureSchema: company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols + portal_shares + portal_sessions + push_subscriptions + pending_pushes + subcontractor_documents + subcontractors/people.archived_at + people.first_name/last_name + subcontractors.contact_first_name/contact_last_name + project_members write-permission cols + activity_log.metadata + photos closure/updated_at cols + plant_items/plant_item_attachments/plant_item_distributions + people.is_primary_contact + person_certifications + primary-contact/project_members backfill + project_members.can_edit_daily_report + messages.project_id + photos archive/photo-removal cols + primary-contact name self-heal ready + photos/daily_reports submitted_at+submitted_by + plant_items portal_draft cols + portal_submission_notes table + submitted-backfill ready + users.platform_admin + Dean/Amy seeded ready + pin_audit_log table ready + documents.require_pin_signoff ready + projects.site_manager_id ready + project_members.is_project_manager ready + accepted-invite/project_members.person_id self-heal ready + failed_stripe_cancellations table ready");
   } catch (err) {
     // Don't crash the server — membership lookups fall back to the home company.
     logger.error({ err }, "ensureSchema failed (continuing with home-company fallback)");
