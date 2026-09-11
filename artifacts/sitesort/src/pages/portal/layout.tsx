@@ -160,14 +160,14 @@ export function PortalLayout({ active, children }: { active: string; children: R
   const logoSrc = `${import.meta.env.BASE_URL}images/logo.webp?v=5`;
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen min-w-0 w-full bg-background flex flex-col">
       {/* Single unified header, mobile AND desktop — no hamburger, no sidebar.
           Every destination is reached from a big tile on Home instead (see
           section.tsx's HomeQuickAccess); tapping the logo always returns
           there, so it doubles as the one consistent "back to everything"
           affordance. Safe-area top so it clears the status bar/notch in
           standalone PWA mode. */}
-      <header className="flex items-center gap-3 px-4 py-3 border-b bg-card pt-[calc(0.75rem+env(safe-area-inset-top))]">
+      <header className="flex items-center gap-3 min-w-0 px-4 py-3 border-b bg-card pt-[calc(0.75rem+env(safe-area-inset-top))]">
         <Link href="/portal/overview" className="shrink-0" aria-label="Portal home">
           <img src={logoSrc} alt="SiteSort" className="w-auto shrink-0 object-contain" style={{ height: "48px" }} />
         </Link>
@@ -193,7 +193,7 @@ export function PortalLayout({ active, children }: { active: string; children: R
 
       {/* Main content — same container + overflow safety net as the main app shell */}
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        <main className="flex-1 p-4 md:p-8 min-w-0 overflow-x-clip">
+        <main className="flex-1 p-4 md:p-8 min-w-0 [overflow-wrap:anywhere] overflow-x-clip">
           <div className="max-w-4xl mx-auto slide-up min-w-0 [&>*]:min-w-0">{children}</div>
         </main>
       </div>

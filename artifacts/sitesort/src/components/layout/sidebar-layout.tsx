@@ -187,15 +187,15 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col md:flex-row">
+    <div className="min-h-screen min-w-0 w-full bg-background flex flex-col md:flex-row">
       {/* Mobile Header — safe-area top so it clears the status bar / notch */}
-      <div className="md:hidden flex items-center justify-between px-4 pb-4 border-b bg-card pt-[calc(1rem+env(safe-area-inset-top))]">
-        <div className="flex items-center gap-2">
+      <div className="md:hidden min-w-0 flex items-center justify-between gap-2 px-4 pb-4 border-b bg-card pt-[calc(1rem+env(safe-area-inset-top))]">
+        <div className="flex items-center gap-2 shrink-0">
           <Link href="/dashboard">
             <img src={`${import.meta.env.BASE_URL}images/logo.webp?v=5`} alt="SiteSort" className="w-auto shrink-0 object-contain" style={{ height: '72px' }} />
           </Link>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 shrink-0">
           <Link href="/notifications" className="relative p-2 text-muted-foreground hover:text-foreground">
             <Bell className="w-6 h-6" />
             {unreadNotifCount > 0 && (
@@ -214,9 +214,9 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       {/* Sidebar */}
       <div className={cn(
         "fixed inset-y-0 left-0 z-40 w-72 bg-card border-r flex flex-col transition-transform duration-300 ease-in-out md:translate-x-0 md:static md:w-64 lg:w-72",
-        isMobileOpen ? "translate-x-0" : "-translate-x-full"
+        isMobileOpen ? "translate-x-0" : "-translate-x-full pointer-events-none md:pointer-events-auto"
       )}>
-        <div className="p-6 hidden md:flex items-center gap-3">
+          <div className="p-6 hidden md:flex items-center gap-3">
           <Link href="/dashboard">
             <img src={`${import.meta.env.BASE_URL}images/logo.webp?v=5`} alt="SiteSort" className="h-[6.25rem] w-auto" />
           </Link>
@@ -364,8 +364,8 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
             action row that outgrows its box) can ever cause horizontal page
             scroll. Content should still be built to fit (wrap/truncate), but this
             guarantees the page itself never widens on mobile/tablet. */}
-        <main className="flex-1 p-4 md:p-8 min-w-0 overflow-x-clip">
-          <div className="max-w-7xl mx-auto slide-up min-w-0">
+          <main className="flex-1 p-4 md:p-8 min-w-0 overflow-x-clip">
+            <div className="max-w-7xl mx-auto slide-up min-w-0 [&>*]:min-w-0">
             {children}
           </div>
         </main>

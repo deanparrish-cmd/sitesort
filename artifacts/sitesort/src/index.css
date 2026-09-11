@@ -110,6 +110,11 @@
     @apply font-sans antialiased bg-background text-foreground;
   }
 
+  #root {
+    min-width: 0;
+    width: 100%;
+  }
+
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
     @apply font-bold tracking-tight text-primary;
