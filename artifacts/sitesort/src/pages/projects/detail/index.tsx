@@ -7,7 +7,7 @@ import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, Shield
 import { formatDate, formatBytes, cn } from "@/lib/utils";
 import { useProjectDetailState } from "./use-project-detail";
 import { ProjectDetailProvider, useDetail, type ProjectDetailReady } from "./context";
-import { buildManagementTabs, buildActivityTabs } from "./tab-config";
+import { buildProjectTabs } from "./tab-config";
 import { OverviewTab } from "./tabs/overview-tab";
 import { ProgressTab } from "./tabs/progress-tab";
 import { DocumentsTab } from "./tabs/documents-tab";
@@ -111,18 +111,9 @@ function ProjectDetailInner() {
       </div>
 
       <Tabs value={activeTab} onValueChange={t => openTab(t)}>
-        <TabsList className="mb-6 w-full h-auto flex flex-wrap justify-start gap-1.5 bg-muted p-1.5 rounded-xl">
-          {/* Group 1: Project management */}
-          {buildManagementTabs(caps, photos.filter(p => (p.category === "snag" || p.category === "safety_concern") && (!p.status || p.status === "open")).length).map(tab => (
-            <TabsTrigger key={tab.value} value={tab.value} className="flex-1 sm:flex-none justify-center rounded-lg py-2 px-3 sm:px-4 text-sm whitespace-nowrap">
-              {tab.label}
-            </TabsTrigger>
-          ))}
-          {/* Divider */}
-          <div className="w-px self-stretch bg-border/60 mx-0.5 my-0.5" />
-          {/* Group 2: Site activity */}
-          {buildActivityTabs(caps, checkins.length, isProjectApprover).map(tab => (
-            <TabsTrigger key={tab.value} value={tab.value} className="flex-1 sm:flex-none justify-center rounded-lg py-2 px-3 sm:px-4 text-sm whitespace-nowrap">
+        <TabsList className="mb-6 w-full min-w-0 h-auto grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 items-stretch gap-1.5 bg-muted p-1.5 rounded-xl">
+          {buildProjectTabs(caps, photos.filter(p => (p.category === "snag" || p.category === "safety_concern") && (!p.status || p.status === "open")).length, checkins.length, isProjectApprover).map(tab => (
+            <TabsTrigger key={tab.value} value={tab.value} className="min-w-0 justify-center rounded-lg py-2 px-2 text-sm whitespace-normal [overflow-wrap:anywhere]">
               {tab.label}
             </TabsTrigger>
           ))}

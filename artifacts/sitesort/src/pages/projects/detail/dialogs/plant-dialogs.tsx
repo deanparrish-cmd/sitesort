@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { DictationButton } from "@/components/ui/dictation-button";
 import { Input } from "@/components/ui/input";
 import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { Send, ExternalLink, X, FileText } from "lucide-react";
@@ -73,6 +74,9 @@ export function PlantItemDialogs({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<FormState>(BLANK);
+  const transcribeUrl = `${import.meta.env.BASE_URL}api/projects/${encodeURIComponent(projectId)}/transcribe`;
+  const appendDictation = (field: "name" | "location" | "notes", text: string) =>
+    setForm(current => ({ ...current, [field]: (current[field].trim() ? current[field].trimEnd() + " " : "") + text }));
   const [attachName, setAttachName] = useState("");
   const [attachKind, setAttachKind] = useState<CreatePlantItemAttachmentRequestKind>("delivery_ticket");
   const [attachFile, setAttachFile] = useState<{ url: string; size: number } | null>(null);
@@ -190,7 +194,10 @@ export function PlantItemDialogs({
         <div className="space-y-3 max-h-[65vh] overflow-y-auto pr-1">
           <div>
             <label className="text-xs font-medium text-muted-foreground">Name</label>
-            <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Tower crane, Ready-mix concrete" />
+            <div className="flex items-start gap-2">
+              <Input className="min-w-0 flex-1" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Tower crane, Ready-mix concrete" />
+              <DictationButton transcribeUrl={transcribeUrl} onTranscript={text => appendDictation("name", text)} />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -233,7 +240,10 @@ export function PlantItemDialogs({
           </div>
           <div>
             <label className="text-xs font-medium text-muted-foreground">Location on site</label>
-            <Input value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} placeholder="e.g. Compound B, Level 3" />
+            <div className="flex items-start gap-2">
+              <Input className="min-w-0 flex-1" value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} placeholder="e.g. Compound B, Level 3" />
+              <DictationButton transcribeUrl={transcribeUrl} onTranscript={text => appendDictation("location", text)} />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -247,7 +257,10 @@ export function PlantItemDialogs({
           </div>
           <div>
             <label className="text-xs font-medium text-muted-foreground">Notes</label>
-            <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={3} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" />
+            <div className="flex items-start gap-2">
+              <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={3} className="mt-1 min-w-0 flex-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" />
+              <DictationButton transcribeUrl={transcribeUrl} onTranscript={text => appendDictation("notes", text)} />
+            </div>
           </div>
 
           {editingItem && (

@@ -3,6 +3,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DictationButton } from "@/components/ui/dictation-button";
 import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronUp, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, PinOff, StickyNote, Send, Loader2, History, Archive, Paperclip, Ban } from "lucide-react";
 import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { OverdueBadge } from "@/components/ui/overdue-badge";
@@ -15,6 +16,7 @@ import { ArchiveIssueDialog } from "../dialogs/archive-issue-dialog";
 
 export function IssuesTab() {
   const {
+    project,
     members,
     photos,
     archivedPhotos,
@@ -199,11 +201,17 @@ export function IssuesTab() {
                       <div className="grid sm:grid-cols-2 gap-3">
                         <div>
                           <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Description (optional)</label>
-                          <Textarea value={photoNote} onChange={e => setPhotoNote(e.target.value)} placeholder="What does this photo show?" rows={2} />
+                          <div className="flex items-start gap-2">
+                            <Textarea className="min-w-0 flex-1" value={photoNote} onChange={e => setPhotoNote(e.target.value)} placeholder="What does this photo show?" rows={2} />
+                            <DictationButton transcribeUrl={`${import.meta.env.BASE_URL}api/projects/${encodeURIComponent(project.id)}/transcribe`} onTranscript={text => setPhotoNote(current => (current.trim() ? current.trimEnd() + " " : "") + text)} />
+                          </div>
                         </div>
                         <div>
                           <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Zone / location (optional)</label>
-                          <Input value={photoZone} onChange={e => setPhotoZone(e.target.value)} placeholder="e.g. Level 2, East wing" />
+                          <div className="flex items-start gap-2">
+                            <Input className="min-w-0 flex-1" value={photoZone} onChange={e => setPhotoZone(e.target.value)} placeholder="e.g. Level 2, East wing" />
+                            <DictationButton transcribeUrl={`${import.meta.env.BASE_URL}api/projects/${encodeURIComponent(project.id)}/transcribe`} onTranscript={text => setPhotoZone(current => (current.trim() ? current.trimEnd() + " " : "") + text)} />
+                          </div>
                         </div>
                         <div>
                           <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Assign to (optional)</label>

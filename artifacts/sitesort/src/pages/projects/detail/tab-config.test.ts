@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildManagementTabs, buildActivityTabs } from "./tab-config";
+import { buildManagementTabs, buildActivityTabs, buildProjectTabs } from "./tab-config";
 import { deriveCapabilities, type Role } from "@/hooks/use-capabilities";
 
 const capsFor = (role: Role | null) => deriveCapabilities(role);
@@ -47,7 +47,6 @@ describe("project detail tab gating", () => {
         expect(mgmt).toContain(v);
       }
       const activity = values(buildActivityTabs(caps, 0, false));
-      expect(activity).toContain("finances");
       expect(activity).toContain("checkins");
     }
   });
@@ -56,7 +55,25 @@ describe("project detail tab gating", () => {
     const caps = capsFor("admin");
     expect(buildManagementTabs(caps, 3).find(t => t.value === "issues")?.label).toBe("Site Issues (3)");
     expect(buildManagementTabs(caps, 0).find(t => t.value === "issues")?.label).toBe("Site Issues");
-    expect(buildActivityTabs(caps, 2, true).find(t => t.value === "checkins")?.label).toBe("Check-ins (2)");
-    expect(buildActivityTabs(caps, 0, true).find(t => t.value === "checkins")?.label).toBe("Check-ins");
+    expect(buildActivityTabs(caps, 2, true).find(t => t.value === "checkins")?.label).toBe("Check-Ins (2)");
+    expect(buildActivityTabs(caps, 0, true).find(t => t.value === "checkins")?.label).toBe("Check-Ins");
+  });
+
+  it("uses the requested order and labels", () => {
+    expect(buildProjectTabs(capsFor("admin"), 0, 0, true).map(t => t.label)).toEqual([
+      "Overview", "Progress", "Documents", "H&S", "Plant & Materials", "Daily Reports",
+      "Team", "Team Portal", "Site Board", "Check-Ins", "Site Issues", "Close-Out",
+    ]);
+  });
+
+  it("preserves permission filtering in the reordered bar", () => {
+    for (const role of ["admin", "project_manager", "site_worker", "subcontractor", null] as (Role | null)[]) {
+      for (const approver of [false, true]) {
+        const caps = capsFor(role);
+        expect(values(buildProjectTabs(caps, 0, 0, approver)).sort()).toEqual(
+          values([...buildManagementTabs(caps, 0), ...buildActivityTabs(caps, 0, approver)]).sort(),
+        );
+      }
+    }
   });
 });

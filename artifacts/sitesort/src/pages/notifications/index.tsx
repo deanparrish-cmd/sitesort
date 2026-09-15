@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/ui/page-header";
+import { MonthFolder, splitByMonth, monthLabel } from "@/components/ui/month-folder";
 import {
   Bell,
   MessageSquare,
@@ -170,7 +171,40 @@ export default function NotificationsPage() {
   };
 
   const visible = notifications.filter(n => filterMatch(n, filter));
+  const activityMonths = splitByMonth(visible, n => n.createdAt);
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  const renderNotifications = (items: Notification[]) => (
+    <div className="space-y-1">
+      {items.map(n => (
+        <Card
+          key={n.id}
+          onClick={() => setViewer({ items: visible, index: visible.indexOf(n) })}
+          className={cn(
+            "flex items-start gap-4 px-4 py-4 cursor-pointer transition-colors hover:bg-muted/50",
+            !n.read && "bg-primary/5 border-primary/20"
+          )}
+        >
+          <div className={cn("w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0", notifBg(n.type))}>
+            {notifIcon(n.type)}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <p className={cn("text-sm leading-snug", !n.read ? "font-semibold text-foreground" : "font-medium text-foreground/80")}>
+                {n.title}
+              </p>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <span className="text-xs text-muted-foreground whitespace-nowrap">{timeLabel(n.createdAt)}</span>
+                {!n.read && <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />}
+                {n.read && <Check className="w-3.5 h-3.5 text-muted-foreground/50 flex-shrink-0" />}
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
 
   return (
     <SidebarLayout>
@@ -197,6 +231,7 @@ export default function NotificationsPage() {
       />
 
       {/* Filter tabs */}
+      <p className="text-sm text-muted-foreground mb-4">This month’s activity is shown below. Open a month folder to see earlier updates.</p>
       <div className="flex overflow-x-auto gap-1 mb-4 border-b">
         {FILTERS.map(({ key, label }) => {
           const count = key === "unread"
@@ -243,34 +278,14 @@ export default function NotificationsPage() {
           </p>
         </div>
       ) : (
-        <div className="space-y-1">
-          {visible.map(n => (
-            <Card
-              key={n.id}
-              onClick={() => setViewer({ items: visible, index: visible.indexOf(n) })}
-              className={cn(
-                "flex items-start gap-4 px-4 py-4 cursor-pointer transition-colors hover:bg-muted/50",
-                !n.read && "bg-primary/5 border-primary/20"
-              )}
-            >
-              <div className={cn("w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0", notifBg(n.type))}>
-                {notifIcon(n.type)}
-              </div>
-
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2">
-                  <p className={cn("text-sm leading-snug", !n.read ? "font-semibold text-foreground" : "font-medium text-foreground/80")}>
-                    {n.title}
-                  </p>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">{timeLabel(n.createdAt)}</span>
-                    {!n.read && <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />}
-                    {n.read && <Check className="w-3.5 h-3.5 text-muted-foreground/50 flex-shrink-0" />}
-                  </div>
-                </div>
-                <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>
-              </div>
-            </Card>
+        <div className="space-y-3">
+          {activityMonths.current.length > 0
+            ? renderNotifications(activityMonths.current)
+            : <p className="text-sm text-muted-foreground py-4">No matching activity this month. Earlier activity is in the folders below.</p>}
+          {[...activityMonths.byMonth].map(([month, items]) => (
+            <MonthFolder key={month} label={monthLabel(month)} count={items.length} countLabel="notification" testId={`notification-month-${month}`}>
+              {renderNotifications(items)}
+            </MonthFolder>
           ))}
         </div>
       )}

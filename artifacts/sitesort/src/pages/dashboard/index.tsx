@@ -588,6 +588,26 @@ export default function Dashboard() {
   const recentActivity = notifications.slice(0, 8);
   const [activityViewer, setActivityViewer] = useState<{ items: Notification[]; index: number } | null>(null);
 
+  const renderActivity = (items: Notification[]) => (
+    <div className="divide-y">
+      {items.map((n, index) => (
+        <button key={n.id} onClick={() => setActivityViewer({ items, index })} className="w-full text-left">
+          <div className={cn(
+            "flex items-start gap-3 px-4 py-3 hover:bg-muted/50 transition-colors cursor-pointer",
+            !n.read && "bg-primary/5"
+          )}>
+            <div className="mt-0.5 flex-shrink-0">{notifIcon(n.type)}</div>
+            <div className="min-w-0 flex-1">
+              <p className={cn("text-sm truncate", !n.read && "font-semibold")}>{n.title}</p>
+              <p className="text-xs text-muted-foreground truncate">{n.message}</p>
+            </div>
+            <span className="text-xs text-muted-foreground flex-shrink-0 mt-0.5">{timeAgo(n.createdAt)}</span>
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+
   const markActivityRead = (id: string) => {
     setNotifications(prev => prev.map(x => x.id === id ? { ...x, read: true } : x));
     fetch(`/api/notifications/${id}/read`, { method: "PATCH", headers: authHeaders() }).catch(() => {});
@@ -854,6 +874,7 @@ export default function Dashboard() {
             <h2 className="text-xl font-bold">Recent Activity</h2>
             <Link href="/notifications" className="text-xs text-muted-foreground hover:text-primary transition-colors">View all</Link>
           </div>
+          <p className="text-xs text-muted-foreground mb-3">Your latest 8 updates. View all for the full history, organised by month.</p>
           <Card>
             <CardContent className="p-0">
               {recentActivity.length === 0 ? (
@@ -862,29 +883,7 @@ export default function Dashboard() {
                   No recent activity
                 </div>
               ) : (
-                <div className="divide-y">
-                  {recentActivity.map(n => (
-                    <button
-                      key={n.id}
-                      onClick={() => setActivityViewer({ items: recentActivity, index: recentActivity.indexOf(n) })}
-                      className="w-full text-left"
-                    >
-                      <div className={cn(
-                        "flex items-start gap-3 px-4 py-3 hover:bg-muted/50 transition-colors cursor-pointer",
-                        !n.read && "bg-primary/5"
-                      )}>
-                        <div className="mt-0.5 flex-shrink-0">
-                          {notifIcon(n.type)}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className={cn("text-sm truncate", !n.read && "font-semibold")}>{n.title}</p>
-                          <p className="text-xs text-muted-foreground truncate">{n.message}</p>
-                        </div>
-                        <span className="text-xs text-muted-foreground flex-shrink-0 mt-0.5">{timeAgo(n.createdAt)}</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                renderActivity(recentActivity)
               )}
             </CardContent>
           </Card>

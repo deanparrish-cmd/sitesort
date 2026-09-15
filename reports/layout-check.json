@@ -1,10 +1,11 @@
 {
-  "generatedAt": "2026-09-15T08:52:27.736Z",
+  "generatedAt": "2026-09-15T09:51:09.826Z",
   "target": "http://localhost:8080",
   "viewports": [
     360,
     390,
-    768
+    768,
+    1440
   ],
   "routeDiscovery": {
     "appRouteTemplates": [
@@ -213,7 +214,7 @@
         "auth": "none"
       },
       {
-        "path": "/portal/accept/e113d3861525dfde6aa8094f622862c02d416a89b34718757cc200f4f5e55117",
+        "path": "/portal/accept/9d235a103b36833de29edc10ba65b9dcb8136067cfa2d4359c87460e3a3fc7d1",
         "label": "portal-accept",
         "auth": "none"
       },
@@ -1789,9 +1790,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/e113d3861525dfde6aa8094f622862c02d416a89b34718757cc200f4f5e55117",
+      "path": "/portal/accept/9d235a103b36833de29edc10ba65b9dcb8136067cfa2d4359c87460e3a3fc7d1",
       "width": 360,
-      "finalPath": "/portal/accept/e113d3861525dfde6aa8094f622862c02d416a89b34718757cc200f4f5e55117",
+      "finalPath": "/portal/accept/9d235a103b36833de29edc10ba65b9dcb8136067cfa2d4359c87460e3a3fc7d1",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -4951,9 +4952,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/e113d3861525dfde6aa8094f622862c02d416a89b34718757cc200f4f5e55117",
+      "path": "/portal/accept/9d235a103b36833de29edc10ba65b9dcb8136067cfa2d4359c87460e3a3fc7d1",
       "width": 390,
-      "finalPath": "/portal/accept/e113d3861525dfde6aa8094f622862c02d416a89b34718757cc200f4f5e55117",
+      "finalPath": "/portal/accept/9d235a103b36833de29edc10ba65b9dcb8136067cfa2d4359c87460e3a3fc7d1",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -8267,9 +8268,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/e113d3861525dfde6aa8094f622862c02d416a89b34718757cc200f4f5e55117",
+      "path": "/portal/accept/9d235a103b36833de29edc10ba65b9dcb8136067cfa2d4359c87460e3a3fc7d1",
       "width": 768,
-      "finalPath": "/portal/accept/e113d3861525dfde6aa8094f622862c02d416a89b34718757cc200f4f5e55117",
+      "finalPath": "/portal/accept/9d235a103b36833de29edc10ba65b9dcb8136067cfa2d4359c87460e3a3fc7d1",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -10175,6 +10176,3454 @@
             "scrollWidth": 768,
             "clientWidth": 768,
             "viewportWidth": 768,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "landing",
+      "path": "/",
+      "width": 1440,
+      "finalPath": "/",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "info",
+      "path": "/info",
+      "width": 1440,
+      "finalPath": "/info",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "login",
+      "path": "/login",
+      "width": 1440,
+      "finalPath": "/login",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "register",
+      "path": "/register",
+      "width": 1440,
+      "finalPath": "/register",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "verify-email",
+      "path": "/verify-email",
+      "width": 1440,
+      "finalPath": "/verify-email",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "forgot-password",
+      "path": "/forgot-password",
+      "width": 1440,
+      "finalPath": "/forgot-password",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "reset-password",
+      "path": "/reset-password",
+      "width": 1440,
+      "finalPath": "/reset-password",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "forgot-pin",
+      "path": "/forgot-pin",
+      "width": 1440,
+      "finalPath": "/forgot-pin",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "reset-pin",
+      "path": "/reset-pin",
+      "width": 1440,
+      "finalPath": "/reset-pin",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "guide",
+      "path": "/guide",
+      "width": 1440,
+      "finalPath": "/guide",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "dashboard",
+      "path": "/dashboard",
+      "width": 1440,
+      "finalPath": "/dashboard",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "menu-open-1",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "projects",
+      "path": "/projects",
+      "width": 1440,
+      "finalPath": "/projects",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "menu-open-1",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "projects",
+      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "width": 1440,
+      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "menu-open-1",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "subcontractors",
+      "path": "/subcontractors",
+      "width": 1440,
+      "finalPath": "/subcontractors",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "menu-open-1",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "compliance",
+      "path": "/compliance",
+      "width": 1440,
+      "finalPath": "/compliance",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "menu-open-1",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "qr",
+      "path": "/qr",
+      "width": 1440,
+      "finalPath": "/qr",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "menu-open-1",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "site",
+      "path": "/site/81908daa53dad800fd3e154c762e58ce",
+      "width": 1440,
+      "finalPath": "/site/81908daa53dad800fd3e154c762e58ce",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "team",
+      "path": "/team",
+      "width": 1440,
+      "finalPath": "/team",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "menu-open-1",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "messages",
+      "path": "/messages",
+      "width": 1440,
+      "finalPath": "/messages",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "menu-open-1",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "notifications",
+      "path": "/notifications",
+      "width": 1440,
+      "finalPath": "/notifications",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "menu-open-1",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "settings",
+      "path": "/settings",
+      "width": 1440,
+      "finalPath": "/settings",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "menu-open-1",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "user-guide",
+      "path": "/user-guide",
+      "width": 1440,
+      "finalPath": "/user-guide",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "menu-open-1",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "daily-reports",
+      "path": "/daily-reports",
+      "width": 1440,
+      "finalPath": "/daily-reports",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "menu-open-1",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "issues",
+      "path": "/issues",
+      "width": 1440,
+      "finalPath": "/issues",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "menu-open-1",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "checkins",
+      "path": "/checkins",
+      "width": 1440,
+      "finalPath": "/checkins",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "menu-open-1",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "admin",
+      "path": "/admin",
+      "width": 1440,
+      "finalPath": "/admin",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "portal-login",
+      "path": "/portal/login",
+      "width": 1440,
+      "finalPath": "/portal/login",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "portal-accept",
+      "path": "/portal/accept/9d235a103b36833de29edc10ba65b9dcb8136067cfa2d4359c87460e3a3fc7d1",
+      "width": 1440,
+      "finalPath": "/portal/accept/9d235a103b36833de29edc10ba65b9dcb8136067cfa2d4359c87460e3a3fc7d1",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "portal-forgot-password",
+      "path": "/portal/forgot-password",
+      "width": 1440,
+      "finalPath": "/portal/forgot-password",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "portal-reset-password",
+      "path": "/portal/reset-password",
+      "width": 1440,
+      "finalPath": "/portal/reset-password",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "portal",
+      "path": "/portal",
+      "width": 1440,
+      "finalPath": "/portal/overview",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "project-detail:overview",
+      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=overview",
+      "width": 1440,
+      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "menu-open-1",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "project-detail:progress",
+      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=progress",
+      "width": 1440,
+      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "menu-open-1",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "project-detail:team",
+      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=team",
+      "width": 1440,
+      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "menu-open-1",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "project-detail:issues",
+      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=issues",
+      "width": 1440,
+      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "menu-open-1",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "project-detail:qr",
+      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=qr",
+      "width": 1440,
+      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "menu-open-1",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "project-detail:documents",
+      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=documents",
+      "width": 1440,
+      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "menu-open-1",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "project-detail:plant",
+      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=plant",
+      "width": 1440,
+      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "menu-open-1",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "project-detail:permits",
+      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=permits",
+      "width": 1440,
+      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "menu-open-1",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "project-detail:closeout",
+      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=closeout",
+      "width": 1440,
+      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "menu-open-1",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "project-detail:checkins",
+      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=checkins",
+      "width": 1440,
+      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "menu-open-1",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "project-detail:reports",
+      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=reports",
+      "width": 1440,
+      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "menu-open-1",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "project-detail:teamportal",
+      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=teamportal",
+      "width": 1440,
+      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "menu-open-1",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "portal:overview",
+      "path": "/portal/overview",
+      "width": 1440,
+      "finalPath": "/portal/overview",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "portal:messages",
+      "path": "/portal/messages",
+      "width": 1440,
+      "finalPath": "/portal/messages",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "portal:shared",
+      "path": "/portal/shared",
+      "width": 1440,
+      "finalPath": "/portal/shared",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "portal:my-documents",
+      "path": "/portal/my-documents",
+      "width": 1440,
+      "finalPath": "/portal/my-documents",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "portal:site-board",
+      "path": "/portal/site-board",
+      "width": 1440,
+      "finalPath": "/portal/site-board",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "portal:permits",
+      "path": "/portal/permits",
+      "width": 1440,
+      "finalPath": "/portal/permits",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "portal:settings",
+      "path": "/portal/settings",
+      "width": 1440,
+      "finalPath": "/portal/settings",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "portal:help",
+      "path": "/portal/help",
+      "width": 1440,
+      "finalPath": "/portal/help",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "portal:site-issues",
+      "path": "/portal/site-issues",
+      "width": 1440,
+      "finalPath": "/portal/site-issues",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "portal:plant-materials",
+      "path": "/portal/plant-materials",
+      "width": 1440,
+      "finalPath": "/portal/plant-materials",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "portal:daily-report",
+      "path": "/portal/daily-report",
+      "width": 1440,
+      "finalPath": "/portal/daily-report",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "portal:progress",
+      "path": "/portal/progress",
+      "width": 1440,
+      "finalPath": "/portal/overview",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "portal:team",
+      "path": "/portal/team",
+      "width": 1440,
+      "finalPath": "/portal/overview",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "portal:site-tasks",
+      "path": "/portal/site-tasks",
+      "width": 1440,
+      "finalPath": "/portal/site-tasks",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "portal:hs",
+      "path": "/portal/hs",
+      "width": 1440,
+      "finalPath": "/portal/hs",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "portal:drawings",
+      "path": "/portal/drawings",
+      "width": 1440,
+      "finalPath": "/portal/drawings",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "portal:method-statements",
+      "path": "/portal/method-statements",
+      "width": 1440,
+      "finalPath": "/portal/method-statements",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "portal:safety",
+      "path": "/portal/safety",
+      "width": 1440,
+      "finalPath": "/portal/safety",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "portal:general",
+      "path": "/portal/general",
+      "width": 1440,
+      "finalPath": "/portal/general",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "viewportWidth": 1440,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 1440,
+            "clientWidth": 1440,
+            "viewportWidth": 1440,
             "overflowElements": [],
             "overlaps": [],
             "stacking": []
@@ -10184,8 +13633,8 @@
     }
   ],
   "summary": {
-    "passed": 186,
+    "passed": 248,
     "failed": 0,
-    "total": 186
+    "total": 248
   }
 }

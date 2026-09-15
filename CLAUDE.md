@@ -198,8 +198,9 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 ## Session Log
 
 Full session-by-session detail in CLAUDE_ARCHIVE.md. Recent sessions (newest first):
-- **2026-09-11 (untracked):** 2 undocumented commits found+logged at 2026-09-15 opener — `4c355d5` shipped **#99**; `9cbec89` (separate bare Replit Agent session, not Claude Code) renamed permits-tab "Team Insurance & Site Access" to "Team Compliance & Site Access". Both in `4824e11` Publish, live in prod. `typecheck` clean; detail in CLAUDE_ARCHIVE.md.
-- **2026-07-30:** shipped and prod-verified #94-#98. Committed+pushed (`main → c70f8dff`), clean tree. Open item: `permits-tab.tsx` "N overdue" pill still has no deep-link (spans multiple sections, no single target — left as-is). Full detail in CLAUDE_ARCHIVE.md. **Standing gotcha:** local api-server on `:8080` is a plain `node dist/index.mjs`, NOT auto-restarted — rebuild + kill+restart after backend changes before trusting `check:layout`.
-- **2026-07-27 and earlier:** see feature list + CLAUDE_ARCHIVE.md. `git pull` fails — `origin` is a synthetic API-pushed mirror, not shared history; use `push-robust.ts`.
-- **PD test backlog**: **F7** Site Board on-site count, **F8** Timeline link, **F9/F10** spikes. Opportunity: uptime monitor on `GET /api/health`.
-- **Infra facts:** GitHub push ≠ deploy; prod = Replit **Publish**. Apex+`www` → `34.111.179.208`. Stripe env is **LIVE** (`sk_live`). Verify via `.claude/skills/browser-check`; rollout lags ~1-3 min.
+- **2026-09-15 SESSION CLOSE:** removed the finance/invoices feature (Finances & Expiry tab + sidebar Invoices item) — verified compliance content (Permit Expiry, Document Status) already covered elsewhere, so full removal not relocation (~40 files). `invoices` table + `messages.invoice_id` left in place, not dropped (live-Stripe prod data). `typecheck`/`check:layout` clean. Committed `bebe715`, pushed+verified `main → 29315fe1`, Published (`6592553`). Detail (incl. a GitHub rate-limit gotcha) in CLAUDE_ARCHIVE.md.
+- **2026-09-11 (untracked):** `4c355d5` shipped **#99**; `9cbec89` (separate Replit Agent session) renamed a permits-tab label. Found+logged 2026-09-15.
+- **2026-07-30:** shipped/prod-verified #94-#98. Open item: `permits-tab.tsx` "N overdue" pill has no deep-link (spans sections, no single target). **Standing gotcha:** local api-server on `:8080` is a plain `node dist/index.mjs`, NOT auto-restarted — rebuild+restart before trusting `check:layout`.
+- **2026-07-27 and earlier:** see feature list + CLAUDE_ARCHIVE.md. `git pull` fails; use `push-robust.ts`.
+- **PD test backlog**: **F7** Site Board on-site count, **F8** Timeline link, **F9/F10** spikes.
+- **Infra facts:** GitHub push ≠ deploy; prod = Replit **Publish** (rollout lags ~1-3 min). Stripe **LIVE**. Verify via `.claude/skills/browser-check`.
