@@ -166,6 +166,8 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 
 98. **Em-dash/en-dash sweep + app-wide dead-badge deep-link audit** — 53 dash instances fixed across 15 user-facing files; audited every count/badge/alert app-wide and fixed 2 more dead badges (Issues status cards, Contacts Insurance Issues/Payment Hold cards). Added standing CLAUDE.md rules for both (see Key Architecture Notes) so neither regresses again. **DEPLOYED+prod-verified** (2026-07-30). *(full detail in CLAUDE_ARCHIVE.md)*
 
+99. **Construction Programme document surfaced on the Progress tab** — "Construction Programme" card (Open/Download, Upload/Replace, link to Documents), reusing existing document upload plumbing; allowlist extended to accept `.mpp`. **DEPLOYED** (2026-09-11, `main → 4c355d5`). *(full detail in CLAUDE_ARCHIVE.md)*
+
 ## Uploads / File Serving
 
 **Critical:** Replit's router only forwards `/api/*` to the Express server. Files must be served under `/api/uploads/` not `/uploads/` or they 404 in the frontend.
@@ -196,8 +198,8 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 ## Session Log
 
 Full session-by-session detail in CLAUDE_ARCHIVE.md. Recent sessions (newest first):
-- **2026-07-30 SESSION CLOSE:** all work committed+pushed (`main → c70f8dff`), working tree clean, no branch needed (nothing in progress). Completed today: session-opener housekeeping (CLAUDE.md trim), **#97** (deep-link project/expiry alerts + overdue invoices to their specific record), **#98** (em/en-dash sweep, 53 instances across 15 files, via sequential not parallel forks to avoid edit clobbering; app-wide dead-badge audit, fixed Issues page + Contacts directory). Both DEPLOYED+prod-verified against `www.sitesort.co.uk`. All UI changes passed `check:layout` 104/104 at both 360px and 768px, zero horizontal-overflow/overlap failures. **New issue discovered, not fixed (next session):** `permits-tab.tsx`'s "N overdue" pill has no deep-link — `p.overdue` spans multiple sections (Expired/Expiring/Active) of the same already-visible page, so no single honest link target exists; left as-is since all overdue rows are already inline-visible, but worth a second look. No other open threads.
-- **2026-07-30 (earlier) — shipped #94/#95/#96** (portal visual redesign; check-in insurance fix; hamburger removed). Published, prod-verified. **Standing gotcha:** local api-server on `:8080` is a plain `node dist/index.mjs` left running, NOT auto-restarted — rebuild + kill+restart after backend changes before trusting `check:layout`/manual checks.
-- **2026-07-27 and earlier:** see feature list above + CLAUDE_ARCHIVE.md. Local `git pull` fails — `origin` is a synthetic API-pushed mirror, not shared history; use `push-robust.ts`.
-- **PD test backlog**: **F7** Site Board on-site count, **F8** Timeline link, **F9/F10** spikes. **Opportunity:** uptime monitor on `GET /api/health`.
-- **Infra facts:** GitHub push ≠ deploy; prod = Replit **Publish**. Apex+`www` → `34.111.179.208`. Workspace Stripe env is **LIVE** (`sk_live`). Verify via `.claude/skills/browser-check`; rollout lags ~1-3 min.
+- **2026-09-11 (untracked):** 2 undocumented commits found+logged at 2026-09-15 opener — `4c355d5` shipped **#99**; `9cbec89` (separate bare Replit Agent session, not Claude Code) renamed permits-tab "Team Insurance & Site Access" to "Team Compliance & Site Access". Both in `4824e11` Publish, live in prod. `typecheck` clean; detail in CLAUDE_ARCHIVE.md.
+- **2026-07-30:** shipped and prod-verified #94-#98. Committed+pushed (`main → c70f8dff`), clean tree. Open item: `permits-tab.tsx` "N overdue" pill still has no deep-link (spans multiple sections, no single target — left as-is). Full detail in CLAUDE_ARCHIVE.md. **Standing gotcha:** local api-server on `:8080` is a plain `node dist/index.mjs`, NOT auto-restarted — rebuild + kill+restart after backend changes before trusting `check:layout`.
+- **2026-07-27 and earlier:** see feature list + CLAUDE_ARCHIVE.md. `git pull` fails — `origin` is a synthetic API-pushed mirror, not shared history; use `push-robust.ts`.
+- **PD test backlog**: **F7** Site Board on-site count, **F8** Timeline link, **F9/F10** spikes. Opportunity: uptime monitor on `GET /api/health`.
+- **Infra facts:** GitHub push ≠ deploy; prod = Replit **Publish**. Apex+`www` → `34.111.179.208`. Stripe env is **LIVE** (`sk_live`). Verify via `.claude/skills/browser-check`; rollout lags ~1-3 min.
