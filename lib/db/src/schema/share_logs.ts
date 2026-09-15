@@ -6,7 +6,7 @@ export const shareLogsTable = pgTable("share_logs", {
   id: text("id").primaryKey(),
   companyId: text("company_id").notNull(),
   projectId: text("project_id").references(() => projectsTable.id, { onDelete: "set null" }),
-  entityType: text("entity_type").notNull(), // document | photo | permit | invoice | certificate
+  entityType: text("entity_type").notNull(), // document | photo | permit | certificate (also legacy "invoice" rows predating invoice removal)
   entityId: text("entity_id").notNull(),
   entityName: text("entity_name").notNull(),
   method: text("method").notNull(), // email | whatsapp | team

@@ -13,10 +13,9 @@ import {
   ShieldAlert, FileSignature, Users, Bell, Search,
   MessageSquare, Camera, FilePlus, Plus, AlertCircle, CreditCard,
   FileText, CheckCircle2, Clock, TrendingUp, Zap, X, Circle, ClipboardCheck,
-  Lock, Sparkles, Trash2, Receipt, ArrowDownCircle, ArrowUpCircle, Eye, Share2, UserCheck,
+  Lock, Sparkles, Trash2, UserCheck,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
-import { ShareModal } from "@/components/share-modal";
 import { AlertViewer } from "@/components/alert-viewer";
 import { navigateToNotification, itemDeepLink } from "@/lib/deep-link";
 import { useToast } from "@/hooks/use-toast";
@@ -26,7 +25,7 @@ import { cn } from "@/lib/utils";
 import { useCapabilities } from "@/hooks/use-capabilities";
 import { useSubscription } from "@/contexts/subscription";
 
-type CalEvent = { date: string; label: string; type: "project-start" | "project-end" | "permit" | "insurance" | "invoice-out" | "invoice-in" | "custom"; href?: string; id?: string; note?: string | null; projectId?: string | null };
+type CalEvent = { date: string; label: string; type: "project-start" | "project-end" | "permit" | "insurance" | "custom"; href?: string; id?: string; note?: string | null; projectId?: string | null };
 type CustomEvent = { id: string; title: string; eventDate: string; note: string | null; projectId: string | null };
 type ExpiryAlert = {
   label: string; expiryDate: string; kind: "permit" | "insurance"; daysLeft: number;
@@ -35,28 +34,23 @@ type ExpiryAlert = {
   permitId?: string; projectId?: string; subcontractorId?: string;
 };
 type Notification = { id: string; type: string; title: string; message: string; read: boolean; createdAt: string; relatedEntityId?: string; relatedEntityType?: string };
-type Invoice = { id: string; direction: string; counterpartyName: string; description: string; amount: string; currency: string; dueDate: string; status: string; reference?: string; attachmentUrl?: string | null; projectId?: string | null };
 
 const EVENT_STYLES: Record<CalEvent["type"], { dot: string; badge: string; label: string }> = {
   "project-start": { dot: "bg-primary",     badge: "bg-primary/10 text-primary border-primary/20",              label: "Project Start"    },
   "project-end":   { dot: "bg-destructive",  badge: "bg-destructive/10 text-destructive border-destructive/20",   label: "Project End"      },
   "permit":        { dot: "bg-yellow-500",   badge: "bg-yellow-500/10 text-yellow-700 border-yellow-500/20",      label: "Permit Expiry"    },
   "insurance":     { dot: "bg-blue-500",     badge: "bg-blue-500/10 text-blue-700 border-blue-500/20",            label: "Insurance Expiry" },
-  "invoice-out":   { dot: "bg-rose-500",     badge: "bg-rose-500/10 text-rose-700 border-rose-500/20",            label: "Payment Due"      },
-  "invoice-in":    { dot: "bg-emerald-500",  badge: "bg-emerald-500/10 text-emerald-700 border-emerald-500/20",   label: "Invoice Due In"   },
   "custom":        { dot: "bg-violet-500",   badge: "bg-violet-500/10 text-violet-700 border-violet-500/20",      label: "Custom Event"     },
 };
 
 // Fallback section + action label per event type for the "View" link in the day dialog.
-// Individual events carry a deep `href` (to the specific project / invoice) where an id is
+// Individual events carry a deep `href` (to the specific project) where an id is
 // available; these are the generic fallbacks used when an event has no deep link.
 const EVENT_LINK: Record<CalEvent["type"], { href: string; label: string }> = {
   "project-start": { href: "/projects",   label: "Open project"       },
   "project-end":   { href: "/projects",   label: "Open project"       },
   "permit":        { href: "/compliance", label: "View permit"        },
   "insurance":     { href: "/compliance", label: "View in Compliance" },
-  "invoice-out":   { href: "/invoices",   label: "Open invoice"       },
-  "invoice-in":    { href: "/invoices",   label: "Open invoice"       },
   "custom":        { href: "#",           label: ""                   }, // custom events have no deep link; managers get a delete action instead
 };
 
@@ -91,26 +85,8 @@ function authHeaders(): Record<string, string> {
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
-function fmtAmount(currency: string, amount: string) {
-  return `${currency} ${Number(amount).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
 function fmtDate(iso: string) {
   return new Date(iso.slice(0, 10) + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-}
-
-function daysUntilDue(dateStr: string) {
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const due = new Date(dateStr.slice(0, 10) + "T00:00:00");
-  return Math.ceil((due.getTime() - today.getTime()) / 86400000);
-}
-
-function InvoiceStatusBadge({ invoice }: { invoice: Invoice }) {
-  if (invoice.status === "paid") return <Badge variant="success" className="gap-1"><CheckCircle2 className="w-3 h-3" />Paid</Badge>;
-  const days = daysUntilDue(invoice.dueDate);
-  if (days < 0) return <Badge variant="destructive" className="gap-1"><AlertTriangle className="w-3 h-3" />Overdue</Badge>;
-  if (days <= 7) return <Badge className="gap-1 bg-orange-100 text-orange-700 border-orange-200"><Clock className="w-3 h-3" />Due in {days}d</Badge>;
-  return <Badge variant="secondary" className="gap-1"><Clock className="w-3 h-3" />Due in {days}d</Badge>;
 }
 
 function SiteCalendar({ events, alerts, canManage, projects, onCreate, onDelete }: {
@@ -461,10 +437,6 @@ export default function Dashboard() {
   const nextPlan = DASH_NEXT_PLAN[tier];
   const atLimit = !isCancelled && !betaAccess && planLimit !== Infinity && (projects?.length ?? 0) >= planLimit;
 
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [shareInvoice, setShareInvoice] = useState<Invoice | null>(null);
-  const [moveToInvoice, setMoveToInvoice] = useState<Invoice | null>(null);
-  const [movingProject, setMovingProject] = useState(false);
   const [customEvents, setCustomEvents] = useState<CustomEvent[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadMessages, setUnreadMessages] = useState(0);
@@ -476,7 +448,6 @@ export default function Dashboard() {
 
   useEffect(() => {
     const h = authHeaders();
-    fetch("/api/invoices", { headers: h }).then(r => r.ok ? r.json() : []).then(setInvoices).catch(() => {});
     fetch("/api/calendar-events", { headers: h }).then(r => r.ok ? r.json() : []).then(setCustomEvents).catch(() => {});
     fetch("/api/notifications", { headers: h }).then(r => r.ok ? r.json() : []).then(setNotifications).catch(() => {});
     fetch("/api/messages/unread-count", { headers: h }).then(r => r.ok ? r.json() : { count: 0 }).then(d => setUnreadMessages(d.count ?? 0)).catch(() => {});
@@ -506,20 +477,12 @@ export default function Dashboard() {
       const daysLeft = Math.ceil((new Date(date).getTime() - todayMs) / 86400000);
       alerts.push({ label: `${permit.projectName} · ${permit.permitType}`, expiryDate: date, kind: "permit", daysLeft, permitId: permit.permitId, projectId: permit.projectId });
     }
-    for (const inv of invoices) {
-      if (inv.status === "paid") continue;
-      const date = inv.dueDate.slice(0, 10);
-      const type: CalEvent["type"] = inv.direction === "outbound" ? "invoice-out" : "invoice-in";
-      const prefix = inv.direction === "outbound" ? "Pay" : "Receive";
-      const amount = `${inv.currency} ${Number(inv.amount).toLocaleString("en-GB", { minimumFractionDigits: 2 })}`;
-      events.push({ date, label: `${prefix}: ${inv.counterpartyName} · ${amount}`, type, href: `/invoices?invoice=${inv.id}` });
-    }
     for (const ce of customEvents) {
       events.push({ date: ce.eventDate.slice(0, 10), label: ce.title, type: "custom", id: ce.id, note: ce.note, projectId: ce.projectId });
     }
     alerts.sort((a, b) => a.daysLeft - b.daysLeft);
     return { calendarEvents: events, expiryAlerts: alerts };
-  }, [projects, compliance, invoices, customEvents]);
+  }, [projects, compliance, customEvents]);
 
   const todayStr = new Date().toISOString().slice(0, 10);
 
@@ -567,48 +530,6 @@ export default function Dashboard() {
     }
   }
 
-  async function markInvoicePaid(inv: Invoice) {
-    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
-    const res = await fetch(`/api/invoices/${inv.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
-      body: JSON.stringify({ status: "paid" }),
-    }).catch(() => null);
-    if (!res?.ok) { toast({ title: "Couldn't mark as paid", description: "Please try again.", variant: "destructive" }); return; }
-    setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, status: "paid" } : i));
-    // Unassigned invoices prompt a move-to-project picker; already-linked ones just confirm.
-    if (!inv.projectId) setMoveToInvoice({ ...inv, status: "paid" });
-    else toast({ title: "Marked as paid", description: `${inv.counterpartyName} invoice updated.` });
-  }
-
-  async function moveInvoiceToProject(invoiceId: string, projectId: string) {
-    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
-    setMovingProject(true);
-    const res = await fetch(`/api/invoices/${invoiceId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
-      body: JSON.stringify({ projectId }),
-    }).catch(() => null);
-    setMovingProject(false);
-    if (res?.ok) {
-      setInvoices(prev => prev.map(i => i.id === invoiceId ? { ...i, projectId } : i));
-      const projectName = projects?.find(p => p.id === projectId)?.name ?? "project";
-      toast({ title: "Invoice moved", description: `Invoice moved to ${projectName}.` });
-      setMoveToInvoice(null);
-    } else {
-      toast({ title: "Couldn't move invoice", description: "Please try again.", variant: "destructive" });
-    }
-  }
-
-  // Outstanding invoices: unpaid/overdue, overdue first, then soonest due. Capped for the dashboard.
-  const outstandingInvoices = useMemo(() => {
-    return invoices
-      .filter(inv => inv.status !== "paid")
-      .sort((a, b) => daysUntilDue(a.dueDate) - daysUntilDue(b.dueDate))
-      .slice(0, 5);
-  }, [invoices]);
-  const outstandingCount = invoices.filter(inv => inv.status !== "paid").length;
-
   const attentionItems = useMemo(() => {
     const items: { icon: React.ReactNode; label: string; href?: string; scrollTo?: string; severity: "critical" | "warning" }[] = [];
 
@@ -627,20 +548,6 @@ export default function Dashboard() {
       if (a.daysLeft < 0) items.push({ icon: <ShieldAlert className="w-4 h-4" />, label: `${a.label} · expired`, href: expiryHref(a), severity: "critical" });
       else if (a.daysLeft <= 3) items.push({ icon: <ShieldAlert className="w-4 h-4" />, label: `${a.label} · expires in ${a.daysLeft}d`, href: expiryHref(a), severity: "critical" });
     }
-
-    // Overdue invoices — the count includes invoices filed to projects, which
-    // the standalone /invoices page deliberately HIDES (they live under each
-    // project's Finances tab), so linking there can show fewer than the count
-    // says. The dashboard's own Outstanding Invoices card lists every one of
-    // them, so the alert scrolls down to that card instead of navigating away.
-    const overdue = invoices.filter(inv => inv.status !== "paid" && inv.dueDate.slice(0, 10) < todayStr);
-    if (overdue.length > 0)
-      items.push({
-        icon: <FileText className="w-4 h-4" />,
-        label: `${overdue.length} overdue invoice${overdue.length > 1 ? "s" : ""}`,
-        scrollTo: "outstanding-invoices",
-        severity: "critical",
-      });
 
     // Pending sign-offs — pendingAcknowledgments is one row per DOCUMENT
     // (pendingCount is how many people are pending on it); when only one
@@ -662,7 +569,7 @@ export default function Dashboard() {
       items.push({ icon: <MessageSquare className="w-4 h-4" />, label: `${unreadMessages} unread message${unreadMessages > 1 ? "s" : ""}`, href: "/messages?filter=unread", severity: "warning" });
 
     return items;
-  }, [expiryAlerts, invoices, compliance, unreadMessages, todayStr]);
+  }, [expiryAlerts, compliance, unreadMessages]);
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
@@ -846,82 +753,6 @@ export default function Dashboard() {
             })}
           </div>
         </div>
-      )}
-
-      {/* Outstanding invoices */}
-      {outstandingInvoices.length > 0 && (
-        <Card className="mb-6 scroll-mt-4" id="outstanding-invoices">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between gap-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Receipt className="w-4 h-4 text-primary" /> Outstanding Invoices
-                <span className="text-xs font-normal text-muted-foreground">({outstandingCount})</span>
-              </CardTitle>
-              <Link href="/invoices" className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
-                View all <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0 divide-y">
-            {outstandingInvoices.map(inv => (
-              <div key={inv.id} className="py-3 first:pt-0 last:pb-0">
-                {/* Row 1: avatar + name + amount */}
-                <div className="flex items-center justify-between gap-2 mb-1.5">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className={cn(
-                      "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0",
-                      inv.direction === "inbound" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
-                    )}>
-                      {inv.counterpartyName.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-semibold text-sm truncate">{inv.counterpartyName}</p>
-                      <p className="text-xs text-muted-foreground truncate">{inv.reference ? `${inv.reference} · ` : ""}{inv.description}</p>
-                    </div>
-                  </div>
-                  <span className="font-bold tabular-nums text-sm shrink-0">{fmtAmount(inv.currency, inv.amount)}</span>
-                </div>
-                {/* Row 2: direction + status + due */}
-                <div className="flex items-center gap-2 flex-wrap mb-2.5">
-                  {inv.direction === "inbound"
-                    ? <span className="flex items-center gap-1 text-xs text-emerald-600 font-medium"><ArrowDownCircle className="w-3.5 h-3.5" />In</span>
-                    : <span className="flex items-center gap-1 text-xs text-rose-600 font-medium"><ArrowUpCircle className="w-3.5 h-3.5" />Out</span>
-                  }
-                  <InvoiceStatusBadge invoice={inv} />
-                  <span className="text-xs text-muted-foreground">Due {fmtDate(inv.dueDate)}</span>
-                </div>
-                {/* Row 3: pill action buttons */}
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/invoices?invoice=${inv.id}`)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-sm font-medium text-foreground hover:bg-muted transition-colors"
-                  >
-                    <Eye className="w-3.5 h-3.5" />Open
-                  </button>
-                  {inv.attachmentUrl && (
-                    <button
-                      type="button"
-                      onClick={() => setShareInvoice(inv)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-sm font-medium text-foreground hover:bg-muted transition-colors"
-                    >
-                      <Share2 className="w-3.5 h-3.5" />Share
-                    </button>
-                  )}
-                  {caps.canManageInvoices && (
-                    <button
-                      type="button"
-                      onClick={() => markInvoicePaid(inv)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-amber-200 bg-amber-50 text-sm font-medium text-amber-700 hover:bg-amber-100 transition-colors"
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5" />Mark Paid
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
       )}
 
       {/* Main: Projects + Activity */}
@@ -1142,47 +973,6 @@ export default function Dashboard() {
           </Button>
         </DialogFooter>
       </Dialog>
-
-      {/* Move-to-project picker shown after marking an unassigned invoice paid */}
-      <Dialog open={!!moveToInvoice} onOpenChange={open => { if (!open) setMoveToInvoice(null); }}>
-        <DialogHeader>
-          <DialogTitle>Move to</DialogTitle>
-          <p className="text-sm text-muted-foreground">
-            Invoice marked as paid. Choose a project to move it to.
-          </p>
-        </DialogHeader>
-        <div className="max-h-80 overflow-y-auto -mx-1 px-1 space-y-1">
-          {(projects ?? []).length === 0 && (
-            <p className="text-sm text-muted-foreground py-4 text-center">No projects yet.</p>
-          )}
-          {(projects ?? []).map(p => (
-            <button
-              key={p.id}
-              type="button"
-              disabled={movingProject}
-              onClick={() => moveToInvoice && moveInvoiceToProject(moveToInvoice.id, p.id)}
-              className="w-full text-left rounded-lg border border-border px-4 py-3 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50"
-            >
-              {p.name}
-            </button>
-          ))}
-        </div>
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => setMoveToInvoice(null)}>
-            {movingProject ? "Moving…" : "Skip"}
-          </Button>
-        </DialogFooter>
-      </Dialog>
-
-      <ShareModal
-        open={!!shareInvoice}
-        onClose={() => setShareInvoice(null)}
-        entityType="invoice"
-        entityId={shareInvoice?.id ?? ""}
-        entityName={shareInvoice ? `Invoice: ${shareInvoice.counterpartyName}` : ""}
-        fileUrl={shareInvoice?.attachmentUrl ?? undefined}
-        projectId={shareInvoice?.projectId}
-      />
 
       {activityViewer && (
         <AlertViewer

@@ -20,7 +20,7 @@ import { ArrowLeft, Send, Hash, X, Plus, Building2 } from "lucide-react";
 // Portal Messages — structural section (visible to every member, like Team/
 // Daily Report): DMs to any other person on THIS project + the shared project
 // channel. v1 composer scope: plain text + reactions + read receipts only (no
-// attachments/invoice/reply-to/quick-replies). Reuses the SAME messages/
+// attachments/reply-to/quick-replies). Reuses the SAME messages/
 // channel_messages tables and send/react logic as the dashboard — see
 // lib/messaging.ts on the server. A dedicated file (not folded into the
 // already-huge section.tsx) since this is list+thread+compose, not a simple

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { messagesTable, usersTable, notificationsTable, invoicesTable, documentsTable, photosTable, permitsTable, messageReactionsTable, companyMembersTable, projectsTable } from "@workspace/db/schema";
+import { messagesTable, usersTable, notificationsTable, documentsTable, photosTable, permitsTable, messageReactionsTable, companyMembersTable, projectsTable } from "@workspace/db/schema";
 import { eq, and, or, desc, lt, gt, sql, inArray, isNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
@@ -10,10 +10,9 @@ import { sendDirectMessage, toggleMessageReaction, isAllowedReactionEmoji } from
 const router: IRouter = Router();
 
 // Conversation-list preview for a message: its text, or a typed label when the
-// message is attachment/invoice-only (otherwise the list row would render blank).
-function messagePreview(m: { content: string | null; invoiceId?: string | null; attachmentType?: string | null }): string {
+// message is attachment-only (otherwise the list row would render blank).
+function messagePreview(m: { content: string | null; attachmentType?: string | null }): string {
   if (m.content && m.content.trim()) return m.content;
-  if (m.invoiceId) return "🧾 Invoice";
   if (m.attachmentType === "document") return "📄 Document";
   if (m.attachmentType === "photo") return "📷 Photo";
   if (m.attachmentType === "permit") return "📋 Permit";
@@ -267,23 +266,6 @@ router.get("/messages/thread/:userId", authenticate, async (req, res) => {
       : [];
     const userMap = Object.fromEntries(userRows.map(u => [u.id, u.name]));
 
-    // Fetch invoice data for messages that have one
-    const invoiceIds = Array.from(new Set(rows.map(r => r.invoiceId).filter(Boolean))) as string[];
-    const invoiceRows = invoiceIds.length
-      ? await db.select({
-          id: invoicesTable.id,
-          counterpartyName: invoicesTable.counterpartyName,
-          amount: invoicesTable.amount,
-          currency: invoicesTable.currency,
-          dueDate: invoicesTable.dueDate,
-          status: invoicesTable.status,
-          reference: invoicesTable.reference,
-          attachmentUrl: invoicesTable.attachmentUrl,
-          direction: invoicesTable.direction,
-        }).from(invoicesTable).where(inArray(invoicesTable.id, invoiceIds))
-      : [];
-    const invoiceMap = Object.fromEntries(invoiceRows.map(inv => [inv.id, inv]));
-
     // Fetch document/photo/permit attachments
     const docIds = rows.filter(r => r.attachmentType === "document" && r.attachmentId).map(r => r.attachmentId as string);
     const photoIds = rows.filter(r => r.attachmentType === "photo" && r.attachmentId).map(r => r.attachmentId as string);
@@ -339,8 +321,6 @@ router.get("/messages/thread/:userId", authenticate, async (req, res) => {
         recipientId: m.recipientId,
         projectId: m.projectId ?? null,
         content: m.content,
-        invoiceId: m.invoiceId ?? null,
-        invoice: m.invoiceId ? (invoiceMap[m.invoiceId] ?? null) : null,
         attachmentType: m.attachmentType ?? null,
         attachmentId: m.attachmentId ?? null,
         attachment: m.attachmentType === "document" && m.attachmentId ? (docMap[m.attachmentId] ?? null)
@@ -369,9 +349,9 @@ router.get("/messages/thread/:userId", authenticate, async (req, res) => {
 // POST /api/messages — send a message
 router.post("/messages", authenticate, async (req, res) => {
   try {
-    const { recipientId, content, invoiceId, attachmentType, attachmentId, replyToId, projectId } = req.body;
-    if (!recipientId || (!content?.trim() && !invoiceId && !attachmentId)) {
-      res.status(400).json({ error: "validation_error", message: "recipientId and content, invoiceId, or attachment are required" });
+    const { recipientId, content, attachmentType, attachmentId, replyToId, projectId } = req.body;
+    if (!recipientId || (!content?.trim() && !attachmentId)) {
+      res.status(400).json({ error: "validation_error", message: "recipientId and content or attachment are required" });
       return;
     }
 
@@ -388,12 +368,11 @@ router.post("/messages", authenticate, async (req, res) => {
     const sent = await sendDirectMessage({
       senderId: req.user!.id, recipientId, companyId: req.user!.companyId,
       projectId: projectId ?? null, content: content?.trim() || "",
-      invoiceId, attachmentType, attachmentId, replyToId,
+      attachmentType, attachmentId, replyToId,
     });
 
     res.status(201).json({
       id: sent.id, recipientId, projectId: projectId ?? null, content: sent.content,
-      invoiceId: invoiceId ?? null, invoice: null,
       attachmentType: attachmentType ?? null, attachmentId: attachmentId ?? null, attachment: null,
       readAt: null, createdAt: sent.createdAt.toISOString(), mine: true,
     });

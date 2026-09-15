@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-15T08:11:38.444Z",
+  "generatedAt": "2026-09-15T08:52:27.736Z",
   "target": "http://localhost:8080",
   "viewports": [
     360,
@@ -30,7 +30,6 @@
       "/notifications",
       "/settings",
       "/user-guide",
-      "/invoices",
       "/daily-reports",
       "/issues",
       "/checkins",
@@ -52,7 +51,6 @@
       "plant",
       "permits",
       "closeout",
-      "finances",
       "checkins",
       "reports",
       "teamportal"
@@ -190,11 +188,6 @@
         "auth": "app"
       },
       {
-        "path": "/invoices",
-        "label": "invoices",
-        "auth": "app"
-      },
-      {
         "path": "/daily-reports",
         "label": "daily-reports",
         "auth": "app"
@@ -220,7 +213,7 @@
         "auth": "none"
       },
       {
-        "path": "/portal/accept/12a221adf2d72741474bb817d71fb56d4c8b4b1a5fa6ada36257dcd4277cc0f5",
+        "path": "/portal/accept/e113d3861525dfde6aa8094f622862c02d416a89b34718757cc200f4f5e55117",
         "label": "portal-accept",
         "auth": "none"
       },
@@ -282,11 +275,6 @@
       {
         "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=closeout",
         "label": "project-detail:closeout",
-        "auth": "app"
-      },
-      {
-        "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=finances",
-        "label": "project-detail:finances",
         "auth": "app"
       },
       {
@@ -400,7 +388,7 @@
         "auth": "portal"
       }
     ],
-    "routeCount": 64,
+    "routeCount": 62,
     "legacyCoverageDefects": [
       "The previous checker manually duplicated top-level routes and therefore could miss a newly added <Route>.",
       "The previous checker omitted /verify-email, /reset-password, /forgot-pin, /reset-pin, and /portal/accept/:token.",
@@ -1545,57 +1533,6 @@
       ]
     },
     {
-      "label": "invoices",
-      "path": "/invoices",
-      "width": 360,
-      "finalPath": "/invoices",
-      "ok": true,
-      "reasons": [],
-      "metrics": {
-        "scrollWidth": 360,
-        "clientWidth": 360,
-        "viewportWidth": 360,
-        "overflowElements": [],
-        "overlaps": [],
-        "stacking": []
-      },
-      "probes": [
-        {
-          "name": "initial",
-          "metrics": {
-            "scrollWidth": 360,
-            "clientWidth": 360,
-            "viewportWidth": 360,
-            "overflowElements": [],
-            "overlaps": [],
-            "stacking": []
-          }
-        },
-        {
-          "name": "scrolled",
-          "metrics": {
-            "scrollWidth": 360,
-            "clientWidth": 360,
-            "viewportWidth": 360,
-            "overflowElements": [],
-            "overlaps": [],
-            "stacking": []
-          }
-        },
-        {
-          "name": "long-string-stress",
-          "metrics": {
-            "scrollWidth": 360,
-            "clientWidth": 360,
-            "viewportWidth": 360,
-            "overflowElements": [],
-            "overlaps": [],
-            "stacking": []
-          }
-        }
-      ]
-    },
-    {
       "label": "daily-reports",
       "path": "/daily-reports",
       "width": 360,
@@ -1852,9 +1789,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/12a221adf2d72741474bb817d71fb56d4c8b4b1a5fa6ada36257dcd4277cc0f5",
+      "path": "/portal/accept/e113d3861525dfde6aa8094f622862c02d416a89b34718757cc200f4f5e55117",
       "width": 360,
-      "finalPath": "/portal/accept/12a221adf2d72741474bb817d71fb56d4c8b4b1a5fa6ada36257dcd4277cc0f5",
+      "finalPath": "/portal/accept/e113d3861525dfde6aa8094f622862c02d416a89b34718757cc200f4f5e55117",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -2465,57 +2402,6 @@
     {
       "label": "project-detail:closeout",
       "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=closeout",
-      "width": 360,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
-      "ok": true,
-      "reasons": [],
-      "metrics": {
-        "scrollWidth": 360,
-        "clientWidth": 360,
-        "viewportWidth": 360,
-        "overflowElements": [],
-        "overlaps": [],
-        "stacking": []
-      },
-      "probes": [
-        {
-          "name": "initial",
-          "metrics": {
-            "scrollWidth": 360,
-            "clientWidth": 360,
-            "viewportWidth": 360,
-            "overflowElements": [],
-            "overlaps": [],
-            "stacking": []
-          }
-        },
-        {
-          "name": "scrolled",
-          "metrics": {
-            "scrollWidth": 360,
-            "clientWidth": 360,
-            "viewportWidth": 360,
-            "overflowElements": [],
-            "overlaps": [],
-            "stacking": []
-          }
-        },
-        {
-          "name": "long-string-stress",
-          "metrics": {
-            "scrollWidth": 360,
-            "clientWidth": 360,
-            "viewportWidth": 360,
-            "overflowElements": [],
-            "overlaps": [],
-            "stacking": []
-          }
-        }
-      ]
-    },
-    {
-      "label": "project-detail:finances",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=finances",
       "width": 360,
       "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
       "ok": true,
@@ -4809,57 +4695,6 @@
       ]
     },
     {
-      "label": "invoices",
-      "path": "/invoices",
-      "width": 390,
-      "finalPath": "/invoices",
-      "ok": true,
-      "reasons": [],
-      "metrics": {
-        "scrollWidth": 390,
-        "clientWidth": 390,
-        "viewportWidth": 390,
-        "overflowElements": [],
-        "overlaps": [],
-        "stacking": []
-      },
-      "probes": [
-        {
-          "name": "initial",
-          "metrics": {
-            "scrollWidth": 390,
-            "clientWidth": 390,
-            "viewportWidth": 390,
-            "overflowElements": [],
-            "overlaps": [],
-            "stacking": []
-          }
-        },
-        {
-          "name": "scrolled",
-          "metrics": {
-            "scrollWidth": 390,
-            "clientWidth": 390,
-            "viewportWidth": 390,
-            "overflowElements": [],
-            "overlaps": [],
-            "stacking": []
-          }
-        },
-        {
-          "name": "long-string-stress",
-          "metrics": {
-            "scrollWidth": 390,
-            "clientWidth": 390,
-            "viewportWidth": 390,
-            "overflowElements": [],
-            "overlaps": [],
-            "stacking": []
-          }
-        }
-      ]
-    },
-    {
       "label": "daily-reports",
       "path": "/daily-reports",
       "width": 390,
@@ -5116,9 +4951,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/12a221adf2d72741474bb817d71fb56d4c8b4b1a5fa6ada36257dcd4277cc0f5",
+      "path": "/portal/accept/e113d3861525dfde6aa8094f622862c02d416a89b34718757cc200f4f5e55117",
       "width": 390,
-      "finalPath": "/portal/accept/12a221adf2d72741474bb817d71fb56d4c8b4b1a5fa6ada36257dcd4277cc0f5",
+      "finalPath": "/portal/accept/e113d3861525dfde6aa8094f622862c02d416a89b34718757cc200f4f5e55117",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -5729,57 +5564,6 @@
     {
       "label": "project-detail:closeout",
       "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=closeout",
-      "width": 390,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
-      "ok": true,
-      "reasons": [],
-      "metrics": {
-        "scrollWidth": 390,
-        "clientWidth": 390,
-        "viewportWidth": 390,
-        "overflowElements": [],
-        "overlaps": [],
-        "stacking": []
-      },
-      "probes": [
-        {
-          "name": "initial",
-          "metrics": {
-            "scrollWidth": 390,
-            "clientWidth": 390,
-            "viewportWidth": 390,
-            "overflowElements": [],
-            "overlaps": [],
-            "stacking": []
-          }
-        },
-        {
-          "name": "scrolled",
-          "metrics": {
-            "scrollWidth": 390,
-            "clientWidth": 390,
-            "viewportWidth": 390,
-            "overflowElements": [],
-            "overlaps": [],
-            "stacking": []
-          }
-        },
-        {
-          "name": "long-string-stress",
-          "metrics": {
-            "scrollWidth": 390,
-            "clientWidth": 390,
-            "viewportWidth": 390,
-            "overflowElements": [],
-            "overlaps": [],
-            "stacking": []
-          }
-        }
-      ]
-    },
-    {
-      "label": "project-detail:finances",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=finances",
       "width": 390,
       "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
       "ok": true,
@@ -8194,68 +7978,6 @@
       ]
     },
     {
-      "label": "invoices",
-      "path": "/invoices",
-      "width": 768,
-      "finalPath": "/invoices",
-      "ok": true,
-      "reasons": [],
-      "metrics": {
-        "scrollWidth": 768,
-        "clientWidth": 768,
-        "viewportWidth": 768,
-        "overflowElements": [],
-        "overlaps": [],
-        "stacking": []
-      },
-      "probes": [
-        {
-          "name": "initial",
-          "metrics": {
-            "scrollWidth": 768,
-            "clientWidth": 768,
-            "viewportWidth": 768,
-            "overflowElements": [],
-            "overlaps": [],
-            "stacking": []
-          }
-        },
-        {
-          "name": "scrolled",
-          "metrics": {
-            "scrollWidth": 768,
-            "clientWidth": 768,
-            "viewportWidth": 768,
-            "overflowElements": [],
-            "overlaps": [],
-            "stacking": []
-          }
-        },
-        {
-          "name": "menu-open-1",
-          "metrics": {
-            "scrollWidth": 768,
-            "clientWidth": 768,
-            "viewportWidth": 768,
-            "overflowElements": [],
-            "overlaps": [],
-            "stacking": []
-          }
-        },
-        {
-          "name": "long-string-stress",
-          "metrics": {
-            "scrollWidth": 768,
-            "clientWidth": 768,
-            "viewportWidth": 768,
-            "overflowElements": [],
-            "overlaps": [],
-            "stacking": []
-          }
-        }
-      ]
-    },
-    {
       "label": "daily-reports",
       "path": "/daily-reports",
       "width": 768,
@@ -8545,9 +8267,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/12a221adf2d72741474bb817d71fb56d4c8b4b1a5fa6ada36257dcd4277cc0f5",
+      "path": "/portal/accept/e113d3861525dfde6aa8094f622862c02d416a89b34718757cc200f4f5e55117",
       "width": 768,
-      "finalPath": "/portal/accept/12a221adf2d72741474bb817d71fb56d4c8b4b1a5fa6ada36257dcd4277cc0f5",
+      "finalPath": "/portal/accept/e113d3861525dfde6aa8094f622862c02d416a89b34718757cc200f4f5e55117",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -9246,68 +8968,6 @@
     {
       "label": "project-detail:closeout",
       "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=closeout",
-      "width": 768,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
-      "ok": true,
-      "reasons": [],
-      "metrics": {
-        "scrollWidth": 768,
-        "clientWidth": 768,
-        "viewportWidth": 768,
-        "overflowElements": [],
-        "overlaps": [],
-        "stacking": []
-      },
-      "probes": [
-        {
-          "name": "initial",
-          "metrics": {
-            "scrollWidth": 768,
-            "clientWidth": 768,
-            "viewportWidth": 768,
-            "overflowElements": [],
-            "overlaps": [],
-            "stacking": []
-          }
-        },
-        {
-          "name": "scrolled",
-          "metrics": {
-            "scrollWidth": 768,
-            "clientWidth": 768,
-            "viewportWidth": 768,
-            "overflowElements": [],
-            "overlaps": [],
-            "stacking": []
-          }
-        },
-        {
-          "name": "menu-open-1",
-          "metrics": {
-            "scrollWidth": 768,
-            "clientWidth": 768,
-            "viewportWidth": 768,
-            "overflowElements": [],
-            "overlaps": [],
-            "stacking": []
-          }
-        },
-        {
-          "name": "long-string-stress",
-          "metrics": {
-            "scrollWidth": 768,
-            "clientWidth": 768,
-            "viewportWidth": 768,
-            "overflowElements": [],
-            "overlaps": [],
-            "stacking": []
-          }
-        }
-      ]
-    },
-    {
-      "label": "project-detail:finances",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=finances",
       "width": 768,
       "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
       "ok": true,
@@ -10524,8 +10184,8 @@
     }
   ],
   "summary": {
-    "passed": 192,
+    "passed": 186,
     "failed": 0,
-    "total": 192
+    "total": 186
   }
 }

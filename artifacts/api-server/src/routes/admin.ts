@@ -16,7 +16,6 @@ import {
   messagesTable,
   channelMessagesTable,
   channelReadsTable,
-  invoicesTable,
   shareLogsTable,
   subcontractorNotesTable,
   milestonesTable,

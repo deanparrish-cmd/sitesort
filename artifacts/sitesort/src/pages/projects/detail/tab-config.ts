@@ -20,7 +20,6 @@ export function buildManagementTabs(caps: Caps, openIssueCount: number): TabDef[
 
 export function buildActivityTabs(caps: Caps, checkinCount: number, isProjectApprover: boolean): TabDef[] {
   return [
-    { value: "finances", label: "Finances & Expiry" },
     { value: "checkins", label: `Check-ins${checkinCount > 0 ? ` (${checkinCount})` : ""}` },
     ...(caps.isInternal ? [{ value: "reports", label: "Daily Reports" }] : []),
     // Team Portal (member document review etc.) is available to anyone with

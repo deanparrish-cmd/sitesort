@@ -42,7 +42,7 @@ export const peopleTable = pgTable("people", {
   // cards). Lets every subcontractor's default contact be a real, addressable
   // `people` row instead of a UI-only pseudo-person — subcontractors.ts keeps
   // this row's name/email/phone mirrored bidirectionally with the parent
-  // subcontructor row so legacy readers (Compliance Centre, invoices, Contacts
+  // subcontructor row so legacy readers (Compliance Centre, Contacts
   // directory) that still read subcontructors.contactName etc. see no change.
   isPrimaryContact: boolean("is_primary_contact").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),

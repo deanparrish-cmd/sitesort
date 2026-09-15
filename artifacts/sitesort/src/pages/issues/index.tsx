@@ -210,8 +210,8 @@ export default function IssuesPage() {
       />
 
       {/* Summary cards — each names a specific status bucket, so clicking one
-          filters the list below to it and scrolls there (same rule as the
-          Invoices Overdue card: a count naming specific items must lead to them). */}
+          filters the list below to it and scrolls there (a count naming
+          specific items must lead to them). */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         {([
           { key: "new", label: "New", count: newCount, cls: "border-violet-200 bg-violet-50 dark:bg-violet-950/20 dark:border-violet-900", text: "text-violet-700" },

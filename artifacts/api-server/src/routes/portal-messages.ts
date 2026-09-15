@@ -16,7 +16,7 @@ import { sendDirectMessage, sendChannelMessage, toggleMessageReaction, toggleCha
 // send/react logic as the dashboard (lib/messaging.ts), scoped to the calling
 // member's project. A structural section (like Team/Progress/Daily Report) —
 // every member sees it, not portal_shares-gated. v1 composer scope: plain
-// text + reactions + read receipts only (no attachments/invoice/reply-to/
+// text + reactions + read receipts only (no attachments/reply-to/
 // quick-replies — see the plan for this feature).
 
 const router: IRouter = Router();

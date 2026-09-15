@@ -13,7 +13,6 @@ export const messagesTable = pgTable("messages", {
   // lib/messaging.ts for why this makes conversations per-project.
   projectId: text("project_id").references(() => projectsTable.id),
   content: text("content").notNull().default(""),
-  invoiceId: text("invoice_id"),
   attachmentType: text("attachment_type"), // "document" | "photo" | "permit"
   attachmentId: text("attachment_id"),
   replyToId: text("reply_to_id"),

@@ -175,7 +175,6 @@ export * from "./portalPushSubscribeRequestKeys";
 export * from "./portalPushUnsubscribeRequest";
 export * from "./portalShared";
 export * from "./portalSharedDailyReport";
-export * from "./portalSharedInvoice";
 export * from "./portalSiteBoard";
 export * from "./portalSiteBoardDocumentsItem";
 export * from "./portalSiteBoardPermitsItem";

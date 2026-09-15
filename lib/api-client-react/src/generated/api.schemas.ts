@@ -1159,7 +1159,7 @@ export interface PortalMessageReaction {
 }
 
 /**
- * A single DM or channel message, rendered in the portal. Text-only in v1 — no attachments/invoice/reply-to.
+ * A single DM or channel message, rendered in the portal. Text-only in v1 — no attachments/reply-to.
  */
 export interface PortalMessage {
   id: string;
@@ -1930,30 +1930,11 @@ export interface PortalSharedDailyReport {
   myViewedAt?: string | null;
 }
 
-/**
- * An invoice shared privately with THIS member (invoices are only ever shared person-by-person, never to everyone or a trade).
- */
-export interface PortalSharedInvoice {
-  id: string;
-  direction: string;
-  counterpartyName: string;
-  description?: string;
-  amount: string;
-  currency: string;
-  dueDate?: string;
-  status: string;
-  reference?: string;
-  attachmentUrl?: string;
-  sharedAt?: string;
-  unseen?: boolean;
-}
-
 export interface PortalShared {
   documents: PortalDocument[];
   photos: PortalIssue[];
   permits: PortalPermit[];
   dailyReports: PortalSharedDailyReport[];
-  invoices: PortalSharedInvoice[];
 }
 
 export interface PortalGeneral {

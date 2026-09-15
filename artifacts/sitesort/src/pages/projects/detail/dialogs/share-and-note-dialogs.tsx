@@ -16,8 +16,6 @@ export function ShareAndNoteDialogs() {
     setSharingDoc,
     sharingContact,
     setSharingContact,
-    sharingInvoice,
-    setSharingInvoice,
   } = useDetail();
 
   return (
@@ -103,17 +101,6 @@ export function ShareAndNoteDialogs() {
         fileUrl={null}
         projectId={projectId}
         shareText={sharingContact?.text ?? null}
-      />
-
-      <ShareModal
-        open={!!sharingInvoice}
-        onClose={() => setSharingInvoice(null)}
-        entityType="invoice"
-        entityId={sharingInvoice?.id ?? ""}
-        entityName={`Invoice · ${sharingInvoice?.counterpartyName ?? ""}`}
-        fileUrl={sharingInvoice?.attachmentUrl ?? null}
-        projectId={projectId}
-        secureViewUrl={sharingInvoice ? `${window.location.origin}/invoices?invoice=${sharingInvoice.id}` : null}
       />
     </>
   );

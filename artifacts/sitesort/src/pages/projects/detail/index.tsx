@@ -16,7 +16,6 @@ import { TeamTab } from "./tabs/team-tab";
 import { IssuesTab } from "./tabs/issues-tab";
 import { ReportsTab } from "./tabs/reports-tab";
 import { PermitsTab } from "./tabs/permits-tab";
-import { FinancesTab } from "./tabs/finances-tab";
 import { QrTab } from "./tabs/qr-tab";
 import { CheckinsTab } from "./tabs/checkins-tab";
 import { CloseoutTab } from "./tabs/closeout-tab";
@@ -137,7 +136,6 @@ function ProjectDetailInner() {
         <IssuesTab />
         <ReportsTab />
         <PermitsTab />
-        <FinancesTab />
         <QrTab />
         <CheckinsTab />
         <CloseoutTab />

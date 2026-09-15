@@ -65,7 +65,6 @@ const ProjectDetail = lazyWithRetry(() => import("@/pages/projects/detail"));
 const QrPage = lazyWithRetry(() => import("@/pages/qr"));
 const SiteBoard = lazyWithRetry(() => import("@/pages/site-board"));
 const AdminDashboard = lazyWithRetry(() => import("@/pages/admin"));
-const InvoicesPage = lazyWithRetry(() => import("@/pages/invoices"));
 const SubcontractorsPage = lazyWithRetry(() => import("@/pages/subcontractors"));
 const CompliancePage = lazyWithRetry(() => import("@/pages/compliance"));
 const TeamPage = lazyWithRetry(() => import("@/pages/team"));
@@ -139,7 +138,6 @@ function Router() {
       <Route path="/settings" component={SettingsPage} />
       <Route path="/user-guide" component={UserGuidePage} />
 
-      <Route path="/invoices" component={InvoicesPage} />
       <Route path="/daily-reports" component={DailyReportsPage} />
       <Route path="/issues" component={IssuesPage} />
       <Route path="/checkins" component={CheckinsPage} />

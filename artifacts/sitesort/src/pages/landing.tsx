@@ -245,7 +245,7 @@ export default function LandingPage() {
                 points: [
                   "Log site issues with photos, track new to resolved",
                   "Plant & materials register: on site, on order, off-hired",
-                  "Invoices, project finances and close-out when the job wraps up",
+                  "Project close-out reporting when the job wraps up",
                 ],
               },
             ].map(card => (

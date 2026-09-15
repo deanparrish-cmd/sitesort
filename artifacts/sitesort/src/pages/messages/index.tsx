@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Send, Users, Eye, ArrowLeft, Check, CheckCheck, Pencil, Trash2, User, Building2, Receipt, X, ExternalLink, FileText, Image, FileCheck, Paperclip, Hash, CornerUpLeft, Search, Zap, ChevronUp, Loader2, StickyNote } from "lucide-react";
+import { MessageSquare, Send, Users, Eye, ArrowLeft, Check, CheckCheck, Pencil, Trash2, User, Building2, X, ExternalLink, FileText, Image, FileCheck, Paperclip, Hash, CornerUpLeft, Search, Zap, ChevronUp, Loader2, StickyNote } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { notifyMessagesRead } from "@/lib/message-events";
 import { useSubscription } from "@/contexts/subscription";
@@ -32,18 +32,6 @@ type Conversation = {
   listId?: string;
 };
 
-type InvoiceAttachment = {
-  id: string;
-  counterpartyName: string;
-  amount: string;
-  currency: string;
-  dueDate: string;
-  status: string;
-  reference?: string | null;
-  attachmentUrl?: string | null;
-  direction: string;
-};
-
 type DocAttachment = { id: string; name: string; type: string; fileUrl: string; status: string; version: number };
 type PhotoAttachment = { id: string; photoUrl?: string | null; category: string; description?: string | null; referenceNumber: string; zone?: string | null };
 type PermitAttachment = { id: string; type: string; description: string; expiryDate: string; documentUrl?: string | null };
@@ -60,8 +48,6 @@ type Message = {
   recipientId: string;
   projectId?: string | null;
   content: string;
-  invoiceId?: string | null;
-  invoice?: InvoiceAttachment | null;
   attachmentType?: "document" | "photo" | "permit" | null;
   attachmentId?: string | null;
   attachment?: DocAttachment | PhotoAttachment | PermitAttachment | null;
@@ -147,9 +133,8 @@ function fullTimestamp(iso: string) {
 }
 
 // Plain-text preview of a message for saving into a contact's notes.
-function messageText(m: { content?: string | null; invoice?: unknown; attachmentType?: string | null }): string {
+function messageText(m: { content?: string | null; attachmentType?: string | null }): string {
   if (m.content && m.content.trim()) return m.content.trim();
-  if (m.invoice) return "[Invoice]";
   if (m.attachmentType === "document") return "[Document]";
   if (m.attachmentType === "photo") return "[Photo]";
   if (m.attachmentType === "permit") return "[Permit]";
@@ -207,12 +192,6 @@ export default function MessagesPage() {
   const [broadcastRole, setBroadcastRole] = useState("all");
   const [broadcastContent, setBroadcastContent] = useState("");
   const [broadcastSending, setBroadcastSending] = useState(false);
-
-  // Invoice attachment state
-  const [invoicePickerOpen, setInvoicePickerOpen] = useState(false);
-  const [pickerInvoices, setPickerInvoices] = useState<InvoiceAttachment[]>([]);
-  const [pickerLoading, setPickerLoading] = useState(false);
-  const [attachedInvoice, setAttachedInvoice] = useState<InvoiceAttachment | null>(null);
 
   // Doc/photo/permit attachment state
   type AttachTab = "document" | "photo" | "permit";
@@ -509,7 +488,7 @@ export default function MessagesPage() {
     // Sending is blocked in pure oversight mode (viewAll on a conversation the
     // PM isn't part of) — but allowed when the PM opened one of THEIR OWN
     // conversations from the oversight list (isMine).
-    if ((!draft.trim() && !attachedInvoice && !attachedItem) || !activeConv || sending || (viewAll && !activeConv.isMine)) return;
+    if ((!draft.trim() && !attachedItem) || !activeConv || sending || (viewAll && !activeConv.isMine)) return;
     setSending(true);
     const r = await fetch("/api/messages", {
       method: "POST",
@@ -518,16 +497,14 @@ export default function MessagesPage() {
         recipientId: activeConv.otherId,
         content: draft.trim(),
         ...(activeConv.projectId ? { projectId: activeConv.projectId } : {}),
-        ...(attachedInvoice ? { invoiceId: attachedInvoice.id } : {}),
         ...(attachedItem ? { attachmentType: attachedItem.type, attachmentId: attachedItem.data.id } : {}),
         ...(replyingTo ? { replyToId: replyingTo.id } : {}),
       }),
     });
     if (r.ok) {
       const msg = await r.json();
-      setThread(prev => [...prev, { ...msg, senderName: me?.name ?? "Me", invoice: attachedInvoice, attachment: attachedItem?.data ?? null, replyTo: replyingTo }]);
+      setThread(prev => [...prev, { ...msg, senderName: me?.name ?? "Me", attachment: attachedItem?.data ?? null, replyTo: replyingTo }]);
       setDraft("");
-      setAttachedInvoice(null);
       setAttachedItem(null);
       setReplyingTo(null);
       fetchConversations();
@@ -649,19 +626,8 @@ export default function MessagesPage() {
     setBroadcastContent("");
   }
 
-  async function openInvoicePicker() {
-    setInvoicePickerOpen(true);
-    if (pickerInvoices.length > 0) return;
-    setPickerLoading(true);
-    const r = await fetch("/api/invoices", { headers: authHeaders() });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (r.ok) setPickerInvoices(await r.json() as any[]);
-    setPickerLoading(false);
-  }
-
   function openAttachPicker() {
     setAttachPickerOpen(true);
-    setInvoicePickerOpen(false);
     if (attachPickerProjects.length === 0) {
       fetch("/api/projects", { headers: authHeaders() })
         .then(r => r.ok ? r.json() : [])
@@ -1255,44 +1221,6 @@ export default function MessagesPage() {
                                 </div>
                               </div>
                             )}
-                            {/* Invoice card */}
-                            {msg.invoice && (
-                              <div className={cn(
-                                "rounded-2xl border text-xs overflow-hidden min-w-[220px]",
-                                msg.mine && !oversightReadOnly ? "rounded-tr-sm border-primary/20 bg-primary/5" : "rounded-tl-sm border-border bg-card"
-                              )}>
-                                <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/40">
-                                  <Receipt className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                                  <span className="font-semibold text-foreground">Invoice</span>
-                                  <span className={cn("ml-auto px-1.5 py-0.5 rounded text-[10px] font-semibold capitalize",
-                                    msg.invoice.status === "paid" ? "bg-emerald-100 text-emerald-700" :
-                                    msg.invoice.status === "overdue" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
-                                  )}>{msg.invoice.status}</span>
-                                </div>
-                                <div className="px-3 py-2 space-y-0.5">
-                                  <p className="font-semibold text-foreground">{msg.invoice.counterpartyName}</p>
-                                  <p className="text-muted-foreground">{msg.invoice.currency} {Number(msg.invoice.amount).toLocaleString("en-GB", { minimumFractionDigits: 2 })}</p>
-                                  {msg.invoice.reference && <p className="text-muted-foreground">Ref: {msg.invoice.reference}</p>}
-                                  <p className="text-muted-foreground">Due: {new Date(msg.invoice.dueDate + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
-                                </div>
-                                <div className="px-3 pb-2 flex items-center gap-3">
-                                  <button
-                                    onClick={() => { if (msg.invoice) navigate(`/invoices?invoice=${msg.invoice.id}`); }}
-                                    className="inline-flex items-center gap-1 text-primary hover:underline text-[11px] font-medium"
-                                  >
-                                    <Eye className="w-3 h-3" /> Open invoice
-                                  </button>
-                                  {msg.invoice.attachmentUrl && (
-                                    <button
-                                      onClick={() => { const u = msg.invoice?.attachmentUrl?.replace(/^\/uploads\//, "/api/uploads/"); if (u) window.open(u, '_blank', 'noopener,noreferrer'); }}
-                                      className="inline-flex items-center gap-1 text-primary hover:underline text-[11px] font-medium"
-                                    >
-                                      <ExternalLink className="w-3 h-3" /> View document
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            )}
                             {/* Document attachment card */}
                             {msg.attachmentType === "document" && msg.attachment && (() => {
                               const doc = msg.attachment as DocAttachment;
@@ -1382,8 +1310,8 @@ export default function MessagesPage() {
                               );
                             })()}
 
-                            {/* Text bubble (optional note alongside invoice, or standalone message) */}
-                            {(msg.content || (!msg.invoice && !msg.attachmentType)) && (
+                            {/* Text bubble (optional note alongside attachment, or standalone message) */}
+                            {(msg.content || !msg.attachmentType) && (
                               <div className={cn(
                                 "px-3 py-2 rounded-2xl text-sm leading-relaxed break-words",
                                 msg.mine && !oversightReadOnly
@@ -1495,21 +1423,6 @@ export default function MessagesPage() {
                       </button>
                     </div>
                   )}
-                  {/* Attached invoice preview */}
-                  {attachedInvoice && (
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-50 border border-blue-200 text-xs">
-                      <Receipt className="w-4 h-4 text-blue-600 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <span className="font-semibold text-blue-800">{attachedInvoice.counterpartyName}</span>
-                        <span className="text-blue-600 ml-2">{attachedInvoice.currency} {Number(attachedInvoice.amount).toLocaleString("en-GB", { minimumFractionDigits: 2 })}</span>
-                        {attachedInvoice.reference && <span className="text-blue-500 ml-1">· {attachedInvoice.reference}</span>}
-                      </div>
-                      <button onClick={() => setAttachedInvoice(null)} className="text-blue-400 hover:text-blue-600 shrink-0">
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  )}
-
                   {/* Attached doc/photo/permit preview */}
                   {attachedItem && (
                     <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-violet-50 border border-violet-200 text-xs">
@@ -1524,35 +1437,6 @@ export default function MessagesPage() {
                       <button onClick={() => setAttachedItem(null)} className="text-violet-400 hover:text-violet-600 shrink-0">
                         <X className="w-3.5 h-3.5" />
                       </button>
-                    </div>
-                  )}
-
-                  {/* Invoice picker dropdown */}
-                  {invoicePickerOpen && (
-                    <div className="rounded-xl border bg-card shadow-lg max-h-48 overflow-y-auto">
-                      {pickerLoading ? (
-                        <div className="p-3 text-xs text-muted-foreground text-center">Loading invoices…</div>
-                      ) : pickerInvoices.length === 0 ? (
-                        <div className="p-3 text-xs text-muted-foreground text-center">No invoices found.</div>
-                      ) : (
-                        pickerInvoices.map(inv => (
-                          <button
-                            key={inv.id}
-                            onClick={() => { setAttachedInvoice(inv); setInvoicePickerOpen(false); }}
-                            className="w-full text-left px-3 py-2 hover:bg-muted transition-colors text-xs flex items-center gap-2 border-b last:border-0"
-                          >
-                            <Receipt className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <p className="font-semibold truncate">{inv.counterpartyName}</p>
-                              <p className="text-muted-foreground">{inv.currency} {Number(inv.amount).toLocaleString("en-GB", { minimumFractionDigits: 2 })}{inv.reference ? ` · ${inv.reference}` : ""}</p>
-                            </div>
-                            <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-semibold capitalize shrink-0",
-                              inv.status === "paid" ? "bg-emerald-100 text-emerald-700" :
-                              inv.status === "overdue" ? "bg-red-100 text-red-700" : "bg-muted text-muted-foreground"
-                            )}>{inv.status}</span>
-                          </button>
-                        ))
-                      )}
                     </div>
                   )}
 
@@ -1681,16 +1565,6 @@ export default function MessagesPage() {
                       type="button"
                       size="sm"
                       variant="ghost"
-                      title="Attach invoice"
-                      className={cn("px-2 shrink-0", invoicePickerOpen && "text-blue-600 bg-blue-50")}
-                      onClick={() => invoicePickerOpen ? setInvoicePickerOpen(false) : openInvoicePicker()}
-                    >
-                      <Receipt className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
                       title="Attach document, photo or permit"
                       className={cn("px-2 shrink-0", attachPickerOpen && "text-violet-600 bg-violet-50")}
                       onClick={() => attachPickerOpen ? setAttachPickerOpen(false) : openAttachPicker()}
@@ -1703,18 +1577,18 @@ export default function MessagesPage() {
                       variant="ghost"
                       title="Quick replies"
                       className={cn("px-2 shrink-0", quickReplyOpen && "text-amber-500 bg-amber-50")}
-                      onClick={() => { setQuickReplyOpen(v => !v); setInvoicePickerOpen(false); setAttachPickerOpen(false); }}
+                      onClick={() => { setQuickReplyOpen(v => !v); setAttachPickerOpen(false); }}
                     >
                       <Zap className="w-4 h-4" />
                     </Button>
                     <Input
                       value={draft}
                       onChange={e => setDraft(e.target.value)}
-                      placeholder={(attachedInvoice || attachedItem) ? "Add a note (optional)…" : "Type a message…"}
+                      placeholder={attachedItem ? "Add a note (optional)…" : "Type a message…"}
                       className="flex-1"
                       onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
                     />
-                    <Button type="submit" size="sm" disabled={(!draft.trim() && !attachedInvoice && !attachedItem) || sending} className="px-3">
+                    <Button type="submit" size="sm" disabled={(!draft.trim() && !attachedItem) || sending} className="px-3">
                       <Send className="w-4 h-4" />
                     </Button>
                   </form>

@@ -33,7 +33,6 @@ return doc.type === "drawing" && doc.revision ? `Rev ${doc.revision}` : `v${doc.
 }
 
 export type PermitItem = { id: string; type: string; description: string; startDate: string; expiryDate: string; dueDate?: string | null; status: string; responsibleUserId?: string; responsibleName?: string; overdue?: boolean; documentUrl?: string | null; archivedAt?: string | null };
-export type InvoiceItem = { id: string; direction: string; counterpartyName: string; description: string; amount: string; currency: string; dueDate: string; status: string; reference?: string | null; attachmentUrl?: string | null };
 export type PhotoItem = { id: string; uploadedBy: string; uploaderName: string; photoUrl: string | null; category: string; description: string | null; zone: string | null; referenceNumber: string; takenAt: string; status: string | null; resolvedAt: string | null; latitude?: number | null; longitude?: number | null; assignedToUserId?: string | null; assignedToName?: string | null; dueDate?: string | null; overdue?: boolean; closureReason?: string | null; closureNote?: string | null; archivedAt?: string | null; archivedByName?: string | null; archiveReason?: string | null; photoRemovedAt?: string | null };
 export type MilestoneItem = { id: string; title: string; dueDate: string; completedAt: string | null; order: number };
 export type CheckinItem = { id: string; workerName: string; photoUrl: string; checkedInAt: string; lat: number | null; lng: number | null };
@@ -108,7 +107,6 @@ export function useProjectDetailState() {
     setProjectShareLogLoading(false);
   };
 
-  const [projectInvoices, setProjectInvoices] = useState<InvoiceItem[]>([]);
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [archivedPhotos, setArchivedPhotos] = useState<PhotoItem[]>([]);
   const [showArchivedIssues, setShowArchivedIssues] = useState(false);
@@ -175,10 +173,6 @@ export function useProjectDetailState() {
     return t ? { Authorization: `Bearer ${t}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" } as Record<string, string>;
   };
 
-  const invoiceFullUrl = (attachmentUrl: string) => {
-    const normalised = attachmentUrl.replace(/^\/uploads\//, "/api/uploads/");
-    return normalised.startsWith("http") ? normalised : `${window.location.origin}${normalised}`;
-  };
   // PATCH a site issue (status and/or assignment). Shared by the status pickers
   // and the assign-to / due-by controls so all updates refresh state the same way.
   const patchPhoto = async (photoId: string, patch: { status?: string; assignedToUserId?: string | null; dueDate?: string | null; closureReason?: string | null; closureNote?: string | null }, errTitle = "Couldn't update issue") => {
@@ -205,14 +199,6 @@ export function useProjectDetailState() {
   // Server-side enforces the PM role gate + requires a non-empty note.
   const closeIssueAsInvalid = (photoId: string, reason: "invalid" | "duplicate", note: string) =>
     patchPhoto(photoId, { status: "resolved", closureReason: reason, closureNote: note }, "Couldn't close issue");
-
-  const markInvoiceUnpaid = async (id: string) => {
-    if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
-    const res = await fetch(`/api/invoices/${id}`, { method: "PATCH", headers: authHeaders(), body: JSON.stringify({ status: "pending", projectId: null }) });
-    if (!res.ok) { toast({ title: "Couldn't update invoice", description: "Please try again.", variant: "destructive" }); return; }
-    setProjectInvoices(prev => prev.filter(inv => inv.id !== id));
-    toast({ title: "Moved back to Invoices", description: "This invoice is now unpaid and back on the main Invoices page." });
-  };
 
   const fetchMilestones = () => {
     fetch(`/api/projects/${projectId}/milestones`, { headers: authHeaders() })
@@ -449,7 +435,6 @@ export function useProjectDetailState() {
     const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
     Promise.all([
       fetch(`/api/projects/${projectId}/permits`, { headers }).then(r => r.ok ? r.json() : []),
-      fetch(`/api/projects/${projectId}/invoices`, { headers }).then(r => r.ok ? r.json() : []),
       fetch(`/api/projects/${projectId}/photos`, { headers }).then(r => r.ok ? r.json() : []),
       fetch(`/api/projects/${projectId}/milestones`, { headers }).then(r => r.ok ? r.json() : []),
       fetch(`/api/projects/${projectId}/checkins`, { headers }).then(r => r.ok ? r.json() : []),
@@ -457,8 +442,8 @@ export function useProjectDetailState() {
       fetch(`/api/projects/${projectId}/daily-notes`, { headers }).then(r => r.ok ? r.json() : []),
       fetch(`/api/projects/${projectId}/qr-pins`, { headers }).then(r => r.ok ? r.json() : []),
       fetch(`/api/projects/${projectId}/qr-codes`, { headers }).then(r => r.ok ? r.json() : []),
-    ]).then(([p, inv, ph, ms, ci, rep, notes, pins, qrCodes]) => {
-      setPermits((Array.isArray(p) ? p : []).map(normalizePermit)); setProjectInvoices(inv); setPhotos(ph); setMilestones(ms); setCheckins(ci); setReports(rep); setTodayNotes(notes);
+    ]).then(([p, ph, ms, ci, rep, notes, pins, qrCodes]) => {
+      setPermits((Array.isArray(p) ? p : []).map(normalizePermit)); setPhotos(ph); setMilestones(ms); setCheckins(ci); setReports(rep); setTodayNotes(notes);
       if (Array.isArray(pins)) setQrPins(pins);
       if (Array.isArray(qrCodes) && qrCodes.length > 0) {
         const qr = qrCodes.find((q: any) => q.category === "site_board") ?? qrCodes[0];
@@ -999,9 +984,8 @@ export function useProjectDetailState() {
   };
   type SharingDoc = { type: string; id: string; name: string; version: number | null; fileUrl: string | null; additionalInfo?: string; shareText?: string };
   const [sharingDoc, setSharingDoc] = useState<SharingDoc | null>(null);
-  // Contact / invoice shares route through the one ShareModal (External channels).
+  // Contact shares route through the one ShareModal (External channels).
   const [sharingContact, setSharingContact] = useState<{ id: string; name: string; text: string } | null>(null);
-  const [sharingInvoice, setSharingInvoice] = useState<InvoiceItem | null>(null);
 
   // Sub notes dialog (project Team tab)
   type SubNote = { id: string; body: string; authorName: string; projectId: string | null; projectName: string | null; createdAt: string };
@@ -1258,7 +1242,6 @@ export function useProjectDetailState() {
     if (!project) return;
     const now = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" } as Intl.DateTimeFormatOptions);
     const fmtD = (s?: string | null) => s ? new Date(s.slice(0, 10) + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "-";
-    const fmtAmt = (currency: string, amount: string) => `${currency} ${Number(amount).toLocaleString("en-GB", { minimumFractionDigits: 2 })}`;
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const daysLeft = (s: string) => Math.ceil((new Date(s + "T00:00:00").getTime() - today.getTime()) / 86400000);
 
@@ -1285,15 +1268,6 @@ export function useProjectDetailState() {
       const pending = doc.distributionSummary?.pending ?? 0;
       const signOff = doc.status === "superseded" ? "Superseded" : pending > 0 ? `${pending} pending` : "All signed off";
       return `<tr${doc.status === "superseded" ? ' class="superseded"' : ""}><td>${doc.name}</td><td class="capitalize">${doc.type.replace("_", " ")}</td><td>v${doc.version}</td><td>${doc.status === "superseded" ? "Superseded" : "Current"}</td><td>${signOff}</td><td>${fmtD(String(doc.createdAt))}</td></tr>`;
-    }).join("");
-
-    const unpaidIn = projectInvoices.filter(i => i.direction === "inbound" && i.status !== "paid").reduce((s, i) => s + Number(i.amount), 0);
-    const unpaidOut = projectInvoices.filter(i => i.direction === "outbound" && i.status !== "paid").reduce((s, i) => s + Number(i.amount), 0);
-    const invRows = [...projectInvoices].sort((a, b) => a.dueDate.localeCompare(b.dueDate)).map(inv => {
-      const d = daysLeft(inv.dueDate); const paid = inv.status === "paid";
-      const statusLabel = paid ? "Paid" : d < 0 ? "Overdue" : `Due in ${d}d`;
-      const cls = paid ? "green" : d < 0 ? "red" : d <= 7 ? "orange" : "";
-      return `<tr><td>${inv.direction === "inbound" ? "↓ Inbound" : "↑ Outbound"}</td><td>${inv.counterpartyName}</td><td>${inv.description}</td><td>${inv.reference ?? "-"}</td><td>${fmtAmt(inv.currency, inv.amount)}</td><td>${fmtD(inv.dueDate)}</td><td class="${cls}">${statusLabel}</td></tr>`;
     }).join("");
 
     const photoCounts = photos.reduce((acc, p) => { acc[p.category] = (acc[p.category] ?? 0) + 1; return acc; }, {} as Record<string, number>);
@@ -1368,10 +1342,6 @@ tr:last-child td{border-bottom:none}
   ${(documents ?? []).length ? `<table><thead><tr><th>Name</th><th>Category</th><th>Version</th><th>Status</th><th>Sign-offs</th><th>Uploaded</th></tr></thead><tbody>${docsRows}</tbody></table>` : `<p class="empty">No documents uploaded yet.</p>`}
 </section>
 <section>
-  <h2>Finances<span class="count">${projectInvoices.length}</span></h2>
-  ${projectInvoices.length ? `<div class="summary-grid"><div class="summary-box green-box"><label>Due to You (unpaid)</label><span>GBP ${unpaidIn.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</span></div><div class="summary-box red-box"><label>You Owe (unpaid)</label><span>GBP ${unpaidOut.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</span></div></div><table><thead><tr><th>Type</th><th>Counterparty</th><th>Description</th><th>Ref</th><th>Amount</th><th>Due</th><th>Status</th></tr></thead><tbody>${invRows}</tbody></table>` : `<p class="empty">No invoices linked to this project.</p>`}
-</section>
-<section>
   <h2>Photo Log<span class="count">${photos.length}</span></h2>
   ${photos.length ? `<div class="photo-box"><strong>${photos.length}</strong> photo${photos.length !== 1 ? "s" : ""} logged${photoSummary ? ` · ${photoSummary}` : ""}</div>` : `<p class="empty">No photos logged yet.</p>`}
 </section>
@@ -1431,8 +1401,6 @@ tr:last-child td{border-bottom:none}
     projectShareLogLoading,
     setProjectShareLogLoading,
     loadProjectShareLog,
-    projectInvoices,
-    setProjectInvoices,
     photos,
     setPhotos,
     archivedPhotos,
@@ -1507,12 +1475,10 @@ tr:last-child td{border-bottom:none}
     navigate,
     openTab,
     authHeaders,
-    invoiceFullUrl,
     patchPhoto,
     updatePhotoStatus,
     confirmIssueDone,
     closeIssueAsInvalid,
-    markInvoiceUnpaid,
     fetchMilestones,
     fetchPhotos,
     fetchReports,
@@ -1676,8 +1642,6 @@ tr:last-child td{border-bottom:none}
     setSharingDoc,
     sharingContact,
     setSharingContact,
-    sharingInvoice,
-    setSharingInvoice,
     subNotesTarget,
     setSubNotesTarget,
     subNotesList,

@@ -8,7 +8,7 @@
 import type { PortalMessageReaction } from "./portalMessageReaction";
 
 /**
- * A single DM or channel message, rendered in the portal. Text-only in v1 — no attachments/invoice/reply-to.
+ * A single DM or channel message, rendered in the portal. Text-only in v1 — no attachments/reply-to.
  */
 export interface PortalMessage {
   id: string;

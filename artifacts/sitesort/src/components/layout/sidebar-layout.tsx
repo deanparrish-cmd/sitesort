@@ -6,7 +6,6 @@ import {
   Users,
   Settings,
   HelpCircle,
-  Receipt,
   Menu,
   X,
   LogOut,
@@ -164,7 +163,6 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     // covered per-project (each project has its own Compliance/H&S + Check-Ins
     // tabs), so the company-wide aggregate pages were redundant. Routes/pages
     // still exist (deep-linkable) but are no longer surfaced here.
-    { name: "Invoices", href: "/invoices", icon: Receipt, badge: 0 },
     { name: "QR Codes", href: "/qr", icon: QrCode, badge: 0 },
     // Platform Admin (SiteSort's own staff) — distinct from a customer's
     // company-level "admin" role. A customer who is admin of their own

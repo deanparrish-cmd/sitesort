@@ -23,27 +23,25 @@ export function isAllowedReactionEmoji(emoji: string): boolean {
 // conversation — which is what makes "separate conversation lists per project
 // portal" real: the SAME two users get a distinct thread per project.
 //
-// invoiceId/attachmentType/attachmentId/replyToId exist only for the dashboard
-// composer (invoice sharing #32, attachment sharing #33) — the portal composer
-// (v1 scope) never sets them, but the send/notify path is identical either way,
-// so it's shared rather than forked.
+// attachmentType/attachmentId/replyToId exist only for the dashboard composer
+// (attachment sharing #33) — the portal composer (v1 scope) never sets them,
+// but the send/notify path is identical either way, so it's shared rather
+// than forked.
 export async function sendDirectMessage(params: {
   senderId: string;
   recipientId: string;
   companyId: string;
   projectId: string | null;
   content: string;
-  invoiceId?: string | null;
   attachmentType?: string | null;
   attachmentId?: string | null;
   replyToId?: string | null;
 }): Promise<{ id: string; senderName: string; content: string; createdAt: Date }> {
-  const { senderId, recipientId, companyId, projectId, content, invoiceId, attachmentType, attachmentId, replyToId } = params;
+  const { senderId, recipientId, companyId, projectId, content, attachmentType, attachmentId, replyToId } = params;
   const id = generateId();
   const now = new Date();
   await db.insert(messagesTable).values({
     id, companyId, senderId, recipientId, projectId, content: content.trim(), createdAt: now,
-    ...(invoiceId ? { invoiceId } : {}),
     ...(attachmentType && attachmentId ? { attachmentType, attachmentId } : {}),
     ...(replyToId ? { replyToId } : {}),
   });

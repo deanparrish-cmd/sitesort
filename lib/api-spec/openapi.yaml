@@ -4986,7 +4986,7 @@ components:
 
     PortalMessage:
       type: object
-      description: A single DM or channel message, rendered in the portal. Text-only in v1 — no attachments/invoice/reply-to.
+      description: A single DM or channel message, rendered in the portal. Text-only in v1 — no attachments/reply-to.
       properties:
         id:
           type: string
@@ -6097,37 +6097,6 @@ components:
           nullable: true
       required: [id, reportDate]
 
-    PortalSharedInvoice:
-      type: object
-      description: An invoice shared privately with THIS member (invoices are only ever shared person-by-person, never to everyone or a trade).
-      properties:
-        id:
-          type: string
-        direction:
-          type: string
-        counterpartyName:
-          type: string
-        description:
-          type: string
-        amount:
-          type: string
-        currency:
-          type: string
-        dueDate:
-          type: string
-        status:
-          type: string
-        reference:
-          type: string
-        attachmentUrl:
-          type: string
-        sharedAt:
-          type: string
-          format: date-time
-        unseen:
-          type: boolean
-      required: [id, direction, counterpartyName, amount, currency, status]
-
     PortalShared:
       type: object
       properties:
@@ -6147,11 +6116,7 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PortalSharedDailyReport"
-        invoices:
-          type: array
-          items:
-            $ref: "#/components/schemas/PortalSharedInvoice"
-      required: [documents, photos, permits, dailyReports, invoices]
+      required: [documents, photos, permits, dailyReports]
 
     PortalGeneral:
       type: object

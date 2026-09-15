@@ -14,7 +14,6 @@ export type Capabilities = {
   canManageTeam: boolean;
   canManageSubcontractors: boolean;
   canManageCompliance: boolean;
-  canManageInvoices: boolean;
   canUploadDocument: boolean;
   canBroadcast: boolean;
   canLogPhoto: boolean;
@@ -39,7 +38,6 @@ export function deriveCapabilities(role: Role | null): Omit<Capabilities, "isLoa
     canManageTeam: isManager,
     canManageSubcontractors: isManager,
     canManageCompliance: isManager,
-    canManageInvoices: isManager,
     canUploadDocument: isManager,
     canBroadcast: isManager,
     canLogPhoto: isInternal,

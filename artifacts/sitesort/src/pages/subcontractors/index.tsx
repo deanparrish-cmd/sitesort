@@ -762,7 +762,7 @@ export default function SubcontractorsPage() {
 
       {/* Summary — Insurance Issues / Payment Hold each name a specific set of
           contacts, so clicking one filters the directory below to it (click
-          again to clear), same rule as the Invoices Overdue card. */}
+          again to clear). */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <Card className="p-4">
           <div className="flex items-center gap-2 mb-1"><Users className="w-4 h-4 text-primary" /><p className="text-xs font-medium text-muted-foreground">Total</p></div>
