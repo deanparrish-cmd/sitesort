@@ -48,17 +48,29 @@ async function api(endpoint: string, method: string, body?: object) {
   return { status, body: parsed };
 }
 
-async function createBlobWithRetry(content: string, p: string, tries = 5): Promise<string | null> {
+type BlobResult = { sha: string; skippedOversize?: false } | { sha: null; skippedOversize: boolean };
+
+// Distinguishes a LEGITIMATE skip (413 — payload too large, retrying is pointless)
+// from every other failure (403 rate-limit, 5xx, network blip, etc.). The two used
+// to be conflated into one "skipped (oversized)" bucket, so a run that hit sustained
+// rate-limiting (e.g. two sessions pushing at once) would silently drop real files
+// from the tree while still printing "✅ Pushed" with exit code 0 — the exact
+// silent-failure class this script was written to fix in the first place. Now only
+// a 413 counts as a skip; anything else is a hard failure that aborts the whole push.
+async function createBlobWithRetry(content: string, p: string, tries = 5): Promise<BlobResult> {
   let lastStatus = 0;
   for (let i = 0; i < tries; i++) {
     const r = await api(`/repos/${OWNER}/${REPO}/git/blobs`, "POST", { content, encoding: "base64" });
-    if (r.body?.sha) return r.body.sha;
+    if (r.body?.sha) return { sha: r.body.sha };
     lastStatus = r.status;
-    if (r.status === 413) break; // payload too large — retry won't help
+    if (r.status === 413) {
+      console.warn(`  ⚠️  blob too large (HTTP 413), skipping: ${p}`);
+      return { sha: null, skippedOversize: true };
+    }
     await new Promise(res => setTimeout(res, 400 * (i + 1) + Math.floor(i * 137))); // backoff
   }
-  console.warn(`  ⚠️  blob failed (HTTP ${lastStatus}), skipping: ${p}`);
-  return null;
+  console.error(`  ❌ blob failed after ${tries} tries (HTTP ${lastStatus}), NOT a size issue: ${p}`);
+  return { sha: null, skippedOversize: false };
 }
 
 // Simple concurrency pool

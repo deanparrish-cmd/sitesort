@@ -47,11 +47,12 @@ There is no git remote pointing to GitHub. Pushes go through the Replit GitHub c
 
 **USE `scripts/src/push-robust.ts`** — `pnpm --filter @workspace/scripts exec tsx ./src/push-robust.ts`. The old `github-push.ts` is **BROKEN: it never checks HTTP status, so failures are silent** (it prints "Done!" even when nothing pushed — this left the repo EMPTY for a long time). `push-robust.ts` fixes it: bounded concurrency (6) + retries, status checks at every step, and it skips files whose base64 payload would exceed the proxy's **~1MB body limit** (nginx 413).
 
-Three gotchas push-robust handles (learned 2026-06-18):
+Gotchas push-robust handles (learned 2026-06-18, #5 2026-09-16):
 1. **Empty repo** → the Git Data API (blobs/trees) returns 409 "Git Repository is empty". You must seed ONE commit via the **Contents API** first (`scripts/src/bootstrap-repo.ts` — `PUT /contents/README.md`). Only needed once, when the repo has zero commits.
 2. **Proxy ~1MB limit** → files >~650KB raw (auth-bg.png, hero PNGs, attached_assets) get HTTP 413 and are **skipped** (logged). Large binary assets do NOT push — code/text all pushes fine.
 3. **Junk dirs** → `.config/chromium` crash dumps (from the browser-check skill) choke blob creation; push-robust ignores `.config`/`.npm`/`tmp` etc.
 4. Pushes use **`base_tree` (additive)** — files removed locally are NOT deleted from GitHub. After a push, verify with `scripts/src/verify-push.ts` (checks signature strings of changed files on `main`).
+5. **Shared GitHub rate limit across concurrent sessions** → 2+ sessions active here share ONE GitHub connector identity/rate-limit budget; a push can outright 403 "API rate limit exceeded" if another session is pushing/publishing too. Not fatal — local commit is safe; just retry `push-robust.ts` shortly after.
 
 To create the repo fresh: `pnpm --filter @workspace/scripts exec tsx ./src/github-setup.ts`
 
@@ -199,9 +200,9 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 ## Session Log
 
 Full session-by-session detail in CLAUDE_ARCHIVE.md. Recent sessions (newest first):
-- **2026-09-16:** live-verified/tested/documented **#100** (undocumented cross-tenant portal login) — no leakage found. Full detail in CLAUDE_ARCHIVE.md.
-- **2026-09-15 (2 sessions, logged 2026-09-16):** untracked session (9 commits: tab reorg, dictation buttons, month-folder pattern) + SESSION CLOSE (removed finance/invoices feature). Full detail in CLAUDE_ARCHIVE.md.
-- **2026-09-11 (untracked):** `4c355d5` shipped **#99**; `9cbec89` renamed a permits-tab label. Found+logged 2026-09-15.
-- **2026-07-30 and earlier:** see feature list + CLAUDE_ARCHIVE.md. Open item: `permits-tab.tsx` "N overdue" pill has no deep-link. **Gotcha:** local api-server on `:8080` isn't auto-restarted. `git pull` fails; use `push-robust.ts`.
-- **PD test backlog**: **F7** Site Board on-site count, **F8** Timeline link, **F9/F10** spikes.
-- **Infra:** GitHub push ≠ deploy; prod = Replit **Publish** (~1-3min lag). Stripe **LIVE**. Verify via `.claude/skills/browser-check`.
+- **2026-09-16 SESSION CLOSE:** (1) live-verified/tested/documented **#100** (undocumented cross-tenant portal login), no leakage found, detail in CLAUDE_ARCHIVE.md. (2) Fixed reintroduced em-dashes in `index.html` (title/og/twitter tags); text/meta-only, no layout, verified dash-free live on prod. `48e6cd3` → `main → 0d759622` (hit rate-limit gotcha #5 below on attempt 1, retry succeeded). **Open for next session:** a separate, still-active session made 6 unreviewed commits today — `cd91563`/`e49a8a1`/`3e49ec7`/`1c22838`/`27dd5ef`/`9c76587` (portal `section.tsx`+API-schema, dashboard/documents pages, user-guide, 2 Publishes). Read these, confirm `typecheck`/`check:layout` pass, log properly — same pattern as 2026-08-06/2026-09-15.
+- **2026-09-15 (2 sessions):** untracked session (tab reorg, dictation buttons, month-folder) + SESSION CLOSE (removed finance/invoices feature). Detail in CLAUDE_ARCHIVE.md.
+- **2026-09-11 (untracked):** `4c355d5` shipped **#99**; `9cbec89` renamed a permits-tab label.
+- **2026-07-30 and earlier:** see feature list + CLAUDE_ARCHIVE.md. `permits-tab.tsx` "N overdue" pill has no deep-link. **Gotcha:** local api-server on `:8080` isn't auto-restarted. `git pull` fails; use `push-robust.ts`.
+- **PD backlog**: **F7** Site Board on-site count, **F8** Timeline link, **F9/F10** spikes.
+- **Infra:** GitHub push ≠ deploy; prod = Replit **Publish** (~1-3min lag). Stripe **LIVE**. Verify via browser-check skill.
