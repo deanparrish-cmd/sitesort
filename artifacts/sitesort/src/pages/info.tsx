@@ -38,7 +38,7 @@ const howItWorks = [
     step: "2",
     icon: Users,
     title: "Add your team.",
-    body: "Invite your subcontractors and staff. Each gets their own login on their own phone. No app store, no faff.",
+    body: "Invite your subcontractors and staff. Each gets their own login on their own phone, with invited projects available in Your projects. No app store, no faff.",
   },
   {
     step: "3",
@@ -67,8 +67,8 @@ const whatYouGet = [
   },
   {
     icon: BellRing,
-    title: "Instant notifications",
-    body: "When something new lands, your crew knows. No \"did you get my message?\"",
+    title: "Organised notifications",
+    body: "See the current month's activity first, with older updates in month folders. The dashboard keeps your latest eight updates close at hand.",
   },
   {
     icon: AlertTriangle,
@@ -78,7 +78,7 @@ const whatYouGet = [
   {
     icon: Camera,
     title: "Timestamped photo & activity log",
-    body: "Site progress and compliance, captured with a name and time. Your proof if anything's ever questioned.",
+    body: "Site progress and project activity, captured with a name and time. Your proof if anything's ever questioned.",
   },
   {
     icon: ClipboardCheck,
@@ -87,8 +87,8 @@ const whatYouGet = [
   },
   {
     icon: ShieldCheck,
-    title: "Permit & insurance expiry tracking",
-    body: "Get warned before a permit lapses or a subcontractor's insurance runs out, instead of finding out too late.",
+    title: "H&S compliance & site access",
+    body: "Keep insurance, permits and site-access checks visible for the H&S team, with expiry alerts before something lapses.",
   },
   {
     icon: Star,
@@ -97,13 +97,13 @@ const whatYouGet = [
   },
   {
     icon: QrCode,
-    title: "QR site board",
-    body: "Print a code for the gate. Anyone on site scans it to see permits, rules, current documents and what's coming up. No login needed.",
+    title: "QR site board & Check-Ins",
+    body: "Print a code for the gate. Anyone on site scans it to see permits, rules, current documents and what's coming up; Check-Ins record site entry with a photo and time. No login needed.",
   },
   {
     icon: Mic,
-    title: "Site diary with voice input",
-    body: "Fill in daily reports and H&S notes by talking instead of typing, straight from your phone on site.",
+    title: "Plant & material item details with voice input",
+    body: "Dictate plant/material item details and site issue descriptions on desktop or in the portal, plus free-text daily report notes.",
   },
   {
     icon: Calendar,
@@ -128,7 +128,7 @@ const salesFaqs = [
   },
   {
     q: "What if my subcontractors aren't tech-savvy?",
-    a: "The team portal is deliberately simple. Big buttons, clear labels, made for a phone on site with muddy hands. If they can use WhatsApp, they can use this.",
+    a: "The team portal is deliberately simple. Big buttons, clear labels, made for a phone on site with muddy hands. If they can use WhatsApp, they can use this. Your projects shows project and company names, lets invited users move between projects without logging out, confirms cross-company switches with Continue or Cancel, and returns them to their last active project after sign-in.",
   },
   {
     q: "Can I control who sees what?",

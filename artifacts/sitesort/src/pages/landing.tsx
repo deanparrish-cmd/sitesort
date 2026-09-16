@@ -49,11 +49,11 @@ const faqs = [
   },
   {
     q: "What do my site team and subcontractors see?",
-    a: "They get their own team portal: a simple mobile view with just their documents to sign off, site issues, plant and materials, and the site diary. They only ever see what you've shared with them, never your whole project.",
+                a: "They get their own team portal: a simple mobile view with just their documents to sign off, site issues, plant and materials, and the site diary. They only ever see what you've shared with them, never your whole project. If invited to multiple projects, Your projects shows project and company names and lets them switch without logging out; switching companies offers Continue or Cancel, and sign-in returns them to their last active project.",
   },
   {
     q: "Is my data secure?",
-    a: "Documents are stored securely and access is scoped to your company. Public site boards only ever expose the specific documents you choose to share.",
+    a: "Documents are stored securely and access is scoped to each project and the permissions you've been given. Public site boards only ever expose the specific documents you choose to share.",
   },
 ];
 
@@ -214,20 +214,20 @@ export default function LandingPage() {
               },
               {
                 icon: ShieldCheck,
-                title: "Compliance hub",
+                title: "H&S compliance & site access",
                 points: [
-                  "Subcontractor insurance & certificates in one place",
+                  "Insurance and site-access checks for your H&S team",
                   "Track active permits across all sites",
-                  "Automated alerts before anything expires",
+                  "Expiry alerts before insurance or permits lapse",
                 ],
               },
               {
                 icon: QrCode,
-                title: "QR site boards & check-in",
+                title: "QR site boards & Check-Ins",
                 points: [
                   "Dynamic QR codes for your site signage",
                   "Public safety documents & site contacts on scan",
-                  "Site check-in for an attendance record",
+                  "Check-Ins record who enters the site",
                 ],
               },
               {
@@ -235,7 +235,7 @@ export default function LandingPage() {
                 title: "Site diary & daily reports",
                 points: [
                   "Daily reports from site: draft, then submit to the PM",
-                  "Dictate notes on the go, transcribed automatically",
+                  "Dictate free-text site diary notes on the go",
                   "Photos, site updates and progress in one record",
                 ],
               },
@@ -244,8 +244,8 @@ export default function LandingPage() {
                 title: "Issues, plant & materials",
                 points: [
                   "Log site issues with photos, track new to resolved",
-                  "Plant & materials register: on site, on order, off-hired",
-                  "Project close-out reporting when the job wraps up",
+                  "Voice-dictate plant & material item details and site issue descriptions on desktop or in the portal",
+                  "Project Close-Out reporting when the job wraps up",
                 ],
               },
             ].map(card => (
@@ -286,7 +286,7 @@ export default function LandingPage() {
                 {[
                   { icon: ClipboardCheck, text: "Documents to read and sign off, with PIN protection on safety-critical ones" },
                   { icon: AlertTriangle, text: "Raise site issues with photos, straight from the phone" },
-                  { icon: Mic, text: "Dictate daily report notes, transcribed automatically" },
+                  { icon: Mic, text: "Dictate plant & material item details and site issue descriptions in the portal" },
                   { icon: Wrench, text: "Check plant & materials and flag what's running low" },
                   { icon: Users, text: "Site board, messages and everything shared with them" },
                 ].map(item => (
@@ -308,7 +308,7 @@ export default function LandingPage() {
                   </div>
                   <div>
                     <p className="font-bold text-foreground">Built for the whole site</p>
-                    <p className="text-sm text-muted-foreground">No training day needed</p>
+                    <p className="text-sm text-muted-foreground">Simple for site teams</p>
                   </div>
                 </div>
                 <ul className="space-y-3 text-sm">
@@ -359,7 +359,7 @@ export default function LandingPage() {
                 icon: BellRing,
                 step: "03",
                 title: "Stay ahead of everything",
-                body: "Daily reports and site issues flow in from site. Automated alerts fire before insurance or permits lapse, so nothing slips through.",
+                body: "Daily reports and site issues flow in from site, with expiry alerts for insurance or permits. The dashboard keeps your latest eight updates close, while Notifications organises this month and older activity in month folders.",
               },
             ].map(item => (
               <div key={item.step} className="relative p-8 rounded-2xl border bg-card shadow-sm">

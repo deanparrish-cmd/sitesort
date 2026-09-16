@@ -47,6 +47,13 @@ export const PM_GUIDE: GuideSection[] = [
           "Go to Projects in the sidebar and click New Project. Add the project name, address and dates. You can edit these any time from the project's Overview tab.",
         ],
       },
+      {
+        heading: "Find your way around a project",
+        body: [
+          "The project tabs are Overview, Progress, Documents, H&S, Plant & Materials, Daily Reports, Team, Team Portal, Site Board, Check-Ins, Site Issues and Close-Out. The tabs you see depend on your role and permissions.",
+          "On a wide desktop screen the tabs sit in two rows. On tablet and phone they wrap into more rows to keep the labels readable.",
+        ],
+      },
     ],
   },
   {
@@ -63,6 +70,12 @@ export const PM_GUIDE: GuideSection[] = [
         heading: "Then add them to a project",
         body: [
           "Open a project's Team tab and use Add to Project to bring in anyone already in your Contacts directory. Your own staff (admins, project managers, site workers) are managed separately under In House Team.",
+        ],
+      },
+      {
+        heading: "Use a contact's action pills",
+        body: [
+          "Contacts have labelled buttons such as Call, Text, WhatsApp, Email, Notes, Docs and Share. Available contact methods depend on the details saved for that person. Managers also see Insurance, Add to project, Edit and Remove. These buttons wrap onto extra rows on smaller screens.",
         ],
       },
     ],
@@ -155,15 +168,22 @@ export const PM_GUIDE: GuideSection[] = [
       {
         heading: "Pin what's on display",
         body: [
-          "From a project's own QR tab, pin documents, permits or photos so they show on the public board anyone can see by scanning the code. No login needed.",
+          "From a project's Site Board tab, pin documents, permits or photos so they show on the public board anyone can see by scanning the code. No login needed.",
         ],
       },
     ],
   },
   {
     id: "activity",
-    title: "The activity log",
+    title: "Activity and notification history",
     steps: [
+      {
+        heading: "Keep the dashboard brief; open the full history when needed",
+        body: [
+          "Recent Activity on the dashboard shows your latest eight updates. Choose View all to open Notifications: this month's activity stays visible, while earlier updates sit in collapsible month folders, newest month first.",
+          "Open a month folder to see its entries. Notification filters apply across the full history, including older months. Grouping into folders does not delete activity.",
+        ],
+      },
       {
         heading: "See what's happened",
         body: [
@@ -179,7 +199,14 @@ export const PM_GUIDE: GuideSection[] = [
       {
         heading: "Site issues",
         body: [
-          "The project's Issues tab lists everything logged by your team, in-app or shared. Close a resolved one, or use Close as invalid/duplicate with a reason if it wasn't a real issue.",
+          "The project's Site Issues tab lists issues logged by your team. Close a resolved one, or use Close as invalid/duplicate with a reason if it wasn't a real issue.",
+        ],
+      },
+      {
+        heading: "Dictate instead of typing",
+        body: [
+          "On the dashboard, the Plant & Materials Add/Edit form has microphone buttons beside the item name, location and notes. Log Issue has them beside the description and zone/location.",
+          "Select the microphone, allow microphone access if prompted, speak, then stop recording. Wait for the text to appear. Dictation appends to existing text rather than replacing it; review and edit it before saving.",
         ],
       },
       {
@@ -192,8 +219,14 @@ export const PM_GUIDE: GuideSection[] = [
   },
   {
     id: "team-certs",
-    title: "Insurance certificates on the Team tab",
+    title: "Team insurance and site-access compliance",
     steps: [
+      {
+        heading: "Review Team Compliance & Site Access",
+        body: [
+          "In the project's H&S tab, Team Compliance & Site Access shows insurance-based compliance, public liability certificate expiry dates and flagged site-access restrictions. Use Check-Ins for attendance records; this H&S section is not a training-qualifications or live check-in list.",
+        ],
+      },
       {
         heading: "See and update a member's certificate",
         body: [
@@ -263,6 +296,14 @@ export const WORKER_GUIDE: GuideSection[] = [
         heading: "Getting back",
         body: [
           "From any section, tap the Home button in the top corner (or the SiteSort logo) to go back to your Home screen.",
+        ],
+      },
+      {
+        heading: "Choose a project without signing out",
+        body: [
+          "If you belong to more than one project, open Your projects on the portal Home screen. The current project and every other entry show both the project name and company name. Only projects you have access to appear.",
+          "Choose another project in the same company to switch straight away. If it belongs to a different company, a confirmation names the company and project: choose Continue to switch or Cancel to stay where you are. No extra PIN or password is required for this confirmation.",
+          "After a successful switch the page refreshes to show the selected project. Opening the app again keeps you in your last-active project while you still have access.",
         ],
       },
     ],
@@ -369,11 +410,30 @@ export const WORKER_GUIDE: GuideSection[] = [
           text: "After you submit, add updates as notes rather than editing the original, so there's always a clear record of what was said and when.",
         },
       },
+      {
+        heading: "Use voice input where a microphone is shown",
+        body: [
+          "You can dictate into supported fields in Site Issues, Plant & Materials and Daily Report. Tap the microphone, allow access if asked, speak and tap again to stop. Wait for transcription to finish, then check and edit the text.",
+          "Dictation adds to what is already in the field. It does not save or submit the entry for you.",
+        ],
+      },
     ],
   },
 ];
 
 export const FAQ: FaqItem[] = [
+  {
+    id: "switch-projects",
+    question: "Can I use the portal for projects at different companies?",
+    answer: "Yes, if each project has granted you access. Open Your projects on the portal Home screen and check both the company and project name. Same-company choices switch immediately; a different company asks you to Continue or Cancel first. The app keeps your last-active project when you reopen it while you still have access.",
+    audience: "both",
+  },
+  {
+    id: "older-activity",
+    question: "Where did older dashboard activity go?",
+    answer: "The dashboard shows the latest eight updates. Choose View all to open Notifications. This month's entries are visible there, and older entries are grouped into expandable month folders. They have not been deleted.",
+    audience: "pm",
+  },
   {
     id: "invite-spam",
     question: "I can't find my invite email",

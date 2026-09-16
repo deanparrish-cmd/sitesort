@@ -627,7 +627,7 @@ export default function Dashboard() {
   return (
     <SidebarLayout>
       <PageHeader
-        className="mb-6"
+        className="mb-6 sm:flex-col xl:flex-row"
         title={<>{greeting}{userName ? `, ${userName}` : ""}!</>}
         description={dateLabel}
         actions={<>
