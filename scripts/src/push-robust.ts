@@ -103,14 +103,27 @@ async function main() {
 
   console.log("Creating blobs (concurrency 6, with retry)…");
   let done = 0;
+  const hardFailures: string[] = [];
   const raw = await pool(files, 6, async (f) => {
-    const sha = await createBlobWithRetry(f.content, f.path);
+    const result = await createBlobWithRetry(f.content, f.path);
     if (++done % 100 === 0) console.log(`  ${done}/${files.length}`);
-    return sha ? { path: f.path, mode: "100644" as const, type: "blob" as const, sha } : null;
+    if (!result.sha && !result.skippedOversize) hardFailures.push(f.path);
+    return result.sha ? { path: f.path, mode: "100644" as const, type: "blob" as const, sha: result.sha } : null;
   });
   const treeItems = raw.filter((x): x is NonNullable<typeof x> => x !== null);
-  const failedCount = raw.length - treeItems.length;
-  console.log(`  ${treeItems.length} blobs created${failedCount ? `, ${failedCount} skipped (oversized)` : ""}.`);
+  const oversizeSkipped = raw.length - treeItems.length - hardFailures.length;
+  console.log(`  ${treeItems.length} blobs created${oversizeSkipped ? `, ${oversizeSkipped} skipped (oversized)` : ""}.`);
+
+  // A hard failure (rate-limit, network, 5xx — anything but a legitimate 413) means
+  // the tree we're about to build is missing real content. Pushing it anyway would
+  // silently regress those files on GitHub while the script reports success — abort
+  // instead, so a failed push looks like a failed push.
+  if (hardFailures.length > 0) {
+    console.error(`\n❌ PUSH ABORTED: ${hardFailures.length} file(s) failed to upload for a reason OTHER than size (rate-limit/network/5xx) — pushing now would silently drop them from GitHub.`);
+    console.error(`   Failed: ${hardFailures.slice(0, 15).join(", ")}${hardFailures.length > 15 ? "…" : ""}`);
+    console.error(`   Nothing was pushed. Wait a bit (this is usually a shared GitHub API rate limit — see CLAUDE.md gotcha #5) and re-run.`);
+    process.exit(1);
+  }
 
   // A single create-tree call with ~2000+ entries reliably 502s (GitHub's tree
   // endpoint chokes on the payload, retries don't help). Build the tree
