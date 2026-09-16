@@ -1549,6 +1549,7 @@ export type PortalMyProjectsResponseProjectsItem = {
   id: string;
   name: string;
   companyName: string;
+  companyId: string;
 };
 
 export interface PortalMyProjectsResponse {

@@ -5541,7 +5541,9 @@ components:
                 type: string
               companyName:
                 type: string
-            required: [id, name, companyName]
+              companyId:
+                type: string
+            required: [id, name, companyName, companyId]
       required: [currentProjectId, projects]
 
     PortalSwitchProjectRequest:

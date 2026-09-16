@@ -1,0 +1,39 @@
+Two small portal switcher improvements (the cross-tenant isolation is now
+verified and tested, so this is UI only — do not change the access/
+security logic underneath).
+
+1. COMPANY NAMES IN THE SWITCHER:
+   In the portal "Your projects" switcher card, show each project with
+   BOTH its project name and its company name, so a member working across
+   multiple companies can clearly tell which company's job each entry
+   belongs to. (The switcher already has companyName available per the
+   earlier code review — surface it clearly on each row, not hidden.)
+   Group or visually separate by company if it reads more clearly with
+   several companies, but keep it simple.
+
+2. CROSS-COMPANY SWITCH CONFIRMATION (lightweight, NOT a PIN/password):
+   - Switching between projects within the SAME company: no change, stays
+     instant as now.
+   - Switching to a project belonging to a DIFFERENT company: show a
+     simple confirmation first, e.g. "You're switching to [Company Name].
+     Continue?" with Continue / Cancel. One tap, no password.
+   - This is only to prevent accidentally landing in the wrong company's
+     data and to make the boundary visible — it is NOT a security gate
+     (security is already handled by session scoping and revocation).
+   - After confirming, the existing switch-project flow runs exactly as
+     now (which correctly revokes the old session, etc.). Don't alter
+     that flow — just add the confirm step in front of the cross-company
+     case.
+
+3. Keep the member in their last-active project on opening the app as now
+   — this doesn't change the landing behaviour, only the switch UX.
+
+QUALITY: don't touch the verified access-control / tenant-isolation code
+or the switch-project security logic — UI/UX layer only. typecheck +
+check:layout pass at 360px standalone PWA (this is used on phones).
+Republish.
+
+VERIFY: switcher shows project + company name on each entry; switching
+within a company is instant; switching to a different company shows the
+confirm step, and confirming completes the switch correctly. Confirm the
+tenant-isolation tests still pass (nothing underneath changed).

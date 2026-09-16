@@ -83,6 +83,8 @@ describe("portal cross-tenant access", () => {
     expect((byId.get(companyA.projectId) as any).companyName).toBeTruthy();
     expect((byId.get(companyB.projectId) as any).companyName).toBeTruthy();
     expect((byId.get(companyA.projectId) as any).companyName).not.toBe((byId.get(companyB.projectId) as any).companyName);
+    expect((byId.get(companyA.projectId) as any).companyId).toBe(companyA.companyId);
+    expect((byId.get(companyB.projectId) as any).companyId).toBe(companyB.companyId);
   });
 
   it("switch-project moves the session to the other company's project", async () => {

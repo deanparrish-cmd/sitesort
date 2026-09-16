@@ -574,6 +574,7 @@ router.get("/portal/my-projects", ...portalGuards, async (req, res) => {
         id: projectsTable.id,
         name: projectsTable.name,
         companyName: companiesTable.name,
+        companyId: companiesTable.id,
       })
       .from(projectMembersTable)
       .innerJoin(projectsTable, eq(projectMembersTable.projectId, projectsTable.id))

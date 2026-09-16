@@ -3228,6 +3228,7 @@ export const GetPortalMyProjectsResponse = zod.object({
       id: zod.string(),
       name: zod.string(),
       companyName: zod.string(),
+      companyId: zod.string(),
     }),
   ),
 });

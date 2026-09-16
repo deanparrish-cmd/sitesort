@@ -25,3 +25,4 @@
 - [First-use scope boundaries](first-use-scope-boundaries.md) — preserve the intentional trial, programme, invoice and daily-report boundaries when improving discoverability.
 - [Company storage allowances](company-storage-allowances.md) — future storage plans belong to the company account and should align with the three existing price tiers.
 - [Layout validation trust](layout-validation-trust.md) — route navigation is not content coverage; permission errors and intentional menu blocking need explicit handling.
+- [Portal switch rendering boundary](portal-switch-render-boundary.md) — correct session switching can still leave mounted views stale; preserve a complete rendering reset.

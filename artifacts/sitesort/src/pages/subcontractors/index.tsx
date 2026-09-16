@@ -200,34 +200,36 @@ function WhatsAppIcon({ className }: { className?: string }) {
   );
 }
 
+const contactPillClass = "inline-flex shrink-0 items-center justify-center gap-1.5 px-2.5 py-1 min-h-8 rounded-full border border-border bg-background text-xs font-medium text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
 function ContactActions({ email, phone }: { email: string; phone: string | null }) {
   const cleanPhone = phone?.replace(/\D/g, "") ?? null;
   return (
-    <div className="flex items-center gap-0.5 shrink-0">
+    <>
       {phone && (
         <>
           <a
             href={`tel:${phone}`}
             title={`Call ${phone}`}
-            className="p-1.5 rounded-lg text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors"
+            className={cn(contactPillClass, "hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30")}
           >
-            <Phone className="w-4 h-4" />
+            <Phone className="w-3.5 h-3.5" />Call
           </a>
           <a
             href={`sms:${phone}`}
             title={`Text ${phone}`}
-            className="p-1.5 rounded-lg text-muted-foreground hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
+            className={cn(contactPillClass, "hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30")}
           >
-            <MessageSquare className="w-4 h-4" />
+            <MessageSquare className="w-3.5 h-3.5" />Text
           </a>
           <a
             href={`https://wa.me/${cleanPhone}`}
             target="_blank"
             rel="noreferrer"
             title={`WhatsApp ${phone}`}
-            className="p-1.5 rounded-lg text-muted-foreground hover:text-[#25D366] hover:bg-green-50 dark:hover:bg-green-950/30 transition-colors"
+            className={cn(contactPillClass, "hover:text-[#25D366] hover:bg-green-50 dark:hover:bg-green-950/30")}
           >
-            <WhatsAppIcon className="w-4 h-4" />
+            <WhatsAppIcon className="w-3.5 h-3.5" />WhatsApp
           </a>
         </>
       )}
@@ -235,12 +237,12 @@ function ContactActions({ email, phone }: { email: string; phone: string | null 
         <a
           href={`mailto:${email}`}
           title={`Email ${email}`}
-          className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+          className={cn(contactPillClass, "hover:text-primary hover:bg-primary/10")}
         >
-          <Mail className="w-4 h-4" />
+          <Mail className="w-3.5 h-3.5" />Email
         </a>
       )}
-    </div>
+    </>
   );
 }
 
@@ -903,7 +905,7 @@ export default function SubcontractorsPage() {
                   <div className="border-t divide-y">
                     {members.map(sub => (
                       <div key={sub.id} className={cn("px-4 py-3 hover:bg-muted/10 transition-colors", sub.paymentHold && "bg-red-50/50 dark:bg-red-950/10", sub.archivedAt && "opacity-60")}>
-                        {/* Top row: avatar + info + desktop-only actions */}
+                        {/* Contact details stay above the wrapping action pills at every width. */}
                         <div className="flex items-start gap-3">
                           {/* Avatar — person-first: initials from the contact's own name */}
                           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
@@ -1014,83 +1016,32 @@ export default function SubcontractorsPage() {
                             )}
                           </div>
 
-                          {/* Desktop-only: status + all action icons */}
-                          <div className="hidden md:flex items-center gap-1 shrink-0">
-                            {sub.archivedAt ? (
-                              caps.canManageSubcontractors && (
-                                <Button size="sm" variant="outline" onClick={() => restoreSub(sub)} isLoading={restoringId === sub.id}>
-                                  <ArchiveRestore className="w-3.5 h-3.5 mr-1.5" />Restore
-                                </Button>
-                              )
-                            ) : (
-                              <>
-                                <div className="flex flex-col items-end gap-1.5 mr-1">
-                                  {insuranceBadge(sub.insuranceStatus, sub.contactType)}
-                                  <RatingStars rating={sub.reliabilityRating} />
-                                </div>
-                                <ContactActions email={sub.contactEmail} phone={sub.contactPhone} />
-                                <button onClick={() => openNotes(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors" title="Notes & reminders log">
-                                  <StickyNote className="w-3.5 h-3.5" />
-                                </button>
-                                <button onClick={() => openDocs(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Documents">
-                                  <FileText className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  onClick={() => setSharingContact({
-                                    id: sub.id,
-                                    name: sub.contactName,
-                                    text: `${sub.contactName}\n${companyLabel(sub)}${sub.contactEmail ? `\nEmail: ${sub.contactEmail}` : ""}${sub.contactPhone ? `\nPhone: ${sub.contactPhone}` : ""}${sub.trades.length ? `\nTrades: ${sub.trades.join(", ")}` : ""}`,
-                                  })}
-                                  className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
-                                  title="Share contact"
-                                >
-                                  <Share2 className="w-3.5 h-3.5" />
-                                </button>
-                                {caps.canManageSubcontractors && (
-                                  <>
-                                    <button onClick={() => openInsAdd(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors" title="Add / renew insurance">
-                                      <ShieldCheck className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button onClick={() => setShareTarget(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Add to a project">
-                                      <FolderPlus className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button onClick={() => openEdit(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Edit">
-                                      <Pencil className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button onClick={() => setDeleteTarget(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="Remove contact">
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </>
-                                )}
-                              </>
-                            )}
-                          </div>
                         </div>
 
-                        {/* Mobile-only bottom bar: insurance badge left, action icons right */}
-                        <div className="flex md:hidden items-center justify-between mt-2 pt-2 border-t border-border/40">
+                        {/* One responsive action row avoids separate desktop/mobile controls drifting. */}
+                        <div data-testid="contact-action-row" className="flex flex-col gap-2 mt-2 pt-2 border-t border-border/40 min-w-0">
                           {sub.archivedAt ? (
-                            <div className="flex items-center justify-between w-full">
+                            <div className="flex flex-wrap gap-2 items-center justify-between w-full">
                               <Badge variant="secondary" className="text-[10px] gap-1"><Archive className="w-3 h-3" />Archived</Badge>
                               {caps.canManageSubcontractors && (
-                                <Button size="sm" variant="outline" onClick={() => restoreSub(sub)} isLoading={restoringId === sub.id}>
+                                <Button size="sm" variant="outline" className="rounded-full" onClick={() => restoreSub(sub)} isLoading={restoringId === sub.id}>
                                   <ArchiveRestore className="w-3.5 h-3.5 mr-1.5" />Restore
                                 </Button>
                               )}
                             </div>
                           ) : (
                             <>
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-wrap items-center gap-2">
                                 {insuranceBadge(sub.insuranceStatus, sub.contactType)}
                                 <RatingStars rating={sub.reliabilityRating} />
                               </div>
-                              <div className="flex items-center gap-0.5">
+                              <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                                 <ContactActions email={sub.contactEmail} phone={sub.contactPhone} />
-                                <button onClick={() => openNotes(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors" title="Notes & reminders log">
-                                  <StickyNote className="w-3.5 h-3.5" />
+                                <button onClick={() => openNotes(sub)} className={cn(contactPillClass, "hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30")} title="Notes & reminders log">
+                                  <StickyNote className="w-3.5 h-3.5" />Notes
                                 </button>
-                                <button onClick={() => openDocs(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Documents">
-                                  <FileText className="w-3.5 h-3.5" />
+                                <button onClick={() => openDocs(sub)} className={cn(contactPillClass, "hover:text-primary hover:bg-muted")} title="Documents">
+                                  <FileText className="w-3.5 h-3.5" />Docs
                                 </button>
                                 <button
                                   onClick={() => setSharingContact({
@@ -1098,24 +1049,24 @@ export default function SubcontractorsPage() {
                                     name: sub.contactName,
                                     text: `${sub.contactName}\n${companyLabel(sub)}${sub.contactEmail ? `\nEmail: ${sub.contactEmail}` : ""}${sub.contactPhone ? `\nPhone: ${sub.contactPhone}` : ""}${sub.trades.length ? `\nTrades: ${sub.trades.join(", ")}` : ""}`,
                                   })}
-                                  className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
+                                  className={cn(contactPillClass, "hover:text-primary hover:bg-muted")}
                                   title="Share contact"
                                 >
-                                  <Share2 className="w-3.5 h-3.5" />
+                                  <Share2 className="w-3.5 h-3.5" />Share
                                 </button>
                                 {caps.canManageSubcontractors && (
                                   <>
-                                    <button onClick={() => openInsAdd(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors" title="Add / renew insurance">
-                                      <ShieldCheck className="w-3.5 h-3.5" />
+                                    <button onClick={() => openInsAdd(sub)} className={cn(contactPillClass, "hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30")} title="Add / renew insurance">
+                                      <ShieldCheck className="w-3.5 h-3.5" />Insurance
                                     </button>
-                                    <button onClick={() => setShareTarget(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Add to a project">
-                                      <FolderPlus className="w-3.5 h-3.5" />
+                                    <button onClick={() => setShareTarget(sub)} className={cn(contactPillClass, "hover:text-primary hover:bg-muted")} title="Add to a project">
+                                      <FolderPlus className="w-3.5 h-3.5" />Add to project
                                     </button>
-                                    <button onClick={() => openEdit(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Edit">
-                                      <Pencil className="w-3.5 h-3.5" />
+                                    <button onClick={() => openEdit(sub)} className={cn(contactPillClass, "hover:text-primary hover:bg-muted")} title="Edit">
+                                      <Pencil className="w-3.5 h-3.5" />Edit
                                     </button>
-                                    <button onClick={() => setDeleteTarget(sub)} className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="Remove contact">
-                                      <Trash2 className="w-3.5 h-3.5" />
+                                    <button onClick={() => setDeleteTarget(sub)} className={cn(contactPillClass, "hover:text-destructive hover:bg-destructive/10")} title="Remove contact">
+                                      <Trash2 className="w-3.5 h-3.5" />Remove
                                     </button>
                                   </>
                                 )}

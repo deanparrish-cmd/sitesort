@@ -734,6 +734,9 @@ function ProjectSwitcherCard() {
   const [, setLocation] = useLocation();
   const [open, setOpen] = useState(false);
   const projects = data?.projects ?? [];
+  const [confirmProjectId, setConfirmProjectId] = useState<string | null>(null);
+  const confirmProject = projects.find(p => p.id === confirmProjectId);
+  useEffect(() => { setConfirmProjectId(null); }, [data?.currentProjectId]);
   if (projects.length < 2) return null;
   const current = projects.find(p => p.id === data?.currentProjectId);
   const others = projects.filter(p => p.id !== data?.currentProjectId);
@@ -746,6 +749,9 @@ function ProjectSwitcherCard() {
         queryClient.clear();
         setOpen(false);
         setLocation("/portal/overview");
+        // Clear mounted views as well as cached queries: the destination is
+        // often the same route, so navigation alone can retain old project UI.
+        window.location.reload();
       }
     } catch (e: any) {
       toast({ variant: "destructive", title: "Couldn't switch project", description: e?.data?.message ?? "Please try again." });
@@ -763,7 +769,8 @@ function ProjectSwitcherCard() {
         <FolderUp className="w-5 h-5 text-primary shrink-0" />
         <span className="min-w-0 flex-1">
           <span className="block text-xs text-muted-foreground">Your projects</span>
-          <span className="block font-semibold truncate">{current?.name ?? "Current project"}</span>
+          <span className="block font-semibold break-words">{current?.name ?? "Current project"}</span>
+          <span className="block text-sm text-muted-foreground break-words">{current?.companyName}</span>
         </span>
         <ChevronDown className={cn("w-5 h-5 text-muted-foreground shrink-0 transition-transform", open && "rotate-180")} />
       </button>
@@ -772,20 +779,42 @@ function ProjectSwitcherCard() {
           {others.map(p => (
             <button
               key={p.id}
-              onClick={() => doSwitch(p.id)}
+              onClick={() => {
+                if (current?.companyId && p.companyId === current.companyId) {
+                  void doSwitch(p.id);
+                } else {
+                  setConfirmProjectId(p.id);
+                }
+              }}
               disabled={switchProject.isPending}
               className="w-full flex items-center gap-3 rounded-lg border px-3 py-3 min-h-11 text-left hover:bg-accent/10 active:bg-accent/10 disabled:opacity-50"
               data-testid={`button-switch-project-${p.id}`}
             >
               <span className="min-w-0 flex-1">
-                <span className="block font-semibold truncate">{p.name}</span>
-                <span className="block text-xs text-muted-foreground truncate">{p.companyName}</span>
+                <span className="block font-semibold break-words">{p.name}</span>
+                <span className="block text-sm text-muted-foreground break-words">{p.companyName}</span>
               </span>
               {switchProject.isPending ? <Spinner className="size-4" /> : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
             </button>
           ))}
         </div>
       )}
+      <Dialog open={!!confirmProject} onOpenChange={v => { if (!v && !switchProject.isPending) setConfirmProjectId(null); }}>
+        <div role="dialog" aria-modal="true" aria-labelledby="switch-company-title">
+          <DialogHeader>
+            <DialogTitle id="switch-company-title">Switch company?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm break-words">
+            You’re switching to <strong>{confirmProject?.companyName}</strong> for <strong>{confirmProject?.name}</strong>. Continue?
+          </p>
+          <div className="flex flex-wrap justify-end gap-2 mt-6">
+            <button type="button" className="rounded-full border px-4 min-h-11 text-sm font-medium disabled:opacity-50" disabled={switchProject.isPending} onClick={() => setConfirmProjectId(null)}>Cancel</button>
+            <button type="button" className="rounded-full bg-primary text-primary-foreground px-4 min-h-11 text-sm font-medium disabled:opacity-50" disabled={switchProject.isPending} onClick={() => { if (confirmProject) void doSwitch(confirmProject.id); }}>
+              {switchProject.isPending ? "Switching…" : "Continue"}
+            </button>
+          </div>
+        </div>
+      </Dialog>
     </Card>
   );
 }
