@@ -13,10 +13,11 @@ import {
   ShieldAlert, FileSignature, Users, Bell, Search,
   MessageSquare, Camera, FilePlus, Plus, AlertCircle, CreditCard,
   FileText, CheckCircle2, Clock, TrendingUp, Zap, X, Circle, ClipboardCheck,
-  Lock, Sparkles, Trash2, UserCheck, Wrench,
+  Lock, Sparkles, Trash2, UserCheck, Wrench, LogOut,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { AlertViewer } from "@/components/alert-viewer";
+import { CheckinNotificationDialog, CHECKIN_NOTIFICATION_TYPES } from "@/components/checkin-notification-dialog";
 import { navigateToNotification, itemDeepLink } from "@/lib/deep-link";
 import { useToast } from "@/hooks/use-toast";
 import { useListProjects, useGetComplianceOverview } from "@workspace/api-client-react";
@@ -62,6 +63,7 @@ function notifIcon(type: string) {
     case "safety_concern": return <AlertTriangle className="w-4 h-4 text-amber-500" />;
     case "daily_report":   return <ClipboardCheck className="w-4 h-4 text-teal-500" />;
     case "check_in":         return <UserCheck className="w-4 h-4 text-green-600" />;
+    case "check_out":        return <LogOut className="w-4 h-4 text-muted-foreground" />;
     case "check_in_blocked": return <AlertTriangle className="w-4 h-4 text-red-500" />;
     case "trial_ending":   return <CreditCard className="w-4 h-4 text-orange-500" />;
     case "payment_failed": return <CreditCard className="w-4 h-4 text-red-500" />;
@@ -622,8 +624,13 @@ export default function Dashboard() {
     fetch(`/api/notifications/${id}/read`, { method: "PATCH", headers: authHeaders() }).catch(() => {});
   };
 
+  const [checkinNotifId, setCheckinNotifId] = useState<string | null>(null);
   const handleActivityClick = async (n: Notification) => {
     markActivityRead(n.id);
+
+    // Check-in / blocked / sign-out items open their own detail (photo, times,
+    // register link) instead of navigating anywhere.
+    if (CHECKIN_NOTIFICATION_TYPES.includes(n.type)) { setCheckinNotifId(n.id); return; }
 
     if (await navigateToNotification(n, navigate)) return;
 
@@ -1021,6 +1028,7 @@ export default function Dashboard() {
           onClose={() => setActivityViewer(null)}
         />
       )}
+      {checkinNotifId && <CheckinNotificationDialog notificationId={checkinNotifId} onClose={() => setCheckinNotifId(null)} />}
     </SidebarLayout>
   );
 }

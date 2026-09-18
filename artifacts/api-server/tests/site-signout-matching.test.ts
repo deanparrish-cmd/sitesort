@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import jwt from "jsonwebtoken";
 import { db } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { siteCheckinsTable, qrCodesTable } from "@workspace/db/schema";
+import { siteCheckinsTable, qrCodesTable, notificationsTable } from "@workspace/db/schema";
 import { seedCompany, cleanupFixtures, api, login, type Fixture } from "./helpers";
 
 /**
@@ -37,6 +37,7 @@ describe("site sign-out matching", () => {
 
   afterAll(async () => {
     for (const id of rowIds) await db.delete(siteCheckinsTable).where(eq(siteCheckinsTable.id, id));
+    await db.delete(notificationsTable).where(eq(notificationsTable.userId, co.userId));
     await db.delete(qrCodesTable).where(eq(qrCodesTable.projectId, co.projectId));
     await cleanupFixtures([co]);
   });

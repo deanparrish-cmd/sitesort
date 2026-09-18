@@ -17,6 +17,7 @@ export type RegisterCheckin = {
   checkedOutAt?: string | null;
   onSite?: boolean;
   notSignedOut?: boolean;
+  personKey?: string | null;
 };
 
 function authHeaders(): Record<string, string> {
@@ -54,8 +55,19 @@ export function OnSiteRegister({
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // One row per PERSON: several open rows for the same registered person (or the
+  // same name + company, for older rows) collapse to their latest, so the
+  // roll-call never lists one human twice.
+  const seen = new Set<string>();
   const onSite = checkins
     .filter(c => c.onSite ?? !c.checkedOutAt)
+    .sort((a, b) => b.checkedInAt.localeCompare(a.checkedInAt))
+    .filter(c => {
+      const k = c.personKey ?? `${c.workerName.trim().toLowerCase().replace(/\s+/g, " ")}|${(c.companyName ?? "").trim().toLowerCase().replace(/\s+/g, " ")}|${c.projectId ?? ""}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    })
     // Not-signed-out flags first, then longest on site first.
     .sort((a, b) => Number(!!b.notSignedOut) - Number(!!a.notSignedOut) || a.checkedInAt.localeCompare(b.checkedInAt));
   const flagged = onSite.filter(c => c.notSignedOut).length;

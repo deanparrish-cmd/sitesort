@@ -15,10 +15,13 @@ import {
   Check,
   CreditCard,
   ClipboardCheck,
+  UserCheck,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AlertViewer } from "@/components/alert-viewer";
 import { navigateToNotification } from "@/lib/deep-link";
+import { CheckinNotificationDialog, CHECKIN_NOTIFICATION_TYPES } from "@/components/checkin-notification-dialog";
 
 type Notification = {
   id: string;
@@ -69,6 +72,12 @@ function notifIcon(type: string) {
       return <ClipboardCheck className="w-5 h-5 text-teal-500" />;
     case "portal_issue_logged":
       return <AlertTriangle className="w-5 h-5 text-violet-500" />;
+    case "check_in":
+      return <UserCheck className="w-5 h-5 text-green-600" />;
+    case "check_out":
+      return <LogOut className="w-5 h-5 text-muted-foreground" />;
+    case "check_in_blocked":
+      return <AlertTriangle className="w-5 h-5 text-red-500" />;
     default:
       return <Bell className="w-5 h-5 text-muted-foreground" />;
   }
@@ -161,8 +170,11 @@ export default function NotificationsPage() {
     finally { setMarkingAll(false); }
   };
 
+  const [checkinNotifId, setCheckinNotifId] = useState<string | null>(null);
   const handleClick = async (n: Notification) => {
     if (!n.read) await markRead(n.id);
+
+    if (CHECKIN_NOTIFICATION_TYPES.includes(n.type)) { setCheckinNotifId(n.id); return; }
 
     if (await navigateToNotification(n, setLocation)) return;
 
@@ -299,6 +311,7 @@ export default function NotificationsPage() {
           onClose={() => setViewer(null)}
         />
       )}
+      {checkinNotifId && <CheckinNotificationDialog notificationId={checkinNotifId} onClose={() => setCheckinNotifId(null)} />}
     </SidebarLayout>
   );
 }

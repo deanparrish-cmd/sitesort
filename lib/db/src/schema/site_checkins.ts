@@ -19,6 +19,11 @@ export const siteCheckinsTable = pgTable("site_checkins", {
   checkedOutBy: text("checked_out_by").references(() => usersTable.id, { onDelete: "set null" }),
   checkoutNote: text("checkout_note"),
   checkoutMethod: text("checkout_method"),
+  // Identity of the REGISTERED person this check-in matched (user:<id> |
+  // person:<id> | sub:<id>), so one human can't show up as two people when they
+  // type "Amy" one day and "Amy Parrish" the next. NULL on rows from before this
+  // existed; those fall back to matching on the stored name + company text.
+  personKey: text("person_key"),
 }, (t) => ({
   projectOpenIdx: index("site_checkins_project_open_idx").on(t.projectId, t.checkedOutAt),
 }));

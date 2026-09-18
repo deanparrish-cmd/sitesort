@@ -176,6 +176,7 @@ export const PM_GUIDE: GuideSection[] = [
         body: [
           "The project's Check-Ins tab (and the Check-Ins page) opens with Currently on site: everyone who has signed in and not yet signed out, so you can use it for a roll call.",
           "The public site board (the page the QR code opens) shows a live count, for example 12 currently on site. It is a number only; names are only visible to you here.",
+          "In your notifications and the dashboard activity feed, tap a Check-in, Signed out or Check-in blocked item to open its detail: the photo (tap to enlarge), name, company, in and out times, a link to Currently on site, and for a blocked attempt exactly what they typed and why it was blocked. Sign-outs appear in the feed as well, so a sign-out between two check-ins is easy to see.",
           "Anyone still signed in from a previous day is flagged Not signed out. They are never closed automatically. Choose Sign out beside their name, add a note (for example, left site at 17:00) and confirm. Admins and project managers can do this.",
         ],
       },
@@ -374,7 +375,7 @@ export const WORKER_GUIDE: GuideSection[] = [
         heading: "Sign out when you leave",
         body: [
           "Scan the same QR code again. On the phone you signed in with, you will see Sign out of site straight away; choose it and your time is recorded. When you are signed out, the same phone offers Sign in as your name and company, so you only need to take the photo. Choose Not me if it is someone else's phone.",
-          "On a different phone, start typing your name. After three letters, people currently signed in on this site appear (first name and company only) so you can tap yourself and sign out. If your spelling is slightly off, you will be asked Did you mean...? to confirm; nothing is ever signed out without your tap. The company box suggests companies already on this project, and you can still type a new one.",
+          "On a different phone, start typing your name. After three letters, people currently signed in on this site appear (first name and company only) so you can tap yourself and sign out. If your spelling is slightly off, you will be asked Did you mean...? to confirm; nothing is ever signed out without your tap. The same happens when signing in: if your name or company is a close match to someone registered on the project (for example 'I cloud' for 'Amy I Cloud'), you are asked to confirm rather than being turned away. The company box suggests companies already on this project, and you can still type a new one.",
           "You can sign in and out as many times as you need in a day, for example for lunch. Each visit is recorded separately. If you forget to sign out, tell your site manager so they can do it for you.",
         ],
       },

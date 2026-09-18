@@ -75,6 +75,8 @@ async function notifyBlockedCheckin(
         message: `${workerName} (${companyName}) was blocked from checking in: ${reasonText}.`,
         relatedEntityId: projectId,
         relatedEntityType: "project",
+        // What they typed and why: the detail view can't rely on parsing the message.
+        metadata: { projectId, workerName, companyName, reason },
         read: false,
       });
     }
@@ -84,12 +86,14 @@ async function notifyBlockedCheckin(
 }
 
 // Best-effort: tell the same audience (managers + site manager) who arrived
-// and when, each time a worker successfully checks in via the QR board.
+// and when, each time a worker successfully checks in via the QR board. The
+// notification points at the check-in row itself so it can open its detail.
 async function notifySuccessfulCheckin(
   projectId: string,
   workerName: string,
   companyName: string,
   checkedInAt: Date,
+  checkinId: string,
 ): Promise<void> {
   try {
     const rec = await checkinRecipients(projectId);
@@ -102,8 +106,40 @@ async function notifySuccessfulCheckin(
         type: "check_in",
         title: `Check-in at ${rec.projectName}`,
         message: `${workerName} (${companyName}) checked in on site at ${timeStr}.`,
-        relatedEntityId: projectId,
-        relatedEntityType: "project",
+        relatedEntityId: checkinId,
+        relatedEntityType: "site_checkin",
+        metadata: { projectId, workerName, companyName },
+        read: false,
+      });
+    }
+  } catch {
+    /* alerting is best-effort */
+  }
+}
+
+// Best-effort: sign-outs now show in the activity feed too, so a sign-out
+// between two check-ins is visible instead of looking like a double check-in.
+async function notifySignedOut(
+  projectId: string,
+  row: { id: string; workerName: string; companyName: string | null },
+  at: Date,
+  by?: { name: string; note?: string | null },
+): Promise<void> {
+  try {
+    const rec = await checkinRecipients(projectId);
+    if (!rec) return;
+    const timeStr = at.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
+    const who = `${row.workerName}${row.companyName ? ` (${row.companyName})` : ""}`;
+    for (const userId of rec.userIds) {
+      await db.insert(notificationsTable).values({
+        id: generateId(),
+        userId,
+        type: "check_out",
+        title: `Signed out at ${rec.projectName}`,
+        message: by ? `${who} was signed out by ${by.name} at ${timeStr}${by.note ? `: ${by.note}` : ""}.` : `${who} signed out at ${timeStr}.`,
+        relatedEntityId: row.id,
+        relatedEntityType: "site_checkin",
+        metadata: { projectId, workerName: row.workerName, companyName: row.companyName },
         read: false,
       });
     }
@@ -316,19 +352,18 @@ function serializeCheckin<T extends { checkedInAt: Date; checkedOutAt: Date | nu
 // The person's currently-open cycles on a project (name + company, case-insensitive),
 // newest first.
 async function openCheckinsFor(projectId: string, workerName: string, companyName: string) {
-  return db.select().from(siteCheckinsTable).where(and(
-    eq(siteCheckinsTable.projectId, projectId),
-    isNull(siteCheckinsTable.checkedOutAt),
-    sql`coalesce(${siteCheckinsTable.checkoutMethod}, '') <> 'legacy'`,
-    sql`lower(regexp_replace(trim(${siteCheckinsTable.workerName}), '[[:space:]]+', ' ', 'g')) = ${normText(workerName)}`,
-    sql`lower(regexp_replace(trim(coalesce(${siteCheckinsTable.companyName}, '')), '[[:space:]]+', ' ', 'g')) = ${normText(companyName)}`,
-  )).orderBy(desc(siteCheckinsTable.checkedInAt));
+  const open = await openRowsForProject(projectId);
+  const key = matchRegistered(await loadRegistered(projectId), workerName, companyName)?.key ?? null;
+  const n = normText(workerName), c = normText(companyName);
+  // Same registered person (by identity link) OR same typed name + company.
+  return open.filter(r => (key && r.personKey === key) || (normText(r.workerName) === n && normText(r.companyName ?? "") === c));
 }
 
 // Count-only view of the "Currently on site" register (signed in, not signed out;
 // legacy rows excluded) for the PUBLIC board. Deliberately no names.
 async function countOnSite(projectId: string): Promise<number> {
-  const [row] = await db.select({ n: sql<number>`count(*)::int` }).from(siteCheckinsTable).where(and(
+  // Distinct PEOPLE: one identity (or, for older rows, one name+company) counts once.
+  const [row] = await db.select({ n: sql<number>`count(distinct coalesce(${siteCheckinsTable.personKey}, lower(trim(${siteCheckinsTable.workerName})) || '|' || lower(trim(coalesce(${siteCheckinsTable.companyName}, '')))))::int` }).from(siteCheckinsTable).where(and(
     eq(siteCheckinsTable.projectId, projectId),
     isNull(siteCheckinsTable.checkedOutAt),
     sql`coalesce(${siteCheckinsTable.checkoutMethod}, '') <> 'legacy'`,
@@ -375,6 +410,95 @@ function isClose(typed: string, actual: string): boolean {
 }
 function firstName(full: string): string {
   return full.trim().split(/\s+/)[0] ?? full;
+}
+
+// ---- Registered people for a project (who may check in) ---------------------
+// Three record kinds can register someone: an in-house user (matched on name
+// only), a subcontractor contact (name + company), a team person (name, plus
+// company when they belong to a subcontractor). `key` is the identity used to
+// group check-ins, so a contact card and its primary-contact person (which can
+// carry slightly different names) count as ONE human.
+type Registered = {
+  key: string;
+  kind: "user" | "contact" | "person";
+  names: string[];            // accepted spellings of the name
+  company: string | null;     // canonical company text
+  companyRequired: boolean;
+  insuranceSubId: string | null;
+};
+
+async function loadRegistered(projectId: string): Promise<Registered[]> {
+  const out: Registered[] = [];
+  const users = await db.select({ id: usersTable.id, name: usersTable.name })
+    .from(projectMembersTable)
+    .innerJoin(usersTable, eq(usersTable.id, projectMembersTable.userId))
+    .where(eq(projectMembersTable.projectId, projectId));
+  for (const u of users) out.push({ key: `user:${u.id}`, kind: "user", names: [u.name], company: null, companyRequired: false, insuranceSubId: null });
+
+  const contacts = await db.select({ id: subcontractorsTable.id, contactName: subcontractorsTable.contactName, companyName: subcontractorsTable.companyName })
+    .from(projectMembersTable)
+    .innerJoin(subcontractorsTable, eq(subcontractorsTable.id, projectMembersTable.subcontractorId))
+    .where(eq(projectMembersTable.projectId, projectId));
+  const subIds = [...new Set(contacts.map(c => c.id))];
+  const primaries = subIds.length
+    ? await db.select({ id: peopleTable.id, subId: peopleTable.subcontractorId, name: peopleTable.name })
+        .from(peopleTable)
+        .where(and(inArray(peopleTable.subcontractorId, subIds), eq(peopleTable.isPrimaryContact, true), isNull(peopleTable.archivedAt)))
+    : [];
+  const primaryBySub = new Map(primaries.map(p => [p.subId as string, p]));
+  for (const c of contacts) {
+    const prim = primaryBySub.get(c.id);
+    // Accept the contact card's spelling AND its linked primary person's, and
+    // key both to the person so they group as one human.
+    out.push({ key: prim ? `person:${prim.id}` : `sub:${c.id}`, kind: "contact", names: [c.contactName, ...(prim ? [prim.name] : [])], company: c.companyName, companyRequired: true, insuranceSubId: c.id });
+  }
+
+  const people = await db.select({ id: peopleTable.id, name: peopleTable.name, subId: peopleTable.subcontractorId, subCompany: subcontractorsTable.companyName })
+    .from(projectMembersTable)
+    .innerJoin(peopleTable, eq(peopleTable.id, projectMembersTable.personId))
+    .leftJoin(subcontractorsTable, eq(subcontractorsTable.id, peopleTable.subcontractorId))
+    .where(and(eq(projectMembersTable.projectId, projectId), isNull(peopleTable.archivedAt)));
+  for (const p of people) out.push({ key: `person:${p.id}`, kind: "person", names: [p.name], company: p.subCompany ?? null, companyRequired: !!p.subCompany, insuranceSubId: p.subId ?? null });
+  return out;
+}
+
+// Same rules the check-in has always used (users by name; contacts by name +
+// company; people by name, + company when they belong to a firm), whitespace-
+// and case-insensitive. Users win, then contacts, then people.
+function matchRegistered(records: Registered[], typedName: string, typedCompany: string): Registered | null {
+  const n = normText(typedName), c = normText(typedCompany);
+  for (const kind of ["user", "contact", "person"] as const) {
+    const hit = records.find(r => r.kind === kind && r.names.some(x => normText(x) === n) && (!r.companyRequired || normText(r.company ?? "") === c));
+    if (hit) return hit;
+  }
+  return null;
+}
+
+// Close-but-not-exact registered people, for "Did you mean...?" at check-in.
+// Only for 3+ typed letters; at most 3; the client always asks for a tap.
+function nearRegistered(records: Registered[], typedName: string, typedCompany: string): { key: string; label: string; workerName: string; companyName: string }[] {
+  const n = normText(typedName), c = normText(typedCompany);
+  if (n.length < 3) return [];
+  const scored: { r: Registered; name: string; score: number }[] = [];
+  for (const r of records) {
+    for (const nm of r.names) {
+      const full = normText(nm);
+      const tokens = full.split(" ");
+      const nameClose = isClose(n, full) || tokens.some(t => t === n || (n.length >= 3 && t.startsWith(n))) || full.startsWith(n) || tokens.some(t => isClose(n, t));
+      if (!nameClose) continue;
+      const rc = normText(r.company ?? "");
+      const companyFine = !c || !r.companyRequired || rc === c || isClose(c, rc) || rc.includes(c) || c.includes(rc);
+      if (!companyFine) continue;
+      scored.push({ r, name: nm, score: (full === n ? 0 : isClose(n, full) ? 1 : 2) + (rc === c ? 0 : 1) });
+    }
+  }
+  const seen = new Set<string>();
+  return scored.sort((a, b) => a.score - b.score).filter(x => (seen.has(x.r.key) ? false : (seen.add(x.r.key), true))).slice(0, 3).map(x => ({
+    key: x.r.key,
+    label: [x.name, x.r.company].filter(Boolean).join(", "),
+    workerName: x.name,
+    companyName: x.r.company ?? typedCompany.trim(),
+  }));
 }
 
 type OpenRow = typeof siteCheckinsTable.$inferSelect;
@@ -433,7 +557,8 @@ router.get("/site/:token/who", async (req: Request, res: Response) => {
     const labels = publicLabels(open);
     const shape = (r: OpenRow) => ({ checkinId: r.id, label: labels.get(r.id), checkedInAt: r.checkedInAt.toISOString() });
 
-    const exact = typedCompany ? open.find(r => normText(r.workerName) === typedName && normText(r.companyName ?? "") === typedCompany) : undefined;
+    const typedKey = typedCompany && typedName.length >= 3 ? matchRegistered(await loadRegistered(qr.projectId), typedName, typedCompany)?.key ?? null : null;
+    const exact = typedCompany ? open.find(r => (typedKey && r.personKey === typedKey) || (normText(r.workerName) === typedName && normText(r.companyName ?? "") === typedCompany)) : undefined;
     if (exact) { res.json({ exact: shape(exact), matches: [], suggestions: [] }); return; }
 
     const tokens = (r: OpenRow) => normText(r.workerName).split(" ");
@@ -495,6 +620,20 @@ router.get("/site/:token/companies", async (req: Request, res: Response) => {
   }
 });
 
+// One person = one presence. Signing out closes the target row AND any other
+// still-open row for the same person from the SAME London day (duplicates from
+// earlier spelling variants), so the roll-call can't keep a ghost. Open rows
+// from a PREVIOUS day are deliberately left flagged, never auto-closed.
+async function openRowsToClose(projectId: string, target: OpenRow): Promise<OpenRow[]> {
+  const day = londonDateStr(target.checkedInAt);
+  const t = normText(target.workerName), c = normText(target.companyName ?? "");
+  const all = await openRowsForProject(projectId);
+  return all.filter(r => r.id === target.id || (
+    londonDateStr(r.checkedInAt) === day &&
+    ((target.personKey && r.personKey === target.personKey) || (normText(r.workerName) === t && normText(r.companyName ?? "") === c))
+  ));
+}
+
 // Public: is this person currently signed in on this site? Drives whether the
 // QR page offers SIGN IN or SIGN OUT. Returns only a boolean + their own times.
 router.get("/site/:token/status", async (req: Request, res: Response) => {
@@ -535,11 +674,16 @@ router.post("/site/:token/checkout", async (req: Request, res: Response) => {
       open = await openCheckinsFor(qr.projectId, workerName, companyName);
     }
     if (!open[0]) { res.status(409).json({ error: "not_signed_in", message: "You are not signed in on this site" }); return; }
-    const [row] = await db.update(siteCheckinsTable)
-      .set({ checkedOutAt: new Date(), checkoutMethod: "self" })
-      .where(and(eq(siteCheckinsTable.id, open[0].id), isNull(siteCheckinsTable.checkedOutAt)))
+    const targetRow = open[0];
+    const toClose = await openRowsToClose(qr.projectId, targetRow);
+    const now = new Date();
+    const closed = await db.update(siteCheckinsTable)
+      .set({ checkedOutAt: now, checkoutMethod: "self" })
+      .where(and(inArray(siteCheckinsTable.id, toClose.map(r => r.id)), isNull(siteCheckinsTable.checkedOutAt)))
       .returning();
+    const row = closed.find(r => r.id === targetRow.id);
     if (!row) { res.status(409).json({ error: "not_signed_in", message: "You are not signed in on this site" }); return; }
+    void notifySignedOut(qr.projectId, row, now);
     res.json(serializeCheckin(row));
   } catch {
     res.status(500).json({ error: "server_error", message: "Sign-out failed" });
@@ -559,19 +703,91 @@ router.post("/projects/:projectId/checkins/:id/sign-out", authenticate, async (r
     }
     const note = typeof req.body?.note === "string" ? req.body.note.trim() : "";
     if (!note) { res.status(400).json({ error: "validation_error", message: "A note is required" }); return; }
-    const [row] = await db.update(siteCheckinsTable)
-      .set({ checkedOutAt: new Date(), checkedOutBy: req.user!.id, checkoutNote: note.slice(0, 500), checkoutMethod: "manual" })
-      .where(and(
-        eq(siteCheckinsTable.id, req.params.id),
-        eq(siteCheckinsTable.projectId, project[0].id),
-        isNull(siteCheckinsTable.checkedOutAt),
-      )).returning();
+    const target = (await openRowsForProject(project[0].id)).find(r => r.id === req.params.id);
+    if (!target) { res.status(409).json({ error: "not_signed_in", message: "Already signed out, or not found" }); return; }
+    const toClose = await openRowsToClose(project[0].id, target);
+    const now = new Date();
+    const closed = await db.update(siteCheckinsTable)
+      .set({ checkedOutAt: now, checkedOutBy: req.user!.id, checkoutNote: note.slice(0, 500), checkoutMethod: "manual" })
+      .where(and(inArray(siteCheckinsTable.id, toClose.map(r => r.id)), eq(siteCheckinsTable.projectId, project[0].id), isNull(siteCheckinsTable.checkedOutAt)))
+      .returning();
+    const row = closed.find(r => r.id === target.id);
     if (!row) { res.status(409).json({ error: "not_signed_in", message: "Already signed out, or not found" }); return; }
+    const managerName = (await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1))[0]?.name ?? "a manager";
+    void notifySignedOut(project[0].id, row, now, { name: managerName, note });
     void logActivity({ userId: req.user!.id, projectId: project[0].id, companyId: project[0].companyId, section: "check-ins", action: "update", itemType: "site_checkin", itemId: row.id, metadata: { signedOut: row.workerName, note }, req });
     res.json(serializeCheckin(row));
   } catch (err) {
     req.log.error({ err }, "Manual sign-out error");
     res.status(500).json({ error: "server_error", message: "Failed to sign out" });
+  }
+});
+
+// Public: at check-in, is what was typed a registered person? If not, close
+// matches ("Did you mean...?") so a company/name typo is suggested, not just blocked.
+router.get("/site/:token/register-match", async (req: Request, res: Response) => {
+  try {
+    const workerName = String(req.query.workerName ?? "");
+    const companyName = String(req.query.companyName ?? "");
+    const qr = await db.select().from(qrCodesTable).where(eq(qrCodesTable.token, req.params.token)).then(r => r[0]);
+    if (!qr) { res.status(404).json({ error: "not_found", message: "Invalid site token" }); return; }
+    if (normText(workerName).length < 3) { res.json({ registered: false, suggestions: [] }); return; }
+    const records = await loadRegistered(qr.projectId);
+    if (matchRegistered(records, workerName, companyName)) { res.json({ registered: true, suggestions: [] }); return; }
+    res.json({ registered: false, suggestions: nearRegistered(records, workerName, companyName).map(({ label, workerName: w, companyName: c }) => ({ label, workerName: w, companyName: c })) });
+  } catch {
+    res.status(500).json({ error: "server_error", message: "Failed to look up" });
+  }
+});
+
+// Authenticated: the detail behind a check-in / check-in-blocked / sign-out
+// notification (opened from the activity feed). Scoped to the notification's
+// owner and their company.
+router.get("/notifications/:notificationId/checkin", authenticate, async (req: Request, res: Response) => {
+  try {
+    const n = (await db.select().from(notificationsTable).where(and(eq(notificationsTable.id, req.params.notificationId), eq(notificationsTable.userId, req.user!.id))).limit(1))[0];
+    if (!n || !["check_in", "check_in_blocked", "check_out"].includes(n.type)) { res.status(404).json({ error: "not_found", message: "Not found" }); return; }
+    const meta = (n.metadata ?? {}) as { projectId?: string; workerName?: string; companyName?: string; reason?: string };
+    const projectId = meta.projectId ?? (n.relatedEntityType === "project" ? n.relatedEntityId : null);
+
+    // Older notifications carry only the message text: recover name/company from it.
+    const parsed = n.message.match(/^(.*?) \((.*)\) (?:checked in on site at|signed out at|was signed out by|was blocked from checking in)/);
+    const workerName = meta.workerName ?? parsed?.[1] ?? null;
+    const companyName = meta.companyName ?? parsed?.[2] ?? null;
+
+    let project = projectId
+      ? (await db.select({ id: projectsTable.id, name: projectsTable.name, companyId: projectsTable.companyId }).from(projectsTable).where(eq(projectsTable.id, projectId)).limit(1))[0]
+      : undefined;
+    let checkin: OpenRow | undefined;
+    if (n.relatedEntityType === "site_checkin" && n.relatedEntityId) {
+      checkin = (await db.select().from(siteCheckinsTable).where(eq(siteCheckinsTable.id, n.relatedEntityId)).limit(1))[0];
+      if (checkin && !project) project = (await db.select({ id: projectsTable.id, name: projectsTable.name, companyId: projectsTable.companyId }).from(projectsTable).where(eq(projectsTable.id, checkin.projectId)).limit(1))[0];
+    } else if (n.type !== "check_in_blocked" && project && workerName) {
+      // Legacy check-in notification (pointed at the project): find the row by
+      // name, within a few minutes of the notification.
+      const rows = await db.select().from(siteCheckinsTable).where(eq(siteCheckinsTable.projectId, project.id)).orderBy(desc(siteCheckinsTable.checkedInAt));
+      checkin = rows.find(r => normText(r.workerName) === normText(workerName) && Math.abs(r.checkedInAt.getTime() - n.createdAt.getTime()) <= 5 * 60_000);
+    }
+    if (!project || project.companyId !== req.user!.companyId) { res.status(404).json({ error: "not_found", message: "Not found" }); return; }
+
+    if (n.type === "check_in_blocked") {
+      const reason = meta.reason ?? (/insurance/i.test(n.message) ? "no_valid_insurance" : "not_registered");
+      res.json({
+        kind: "blocked", project: { id: project.id, name: project.name }, at: n.createdAt.toISOString(),
+        attempt: { workerName, companyName, reason, reasonText: reason === "not_registered" ? "They are not registered on this project (name or company did not match a project contact)." : "They have no valid insurance on file." },
+      });
+      return;
+    }
+    res.json({
+      kind: n.type === "check_out" ? "check_out" : "check_in",
+      project: { id: project.id, name: project.name },
+      at: n.createdAt.toISOString(),
+      fallback: { workerName, companyName },
+      checkin: checkin ? { ...serializeCheckin(checkin), photoUrl: checkin.photoUrl } : null,
+    });
+  } catch (err) {
+    req.log.error({ err }, "Check-in notification detail error");
+    res.status(500).json({ error: "server_error", message: "Failed to load" });
   }
 });
 
@@ -596,102 +812,51 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
       return;
     }
 
-    // Already signed in today: don't create a second open row; the client
-    // should offer SIGN OUT instead. (An open row from a PREVIOUS day doesn't
-    // block: a new visit is a new row and the old one stays flagged.)
+    // Who is this? Resolve against the project's registered people (users,
+    // contacts, team people) with the same rules as ever, then remember WHICH
+    // record matched so "Amy" and "Amy Parrish" can't become two people.
+    const registered = await loadRegistered(qr.projectId);
+    const match = matchRegistered(registered, workerName, companyName);
+
+    // Already signed in today (by identity OR by typed text): don't create a
+    // second open row; the client offers SIGN OUT instead. An open row from a
+    // PREVIOUS day doesn't block: a new visit is a new row and the old one
+    // stays flagged.
+    const today = londonDateStr(new Date());
     const alreadyOpen = (await openCheckinsFor(qr.projectId, workerName, companyName))
-      .find(c => londonDateStr(c.checkedInAt) === londonDateStr(new Date()));
+      .find(c => londonDateStr(c.checkedInAt) === today);
     if (alreadyOpen) {
       res.status(409).json({ error: "already_signed_in", checkinId: alreadyOpen.id, checkedInAt: alreadyOpen.checkedInAt.toISOString() });
       return;
     }
 
-    const nameLower = workerName.trim().toLowerCase();
-    const companyLower = companyName.trim().toLowerCase();
+    if (!match) {
+      // Not registered as typed: block, but offer close matches ("Did you mean?").
+      await notifyBlockedCheckin(qr.projectId, workerName.trim(), companyName.trim(), "not_registered");
+      res.status(403).json({ error: "check_in_blocked", reason: "not_registered", suggestions: nearRegistered(registered, workerName, companyName) });
+      return;
+    }
 
-    // 1) In-house team members (users) assigned to this project — matched on name
-    //    alone (no company / insurance requirement: they're covered by the company).
-    const projectUsers = await db
-      .select({ name: usersTable.name })
-      .from(projectMembersTable)
-      .innerJoin(usersTable, eq(usersTable.id, projectMembersTable.userId))
-      .where(eq(projectMembersTable.projectId, qr.projectId));
+    if (match.insuranceSubId) {
+      // Same source the Contacts directory's "Insurance OK" badge reads
+      // (company-level insurance_records PLUS any filed insurance-named
+      // person certification) so a contact shown as insured on their card
+      // must pass here too. "expiring_soon" still passes (not yet expired);
+      // only "expired" or "none" blocks.
+      const project = await db.select({ companyId: projectsTable.companyId }).from(projectsTable)
+        .where(eq(projectsTable.id, qr.projectId)).limit(1);
+      const status = project[0] ? await subcontractorInsuranceStatus(match.insuranceSubId, project[0].companyId) : "none";
 
-    const isInHouseMember = projectUsers.some(u => u.name.trim().toLowerCase() === nameLower);
-
-    if (!isInHouseMember) {
-      // 2) Otherwise must be a subcontractor contact linked to this project (name + company)
-      //    with at least one valid (non-archived, non-expired) insurance certificate.
-      const projectContacts = await db
-        .select({
-          id: subcontractorsTable.id,
-          contactName: subcontractorsTable.contactName,
-          companyName: subcontractorsTable.companyName,
-        })
-        .from(projectMembersTable)
-        .innerJoin(subcontractorsTable, eq(subcontractorsTable.id, projectMembersTable.subcontractorId))
-        .where(eq(projectMembersTable.projectId, qr.projectId));
-
-      const matched = projectContacts.find(c =>
-        c.contactName.toLowerCase() === nameLower &&
-        c.companyName.toLowerCase() === companyLower
-      );
-
-      // 3) Team contacts (people) added to this project via project_members.person_id
-      //    — e.g. a subcontractor's individual workers invited to the portal.
-      //    Matched on the person's name; if they belong to a subcontractor, the
-      //    typed company name must match that subcontractor's company name and
-      //    the same insurance rule applies.
-      let insuranceSubId: string | null = matched?.id ?? null;
-      let isRegistered = !!matched;
-      if (!matched) {
-        const projectPeople = await db
-          .select({
-            personName: peopleTable.name,
-            subId: peopleTable.subcontractorId,
-            subCompanyName: subcontractorsTable.companyName,
-          })
-          .from(projectMembersTable)
-          .innerJoin(peopleTable, eq(peopleTable.id, projectMembersTable.personId))
-          .leftJoin(subcontractorsTable, eq(subcontractorsTable.id, peopleTable.subcontractorId))
-          .where(and(
-            eq(projectMembersTable.projectId, qr.projectId),
-            isNull(peopleTable.archivedAt),
-          ));
-
-        const matchedPerson = projectPeople.find(p =>
-          p.personName.trim().toLowerCase() === nameLower &&
-          (p.subCompanyName ? p.subCompanyName.trim().toLowerCase() === companyLower : true)
-        );
-        if (matchedPerson) {
-          isRegistered = true;
-          insuranceSubId = matchedPerson.subId ?? null;
-        }
-      }
-
-      if (!isRegistered) {
-        await notifyBlockedCheckin(qr.projectId, workerName.trim(), companyName.trim(), "not_registered");
-        res.status(403).json({ error: "check_in_blocked", reason: "not_registered" });
+      if (status === "expired" || status === "none") {
+        await notifyBlockedCheckin(qr.projectId, workerName.trim(), companyName.trim(), "no_valid_insurance");
+        res.status(403).json({ error: "check_in_blocked", reason: "no_valid_insurance" });
         return;
       }
-
-      if (insuranceSubId) {
-        // Same source the Contacts directory's "Insurance OK" badge reads
-        // (company-level insurance_records PLUS any filed insurance-named
-        // person certification) — a contact shown as insured on their card
-        // must pass here too. "expiring_soon" still passes (not yet expired);
-        // only "expired" or "none" blocks.
-        const project = await db.select({ companyId: projectsTable.companyId }).from(projectsTable)
-          .where(eq(projectsTable.id, qr.projectId)).limit(1);
-        const status = project[0] ? await subcontractorInsuranceStatus(insuranceSubId, project[0].companyId) : "none";
-
-        if (status === "expired" || status === "none") {
-          await notifyBlockedCheckin(qr.projectId, workerName.trim(), companyName.trim(), "no_valid_insurance");
-          res.status(403).json({ error: "check_in_blocked", reason: "no_valid_insurance" });
-          return;
-        }
-      }
     }
+
+    // Store the registered record's own spelling so every visit reads the same.
+    const storedName = match.names.find(n => normText(n) === normText(workerName)) ?? workerName.trim();
+    const storedCompany = match.company ?? companyName.trim();
 
     const ext = path.extname(req.file.originalname || ".jpg").toLowerCase() || ".jpg";
     const filename = `checkin-${randomUUID()}${ext}`;
@@ -707,8 +872,9 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
     const [checkin] = await db.insert(siteCheckinsTable).values({
       id,
       projectId: qr.projectId,
-      workerName: workerName.trim(),
-      companyName: companyName.trim(),
+      workerName: storedName,
+      companyName: storedCompany,
+      personKey: match.key,
       photoUrl,
       lat: lat ? parseFloat(lat) : null,
       lng: lng ? parseFloat(lng) : null,
@@ -716,9 +882,9 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
 
     // Fire-and-forget: the worker's check-in must not wait on (or fail with)
     // the notification fan-out.
-    void notifySuccessfulCheckin(qr.projectId, workerName.trim(), companyName.trim(), checkin.checkedInAt);
+    void notifySuccessfulCheckin(qr.projectId, storedName, storedCompany, checkin.checkedInAt, checkin.id);
 
-    res.status(201).json({ ...serializeCheckin(checkin), deviceToken: signDeviceToken(qr.projectId, workerName.trim(), companyName.trim()) });
+    res.status(201).json({ ...serializeCheckin(checkin), deviceToken: signDeviceToken(qr.projectId, storedName, storedCompany) });
   } catch (err) {
     res.status(500).json({ error: "server_error", message: "Check-in failed" });
   }
@@ -741,6 +907,7 @@ router.get("/checkins", authenticate, async (req: Request, res: Response) => {
         checkedOutAt: siteCheckinsTable.checkedOutAt,
         checkoutNote: siteCheckinsTable.checkoutNote,
         checkoutMethod: siteCheckinsTable.checkoutMethod,
+        personKey: siteCheckinsTable.personKey,
       })
       .from(siteCheckinsTable)
       .innerJoin(projectsTable, eq(projectsTable.id, siteCheckinsTable.projectId))

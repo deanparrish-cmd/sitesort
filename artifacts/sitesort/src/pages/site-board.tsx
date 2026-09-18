@@ -85,6 +85,10 @@ function CheckInCard({
   const [companyName, setCompanyName] = useState("");
   const [status, setStatus] = useState<"idle" | "capturing" | "uploading" | "done" | "error">("idle");
   const [blockedReason, setBlockedReason] = useState<"not_registered" | "no_valid_insurance" | null>(null);
+  // "Did you mean...?" for check-in: close matches among the project's registered people.
+  type RegSuggest = { label: string; workerName: string; companyName: string };
+  const [regSuggest, setRegSuggest] = useState<RegSuggest[]>([]);
+  const [blockedSuggest, setBlockedSuggest] = useState<RegSuggest[]>([]);
   const [preview, setPreview] = useState<string | null>(null);
   const [capturedFile, setCapturedFile] = useState<File | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
@@ -147,6 +151,30 @@ function CheckInCard({
     return () => clearTimeout(h);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name, companyName, device, signedIn, token]);
+
+  // Check-in near-match: once 3+ letters are typed and the typed details are not
+  // an exact registered person, suggest close registered names/companies. The
+  // user must tap to accept; nothing is ever matched silently.
+  useEffect(() => {
+    if (device || signedIn || name.trim().length < 3) { setRegSuggest([]); return; }
+    const h = setTimeout(() => {
+      fetch(`/api/site/${token}/register-match?workerName=${encodeURIComponent(name.trim())}&companyName=${encodeURIComponent(companyName.trim())}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => setRegSuggest(d && !d.registered ? (d.suggestions ?? []) : []))
+        .catch(() => {});
+    }, 500);
+    return () => clearTimeout(h);
+  }, [name, companyName, device, signedIn, token]);
+
+  const useSuggestion = (sug: RegSuggest) => {
+    setName(sug.workerName);
+    setCompanyName(sug.companyName);
+    setRegSuggest([]);
+    setBlockedSuggest([]);
+    setBlockedReason(null);
+    setErrorMsg("");
+    setStatus(capturedFile ? "capturing" : "idle");
+  };
 
   const doSignOut = async (opts: { checkinId?: string; label?: string }) => {
     setSigningOut(true);
@@ -225,6 +253,7 @@ function CheckInCard({
       if (res.status === 403) {
         const body = await res.json();
         setBlockedReason(body.reason ?? "not_registered");
+        setBlockedSuggest(body.suggestions ?? []);
         setStatus("idle");
         return;
       }
@@ -259,6 +288,8 @@ function CheckInCard({
     setCapturedFile(null);
     setErrorMsg("");
     setBlockedReason(null);
+    setBlockedSuggest([]);
+    setRegSuggest([]);
     if (fileRef.current) fileRef.current.value = "";
   };
 
@@ -334,6 +365,23 @@ function CheckInCard({
             </p>
           </div>
 
+          {blockedReason === "not_registered" && blockedSuggest.length > 0 && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 space-y-2 text-left" data-testid="panel-blocked-suggestions">
+              <p className="text-xs font-semibold text-blue-800">Did you mean one of these? Tap to use those details and try again.</p>
+              {blockedSuggest.map(sug => (
+                <button
+                  key={sug.label}
+                  onClick={() => useSuggestion(sug)}
+                  className="w-full flex items-center justify-between gap-3 bg-white border border-blue-200 rounded-xl px-4 py-3 min-h-11 text-left"
+                  data-testid="button-use-blocked-suggestion"
+                >
+                  <span className="text-sm font-semibold text-gray-900 break-words min-w-0">Did you mean {sug.label}?</span>
+                  <span className="text-xs text-orange-600 font-bold shrink-0">Use these</span>
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-left">
             <p className="text-amber-800 font-semibold text-sm text-center mb-3">
               Please contact the site manager before entering the site.
@@ -408,6 +456,23 @@ function CheckInCard({
               Sign in as {device.workerName}, {device.companyName}
             </button>
             <button onClick={notMe} className="w-full text-xs text-gray-500 underline min-h-11" data-testid="button-not-me-device">Not me? Use different details</button>
+          </div>
+        )}
+
+        {!device && !signedIn && regSuggest.length > 0 && who.matches.length === 0 && (
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 space-y-2" data-testid="panel-register-suggestions">
+            <p className="text-xs font-semibold text-blue-800">These details don't match anyone on this project yet. Did you mean:</p>
+            {regSuggest.map(sug => (
+              <button
+                key={sug.label}
+                onClick={() => useSuggestion(sug)}
+                className="w-full flex items-center justify-between gap-3 bg-white border border-blue-200 rounded-xl px-4 py-3 min-h-11 text-left"
+                data-testid="button-use-register-suggestion"
+              >
+                <span className="text-sm font-semibold text-gray-900 break-words min-w-0">Did you mean {sug.label}?</span>
+                <span className="text-xs text-orange-600 font-bold shrink-0">Yes, that's me</span>
+              </button>
+            ))}
           </div>
         )}
 
