@@ -76,6 +76,9 @@ export function PermitsTab() {
     deletePermit,
     setSharingDoc,
   } = useDetail();
+  // Overdue pill deep-link: many overdue permits land on the list filtered to
+  // just those; exactly one opens that permit directly.
+  const [overdueOnly, setOverdueOnly] = useState(false);
 
   return (
     <>
@@ -86,10 +89,20 @@ export function PermitsTab() {
 
             const livePermits = [...permits].filter(p => !p.archivedAt);
             const supersededPermits = [...permits].filter(p => !!p.archivedAt).sort((a, b) => (b.archivedAt ?? "").localeCompare(a.archivedAt ?? ""));
-            const active = livePermits.filter(p => { const d = daysLeft(p.expiryDate); return d > 30; }).sort((a, b) => a.expiryDate.localeCompare(b.expiryDate));
-            const expiring = livePermits.filter(p => { const d = daysLeft(p.expiryDate); return d >= 0 && d <= 30; }).sort((a, b) => a.expiryDate.localeCompare(b.expiryDate));
-            const expired = livePermits.filter(p => daysLeft(p.expiryDate) < 0).sort((a, b) => b.expiryDate.localeCompare(a.expiryDate));
-            const overdueCount = livePermits.filter(p => p.overdue).length;
+            const showing = overdueOnly ? livePermits.filter(p => p.overdue) : livePermits;
+            const active = showing.filter(p => { const d = daysLeft(p.expiryDate); return d > 30; }).sort((a, b) => a.expiryDate.localeCompare(b.expiryDate));
+            const expiring = showing.filter(p => { const d = daysLeft(p.expiryDate); return d >= 0 && d <= 30; }).sort((a, b) => a.expiryDate.localeCompare(b.expiryDate));
+            const expired = showing.filter(p => daysLeft(p.expiryDate) < 0).sort((a, b) => b.expiryDate.localeCompare(a.expiryDate));
+            const overdueList = livePermits.filter(p => p.overdue);
+            const overdueCount = overdueList.length;
+            const openOverdue = () => {
+              if (overdueCount === 1) {
+                const only = overdueList[0];
+                if (caps.canManageTeam) { setEditingPermit(only); setEditPermitError(null); return; }
+                if (only.documentUrl) { openDocument(only.documentUrl, only.type); return; }
+              }
+              setOverdueOnly(true);
+            };
 
             const permitRow = (p: PermitItem, accent: string) => {
               const days = daysLeft(p.expiryDate);
@@ -160,7 +173,16 @@ export function PermitsTab() {
                   level="section"
                   title="Health & Safety"
                   badge={overdueCount > 0 && (
-                    <Pill className="bg-red-100 text-red-700" icon={<AlertTriangle className="w-3 h-3" />}>{overdueCount} overdue</Pill>
+                    <button
+                      type="button"
+                      onClick={openOverdue}
+                      className="rounded-full hover:ring-2 hover:ring-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 min-h-6"
+                      title={overdueCount === 1 ? "Open the overdue permit" : "Show only overdue permits"}
+                      aria-label={`${overdueCount} overdue: ${overdueCount === 1 ? "open it" : "show only overdue permits"}`}
+                      data-testid="button-permits-overdue"
+                    >
+                      <Pill className="bg-red-100 text-red-700 cursor-pointer" icon={<AlertTriangle className="w-3 h-3" />}>{overdueCount} overdue</Pill>
+                    </button>
                   )}
                   description="Permits, RAMS, safety documents and insurance for this project."
                   actions={<>
@@ -176,6 +198,14 @@ export function PermitsTab() {
                     )}
                   </>}
                 />
+
+                {overdueOnly && (
+                  <div className="flex flex-wrap items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800" data-testid="banner-overdue-filter">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span className="font-semibold">Showing {overdueCount} overdue {overdueCount === 1 ? "permit" : "permits"} only.</span>
+                    <button type="button" onClick={() => setOverdueOnly(false)} className="underline font-semibold min-h-6" data-testid="button-clear-overdue-filter">Show all</button>
+                  </div>
+                )}
 
                 {/* Permits list */}
                 {livePermits.length === 0 && supersededPermits.length === 0 ? (
@@ -193,12 +223,12 @@ export function PermitsTab() {
                       </FolderSection>
                     )}
                     {expiring.length > 0 && (
-                      <FolderSection icon={<Clock className="w-4 h-4 text-orange-600" />} title="Expiring Soon" count={expiring.length} titleClass="text-orange-600" defaultOpen>
+                      <FolderSection key={`exp-${overdueOnly}`} icon={<Clock className="w-4 h-4 text-orange-600" />} title="Expiring Soon" count={expiring.length} titleClass="text-orange-600" defaultOpen>
                         <div className="space-y-2">{expiring.map(p => permitRow(p, "bg-orange-50 border-orange-200"))}</div>
                       </FolderSection>
                     )}
                     {active.length > 0 && (
-                      <FolderSection icon={<ShieldCheck className="w-4 h-4 text-emerald-600" />} title="Active" count={active.length} titleClass="text-emerald-600">
+                      <FolderSection key={`act-${overdueOnly}`} icon={<ShieldCheck className="w-4 h-4 text-emerald-600" />} title="Active" count={active.length} titleClass="text-emerald-600" defaultOpen={overdueOnly}>
                         <div className="space-y-2">{active.map(p => permitRow(p, "bg-emerald-50 border-emerald-200"))}</div>
                       </FolderSection>
                     )}
