@@ -6054,9 +6054,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PortalEvent"
-        qrToken:
-          type: string
-          nullable: true
       required: [project, teamSize, permits, documents, pinnedItems, upcomingEvents]
 
     PortalHs:

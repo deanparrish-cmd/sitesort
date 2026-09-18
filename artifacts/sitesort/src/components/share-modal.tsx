@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { QRCodeCanvas } from "qrcode.react";
 import { cn } from "@/lib/utils";
+import { useCapabilities } from "@/hooks/use-capabilities";
 import {
   Share2, Mail, MessageCircle, Users, ExternalLink, X,
   Download, Clock, Loader2, CheckCircle2, Pin, PinOff, QrCode, ChevronDown,
@@ -72,6 +73,7 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
   const [isPinned, setIsPinned] = useState(false);
   const [pinLoading, setPinLoading] = useState(false);
   const [siteBoardUrl, setSiteBoardUrl] = useState<string | null>(null);
+  const canSeeSiteQr = useCapabilities().isManager;
   // Project picker — used when no projectId prop is supplied (e.g. insurance certs in Compliance)
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState("");
@@ -131,10 +133,15 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
   useEffect(() => {
     if (tab !== "qr" || !open || !effectiveProjectId) return;
     const h: Record<string, string> = token() ? { Authorization: `Bearer ${token()}` } : {};
-    fetch(`/api/projects/${effectiveProjectId}/qr-codes`, { headers: h })
-      .then(r => r.ok ? r.json() : [])
-      .then((codes: { siteUrl: string }[]) => { setSiteBoardUrl(codes[0]?.siteUrl ?? null); })
-      .catch(() => {});
+    // The site check-in link is admin/PM only (the API refuses everyone else).
+    if (canSeeSiteQr) {
+      fetch(`/api/projects/${effectiveProjectId}/qr-codes`, { headers: h })
+        .then(r => r.ok ? r.json() : [])
+        .then((codes: { siteUrl: string }[]) => { setSiteBoardUrl(Array.isArray(codes) ? (codes[0]?.siteUrl ?? null) : null); })
+        .catch(() => {});
+    } else {
+      setSiteBoardUrl(null);
+    }
     if (!canPin) return;
     fetch(`/api/projects/${effectiveProjectId}/qr-pins`, { headers: h })
       .then(r => r.ok ? r.json() : [])
@@ -142,7 +149,7 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
         setIsPinned(pins.some(p => p.itemType === entityType && p.itemId === entityId));
       })
       .catch(() => {});
-  }, [tab, open, effectiveProjectId, canPin, entityType, entityId]);
+  }, [tab, open, effectiveProjectId, canPin, entityType, entityId, canSeeSiteQr]);
 
   useEffect(() => {
     if (tab !== "history" || !open) return;

@@ -3734,7 +3734,6 @@ export const GetPortalSiteBoardResponse = zod
         scope: zod.string(),
       }),
     ),
-    qrToken: zod.string().nullish(),
   })
   .describe(
     "Full site board — same source as the public scanned view + the board QR token.",

@@ -8,6 +8,7 @@ import { QrCode, Download, Printer, Building2, MapPin, ExternalLink } from "luci
 import { Link } from "wouter";
 import { QRCodeSVG } from "qrcode.react";
 import { useListProjects } from "@workspace/api-client-react";
+import { useCapabilities } from "@/hooks/use-capabilities";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -148,8 +149,23 @@ function ProjectQrCard({ project }: { project: any }) {
 
 export default function QrPage() {
   const { data: projects, isLoading } = useListProjects();
+  const caps = useCapabilities();
 
   const activeProjects = projects?.filter(p => p.status === "active") ?? [];
+
+  // The site check-in QR is admin + project manager only (the API enforces it too).
+  if (!caps.isLoading && !caps.isManager) {
+    return (
+      <SidebarLayout>
+        <PageHeader className="mb-8" title="QR Code Site Boards" />
+        <Card className="p-12 text-center border-dashed border-2" data-testid="text-qr-page-restricted">
+          <QrCode className="w-12 h-12 mx-auto text-muted-foreground mb-4 opacity-40" />
+          <h3 className="text-lg font-bold">Not available</h3>
+          <p className="text-muted-foreground">The site check-in QR code is only available to admins and project managers.</p>
+        </Card>
+      </SidebarLayout>
+    );
+  }
 
   return (
     <SidebarLayout>
@@ -169,7 +185,7 @@ export default function QrPage() {
           <h3 className="text-lg font-bold">No active projects</h3>
           <p className="text-muted-foreground">Create a project first. Its QR code will show here once created in the project.</p>
         </Card>
-      ) : (
+      ) : caps.isLoading ? null : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {activeProjects.map(project => (
             <ProjectQrCard key={project.id} project={project} />

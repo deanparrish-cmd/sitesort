@@ -1910,7 +1910,6 @@ export interface PortalSiteBoard {
   documents: PortalSiteBoardDocumentsItem[];
   pinnedItems: PortalBoardPin[];
   upcomingEvents: PortalEvent[];
-  qrToken?: string | null;
 }
 
 export interface PortalHs {

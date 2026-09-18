@@ -45,6 +45,8 @@ describe("site check-in identity", () => {
   });
 
   afterAll(async () => {
+    // notifications are inserted fire-and-forget by the API; let the last ones land before cleanup
+    await new Promise(r => setTimeout(r, 500));
     await db.delete(notificationsTable).where(eq(notificationsTable.userId, co.userId));
     await db.delete(siteCheckinsTable).where(eq(siteCheckinsTable.projectId, co.projectId));
     await db.delete(insuranceRecordsTable).where(eq(insuranceRecordsTable.subcontractorId, subId));
@@ -89,9 +91,11 @@ describe("site check-in identity", () => {
     const blocked = await checkIn("Amy Parrish", "I cloud");
     expect(blocked.status).toBe(403);
     expect(blocked.json.reason).toBe("not_registered");
-    expect(blocked.json.suggestions.map((s: any) => s.label)).toContain("Amy Parrish, Amy I Cloud");
-    const sug = blocked.json.suggestions[0];
-    expect(sug.workerName).toBeTruthy();
+    expect(blocked.json.suggestions.map((s: any) => s.label)).toContain("Amy P, Amy I Cloud");
+    // public responses carry initials + an opaque token, never a full name
+    expect(JSON.stringify(blocked.json)).not.toContain("Parrish");
+    expect(blocked.json.suggestions[0].matchToken).toBeTruthy();
+    expect(blocked.json.suggestions[0].workerName).toBeUndefined();
     // no row was created
     const rows = await db.select().from(siteCheckinsTable).where(eq(siteCheckinsTable.projectId, co.projectId));
     expect(rows).toHaveLength(2);
@@ -99,6 +103,8 @@ describe("site check-in identity", () => {
     const match = await api(`/site/${qrToken}/register-match?workerName=${encodeURIComponent("Amy Parrish")}&companyName=${encodeURIComponent("I cloud")}`);
     expect(match.json.registered).toBe(false);
     expect(match.json.suggestions.length).toBeGreaterThan(0);
+    expect(JSON.stringify(match.json)).not.toContain("Parrish");
+    expect(match.json.suggestions[0].label).toBe("Amy P, Amy I Cloud");
     // and an exact registered person gets no suggestions
     expect((await api(`/site/${qrToken}/register-match?workerName=Amy&companyName=Amy%20I%20Cloud`)).json.registered).toBe(true);
     // far-off names get nothing; under 3 letters never lists anyone
@@ -153,5 +159,25 @@ describe("site check-in identity", () => {
     } finally {
       await cleanupFixtures([other]);
     }
+  });
+
+  it("tapping a 'Did you mean' checks in the CONFIRMED person via the signed token, and a forged token does nothing", async () => {
+    // the guard test above left everyone signed out, so this is a fresh visit
+    const match = await api(`/site/${qrToken}/register-match?workerName=${encodeURIComponent("Amy Parrish")}&companyName=${encodeURIComponent("I cloud")}`);
+    const tok = match.json.suggestions[0].matchToken;
+    const fd = (t: string) => {
+      const f = new FormData();
+      f.append("photo", new Blob([JPG], { type: "image/jpeg" }), "c.jpg");
+      f.append("workerName", "Amy Parrish"); f.append("companyName", "I cloud"); f.append("matchToken", t);
+      return f;
+    };
+    const forged = await fetch(`${API_BASE}/site/${qrToken}/checkin`, { method: "POST", body: fd("not-a-real-token") });
+    expect(forged.status).toBe(403);
+    const good = await fetch(`${API_BASE}/site/${qrToken}/checkin`, { method: "POST", body: fd(tok) });
+    expect(good.status).toBe(201);
+    const row = await good.json();
+    expect(row.personKey).toBe(`person:${personId}`);
+    expect(row.companyName).toBe("Amy I Cloud"); // the record's own spelling, not the typo
+    await checkOut({ workerName: "Amy", companyName: "Amy I Cloud" });
   });
 });

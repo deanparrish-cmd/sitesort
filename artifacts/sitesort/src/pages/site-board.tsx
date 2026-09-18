@@ -86,9 +86,11 @@ function CheckInCard({
   const [status, setStatus] = useState<"idle" | "capturing" | "uploading" | "done" | "error">("idle");
   const [blockedReason, setBlockedReason] = useState<"not_registered" | "no_valid_insurance" | null>(null);
   // "Did you mean...?" for check-in: close matches among the project's registered people.
-  type RegSuggest = { label: string; workerName: string; companyName: string };
+  type RegSuggest = { label: string; matchToken: string };
   const [regSuggest, setRegSuggest] = useState<RegSuggest[]>([]);
   const [blockedSuggest, setBlockedSuggest] = useState<RegSuggest[]>([]);
+  // A "Did you mean" the visitor tapped: a signed token (never a full name) sent with the check-in.
+  const [confirmed, setConfirmed] = useState<RegSuggest | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [capturedFile, setCapturedFile] = useState<File | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
@@ -156,7 +158,7 @@ function CheckInCard({
   // an exact registered person, suggest close registered names/companies. The
   // user must tap to accept; nothing is ever matched silently.
   useEffect(() => {
-    if (device || signedIn || name.trim().length < 3) { setRegSuggest([]); return; }
+    if (device || signedIn || confirmed || name.trim().length < 3) { setRegSuggest([]); return; }
     const h = setTimeout(() => {
       fetch(`/api/site/${token}/register-match?workerName=${encodeURIComponent(name.trim())}&companyName=${encodeURIComponent(companyName.trim())}`)
         .then(r => r.ok ? r.json() : null)
@@ -164,11 +166,12 @@ function CheckInCard({
         .catch(() => {});
     }, 500);
     return () => clearTimeout(h);
-  }, [name, companyName, device, signedIn, token]);
+  }, [name, companyName, device, signedIn, confirmed, token]);
 
   const useSuggestion = (sug: RegSuggest) => {
-    setName(sug.workerName);
-    setCompanyName(sug.companyName);
+    // Nothing is filled in with a real name: we keep what was typed and send the
+    // signed confirmation with the check-in.
+    setConfirmed(sug);
     setRegSuggest([]);
     setBlockedSuggest([]);
     setBlockedReason(null);
@@ -245,6 +248,7 @@ function CheckInCard({
       fd.append("photo", stamped, "checkin.jpg");
       fd.append("workerName", name.trim());
       fd.append("companyName", companyName.trim());
+      if (confirmed) fd.append("matchToken", confirmed.matchToken);
       if (lat !== null) fd.append("lat", String(lat));
       if (lng !== null) fd.append("lng", String(lng));
 
@@ -290,6 +294,7 @@ function CheckInCard({
     setBlockedReason(null);
     setBlockedSuggest([]);
     setRegSuggest([]);
+    setConfirmed(null);
     if (fileRef.current) fileRef.current.value = "";
   };
 
@@ -459,6 +464,13 @@ function CheckInCard({
           </div>
         )}
 
+        {confirmed && (
+          <div className="rounded-xl border border-green-200 bg-green-50 p-3 flex items-center justify-between gap-3" data-testid="chip-confirmed-match">
+            <p className="text-sm text-green-900 break-words min-w-0">Checking in as <strong>{confirmed.label}</strong></p>
+            <button onClick={() => setConfirmed(null)} className="text-xs text-gray-600 underline shrink-0 min-h-11" data-testid="button-clear-confirmed">Change</button>
+          </div>
+        )}
+
         {!device && !signedIn && regSuggest.length > 0 && who.matches.length === 0 && (
           <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 space-y-2" data-testid="panel-register-suggestions">
             <p className="text-xs font-semibold text-blue-800">These details don't match anyone on this project yet. Did you mean:</p>
@@ -503,7 +515,7 @@ function CheckInCard({
           <input
             type="text"
             value={name}
-            onChange={e => setName(e.target.value)}
+            onChange={e => { setName(e.target.value); setConfirmed(null); }}
             placeholder="e.g. John Smith"
             className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
           />
@@ -516,7 +528,7 @@ function CheckInCard({
           <input
             type="text"
             value={companyName}
-            onChange={e => setCompanyName(e.target.value)}
+            onChange={e => { setCompanyName(e.target.value); setConfirmed(null); }}
             list="site-companies"
             autoComplete="organization"
             placeholder="e.g. Acme Electrical Ltd"

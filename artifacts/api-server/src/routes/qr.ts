@@ -156,8 +156,22 @@ const CATEGORY_LABELS: Record<string, string> = {
   general: "General Documents",
 };
 
+// The site check-in QR code and its /site/<token> URL are the only thing that
+// lets someone check in, so they must never reach anyone who could pass them
+// on. Only company Admins and Project Managers may list, create or delete them;
+// site workers and (via the /api/portal containment in middlewares/auth) portal
+// members get 403 from the API itself, not just a hidden button.
+const QR_MANAGER_ROLES = ["admin", "project_manager"];
+function requireQrManager(req: Request, res: Response, next: import("express").NextFunction): void {
+  if (!QR_MANAGER_ROLES.includes(req.user?.role ?? "")) {
+    res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can view the site QR code." });
+    return;
+  }
+  next();
+}
+
 // List QR codes for a project
-router.get("/projects/:projectId/qr-codes", authenticate, async (req, res) => {
+router.get("/projects/:projectId/qr-codes", authenticate, requireQrManager, async (req, res) => {
   try {
     const project = await db.select({ id: projectsTable.id }).from(projectsTable)
       .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
@@ -184,7 +198,7 @@ router.get("/projects/:projectId/qr-codes", authenticate, async (req, res) => {
 });
 
 // Generate QR codes for a project
-router.post("/projects/:projectId/qr-codes", authenticate, async (req, res) => {
+router.post("/projects/:projectId/qr-codes", authenticate, requireQrManager, async (req, res) => {
   try {
     const { categories } = req.body;
     if (!categories || !Array.isArray(categories)) {
@@ -238,7 +252,7 @@ router.post("/projects/:projectId/qr-codes", authenticate, async (req, res) => {
 });
 
 // Delete a QR code
-router.delete("/projects/:projectId/qr-codes/:id", authenticate, async (req, res) => {
+router.delete("/projects/:projectId/qr-codes/:id", authenticate, requireQrManager, async (req, res) => {
   try {
     const project = await db.select().from(projectsTable)
       .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
@@ -476,7 +490,7 @@ function matchRegistered(records: Registered[], typedName: string, typedCompany:
 
 // Close-but-not-exact registered people, for "Did you mean...?" at check-in.
 // Only for 3+ typed letters; at most 3; the client always asks for a tap.
-function nearRegistered(records: Registered[], typedName: string, typedCompany: string): { key: string; label: string; workerName: string; companyName: string }[] {
+function nearRegistered(records: Registered[], typedName: string, typedCompany: string): { key: string; label: string }[] {
   const n = normText(typedName), c = normText(typedCompany);
   if (n.length < 3) return [];
   const scored: { r: Registered; name: string; score: number }[] = [];
@@ -495,9 +509,7 @@ function nearRegistered(records: Registered[], typedName: string, typedCompany: 
   const seen = new Set<string>();
   return scored.sort((a, b) => a.score - b.score).filter(x => (seen.has(x.r.key) ? false : (seen.add(x.r.key), true))).slice(0, 3).map(x => ({
     key: x.r.key,
-    label: [x.name, x.r.company].filter(Boolean).join(", "),
-    workerName: x.name,
-    companyName: x.r.company ?? typedCompany.trim(),
+    label: publicLabel(x.name, x.r.company),
   }));
 }
 
@@ -509,18 +521,30 @@ async function openRowsForProject(projectId: string): Promise<OpenRow[]> {
     sql`coalesce(${siteCheckinsTable.checkoutMethod}, '') <> 'legacy'`,
   )).orderBy(desc(siteCheckinsTable.checkedInAt));
 }
-// Public label = first name + company only. If two people on site would show
-// the same label, add the surname initial to tell them apart (never the full name).
+// Public label = first name + surname initial + company ("Amy P, Amy I Cloud").
+// Full names never go out on the public endpoints.
+function publicLabel(fullName: string, company: string | null | undefined): string {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  const first = parts[0] ?? fullName.trim();
+  const initial = parts.length > 1 ? ` ${parts[parts.length - 1][0].toUpperCase()}` : "";
+  return `${first}${initial}${company ? `, ${company}` : ""}`;
+}
 function publicLabels(rows: OpenRow[]): Map<string, string> {
-  const base = (r: OpenRow) => `${firstName(r.workerName)}, ${r.companyName ?? ""}`.replace(/, $/, "");
-  const count = new Map<string, number>();
-  for (const r of rows) count.set(base(r).toLowerCase(), (count.get(base(r).toLowerCase()) ?? 0) + 1);
-  return new Map(rows.map(r => {
-    const parts = r.workerName.trim().split(/\s+/);
-    const initial = parts.length > 1 ? ` ${parts[parts.length - 1][0].toUpperCase()}.` : "";
-    const dup = (count.get(base(r).toLowerCase()) ?? 0) > 1;
-    return [r.id, dup ? `${firstName(r.workerName)}${initial}, ${r.companyName ?? ""}`.replace(/, $/, "") : base(r)];
-  }));
+  return new Map(rows.map(r => [r.id, publicLabel(r.workerName, r.companyName)]));
+}
+
+// "Did you mean" confirmation: a short-lived signed token naming ONLY the
+// registered record (key), never a name, so tapping a suggestion can check the
+// person in without their full name ever being sent to the public page.
+function signMatchToken(projectId: string, key: string): string {
+  return jwt.sign({ kind: "site-match", projectId, key }, process.env.JWT_SECRET as string, { expiresIn: "10m" });
+}
+function readMatchToken(raw: unknown, projectId: string): string | null {
+  if (typeof raw !== "string" || !raw) return null;
+  try {
+    const p = jwt.verify(raw, process.env.JWT_SECRET as string) as any;
+    return p?.kind === "site-match" && p.projectId === projectId && typeof p.key === "string" ? p.key : null;
+  } catch { return null; }
 }
 
 // Remembered-device token: a signed, project-scoped record of who last signed
@@ -734,7 +758,7 @@ router.get("/site/:token/register-match", async (req: Request, res: Response) =>
     if (normText(workerName).length < 3) { res.json({ registered: false, suggestions: [] }); return; }
     const records = await loadRegistered(qr.projectId);
     if (matchRegistered(records, workerName, companyName)) { res.json({ registered: true, suggestions: [] }); return; }
-    res.json({ registered: false, suggestions: nearRegistered(records, workerName, companyName).map(({ label, workerName: w, companyName: c }) => ({ label, workerName: w, companyName: c })) });
+    res.json({ registered: false, suggestions: nearRegistered(records, workerName, companyName).map(({ key, label }) => ({ label, matchToken: signMatchToken(qr.projectId, key) })) });
   } catch {
     res.status(500).json({ error: "server_error", message: "Failed to look up" });
   }
@@ -794,7 +818,7 @@ router.get("/notifications/:notificationId/checkin", authenticate, async (req: R
 // Public check-in endpoint — validates contact registration and insurance before recording
 router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: Request, res: Response) => {
   try {
-    const { workerName, companyName, lat, lng } = req.body;
+    const { workerName, companyName, lat, lng, matchToken } = req.body;
     if (!workerName?.trim() || !companyName?.trim()) {
       res.status(400).json({ error: "validation_error", message: "workerName and companyName required" });
       return;
@@ -816,15 +840,20 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
     // contacts, team people) with the same rules as ever, then remember WHICH
     // record matched so "Amy" and "Amy Parrish" can't become two people.
     const registered = await loadRegistered(qr.projectId);
-    const match = matchRegistered(registered, workerName, companyName);
+    // Either an exact match on what was typed, or a person the visitor confirmed
+    // from a "Did you mean...?" suggestion (signed token naming the record).
+    const confirmedKey = readMatchToken(matchToken, qr.projectId);
+    const match = (confirmedKey ? registered.find(r => r.key === confirmedKey) ?? null : null) ?? matchRegistered(registered, workerName, companyName);
 
     // Already signed in today (by identity OR by typed text): don't create a
     // second open row; the client offers SIGN OUT instead. An open row from a
     // PREVIOUS day doesn't block: a new visit is a new row and the old one
     // stays flagged.
     const today = londonDateStr(new Date());
-    const alreadyOpen = (await openCheckinsFor(qr.projectId, workerName, companyName))
-      .find(c => londonDateStr(c.checkedInAt) === today);
+    const typedN = normText(workerName), typedC = normText(companyName);
+    const alreadyOpen = (await openRowsForProject(qr.projectId)).find(c =>
+      londonDateStr(c.checkedInAt) === today &&
+      ((match && c.personKey === match.key) || (normText(c.workerName) === typedN && normText(c.companyName ?? "") === typedC)));
     if (alreadyOpen) {
       res.status(409).json({ error: "already_signed_in", checkinId: alreadyOpen.id, checkedInAt: alreadyOpen.checkedInAt.toISOString() });
       return;
@@ -833,7 +862,7 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
     if (!match) {
       // Not registered as typed: block, but offer close matches ("Did you mean?").
       await notifyBlockedCheckin(qr.projectId, workerName.trim(), companyName.trim(), "not_registered");
-      res.status(403).json({ error: "check_in_blocked", reason: "not_registered", suggestions: nearRegistered(registered, workerName, companyName) });
+      res.status(403).json({ error: "check_in_blocked", reason: "not_registered", suggestions: nearRegistered(registered, workerName, companyName).map(({ key, label }) => ({ label, matchToken: signMatchToken(qr.projectId, key) })) });
       return;
     }
 
@@ -855,7 +884,7 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
     }
 
     // Store the registered record's own spelling so every visit reads the same.
-    const storedName = match.names.find(n => normText(n) === normText(workerName)) ?? workerName.trim();
+    const storedName = match.names.find(n => normText(n) === normText(workerName)) ?? (confirmedKey ? match.names[0] : workerName.trim());
     const storedCompany = match.company ?? companyName.trim();
 
     const ext = path.extname(req.file.originalname || ".jpg").toLowerCase() || ".jpg";

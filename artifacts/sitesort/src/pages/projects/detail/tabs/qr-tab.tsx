@@ -14,6 +14,7 @@ export function QrTab() {
     photos,
     siteBoardUrl,
     qrCode,
+    canSeeQr,
     qrLoading,
     qrFetched,
     qrSvgRef,
@@ -30,9 +31,11 @@ export function QrTab() {
           <div className="max-w-xl mx-auto py-4">
             <div className="text-center mb-8">
               <QrCode className="w-10 h-10 text-primary mx-auto mb-3" />
-              <h2 className="text-xl font-bold">Site Board QR Code</h2>
+              <h2 className="text-xl font-bold">{canSeeQr ? "Site Board QR Code" : "Site Board"}</h2>
               <p className="text-muted-foreground text-sm mt-1">
-                Print this QR code and post it on site. Workers can scan it to view live project information, permits, and documents, no login required.
+                {canSeeQr
+                  ? "Print this QR code and post it on site. Workers can scan it to view live project information, permits, and documents, no login required."
+                  : "The information pinned to this project's site board."}
               </p>
             </div>
 
@@ -73,7 +76,11 @@ export function QrTab() {
               );
             })()}
 
-            {!qrFetched ? (
+            {!canSeeQr ? (
+              <div className="rounded-xl border bg-muted/30 p-4 text-sm text-muted-foreground text-center" data-testid="text-qr-restricted">
+                The site check-in QR code and link are only available to admins and project managers.
+              </div>
+            ) : !qrFetched ? (
               <div className="flex flex-col items-center gap-4">
                 <div className="w-40 h-40 rounded-2xl bg-muted flex items-center justify-center opacity-40">
                   <QrCode className="w-16 h-16 text-muted-foreground" />

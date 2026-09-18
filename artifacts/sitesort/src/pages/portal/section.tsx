@@ -26,14 +26,13 @@ import {
 import { DailyReportPhotos } from "@/components/daily-report-photos";
 import { DictationButton } from "@/components/ui/dictation-button";
 import { MessagesView } from "./messages-view";
-import { QRCodeSVG } from "qrcode.react";
 import { PortalLayout, SECTION_NAV, portalLogout } from "./layout";
 import { portalQueryClient, PORTAL_LIVE_REFETCH } from "./query-client";
 import { Spinner } from "@/components/ui/spinner";
 import {
   ExternalLink, MapPin, Calendar, Phone, Mail,
   FileText, AlertTriangle, StickyNote, Download,
-  QrCode, Copy, Building2, ShieldCheck, X, Sparkles, UploadCloud, Share, Plus,
+  Building2, ShieldCheck, X, Sparkles, UploadCloud, Share, Plus,
   ChevronDown, ChevronRight, Users, FileSignature, CheckCircle2, HardHat, LogOut, ListChecks, HelpCircle,
   Inbox, FolderUp,
 } from "lucide-react";
@@ -1249,15 +1248,15 @@ function SiteIssuesView() {
   );
 }
 
-// Full Site Board — same content as the public scanned view (single source), plus
-// the board's own QR so anyone on site can rescan/share it.
+// Full Site Board — same content as the public scanned view (single source).
+// It deliberately has NO QR code or check-in link: those are admin/PM-only, so a
+// portal member can't pass them on and check in without being on site.
 // `embedded` — rendered inside the Home landing page, where the project card
 // and site manager contact already appear at the top, so skip them here.
 function SiteBoardView({ embedded }: { embedded?: boolean }) {
   const { data, isLoading } = useGetPortalSiteBoard();
   if (isLoading) return <Loading />;
   if (!data) return <Empty>Site board unavailable.</Empty>;
-  const siteUrl = data.qrToken ? `${window.location.origin}/site/${data.qrToken}` : null;
   const pins = data.pinnedItems ?? [];
   const pinnedDocs = pins.filter(p => p.itemType === "document");
   const pinnedPermits = pins.filter(p => p.itemType === "permit");
@@ -1271,19 +1270,6 @@ function SiteBoardView({ embedded }: { embedded?: boolean }) {
           <h2 className="text-xl font-display font-extrabold truncate">{data.project.name}</h2>
           <p className="text-base text-muted-foreground flex items-center gap-1.5 mt-1.5"><MapPin className="w-4 h-4 shrink-0" /><span className="truncate">{data.project.address}</span></p>
           <span className="inline-block mt-2"><Badge label={data.project.status} className={NEUTRAL} /></span>
-        </Card>
-      )}
-
-      {/* Site board QR */}
-      {siteUrl && (
-        <Card className="flex flex-col items-center text-center">
-          <SectionTitle>Site board QR code</SectionTitle>
-          <div className="p-3 bg-white rounded-xl border"><QRCodeSVG value={siteUrl} size={168} level="H" includeMargin /></div>
-          <p className="text-sm text-muted-foreground break-all mt-2 px-2 max-w-full">{siteUrl}</p>
-          <div className="flex gap-2 mt-3">
-            <a href={siteUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 min-h-12 px-4 rounded-xl border-2 border-border text-base font-bold hover:bg-muted active:scale-[0.98] transition-all"><QrCode className="w-5 h-5" /> Open</a>
-            <button onClick={() => { navigator.clipboard.writeText(siteUrl).catch(() => {}); }} className="inline-flex items-center gap-1.5 min-h-12 px-4 rounded-xl border-2 border-border text-base font-bold hover:bg-muted active:scale-[0.98] transition-all"><Copy className="w-5 h-5" /> Copy link</button>
-          </div>
         </Card>
       )}
 

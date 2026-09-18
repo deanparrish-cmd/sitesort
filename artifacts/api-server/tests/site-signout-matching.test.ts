@@ -44,7 +44,7 @@ describe("site sign-out matching", () => {
 
   it("exact match ignores case and extra whitespace", async () => {
     const r = await who("  PAUL   smith ", "acme  construction");
-    expect(r.json.exact?.label).toBe("Paul, Acme Construction");
+    expect(r.json.exact?.label).toBe("Paul S, Acme Construction");
     const s = await api(`/site/${qrToken}/status?workerName=${encodeURIComponent("paul  smith")}&companyName=ACME%20CONSTRUCTION`);
     expect(s.json.onSite).toBe(true);
   });
@@ -53,7 +53,7 @@ describe("site sign-out matching", () => {
     expect((await who("Pa")).json.matches).toHaveLength(0);
     const r = await who("pau");
     const labels = r.json.matches.map((m: any) => m.label).sort();
-    expect(labels).toEqual(["Paul, Acme Construction", "Paula, Acme Construction"]);
+    expect(labels).toEqual(["Paul S, Acme Construction", "Paula J, Acme Construction"]);
     expect(JSON.stringify(r.json)).not.toMatch(/Smith|Jones|Legacy/);
     expect((await who("old")).json.matches).toHaveLength(0);
   });
@@ -62,7 +62,7 @@ describe("site sign-out matching", () => {
     const r = await who("Pual Smth", "Acme Constructon");
     expect(r.json.exact).toBeNull();
     expect(r.json.matches).toHaveLength(0);
-    expect(r.json.suggestions.map((s: any) => s.label)).toContain("Paul, Acme Construction");
+    expect(r.json.suggestions.map((s: any) => s.label)).toContain("Paul S, Acme Construction");
     // far-off names get nothing
     expect((await who("Zachary Quill", "Other Co")).json.suggestions).toHaveLength(0);
   });

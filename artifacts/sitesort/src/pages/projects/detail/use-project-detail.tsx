@@ -441,10 +441,20 @@ export function useProjectDetailState() {
       fetch(`/api/projects/${projectId}/daily-reports`, { headers }).then(r => r.ok ? r.json() : []),
       fetch(`/api/projects/${projectId}/daily-notes`, { headers }).then(r => r.ok ? r.json() : []),
       fetch(`/api/projects/${projectId}/qr-pins`, { headers }).then(r => r.ok ? r.json() : []),
-      fetch(`/api/projects/${projectId}/qr-codes`, { headers }).then(r => r.ok ? r.json() : []),
-    ]).then(([p, ph, ms, ci, rep, notes, pins, qrCodes]) => {
+    ]).then(([p, ph, ms, ci, rep, notes, pins]) => {
       setPermits((Array.isArray(p) ? p : []).map(normalizePermit)); setPhotos(ph); setMilestones(ms); setCheckins(ci); setReports(rep); setTodayNotes(notes);
       if (Array.isArray(pins)) setQrPins(pins);
+    });
+  }, [projectId]);
+
+  // The site QR / check-in URL is admin + project manager only: the API answers
+  // 403 to anyone else, and we don't even ask (or keep the URL in state) for them.
+  const canSeeQr = useCapabilities().isManager;
+  useEffect(() => {
+    if (!projectId || !canSeeQr) return;
+    const token = localStorage.getItem("sitesort_token");
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+    fetch(`/api/projects/${projectId}/qr-codes`, { headers }).then(r => r.ok ? r.json() : []).then((qrCodes) => {
       if (Array.isArray(qrCodes) && qrCodes.length > 0) {
         const qr = qrCodes.find((q: any) => q.category === "site_board") ?? qrCodes[0];
         const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -456,7 +466,7 @@ export function useProjectDetailState() {
         setQrFetched(true);
       }
     });
-  }, [projectId]);
+  }, [projectId, canSeeQr]);
 
   useEffect(() => {
     if (!projectId) return;
@@ -882,6 +892,7 @@ export function useProjectDetailState() {
   };
 
   const loadQr = async () => {
+    if (!canSeeQr) return;
     setQrLoading(true);
     try {
       const token = localStorage.getItem("sitesort_token");
@@ -1611,6 +1622,7 @@ tr:last-child td{border-bottom:none}
     setSiteBoardUrl,
     qrCode,
     setQrCode,
+    canSeeQr,
     qrLoading,
     setQrLoading,
     qrFetched,

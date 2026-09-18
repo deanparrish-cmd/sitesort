@@ -7,7 +7,7 @@ import {
   usersTable, projectsTable, projectMembersTable, projectInvitesTable,
   documentsTable, photosTable, permitsTable, milestonesTable, dailyNotesTable,
   qrBoardPinsTable, calendarEventsTable, subcontractorsTable, peopleTable,
-  portalSharesTable, documentDistributionsTable, companiesTable, qrCodesTable,
+  portalSharesTable, documentDistributionsTable, companiesTable,
   portalMemberDocumentsTable, notificationsTable, companyMembersTable, portalSubmissionNotesTable,
   plantItemsTable, plantItemAttachmentsTable, plantItemDistributionsTable, personCertificationsTable, dailyReportsTable,
   messagesTable, channelMessagesTable, acknowledgmentAuditTable, portalItemViewsTable,
@@ -1652,16 +1652,15 @@ router.patch("/portal/site-issues/:issueId", authenticate, requirePortalSession,
   }
 });
 
-// GET /api/portal/site-board — FULL parity with the public scanned board, read
-// from the SAME source (buildSiteBoardPayload), plus the board's QR token so a
-// member can rescan/share it. This is public-parity content, not gated.
+// GET /api/portal/site-board — parity with the public scanned board, read from
+// the SAME source (buildSiteBoardPayload). It deliberately carries NO QR token
+// or check-in URL: anyone with portal access could otherwise pass it on and
+// check in without being on site. The QR is admin/PM-only (see qr.ts).
 router.get("/portal/site-board", ...portalGuards, async (req, res) => {
   const pid = req.portalProjectId!;
   const payload = await buildSiteBoardPayload(pid);
   if (!payload) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
-  const qr = (await db.select({ token: qrCodesTable.token }).from(qrCodesTable)
-    .where(and(eq(qrCodesTable.projectId, pid), eq(qrCodesTable.category, "site_board"))).limit(1))[0];
-  res.json({ ...payload, qrToken: qr?.token ?? null });
+  res.json(payload);
 });
 
 // GET /api/portal/hs — Health & Safety hub. Safety docs are always visible;

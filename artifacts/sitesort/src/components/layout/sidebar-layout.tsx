@@ -163,7 +163,8 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     // covered per-project (each project has its own Compliance/H&S + Check-Ins
     // tabs), so the company-wide aggregate pages were redundant. Routes/pages
     // still exist (deep-linkable) but are no longer surfaced here.
-    { name: "QR Codes", href: "/qr", icon: QrCode, badge: 0 },
+    // The site check-in QR is admin + project manager only.
+    ...(user?.role === "admin" || user?.role === "project_manager" ? [{ name: "QR Codes", href: "/qr", icon: QrCode, badge: 0 }] : []),
     // Platform Admin (SiteSort's own staff) — distinct from a customer's
     // company-level "admin" role. A customer who is admin of their own
     // account must never see this; only users.platformAdmin === true.

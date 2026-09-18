@@ -162,7 +162,7 @@ export const PM_GUIDE: GuideSection[] = [
       {
         heading: "Generate and print",
         body: [
-          "QR Codes in the sidebar lists a QR code per project. Download or print it for site signage.",
+          "QR Codes in the sidebar lists a QR code per project. Download or print it for site signage. The QR code and its check-in link are visible only to admins and project managers, and are deliberately not shown in the Team Portal, so nobody can pass them on and check in without being on site.",
         ],
       },
       {
@@ -364,7 +364,7 @@ export const WORKER_GUIDE: GuideSection[] = [
       {
         heading: "Scan the site board",
         body: [
-          "Scan the QR code posted on site (or open it from Site Board in the portal). Complete your check-in (your details are matched against the project's contacts), then take a photo when prompted. It's automatically stamped with your name, the date and the project.",
+          "Scan the QR code posted at the site entrance. Complete your check-in (your details are matched against the project's contacts), then take a photo when prompted. It's automatically stamped with your name, the date and the project.",
         ],
         callout: {
           tone: "tip",
@@ -375,7 +375,7 @@ export const WORKER_GUIDE: GuideSection[] = [
         heading: "Sign out when you leave",
         body: [
           "Scan the same QR code again. On the phone you signed in with, you will see Sign out of site straight away; choose it and your time is recorded. When you are signed out, the same phone offers Sign in as your name and company, so you only need to take the photo. Choose Not me if it is someone else's phone.",
-          "On a different phone, start typing your name. After three letters, people currently signed in on this site appear (first name and company only) so you can tap yourself and sign out. If your spelling is slightly off, you will be asked Did you mean...? to confirm; nothing is ever signed out without your tap. The same happens when signing in: if your name or company is a close match to someone registered on the project (for example 'I cloud' for 'Amy I Cloud'), you are asked to confirm rather than being turned away. The company box suggests companies already on this project, and you can still type a new one.",
+          "On a different phone, start typing your name. After three letters, people currently signed in on this site appear (first name and company only) so you can tap yourself and sign out. If your spelling is slightly off, you will be asked Did you mean...? to confirm; nothing is ever signed out without your tap. The same happens when signing in: if your name or company is a close match to someone registered on the project (for example 'I cloud' for 'Amy I Cloud'), you are asked to confirm rather than being turned away. Suggestions show only a first name, a surname initial and the company (for example Amy P, Amy I Cloud); full names are never shown on the public page. The company box suggests companies already on this project, and you can still type a new one.",
           "You can sign in and out as many times as you need in a day, for example for lunch. Each visit is recorded separately. If you forget to sign out, tell your site manager so they can do it for you.",
         ],
       },
@@ -485,7 +485,7 @@ export const FAQ: FaqItem[] = [
   {
     id: "check-in-how",
     question: "How do I check in on site?",
-    answer: "Scan the QR code on the site board (or open Site Board in the portal), complete your check-in details, then take the photo when prompted. It's stamped automatically. No portal login is needed for this step.",
+    answer: "Scan the QR code posted at the site entrance, complete your check-in details, then take the photo when prompted. It's stamped automatically. No portal login is needed for this step.",
     audience: "worker",
   },
   {
