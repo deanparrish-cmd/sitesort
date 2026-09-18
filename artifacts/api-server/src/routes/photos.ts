@@ -60,6 +60,8 @@ async function formatPhoto(p: typeof photosTable.$inferSelect, uploaderName: str
     // Portal save-vs-submit lifecycle (Feature). Dashboard-created photos are
     // always submitted immediately — only portal-reported issues can be drafts.
     submittedAt: p.submittedAt ? p.submittedAt.toISOString() : null,
+    // Set when the photo was added inside a daily site report (YYYY-MM-DD).
+    dailyReportDate: p.dailyReportDate ?? null,
     submittedByName,
     lifecycleStatus: p.submittedAt ? "submitted" : "draft",
     notes,
@@ -422,7 +424,7 @@ router.post("/projects/:projectId/photos", authenticate, async (req, res) => {
 
     const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
     res.status(201).json(await formatPhoto(
-      { id, projectId: req.params.projectId, uploadedBy: req.user!.id, photoUrl: photoUrl ?? null, category, description: description ?? null, zone: zone ?? null, referenceNumber: refNum, latitude: latitude ?? null, longitude: longitude ?? null, takenAt: new Date(), status: isIssue ? "open" : null, resolvedAt: null, assignedToUserId: assignedToUserId || null, dueDate: dueDate || null, closureReason: null, closureNote: null, updatedAt: null, archivedAt: null, archivedBy: null, archiveReason: null, photoRemovedAt: null, photoRemovedBy: null, submittedAt: new Date(), submittedBy: req.user!.id },
+      { id, projectId: req.params.projectId, uploadedBy: req.user!.id, photoUrl: photoUrl ?? null, category, description: description ?? null, zone: zone ?? null, referenceNumber: refNum, latitude: latitude ?? null, longitude: longitude ?? null, takenAt: new Date(), status: isIssue ? "open" : null, resolvedAt: null, assignedToUserId: assignedToUserId || null, dueDate: dueDate || null, closureReason: null, closureNote: null, updatedAt: null, archivedAt: null, archivedBy: null, archiveReason: null, photoRemovedAt: null, photoRemovedBy: null, submittedAt: new Date(), submittedBy: req.user!.id, dailyReportDate: null },
       userRows[0]?.name ?? "Unknown",
       project[0].name,
       await nameForUser(assignedToUserId),

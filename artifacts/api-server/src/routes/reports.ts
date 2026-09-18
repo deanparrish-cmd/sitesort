@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { dailyReportsTable, dailyNotesTable, projectsTable, usersTable } from "@workspace/db/schema";
-import { eq, and, desc, gte, lte } from "drizzle-orm";
+import { dailyReportsTable, dailyNotesTable, projectsTable, usersTable, photosTable } from "@workspace/db/schema";
+import { eq, and, desc, gte, lte, count, isNull } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
 import { generateDailyReportForProject, hasManagerContent, upsertManagerReport, contributorsForReport } from "../lib/daily-reports";
 import { generateId } from "../lib/id";
@@ -393,6 +393,96 @@ router.patch("/projects/:projectId/daily-reports/:date", authenticate, async (re
   } catch (err) {
     req.log.error({ err }, "Author daily report error");
     res.status(500).json({ error: "server_error", message: "Failed to save report" });
+  }
+});
+
+// Photos attached directly to a daily site report. Each is a normal `photos`
+// row (category "progress") tagged with daily_report_date, so ONE upload shows
+// in the report AND in the project photo library (tagged with the report date).
+const REPORT_PHOTO_MAX = 20;
+
+async function reportPhotoProject(req: import("express").Request, res: import("express").Response) {
+  if (!isInternal(req.user!.role)) {
+    res.status(403).json({ error: "forbidden", message: "Not allowed to view report photos" });
+    return null;
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(req.params.date)) {
+    res.status(400).json({ error: "validation_error", message: "date must be YYYY-MM-DD" });
+    return null;
+  }
+  const project = await db.select({ id: projectsTable.id }).from(projectsTable)
+    .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId))).limit(1);
+  if (!project[0]) {
+    res.status(404).json({ error: "not_found", message: "Project not found" });
+    return null;
+  }
+  return project[0];
+}
+
+async function listReportPhotos(projectId: string, date: string) {
+  const rows = await db.select({
+    id: photosTable.id, referenceNumber: photosTable.referenceNumber, photoUrl: photosTable.photoUrl,
+    caption: photosTable.description, takenAt: photosTable.takenAt, uploaderName: usersTable.name,
+    dailyReportDate: photosTable.dailyReportDate,
+  }).from(photosTable)
+    .leftJoin(usersTable, eq(usersTable.id, photosTable.uploadedBy))
+    .where(and(
+      eq(photosTable.projectId, projectId),
+      eq(photosTable.dailyReportDate, date),
+      isNull(photosTable.archivedAt),
+      isNull(photosTable.photoRemovedAt),
+    ))
+    .orderBy(photosTable.takenAt);
+  return rows.map(r => ({ ...r, uploaderName: r.uploaderName ?? "Unknown", takenAt: r.takenAt.toISOString() }));
+}
+
+// GET /api/projects/:projectId/daily-reports/:date/photos
+router.get("/projects/:projectId/daily-reports/:date/photos", authenticate, async (req, res) => {
+  try {
+    const project = await reportPhotoProject(req, res);
+    if (!project) return;
+    res.json(await listReportPhotos(project.id, req.params.date));
+  } catch (err) {
+    req.log.error({ err }, "List report photos error");
+    res.status(500).json({ error: "server_error", message: "Failed to load report photos" });
+  }
+});
+
+// POST /api/projects/:projectId/daily-reports/:date/photos
+// body: { photos: [{ photoUrl, caption? }] } (photoUrl from POST /api/upload)
+router.post("/projects/:projectId/daily-reports/:date/photos", authenticate, async (req, res) => {
+  try {
+    const project = await reportPhotoProject(req, res);
+    if (!project) return;
+    const input = Array.isArray(req.body?.photos) ? req.body.photos : [];
+    const photos = input
+      .map((p: any) => ({ photoUrl: typeof p?.photoUrl === "string" ? p.photoUrl : "", caption: typeof p?.caption === "string" ? p.caption.trim().slice(0, 300) : "" }))
+      .filter((p: { photoUrl: string }) => /^\/(api\/)?uploads\/[^/]+$/.test(p.photoUrl));
+    if (photos.length === 0 || photos.length > REPORT_PHOTO_MAX) {
+      res.status(400).json({ error: "validation_error", message: `Add between 1 and ${REPORT_PHOTO_MAX} photos` });
+      return;
+    }
+    // Sequential reference numbers from one count, mirroring POST /projects/:id/photos.
+    const [{ total }] = await db.select({ total: count() }).from(photosTable);
+    const now = new Date();
+    await db.insert(photosTable).values(photos.map((p: { photoUrl: string; caption: string }, i: number) => ({
+      id: generateId(),
+      projectId: project.id,
+      uploadedBy: req.user!.id,
+      photoUrl: p.photoUrl.replace(/^\/uploads\//, "/api/uploads/"),
+      category: "progress",
+      description: p.caption || null,
+      zone: null,
+      referenceNumber: `PHOTO-${String(total + 1 + i).padStart(4, "0")}`,
+      takenAt: now,
+      dailyReportDate: req.params.date,
+      submittedAt: now,
+      submittedBy: req.user!.id,
+    })));
+    res.status(201).json(await listReportPhotos(project.id, req.params.date));
+  } catch (err) {
+    req.log.error({ err }, "Add report photos error");
+    res.status(500).json({ error: "server_error", message: "Failed to add photos" });
   }
 });
 

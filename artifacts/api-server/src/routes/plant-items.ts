@@ -11,6 +11,7 @@ import { logActivity } from "../lib/activity";
 import { CreatePlantItemBody, UpdatePlantItemBody, CreatePlantItemAttachmentBody } from "@workspace/api-zod";
 import { notesFor, addNote } from "../lib/portal-submission-notes";
 import { isProjectApprover } from "../lib/project-authority";
+import { londonDateStr } from "../lib/daily-reports";
 
 const router: IRouter = Router();
 
@@ -100,6 +101,49 @@ async function serializeItems(items: ItemRow[]) {
     submissionNotes: submissionNotesByItem.get(i.id) ?? [],
   }));
 }
+
+// GET /api/plant-items/on-hire — company-wide list of hired plant that is
+// still on hire, for the dashboard. There is deliberately NO date filter: an
+// item stays here until it is explicitly marked off-hired, so plant that has
+// run past its expected off-hire date is never silently dropped. Overdue items
+// (expected off-hire date before today, London time) sort first.
+router.get("/plant-items/on-hire", authenticate, async (req, res) => {
+  try {
+    if (!requireInternal(req, res)) return;
+    const rows = await db.select({ item: plantItemsTable, projectName: projectsTable.name })
+      .from(plantItemsTable)
+      .innerJoin(projectsTable, eq(projectsTable.id, plantItemsTable.projectId))
+      .where(and(
+        eq(projectsTable.companyId, req.user!.companyId),
+        eq(plantItemsTable.category, "plant_equipment"),
+        inArray(plantItemsTable.status, ["on_site", "on_order"]),
+        isNull(plantItemsTable.archivedAt),
+      ));
+    const today = londonDateStr(new Date());
+    const out = rows.map(({ item, projectName }) => ({
+      id: item.id,
+      projectId: item.projectId,
+      projectName,
+      name: item.name,
+      status: item.status,
+      location: item.location ?? null,
+      supplierOwnerText: item.supplierOwnerText ?? null,
+      expectedOffHireDate: item.expectedOffHireDate ?? null,
+      overdue: !!item.expectedOffHireDate && item.expectedOffHireDate < today,
+    })).sort((a, b) => {
+      if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
+      // Within a group: soonest/longest-overdue date first, undated last.
+      if (a.expectedOffHireDate && b.expectedOffHireDate) return a.expectedOffHireDate.localeCompare(b.expectedOffHireDate);
+      if (a.expectedOffHireDate) return -1;
+      if (b.expectedOffHireDate) return 1;
+      return a.name.localeCompare(b.name);
+    });
+    res.json(out);
+  } catch (err) {
+    req.log.error({ err }, "List on-hire plant error");
+    res.status(500).json({ error: "server_error", message: "Failed to list plant on hire" });
+  }
+});
 
 // GET /api/projects/:projectId/plant-items
 router.get("/projects/:projectId/plant-items", authenticate, async (req, res) => {

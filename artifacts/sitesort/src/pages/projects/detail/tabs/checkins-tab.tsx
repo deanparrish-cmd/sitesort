@@ -5,12 +5,17 @@ import { PageHeader } from "@/components/ui/page-header";
 import { QrCode, Share2, FolderOpen, ChevronDown, ChevronRight } from "lucide-react";
 import { MonthFolder, splitByMonth, monthLabel } from "@/components/ui/month-folder";
 import { useDetail } from "../context";
+import { OnSiteRegister } from "@/components/on-site-register";
 
 type Checkin = {
   id: string;
   workerName: string;
   photoUrl: string;
   checkedInAt: string;
+  checkedOutAt?: string | null;
+  checkoutMethod?: string | null;
+  checkoutNote?: string | null;
+  notSignedOut?: boolean;
 };
 
 function CheckinCard({ ci, setSharingDoc }: { ci: Checkin; setSharingDoc: (d: any) => void }) {
@@ -27,7 +32,12 @@ function CheckinCard({ ci, setSharingDoc }: { ci: Checkin; setSharingDoc: (d: an
         <p className="font-semibold text-sm truncate">{ci.workerName}</p>
         <p className="text-muted-foreground text-xs mt-0.5">{dateStr}</p>
         <div className="flex items-center justify-between gap-2 mt-0.5">
-          <p className="text-muted-foreground text-xs">{timeStr}</p>
+          <p className="text-muted-foreground text-xs">
+            In {timeStr}
+            {ci.checkedOutAt
+              ? ` · Out ${new Date(ci.checkedOutAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}${ci.checkoutMethod === "manual" ? " (by manager)" : ""}`
+              : ci.notSignedOut ? " · Not signed out" : " · On site"}
+          </p>
           <button
             type="button"
             onClick={() => setSharingDoc({ type: "photo", id: ci.id, name: `Check-in: ${ci.workerName}`, version: null, fileUrl: photoSrc })}
@@ -47,7 +57,14 @@ export function CheckinsTab() {
     checkins,
     siteBoardUrl,
     setSharingDoc,
+    setCheckins,
+    projectId,
+    isProjectApprover,
+    authHeaders,
   } = useDetail();
+  const refreshCheckins = () =>
+    fetch(`/api/projects/${projectId}/checkins`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : null).then(d => { if (d) setCheckins(d); }).catch(() => {});
   // Only today's photos are laid out as cards. Every earlier day is collapsed
   // into a dated folder row (newest first) that expands on demand, so the tab
   // never fills up with old photos.
@@ -89,6 +106,12 @@ export function CheckinsTab() {
               )}
               <span className="text-sm text-muted-foreground whitespace-nowrap">{checkins.length} {checkins.length === 1 ? "check-in" : "check-ins"}</span>
             </>}
+          />
+
+          <OnSiteRegister
+            checkins={checkins.map(c => ({ ...c, projectId }))}
+            canSignOut={isProjectApprover}
+            onChanged={refreshCheckins}
           />
 
           {checkins.length === 0 ? (

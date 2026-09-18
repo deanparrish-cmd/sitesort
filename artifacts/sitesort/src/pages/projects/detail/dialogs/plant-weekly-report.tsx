@@ -76,7 +76,11 @@ export function PlantWeeklyReportDialog({ open, onClose, projectId, projectName,
     );
     const buckets: Record<PlantWeeklyBucket, PlantItem[]> = {
       active: inWeek.filter(i => i.status !== "off_hired" && (i.expectedOffHireDate as string) >= todayISO),
-      overdue: inWeek.filter(i => i.status !== "off_hired" && (i.expectedOffHireDate as string) < todayISO),
+      // Overdue is NOT limited to the chosen week: plant still on hire past its
+      // expected off-hire date must keep showing until it is off-hired.
+      overdue: items
+        .filter(i => i.status !== "off_hired" && i.status !== "depleted" && !!i.expectedOffHireDate && i.expectedOffHireDate < todayISO)
+        .sort((a, b) => (a.expectedOffHireDate as string).localeCompare(b.expectedOffHireDate as string)),
       returned: inWeek.filter(i => i.status === "off_hired"),
     };
     return { buckets, missing };

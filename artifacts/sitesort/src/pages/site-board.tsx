@@ -88,6 +88,56 @@ function CheckInCard({
   const [preview, setPreview] = useState<string | null>(null);
   const [capturedFile, setCapturedFile] = useState<File | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
+  // Sign-out state: `signedIn` is set when the server says this person is
+  // currently on site (offer SIGN OUT); `signedOutAt` shows the confirmation.
+  const [signedIn, setSignedIn] = useState<{ checkedInAt: string } | null>(null);
+  const [signedOutAt, setSignedOutAt] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
+  const idKey = `sitesort_site_identity_${token}`;
+
+  const lookupStatus = async (n: string, c: string) => {
+    if (!n.trim() || !c.trim()) return;
+    try {
+      const r = await fetch(`/api/site/${token}/status?workerName=${encodeURIComponent(n.trim())}&companyName=${encodeURIComponent(c.trim())}`);
+      if (!r.ok) return;
+      const d = await r.json();
+      setSignedIn(d.onSite ? { checkedInAt: d.checkedInAt } : null);
+    } catch { /* offline: fall back to the sign-in form */ }
+  };
+
+  // Remembered on this device only, so a re-scan can offer SIGN OUT straight away.
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(idKey) ?? "null");
+      if (saved?.name && saved?.company) {
+        setName(saved.name);
+        setCompanyName(saved.company);
+        void lookupStatus(saved.name, saved.company);
+      }
+    } catch { /* storage unavailable */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    setErrorMsg("");
+    try {
+      const r = await fetch(`/api/site/${token}/checkout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workerName: name.trim(), companyName: companyName.trim() }),
+      });
+      if (r.status === 409) { setSignedIn(null); return; }
+      if (!r.ok) throw new Error("failed");
+      const d = await r.json();
+      setSignedIn(null);
+      setSignedOutAt(d.checkedOutAt);
+    } catch {
+      setErrorMsg("Sign-out failed. Please try again.");
+    } finally {
+      setSigningOut(false);
+    }
+  };
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -131,8 +181,19 @@ function CheckInCard({
         return;
       }
 
+      if (res.status === 409) {
+        // Already signed in: offer SIGN OUT instead of a second sign-in.
+        const body = await res.json().catch(() => ({}));
+        setSignedIn({ checkedInAt: body.checkedInAt });
+        setStatus("idle");
+        setPreview(null);
+        setCapturedFile(null);
+        return;
+      }
+
       if (!res.ok) throw new Error("Upload failed");
 
+      try { localStorage.setItem(idKey, JSON.stringify({ name: name.trim(), company: companyName.trim() })); } catch { /* ignore */ }
       setStatus("done");
       setTimeout(() => onCheckedIn(), 2000);
     } catch {
@@ -151,6 +212,57 @@ function CheckInCard({
     setBlockedReason(null);
     if (fileRef.current) fileRef.current.value = "";
   };
+
+  const hhmm = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+
+  if (signedOutAt) {
+    return (
+      <div className="bg-white rounded-2xl shadow-sm border p-6 text-center space-y-4">
+        <CheckCircle2 className="w-14 h-14 text-green-500 mx-auto" />
+        <h3 className="text-xl font-bold text-gray-900">Signed out</h3>
+        <p className="text-gray-500 text-sm">{name.trim()}, you signed out at {hhmm(signedOutAt)}. Scan again to sign back in.</p>
+        <button
+          onClick={() => setSignedOutAt(null)}
+          className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl min-h-11"
+          data-testid="button-sign-back-in"
+        >
+          Sign back in
+        </button>
+      </div>
+    );
+  }
+
+  if (signedIn) {
+    return (
+      <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+        <div className="bg-gradient-to-r from-green-700 to-green-500 px-5 py-4 flex items-center gap-3">
+          <CheckCircle2 className="w-5 h-5 text-white" />
+          <h2 className="text-white font-bold text-base">You are signed in</h2>
+        </div>
+        <div className="p-5 space-y-4">
+          <p className="text-gray-600 text-sm break-words">
+            <strong>{name.trim()}</strong> ({companyName.trim()}) signed in at {hhmm(signedIn.checkedInAt)}
+            {new Date(signedIn.checkedInAt).toDateString() !== new Date().toDateString() && " on " + new Date(signedIn.checkedInAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}.
+          </p>
+          {errorMsg && <p className="text-red-500 text-sm">{errorMsg}</p>}
+          <button
+            onClick={handleSignOut}
+            disabled={signingOut}
+            className="w-full bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 min-h-11"
+            data-testid="button-sign-out"
+          >
+            {signingOut ? <><Loader2 className="w-5 h-5 animate-spin" /> Signing out…</> : "Sign out of site"}
+          </button>
+          <button onClick={onCheckedIn} className="w-full border border-gray-200 text-gray-700 font-semibold py-3 rounded-xl min-h-11">
+            View site information
+          </button>
+          <button onClick={() => { setSignedIn(null); setName(""); setCompanyName(""); try { localStorage.removeItem(idKey); } catch { /* ignore */ } }} className="w-full text-xs text-gray-500 underline min-h-11">
+            Not you? Use different details
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Access blocked screen
   if (blockedReason) {
@@ -255,6 +367,7 @@ function CheckInCard({
             type="text"
             value={companyName}
             onChange={e => setCompanyName(e.target.value)}
+            onBlur={() => void lookupStatus(name, companyName)}
             placeholder="e.g. Acme Electrical Ltd"
             className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
           />

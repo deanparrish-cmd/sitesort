@@ -12,6 +12,7 @@ import {
   ClipboardCheck, ClipboardList, PencilLine, Plus,
 } from "lucide-react";
 import { DictationButton } from "@/components/ui/dictation-button";
+import { DailyReportPhotos } from "@/components/daily-report-photos";
 import { itemDeepLink } from "@/lib/deep-link";
 
 // Shared by the Daily Reports hub (/daily-reports) and the project-detail
@@ -278,6 +279,8 @@ export function DailyReportDetail({
           </div>
         </div>
       )}
+
+      <DailyReportPhotos projectId={report.projectId} reportDate={report.reportDate} canEdit={canEdit} />
 
       {d.sitePhotos.length > 0 && (
         <div>

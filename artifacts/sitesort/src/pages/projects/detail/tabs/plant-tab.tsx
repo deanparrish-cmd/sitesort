@@ -60,7 +60,12 @@ export function PlantTab() {
   const { data, isLoading } = useListPlantItems(projectId, params, { query: { enabled: !!projectId, queryKey: getListPlantItemsQueryKey(projectId, params) } });
   const deleteItem = useDeletePlantItem();
 
-  const items = (data as PlantItem[]) ?? [];
+  // Hired plant still on hire (not off-hired) and past its expected off-hire
+  // date is OVERDUE: flagged red and sorted to the top.
+  const todayISO = new Date().toLocaleDateString("en-CA");
+  const isOverdueHire = (i: PlantItem) =>
+    i.category === "plant_equipment" && i.status !== "off_hired" && i.status !== "depleted" && !!i.expectedOffHireDate && i.expectedOffHireDate < todayISO;
+  const items = [...((data as PlantItem[]) ?? [])].sort((a, b) => Number(isOverdueHire(b)) - Number(isOverdueHire(a)));
 
   const authHeaders = (): Record<string, string> => {
     const t = localStorage.getItem("sitesort_token");
@@ -192,6 +197,11 @@ export function PlantTab() {
                 )}
               </>}
               actions={<>
+                {isOverdueHire(item) && (
+                  <Pill className="bg-destructive text-destructive-foreground border-destructive font-bold">
+                    Overdue, due off hire {new Date(`${item.expectedOffHireDate}T12:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                  </Pill>
+                )}
                 <Pill className={STATUS_PILL[item.status]}>{STATUS_LABEL[item.status] ?? item.status}</Pill>
                 {caps.isInternal && !showArchived && (
                   <>

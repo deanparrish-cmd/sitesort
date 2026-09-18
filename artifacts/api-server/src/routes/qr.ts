@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db } from "@workspace/db";
 import { qrCodesTable, qrBoardPinsTable, documentsTable, projectsTable, projectMembersTable, usersTable, permitsTable, photosTable, siteCheckinsTable, subcontractorsTable, calendarEventsTable, companyMembersTable, notificationsTable, peopleTable } from "@workspace/db/schema";
-import { eq, and, or, desc, asc, inArray, isNull } from "drizzle-orm";
+import { eq, and, or, desc, asc, inArray, isNull, sql } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { expiryStatus } from "../lib/expiry";
@@ -12,6 +12,9 @@ import multer from "multer";
 import path from "path";
 import { randomUUID } from "crypto";
 import { getBucket, objectKey } from "../lib/gcs";
+import { londonDateStr } from "../lib/daily-reports";
+import { isProjectApprover } from "../lib/project-authority";
+import { logActivity } from "../lib/activity";
 
 const checkinUpload = multer({
   storage: multer.memoryStorage(),
@@ -288,6 +291,112 @@ router.get("/site/:token", async (req, res) => {
   }
 });
 
+// Sign-out state for a check-in row. One row = one in/out cycle. `onSite` means
+// signed in and not signed out; `notSignedOut` flags an open row from a
+// PREVIOUS (London) day. Those are surfaced for a manager to close manually,
+// never auto-closed, so the emergency roll-call never silently drops anyone.
+function checkinState(c: { checkedInAt: Date; checkedOutAt: Date | null; checkoutMethod?: string | null }) {
+  // 'legacy' = recorded before sign-out existed (no way to sign out then), so
+  // it's history, not someone still on site.
+  const open = !c.checkedOutAt && c.checkoutMethod !== "legacy";
+  return {
+    onSite: open,
+    notSignedOut: open && londonDateStr(c.checkedInAt) < londonDateStr(new Date()),
+  };
+}
+function serializeCheckin<T extends { checkedInAt: Date; checkedOutAt: Date | null; checkoutMethod?: string | null }>(c: T) {
+  return {
+    ...c,
+    checkedInAt: c.checkedInAt.toISOString(),
+    checkedOutAt: c.checkedOutAt ? c.checkedOutAt.toISOString() : null,
+    ...checkinState(c),
+  };
+}
+// The person's currently-open cycles on a project (name + company, case-insensitive),
+// newest first.
+async function openCheckinsFor(projectId: string, workerName: string, companyName: string) {
+  return db.select().from(siteCheckinsTable).where(and(
+    eq(siteCheckinsTable.projectId, projectId),
+    isNull(siteCheckinsTable.checkedOutAt),
+    sql`coalesce(${siteCheckinsTable.checkoutMethod}, '') <> 'legacy'`,
+    sql`lower(trim(${siteCheckinsTable.workerName})) = ${workerName.trim().toLowerCase()}`,
+    sql`lower(trim(coalesce(${siteCheckinsTable.companyName}, ''))) = ${companyName.trim().toLowerCase()}`,
+  )).orderBy(desc(siteCheckinsTable.checkedInAt));
+}
+
+// Public: is this person currently signed in on this site? Drives whether the
+// QR page offers SIGN IN or SIGN OUT. Returns only a boolean + their own times.
+router.get("/site/:token/status", async (req: Request, res: Response) => {
+  try {
+    const workerName = String(req.query.workerName ?? "");
+    const companyName = String(req.query.companyName ?? "");
+    if (!workerName.trim() || !companyName.trim()) {
+      res.status(400).json({ error: "validation_error", message: "workerName and companyName required" });
+      return;
+    }
+    const qr = await db.select().from(qrCodesTable).where(eq(qrCodesTable.token, req.params.token)).then(r => r[0]);
+    if (!qr) { res.status(404).json({ error: "not_found", message: "Invalid site token" }); return; }
+    const open = await openCheckinsFor(qr.projectId, workerName, companyName);
+    const latest = open[0];
+    res.json({ onSite: !!latest, checkinId: latest?.id ?? null, checkedInAt: latest ? latest.checkedInAt.toISOString() : null });
+  } catch {
+    res.status(500).json({ error: "server_error", message: "Failed to check status" });
+  }
+});
+
+// Public: sign out. Closes the person's most recent open cycle only; an older
+// unclosed cycle from a previous day stays flagged for a manager.
+router.post("/site/:token/checkout", async (req: Request, res: Response) => {
+  try {
+    const { workerName, companyName } = req.body ?? {};
+    if (!workerName?.trim() || !companyName?.trim()) {
+      res.status(400).json({ error: "validation_error", message: "workerName and companyName required" });
+      return;
+    }
+    const qr = await db.select().from(qrCodesTable).where(eq(qrCodesTable.token, req.params.token)).then(r => r[0]);
+    if (!qr) { res.status(404).json({ error: "not_found", message: "Invalid site token" }); return; }
+    const open = await openCheckinsFor(qr.projectId, workerName, companyName);
+    if (!open[0]) { res.status(409).json({ error: "not_signed_in", message: "You are not signed in on this site" }); return; }
+    const [row] = await db.update(siteCheckinsTable)
+      .set({ checkedOutAt: new Date(), checkoutMethod: "self" })
+      .where(and(eq(siteCheckinsTable.id, open[0].id), isNull(siteCheckinsTable.checkedOutAt)))
+      .returning();
+    if (!row) { res.status(409).json({ error: "not_signed_in", message: "You are not signed in on this site" }); return; }
+    res.json(serializeCheckin(row));
+  } catch {
+    res.status(500).json({ error: "server_error", message: "Sign-out failed" });
+  }
+});
+
+// Authenticated: a manager signs someone out on their behalf (forgot to sign
+// out), with a required note. Admin / project manager / project approver only.
+router.post("/projects/:projectId/checkins/:id/sign-out", authenticate, async (req: Request, res: Response) => {
+  try {
+    const project = await db.select({ id: projectsTable.id, companyId: projectsTable.companyId }).from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId))).limit(1);
+    if (!project[0]) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+    if (!(await isProjectApprover(req.user!, project[0].id))) {
+      res.status(403).json({ error: "forbidden", message: "Only a manager can sign someone out" });
+      return;
+    }
+    const note = typeof req.body?.note === "string" ? req.body.note.trim() : "";
+    if (!note) { res.status(400).json({ error: "validation_error", message: "A note is required" }); return; }
+    const [row] = await db.update(siteCheckinsTable)
+      .set({ checkedOutAt: new Date(), checkedOutBy: req.user!.id, checkoutNote: note.slice(0, 500), checkoutMethod: "manual" })
+      .where(and(
+        eq(siteCheckinsTable.id, req.params.id),
+        eq(siteCheckinsTable.projectId, project[0].id),
+        isNull(siteCheckinsTable.checkedOutAt),
+      )).returning();
+    if (!row) { res.status(409).json({ error: "not_signed_in", message: "Already signed out, or not found" }); return; }
+    void logActivity({ userId: req.user!.id, projectId: project[0].id, companyId: project[0].companyId, section: "check-ins", action: "update", itemType: "site_checkin", itemId: row.id, metadata: { signedOut: row.workerName, note }, req });
+    res.json(serializeCheckin(row));
+  } catch (err) {
+    req.log.error({ err }, "Manual sign-out error");
+    res.status(500).json({ error: "server_error", message: "Failed to sign out" });
+  }
+});
+
 // Public check-in endpoint — validates contact registration and insurance before recording
 router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: Request, res: Response) => {
   try {
@@ -306,6 +415,16 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
       .then(r => r[0]);
     if (!qr) {
       res.status(404).json({ error: "not_found", message: "Invalid site token" });
+      return;
+    }
+
+    // Already signed in today: don't create a second open row; the client
+    // should offer SIGN OUT instead. (An open row from a PREVIOUS day doesn't
+    // block: a new visit is a new row and the old one stays flagged.)
+    const alreadyOpen = (await openCheckinsFor(qr.projectId, workerName, companyName))
+      .find(c => londonDateStr(c.checkedInAt) === londonDateStr(new Date()));
+    if (alreadyOpen) {
+      res.status(409).json({ error: "already_signed_in", checkinId: alreadyOpen.id, checkedInAt: alreadyOpen.checkedInAt.toISOString() });
       return;
     }
 
@@ -421,10 +540,7 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
     // the notification fan-out.
     void notifySuccessfulCheckin(qr.projectId, workerName.trim(), companyName.trim(), checkin.checkedInAt);
 
-    res.status(201).json({
-      ...checkin,
-      checkedInAt: checkin.checkedInAt.toISOString(),
-    });
+    res.status(201).json(serializeCheckin(checkin));
   } catch (err) {
     res.status(500).json({ error: "server_error", message: "Check-in failed" });
   }
@@ -444,13 +560,16 @@ router.get("/checkins", authenticate, async (req: Request, res: Response) => {
         checkedInAt: siteCheckinsTable.checkedInAt,
         lat: siteCheckinsTable.lat,
         lng: siteCheckinsTable.lng,
+        checkedOutAt: siteCheckinsTable.checkedOutAt,
+        checkoutNote: siteCheckinsTable.checkoutNote,
+        checkoutMethod: siteCheckinsTable.checkoutMethod,
       })
       .from(siteCheckinsTable)
       .innerJoin(projectsTable, eq(projectsTable.id, siteCheckinsTable.projectId))
       .where(eq(projectsTable.companyId, req.user!.companyId))
       .orderBy(desc(siteCheckinsTable.checkedInAt));
 
-    res.json(rows.map(c => ({ ...c, checkedInAt: c.checkedInAt.toISOString() })));
+    res.json(rows.map(serializeCheckin));
   } catch (err) {
     req.log.error({ err }, "List all checkins error");
     res.status(500).json({ error: "server_error", message: "Failed to load check-ins" });
@@ -472,7 +591,7 @@ router.get("/projects/:projectId/checkins", authenticate, async (req: Request, r
       .where(eq(siteCheckinsTable.projectId, req.params.projectId))
       .orderBy(desc(siteCheckinsTable.checkedInAt));
 
-    res.json(checkins.map(c => ({ ...c, checkedInAt: c.checkedInAt.toISOString() })));
+    res.json(checkins.map(serializeCheckin));
   } catch (err) {
     res.status(500).json({ error: "server_error", message: "Failed to load check-ins" });
   }

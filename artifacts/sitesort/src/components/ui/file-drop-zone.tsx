@@ -14,11 +14,13 @@ interface FileDropZoneProps {
   onCleared: () => void;
   accept?: string;
   className?: string;
+  /** Multi-file mode: every picked/dropped file uploads in turn and fires onUploaded; no single-file "done" card. */
+  multiple?: boolean;
 }
 
 const ACCEPTED_EXTS = ".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.dwg,.dxf,.dwf,.rvt,.ifc,.mpp";
 
-export function FileDropZone({ onUploaded, onCleared, accept = ACCEPTED_EXTS, className }: FileDropZoneProps) {
+export function FileDropZone({ onUploaded, onCleared, accept = ACCEPTED_EXTS, className, multiple = false }: FileDropZoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploaded, setUploaded] = useState<UploadedFile | null>(null);
@@ -42,7 +44,9 @@ export function FileDropZone({ onUploaded, onCleared, accept = ACCEPTED_EXTS, cl
     };
   }, []);
 
-  const uploadFile = useCallback(async (file: File) => {
+  const [progress, setProgress] = useState<string | null>(null);
+
+  const uploadFile = useCallback(async (file: File, opts?: { silent?: boolean }) => {
     setError(null);
     setUploading(true);
     try {
@@ -59,14 +63,26 @@ export function FileDropZone({ onUploaded, onCleared, accept = ACCEPTED_EXTS, cl
         throw new Error(err.message ?? "Upload failed");
       }
       const data: UploadedFile = await res.json();
-      setUploaded(data);
+      if (!opts?.silent) setUploaded(data);
       onUploaded(data);
     } catch (e: any) {
-      setError(e.message ?? "Upload failed");
+      setError(`${file.name}: ${e.message ?? "Upload failed"}`);
     } finally {
       setUploading(false);
     }
   }, [onUploaded]);
+
+  // Multi-file: upload sequentially so one bad file doesn't lose the others.
+  const uploadMany = useCallback(async (files: File[]) => {
+    const allowed = accept.split(",").map(a => a.trim().toLowerCase()).filter(Boolean);
+    const ok = files.filter(f => allowed.length === 0 || allowed.some(a => f.name.toLowerCase().endsWith(a) || (a.includes("/") && f.type === a)));
+    if (ok.length < files.length) setError(`${files.length - ok.length} file(s) skipped: unsupported type`);
+    for (let i = 0; i < ok.length; i++) {
+      setProgress(`Uploading ${i + 1} of ${ok.length}`);
+      await uploadFile(ok[i], { silent: true });
+    }
+    setProgress(null);
+  }, [accept, uploadFile]);
 
   const clear = () => {
     setUploaded(null);
@@ -93,11 +109,22 @@ export function FileDropZone({ onUploaded, onCleared, accept = ACCEPTED_EXTS, cl
     e.preventDefault();
     dragCounter.current = 0;
     setIsDragging(false);
+    if (multiple) {
+      const files = Array.from(e.dataTransfer.files);
+      if (files.length) void uploadMany(files);
+      return;
+    }
     const file = e.dataTransfer.files[0];
     if (file) uploadFile(file);
-  }, [uploadFile]);
+  }, [uploadFile, uploadMany, multiple]);
 
   const onInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (multiple) {
+      const files = Array.from(e.target.files ?? []);
+      if (files.length) void uploadMany(files);
+      e.target.value = "";
+      return;
+    }
     const file = e.target.files?.[0];
     if (file) uploadFile(file);
   };
@@ -136,7 +163,7 @@ export function FileDropZone({ onUploaded, onCleared, accept = ACCEPTED_EXTS, cl
         {uploading ? (
           <>
             <Loader2 className="w-8 h-8 text-primary animate-spin" />
-            <p className="text-sm text-muted-foreground font-medium">Uploading…</p>
+            <p className="text-sm text-muted-foreground font-medium">{progress ?? "Uploading…"}</p>
           </>
         ) : (
           <>
@@ -144,12 +171,12 @@ export function FileDropZone({ onUploaded, onCleared, accept = ACCEPTED_EXTS, cl
               <Upload className="w-6 h-6 text-muted-foreground" />
             </div>
             <div className="text-center">
-              <p className="font-semibold text-sm">Drop file here or <span className="text-primary underline">browse</span></p>
+              <p className="font-semibold text-sm">{multiple ? "Drop photos here or " : "Drop file here or "}<span className="text-primary underline">browse</span></p>
               <p className="text-xs text-muted-foreground mt-1">PDF, images, Word, Excel, MS Project, DWG, DXF, DWF · up to 100MB</p>
             </div>
           </>
         )}
-        <input ref={inputRef} type="file" accept={accept} className="hidden" onChange={onInputChange} />
+        <input ref={inputRef} type="file" accept={accept} multiple={multiple} className="hidden" onChange={onInputChange} data-testid="input-file-drop" />
       </div>
       {error && (
         <div className="flex items-center gap-2 text-destructive text-sm">

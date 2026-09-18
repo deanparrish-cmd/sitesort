@@ -62,6 +62,11 @@ export function PhotoOverlay() {
                     {CATEGORY_LABELS[viewingPhoto.category] ?? viewingPhoto.category}
                   </span>
                   <span className="font-mono text-xs text-muted-foreground shrink-0">{viewingPhoto.referenceNumber}</span>
+                  {viewingPhoto.dailyReportDate && (
+                    <span className="text-xs font-bold px-2 py-0.5 rounded border shrink-0 bg-primary/5 border-primary/25 text-primary" data-testid="tag-report-date">
+                      Daily report {new Date(`${viewingPhoto.dailyReportDate}T12:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                    </span>
+                  )}
                   {viewingPhoto.status && STATUS_LABELS[viewingPhoto.status] && (
                     <span className={cn("text-xs font-bold px-2 py-0.5 rounded border shrink-0", STATUS_LABELS[viewingPhoto.status].cls)}>{STATUS_LABELS[viewingPhoto.status].label}</span>
                   )}

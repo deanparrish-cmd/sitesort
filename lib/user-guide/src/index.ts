@@ -171,6 +171,13 @@ export const PM_GUIDE: GuideSection[] = [
           "From a project's Site Board tab, pin documents, permits or photos so they show on the public board anyone can see by scanning the code. No login needed.",
         ],
       },
+      {
+        heading: "See who is on site right now",
+        body: [
+          "The project's Check-Ins tab (and the Check-Ins page) opens with Currently on site: everyone who has signed in and not yet signed out, so you can use it for a roll call.",
+          "Anyone still signed in from a previous day is flagged Not signed out. They are never closed automatically. Choose Sign out beside their name, add a note (for example, left site at 17:00) and confirm. Admins and project managers can do this.",
+        ],
+      },
     ],
   },
   {
@@ -236,6 +243,24 @@ export const PM_GUIDE: GuideSection[] = [
           tone: "note",
           text: "Certificates a worker submits through the portal are filed against their record automatically once you file them from Team Activity, and filed submissions leave the review queue on their own.",
         },
+      },
+    ],
+  },
+  {
+    id: "plant-and-report-photos",
+    title: "Plant on hire and report photos",
+    steps: [
+      {
+        heading: "Plant on hire stays on your dashboard",
+        body: [
+          "Hired plant appears under Plant on hire on the dashboard until you mark it Off-hired on the project's Plant & Materials tab. Plant past its expected off-hire date shows in red as Overdue, with the date it was due off hire, and sits at the top.",
+        ],
+      },
+      {
+        heading: "Add photos to a daily report",
+        body: [
+          "Open a daily site report and choose Add Photos. Drop several photos at once or browse, add an optional caption to each, then save. They show in the report and also appear in the project's photo library tagged with the report date, so there is no need to upload them twice.",
+        ],
       },
     ],
   },
@@ -343,6 +368,13 @@ export const WORKER_GUIDE: GuideSection[] = [
           tone: "tip",
           text: "No portal login is needed for this step.",
         },
+      },
+      {
+        heading: "Sign out when you leave",
+        body: [
+          "Scan the same QR code again. If you are signed in you will see Sign out of site; choose it and your time is recorded. If you are signed out you will see the check-in form again.",
+          "You can sign in and out as many times as you need in a day, for example for lunch. Each visit is recorded separately. If you forget to sign out, tell your site manager so they can do it for you.",
+        ],
       },
     ],
   },

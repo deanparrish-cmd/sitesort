@@ -47,6 +47,10 @@ export const photosTable = pgTable("photos", {
   // immediately (no draft step for the PM's own entries).
   submittedAt: timestamp("submitted_at"),
   submittedBy: text("submitted_by").references(() => usersTable.id),
+  // YYYY-MM-DD (Europe/London) of the daily site report this photo was added
+  // to. NULL for photos uploaded elsewhere. One row serves both the report and
+  // the project photo library, so a photo is never uploaded twice.
+  dailyReportDate: text("daily_report_date"),
 });
 
 export const insertPhotoSchema = createInsertSchema(photosTable).omit({ takenAt: true });

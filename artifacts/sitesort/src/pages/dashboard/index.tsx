@@ -13,7 +13,7 @@ import {
   ShieldAlert, FileSignature, Users, Bell, Search,
   MessageSquare, Camera, FilePlus, Plus, AlertCircle, CreditCard,
   FileText, CheckCircle2, Clock, TrendingUp, Zap, X, Circle, ClipboardCheck,
-  Lock, Sparkles, Trash2, UserCheck,
+  Lock, Sparkles, Trash2, UserCheck, Wrench,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { AlertViewer } from "@/components/alert-viewer";
@@ -424,6 +424,13 @@ const DASH_NEXT_PLAN: Record<string, { name: string; projects: string; price: st
   team:  { name: "Pro",  projects: "Unlimited projects", price: "£149/mo" },
 };
 
+type OnHirePlant = {
+  id: string; projectId: string; projectName: string; name: string; status: string;
+  location: string | null; supplierOwnerText: string | null; expectedOffHireDate: string | null; overdue: boolean;
+};
+const fmtHireDate = (iso: string) =>
+  new Date(`${iso}T12:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+
 export default function Dashboard() {
   const [, navigate] = useLocation();
   const { data: projects, isLoading: projectsLoading } = useListProjects();
@@ -444,6 +451,7 @@ export default function Dashboard() {
 
   type OnboardingStatus = { hasProject: boolean; hasTeamMember: boolean; hasDocument: boolean; hasSubcontractor: boolean; hasMilestone: boolean };
   const [onboarding, setOnboarding] = useState<OnboardingStatus | null>(null);
+  const [plantOnHire, setPlantOnHire] = useState<OnHirePlant[]>([]);
   const [onboardingDismissed, setOnboardingDismissed] = useState(() => localStorage.getItem("sitesort_onboarding_dismissed") === "1");
 
   useEffect(() => {
@@ -453,6 +461,7 @@ export default function Dashboard() {
     fetch("/api/messages/unread-count", { headers: h }).then(r => r.ok ? r.json() : { count: 0 }).then(d => setUnreadMessages(d.count ?? 0)).catch(() => {});
     fetch("/api/auth/me", { headers: h }).then(r => r.ok ? r.json() : null).then(u => { if (u?.name) setUserName(u.name.split(" ")[0]); }).catch(() => {});
     fetch("/api/onboarding/status", { headers: h }).then(r => r.ok ? r.json() : null).then(setOnboarding).catch(() => {});
+    fetch("/api/plant-items/on-hire", { headers: h }).then(r => r.ok ? r.json() : []).then(setPlantOnHire).catch(() => {});
   }, []);
 
   const [search, setSearch] = useState("");
@@ -773,6 +782,36 @@ export default function Dashboard() {
             })}
           </div>
         </div>
+      )}
+
+      {/* Plant on hire: stays until explicitly marked off-hired, overdue first */}
+      {plantOnHire.length > 0 && (
+        <Card className="mb-6" data-testid="card-plant-on-hire">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Wrench className="w-4 h-4 text-primary" /> Plant on hire
+              {plantOnHire.some(p => p.overdue) && (
+                <span className="text-xs font-bold text-destructive">{plantOnHire.filter(p => p.overdue).length} overdue</span>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1.5 max-h-80 overflow-y-auto">
+            {plantOnHire.map(p => (
+              <LinkRow
+                key={p.id}
+                href={`/projects/${p.projectId}?tab=plant`}
+                icon={<Wrench className={cn("w-4 h-4", p.overdue ? "text-destructive" : "text-muted-foreground")} />}
+                label={p.name}
+                sub={[p.projectName, p.location].filter(Boolean).join(" · ")}
+                detail={p.overdue && p.expectedOffHireDate
+                  ? `Overdue, due off hire ${fmtHireDate(p.expectedOffHireDate)}`
+                  : p.expectedOffHireDate ? `Off hire ${fmtHireDate(p.expectedOffHireDate)}` : "No off-hire date"}
+                tone={p.overdue ? "danger" : "default"}
+                className={p.overdue ? "border-destructive/40 bg-destructive/5" : undefined}
+              />
+            ))}
+          </CardContent>
+        </Card>
       )}
 
       {/* Main: Projects + Activity */}

@@ -4,6 +4,8 @@ import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { Input } from "@/components/ui/input";
 import { ShareModal } from "@/components/share-modal";
+import { OnSiteRegister } from "@/components/on-site-register";
+import { useCapabilities } from "@/hooks/use-capabilities";
 import {
   ClipboardCheck, Search, MapPin, Building2, Calendar,
   ExternalLink, Share2, X, Users,
@@ -21,6 +23,10 @@ type Checkin = {
   checkedInAt: string;
   lat: number | null;
   lng: number | null;
+  checkedOutAt?: string | null;
+  checkoutMethod?: string | null;
+  onSite?: boolean;
+  notSignedOut?: boolean;
 };
 
 function normaliseUrl(url: string) {
@@ -40,12 +46,13 @@ export default function CheckinsPage() {
   const [viewing, setViewing] = useState<Checkin | null>(null);
   const [shareItem, setShareItem] = useState<{ id: string; name: string; fileUrl: string; projectId: string } | null>(null);
 
-  useEffect(() => {
+  const caps = useCapabilities();
+  const load = () =>
     fetch("/api/checkins", { headers: authHeaders() })
       .then(r => r.ok ? r.json() : [])
       .then(setCheckins)
       .finally(() => setLoading(false));
-  }, []);
+  useEffect(() => { void load(); }, []);
 
   // Apply deep-link filters carried in the URL (e.g. /checkins?project=<id>).
   useEffect(() => {
@@ -124,6 +131,8 @@ export default function CheckinsPage() {
         </select>
       </div>
 
+      <OnSiteRegister checkins={checkins} canSignOut={caps.isManager} onChanged={load} showProject />
+
       {/* Grid */}
       {loading ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -158,6 +167,7 @@ export default function CheckinsPage() {
                   <div className="flex items-center justify-between gap-2 mt-1.5">
                     <p className="text-xs text-muted-foreground">
                       {dt.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} · {dt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                      {ci.checkedOutAt ? ` to ${new Date(ci.checkedOutAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}` : ci.notSignedOut ? " · Not signed out" : ""}
                     </p>
                     <div className="flex items-center gap-1">
                       <button
