@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db } from "@workspace/db";
-import { qrCodesTable, qrBoardPinsTable, documentsTable, projectsTable, projectMembersTable, usersTable, permitsTable, photosTable, siteCheckinsTable, subcontractorsTable, calendarEventsTable, companyMembersTable, notificationsTable, peopleTable } from "@workspace/db/schema";
+import { qrCodesTable, qrBoardPinsTable, documentsTable, projectsTable, projectMembersTable, usersTable, permitsTable, photosTable, siteCheckinsTable, subcontractorsTable, calendarEventsTable, companyMembersTable, notificationsTable, peopleTable, companiesTable } from "@workspace/db/schema";
 import { eq, and, or, desc, asc, inArray, isNull, sql } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
@@ -8,6 +8,7 @@ import { expiryStatus } from "../lib/expiry";
 import { buildSiteBoardPayload } from "../lib/site-board";
 import { subcontractorInsuranceStatus } from "../lib/insurance";
 import { randomBytes } from "crypto";
+import jwt from "jsonwebtoken";
 import multer from "multer";
 import path from "path";
 import { randomUUID } from "crypto";
@@ -319,8 +320,8 @@ async function openCheckinsFor(projectId: string, workerName: string, companyNam
     eq(siteCheckinsTable.projectId, projectId),
     isNull(siteCheckinsTable.checkedOutAt),
     sql`coalesce(${siteCheckinsTable.checkoutMethod}, '') <> 'legacy'`,
-    sql`lower(trim(${siteCheckinsTable.workerName})) = ${workerName.trim().toLowerCase()}`,
-    sql`lower(trim(coalesce(${siteCheckinsTable.companyName}, ''))) = ${companyName.trim().toLowerCase()}`,
+    sql`lower(regexp_replace(trim(${siteCheckinsTable.workerName}), '[[:space:]]+', ' ', 'g')) = ${normText(workerName)}`,
+    sql`lower(regexp_replace(trim(coalesce(${siteCheckinsTable.companyName}, '')), '[[:space:]]+', ' ', 'g')) = ${normText(companyName)}`,
   )).orderBy(desc(siteCheckinsTable.checkedInAt));
 }
 
@@ -342,6 +343,155 @@ router.get("/site/:token/on-site-count", async (req: Request, res: Response) => 
     res.json({ count: await countOnSite(qr.projectId) });
   } catch {
     res.status(500).json({ error: "server_error", message: "Failed to load count" });
+  }
+});
+
+// ---- Matching helpers for public sign-in/out ---------------------------------
+// Lowercase, trim, collapse inner whitespace. Diacritics are left alone so
+// this stays consistent with the SQL comparison in openCheckinsFor.
+function normText(v: string): string {
+  return v.trim().replace(/\s+/g, " ").toLowerCase();
+}
+// Optimal string alignment distance: like Levenshtein, but swapping two
+// adjacent letters ("Pual" for "Paul") costs 1 edit, the most common typo.
+function editDistance(a: string, b: string): number {
+  if (a === b) return 0;
+  const d: number[][] = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 0; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+    }
+  }
+  return d[a.length][b.length];
+}
+// "Close" = within ~20% edits (min 1, max 3). Catches small typos and swaps.
+function isClose(typed: string, actual: string): boolean {
+  if (!typed || !actual) return false;
+  const limit = Math.min(3, Math.max(1, Math.floor(Math.max(typed.length, actual.length) * 0.2)));
+  return editDistance(typed, actual) <= limit;
+}
+function firstName(full: string): string {
+  return full.trim().split(/\s+/)[0] ?? full;
+}
+
+type OpenRow = typeof siteCheckinsTable.$inferSelect;
+async function openRowsForProject(projectId: string): Promise<OpenRow[]> {
+  return db.select().from(siteCheckinsTable).where(and(
+    eq(siteCheckinsTable.projectId, projectId),
+    isNull(siteCheckinsTable.checkedOutAt),
+    sql`coalesce(${siteCheckinsTable.checkoutMethod}, '') <> 'legacy'`,
+  )).orderBy(desc(siteCheckinsTable.checkedInAt));
+}
+// Public label = first name + company only. If two people on site would show
+// the same label, add the surname initial to tell them apart (never the full name).
+function publicLabels(rows: OpenRow[]): Map<string, string> {
+  const base = (r: OpenRow) => `${firstName(r.workerName)}, ${r.companyName ?? ""}`.replace(/, $/, "");
+  const count = new Map<string, number>();
+  for (const r of rows) count.set(base(r).toLowerCase(), (count.get(base(r).toLowerCase()) ?? 0) + 1);
+  return new Map(rows.map(r => {
+    const parts = r.workerName.trim().split(/\s+/);
+    const initial = parts.length > 1 ? ` ${parts[parts.length - 1][0].toUpperCase()}.` : "";
+    const dup = (count.get(base(r).toLowerCase()) ?? 0) > 1;
+    return [r.id, dup ? `${firstName(r.workerName)}${initial}, ${r.companyName ?? ""}`.replace(/, $/, "") : base(r)];
+  }));
+}
+
+// Remembered-device token: a signed, project-scoped record of who last signed
+// in from this device. Nothing new is stored server-side.
+const DEVICE_TOKEN_TTL = "180d";
+function signDeviceToken(projectId: string, workerName: string, companyName: string): string {
+  return jwt.sign({ kind: "site-device", projectId, workerName, companyName }, process.env.JWT_SECRET as string, { expiresIn: DEVICE_TOKEN_TTL });
+}
+function readDeviceToken(raw: unknown, projectId: string): { workerName: string; companyName: string } | null {
+  if (typeof raw !== "string" || !raw) return null;
+  try {
+    const p = jwt.verify(raw, process.env.JWT_SECRET as string) as any;
+    if (p?.kind !== "site-device" || p.projectId !== projectId) return null;
+    return { workerName: String(p.workerName), companyName: String(p.companyName) };
+  } catch { return null; }
+}
+
+// Public: who on THIS site matches what the visitor has typed?
+//  - exact: their own open sign-in (normalised name + company)
+//  - matches: people signed in whose name contains the typed text, ONLY once at
+//    least 3 letters are typed (never a full public list). First name + company.
+//  - suggestions: near-misses (typos) offered as "Did you mean...?" only when
+//    there is no exact match. The client always asks the user to confirm.
+router.get("/site/:token/who", async (req: Request, res: Response) => {
+  try {
+    const workerName = String(req.query.workerName ?? "");
+    const companyName = String(req.query.companyName ?? "");
+    const qr = await db.select().from(qrCodesTable).where(eq(qrCodesTable.token, req.params.token)).then(r => r[0]);
+    if (!qr) { res.status(404).json({ error: "not_found", message: "Invalid site token" }); return; }
+
+    const typedName = normText(workerName);
+    const typedCompany = normText(companyName);
+    const open = typedName.length >= 3 ? await openRowsForProject(qr.projectId) : [];
+    const labels = publicLabels(open);
+    const shape = (r: OpenRow) => ({ checkinId: r.id, label: labels.get(r.id), checkedInAt: r.checkedInAt.toISOString() });
+
+    const exact = typedCompany ? open.find(r => normText(r.workerName) === typedName && normText(r.companyName ?? "") === typedCompany) : undefined;
+    if (exact) { res.json({ exact: shape(exact), matches: [], suggestions: [] }); return; }
+
+    const tokens = (r: OpenRow) => normText(r.workerName).split(" ");
+    const matches = open.filter(r => normText(r.workerName).includes(typedName) || tokens(r).some(t => t.startsWith(typedName)));
+    let suggestions: OpenRow[] = [];
+    if (matches.length === 0) {
+      suggestions = open.filter(r => {
+        const nameClose = isClose(typedName, normText(r.workerName));
+        if (!nameClose) return false;
+        return !typedCompany || isClose(typedCompany, normText(r.companyName ?? "")) || normText(r.companyName ?? "").includes(typedCompany) || typedCompany.includes(normText(r.companyName ?? ""));
+      });
+      // A typed name that is a typo AND a company that only partly matches also counts
+      if (suggestions.length === 0 && typedName.includes(" ")) {
+        suggestions = open.filter(r => isClose(typedName, normText(r.workerName)));
+      }
+    }
+    res.json({ exact: null, matches: matches.slice(0, 8).map(shape), suggestions: suggestions.slice(0, 5).map(shape) });
+  } catch {
+    res.status(500).json({ error: "server_error", message: "Failed to look up" });
+  }
+});
+
+// Public: verify a remembered-device token and report current status.
+router.get("/site/:token/device", async (req: Request, res: Response) => {
+  try {
+    const qr = await db.select().from(qrCodesTable).where(eq(qrCodesTable.token, req.params.token)).then(r => r[0]);
+    if (!qr) { res.status(404).json({ error: "not_found", message: "Invalid site token" }); return; }
+    const who = readDeviceToken(req.query.deviceToken, qr.projectId);
+    if (!who) { res.json({ valid: false }); return; }
+    const open = await openCheckinsFor(qr.projectId, who.workerName, who.companyName);
+    res.json({ valid: true, workerName: who.workerName, companyName: who.companyName, onSite: !!open[0], checkinId: open[0]?.id ?? null, checkedInAt: open[0] ? open[0].checkedInAt.toISOString() : null });
+  } catch {
+    res.status(500).json({ error: "server_error", message: "Failed to check device" });
+  }
+});
+
+// Public: company names already linked to this project, for autocomplete at
+// sign-in. Free text is still allowed for anything not listed.
+router.get("/site/:token/companies", async (req: Request, res: Response) => {
+  try {
+    const qr = await db.select().from(qrCodesTable).where(eq(qrCodesTable.token, req.params.token)).then(r => r[0]);
+    if (!qr) { res.status(404).json({ error: "not_found", message: "Invalid site token" }); return; }
+    const own = await db.select({ name: companiesTable.name }).from(projectsTable)
+      .innerJoin(companiesTable, eq(companiesTable.id, projectsTable.companyId))
+      .where(eq(projectsTable.id, qr.projectId));
+    const linked = await db.select({ name: subcontractorsTable.companyName })
+      .from(projectMembersTable)
+      .innerJoin(subcontractorsTable, eq(subcontractorsTable.id, projectMembersTable.subcontractorId))
+      .where(eq(projectMembersTable.projectId, qr.projectId));
+    const viaPeople = await db.select({ name: subcontractorsTable.companyName })
+      .from(projectMembersTable)
+      .innerJoin(peopleTable, eq(peopleTable.id, projectMembersTable.personId))
+      .innerJoin(subcontractorsTable, eq(subcontractorsTable.id, peopleTable.subcontractorId))
+      .where(and(eq(projectMembersTable.projectId, qr.projectId), isNull(peopleTable.archivedAt)));
+    const names = [...new Set([...own, ...linked, ...viaPeople].map(r => (r.name ?? "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    res.json(names);
+  } catch {
+    res.status(500).json({ error: "server_error", message: "Failed to load companies" });
   }
 });
 
@@ -369,14 +519,21 @@ router.get("/site/:token/status", async (req: Request, res: Response) => {
 // unclosed cycle from a previous day stays flagged for a manager.
 router.post("/site/:token/checkout", async (req: Request, res: Response) => {
   try {
-    const { workerName, companyName } = req.body ?? {};
-    if (!workerName?.trim() || !companyName?.trim()) {
-      res.status(400).json({ error: "validation_error", message: "workerName and companyName required" });
-      return;
-    }
+    const { workerName, companyName, checkinId } = req.body ?? {};
     const qr = await db.select().from(qrCodesTable).where(eq(qrCodesTable.token, req.params.token)).then(r => r[0]);
     if (!qr) { res.status(404).json({ error: "not_found", message: "Invalid site token" }); return; }
-    const open = await openCheckinsFor(qr.projectId, workerName, companyName);
+    // Either the visitor tapped a specific person from the on-site suggestions
+    // (checkinId, project-scoped, still open), or typed name + company.
+    let open: OpenRow[];
+    if (typeof checkinId === "string" && checkinId) {
+      open = (await openRowsForProject(qr.projectId)).filter(r => r.id === checkinId);
+    } else {
+      if (!workerName?.trim() || !companyName?.trim()) {
+        res.status(400).json({ error: "validation_error", message: "workerName and companyName required" });
+        return;
+      }
+      open = await openCheckinsFor(qr.projectId, workerName, companyName);
+    }
     if (!open[0]) { res.status(409).json({ error: "not_signed_in", message: "You are not signed in on this site" }); return; }
     const [row] = await db.update(siteCheckinsTable)
       .set({ checkedOutAt: new Date(), checkoutMethod: "self" })
@@ -561,7 +718,7 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
     // the notification fan-out.
     void notifySuccessfulCheckin(qr.projectId, workerName.trim(), companyName.trim(), checkin.checkedInAt);
 
-    res.status(201).json(serializeCheckin(checkin));
+    res.status(201).json({ ...serializeCheckin(checkin), deviceToken: signDeviceToken(qr.projectId, workerName.trim(), companyName.trim()) });
   } catch (err) {
     res.status(500).json({ error: "server_error", message: "Check-in failed" });
   }

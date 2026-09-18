@@ -90,53 +90,101 @@ function CheckInCard({
   const [errorMsg, setErrorMsg] = useState("");
   // Sign-out state: `signedIn` is set when the server says this person is
   // currently on site (offer SIGN OUT); `signedOutAt` shows the confirmation.
-  const [signedIn, setSignedIn] = useState<{ checkedInAt: string } | null>(null);
+  // checkinId is set when we know exactly which open sign-in to close.
+  const [signedIn, setSignedIn] = useState<{ checkedInAt: string; checkinId?: string } | null>(null);
   const [signedOutAt, setSignedOutAt] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
-  const idKey = `sitesort_site_identity_${token}`;
+  const [signedOutLabel, setSignedOutLabel] = useState("");
+  // Remembered device: server-verified token, per project.
+  const [device, setDevice] = useState<{ workerName: string; companyName: string } | null>(null);
+  // Live lookup while typing: people signed in on this site matching what was typed.
+  type Who = { checkinId: string; label: string; checkedInAt: string };
+  const [who, setWho] = useState<{ exact: Who | null; matches: Who[]; suggestions: Who[] }>({ exact: null, matches: [], suggestions: [] });
+  const [companies, setCompanies] = useState<string[]>([]);
+  const deviceKey = `sitesort_site_device_${token}`;
 
-  const lookupStatus = async (n: string, c: string) => {
-    if (!n.trim() || !c.trim()) return;
-    try {
-      const r = await fetch(`/api/site/${token}/status?workerName=${encodeURIComponent(n.trim())}&companyName=${encodeURIComponent(c.trim())}`);
-      if (!r.ok) return;
-      const d = await r.json();
-      setSignedIn(d.onSite ? { checkedInAt: d.checkedInAt } : null);
-    } catch { /* offline: fall back to the sign-in form */ }
-  };
+  // Storage can be unavailable (private mode, blocked site data): never throw.
+  const readDeviceToken = (): string | null => { try { return localStorage.getItem(deviceKey); } catch { return null; } };
+  const writeDeviceToken = (v: string | null) => { try { if (v) localStorage.setItem(deviceKey, v); else localStorage.removeItem(deviceKey); } catch { /* fall back to typing */ } };
 
-  // Remembered on this device only, so a re-scan can offer SIGN OUT straight away.
+  // On scan: if this device remembers someone, offer one tap sign-in/out for them.
   useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(idKey) ?? "null");
-      if (saved?.name && saved?.company) {
-        setName(saved.name);
-        setCompanyName(saved.company);
-        void lookupStatus(saved.name, saved.company);
-      }
-    } catch { /* storage unavailable */ }
+    const t = readDeviceToken();
+    if (!t) return;
+    fetch(`/api/site/${token}/device?deviceToken=${encodeURIComponent(t)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d?.valid) { writeDeviceToken(null); return; }
+        setDevice({ workerName: d.workerName, companyName: d.companyName });
+        setName(d.workerName);
+        setCompanyName(d.companyName);
+        if (d.onSite) setSignedIn({ checkedInAt: d.checkedInAt, checkinId: d.checkinId });
+      })
+      .catch(() => { /* offline: normal form */ });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  const handleSignOut = async () => {
+  // Company autocomplete from the project's existing contacts (free text still allowed).
+  useEffect(() => {
+    fetch(`/api/site/${token}/companies`).then(r => r.ok ? r.json() : []).then(setCompanies).catch(() => {});
+  }, [token]);
+
+  // Debounced who's-on-site lookup, only once 3+ letters of a name are typed and
+  // only when we are not showing the remembered-device card.
+  useEffect(() => {
+    if (device || signedIn) { setWho({ exact: null, matches: [], suggestions: [] }); return; }
+    if (name.trim().length < 3) { setWho({ exact: null, matches: [], suggestions: [] }); return; }
+    const h = setTimeout(() => {
+      fetch(`/api/site/${token}/who?workerName=${encodeURIComponent(name.trim())}&companyName=${encodeURIComponent(companyName.trim())}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => {
+          if (!d) return;
+          if (d.exact) { setSignedIn({ checkedInAt: d.exact.checkedInAt, checkinId: d.exact.checkinId }); return; }
+          setWho({ exact: null, matches: d.matches ?? [], suggestions: d.suggestions ?? [] });
+        })
+        .catch(() => {});
+    }, 400);
+    return () => clearTimeout(h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name, companyName, device, signedIn, token]);
+
+  const doSignOut = async (opts: { checkinId?: string; label?: string }) => {
     setSigningOut(true);
     setErrorMsg("");
     try {
       const r = await fetch(`/api/site/${token}/checkout`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workerName: name.trim(), companyName: companyName.trim() }),
+        body: JSON.stringify(opts.checkinId ? { checkinId: opts.checkinId } : { workerName: name.trim(), companyName: companyName.trim() }),
       });
-      if (r.status === 409) { setSignedIn(null); return; }
+      if (r.status === 409) {
+        setSignedIn(null);
+        setWho({ exact: null, matches: [], suggestions: [] });
+        setErrorMsg("We could not find an open sign-in to close. If you are still signed in, type your name to find it, or ask your site manager.");
+        return;
+      }
       if (!r.ok) throw new Error("failed");
       const d = await r.json();
       setSignedIn(null);
+      setWho({ exact: null, matches: [], suggestions: [] });
+      setSignedOutLabel(opts.label ?? name.trim());
       setSignedOutAt(d.checkedOutAt);
     } catch {
       setErrorMsg("Sign-out failed. Please try again.");
     } finally {
       setSigningOut(false);
     }
+  };
+  const handleSignOut = () => doSignOut({ checkinId: signedIn?.checkinId, label: name.trim() });
+
+  const notMe = () => {
+    writeDeviceToken(null);
+    setDevice(null);
+    setSignedIn(null);
+    setSignedOutAt(null);
+    setName("");
+    setCompanyName("");
+    setErrorMsg("");
   };
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -184,7 +232,7 @@ function CheckInCard({
       if (res.status === 409) {
         // Already signed in: offer SIGN OUT instead of a second sign-in.
         const body = await res.json().catch(() => ({}));
-        setSignedIn({ checkedInAt: body.checkedInAt });
+        setSignedIn({ checkedInAt: body.checkedInAt, checkinId: body.checkinId });
         setStatus("idle");
         setPreview(null);
         setCapturedFile(null);
@@ -193,7 +241,8 @@ function CheckInCard({
 
       if (!res.ok) throw new Error("Upload failed");
 
-      try { localStorage.setItem(idKey, JSON.stringify({ name: name.trim(), company: companyName.trim() })); } catch { /* ignore */ }
+      const created = await res.json().catch(() => null);
+      if (created?.deviceToken) writeDeviceToken(created.deviceToken);
       setStatus("done");
       setTimeout(() => onCheckedIn(), 2000);
     } catch {
@@ -220,7 +269,7 @@ function CheckInCard({
       <div className="bg-white rounded-2xl shadow-sm border p-6 text-center space-y-4">
         <CheckCircle2 className="w-14 h-14 text-green-500 mx-auto" />
         <h3 className="text-xl font-bold text-gray-900">Signed out</h3>
-        <p className="text-gray-500 text-sm">{name.trim()}, you signed out at {hhmm(signedOutAt)}. Scan again to sign back in.</p>
+        <p className="text-gray-500 text-sm break-words">{signedOutLabel}, you signed out at {hhmm(signedOutAt)}. Scan again to sign back in.</p>
         <button
           onClick={() => setSignedOutAt(null)}
           className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl min-h-11"
@@ -256,8 +305,8 @@ function CheckInCard({
           <button onClick={onCheckedIn} className="w-full border border-gray-200 text-gray-700 font-semibold py-3 rounded-xl min-h-11">
             View site information
           </button>
-          <button onClick={() => { setSignedIn(null); setName(""); setCompanyName(""); try { localStorage.removeItem(idKey); } catch { /* ignore */ } }} className="w-full text-xs text-gray-500 underline min-h-11">
-            Not you? Use different details
+          <button onClick={notMe} className="w-full text-xs text-gray-500 underline min-h-11" data-testid="button-not-me">
+            Not me? Use different details
           </button>
         </div>
       </div>
@@ -348,6 +397,42 @@ function CheckInCard({
           Complete your check-in to access site information. Your details must match the registered contacts for this project.
         </p>
 
+        {device && !signedIn && (
+          <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 space-y-2" data-testid="card-remembered-device">
+            <p className="text-sm text-gray-700 break-words">Welcome back, <strong>{device.workerName}</strong> ({device.companyName}).</p>
+            <button
+              onClick={() => setDevice(null)}
+              className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl min-h-11"
+              data-testid="button-sign-in-as"
+            >
+              Sign in as {device.workerName}, {device.companyName}
+            </button>
+            <button onClick={notMe} className="w-full text-xs text-gray-500 underline min-h-11" data-testid="button-not-me-device">Not me? Use different details</button>
+          </div>
+        )}
+
+        {!device && (who.matches.length > 0 || who.suggestions.length > 0) && (
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 space-y-2" data-testid="panel-on-site-matches">
+            <p className="text-xs font-semibold text-blue-800">
+              {who.matches.length > 0 ? "Already signed in on this site? Tap yourself to sign out." : "Did you mean one of these? Tap to confirm and sign out."}
+            </p>
+            {(who.matches.length > 0 ? who.matches : who.suggestions).map(m => (
+              <button
+                key={m.checkinId}
+                onClick={() => doSignOut({ checkinId: m.checkinId, label: m.label })}
+                disabled={signingOut}
+                className="w-full flex items-center justify-between gap-3 bg-white border border-blue-200 rounded-xl px-4 py-3 min-h-11 text-left disabled:opacity-60"
+                data-testid={`button-sign-out-match-${m.checkinId}`}
+              >
+                <span className="text-sm font-semibold text-gray-900 break-words min-w-0">
+                  {who.matches.length === 0 && "Did you mean "}{m.label}{who.matches.length === 0 && "?"}
+                </span>
+                <span className="text-xs text-red-600 font-bold shrink-0">Sign out</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         <div>
           <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">Your Name</label>
           <input
@@ -367,10 +452,14 @@ function CheckInCard({
             type="text"
             value={companyName}
             onChange={e => setCompanyName(e.target.value)}
-            onBlur={() => void lookupStatus(name, companyName)}
+            list="site-companies"
+            autoComplete="organization"
             placeholder="e.g. Acme Electrical Ltd"
             className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
           />
+          <datalist id="site-companies">
+            {companies.map(c => <option key={c} value={c} />)}
+          </datalist>
         </div>
 
         {preview && (

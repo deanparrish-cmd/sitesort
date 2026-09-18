@@ -15,14 +15,20 @@ function urlOf(resource: RequestInfo | URL): string {
   return "";
 }
 
+// localStorage can throw (private mode, blocked site data). A blocked read must
+// never break every request, so treat it as "no token".
+function readStored(key: string): string | null {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+
 export function setupApiInterceptor() {
   const originalFetch = window.fetch;
 
   window.fetch = async (...args) => {
     const [resource, config] = args;
     const isPortal = urlOf(resource).includes("/api/portal/");
-    const portalToken = localStorage.getItem("sitesort_portal_token");
-    const token = isPortal && portalToken ? portalToken : localStorage.getItem("sitesort_token");
+    const portalToken = readStored("sitesort_portal_token");
+    const token = isPortal && portalToken ? portalToken : readStored("sitesort_token");
 
     if (token) {
       const existing = config?.headers;
