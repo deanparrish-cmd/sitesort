@@ -16,11 +16,13 @@ interface FileDropZoneProps {
   className?: string;
   /** Multi-file mode: every picked/dropped file uploads in turn and fires onUploaded; no single-file "done" card. */
   multiple?: boolean;
+  /** Upload endpoint. Defaults to /api/upload; Team Portal callers pass a portal-scoped one (portal tokens are blocked from /api/upload). */
+  uploadUrl?: string;
 }
 
 const ACCEPTED_EXTS = ".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.dwg,.dxf,.dwf,.rvt,.ifc,.mpp";
 
-export function FileDropZone({ onUploaded, onCleared, accept = ACCEPTED_EXTS, className, multiple = false }: FileDropZoneProps) {
+export function FileDropZone({ onUploaded, onCleared, accept = ACCEPTED_EXTS, className, multiple = false, uploadUrl = "/api/upload" }: FileDropZoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploaded, setUploaded] = useState<UploadedFile | null>(null);
@@ -53,7 +55,7 @@ export function FileDropZone({ onUploaded, onCleared, accept = ACCEPTED_EXTS, cl
       const token = localStorage.getItem("sitesort_token");
       const formData = new FormData();
       formData.append("file", file);
-      const res = await fetch("/api/upload", {
+      const res = await fetch(uploadUrl, {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
@@ -70,7 +72,7 @@ export function FileDropZone({ onUploaded, onCleared, accept = ACCEPTED_EXTS, cl
     } finally {
       setUploading(false);
     }
-  }, [onUploaded]);
+  }, [onUploaded, uploadUrl]);
 
   // Multi-file: upload sequentially so one bad file doesn't lose the others.
   const uploadMany = useCallback(async (files: File[]) => {

@@ -285,7 +285,7 @@ router.get("/site/:token", async (req, res) => {
       res.status(404).json({ error: "not_found", message: "Project not found" });
       return;
     }
-    res.json({ ...payload, generatedAt: new Date().toISOString() });
+    res.json({ ...payload, onSiteCount: await countOnSite(qr.projectId), generatedAt: new Date().toISOString() });
   } catch (err) {
     res.status(500).json({ error: "server_error", message: "Failed to load site board" });
   }
@@ -323,6 +323,27 @@ async function openCheckinsFor(projectId: string, workerName: string, companyNam
     sql`lower(trim(coalesce(${siteCheckinsTable.companyName}, ''))) = ${companyName.trim().toLowerCase()}`,
   )).orderBy(desc(siteCheckinsTable.checkedInAt));
 }
+
+// Count-only view of the "Currently on site" register (signed in, not signed out;
+// legacy rows excluded) for the PUBLIC board. Deliberately no names.
+async function countOnSite(projectId: string): Promise<number> {
+  const [row] = await db.select({ n: sql<number>`count(*)::int` }).from(siteCheckinsTable).where(and(
+    eq(siteCheckinsTable.projectId, projectId),
+    isNull(siteCheckinsTable.checkedOutAt),
+    sql`coalesce(${siteCheckinsTable.checkoutMethod}, '') <> 'legacy'`,
+  ));
+  return row?.n ?? 0;
+}
+
+router.get("/site/:token/on-site-count", async (req: Request, res: Response) => {
+  try {
+    const qr = await db.select().from(qrCodesTable).where(eq(qrCodesTable.token, req.params.token)).then(r => r[0]);
+    if (!qr) { res.status(404).json({ error: "not_found", message: "Site board not found" }); return; }
+    res.json({ count: await countOnSite(qr.projectId) });
+  } catch {
+    res.status(500).json({ error: "server_error", message: "Failed to load count" });
+  }
+});
 
 // Public: is this person currently signed in on this site? Drives whether the
 // QR page offers SIGN IN or SIGN OUT. Returns only a boolean + their own times.

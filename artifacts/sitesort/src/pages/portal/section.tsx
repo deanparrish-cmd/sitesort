@@ -23,6 +23,7 @@ import {
   useGetPortalPendingInvites,
   getGetPortalMyProjectsQueryKey, getGetPortalPendingInvitesQueryKey,
 } from "@workspace/api-client-react";
+import { DailyReportPhotos } from "@/components/daily-report-photos";
 import { DictationButton } from "@/components/ui/dictation-button";
 import { MessagesView } from "./messages-view";
 import { QRCodeSVG } from "qrcode.react";
@@ -1577,6 +1578,7 @@ function SharedView() {
                 <p className="text-sm mt-1 whitespace-pre-wrap break-words">{viewingReport.managerReport![f.key]}</p>
               </div>
             ))}
+            <DailyReportPhotos endpoint={`/api/portal/daily-reports/${viewingReport.id}/photos`} canEdit={false} />
           </div>
         </Dialog>
       )}
@@ -2053,6 +2055,14 @@ function DailyReportView() {
         ) : (
           <p className="text-sm text-muted-foreground">No report yet for today.</p>
         )}
+        <div className="mt-4 border-t pt-4">
+          <DailyReportPhotos
+            endpoint={`/api/portal/daily-report/${today.reportDate}/photos`}
+            uploadUrl={`/api/portal/daily-report/${today.reportDate}/photos/upload`}
+            canEdit={today.canEdit}
+            large
+          />
+        </div>
       </Card>
 
       <button onClick={() => setShowHistory(v => !v)} className="min-h-11 px-3 -ml-3 rounded-lg text-base font-bold text-muted-foreground hover:text-foreground hover:bg-muted active:scale-[0.98] transition-all">
@@ -2079,6 +2089,9 @@ function DailyReportView() {
                       <p className="text-sm whitespace-pre-wrap break-words">{h.managerReport?.[f.key]}</p>
                     </div>
                   ))}
+                </div>
+                <div className="mt-3">
+                  <DailyReportPhotos endpoint={`/api/portal/daily-report/${h.reportDate}/photos`} canEdit={false} />
                 </div>
               </Card>
             ))}

@@ -432,6 +432,18 @@ export default function SiteBoard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [checkedIn, setCheckedIn] = useState(false);
+  // Live count only (never names) of people signed in and not signed out.
+  const [onSiteCount, setOnSiteCount] = useState<number | null>(null);
+  useEffect(() => {
+    if (!token) return;
+    const load = () => fetch(`/api/site/${token}/on-site-count`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d && typeof d.count === "number") setOnSiteCount(d.count); })
+      .catch(() => {});
+    void load();
+    const t = setInterval(load, 30000);
+    return () => clearInterval(t);
+  }, [token, checkedIn]);
 
   useEffect(() => {
     if (!token) return;
@@ -482,6 +494,12 @@ export default function SiteBoard() {
               <MapPin className="w-4 h-4 shrink-0" />
               <span className="text-sm">{project.address}</span>
             </div>
+            {onSiteCount !== null && (
+              <div className="flex items-center gap-2 mt-2 text-orange-100" data-testid="text-on-site-now">
+                <Users className="w-4 h-4 shrink-0" />
+                <span className="text-sm font-semibold">{onSiteCount} currently on site</span>
+              </div>
+            )}
           </div>
         </div>
         <div className="max-w-2xl mx-auto px-4 py-6">
@@ -561,6 +579,14 @@ export default function SiteBoard() {
             </div>
             <p className="font-bold text-gray-900 text-sm">{teamSize} {teamSize === 1 ? "member" : "members"}</p>
           </div>
+          {onSiteCount !== null && (
+            <div className="bg-white rounded-xl shadow-sm border p-4" data-testid="card-on-site-now">
+              <div className="flex items-center gap-2 text-gray-500 text-xs mb-1">
+                <Users className="w-3.5 h-3.5" /> On Site Now
+              </div>
+              <p className="font-bold text-gray-900 text-sm">{onSiteCount} currently on site</p>
+            </div>
+          )}
         </div>
 
         {/* Expiring permits alert */}

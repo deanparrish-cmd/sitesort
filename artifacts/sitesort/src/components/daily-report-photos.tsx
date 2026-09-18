@@ -19,13 +19,23 @@ const src = (u: string | null) => u?.replace(/^\/uploads\//, "/api/uploads/") ??
  * FileDropZone (multi-file mode), so one upload serves the report and the
  * project photo library (the server tags each photo with the report date).
  */
-export function DailyReportPhotos({ projectId, reportDate, canEdit }: { projectId: string; reportDate: string; canEdit: boolean }) {
+export function DailyReportPhotos({
+  projectId, reportDate, canEdit, endpoint, uploadUrl, large = false,
+}: {
+  projectId?: string; reportDate?: string; canEdit: boolean;
+  /** Override for the Team Portal (list + save URL); defaults to the dashboard route. */
+  endpoint?: string;
+  /** Portal-scoped upload URL (portal tokens can't use /api/upload). */
+  uploadUrl?: string;
+  /** Bigger tap targets for the portal. */
+  large?: boolean;
+}) {
   const { toast } = useToast();
   const [photos, setPhotos] = useState<ReportPhoto[]>([]);
   const [staged, setStaged] = useState<Staged[]>([]);
   const [adding, setAdding] = useState(false);
   const [saving, setSaving] = useState(false);
-  const base = `/api/projects/${projectId}/daily-reports/${reportDate}/photos`;
+  const base = endpoint ?? `/api/projects/${projectId}/daily-reports/${reportDate}/photos`;
 
   const load = useCallback(() => {
     fetch(base, { headers: authHeaders() }).then(r => r.ok ? r.json() : []).then(setPhotos).catch(() => {});
@@ -41,7 +51,11 @@ export function DailyReportPhotos({ projectId, reportDate, canEdit }: { projectI
       body: JSON.stringify({ photos: staged.map(s => ({ photoUrl: s.url, caption: s.caption })) }),
     }).catch(() => null);
     setSaving(false);
-    if (!res?.ok) { toast({ title: "Couldn't save photos", variant: "destructive" }); return; }
+    if (!res?.ok) {
+      const msg = await res?.json().then((b: any) => b?.message).catch(() => undefined);
+      toast({ title: "Couldn't save photos", description: msg, variant: "destructive" });
+      return;
+    }
     setPhotos(await res.json());
     toast({ title: `${staged.length} photo${staged.length === 1 ? "" : "s"} added`, description: "Also in the project photo library." });
     setStaged([]);
@@ -55,7 +69,7 @@ export function DailyReportPhotos({ projectId, reportDate, canEdit }: { projectI
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
         <h4 className="flex items-center gap-2 font-semibold text-sm"><Camera className="w-4 h-4 text-primary" />Report photos ({photos.length})</h4>
         {canEdit && !adding && (
-          <Button variant="outline" size="sm" onClick={() => setAdding(true)} data-testid="button-add-report-photos">
+          <Button variant="outline" size={large ? "default" : "sm"} className={large ? "min-h-14 px-5 text-base font-bold" : undefined} onClick={() => setAdding(true)} data-testid="button-add-report-photos">
             <Camera className="w-3.5 h-3.5 mr-1.5" />Add Photos
           </Button>
         )}
@@ -65,7 +79,8 @@ export function DailyReportPhotos({ projectId, reportDate, canEdit }: { projectI
         <div className="rounded-xl border p-3 mb-3 space-y-3">
           <FileDropZone
             multiple
-            accept=".jpg,.jpeg,.png,.webp"
+            accept={uploadUrl ? ".jpg,.jpeg,.png,.webp,.heic" : ".jpg,.jpeg,.png,.webp"}
+            uploadUrl={uploadUrl}
             onUploaded={f => setStaged(prev => [...prev, { key: `${f.url}-${prev.length}`, url: f.url, caption: "" }])}
             onCleared={() => {}}
           />

@@ -175,6 +175,7 @@ export const PM_GUIDE: GuideSection[] = [
         heading: "See who is on site right now",
         body: [
           "The project's Check-Ins tab (and the Check-Ins page) opens with Currently on site: everyone who has signed in and not yet signed out, so you can use it for a roll call.",
+          "The public site board (the page the QR code opens) shows a live count, for example 12 currently on site. It is a number only; names are only visible to you here.",
           "Anyone still signed in from a previous day is flagged Not signed out. They are never closed automatically. Choose Sign out beside their name, add a note (for example, left site at 17:00) and confirm. Admins and project managers can do this.",
         ],
       },
@@ -447,6 +448,13 @@ export const WORKER_GUIDE: GuideSection[] = [
         body: [
           "You can dictate into supported fields in Site Issues, Plant & Materials and Daily Report. Tap the microphone, allow access if asked, speak and tap again to stop. Wait for transcription to finish, then check and edit the text.",
           "Dictation adds to what is already in the field. It does not save or submit the entry for you.",
+        ],
+      },
+      {
+        heading: "Add photos to today's daily report",
+        body: [
+          "If you can edit the daily report, choose Add Photos under today's report. Drop several photos at once or browse, add an optional caption to each, then save. They join the report and the project's photo library, tagged with the report date.",
+          "Photos can be added until you submit the report or the day is locked, the same as the written notes. Past reports show their photos read-only.",
         ],
       },
     ],

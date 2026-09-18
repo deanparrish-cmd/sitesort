@@ -15,7 +15,7 @@ import {
   type DailyReportData,
   type ManagerReport,
 } from "@workspace/db/schema";
-import { and, eq, gte, lt, inArray, isNotNull, sql, desc } from "drizzle-orm";
+import { and, eq, gte, lt, inArray, isNotNull, isNull, sql, desc, count } from "drizzle-orm";
 import type { Request } from "express";
 import { generateId } from "./id";
 import { logger } from "./logger";
@@ -549,4 +549,57 @@ export async function contributorsForReport(reportId: string): Promise<{ userId:
     out.push({ userId: r.userId, name: r.name });
   }
   return out;
+}
+
+// ---- Photos attached to a daily site report --------------------------------
+// One helper pair shared by the dashboard routes AND the Team Portal routes, so
+// there is a single save path. Each photo is a normal `photos` row (category
+// "progress") tagged with daily_report_date: the same row shows in the report
+// and in the project photo library.
+export const REPORT_PHOTO_MAX = 20;
+
+export async function listReportPhotos(projectId: string, date: string) {
+  const rows = await db.select({
+    id: photosTable.id, referenceNumber: photosTable.referenceNumber, photoUrl: photosTable.photoUrl,
+    caption: photosTable.description, takenAt: photosTable.takenAt, uploaderName: usersTable.name,
+    dailyReportDate: photosTable.dailyReportDate,
+  }).from(photosTable)
+    .leftJoin(usersTable, eq(usersTable.id, photosTable.uploadedBy))
+    .where(and(
+      eq(photosTable.projectId, projectId),
+      eq(photosTable.dailyReportDate, date),
+      isNull(photosTable.archivedAt),
+      isNull(photosTable.photoRemovedAt),
+    ))
+    .orderBy(photosTable.takenAt);
+  return rows.map(r => ({ ...r, uploaderName: r.uploaderName ?? "Unknown", takenAt: r.takenAt.toISOString() }));
+}
+
+
+export async function addReportPhotos(params: {
+  projectId: string; date: string; userId: string; input: unknown;
+}): Promise<{ added: number } | { error: string }> {
+  const raw = Array.isArray(params.input) ? params.input : [];
+  const photos = raw
+    .map((p: any) => ({ photoUrl: typeof p?.photoUrl === "string" ? p.photoUrl : "", caption: typeof p?.caption === "string" ? p.caption.trim().slice(0, 300) : "" }))
+    .filter((p) => /^\/(api\/)?uploads\/[^/]+$/.test(p.photoUrl));
+  if (photos.length === 0 || photos.length > REPORT_PHOTO_MAX) return { error: `Add between 1 and ${REPORT_PHOTO_MAX} photos` };
+  // Sequential reference numbers from one count, mirroring POST /projects/:id/photos.
+  const [{ total }] = await db.select({ total: count() }).from(photosTable);
+  const now = new Date();
+  await db.insert(photosTable).values(photos.map((p, i) => ({
+    id: generateId(),
+    projectId: params.projectId,
+    uploadedBy: params.userId,
+    photoUrl: p.photoUrl.replace(/^\/uploads\//, "/api/uploads/"),
+    category: "progress",
+    description: p.caption || null,
+    zone: null,
+    referenceNumber: `PHOTO-${String(total + 1 + i).padStart(4, "0")}`,
+    takenAt: now,
+    dailyReportDate: params.date,
+    submittedAt: now,
+    submittedBy: params.userId,
+  })));
+  return { added: photos.length };
 }

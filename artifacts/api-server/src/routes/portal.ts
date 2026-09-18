@@ -31,7 +31,7 @@ import { PORTAL_SECTIONS } from "../lib/activity";
 import { PortalLoginBody, AcceptPortalInviteBody } from "@workspace/api-zod";
 import { getBucket, objectKey } from "../lib/gcs";
 import { memberUploadSingle, saveMemberUpload } from "../lib/portal-upload";
-import { isReportLocked, upsertManagerReport, contributorsForReport, hasManagerContent, londonDateStr } from "../lib/daily-reports";
+import { isReportLocked, upsertManagerReport, contributorsForReport, hasManagerContent, londonDateStr, listReportPhotos, addReportPhotos } from "../lib/daily-reports";
 import { notesFor, addNote } from "../lib/portal-submission-notes";
 import { isPinLockedOut, recordFailedPinAttempt, clearPinAttempts } from "../lib/pin-attempts";
 import { setUserPin } from "../lib/pin";
@@ -1242,6 +1242,90 @@ router.post("/portal/daily-reports/:reportId/view", ...portalGuards, async (req,
   void logActivity({ userId: req.user!.id, projectId: pid, companyId: req.user!.companyId, section: "shared", action: "view", itemType: "daily_report", itemId: req.params.reportId, req });
   await recordItemView(pid, req.user!.id, "daily_report", req.params.reportId);
   res.json({ success: true });
+});
+
+// ---- Photos on the daily report (portal) ----------------------------------
+// Same save path as the dashboard (lib/daily-reports addReportPhotos), so a
+// portal photo is one `photos` row tagged with the report date and also shows
+// in the project photo library. Gated on canEditDailyReport; writes obey the
+// exact same rules as PATCH /portal/daily-report/:date (not future, not locked,
+// not submitted, and never on a day the PM started that this member didn't
+// contribute to). Portal JWTs can't use /api/upload, so a portal-scoped upload
+// endpoint returns the same shape FileDropZone expects.
+async function portalReportPhotoGuard(req: import("express").Request, res: import("express").Response, opts: { write: boolean }): Promise<boolean> {
+  const pid = req.portalProjectId!;
+  const date = req.params.date;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { res.status(400).json({ error: "validation_error", message: "date must be YYYY-MM-DD" }); return false; }
+  const existing = await db.select({ id: dailyReportsTable.id, submittedAt: dailyReportsTable.submittedAt, managerReport: dailyReportsTable.managerReport }).from(dailyReportsTable)
+    .where(and(eq(dailyReportsTable.projectId, pid), eq(dailyReportsTable.reportDate, date))).limit(1);
+  // Privacy: a day the PM started is private unless this member contributed.
+  if (existing[0] && hasManagerContent(existing[0].managerReport)) {
+    const contributors = await contributorsForReport(existing[0].id);
+    if (!contributors.some(c => c.userId === req.user!.id)) {
+      if (opts.write) res.status(403).json({ error: "forbidden", message: "This day's report was started by your project manager and isn't shared with you." });
+      else res.json([]);
+      return false;
+    }
+  }
+  if (opts.write) {
+    if (date > londonDateStr(new Date())) { res.status(400).json({ error: "validation_error", message: "Cannot edit a future date" }); return false; }
+    if (isReportLocked(date)) { res.status(403).json({ error: "locked", message: "This day's report is locked. Ask your project manager to amend it from the dashboard." }); return false; }
+    if (existing[0]?.submittedAt) { res.status(403).json({ error: "submitted", message: "This report has already been submitted." }); return false; }
+  }
+  return true;
+}
+
+router.get("/portal/daily-report/:date/photos", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canEditDailyReport"), async (req, res) => {
+  try {
+    if (!(await portalReportPhotoGuard(req, res, { write: false }))) return;
+    res.json(await listReportPhotos(req.portalProjectId!, req.params.date));
+  } catch (err) {
+    req.log.error({ err }, "Portal list report photos error");
+    res.status(500).json({ error: "server_error", message: "Failed to load photos" });
+  }
+});
+
+router.post("/portal/daily-report/:date/photos/upload", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canEditDailyReport"), memberUploadSingle("file"), async (req, res) => {
+  try {
+    if (!req.file) { res.status(400).json({ error: "validation_error", message: "No file provided" }); return; }
+    if (!req.file.mimetype.startsWith("image/")) { res.status(400).json({ error: "upload_error", message: "Only photos can be added to a report." }); return; }
+    if (!(await portalReportPhotoGuard(req, res, { write: true }))) return;
+    const { fileUrl, fileSize } = await saveMemberUpload(req.file, req.user!.id, req.user!.companyId);
+    res.status(201).json({ url: fileUrl, originalName: req.file.originalname, size: fileSize, mimetype: req.file.mimetype });
+  } catch (err) {
+    req.log.error({ err }, "Portal report photo upload error");
+    res.status(500).json({ error: "server_error", message: "Upload failed" });
+  }
+});
+
+router.post("/portal/daily-report/:date/photos", authenticate, requirePortalSession, requirePortalMember, requirePortalPermission("canEditDailyReport"), async (req, res) => {
+  try {
+    if (!(await portalReportPhotoGuard(req, res, { write: true }))) return;
+    const pid = req.portalProjectId!;
+    const added = await addReportPhotos({ projectId: pid, date: req.params.date, userId: req.user!.id, input: req.body?.photos });
+    if ("error" in added) { res.status(400).json({ error: "validation_error", message: added.error }); return; }
+    res.status(201).json(await listReportPhotos(pid, req.params.date));
+  } catch (err) {
+    req.log.error({ err }, "Portal add report photos error");
+    res.status(500).json({ error: "server_error", message: "Failed to add photos" });
+  }
+});
+
+// GET /api/portal/daily-reports/:reportId/photos — photos on a report that was
+// explicitly shared with this member (read-only; same visibility rule as /view).
+router.get("/portal/daily-reports/:reportId/photos", ...portalGuards, async (req, res) => {
+  try {
+    const pid = req.portalProjectId!;
+    const viewer = await resolveViewer(req.user!.id, pid);
+    const ids = await visibleIds(pid, "daily_report", viewer);
+    if (!ids.has(req.params.reportId)) { res.status(404).json({ error: "not_found", message: "Report not found" }); return; }
+    const rep = await db.select({ reportDate: dailyReportsTable.reportDate }).from(dailyReportsTable)
+      .where(and(eq(dailyReportsTable.id, req.params.reportId), eq(dailyReportsTable.projectId, pid))).limit(1);
+    res.json(rep[0] ? await listReportPhotos(pid, rep[0].reportDate) : []);
+  } catch (err) {
+    req.log.error({ err }, "Portal shared report photos error");
+    res.status(500).json({ error: "server_error", message: "Failed to load photos" });
+  }
 });
 
 // GET /api/portal/progress
