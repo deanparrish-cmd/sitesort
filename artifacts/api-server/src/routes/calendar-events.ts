@@ -12,9 +12,13 @@ function isManager(role?: string): boolean {
   return role === "admin" || role === "project_manager";
 }
 
-// List all custom calendar events for the company (visible to every member).
+// List all custom calendar events for the company (managers only).
 router.get("/calendar-events", authenticate, async (req, res) => {
   try {
+    if (!isManager(req.user!.role)) {
+      res.status(403).json({ error: "forbidden", message: "Only managers can view the calendar" });
+      return;
+    }
     const events = await db.select().from(calendarEventsTable)
       .where(eq(calendarEventsTable.companyId, req.user!.companyId));
     res.json(events);

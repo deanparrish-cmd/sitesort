@@ -1367,21 +1367,6 @@ function SiteBoardView({ embedded }: { embedded?: boolean }) {
           </div>
         </div>
       )}
-
-      {/* Upcoming events */}
-      {data.upcomingEvents.length > 0 && (
-        <div>
-          <SectionTitle>Upcoming events</SectionTitle>
-          <Card>
-            {data.upcomingEvents.map(e => (
-              <div key={e.id} className="flex items-center gap-3 py-3 border-b border-border/60 last:border-0">
-                <Calendar className="w-5 h-5 text-primary shrink-0" />
-                <div className="min-w-0"><p className="font-bold text-base truncate">{e.title}</p><p className="text-sm text-muted-foreground mt-0.5">{fmtDate(e.eventDate)}{e.note ? ` · ${e.note}` : ""}</p></div>
-              </div>
-            ))}
-          </Card>
-        </div>
-      )}
     </div>
   );
 }

@@ -1,9 +1,9 @@
 import { db } from "@workspace/db";
 import {
   projectsTable, projectMembersTable, usersTable, permitsTable,
-  documentsTable, qrBoardPinsTable, photosTable, calendarEventsTable,
+  documentsTable, qrBoardPinsTable, photosTable,
 } from "@workspace/db/schema";
-import { and, eq, inArray, isNull, or, gte, asc } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { expiryStatus } from "./expiry";
 
 const normaliseUrl = (url: string) =>
@@ -46,17 +46,6 @@ export async function buildSiteBoardPayload(projectId: string) {
     permitPinIds.length ? db.select().from(permitsTable).where(inArray(permitsTable.id, permitPinIds)) : Promise.resolve([]),
   ]);
 
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const upcomingEvents = await db.select({
-    id: calendarEventsTable.id, title: calendarEventsTable.title,
-    eventDate: calendarEventsTable.eventDate, note: calendarEventsTable.note,
-  }).from(calendarEventsTable)
-    .where(and(
-      eq(calendarEventsTable.companyId, project.companyId),
-      or(isNull(calendarEventsTable.projectId), eq(calendarEventsTable.projectId, projectId)),
-      gte(calendarEventsTable.eventDate, todayStr),
-    ))
-    .orderBy(asc(calendarEventsTable.eventDate));
 
   // Deliberately PM-chosen (projects.siteManagerId) — never guessed. No
   // fallback to "first member"/"role=manager": unset means "Not set".
@@ -77,6 +66,5 @@ export async function buildSiteBoardPayload(projectId: string) {
       ...pinnedPhotos.map(p => ({ itemType: "photo", id: p.id, referenceNumber: p.referenceNumber, category: p.category, description: p.description, photoUrl: p.photoUrl ? normaliseUrl(p.photoUrl) : null })),
       ...pinnedPermitRows.map(p => ({ itemType: "permit", id: p.id, type: p.type, description: p.description, expiryDate: p.expiryDate, status: expiryStatus(p.expiryDate) })),
     ],
-    upcomingEvents,
   };
 }

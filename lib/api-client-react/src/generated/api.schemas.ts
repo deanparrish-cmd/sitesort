@@ -1909,7 +1909,6 @@ export interface PortalSiteBoard {
   permits: PortalSiteBoardPermitsItem[];
   documents: PortalSiteBoardDocumentsItem[];
   pinnedItems: PortalBoardPin[];
-  upcomingEvents: PortalEvent[];
 }
 
 export interface PortalHs {

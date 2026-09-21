@@ -6,7 +6,6 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PortalBoardPin } from "./portalBoardPin";
-import type { PortalEvent } from "./portalEvent";
 import type { PortalSiteBoardDocumentsItem } from "./portalSiteBoardDocumentsItem";
 import type { PortalSiteBoardPermitsItem } from "./portalSiteBoardPermitsItem";
 import type { PortalSiteBoardProject } from "./portalSiteBoardProject";
@@ -22,5 +21,4 @@ export interface PortalSiteBoard {
   permits: PortalSiteBoardPermitsItem[];
   documents: PortalSiteBoardDocumentsItem[];
   pinnedItems: PortalBoardPin[];
-  upcomingEvents: PortalEvent[];
 }

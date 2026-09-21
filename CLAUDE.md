@@ -119,7 +119,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 53. Site Issues moved to each project — Site Issues tab on project detail; full share details via `additionalInfo` prop
 54. Project overview daily notes Open/Share — ExternalLink detail dialog + Share2 ShareModal; `shareText` prop for text-only shares
 55. Mobile/tablet responsive fixes — scrollable filter/nav tabs, breakpoint-tuned "View Site" button visibility
-56. Site Calendar deep-links + custom events — `calendar_events` table + CRUD; QR site board returns `upcomingEvents`
+56. Site Calendar deep-links + custom events — `calendar_events` table + CRUD; (QR/portal boards NO LONGER show events, see #112)
 58. Dashboard outstanding-invoices widget — top-5 unpaid/overdue card w/ Open/Share/Mark-Paid
 59. Multi-threshold expiry email reminders — permits/insurance certs email at 30/21/14/7/1 days then daily post-expiry; `expiry_reminder_logs` de-dup table
 60. Real email verification on registration — `emailVerified:false`+token, no JWT until verified; gated login
@@ -181,6 +181,9 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 109. **Site check-in QR / URL restricted to Admin + Project Manager (enforced server-side)** — `GET/POST/DELETE /projects/:id/qr-codes` now 403 for everyone but company ... *(full text in CLAUDE_ARCHIVE.md)*
 110. **Public suggestions show initials only** — 'Did you mean' at check-in AND sign-out now show first name + surname initial + company (`publicLabel` in qr.ts, e.g. "Amy P, ... *(full text in CLAUDE_ARCHIVE.md)*
 
+111. **/info pricing cards + plan carried to checkout** — 3 plan cards (`?plan=solo|team|pro`); `/register` stores `sitesort_pending_plan`, `CheckoutGate` auto-opens Stripe for it. *(full text in CLAUDE_ARCHIVE.md)*
+112. **Calendar + ratings/payment holds PM/admin only** — removed `upcomingEvents` from QR + portal boards (spec/codegen too); `GET /calendar-events` manager-only, dashboard calendar hidden for others; `reliabilityRating`/`paymentHold` masked for non-managers, PATCH 403, team `complianceStatus` "hold" masked; /info copy updated. *(full text in CLAUDE_ARCHIVE.md)*
+
 ## Uploads / File Serving
 
 **Critical:** Replit's router only forwards `/api/*` to the Express server. Files must be served under `/api/uploads/` not `/uploads/` or they 404 in the frontend.
@@ -213,6 +216,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 ## Session Log
 
 Full session-by-session detail in CLAUDE_ARCHIVE.md. Recent sessions (newest first):
+- **2026-09-21 OPEN (remind user):** "QR code has gone" report from 2026-09-18 still unresolved (see item 3 below). Ratings/holds gate + calendar change (#112) pushed; needs Publish.
 - **2026-09-18 SESSION CLOSE (`main → a0c5d874`, Published `28c2ab5`, tree clean, no WIP branch; all UI verified at 360/768, 22 checks pass):**
   - **Completed:** #101 to #110 (see feature list; #101 = review of 6 unreviewed commits, clean) + new `scripts/src/push-delta.ts`.
   - **Fixes:** overdue plant dropped from weekly report; check-in notifications did nothing on click; QR sign-out mismatch failed silently; one person could show twice on the roll-call; drizzle `sql` template eats `\s` (use `[[:space:]]`); app blank when localStorage blocked; public suggestions leaked full names. Details in CLAUDE_ARCHIVE.md.

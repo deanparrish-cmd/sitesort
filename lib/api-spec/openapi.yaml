@@ -6050,11 +6050,7 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PortalBoardPin"
-        upcomingEvents:
-          type: array
-          items:
-            $ref: "#/components/schemas/PortalEvent"
-      required: [project, teamSize, permits, documents, pinnedItems, upcomingEvents]
+      required: [project, teamSize, permits, documents, pinnedItems]
 
     PortalHs:
       type: object

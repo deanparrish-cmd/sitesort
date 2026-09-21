@@ -93,7 +93,7 @@ const whatYouGet = [
   {
     icon: Star,
     title: "Subcontractor ratings & payment holds",
-    body: "Keep a reliability rating on every subbie and flag payment holds, so the whole team's on the same page about who's who.",
+    body: "Keep a private reliability rating on every subbie and flag payment holds. Only project managers and admins can see them.",
   },
   {
     icon: QrCode,
@@ -108,7 +108,7 @@ const whatYouGet = [
   {
     icon: Calendar,
     title: "Project calendar",
-    body: "Company-wide and per-project events, visible to the team and shown on the site board.",
+    body: "Company-wide and per-project events in one calendar, for the project manager to plan and keep track of every job.",
   },
   {
     icon: Smartphone,
@@ -395,12 +395,12 @@ export default function InfoPage() {
 
       {/* The offer */}
       <section className="py-20 border-b bg-muted/50">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-10">
             <h2 className="text-3xl md:text-4xl font-bold text-primary mb-4">The offer</h2>
             <p className="text-lg text-muted-foreground">Get SiteSort for your site and you get:</p>
           </div>
-          <ul className="space-y-4 mb-10">
+          <ul className="space-y-4 mb-12 max-w-3xl mx-auto">
             {[
               "Unlimited team members and subcontractors on every project. You're never charged per person.",
               "Every feature above, on the web and on your team's phones.",
@@ -414,12 +414,39 @@ export default function InfoPage() {
             ))}
           </ul>
 
-          <div className="rounded-2xl border-2 border-dashed border-border p-8 text-center mb-10">
-            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Placeholder, to fill in</p>
-            <p className="text-muted-foreground leading-relaxed italic">
-              Pricing: £29/month single site, £79/month up to 5 sites, £149/month unlimited.
-            </p>
+          <div className="grid gap-6 md:grid-cols-3 mb-6 [&>*]:min-w-0">
+            {[
+              { id: "solo", name: "Single site", price: "£29", detail: "One active project.", best: "Best for: builders running one job at a time." },
+              { id: "team", name: "Up to 5 sites", price: "£79", detail: "Up to 5 active projects, managed from one dashboard.", best: "Best for: contractors running 2 to 5 projects.", popular: true },
+              { id: "pro", name: "Unlimited sites", price: "£149", detail: "Unlimited active projects.", best: "Best for: firms running six or more sites." },
+            ].map(p => (
+              <div
+                key={p.id}
+                className={`relative flex flex-col rounded-2xl bg-card p-6 text-center ${p.popular ? "border-2 border-accent shadow-lg md:-translate-y-2" : "border border-border"}`}
+              >
+                {p.popular && (
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-accent px-3 py-1 text-xs font-bold uppercase tracking-wide text-white whitespace-nowrap">
+                    Most popular
+                  </span>
+                )}
+                <h3 className="text-sm font-bold uppercase tracking-widest text-primary">{p.name}</h3>
+                <p className="mt-3 text-4xl font-bold text-primary">
+                  {p.price}<span className="text-base font-medium text-muted-foreground">/month</span>
+                </p>
+                <p className="mt-4 text-foreground leading-relaxed">{p.detail}</p>
+                <p className="mt-2 text-sm text-muted-foreground leading-relaxed flex-1">{p.best}</p>
+                <Link href={`/register?plan=${p.id}`} className="mt-6 block">
+                  <Button className={`w-full h-12 ${p.popular ? "bg-accent hover:bg-accent/90 text-white" : ""}`} variant={p.popular ? "default" : "outline"}>
+                    Start free trial
+                  </Button>
+                </Link>
+              </div>
+            ))}
           </div>
+          <p className="text-center text-sm text-muted-foreground leading-relaxed mb-10 max-w-xl mx-auto">
+            Every plan starts with a free 14-day trial. Card details are taken at sign-up, and you won't be
+            charged until the trial ends. Cancel anytime before then and you pay nothing.
+          </p>
 
           <p className="text-center text-lg text-foreground leading-relaxed">
             <strong>Try it free for 14 days.</strong> No commitment. If it doesn't save you

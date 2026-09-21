@@ -646,7 +646,7 @@ export default function SiteBoard() {
     );
   }
 
-  const { project, siteManager, teamSize, permits, documents, pinnedItems = [], upcomingEvents = [], generatedAt } = data;
+  const { project, siteManager, teamSize, permits, documents, pinnedItems = [], generatedAt } = data;
 
   // Gate: show check-in form until the worker has successfully checked in
   if (!checkedIn) {
@@ -789,33 +789,6 @@ export default function SiteBoard() {
                 <Phone className="w-4 h-4" /> {siteManager.phone}
               </a>
             )}
-          </div>
-        )}
-
-        {/* Upcoming events */}
-        {upcomingEvents.length > 0 && (
-          <div className="bg-white rounded-xl shadow-sm border p-5">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-              <Calendar className="w-4 h-4" /> Upcoming Events
-            </h2>
-            <div className="space-y-3">
-              {upcomingEvents.map((e: any) => {
-                const d = new Date(e.eventDate + "T12:00:00");
-                return (
-                  <div key={e.id} className="flex items-start gap-3">
-                    <div className="shrink-0 w-12 text-center rounded-lg bg-violet-50 border border-violet-200 py-1">
-                      <p className="text-[10px] font-semibold uppercase text-violet-500 leading-none">{d.toLocaleDateString("en-GB", { month: "short" })}</p>
-                      <p className="text-lg font-extrabold text-violet-700 leading-tight">{d.getDate()}</p>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-gray-900 text-sm break-words">{e.title}</p>
-                      <p className="text-gray-400 text-xs">{d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</p>
-                      {e.note && <p className="text-gray-500 text-xs mt-0.5 break-words whitespace-pre-wrap">{e.note}</p>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
           </div>
         )}
 

@@ -130,6 +130,7 @@ export default function Register() {
       const { confirmPassword: _ignored, ...registerData } = data;
       const response = await registerMutation.mutateAsync({ data: registerData });
       setRegisteredEmail(response.email);
+      try { localStorage.setItem("sitesort_pending_plan", selectedPlan); } catch { /* storage blocked: gate just asks again */ }
     } catch (err: any) {
       setError(err.message || "Registration failed. Please try again.");
     } finally {

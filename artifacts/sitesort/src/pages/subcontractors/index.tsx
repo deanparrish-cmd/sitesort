@@ -765,7 +765,7 @@ export default function SubcontractorsPage() {
       {/* Summary — Insurance Issues / Payment Hold each name a specific set of
           contacts, so clicking one filters the directory below to it (click
           again to clear). */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+      <div className={cn("grid grid-cols-1 gap-4 mb-8", caps.canManageSubcontractors ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
         <Card className="p-4">
           <div className="flex items-center gap-2 mb-1"><Users className="w-4 h-4 text-primary" /><p className="text-xs font-medium text-muted-foreground">Total</p></div>
           <p className="text-2xl font-extrabold">{totalSubs}</p>
@@ -781,17 +781,19 @@ export default function SubcontractorsPage() {
             <p className={cn("text-2xl font-extrabold", insuranceIssues > 0 ? "text-yellow-700" : "")}>{insuranceIssues}</p>
           </Card>
         </button>
-        <button
-          type="button"
-          onClick={() => { setStatusFilter(v => v === "payment_hold" ? "all" : "payment_hold"); document.getElementById("contacts-list")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
-          disabled={holdCount === 0}
-          className="text-left disabled:cursor-default"
-        >
-          <Card className={cn("p-4 transition-shadow", holdCount > 0 && "border-red-300 bg-red-50 dark:bg-red-950/20 hover:ring-2 hover:ring-red-400/50 cursor-pointer", statusFilter === "payment_hold" && "ring-2 ring-red-500")}>
-            <div className="flex items-center gap-2 mb-1"><AlertTriangle className="w-4 h-4 text-destructive" /><p className="text-xs font-medium text-muted-foreground">Payment Hold</p></div>
-            <p className={cn("text-2xl font-extrabold", holdCount > 0 ? "text-destructive" : "")}>{holdCount}</p>
-          </Card>
-        </button>
+        {caps.canManageSubcontractors && (
+          <button
+            type="button"
+            onClick={() => { setStatusFilter(v => v === "payment_hold" ? "all" : "payment_hold"); document.getElementById("contacts-list")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+            disabled={holdCount === 0}
+            className="text-left disabled:cursor-default"
+          >
+            <Card className={cn("p-4 transition-shadow", holdCount > 0 && "border-red-300 bg-red-50 dark:bg-red-950/20 hover:ring-2 hover:ring-red-400/50 cursor-pointer", statusFilter === "payment_hold" && "ring-2 ring-red-500")}>
+              <div className="flex items-center gap-2 mb-1"><AlertTriangle className="w-4 h-4 text-destructive" /><p className="text-xs font-medium text-muted-foreground">Payment Hold</p></div>
+              <p className={cn("text-2xl font-extrabold", holdCount > 0 ? "text-destructive" : "")}>{holdCount}</p>
+            </Card>
+          </button>
+        )}
       </div>
       {statusFilter !== "all" && (
         <button
@@ -928,7 +930,7 @@ export default function SubcontractorsPage() {
                                   sub.contactType === "other"         && "bg-muted text-muted-foreground",
                                 )}>{CONTACT_TYPE_LABELS[sub.contactType]}</Badge>
                               )}
-                              {sub.paymentHold && (
+                              {caps.canManageSubcontractors && sub.paymentHold && (
                                 <Badge variant="destructive" className="text-[10px] gap-1 shrink-0"><AlertTriangle className="w-3 h-3" />Payment Hold</Badge>
                               )}
                               {!sub.contactLastName?.trim() && (
@@ -1033,7 +1035,7 @@ export default function SubcontractorsPage() {
                             <>
                               <div className="flex flex-wrap items-center gap-2">
                                 {insuranceBadge(sub.insuranceStatus, sub.contactType)}
-                                <RatingStars rating={sub.reliabilityRating} />
+                                {caps.canManageSubcontractors && <RatingStars rating={sub.reliabilityRating} />}
                               </div>
                               <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                                 <ContactActions email={sub.contactEmail} phone={sub.contactPhone} />

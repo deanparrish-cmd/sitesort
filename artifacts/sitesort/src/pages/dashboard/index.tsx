@@ -387,7 +387,7 @@ function SiteCalendar({ events, alerts, canManage, projects, onCreate, onDelete 
             maxLength={500}
           />
         </div>
-        <p className="text-xs text-muted-foreground">Appears on everyone's dashboard calendar. Upcoming events also show on the QR site board{addProjectId ? " for the selected project" : " of every project"}.</p>
+        <p className="text-xs text-muted-foreground">Only project managers and admins can see the calendar. To tell the team about something, use a site update.</p>
       </div>
       <DialogFooter>
         <Button variant="outline" onClick={() => setAddOpen(false)} disabled={saving}>Cancel</Button>
@@ -514,7 +514,7 @@ export default function Dashboard() {
       }
       const created: CustomEvent = await res.json();
       setCustomEvents(prev => [...prev, created]);
-      toast({ title: "Event added", description: `"${data.title}" is now on the team calendar.` });
+      toast({ title: "Event added", description: `"${data.title}" is now on the calendar.` });
       return true;
     } catch {
       toast({ title: "Couldn't add event", description: "Please try again.", variant: "destructive" });
@@ -982,14 +982,16 @@ export default function Dashboard() {
       </div>
 
       {/* Calendar */}
-      <SiteCalendar
-        events={calendarEvents}
-        alerts={expiryAlerts}
-        canManage={caps.canManageProjects}
-        projects={(projects ?? []).map(p => ({ id: p.id, name: p.name }))}
-        onCreate={createCalendarEvent}
-        onDelete={deleteCalendarEvent}
-      />
+      {caps.canManageProjects && (
+        <SiteCalendar
+          events={calendarEvents}
+          alerts={expiryAlerts}
+          canManage={caps.canManageProjects}
+          projects={(projects ?? []).map(p => ({ id: p.id, name: p.name }))}
+          onCreate={createCalendarEvent}
+          onDelete={deleteCalendarEvent}
+        />
+      )}
 
       <Dialog open={showUpgradeDialog} onOpenChange={setShowUpgradeDialog}>
         <DialogHeader>

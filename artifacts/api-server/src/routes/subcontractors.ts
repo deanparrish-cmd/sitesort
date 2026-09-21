@@ -41,6 +41,9 @@ async function serializeInsuranceRecords(records: InsuranceRow[]) {
 
 // ?archived=true → only archived contacts (for the Contacts "Archived" filter);
 // default → active contacts only (archivedAt IS NULL).
+// Reliability ratings and payment holds are private to admins and project managers.
+const canSeeRatings = (role?: string) => role === "admin" || role === "project_manager";
+
 router.get("/subcontractors", authenticate, async (req, res) => {
   try {
     const wantArchived = req.query.archived === "true";
@@ -71,8 +74,8 @@ router.get("/subcontractors", authenticate, async (req, res) => {
         contactType: s.contactType ?? "subcontractor",
         roleTitle: roleTitleBySub.get(s.id) ?? null,
         trades: s.trades ?? [],
-        reliabilityRating: s.reliabilityRating ? Number(s.reliabilityRating) : null,
-        paymentHold: s.paymentHold,
+        reliabilityRating: canSeeRatings(req.user!.role) && s.reliabilityRating ? Number(s.reliabilityRating) : null,
+        paymentHold: canSeeRatings(req.user!.role) ? s.paymentHold : false,
         notes: s.notes ?? null,
         archivedAt: s.archivedAt ? s.archivedAt.toISOString() : null,
         insuranceStatus: combinedInsuranceStatus(insurance, certifications),
@@ -187,8 +190,8 @@ router.get("/subcontractors/:subcontractorId", authenticate, async (req, res) =>
       contactType: s.contactType ?? "subcontractor",
       roleTitle: primaryContact[0]?.roleTitle ?? null,
       trades: s.trades ?? [],
-      reliabilityRating: s.reliabilityRating ? Number(s.reliabilityRating) : null,
-      paymentHold: s.paymentHold,
+      reliabilityRating: canSeeRatings(req.user!.role) && s.reliabilityRating ? Number(s.reliabilityRating) : null,
+      paymentHold: canSeeRatings(req.user!.role) ? s.paymentHold : false,
       notes: s.notes ?? null,
       archivedAt: s.archivedAt ? s.archivedAt.toISOString() : null,
       insuranceStatus: combinedInsuranceStatus(insurance, certifications),
@@ -220,6 +223,10 @@ router.patch("/subcontractors/:subcontractorId", authenticate, async (req, res) 
     const parsed = UpdateSubcontractorBody.safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ error: "validation_error", message: "Invalid update: a first name and surname must be at least 2 characters each." }); return; }
     const { companyName, contactFirstName, contactLastName, contactEmail, contactPhone, contactType, roleTitle, trades, reliabilityRating, paymentHold, notes } = parsed.data;
+    if ((reliabilityRating !== undefined || paymentHold !== undefined) && !canSeeRatings(req.user!.role)) {
+      res.status(403).json({ error: "forbidden", message: "Only project managers and admins can change ratings and payment holds" });
+      return;
+    }
     // Name is stored as two parts + a derived display string; if only one of
     // first/last is given, require the other too so contactName never drifts
     // out of sync with the parts.
@@ -292,7 +299,7 @@ router.patch("/subcontractors/:subcontractorId", authenticate, async (req, res) 
     const patchPrimaryContact = await db.select({ roleTitle: peopleTable.roleTitle }).from(peopleTable)
       .where(and(eq(peopleTable.subcontractorId, s.id), eq(peopleTable.isPrimaryContact, true))).limit(1);
 
-    res.json({ id: s.id, companyId: s.companyId, companyName: s.companyName, contactName: s.contactName, contactFirstName: s.contactFirstName ?? null, contactLastName: s.contactLastName ?? null, contactEmail: s.contactEmail, contactPhone: s.contactPhone ?? null, contactType: s.contactType ?? "subcontractor", roleTitle: patchPrimaryContact[0]?.roleTitle ?? null, trades: s.trades ?? [], reliabilityRating: s.reliabilityRating ? Number(s.reliabilityRating) : null, paymentHold: s.paymentHold, notes: s.notes ?? null, archivedAt: s.archivedAt ? s.archivedAt.toISOString() : null, insuranceStatus: combinedInsuranceStatus(insurance, patchCerts), certifications: patchCerts, insuranceRecords: await serializeInsuranceRecords(insurance), createdAt: s.createdAt.toISOString() });
+    res.json({ id: s.id, companyId: s.companyId, companyName: s.companyName, contactName: s.contactName, contactFirstName: s.contactFirstName ?? null, contactLastName: s.contactLastName ?? null, contactEmail: s.contactEmail, contactPhone: s.contactPhone ?? null, contactType: s.contactType ?? "subcontractor", roleTitle: patchPrimaryContact[0]?.roleTitle ?? null, trades: s.trades ?? [], reliabilityRating: canSeeRatings(req.user!.role) && s.reliabilityRating ? Number(s.reliabilityRating) : null, paymentHold: canSeeRatings(req.user!.role) ? s.paymentHold : false, notes: s.notes ?? null, archivedAt: s.archivedAt ? s.archivedAt.toISOString() : null, insuranceStatus: combinedInsuranceStatus(insurance, patchCerts), certifications: patchCerts, insuranceRecords: await serializeInsuranceRecords(insurance), createdAt: s.createdAt.toISOString() });
   } catch (err) {
     req.log.error({ err }, "Update subcontractor error");
     res.status(500).json({ error: "server_error", message: "Failed to update subcontractor" });

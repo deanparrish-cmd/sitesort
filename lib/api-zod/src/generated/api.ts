@@ -3725,15 +3725,6 @@ export const GetPortalSiteBoardResponse = zod
           "A pinned board item (document, photo, or permit) — polymorphic.",
         ),
     ),
-    upcomingEvents: zod.array(
-      zod.object({
-        id: zod.string(),
-        title: zod.string(),
-        eventDate: zod.string(),
-        note: zod.string().optional(),
-        scope: zod.string(),
-      }),
-    ),
   })
   .describe(
     "Full site board — same source as the public scanned view + the board QR token.",

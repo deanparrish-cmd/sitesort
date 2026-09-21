@@ -50,6 +50,7 @@ export function CheckoutGate() {
   }, [justPaid]);
 
   const startCheckout = async (plan: PlanId) => {
+    try { localStorage.removeItem("sitesort_pending_plan"); } catch { /* ignore */ }
     setSelected(plan);
     setError(null);
     try {
@@ -70,6 +71,16 @@ export function CheckoutGate() {
       setError("Something went wrong starting checkout. Please try again.");
     }
   };
+
+  // A plan picked on /register or the /info pricing cards goes straight to Stripe.
+  useEffect(() => {
+    if (justPaid) return;
+    try {
+      const pending = localStorage.getItem("sitesort_pending_plan");
+      if (pending && pending in PLANS) void startCheckout(pending as PlanId);
+    } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const logout = () => {
     localStorage.removeItem("sitesort_token");

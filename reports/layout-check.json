@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-18T18:48:49.754Z",
+  "generatedAt": "2026-09-21T15:00:16.589Z",
   "target": "http://localhost:8080",
   "viewports": [
     360,
@@ -213,7 +213,7 @@
         "auth": "none"
       },
       {
-        "path": "/portal/accept/7c31732fab5db932677e140761b5a960f72d5ba08062356dc64c787ad42b3e34",
+        "path": "/portal/accept/44dca3f7a7b690b79b36860dccb1efbd20574cec567aab8342da72b145124f7a",
         "label": "portal-accept",
         "auth": "none"
       },
@@ -1789,9 +1789,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/7c31732fab5db932677e140761b5a960f72d5ba08062356dc64c787ad42b3e34",
+      "path": "/portal/accept/44dca3f7a7b690b79b36860dccb1efbd20574cec567aab8342da72b145124f7a",
       "width": 360,
-      "finalPath": "/portal/accept/7c31732fab5db932677e140761b5a960f72d5ba08062356dc64c787ad42b3e34",
+      "finalPath": "/portal/accept/44dca3f7a7b690b79b36860dccb1efbd20574cec567aab8342da72b145124f7a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -4951,9 +4951,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/7c31732fab5db932677e140761b5a960f72d5ba08062356dc64c787ad42b3e34",
+      "path": "/portal/accept/44dca3f7a7b690b79b36860dccb1efbd20574cec567aab8342da72b145124f7a",
       "width": 390,
-      "finalPath": "/portal/accept/7c31732fab5db932677e140761b5a960f72d5ba08062356dc64c787ad42b3e34",
+      "finalPath": "/portal/accept/44dca3f7a7b690b79b36860dccb1efbd20574cec567aab8342da72b145124f7a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -8267,9 +8267,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/7c31732fab5db932677e140761b5a960f72d5ba08062356dc64c787ad42b3e34",
+      "path": "/portal/accept/44dca3f7a7b690b79b36860dccb1efbd20574cec567aab8342da72b145124f7a",
       "width": 768,
-      "finalPath": "/portal/accept/7c31732fab5db932677e140761b5a960f72d5ba08062356dc64c787ad42b3e34",
+      "finalPath": "/portal/accept/44dca3f7a7b690b79b36860dccb1efbd20574cec567aab8342da72b145124f7a",
       "ok": true,
       "reasons": [],
       "metrics": {

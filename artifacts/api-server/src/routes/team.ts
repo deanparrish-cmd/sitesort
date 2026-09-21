@@ -75,7 +75,8 @@ router.get("/projects/:projectId/members", authenticate, async (req, res) => {
     async function companyCompliance(subcontractorId: string) {
       const sub = await db.select({ paymentHold: subcontractorsTable.paymentHold }).from(subcontractorsTable).where(eq(subcontractorsTable.id, subcontractorId)).limit(1);
       let complianceStatus: string;
-      if (sub[0]?.paymentHold) {
+      // Payment holds are private to admins/PMs; everyone else sees the plain insurance status.
+      if (sub[0]?.paymentHold && (req.user!.role === "admin" || req.user!.role === "project_manager")) {
         complianceStatus = "hold";
       } else {
         const insuranceRows = await db.select({ expiryDate: insuranceRecordsTable.expiryDate }).from(insuranceRecordsTable).where(and(eq(insuranceRecordsTable.subcontractorId, subcontractorId), isNull(insuranceRecordsTable.archivedAt)));
