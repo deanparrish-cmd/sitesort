@@ -216,19 +216,15 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 ## Session Log
 
 Full session-by-session detail in CLAUDE_ARCHIVE.md. Recent sessions (newest first):
-- **2026-09-21 OPEN (remind user):** "QR code has gone" report from 2026-09-18 still unresolved (see item 3 below). Ratings/holds gate + calendar change (#112) pushed; needs Publish.
-- **2026-09-18 SESSION CLOSE (`main → a0c5d874`, Published `28c2ab5`, tree clean, no WIP branch; all UI verified at 360/768, 22 checks pass):**
-  - **Completed:** #101 to #110 (see feature list; #101 = review of 6 unreviewed commits, clean) + new `scripts/src/push-delta.ts`.
-  - **Fixes:** overdue plant dropped from weekly report; check-in notifications did nothing on click; QR sign-out mismatch failed silently; one person could show twice on the roll-call; drizzle `sql` template eats `\s` (use `[[:space:]]`); app blank when localStorage blocked; public suggestions leaked full names. Details in CLAUDE_ARCHIVE.md.
-  - **New issues discovered / still open:**
+- **2026-09-21 OPEN (remind user):** "QR code has gone" report from 2026-09-18 still unresolved (see item 3 below). #111/#112 shipped and Published.
+- **2026-09-18 SESSION CLOSE (`main → a0c5d874`):** #101 to #110 shipped (detail in CLAUDE_ARCHIVE.md). Still open:
     1. **Prod double check-in (Dean Parrish 18:52 and 18:54) NOT confirmed.** I cannot query prod. Most likely a sign-out in between (sign-outs had no feed item, now they do). To confirm: that row's "Out HH:MM" in the Check-Ins tab. If empty, the 409 guard failed on prod and needs that row.
     2. **Prod cause of "Amy" vs "Amy Parrish" not confirmed** (mechanism: contact card name vs its primary-contact person name drift). Rows from before `person_key` have no identity link, so an old duplicate pair stays two until signed out.
     3. **User reported "the QR code has gone" while logged in as admin** (2026-09-18, last message). Unresolved: was it only the portal (intended) or also the admin dashboard Site Board tab / `/qr` page? Locally an admin still sees it with Print/Download. **First thing next session: ask which page, and check `requireQrManager` against the prod admin's JWT role.**
     4. Public "Did you mean" at sign-in exposes registered contacts' first name + initial + company to anyone with the QR (3+ letters, max 3). Deliberate trade-off.
-    5. Portal Site Board still shows non-pinned board content (project, manager, permits, documents, trades, events); user confirmed to leave it.
+    5. Portal Site Board still shows non-pinned board content (project, manager, permits, documents, trades; events removed by #112); user confirmed to leave it.
     6. Portal daily-report photos only tested at 400px (drop, save); 360/768 covered by `check:layout` route sweep only, not the Add Photos panel.
   - **Notes for next session:** (a) after ANY backend change rebuild + restart the local api-server (`cd artifacts/api-server && NODE_ENV=development node ./build.mjs && PORT=8080 node dist/index.mjs`); vitest hits the LIVE :8080 server, so tests run against stale code otherwise. (b) `pnpm --filter @workspace/db run push` hangs interactively; apply the same SQL via `psql "$DATABASE_URL"` AND add it to `ensure-schema.ts`. (c) After a schema change run `pnpm run typecheck` (rebuilds lib declarations) before trusting api-server type errors. (d) Headless Chromium hangs the QR check-in unless geolocation permission is granted in the context. (e) Push with `push-delta.ts`; if GitHub returns 403 rate limit wait ~4 min and retry; verify with `verify-push.ts <ref>`. (f) Fire-and-forget notification inserts can race test teardown; wait ~500ms before deleting fixtures. (g) delete any `tmp-*` dev rows.
-- **2026-09-16 SESSION CLOSE:** documented **#100**; fixed em-dashes in `index.html`. **Open:** a separate session made 6 unreviewed commits (`cd91563`/`e49a8a1`/`3e49ec7`/`1c22838`/`27dd5ef`/`9c76587`: portal `section.tsx`+API-schema, dashboard/documents pages, user-guide, 2 Publishes). Read them, confirm `typecheck`/`check:layout` pass, log properly. Later `3e8ea66` fixed push-robust dropping files under rate limits.
 - **2026-09-15 and 2026-09-11:** see CLAUDE_ARCHIVE.md (`4c355d5` shipped #99).
 - **2026-07-30 and earlier:** see feature list + CLAUDE_ARCHIVE.md. **Gotcha:** local api-server on `:8080` isn't auto-restarted. `git pull` fails; use `push-robust.ts`.
 - **PD backlog**: **F7** Site Board on-site count, **F8** Timeline link, **F9/F10** spikes.
