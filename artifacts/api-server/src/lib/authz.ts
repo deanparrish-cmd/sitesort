@@ -14,7 +14,7 @@
 // new endpoint can't ship without saying who is allowed.
 import type { Request, Response, NextFunction, RequestHandler } from "express";
 import { db } from "@workspace/db";
-import { companyMembersTable, projectsTable } from "@workspace/db/schema";
+import { companyMembersTable, projectsTable, usersTable } from "@workspace/db/schema";
 import { and, eq } from "drizzle-orm";
 import { isProjectApprover } from "./project-authority";
 
@@ -50,6 +50,9 @@ export function bustRoleCache(userId: string, companyId: string): void {
 
 // ---- Policies ---------------------------------------------------------------------
 export const COMPANY_ROLES = ["admin", "project_manager", "site_worker", "subcontractor"] as const;
+// Roles a DASHBOARD login may hold. Anyone outside the company (subcontractors,
+// contractors) joins through the Team Portal only (#117), never the dashboard.
+export const DASHBOARD_ROLES = ["admin", "project_manager", "site_worker"] as const;
 
 export function companyRole(...roles: string[]): Policy {
   return { name: `companyRole(${roles.join("|")})`, check: (_req, role) => !!role && roles.includes(role) };
@@ -80,6 +83,34 @@ export function projectSiteManager(param = "projectId"): Policy {
       const p = (await db.select({ siteManagerId: projectsTable.siteManagerId }).from(projectsTable)
         .where(and(eq(projectsTable.id, projectId), eq(projectsTable.companyId, req.user!.companyId))).limit(1))[0];
       return !!p && p.siteManagerId === req.user!.id;
+    },
+  };
+}
+
+/** Company staff with a dashboard login (admin, PM, site worker). */
+export const INTERNAL_STAFF = companyRole("admin", "project_manager", "site_worker");
+
+/** SiteSort's own staff (users.platform_admin), re-read from the DB. */
+export const PLATFORM_ADMIN: Policy = {
+  name: "platformAdmin",
+  check: async (req) => {
+    const row = (await db.select({ platformAdmin: usersTable.platformAdmin }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1))[0];
+    return !!row?.platformAdmin;
+  },
+};
+
+/**
+ * Project approver on a project found from the request (for routes keyed by a
+ * child record, e.g. /permits/:permitId). `resolve` returns the project id only
+ * if the record belongs to the caller's company; null refuses.
+ */
+export function projectApproverFor(label: string, resolve: (req: Request) => Promise<string | null>): Policy {
+  return {
+    name: `projectApproverFor(${label})`,
+    check: async (req, role) => {
+      if (!role) return false;
+      const projectId = await resolve(req);
+      return !!projectId && isProjectApprover({ id: req.user!.id, role }, projectId);
     },
   };
 }

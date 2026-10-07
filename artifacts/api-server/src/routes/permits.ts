@@ -4,6 +4,7 @@ import { permitsTable, usersTable, projectsTable } from "@workspace/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
+import { allow, projectApprover, projectApproverFor } from "../lib/authz";
 import { expiryStatus } from "../lib/expiry";
 import { isOverdue } from "../lib/accountability";
 
@@ -50,7 +51,16 @@ router.get("/projects/:projectId/permits", authenticate, async (req, res) => {
   }
 });
 
-router.post("/projects/:projectId/permits", authenticate, async (req, res) => {
+// Permits are site-safety records: creating, editing and deleting them is for
+// the project's approvers (company admin / PM, per-project PM cover) (#118).
+const PERMIT_APPROVER = projectApproverFor("permit", async (req) => {
+  const row = (await db.select({ projectId: permitsTable.projectId }).from(permitsTable)
+    .innerJoin(projectsTable, eq(projectsTable.id, permitsTable.projectId))
+    .where(and(eq(permitsTable.id, req.params.permitId), eq(projectsTable.companyId, req.user!.companyId))).limit(1))[0];
+  return row?.projectId ?? null;
+});
+
+router.post("/projects/:projectId/permits", authenticate, allow(projectApprover()), async (req, res) => {
   try {
     const project = await db.select({ id: projectsTable.id }).from(projectsTable)
       .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
@@ -96,7 +106,7 @@ router.post("/projects/:projectId/permits", authenticate, async (req, res) => {
   }
 });
 
-router.patch("/permits/:permitId", authenticate, async (req, res) => {
+router.patch("/permits/:permitId", authenticate, allow(PERMIT_APPROVER), async (req, res) => {
   try {
     const existing = await db.select().from(permitsTable).where(eq(permitsTable.id, req.params.permitId)).limit(1);
     if (!existing[0]) {
@@ -130,7 +140,7 @@ router.patch("/permits/:permitId", authenticate, async (req, res) => {
   }
 });
 
-router.delete("/permits/:permitId", authenticate, async (req, res) => {
+router.delete("/permits/:permitId", authenticate, allow(PERMIT_APPROVER), async (req, res) => {
   try {
     const existing = await db.select().from(permitsTable).where(eq(permitsTable.id, req.params.permitId)).limit(1);
     if (!existing[0]) {

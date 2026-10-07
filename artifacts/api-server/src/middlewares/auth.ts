@@ -5,6 +5,7 @@ import { logActivity } from "../lib/activity";
 import { db } from "@workspace/db";
 import { usersTable, companyMembersTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
+import { currentRole } from "../lib/authz";
 
 if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET environment variable is required");
 const JWT_SECRET: string = process.env.JWT_SECRET;
@@ -69,6 +70,16 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
         res.status(401).json({ error: "unauthorized", message: "You no longer have access to this company. Please sign in again." });
         return;
       }
+      // The role in a dashboard token is a 30-day-old snapshot. Use the CURRENT
+      // role from company_members (60s cache, busted on change) everywhere, so
+      // a demotion applies at once (#117). A subcontractor role never opens the
+      // dashboard, even with an older token: they use the Team Portal.
+      const role = await currentRole(payload.id, payload.companyId);
+      if (!role || role === "subcontractor") {
+        res.status(403).json({ error: "use_portal", message: "This account uses the Team Portal. Please use the portal login link your project manager shared with you." });
+        return;
+      }
+      payload.role = role;
     }
 
     req.user = payload;

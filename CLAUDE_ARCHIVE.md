@@ -1121,3 +1121,9 @@ Removed `upcomingEvents` from `lib/site-board.ts`, OpenAPI `PortalSiteBoard`, bo
 108. **Check-in notifications open a detail; identity-linked check-ins; check-in near-match; sign-outs in the feed** — `CheckinNotificationDialog` (dashboard feed + ... *(full text in CLAUDE_ARCHIVE.md)*
 109. **Site check-in QR / URL restricted to Admin + Project Manager (enforced server-side)** — `GET/POST/DELETE /projects/:id/qr-codes` now 403 for everyone but company ... *(full text in CLAUDE_ARCHIVE.md)*
 110. **Public suggestions show initials only** — 'Did you mean' at check-in AND sign-out now show first name + surname initial + company (`publicLabel` in qr.ts, e.g. "Amy P, ... *(full text in CLAUDE_ARCHIVE.md)*
+
+
+## 2026-10-07: full text of #111 to #113 moved from CLAUDE.md
+111. **/info pricing cards + plan carried to checkout** — 3 plan cards (`?plan=solo|team|pro`); `/register` stores `sitesort_pending_plan`, `CheckoutGate` auto-opens Stripe for it. *(full text in CLAUDE_ARCHIVE.md)*
+112. **Calendar + ratings/payment holds PM/admin only** — removed `upcomingEvents` from QR + portal boards (spec/codegen too); `GET /calendar-events` manager-only, dashboard calendar hidden for others; `reliabilityRating`/`paymentHold` masked for non-managers, PATCH 403, team `complianceStatus` "hold" masked; /info copy updated. *(full text in CLAUDE_ARCHIVE.md)*
+113. **QR load failure shown as failure + honest photo upload hints** — Site Board tab: failed `GET qr-codes` shows error+Retry+Generate (POST is idempotent, never duplicates); plain Generate only when load OK and empty. `FileDropZone` `hint` prop; photo-only zones say JPG/PNG/WEBP 100MB (dashboard) or +HEIC 15MB (portal). FAQ "portal-no-qr". (2026-10-07)

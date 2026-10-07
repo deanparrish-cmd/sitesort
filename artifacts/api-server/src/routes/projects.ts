@@ -319,7 +319,7 @@ router.patch("/projects/:projectId", authenticate, allow(projectApprover()), asy
   }
 });
 
-router.post("/projects/:projectId/trades", authenticate, async (req, res) => {
+router.post("/projects/:projectId/trades", authenticate, allow(projectApprover()), async (req, res) => {
   try {
     const { trade } = req.body;
     if (!trade?.trim()) { res.status(400).json({ error: "validation_error", message: "trade is required" }); return; }
@@ -339,7 +339,8 @@ router.post("/projects/:projectId/trades", authenticate, async (req, res) => {
   }
 });
 
-router.post("/projects/:projectId/members/link", authenticate, async (req, res) => {
+// Adding a contact to a project lets them check in there: approvers only (#118).
+router.post("/projects/:projectId/members/link", authenticate, allow(projectApprover()), async (req, res) => {
   try {
     const { subcontractorId } = req.body;
     if (!subcontractorId) {
@@ -386,7 +387,7 @@ router.post("/projects/:projectId/members/link", authenticate, async (req, res) 
   }
 });
 
-router.post("/projects/:projectId/tradespeople", authenticate, async (req, res) => {
+router.post("/projects/:projectId/tradespeople", authenticate, allow(projectApprover()), async (req, res) => {
   try {
     // Tenant scoping: the project must belong to the caller's company.
     const owned = await db.select({ id: projectsTable.id }).from(projectsTable)

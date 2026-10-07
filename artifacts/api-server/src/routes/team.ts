@@ -4,7 +4,7 @@ import { projectMembersTable, usersTable, subcontractorsTable, insuranceRecordsT
 import { eq, and, isNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
-import { allow, COMPANY_MANAGER } from "../lib/authz";
+import { allow, COMPANY_MANAGER, projectApprover } from "../lib/authz";
 import { expiryStatus } from "../lib/expiry";
 import { revokePortalSessionsForMember } from "../lib/portal-sessions";
 import { canonicalPersonName } from "../lib/person-name";
@@ -248,7 +248,8 @@ router.get("/projects/:projectId/members", authenticate, async (req, res) => {
   }
 });
 
-router.post("/projects/:projectId/members", authenticate, async (req, res) => {
+// Adding someone to a project lets them check in there: approvers only (#118).
+router.post("/projects/:projectId/members", authenticate, allow(projectApprover()), async (req, res) => {
   try {
     const { userId, subcontractorId, role } = req.body;
     if (!role) {

@@ -87,7 +87,9 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
 
   const fullUrl = fileUrl ? normaliseUrl(fileUrl) : null;
   const isPortalEntity = PORTAL_ENTITY_TYPES.has(entityType);
-  const canPin = isPortalEntity && !!projectId;
+  // Pinning publishes to the PUBLIC site board: admins / PMs only (the API enforces it).
+  const canPinRole = useCapabilities().isManager;
+  const canPin = isPortalEntity && !!projectId && canPinRole;
   const linkForSharing = fullUrl;
   const hasContent = !!(linkForSharing || shareText);
 

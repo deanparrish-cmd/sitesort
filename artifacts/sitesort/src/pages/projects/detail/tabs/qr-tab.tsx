@@ -15,6 +15,7 @@ export function QrTab() {
     siteBoardUrl,
     qrCode,
     canSeeQr,
+    isProjectApprover,
     qrLoading,
     qrFetched,
     qrChecking,
@@ -65,13 +66,16 @@ export function QrTab() {
                             <span className="text-xs text-muted-foreground">{docRev(doc)}</span>
                           </div>
                         </div>
-                        <button
-                          onClick={() => togglePin("document", doc.id!)}
-                          className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-destructive transition-colors px-2 py-1 rounded-lg hover:bg-muted"
-                          title="Unpin from board"
-                        >
-                          <PinOff className="w-3.5 h-3.5" /> Unpin
-                        </button>
+                        {/* Unpinning changes the PUBLIC board: approvers only (the API enforces it). */}
+                        {isProjectApprover && (
+                          <button
+                            onClick={() => togglePin("document", doc.id!)}
+                            className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-destructive transition-colors px-2 py-1 rounded-lg hover:bg-muted"
+                            title="Unpin from board"
+                          >
+                            <PinOff className="w-3.5 h-3.5" /> Unpin
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>

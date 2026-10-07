@@ -8,7 +8,7 @@ import { authenticate, bustMembershipCache } from "../middlewares/auth";
 import { sendInvitationEmail } from "../lib/email";
 import { addMembership, membershipRole } from "../lib/memberships";
 import { parseFullPersonName } from "../lib/name-validation";
-import { allow, COMPANY_MANAGER, COMPANY_ROLES, self, bustRoleCache } from "../lib/authz";
+import { allow, COMPANY_MANAGER, DASHBOARD_ROLES, self, bustRoleCache } from "../lib/authz";
 
 const router: IRouter = Router();
 
@@ -48,8 +48,8 @@ router.post("/users", authenticate, allow(COMPANY_MANAGER), async (req, res) => 
       res.status(400).json({ error: "validation_error", message: "email, name, role required" });
       return;
     }
-    if (!(COMPANY_ROLES as readonly string[]).includes(role)) {
-      res.status(400).json({ error: "validation_error", message: "role must be admin, project_manager, site_worker or subcontractor" });
+    if (!(DASHBOARD_ROLES as readonly string[]).includes(role)) {
+      res.status(400).json({ error: "validation_error", message: role === "subcontractor" ? "Subcontractors join through the Team Portal, not the dashboard. Invite them to the project's Team Portal instead." : "role must be admin, project_manager or site_worker" });
       return;
     }
     if (role === "admin" && res.locals.role !== "admin") {
@@ -153,8 +153,8 @@ router.patch("/users/:userId", authenticate, allow(COMPANY_MANAGER, self()), asy
 
     // Role is per-company → update the membership for THIS company.
     if (role !== undefined && role !== currentRole) {
-      if (!(COMPANY_ROLES as readonly string[]).includes(role)) {
-        res.status(400).json({ error: "validation_error", message: "role must be admin, project_manager, site_worker or subcontractor" });
+      if (!(DASHBOARD_ROLES as readonly string[]).includes(role)) {
+        res.status(400).json({ error: "validation_error", message: role === "subcontractor" ? "Subcontractors join through the Team Portal, not the dashboard." : "role must be admin, project_manager or site_worker" });
         return;
       }
       // Granting admin, or changing an admin's role, is admin-only: a PM can't

@@ -16,7 +16,7 @@ import { getBucket, objectKey } from "../lib/gcs";
 import { siteDateStr, siteTime, siteTzLabel, closeDueAfter, safeTz, DEFAULT_SITE_CLOSE } from "../lib/site-clock";
 import { isProjectApprover } from "../lib/project-authority";
 import { logActivity } from "../lib/activity";
-import { allow, COMPANY_MANAGER, ANY_MEMBER, projectApprover, projectSiteManager } from "../lib/authz";
+import { allow, COMPANY_MANAGER, ANY_MEMBER, INTERNAL_STAFF, projectApprover, projectSiteManager } from "../lib/authz";
 
 const checkinUpload = multer({
   storage: multer.memoryStorage(),
@@ -313,7 +313,8 @@ router.delete("/projects/:projectId/qr-codes/:id", authenticate, allow(COMPANY_M
 });
 
 // List pinned items for a project's QR board
-router.get("/projects/:projectId/qr-pins", authenticate, async (req, res) => {
+// Which items are pinned: shown on the project page to any of the company's staff.
+router.get("/projects/:projectId/qr-pins", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const project = await db.select({ id: projectsTable.id }).from(projectsTable)
       .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
@@ -327,7 +328,9 @@ router.get("/projects/:projectId/qr-pins", authenticate, async (req, res) => {
 });
 
 // Pin an item to the QR board
-router.post("/projects/:projectId/qr-pins", authenticate, async (req, res) => {
+// Pinning publishes an item on the PUBLIC site board (anyone with the QR can
+// read it), so pinning and unpinning are for the project's approvers (#118).
+router.post("/projects/:projectId/qr-pins", authenticate, allow(projectApprover()), async (req, res) => {
   try {
     const project = await db.select({ id: projectsTable.id }).from(projectsTable)
       .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
@@ -344,7 +347,7 @@ router.post("/projects/:projectId/qr-pins", authenticate, async (req, res) => {
 });
 
 // Unpin an item from the QR board
-router.delete("/projects/:projectId/qr-pins", authenticate, async (req, res) => {
+router.delete("/projects/:projectId/qr-pins", authenticate, allow(projectApprover()), async (req, res) => {
   try {
     const project = await db.select({ id: projectsTable.id }).from(projectsTable)
       .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))

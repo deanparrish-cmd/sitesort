@@ -4,7 +4,7 @@ import { subcontractorsTable, insuranceRecordsTable, projectMembersTable, projec
 import { eq, and, desc, or, isNull, isNotNull, inArray } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
-import { allow, COMPANY_MANAGER } from "../lib/authz";
+import { allow, COMPANY_MANAGER, INTERNAL_STAFF } from "../lib/authz";
 import { isOverdue } from "../lib/accountability";
 import { activeProjectsForSubcontractor, hasAnyHistoricalFootprint } from "../lib/contact-removal";
 import { CreateSubcontractorBody, UpdateSubcontractorBody } from "@workspace/api-zod";
@@ -92,7 +92,8 @@ router.get("/subcontractors", authenticate, async (req, res) => {
   }
 });
 
-router.post("/subcontractors", authenticate, async (req, res) => {
+// The contacts directory is managed by admins / PMs (#118), matching the screens.
+router.post("/subcontractors", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     const parsed = CreateSubcontractorBody.safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ error: "validation_error", message: "A first name and surname (2+ chars each) and contactEmail are required" }); return; }
@@ -207,7 +208,7 @@ router.get("/subcontractors/:subcontractorId", authenticate, async (req, res) =>
   }
 });
 
-router.patch("/subcontractors/:subcontractorId", authenticate, async (req, res) => {
+router.patch("/subcontractors/:subcontractorId", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     // Verify ownership BEFORE writing anything — the peopleTable mirror-write
     // below is scoped only by subcontractorId (it has no companyId column of
@@ -443,7 +444,8 @@ router.get("/subcontractors/:subcontractorId/notes", authenticate, async (req, r
 });
 
 // Add a timestamped note to a subcontractor
-router.post("/subcontractors/:subcontractorId/notes", authenticate, async (req, res) => {
+// Notes & reminders on a contact: any of the company's own staff.
+router.post("/subcontractors/:subcontractorId/notes", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const sub = await db.select({ id: subcontractorsTable.id }).from(subcontractorsTable)
       .where(and(eq(subcontractorsTable.id, req.params.subcontractorId), eq(subcontractorsTable.companyId, req.user!.companyId)))

@@ -2,6 +2,7 @@ import { Router } from "express";
 import Stripe from "stripe";
 import { eq, and } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
+import { allow, COMPANY_ADMIN } from "../lib/authz";
 import { db } from "@workspace/db";
 import { companiesTable, usersTable, notificationsTable, companyMembersTable, stripeWebhookEventsTable } from "@workspace/db/schema";
 import { generateId } from "../lib/id";
@@ -31,7 +32,9 @@ const PLANS = {
 
 type PlanId = keyof typeof PLANS;
 
-router.post("/billing/checkout", authenticate, async (req, res) => {
+// Billing (checkout, portal, cancel, resume) is the company admin's (#118),
+// matching the Settings > Billing tab.
+router.post("/billing/checkout", authenticate, allow(COMPANY_ADMIN), async (req, res) => {
   const apiKey = process.env.STRIPE_SECRET_KEY;
   if (!apiKey) {
     res.status(500).json({ error: "STRIPE_SECRET_KEY is not set" });
@@ -389,7 +392,7 @@ async function processWebhookEvent(stripe: Stripe, event: Stripe.Event): Promise
   }
 }
 
-router.post("/billing/portal", authenticate, async (req, res) => {
+router.post("/billing/portal", authenticate, allow(COMPANY_ADMIN), async (req, res) => {
   const apiKey = process.env.STRIPE_SECRET_KEY;
   if (!apiKey) {
     res.status(500).json({ error: "STRIPE_SECRET_KEY is not set" });
@@ -435,7 +438,7 @@ async function getActiveSubscription(stripe: Stripe, customerId: string): Promis
   return subs.data[0] ?? null;
 }
 
-router.post("/billing/cancel", authenticate, async (req, res) => {
+router.post("/billing/cancel", authenticate, allow(COMPANY_ADMIN), async (req, res) => {
   const apiKey = process.env.STRIPE_SECRET_KEY;
   if (!apiKey) { res.status(500).json({ error: "STRIPE_SECRET_KEY is not set" }); return; }
 
@@ -470,7 +473,7 @@ router.post("/billing/cancel", authenticate, async (req, res) => {
   }
 });
 
-router.post("/billing/resume", authenticate, async (req, res) => {
+router.post("/billing/resume", authenticate, allow(COMPANY_ADMIN), async (req, res) => {
   const apiKey = process.env.STRIPE_SECRET_KEY;
   if (!apiKey) { res.status(500).json({ error: "STRIPE_SECRET_KEY is not set" }); return; }
 

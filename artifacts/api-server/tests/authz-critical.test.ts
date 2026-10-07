@@ -7,6 +7,7 @@ import {
   insuranceRecordsTable, siteCheckinsTable, activityLogTable, notificationsTable,
 } from "@workspace/db/schema";
 import { seedCompany, cleanupFixtures, api, login, type Fixture } from "./helpers";
+import { generateToken } from "../src/middlewares/auth";
 
 /**
  * #116: the three critical holes, proven closed by calling the API DIRECTLY
@@ -35,6 +36,9 @@ describe("critical authorisation fixes, by direct API call per role", () => {
       await db.insert(usersTable).values({ id: uid, companyId: co.companyId, email: `${uid}@example.test`, passwordHash: owner.passwordHash, name: `Name ${uid}`, role, emailVerified: true });
       await db.insert(companyMembersTable).values({ id: randomUUID(), userId: uid, companyId: co.companyId, role });
       if (project) await db.insert(projectMembersTable).values({ id: randomUUID(), projectId: co.projectId, userId: uid, isProjectManager: !!project.isProjectManager } as any);
+      // A subcontractor can't log in to the dashboard any more (#117); use a
+      // signed dashboard token as if left over from before, to prove it's refused.
+      if (role === "subcontractor") return generateToken({ id: uid, companyId: co.companyId, role, email: `${uid}@example.test` });
       return login(`${uid}@example.test`);
     };
     tok.pm = await add(id.pm, "project_manager", {});

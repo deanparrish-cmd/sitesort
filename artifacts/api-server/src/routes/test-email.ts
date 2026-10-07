@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { authenticate } from "../middlewares/auth";
+import { allow, PLATFORM_ADMIN } from "../lib/authz";
 import {
   sendVerificationEmail,
   sendPasswordResetEmail,
@@ -31,14 +32,16 @@ const TEMPLATES: Record<string, (to: string, name: string) => Promise<unknown>> 
   safety: (to, name) => sendSafetyAlertEmail(to, name, "safety_concern", "SC-0042", "Riverside Tower"),
 };
 
-router.post("/test-email", authenticate, async (req, res) => {
+// Developer tool: SiteSort staff only, and only ever to their OWN address (#118).
+// Before this any logged-in user could send any template to any address.
+router.post("/test-email", authenticate, allow(PLATFORM_ADMIN), async (req, res) => {
   if (!process.env.RESEND_API_KEY) {
     res.status(500).json({ error: "RESEND_API_KEY is not set" });
     return;
   }
 
   const template = String(req.body?.template ?? "welcome").toLowerCase();
-  const to = (req.body?.to as string) || req.user!.email;
+  const to = req.user!.email;
   const name = (req.body?.name as string) || "Alex Taylor";
 
   const names = template === "all" ? Object.keys(TEMPLATES) : [template];

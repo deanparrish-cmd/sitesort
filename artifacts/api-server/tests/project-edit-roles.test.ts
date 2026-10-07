@@ -4,6 +4,7 @@ import { db } from "@workspace/db";
 import { eq, and, inArray, desc } from "drizzle-orm";
 import { usersTable, companyMembersTable, projectMembersTable, projectsTable, companiesTable, activityLogTable } from "@workspace/db/schema";
 import { seedCompany, cleanupFixtures, api, login, type Fixture } from "./helpers";
+import { generateToken } from "../src/middlewares/auth";
 
 /**
  * Project edit / create are approver-only ON THE SERVER, not just behind a
@@ -35,6 +36,8 @@ describe("project edit and create: role checks below the buttons", () => {
       await db.insert(usersTable).values({ id, companyId: co.companyId, email: `${id}@example.test`, passwordHash: owner.passwordHash, name: `Name ${id}`, role, emailVerified: true });
       await db.insert(companyMembersTable).values({ id: randomUUID(), userId: id, companyId: co.companyId, role });
       if (onProject) await db.insert(projectMembersTable).values({ id: randomUUID(), projectId: co.projectId, userId: id, isProjectManager: !!onProject.isProjectManager } as any);
+      // Subcontractors can't log in to the dashboard (#117): use a leftover-style signed token.
+      if (role === "subcontractor") return generateToken({ id, companyId: co.companyId, role, email: `${id}@example.test` });
       return login(`${id}@example.test`);
     };
     admin = await login(co.email);
