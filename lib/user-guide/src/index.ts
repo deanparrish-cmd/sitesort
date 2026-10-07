@@ -175,7 +175,7 @@ export const PM_GUIDE: GuideSection[] = [
         heading: "See who is on site right now",
         body: [
           "The project's Check-Ins tab (and the Check-Ins page) opens with Currently on site: everyone who has signed in and not yet signed out, so you can use it for a roll call.",
-          "The public site board (the page the QR code opens) shows a live count, for example 12 currently on site. It is a number only; names are only visible to you here.",
+          "The public site board (the page the QR code opens) does not show how many people are on site. Use Currently on site here for the real list.",
           "In your notifications and the dashboard activity feed, tap a Check-in, Signed out or Check-in blocked item to open its detail: the photo (tap to enlarge), name, company, in and out times, a link to Currently on site, and for a blocked attempt exactly what they typed and why it was blocked. Sign-outs appear in the feed as well, so a sign-out between two check-ins is easy to see.",
           "Anyone still signed in from a previous day is flagged Not signed out. They are never closed automatically. Choose Sign out beside their name, add a note (for example, left site at 17:00) and confirm. Admins and project managers can do this.",
         ],

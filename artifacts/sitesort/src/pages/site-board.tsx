@@ -3,6 +3,9 @@ import { useRoute } from "wouter";
 import { MapPin, Calendar, FileText, HardHat, ShieldCheck, AlertTriangle, Users, Mail, Phone, Clock, Camera, CheckCircle2, Loader2, Pin, XCircle, Building2 } from "lucide-react";
 import { openDocument } from "@/lib/documents";
 
+// See the onSiteCount comment in SiteBoard: off until stale check-ins stop counting.
+const SHOW_PUBLIC_ON_SITE_COUNT = false;
+
 async function stampPhoto(file: File, projectName: string, workerName: string): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -599,9 +602,14 @@ export default function SiteBoard() {
   const [error, setError] = useState<string | null>(null);
   const [checkedIn, setCheckedIn] = useState(false);
   // Live count only (never names) of people signed in and not signed out.
+  // HIDDEN (2026-10-07): nobody is ever signed out automatically, so open rows
+  // from previous days inflate the count (5 "on site" since June on a test
+  // project). A wrong head count on a public board is worse than none. Turn
+  // back on only once stale check-ins stop counting (day-scoped count and/or
+  // automatic close at a site close time).
   const [onSiteCount, setOnSiteCount] = useState<number | null>(null);
   useEffect(() => {
-    if (!token) return;
+    if (!token || !SHOW_PUBLIC_ON_SITE_COUNT) return;
     const load = () => fetch(`/api/site/${token}/on-site-count`)
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d && typeof d.count === "number") setOnSiteCount(d.count); })
