@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DictationButton } from "@/components/ui/dictation-button";
 import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronUp, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, PinOff, StickyNote, Send, Loader2, History, Archive, Paperclip, Ban } from "lucide-react";
-import { FileDropZone } from "@/components/ui/file-drop-zone";
+import { FileDropZone, DASHBOARD_PHOTO_HINT } from "@/components/ui/file-drop-zone";
 import { OverdueBadge } from "@/components/ui/overdue-badge";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDate, formatBytes, cn } from "@/lib/utils";
@@ -195,6 +195,7 @@ export function IssuesTab() {
                       <FileDropZone
                         key={photoFormKey}
                         accept=".jpg,.jpeg,.png,.webp"
+                        hint={DASHBOARD_PHOTO_HINT}
                         onUploaded={f => setPhotoUploadUrl(f.url)}
                         onCleared={() => setPhotoUploadUrl(null)}
                       />

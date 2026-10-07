@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Camera, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { FileDropZone } from "@/components/ui/file-drop-zone";
+import { FileDropZone, DASHBOARD_PHOTO_HINT, PORTAL_PHOTO_HINT } from "@/components/ui/file-drop-zone";
 import { useToast } from "@/hooks/use-toast";
 
 type ReportPhoto = { id: string; referenceNumber: string; photoUrl: string | null; caption: string | null; takenAt: string; uploaderName: string };
@@ -81,6 +81,7 @@ export function DailyReportPhotos({
             multiple
             accept={uploadUrl ? ".jpg,.jpeg,.png,.webp,.heic" : ".jpg,.jpeg,.png,.webp"}
             uploadUrl={uploadUrl}
+            hint={uploadUrl ? PORTAL_PHOTO_HINT : DASHBOARD_PHOTO_HINT}
             onUploaded={f => setStaged(prev => [...prev, { key: `${f.url}-${prev.length}`, url: f.url, caption: "" }])}
             onCleared={() => {}}
           />

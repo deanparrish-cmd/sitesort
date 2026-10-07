@@ -489,6 +489,12 @@ export const FAQ: FaqItem[] = [
     audience: "worker",
   },
   {
+    id: "portal-no-qr",
+    question: "Why is there no QR code on the portal's Site Board?",
+    answer: "The check-in QR code is never shown in the Team Portal, for anyone, so it can't be passed on to someone who isn't on site. Workers scan the code posted at the site entrance. Admins and project managers open it from the main dashboard instead: QR Codes in the sidebar, or the project's Site Board tab, where you can show it on screen, download it or print it.",
+    audience: "both",
+  },
+  {
     id: "default-worker-view",
     question: "What does a brand-new worker see by default?",
     answer: "Just Overview, Messages, Shared with me, My documents, Permits, Site Board and Settings. Site Issues, Plant & Materials and Daily Report are hidden until a project manager grants that specific permission.",

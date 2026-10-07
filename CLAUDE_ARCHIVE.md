@@ -1085,3 +1085,8 @@ Three cards on /info "The offer" (Single site £29 / Up to 5 sites £79 "Most po
 
 ## #112 Calendar + ratings/payment holds PM/admin only (2026-09-21)
 Removed `upcomingEvents` from `lib/site-board.ts`, OpenAPI `PortalSiteBoard`, both board UIs. `GET /calendar-events` 403 for non admin/PM; dashboard SiteCalendar hidden for others; add-event dialog copy says use a site update to tell the team. `subcontractors.ts`: `canSeeRatings()` masks `reliabilityRating`/`paymentHold` (list, detail, PATCH response); PATCH with those fields 403 for non-managers. `team.ts` masks `complianceStatus:"hold"` to the plain insurance status for non-managers. Contacts page hides Payment Hold card/badge and stars for non-managers. Tested with a temp site_worker membership (restored). Other PATCH fields on subcontractors still have no role gate (pre-existing).
+
+
+## 2026-10-07: moved from CLAUDE.md session log (2026-09-18 settled trade-offs)
+    4. Public "Did you mean" at sign-in exposes registered contacts' first name + initial + company to anyone with the QR (3+ letters, max 3). Deliberate trade-off.
+    5. Portal Site Board still shows non-pinned board content (project, manager, permits, documents, trades; events removed by #112); user confirmed to leave it.

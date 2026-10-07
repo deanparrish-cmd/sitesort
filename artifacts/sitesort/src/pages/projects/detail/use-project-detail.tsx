@@ -450,12 +450,19 @@ export function useProjectDetailState() {
   // The site QR / check-in URL is admin + project manager only: the API answers
   // 403 to anyone else, and we don't even ask (or keep the URL in state) for them.
   const canSeeQr = useCapabilities().isManager;
-  useEffect(() => {
+  // Load the project's existing QR. A failed request becomes an error with Retry,
+  // never the empty "Generate" state: that state is only for a project whose
+  // request succeeded and genuinely has no QR yet.
+  const fetchExistingQr = async () => {
     if (!projectId || !canSeeQr) return;
-    const token = localStorage.getItem("sitesort_token");
-    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-    fetch(`/api/projects/${projectId}/qr-codes`, { headers }).then(r => r.ok ? r.json() : []).then((qrCodes) => {
-      if (Array.isArray(qrCodes) && qrCodes.length > 0) {
+    setQrChecking(true);
+    setQrError(null);
+    try {
+      const r = await fetch(`/api/projects/${projectId}/qr-codes`, { headers: authHeaders() });
+      if (!r.ok) throw new Error(`error ${r.status}`);
+      const qrCodes = await r.json();
+      if (!Array.isArray(qrCodes)) throw new Error("unexpected response");
+      if (qrCodes.length > 0) {
         const qr = qrCodes.find((q: any) => q.category === "site_board") ?? qrCodes[0];
         const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
         const url = qr.siteUrl ?? `${window.location.origin}${BASE}/site/${qr.token}`;
@@ -465,8 +472,13 @@ export function useProjectDetailState() {
         setQrCode({ token: qr.token, siteUrl: url });
         setQrFetched(true);
       }
-    });
-  }, [projectId, canSeeQr]);
+    } catch (e) {
+      setQrError(`Couldn't load this project's QR code (${e instanceof Error ? e.message : "network error"}). Check your connection and try again.`);
+    } finally {
+      setQrChecking(false);
+    }
+  };
+  useEffect(() => { void fetchExistingQr(); }, [projectId, canSeeQr]);
 
   useEffect(() => {
     if (!projectId) return;
@@ -875,6 +887,8 @@ export function useProjectDetailState() {
   const [qrCode, setQrCode] = useState<{ token: string; siteUrl: string } | null>(null);
   const [qrLoading, setQrLoading] = useState(false);
   const [qrFetched, setQrFetched] = useState(false);
+  const [qrChecking, setQrChecking] = useState(true);
+  const [qrError, setQrError] = useState<string | null>(null);
   const qrSvgRef = useRef<HTMLDivElement>(null);
   const [qrPins, setQrPins] = useState<{ id: string; itemType: string; itemId: string }[]>([]);
   const isPinned = (itemType: string, itemId: string) => qrPins.some(p => p.itemType === itemType && p.itemId === itemId);
@@ -891,36 +905,32 @@ export function useProjectDetailState() {
     }
   };
 
+  // "Generate": the POST is idempotent (it returns the existing site_board QR
+  // if there is one), so this never creates a duplicate. Failure shows the same
+  // error + Retry state as a failed load.
   const loadQr = async () => {
     if (!canSeeQr) return;
     setQrLoading(true);
+    setQrError(null);
     try {
-      const token = localStorage.getItem("sitesort_token");
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (token) headers["Authorization"] = `Bearer ${token}`;
       const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
       const buildUrl = (t: string) => `${window.location.origin}${BASE}/site/${t}`;
-
-      const existing = await fetch(`/api/projects/${projectId}/qr-codes`, { headers }).then(r => r.json());
-      if (Array.isArray(existing) && existing.length > 0) {
-        const qr = existing.find((q: any) => q.category === "site_board") ?? existing[0];
-        setQrCode({ token: qr.token, siteUrl: buildUrl(qr.token) });
-        setSiteBoardUrl(buildUrl(qr.token));
-        setQrFetched(true);
-        return;
-      }
-
       const res = await fetch(`/api/projects/${projectId}/qr-codes`, {
-        method: "POST", headers,
+        method: "POST", headers: authHeaders(),
         body: JSON.stringify({ categories: ["site_board"] }),
       });
+      if (!res.ok) throw new Error(`error ${res.status}`);
       const created = await res.json();
-      if (Array.isArray(created) && created.length > 0) {
-        const qr = created[0];
-        setQrCode({ token: qr.token, siteUrl: buildUrl(qr.token) });
-      }
-    } catch (e) { console.error(e); }
-    finally { setQrLoading(false); setQrFetched(true); }
+      if (!Array.isArray(created) || created.length === 0) throw new Error("no QR code returned");
+      const qr = created.find((q: any) => q.category === "site_board") ?? created[0];
+      setQrCode({ token: qr.token, siteUrl: buildUrl(qr.token) });
+      setSiteBoardUrl(buildUrl(qr.token));
+      setQrFetched(true);
+    } catch (e) {
+      setQrError(`Couldn't create the QR code (${e instanceof Error ? e.message : "network error"}). Check your connection and try again.`);
+    } finally {
+      setQrLoading(false);
+    }
   };
 
   const downloadQr = () => {
@@ -1626,6 +1636,9 @@ tr:last-child td{border-bottom:none}
     qrLoading,
     setQrLoading,
     qrFetched,
+    qrChecking,
+    qrError,
+    retryQr: fetchExistingQr,
     setQrFetched,
     qrSvgRef,
     qrPins,

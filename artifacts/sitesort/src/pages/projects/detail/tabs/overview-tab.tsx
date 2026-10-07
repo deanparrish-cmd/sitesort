@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronUp, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, PinOff, StickyNote, Send, Loader2, History, Archive, Paperclip } from "lucide-react";
-import { FileDropZone } from "@/components/ui/file-drop-zone";
+import { FileDropZone, DASHBOARD_PHOTO_HINT } from "@/components/ui/file-drop-zone";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDate, formatBytes, cn } from "@/lib/utils";
 import { useDetail } from "../context";
@@ -53,6 +53,7 @@ export function OverviewTab() {
                       <FileDropZone
                         key={ovPhotoKey}
                         accept=".jpg,.jpeg,.png,.webp"
+                        hint={DASHBOARD_PHOTO_HINT}
                         onUploaded={f => setOvPhotoUrl(f.url)}
                         onCleared={() => setOvPhotoUrl(null)}
                       />

@@ -17,6 +17,9 @@ export function QrTab() {
     canSeeQr,
     qrLoading,
     qrFetched,
+    qrChecking,
+    qrError,
+    retryQr,
     qrSvgRef,
     isPinned,
     togglePin,
@@ -79,6 +82,29 @@ export function QrTab() {
             {!canSeeQr ? (
               <div className="rounded-xl border bg-muted/30 p-4 text-sm text-muted-foreground text-center" data-testid="text-qr-restricted">
                 The site check-in QR code and link are only available to admins and project managers.
+              </div>
+            ) : qrError ? (
+              <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-4 flex flex-col items-center gap-3 text-center" role="alert" data-testid="qr-load-error">
+                <AlertTriangle className="w-6 h-6 text-destructive" />
+                <p className="text-sm text-destructive break-words min-w-0">{qrError}</p>
+                {/* Generate stays available so a project with no QR yet is never
+                    stuck behind a failing load. It's safe: the server hands back
+                    the existing QR if there is one, so it can't make a duplicate. */}
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Button variant="outline" onClick={() => void retryQr()} disabled={qrChecking || qrLoading} data-testid="button-qr-retry">
+                    <RefreshCw className={cn("w-4 h-4 mr-2", qrChecking && "animate-spin")} /> Retry
+                  </Button>
+                  <Button onClick={() => void loadQr()} disabled={qrChecking || qrLoading} data-testid="button-qr-generate-from-error">
+                    {qrLoading
+                      ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Generating…</>
+                      : <><QrCode className="w-4 h-4 mr-2" /> Generate Site Board QR Code</>}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">If this project already has a QR code, Generate shows that one. It never makes a second.</p>
+              </div>
+            ) : qrChecking && !qrFetched ? (
+              <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground" data-testid="qr-loading">
+                <Loader2 className="w-4 h-4 animate-spin" /> Loading QR code...
               </div>
             ) : !qrFetched ? (
               <div className="flex flex-col items-center gap-4">
@@ -231,9 +257,7 @@ export function QrTab() {
                   )}
                 </div>
               </div>
-            ) : (
-              <p className="text-destructive text-center text-sm">Failed to generate QR code. Please try again.</p>
-            )}
+            ) : null}
           </div>
         </TabsContent>
     </>

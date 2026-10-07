@@ -18,11 +18,18 @@ interface FileDropZoneProps {
   multiple?: boolean;
   /** Upload endpoint. Defaults to /api/upload; Team Portal callers pass a portal-scoped one (portal tokens are blocked from /api/upload). */
   uploadUrl?: string;
+  /** The formats/size line under "browse". Pass one whenever `accept` or the endpoint narrows what's allowed, so the hint never promises more than the upload takes. */
+  hint?: string;
 }
+
+// Hints for photo-only drop zones. Limits mirror the servers: /api/upload takes
+// 100MB; portal member uploads (lib/portal-upload.ts) cap at 15MB and allow HEIC.
+export const DASHBOARD_PHOTO_HINT = "Photos only: JPG, PNG or WEBP, up to 100MB each";
+export const PORTAL_PHOTO_HINT = "Photos only: JPG, PNG, WEBP or HEIC, up to 15MB each";
 
 const ACCEPTED_EXTS = ".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.dwg,.dxf,.dwf,.rvt,.ifc,.mpp";
 
-export function FileDropZone({ onUploaded, onCleared, accept = ACCEPTED_EXTS, className, multiple = false, uploadUrl = "/api/upload" }: FileDropZoneProps) {
+export function FileDropZone({ onUploaded, onCleared, accept = ACCEPTED_EXTS, className, multiple = false, uploadUrl = "/api/upload", hint = "PDF, images, Word, Excel, MS Project, DWG, DXF, DWF · up to 100MB" }: FileDropZoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploaded, setUploaded] = useState<UploadedFile | null>(null);
@@ -174,7 +181,7 @@ export function FileDropZone({ onUploaded, onCleared, accept = ACCEPTED_EXTS, cl
             </div>
             <div className="text-center">
               <p className="font-semibold text-sm">{multiple ? "Drop photos here or " : "Drop file here or "}<span className="text-primary underline">browse</span></p>
-              <p className="text-xs text-muted-foreground mt-1">PDF, images, Word, Excel, MS Project, DWG, DXF, DWF · up to 100MB</p>
+              <p className="text-xs text-muted-foreground mt-1">{hint}</p>
             </div>
           </>
         )}
