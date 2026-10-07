@@ -8,6 +8,7 @@ import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, Shield
 import { formatDate, formatBytes, cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useDetail } from "../context";
+import { useCapabilities } from "@/hooks/use-capabilities";
 import { siteTimeZoneOptions } from "@/lib/site-time";
 
 export function ProjectDialogs() {
@@ -33,6 +34,9 @@ export function ProjectDialogs() {
     isProjectApprover,
   } = useDetail();
   const { toast } = useToast();
+  // Changing approvers is company admin / PM only (the API enforces it), so a
+  // per-project PM editing details doesn't see that section.
+  const caps = useCapabilities();
 
   // "Project Managers / Approvers" multi-select: per-project approver authority
   // (project_members.isProjectManager). Local Set of memberIds is seeded from
@@ -105,8 +109,13 @@ export function ProjectDialogs() {
             <select {...editRegister("status")} className="flex h-11 w-full rounded-lg border-2 border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:border-primary">
               <option value="active">Active</option>
               <option value="on_hold">On Hold</option>
-              <option value="complete">Complete</option>
+              {project?.status === "complete" && <option value="complete">Complete</option>}
             </select>
+            <p className="text-xs text-muted-foreground mt-1">
+              {project?.status === "complete"
+                ? "This project was closed out. Choosing Active or On Hold reopens it; the close-out record is kept."
+                : "To complete a project, use Close-Out. It needs your PIN and keeps the handover record."}
+            </p>
           </div>
           <div>
             <label className="text-sm font-semibold mb-1 block">Target End Date</label>
@@ -137,7 +146,7 @@ export function ProjectDialogs() {
               <p className="text-xs text-muted-foreground sm:col-span-2">Check-in times are shown on this site's clock. Anyone still signed in at the close time is closed automatically: they stop counting as on site but stay on that day's register, marked, until signed out. Set it late rather than early, for example after the last shift ends.</p>
             </div>
           )}
-          <div>
+          {caps.canManageProjects && (<div>
             <label className="text-sm font-semibold mb-1 block">Project Managers / Approvers</label>
             {accepted.length === 0 ? (
               <p className="text-xs text-muted-foreground">No members have accepted an invite yet. Invite people from the Team tab first.</p>
@@ -163,7 +172,7 @@ export function ProjectDialogs() {
             <p className="text-xs text-muted-foreground mt-1">
               Approvers can triage site issues, allocate, confirm two-step closures, approve submitted reports and documents, and sign off, so there's always cover if a PM is away. Pick one or more. Company admins and project managers always have this authority. Every action is still recorded against the individual who did it.
             </p>
-          </div>
+          </div>)}
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => setIsEditOpen(false)}>Cancel</Button>
             <Button type="submit" variant="accent" isLoading={updateMutation.isPending}>Save Changes</Button>

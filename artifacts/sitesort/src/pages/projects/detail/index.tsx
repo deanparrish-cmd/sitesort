@@ -82,7 +82,7 @@ function ProjectDetailInner() {
               <Button variant="outline" size="sm" onClick={generateReport}>
                 <FileDown className="w-4 h-4 mr-2" /> Export Report
               </Button>
-              {caps.canManageProjects && (
+              {isProjectApprover && (
                 <Button variant="outline" onClick={openEdit}>Edit Details</Button>
               )}
             </div>

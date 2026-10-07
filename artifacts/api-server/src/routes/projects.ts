@@ -5,7 +5,8 @@ import { eq, and, count, sql, asc, desc, isNotNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { isValidTimeZone, isValidCloseTime, safeTz, siteTzLabel } from "../lib/site-clock";
-import { isProjectApprover } from "../lib/project-authority";
+import { isProjectApprover, COMPANY_MANAGER_ROLES } from "../lib/project-authority";
+import { logActivity } from "../lib/activity";
 
 const router: IRouter = Router();
 
@@ -119,6 +120,12 @@ router.get("/projects", authenticate, async (req, res) => {
 
 router.post("/projects", authenticate, async (req, res) => {
   try {
+    // Creating a project uses the plan's project allowance, so it's for company
+    // admins / project managers only (matches the New Project button).
+    if (!COMPANY_MANAGER_ROLES.includes(req.user!.role)) {
+      res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can create a project" });
+      return;
+    }
     const { name, address, startDate, targetEndDate } = req.body;
     if (!name || !address || !startDate) {
       res.status(400).json({ error: "validation_error", message: "name, address, startDate required" });
@@ -224,13 +231,32 @@ router.patch("/projects/:projectId", authenticate, async (req, res) => {
   try {
     const { name, address, status, targetEndDate, siteManagerId, siteTimeZone, siteCloseTime } = req.body;
     const updates: Record<string, unknown> = {};
-    // The site clock decides when people stop counting as on site, so only an
-    // admin / PM / project approver may change it.
-    if (siteTimeZone !== undefined || siteCloseTime !== undefined) {
-      if (!(await isProjectApprover(req.user!, req.params.projectId))) {
-        res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can change the site timezone or close time" });
+
+    // Every project field is approver-only (company admin / PM, per-project PM
+    // cover, or platform admin), matching the Edit Details button. Before this
+    // any logged-in company user could, via the API, rename a project, change
+    // the address on the public board, make themselves site manager (and so
+    // receive every check-in alert) or change its status.
+    const current = (await db.select({ status: projectsTable.status, siteManagerId: projectsTable.siteManagerId }).from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId))).limit(1))[0];
+    if (!current) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+    if (!(await isProjectApprover(req.user!, req.params.projectId))) {
+      res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can edit this project" });
+      return;
+    }
+    if (status !== undefined) {
+      if (!["active", "on_hold", "complete"].includes(status)) {
+        res.status(400).json({ error: "validation_error", message: "status must be active, on_hold or complete" });
         return;
       }
+      // Completing goes through the PIN-confirmed close-out, which also keeps
+      // the handover record. It can't be set here.
+      if (status === "complete" && current.status !== "complete") {
+        res.status(400).json({ error: "use_closeout", message: "To complete a project, use Close-Out on the project. It needs your PIN and keeps the handover record." });
+        return;
+      }
+    }
+    if (siteTimeZone !== undefined || siteCloseTime !== undefined) {
       if (siteTimeZone !== undefined) {
         if (!isValidTimeZone(siteTimeZone)) { res.status(400).json({ error: "validation_error", message: "siteTimeZone must be a valid timezone, for example Europe/London" }); return; }
         updates.siteTimeZone = siteTimeZone;
@@ -242,7 +268,7 @@ router.patch("/projects/:projectId", authenticate, async (req, res) => {
     }
     if (name) updates.name = name;
     if (address) updates.address = address;
-    if (status) updates.status = status;
+    if (status && status !== current.status) updates.status = status;
     if (targetEndDate !== undefined) updates.targetEndDate = targetEndDate;
     if (siteManagerId !== undefined) {
       if (siteManagerId === null) {
@@ -259,7 +285,20 @@ router.patch("/projects/:projectId", authenticate, async (req, res) => {
       }
     }
 
-    await db.update(projectsTable).set(updates).where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)));
+    if (Object.keys(updates).length > 0) {
+      await db.update(projectsTable).set(updates).where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)));
+      // Recorded (who, when, from, to): status changes (pause, reopen after
+      // close-out) and the site manager, who receives every check-in alert
+      // with names and photos, so it's treated as access to personal data.
+      const changes: Record<string, unknown> = {};
+      if (updates.status) changes.status = { from: current.status, to: updates.status };
+      if ("siteManagerId" in updates && (updates.siteManagerId ?? null) !== (current.siteManagerId ?? null)) {
+        changes.siteManager = { from: current.siteManagerId ?? null, to: updates.siteManagerId ?? null };
+      }
+      if (Object.keys(changes).length > 0) {
+        void logActivity({ userId: req.user!.id, projectId: req.params.projectId, companyId: req.user!.companyId, section: "project", action: "update", itemType: "project", itemId: req.params.projectId, metadata: changes, req });
+      }
+    }
 
     const projects = await db.select().from(projectsTable)
       .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
