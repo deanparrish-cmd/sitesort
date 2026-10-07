@@ -4,6 +4,7 @@ import { projectMembersTable, usersTable, subcontractorsTable, insuranceRecordsT
 import { eq, and, isNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
+import { allow, COMPANY_MANAGER } from "../lib/authz";
 import { expiryStatus } from "../lib/expiry";
 import { revokePortalSessionsForMember } from "../lib/portal-sessions";
 import { canonicalPersonName } from "../lib/person-name";
@@ -393,7 +394,7 @@ router.post("/projects/:projectId/members/person", authenticate, async (req, res
   }
 });
 
-router.post("/projects/:projectId/members/:memberId/insurance-cert", authenticate, async (req, res) => {
+router.post("/projects/:projectId/members/:memberId/insurance-cert", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     // Tenant + role gate: only a manager acting on their own company's project
     // may write insurance records (this endpoint predates both checks).

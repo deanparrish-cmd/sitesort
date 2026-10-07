@@ -6,6 +6,7 @@ import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { isValidTimeZone, isValidCloseTime, safeTz, siteTzLabel } from "../lib/site-clock";
 import { isProjectApprover, COMPANY_MANAGER_ROLES } from "../lib/project-authority";
+import { allow, COMPANY_MANAGER, projectApprover } from "../lib/authz";
 import { logActivity } from "../lib/activity";
 
 const router: IRouter = Router();
@@ -118,7 +119,7 @@ router.get("/projects", authenticate, async (req, res) => {
   }
 });
 
-router.post("/projects", authenticate, async (req, res) => {
+router.post("/projects", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     // Creating a project uses the plan's project allowance, so it's for company
     // admins / project managers only (matches the New Project button).
@@ -227,7 +228,7 @@ router.get("/projects/:projectId", authenticate, async (req, res) => {
   }
 });
 
-router.patch("/projects/:projectId", authenticate, async (req, res) => {
+router.patch("/projects/:projectId", authenticate, allow(projectApprover()), async (req, res) => {
   try {
     const { name, address, status, targetEndDate, siteManagerId, siteTimeZone, siteCloseTime } = req.body;
     const updates: Record<string, unknown> = {};

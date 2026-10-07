@@ -57,6 +57,8 @@ describe("project detail tab gating", () => {
     expect(buildManagementTabs(caps, 0).find(t => t.value === "issues")?.label).toBe("Site Issues");
     expect(buildActivityTabs(caps, 2, true).find(t => t.value === "checkins")?.label).toBe("Check-Ins (2)");
     expect(buildActivityTabs(caps, 0, true).find(t => t.value === "checkins")?.label).toBe("Check-Ins");
+    // Check-ins are personal data: no tab for someone who can't see them.
+    expect(buildActivityTabs(caps, 2, false, false).find(t => t.value === "checkins")).toBeUndefined();
   });
 
   it("uses the requested order and labels", () => {

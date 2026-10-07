@@ -4,6 +4,7 @@ import { subcontractorsTable, insuranceRecordsTable, projectMembersTable, projec
 import { eq, and, desc, or, isNull, isNotNull, inArray } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
+import { allow, COMPANY_MANAGER } from "../lib/authz";
 import { isOverdue } from "../lib/accountability";
 import { activeProjectsForSubcontractor, hasAnyHistoricalFootprint } from "../lib/contact-removal";
 import { CreateSubcontractorBody, UpdateSubcontractorBody } from "@workspace/api-zod";
@@ -306,7 +307,10 @@ router.patch("/subcontractors/:subcontractorId", authenticate, async (req, res) 
   }
 });
 
-router.post("/subcontractors/:subcontractorId/insurance", authenticate, async (req, res) => {
+// Insurance evidence decides who the check-in gate lets on site, so adding or
+// editing it is admin / PM only (#116: before this any logged-in user, a
+// subcontractor's own login included, could file a certificate with any expiry).
+router.post("/subcontractors/:subcontractorId/insurance", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     const { type, certificateUrl, expiryDate, assignedToUserId, dueDate } = req.body;
     if (!type || !certificateUrl || !expiryDate) {
@@ -354,7 +358,7 @@ router.post("/subcontractors/:subcontractorId/insurance", authenticate, async (r
 
 // Edit / reassign an insurance record (assignee, due date, expiry, certificate).
 // Tenant-scoped: the record's subcontractor must belong to the caller's company.
-router.patch("/subcontractors/:subcontractorId/insurance/:recordId", authenticate, async (req, res) => {
+router.patch("/subcontractors/:subcontractorId/insurance/:recordId", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     const sub = await db.select({ id: subcontractorsTable.id }).from(subcontractorsTable)
       .where(and(eq(subcontractorsTable.id, req.params.subcontractorId), eq(subcontractorsTable.companyId, req.user!.companyId)))

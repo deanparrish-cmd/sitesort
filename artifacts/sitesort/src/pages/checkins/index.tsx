@@ -48,6 +48,7 @@ export default function CheckinsPage() {
   const [shareItem, setShareItem] = useState<{ id: string; name: string; fileUrl: string; projectId: string } | null>(null);
 
   const caps = useCapabilities();
+  // Company-wide check-ins (names, photos, GPS) are admin / PM only; the API refuses everyone else.
   const load = () =>
     fetch("/api/checkins", { headers: authHeaders() })
       .then(r => r.ok ? r.json() : [])
@@ -84,6 +85,18 @@ export default function CheckinsPage() {
   const todayCount = checkins.filter(c => siteDayKey(c.checkedInAt, c.siteTimeZone) === siteDayKey(new Date(), c.siteTimeZone)).length;
   const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
   const weekCount = checkins.filter(c => new Date(c.checkedInAt).getTime() >= weekAgo).length;
+
+  if (!caps.isLoading && !caps.isManager) {
+    return (
+      <SidebarLayout>
+        <PageHeader className="mb-6" icon={<ClipboardCheck className="w-6 h-6 text-primary" />} title="Site Check-Ins" />
+        <Card className="p-12 text-center border-dashed border-2" data-testid="text-checkins-restricted">
+          <h3 className="text-lg font-bold">Not available</h3>
+          <p className="text-muted-foreground">Check-ins across all projects are only available to admins and project managers.</p>
+        </Card>
+      </SidebarLayout>
+    );
+  }
 
   return (
     <SidebarLayout>

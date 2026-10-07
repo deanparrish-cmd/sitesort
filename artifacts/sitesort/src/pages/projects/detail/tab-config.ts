@@ -18,9 +18,11 @@ export function buildManagementTabs(caps: Caps, openIssueCount: number): TabDef[
   ];
 }
 
-export function buildActivityTabs(caps: Caps, checkinCount: number, isProjectApprover: boolean): TabDef[] {
+// Check-ins are personal data (names, photos, GPS): the tab is only for the
+// project's approvers and its site manager, matching what the API allows.
+export function buildActivityTabs(caps: Caps, checkinCount: number, isProjectApprover: boolean, canSeeCheckins = true): TabDef[] {
   return [
-    { value: "checkins", label: `Check-Ins${checkinCount > 0 ? ` (${checkinCount})` : ""}` },
+    ...(canSeeCheckins ? [{ value: "checkins", label: `Check-Ins${checkinCount > 0 ? ` (${checkinCount})` : ""}` }] : []),
     ...(caps.isInternal ? [{ value: "reports", label: "Daily Reports" }] : []),
     // Team Portal (member document review etc.) is available to anyone with
     // project-approver authority, not just a company-wide manager — see
@@ -29,13 +31,13 @@ export function buildActivityTabs(caps: Caps, checkinCount: number, isProjectApp
   ];
 }
 
-export function buildProjectTabs(caps: Caps, openIssueCount: number, checkinCount: number, isProjectApprover: boolean): TabDef[] {
+export function buildProjectTabs(caps: Caps, openIssueCount: number, checkinCount: number, isProjectApprover: boolean, canSeeCheckins = true): TabDef[] {
   const order = [
     "overview", "progress", "documents", "permits", "plant", "reports",
     "team", "teamportal", "qr", "checkins", "issues", "closeout",
   ];
   return [
     ...buildManagementTabs(caps, openIssueCount),
-    ...buildActivityTabs(caps, checkinCount, isProjectApprover),
+    ...buildActivityTabs(caps, checkinCount, isProjectApprover, canSeeCheckins),
   ].sort((a, b) => order.indexOf(a.value) - order.indexOf(b.value));
 }

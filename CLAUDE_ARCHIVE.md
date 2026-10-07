@@ -1113,3 +1113,11 @@ Removed `upcomingEvents` from `lib/site-board.ts`, OpenAPI `PortalSiteBoard`, bo
 103. **QR site sign-out + live on-site register** — one `site_checkins` row per in/out cycle (`checked_out_at/by`, `checkout_note/method`); public `GET /site/:token/status` + ... *(full text in CLAUDE_ARCHIVE.md)*
 104. **Photos inside a daily site report** — `photos.daily_report_date`; `GET/POST /projects/:id/daily-reports/:date/photos`; `DailyReportPhotos` in the report dialog; ... *(full text in CLAUDE_ARCHIVE.md)*
 105. **Portal report photos + public on-site count** — `DailyReportPhotos`/`FileDropZone` reused in the portal (today's report editable per the same lock/submitted/privacy ... *(full text in CLAUDE_ARCHIVE.md)*
+
+
+## 2026-10-07: full text of #106 to #110 moved from CLAUDE.md
+106. **QR sign-in/out: remembered device, name lookup, near-match, company autocomplete** — `POST /site/:token/checkin` returns a signed per-project `deviceToken` (JWT, 180d, ... *(full text in CLAUDE_ARCHIVE.md)*
+107. **Permits-tab "N overdue" pill now deep-links** (closes the standing dead-badge gap) — many overdue permits: filtered list w/ "Show all" banner (folders auto-open); ... *(full text in CLAUDE_ARCHIVE.md)*
+108. **Check-in notifications open a detail; identity-linked check-ins; check-in near-match; sign-outs in the feed** — `CheckinNotificationDialog` (dashboard feed + ... *(full text in CLAUDE_ARCHIVE.md)*
+109. **Site check-in QR / URL restricted to Admin + Project Manager (enforced server-side)** — `GET/POST/DELETE /projects/:id/qr-codes` now 403 for everyone but company ... *(full text in CLAUDE_ARCHIVE.md)*
+110. **Public suggestions show initials only** — 'Did you mean' at check-in AND sign-out now show first name + surname initial + company (`publicLabel` in qr.ts, e.g. "Amy P, ... *(full text in CLAUDE_ARCHIVE.md)*

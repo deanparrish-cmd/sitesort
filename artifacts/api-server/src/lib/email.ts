@@ -17,7 +17,18 @@ function resend() {
 
 // Centralised sender so every transactional email shares the same
 // "from" name and a SiteSort reply-to address. `from` overrides the default.
+// Never send to reserved, undeliverable test domains (RFC 2606: .test,
+// .invalid, .example, example.com/.net/.org). Automated tests create users on
+// those addresses; this keeps them from reaching the live mail provider.
+const RESERVED_TEST_DOMAIN = /@(?:[^@\s]+\.)?(?:[^@.\s]+\.(?:test|invalid|example|localhost|local)|example\.(?:com|net|org))$/i;
+export function isReservedTestAddress(to: string): boolean {
+  return RESERVED_TEST_DOMAIN.test(to.trim());
+}
+
 function send(opts: { to: string; subject: string; html: string; text: string; from?: string }) {
+  if (isReservedTestAddress(opts.to)) {
+    return Promise.resolve({ data: { id: "skipped-reserved-test-domain" }, error: null });
+  }
   return resend().emails.send({
     from: opts.from ?? FROM,
     replyTo: REPLY_TO,

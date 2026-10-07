@@ -543,6 +543,8 @@ export function useProjectDetailState() {
   // and still gates non-project-scoped things (e.g. creating new projects).
   const myMembership = (members ?? []).find((m: any) => m.userId === me?.id);
   const isProjectApprover = caps.isManager || !!myMembership?.isProjectManager;
+  // Who may see check-ins (names, photos, GPS): approvers and the site manager.
+  const canSeeCheckins = isProjectApprover || (!!me?.id && (project as any)?.siteManagerId === me.id);
   type SignOffDoc = { id: string; name: string; type: string; pinRequired?: boolean };
   const [signOffDoc, setSignOffDoc] = useState<SignOffDoc | null>(null);
   const [signOffPin, setSignOffPin] = useState("");
@@ -1548,6 +1550,7 @@ tr:last-child td{border-bottom:none}
     me,
     caps,
     isProjectApprover,
+    canSeeCheckins,
     hasPin,
     signOffDoc,
     setSignOffDoc,

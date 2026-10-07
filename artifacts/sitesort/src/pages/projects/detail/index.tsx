@@ -54,6 +54,7 @@ function ProjectDetailInner() {
     openTab,
     caps,
     isProjectApprover,
+    canSeeCheckins,
     closeout,
     openEdit,
     generateReport,
@@ -112,7 +113,7 @@ function ProjectDetailInner() {
 
       <Tabs value={activeTab} onValueChange={t => openTab(t)}>
         <TabsList className="mb-6 w-full min-w-0 h-auto grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 items-stretch gap-1.5 bg-muted p-1.5 rounded-xl">
-          {buildProjectTabs(caps, photos.filter(p => (p.category === "snag" || p.category === "safety_concern") && (!p.status || p.status === "open")).length, checkins.length, isProjectApprover).map(tab => (
+          {buildProjectTabs(caps, photos.filter(p => (p.category === "snag" || p.category === "safety_concern") && (!p.status || p.status === "open")).length, checkins.length, isProjectApprover, canSeeCheckins).map(tab => (
             <TabsTrigger key={tab.value} value={tab.value} className="min-w-0 justify-center rounded-lg py-2 px-2 text-sm whitespace-normal [overflow-wrap:anywhere]">
               {tab.label}
             </TabsTrigger>

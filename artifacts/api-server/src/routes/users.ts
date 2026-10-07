@@ -8,6 +8,7 @@ import { authenticate, bustMembershipCache } from "../middlewares/auth";
 import { sendInvitationEmail } from "../lib/email";
 import { addMembership, membershipRole } from "../lib/memberships";
 import { parseFullPersonName } from "../lib/name-validation";
+import { allow, COMPANY_MANAGER, COMPANY_ROLES, self, bustRoleCache } from "../lib/authz";
 
 const router: IRouter = Router();
 
@@ -37,11 +38,22 @@ router.get("/users", authenticate, async (req, res) => {
   }
 });
 
-router.post("/users", authenticate, async (req, res) => {
+// Adding someone to the company: admin / PM only, and only an ADMIN can make
+// someone an admin (before #116 any logged-in user, even a site worker, could
+// create an admin account by calling this directly).
+router.post("/users", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     const { email, role, phone, roleTitle } = req.body;
     if (!email || !role) {
       res.status(400).json({ error: "validation_error", message: "email, name, role required" });
+      return;
+    }
+    if (!(COMPANY_ROLES as readonly string[]).includes(role)) {
+      res.status(400).json({ error: "validation_error", message: "role must be admin, project_manager, site_worker or subcontractor" });
+      return;
+    }
+    if (role === "admin" && res.locals.role !== "admin") {
+      res.status(403).json({ error: "forbidden", message: "Only an admin can add another admin." });
       return;
     }
     const nameParsed = parseFullPersonName(req.body.name);
@@ -109,12 +121,14 @@ router.post("/users", authenticate, async (req, res) => {
   }
 });
 
-router.patch("/users/:userId", authenticate, async (req, res) => {
+router.patch("/users/:userId", authenticate, allow(COMPANY_MANAGER, self()), async (req, res) => {
   try {
     // Manager-gated (self-edits of name/phone allowed): editing another member's
     // details — and role changes in particular — is an admin/PM action. The UI
     // only shows the controls to managers, but the API must enforce it too.
-    const isManager = ["admin", "project_manager"].includes(req.user!.role);
+    // The caller's role comes from the DB (allow() puts it in res.locals.role).
+    const actorRole = res.locals.role as string;
+    const isManager = ["admin", "project_manager"].includes(actorRole);
     const isSelf = req.user!.id === req.params.userId;
     if (!isManager && !isSelf) {
       res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can edit other members." });
@@ -138,9 +152,25 @@ router.patch("/users/:userId", authenticate, async (req, res) => {
     if (currentRole === null) { res.status(404).json({ error: "not_found", message: "User not found" }); return; }
 
     // Role is per-company → update the membership for THIS company.
-    if (role !== undefined) {
+    if (role !== undefined && role !== currentRole) {
+      if (!(COMPANY_ROLES as readonly string[]).includes(role)) {
+        res.status(400).json({ error: "validation_error", message: "role must be admin, project_manager, site_worker or subcontractor" });
+        return;
+      }
+      // Granting admin, or changing an admin's role, is admin-only: a PM can't
+      // promote anyone (themselves included) to admin, or demote an admin.
+      if ((role === "admin" || currentRole === "admin") && actorRole !== "admin") {
+        res.status(403).json({ error: "forbidden", message: "Only an admin can grant or change the admin role." });
+        return;
+      }
+      if (currentRole === "admin") {
+        const admins = await db.select({ id: companyMembersTable.userId }).from(companyMembersTable)
+          .where(and(eq(companyMembersTable.companyId, req.user!.companyId), eq(companyMembersTable.role, "admin")));
+        if (admins.length <= 1) { res.status(400).json({ error: "validation_error", message: "You can't remove the only admin." }); return; }
+      }
       await db.update(companyMembersTable).set({ role })
         .where(and(eq(companyMembersTable.userId, req.params.userId), eq(companyMembersTable.companyId, req.user!.companyId)));
+      bustRoleCache(req.params.userId, req.user!.companyId);
     }
     // Name/phone are identity (global) → only editable from the user's HOME company,
     // so company B can't rename a member whose home is company A.
@@ -164,18 +194,18 @@ router.patch("/users/:userId", authenticate, async (req, res) => {
 // Remove a team member from THIS company (deletes their membership + project
 // memberships here — their login/account survives, and other companies are
 // untouched). Manager-only; you can't remove yourself or the last admin.
-router.delete("/users/:userId", authenticate, async (req, res) => {
+router.delete("/users/:userId", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
-    if (!["admin", "project_manager"].includes(req.user!.role)) {
-      res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can remove team members." });
-      return;
-    }
     if (req.params.userId === req.user!.id) {
       res.status(400).json({ error: "validation_error", message: "You can't remove yourself from the team." });
       return;
     }
     const targetRole = await membershipRole(req.params.userId, req.user!.companyId);
     if (targetRole === null) { res.status(404).json({ error: "not_found", message: "User not found" }); return; }
+    if (targetRole === "admin" && res.locals.role !== "admin") {
+      res.status(403).json({ error: "forbidden", message: "Only an admin can remove an admin." });
+      return;
+    }
     if (targetRole === "admin") {
       const admins = await db.select({ id: companyMembersTable.userId }).from(companyMembersTable)
         .where(and(eq(companyMembersTable.companyId, req.user!.companyId), eq(companyMembersTable.role, "admin")));
@@ -201,6 +231,7 @@ router.delete("/users/:userId", authenticate, async (req, res) => {
     // Their existing dashboard tokens for THIS company die on the next request
     // (authenticate re-checks the membership; bust the cache so it's instant).
     bustMembershipCache(req.params.userId, req.user!.companyId);
+    bustRoleCache(req.params.userId, req.user!.companyId);
 
     res.json({ ok: true });
   } catch (err) {

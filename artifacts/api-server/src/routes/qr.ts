@@ -16,6 +16,7 @@ import { getBucket, objectKey } from "../lib/gcs";
 import { siteDateStr, siteTime, siteTzLabel, closeDueAfter, safeTz, DEFAULT_SITE_CLOSE } from "../lib/site-clock";
 import { isProjectApprover } from "../lib/project-authority";
 import { logActivity } from "../lib/activity";
+import { allow, COMPANY_MANAGER, ANY_MEMBER, projectApprover, projectSiteManager } from "../lib/authz";
 
 const checkinUpload = multer({
   storage: multer.memoryStorage(),
@@ -211,7 +212,7 @@ function requireQrManager(req: Request, res: Response, next: import("express").N
 }
 
 // List QR codes for a project
-router.get("/projects/:projectId/qr-codes", authenticate, requireQrManager, async (req, res) => {
+router.get("/projects/:projectId/qr-codes", authenticate, allow(COMPANY_MANAGER), requireQrManager, async (req, res) => {
   try {
     const project = await db.select({ id: projectsTable.id }).from(projectsTable)
       .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
@@ -238,7 +239,7 @@ router.get("/projects/:projectId/qr-codes", authenticate, requireQrManager, asyn
 });
 
 // Generate QR codes for a project
-router.post("/projects/:projectId/qr-codes", authenticate, requireQrManager, async (req, res) => {
+router.post("/projects/:projectId/qr-codes", authenticate, allow(COMPANY_MANAGER), requireQrManager, async (req, res) => {
   try {
     const { categories } = req.body;
     if (!categories || !Array.isArray(categories)) {
@@ -292,7 +293,7 @@ router.post("/projects/:projectId/qr-codes", authenticate, requireQrManager, asy
 });
 
 // Delete a QR code
-router.delete("/projects/:projectId/qr-codes/:id", authenticate, requireQrManager, async (req, res) => {
+router.delete("/projects/:projectId/qr-codes/:id", authenticate, allow(COMPANY_MANAGER), requireQrManager, async (req, res) => {
   try {
     const project = await db.select().from(projectsTable)
       .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
@@ -846,7 +847,7 @@ router.post("/site/:token/checkout", async (req: Request, res: Response) => {
 
 // Authenticated: a manager signs someone out on their behalf (forgot to sign
 // out), with a required note. Admin / project manager / project approver only.
-router.post("/projects/:projectId/checkins/:id/sign-out", authenticate, async (req: Request, res: Response) => {
+router.post("/projects/:projectId/checkins/:id/sign-out", authenticate, allow(projectApprover()), async (req: Request, res: Response) => {
   try {
     const project = await db.select({ id: projectsTable.id, companyId: projectsTable.companyId }).from(projectsTable)
       .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId))).limit(1);
@@ -903,7 +904,8 @@ router.get("/site/:token/register-match", async (req: Request, res: Response) =>
 // Authenticated: the detail behind a check-in / check-in-blocked / sign-out
 // notification (opened from the activity feed). Scoped to the notification's
 // owner and their company.
-router.get("/notifications/:notificationId/checkin", authenticate, async (req: Request, res: Response) => {
+// Scoped to the notification's own recipient inside the handler.
+router.get("/notifications/:notificationId/checkin", authenticate, allow(ANY_MEMBER), async (req: Request, res: Response) => {
   try {
     const n = (await db.select().from(notificationsTable).where(and(eq(notificationsTable.id, req.params.notificationId), eq(notificationsTable.userId, req.user!.id))).limit(1))[0];
     if (!n || !["check_in", "check_in_blocked", "check_out", "check_in_held", "check_in_auto_closed"].includes(n.type)) { res.status(404).json({ error: "not_found", message: "Not found" }); return; }
@@ -1125,7 +1127,7 @@ router.get("/site/:token/hold", async (req: Request, res: Response) => {
 // Authenticated: an admin / PM / project approver decides a held check-in.
 // Approve needs a reason; both are recorded (who, when, why) on the row and in
 // the activity log. Only a PENDING hold can be decided.
-router.post("/projects/:projectId/checkins/:id/hold-decision", authenticate, async (req: Request, res: Response) => {
+router.post("/projects/:projectId/checkins/:id/hold-decision", authenticate, allow(projectApprover()), async (req: Request, res: Response) => {
   try {
     const project = await db.select({ id: projectsTable.id, companyId: projectsTable.companyId }).from(projectsTable)
       .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId))).limit(1);
@@ -1152,8 +1154,9 @@ router.post("/projects/:projectId/checkins/:id/hold-decision", authenticate, asy
   }
 });
 
-// Authenticated — list all check-ins across all company projects
-router.get("/checkins", authenticate, async (req: Request, res: Response) => {
+// Check-ins are personal data (name, company, photo, GPS). Company-wide list:
+// admin / PM only. Before #116 any company login could read every check-in.
+router.get("/checkins", authenticate, allow(COMPANY_MANAGER), async (req: Request, res: Response) => {
   try {
     const rows = await db
       .select({
@@ -1189,8 +1192,9 @@ router.get("/checkins", authenticate, async (req: Request, res: Response) => {
   }
 });
 
-// Authenticated — list all check-ins for a project
-router.get("/projects/:projectId/checkins", authenticate, async (req: Request, res: Response) => {
+// One project's check-ins: that project's approvers (company admin / PM,
+// per-project PM cover) and its designated site manager only.
+router.get("/projects/:projectId/checkins", authenticate, allow(projectApprover(), projectSiteManager()), async (req: Request, res: Response) => {
   try {
     const project = await db.select({ id: projectsTable.id }).from(projectsTable)
       .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
