@@ -3804,6 +3804,15 @@ components:
             siteManagerName:
               type: string
               nullable: true
+            siteTimeZone:
+              type: string
+              description: IANA timezone of the site clock (check-in times, "today", the close time). Default Europe/London.
+            siteTzLabel:
+              type: string
+              description: Human label for the site clock, e.g. "UK time".
+            siteCloseTime:
+              type: string
+              description: Daily close ("HH:MM", site time). Anyone not signed out by then is closed automatically (not signed out).
           required: [recentActivity]
 
     CreateProjectRequest:
@@ -3838,6 +3847,12 @@ components:
           type: string
           nullable: true
           description: Must be the userId of a current member of this project. Null unsets it.
+        siteTimeZone:
+          type: string
+          description: IANA timezone, e.g. Europe/London. Admin / project manager only.
+        siteCloseTime:
+          type: string
+          description: Daily close time "HH:MM" on the site clock. Admin / project manager only.
 
     ActivityItem:
       type: object

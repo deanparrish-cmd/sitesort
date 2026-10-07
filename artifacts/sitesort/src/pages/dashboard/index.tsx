@@ -65,6 +65,8 @@ function notifIcon(type: string) {
     case "check_in":         return <UserCheck className="w-4 h-4 text-green-600" />;
     case "check_out":        return <LogOut className="w-4 h-4 text-muted-foreground" />;
     case "check_in_blocked": return <AlertTriangle className="w-4 h-4 text-red-500" />;
+    case "check_in_held":    return <AlertTriangle className="w-4 h-4 text-amber-600" />;
+    case "check_in_auto_closed": return <AlertTriangle className="w-4 h-4 text-red-500" />;
     case "trial_ending":   return <CreditCard className="w-4 h-4 text-orange-500" />;
     case "payment_failed": return <CreditCard className="w-4 h-4 text-red-500" />;
     default:               return <Bell className="w-4 h-4 text-muted-foreground" />;

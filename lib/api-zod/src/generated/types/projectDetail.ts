@@ -12,4 +12,10 @@ export type ProjectDetail = Project & {
   recentActivity: ActivityItem[];
   siteManagerId?: string | null;
   siteManagerName?: string | null;
+  /** IANA timezone of the site clock (check-in times, "today", the close time). Default Europe/London. */
+  siteTimeZone?: string;
+  /** Human label for the site clock, e.g. "UK time". */
+  siteTzLabel?: string;
+  /** Daily close ("HH:MM", site time). Anyone not signed out by then is closed automatically (not signed out). */
+  siteCloseTime?: string;
 };

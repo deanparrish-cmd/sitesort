@@ -13,7 +13,7 @@ import multer from "multer";
 import path from "path";
 import { randomUUID } from "crypto";
 import { getBucket, objectKey } from "../lib/gcs";
-import { londonDateStr } from "../lib/daily-reports";
+import { siteDateStr, siteTime, siteTzLabel, closeDueAfter, safeTz, DEFAULT_SITE_CLOSE } from "../lib/site-clock";
 import { isProjectApprover } from "../lib/project-authority";
 import { logActivity } from "../lib/activity";
 
@@ -98,7 +98,8 @@ async function notifySuccessfulCheckin(
   try {
     const rec = await checkinRecipients(projectId);
     if (!rec) return;
-    const timeStr = checkedInAt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
+    const clock = await siteClock(projectId);
+    const timeStr = `${siteTime(checkedInAt, clock.tz)} ${siteTzLabel(clock.tz, checkedInAt)}`;
     for (const userId of rec.userIds) {
       await db.insert(notificationsTable).values({
         id: generateId(),
@@ -128,7 +129,8 @@ async function notifySignedOut(
   try {
     const rec = await checkinRecipients(projectId);
     if (!rec) return;
-    const timeStr = at.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
+    const clock = await siteClock(projectId);
+    const timeStr = `${siteTime(at, clock.tz)} ${siteTzLabel(clock.tz, at)}`;
     const who = `${row.workerName}${row.companyName ? ` (${row.companyName})` : ""}`;
     for (const userId of rec.userIds) {
       await db.insert(notificationsTable).values({
@@ -155,6 +157,44 @@ const CATEGORY_LABELS: Record<string, string> = {
   drawings: "Current Drawings",
   general: "General Documents",
 };
+
+// Insurance hold (#114): tell the managers someone is waiting at the gate and
+// needs an approve / refuse decision. Points at the held row itself.
+async function notifyHeldCheckin(projectId: string, row: { id: string; workerName: string; companyName: string | null }, holdReason: string): Promise<void> {
+  try {
+    const rec = await checkinRecipients(projectId);
+    if (!rec) return;
+    const why = holdReason === "insurance_expired" ? "their insurance has expired" : "there is no insurance on file for them";
+    for (const userId of rec.userIds) {
+      await db.insert(notificationsTable).values({
+        id: generateId(),
+        userId,
+        type: "check_in_held",
+        title: `Waiting at the gate: ${rec.projectName}`,
+        message: `${row.workerName}${row.companyName ? ` (${row.companyName})` : ""} is waiting at the gate because ${why}. Approve or refuse their check-in.`,
+        relatedEntityId: row.id,
+        relatedEntityType: "site_checkin",
+        metadata: { projectId, workerName: row.workerName, companyName: row.companyName, reason: holdReason },
+        read: false,
+      });
+    }
+  } catch {
+    /* alerting is best-effort */
+  }
+}
+
+// The held worker's page polls its own hold with this signed token (names the
+// row only), so a held row can't be looked up by anyone else.
+function signHoldToken(projectId: string, checkinId: string): string {
+  return jwt.sign({ kind: "site-hold", projectId, checkinId }, process.env.JWT_SECRET as string, { expiresIn: "24h" });
+}
+function readHoldToken(raw: unknown, projectId: string): string | null {
+  if (typeof raw !== "string" || !raw) return null;
+  try {
+    const p = jwt.verify(raw, process.env.JWT_SECRET as string) as any;
+    return p?.kind === "site-hold" && p.projectId === projectId && typeof p.checkinId === "string" ? p.checkinId : null;
+  } catch { return null; }
+}
 
 // The site check-in QR code and its /site/<token> URL are the only thing that
 // lets someone check in, so they must never reach anyone who could pass them
@@ -336,31 +376,69 @@ router.get("/site/:token", async (req, res) => {
       res.status(404).json({ error: "not_found", message: "Project not found" });
       return;
     }
-    res.json({ ...payload, onSiteCount: await countOnSite(qr.projectId), generatedAt: new Date().toISOString() });
+    const clock = await siteClock(qr.projectId);
+    res.json({ ...payload, onSiteCount: await countOnSite(qr.projectId), siteTimeZone: clock.tz, siteTzLabel: siteTzLabel(clock.tz), generatedAt: new Date().toISOString() });
   } catch (err) {
     res.status(500).json({ error: "server_error", message: "Failed to load site board" });
   }
 });
 
-// Sign-out state for a check-in row. One row = one in/out cycle. `onSite` means
-// signed in and not signed out; `notSignedOut` flags an open row from a
-// PREVIOUS (London) day. Those are surfaced for a manager to close manually,
-// never auto-closed, so the emergency roll-call never silently drops anyone.
-function checkinState(c: { checkedInAt: Date; checkedOutAt: Date | null; checkoutMethod?: string | null }) {
-  // 'legacy' = recorded before sign-out existed (no way to sign out then), so
-  // it's history, not someone still on site.
-  const open = !c.checkedOutAt && c.checkoutMethod !== "legacy";
+// The site clock for one or many projects (timezone + daily close time).
+export type SiteClock = { tz: string; close: string };
+async function siteClocks(projectIds: string[]): Promise<Map<string, SiteClock>> {
+  const ids = [...new Set(projectIds)];
+  const rows = ids.length
+    ? await db.select({ id: projectsTable.id, tz: projectsTable.siteTimeZone, close: projectsTable.siteCloseTime }).from(projectsTable).where(inArray(projectsTable.id, ids))
+    : [];
+  return new Map(rows.map(r => [r.id, { tz: safeTz(r.tz), close: r.close || DEFAULT_SITE_CLOSE }]));
+}
+async function siteClock(projectId: string): Promise<SiteClock> {
+  return (await siteClocks([projectId])).get(projectId) ?? { tz: safeTz(null), close: DEFAULT_SITE_CLOSE };
+}
+
+type StateRow = {
+  checkedInAt: Date; checkedOutAt: Date | null; checkoutMethod?: string | null;
+  holdStatus?: string | null; autoClosedAt?: Date | null;
+};
+// Where a check-in row stands, on its site's clock. One row = one in/out cycle.
+//   held              waiting at the gate for an admin / PM insurance decision
+//   on_site           signed in, not signed out, site close time not yet passed
+//   auto_closed_today the close time passed without a sign-out, today (site
+//                     day): NOT counted, but still on today's roll-call, marked
+//   auto_closed       the same, from an earlier day: history only
+//   signed_out        genuinely signed out (self or by a manager)
+//   none              refused / lapsed hold, or a pre-sign-out legacy row
+// A close time that has passed counts as closed even before the end-of-day
+// job writes autoClosedAt, so the count is right between job runs.
+export function checkinState(c: StateRow, clock: SiteClock, now: Date = new Date()) {
+  const held = c.holdStatus === "pending";
+  const excluded = c.holdStatus === "refused" || c.holdStatus === "lapsed" || (!c.checkedOutAt && c.checkoutMethod === "legacy");
+  const due = closeDueAfter(c.checkedInAt, clock.tz, clock.close);
+  const autoAt = c.autoClosedAt ?? (!c.checkedOutAt && !held && !excluded && now.getTime() >= due.getTime() ? due : null);
+  const today = siteDateStr(now, clock.tz);
+  let presence: "held" | "on_site" | "auto_closed_today" | "auto_closed" | "signed_out" | "none";
+  if (held) presence = "held";
+  else if (excluded) presence = "none";
+  else if (c.checkedOutAt) presence = "signed_out";
+  else if (autoAt) presence = (siteDateStr(c.checkedInAt, clock.tz) === today || siteDateStr(autoAt, clock.tz) === today) ? "auto_closed_today" : "auto_closed";
+  else presence = "on_site";
   return {
-    onSite: open,
-    notSignedOut: open && londonDateStr(c.checkedInAt) < londonDateStr(new Date()),
+    presence,
+    onSite: presence === "on_site",
+    autoClosed: !!autoAt && !c.checkedOutAt,
+    autoClosedAt: autoAt ? autoAt.toISOString() : null,
+    notSignedOut: presence === "auto_closed_today" || presence === "auto_closed",
+    siteTimeZone: clock.tz,
+    siteTzLabel: siteTzLabel(clock.tz, c.checkedInAt),
   };
 }
-function serializeCheckin<T extends { checkedInAt: Date; checkedOutAt: Date | null; checkoutMethod?: string | null }>(c: T) {
+function serializeCheckin<T extends StateRow & { holdDecidedAt?: Date | null }>(c: T, clock: SiteClock) {
   return {
     ...c,
     checkedInAt: c.checkedInAt.toISOString(),
     checkedOutAt: c.checkedOutAt ? c.checkedOutAt.toISOString() : null,
-    ...checkinState(c),
+    holdDecidedAt: c.holdDecidedAt ? c.holdDecidedAt.toISOString() : null,
+    ...checkinState(c, clock),
   };
 }
 // The person's currently-open cycles on a project (name + company, case-insensitive),
@@ -373,16 +451,19 @@ async function openCheckinsFor(projectId: string, workerName: string, companyNam
   return open.filter(r => (key && r.personKey === key) || (normText(r.workerName) === n && normText(r.companyName ?? "") === c));
 }
 
-// Count-only view of the "Currently on site" register (signed in, not signed out;
-// legacy rows excluded) for the PUBLIC board. Deliberately no names.
+// Count-only view of the "Currently on site" register for the PUBLIC board.
+// Distinct PEOPLE who are on_site right now (not held, not past the close
+// time); one identity (or, for older rows, one name + company) counts once.
 async function countOnSite(projectId: string): Promise<number> {
-  // Distinct PEOPLE: one identity (or, for older rows, one name+company) counts once.
-  const [row] = await db.select({ n: sql<number>`count(distinct coalesce(${siteCheckinsTable.personKey}, lower(trim(${siteCheckinsTable.workerName})) || '|' || lower(trim(coalesce(${siteCheckinsTable.companyName}, '')))))::int` }).from(siteCheckinsTable).where(and(
+  const clock = await siteClock(projectId);
+  const rows = await db.select().from(siteCheckinsTable).where(and(
     eq(siteCheckinsTable.projectId, projectId),
     isNull(siteCheckinsTable.checkedOutAt),
-    sql`coalesce(${siteCheckinsTable.checkoutMethod}, '') <> 'legacy'`,
+    isNull(siteCheckinsTable.autoClosedAt),
   ));
-  return row?.n ?? 0;
+  const keys = new Set(rows.filter(r => checkinState(r, clock).onSite)
+    .map(r => r.personKey ?? `${normText(r.workerName)}|${normText(r.companyName ?? "")}`));
+  return keys.size;
 }
 
 router.get("/site/:token/on-site-count", async (req: Request, res: Response) => {
@@ -427,11 +508,18 @@ function firstName(full: string): string {
 }
 
 // ---- Registered people for a project (who may check in) ---------------------
-// Three record kinds can register someone: an in-house user (matched on name
-// only), a subcontractor contact (name + company), a team person (name, plus
-// company when they belong to a subcontractor). `key` is the identity used to
-// group check-ins, so a contact card and its primary-contact person (which can
-// carry slightly different names) count as ONE human.
+// Three record kinds can register someone: an in-house user, a subcontractor
+// contact card, and a team person. `key` is the identity used to group
+// check-ins, so a contact card and its primary-contact person (which can carry
+// slightly different names) count as ONE human.
+//
+// INSURANCE (#114): every record that belongs to a subcontractor card carries
+// that card's id in `insuranceSubId`, and the check-in gate checks it. That
+// includes a USER account linked to a card (a subcontractor who joined the
+// Team Portal): before #114 those matched as plain users on name alone and
+// skipped the insurance check entirely. Only genuine in-house staff (no card)
+// have no insuranceSubId, and they must give THIS company's name to match, so
+// nobody from a subcontractor can pass as staff by name alone.
 type Registered = {
   key: string;
   kind: "user" | "contact" | "person";
@@ -443,49 +531,82 @@ type Registered = {
 
 async function loadRegistered(projectId: string): Promise<Registered[]> {
   const out: Registered[] = [];
-  const users = await db.select({ id: usersTable.id, name: usersTable.name })
-    .from(projectMembersTable)
-    .innerJoin(usersTable, eq(usersTable.id, projectMembersTable.userId))
-    .where(eq(projectMembersTable.projectId, projectId));
-  for (const u of users) out.push({ key: `user:${u.id}`, kind: "user", names: [u.name], company: null, companyRequired: false, insuranceSubId: null });
+  const own = (await db.select({ name: companiesTable.name }).from(projectsTable)
+    .innerJoin(companiesTable, eq(companiesTable.id, projectsTable.companyId))
+    .where(eq(projectsTable.id, projectId)).limit(1))[0]?.name ?? null;
 
+  // Every card on the project, with its primary person, keyed once.
   const contacts = await db.select({ id: subcontractorsTable.id, contactName: subcontractorsTable.contactName, companyName: subcontractorsTable.companyName })
     .from(projectMembersTable)
     .innerJoin(subcontractorsTable, eq(subcontractorsTable.id, projectMembersTable.subcontractorId))
     .where(eq(projectMembersTable.projectId, projectId));
-  const subIds = [...new Set(contacts.map(c => c.id))];
+
+  // People on the project (and the card each belongs to, if any).
+  const people = await db.select({ id: peopleTable.id, name: peopleTable.name, subId: peopleTable.subcontractorId, subCompany: subcontractorsTable.companyName })
+    .from(projectMembersTable)
+    .innerJoin(peopleTable, eq(peopleTable.id, projectMembersTable.personId))
+    .leftJoin(subcontractorsTable, eq(subcontractorsTable.id, peopleTable.subcontractorId))
+    .where(and(eq(projectMembersTable.projectId, projectId), isNull(peopleTable.archivedAt)));
+
+  // Users on the project, with whatever card their membership links to: the
+  // membership row's own card, or the card of the person it points at.
+  const users = await db.select({
+    id: usersTable.id, name: usersTable.name,
+    personId: projectMembersTable.personId, personName: peopleTable.name,
+    subId: sql<string | null>`coalesce(${projectMembersTable.subcontractorId}, ${peopleTable.subcontractorId})`,
+  })
+    .from(projectMembersTable)
+    .innerJoin(usersTable, eq(usersTable.id, projectMembersTable.userId))
+    .leftJoin(peopleTable, eq(peopleTable.id, projectMembersTable.personId))
+    .where(eq(projectMembersTable.projectId, projectId));
+
+  const userSubIds = users.map(u => u.subId).filter((v): v is string => !!v);
+  const subIds = [...new Set([...contacts.map(c => c.id), ...userSubIds])];
+  const subs = subIds.length
+    ? await db.select({ id: subcontractorsTable.id, companyName: subcontractorsTable.companyName }).from(subcontractorsTable).where(inArray(subcontractorsTable.id, subIds))
+    : [];
+  const subCompany = new Map(subs.map(x => [x.id, x.companyName]));
   const primaries = subIds.length
     ? await db.select({ id: peopleTable.id, subId: peopleTable.subcontractorId, name: peopleTable.name })
         .from(peopleTable)
         .where(and(inArray(peopleTable.subcontractorId, subIds), eq(peopleTable.isPrimaryContact, true), isNull(peopleTable.archivedAt)))
     : [];
   const primaryBySub = new Map(primaries.map(p => [p.subId as string, p]));
+  const cardKey = (subId: string) => { const prim = primaryBySub.get(subId); return prim ? `person:${prim.id}` : `sub:${subId}`; };
+
+  for (const u of users) {
+    const names = [...new Set([u.name, u.personName].filter((n): n is string => !!n))];
+    if (u.subId) {
+      // A subcontractor's own login: same identity, company and insurance as their card.
+      out.push({ key: u.personId ? `person:${u.personId}` : cardKey(u.subId), kind: "user", names, company: subCompany.get(u.subId) ?? null, companyRequired: true, insuranceSubId: u.subId });
+    } else {
+      out.push({ key: `user:${u.id}`, kind: "user", names, company: own, companyRequired: !!own, insuranceSubId: null });
+    }
+  }
   for (const c of contacts) {
     const prim = primaryBySub.get(c.id);
     // Accept the contact card's spelling AND its linked primary person's, and
     // key both to the person so they group as one human.
-    out.push({ key: prim ? `person:${prim.id}` : `sub:${c.id}`, kind: "contact", names: [c.contactName, ...(prim ? [prim.name] : [])], company: c.companyName, companyRequired: true, insuranceSubId: c.id });
+    out.push({ key: cardKey(c.id), kind: "contact", names: [c.contactName, ...(prim ? [prim.name] : [])], company: c.companyName, companyRequired: true, insuranceSubId: c.id });
   }
-
-  const people = await db.select({ id: peopleTable.id, name: peopleTable.name, subId: peopleTable.subcontractorId, subCompany: subcontractorsTable.companyName })
-    .from(projectMembersTable)
-    .innerJoin(peopleTable, eq(peopleTable.id, projectMembersTable.personId))
-    .leftJoin(subcontractorsTable, eq(subcontractorsTable.id, peopleTable.subcontractorId))
-    .where(and(eq(projectMembersTable.projectId, projectId), isNull(peopleTable.archivedAt)));
-  for (const p of people) out.push({ key: `person:${p.id}`, kind: "person", names: [p.name], company: p.subCompany ?? null, companyRequired: !!p.subCompany, insuranceSubId: p.subId ?? null });
+  for (const p of people) {
+    if (p.subId) out.push({ key: `person:${p.id}`, kind: "person", names: [p.name], company: p.subCompany ?? null, companyRequired: true, insuranceSubId: p.subId });
+    else out.push({ key: `person:${p.id}`, kind: "person", names: [p.name], company: own, companyRequired: !!own, insuranceSubId: null });
+  }
   return out;
 }
 
-// Same rules the check-in has always used (users by name; contacts by name +
-// company; people by name, + company when they belong to a firm), whitespace-
-// and case-insensitive. Users win, then contacts, then people.
+// Name (any accepted spelling) AND company must match, whitespace- and
+// case-insensitive. If several records match, one tied to a subcontractor card
+// wins, so a match can never dodge an insurance check that another matching
+// record would have run. Otherwise users, then contacts, then people.
 function matchRegistered(records: Registered[], typedName: string, typedCompany: string): Registered | null {
   const n = normText(typedName), c = normText(typedCompany);
-  for (const kind of ["user", "contact", "person"] as const) {
-    const hit = records.find(r => r.kind === kind && r.names.some(x => normText(x) === n) && (!r.companyRequired || normText(r.company ?? "") === c));
-    if (hit) return hit;
-  }
-  return null;
+  const order = { user: 0, contact: 1, person: 2 } as const;
+  const hits = records
+    .filter(r => r.names.some(x => normText(x) === n) && (!r.companyRequired || normText(r.company ?? "") === c))
+    .sort((a, b) => Number(!b.insuranceSubId) - Number(!a.insuranceSubId) || order[a.kind] - order[b.kind]);
+  return hits[0] ?? null;
 }
 
 // Close-but-not-exact registered people, for "Did you mean...?" at check-in.
@@ -514,11 +635,18 @@ function nearRegistered(records: Registered[], typedName: string, typedCompany: 
 }
 
 type OpenRow = typeof siteCheckinsTable.$inferSelect;
+// Rows a person could still be "in" for sign-in / sign-out purposes: not
+// signed out, not a legacy row, not a pending / refused / lapsed insurance
+// hold. An automatically closed row stays here for 12 hours so the man still
+// working past the close time can sign out properly (and isn't offered a
+// second sign-in).
 async function openRowsForProject(projectId: string): Promise<OpenRow[]> {
   return db.select().from(siteCheckinsTable).where(and(
     eq(siteCheckinsTable.projectId, projectId),
     isNull(siteCheckinsTable.checkedOutAt),
     sql`coalesce(${siteCheckinsTable.checkoutMethod}, '') <> 'legacy'`,
+    sql`(${siteCheckinsTable.holdStatus} IS NULL OR ${siteCheckinsTable.holdStatus} = 'approved')`,
+    sql`(${siteCheckinsTable.autoClosedAt} IS NULL OR ${siteCheckinsTable.autoClosedAt} > now() - interval '12 hours')`,
   )).orderBy(desc(siteCheckinsTable.checkedInAt));
 }
 // Public label = first name + surname initial + company ("Amy P, Amy I Cloud").
@@ -645,17 +773,19 @@ router.get("/site/:token/companies", async (req: Request, res: Response) => {
 });
 
 // One person = one presence. Signing out closes the target row AND any other
-// still-open row for the same person from the SAME London day (duplicates from
-// earlier spelling variants), so the roll-call can't keep a ghost. Open rows
-// from a PREVIOUS day are deliberately left flagged, never auto-closed.
+// still-open row for the same person from the SAME site day (duplicates from
+// earlier spelling variants), so the roll-call can't keep a ghost.
 async function openRowsToClose(projectId: string, target: OpenRow): Promise<OpenRow[]> {
-  const day = londonDateStr(target.checkedInAt);
+  const { tz } = await siteClock(projectId);
+  const dayOf = (d: Date) => siteDateStr(d, tz);
+  const day = dayOf(target.checkedInAt);
   const t = normText(target.workerName), c = normText(target.companyName ?? "");
-  const all = await openRowsForProject(projectId);
-  return all.filter(r => r.id === target.id || (
-    londonDateStr(r.checkedInAt) === day &&
-    ((target.personKey && r.personKey === target.personKey) || (normText(r.workerName) === t && normText(r.companyName ?? "") === c))
-  ));
+  // The target itself always (it may be an older automatically closed row that
+  // a manager is confirming), plus any same-day duplicates still open.
+  const others = (await openRowsForProject(projectId)).filter(r => r.id !== target.id &&
+    dayOf(r.checkedInAt) === day &&
+    ((target.personKey && r.personKey === target.personKey) || (normText(r.workerName) === t && normText(r.companyName ?? "") === c)));
+  return [target, ...others];
 }
 
 // Public: is this person currently signed in on this site? Drives whether the
@@ -708,7 +838,7 @@ router.post("/site/:token/checkout", async (req: Request, res: Response) => {
     const row = closed.find(r => r.id === targetRow.id);
     if (!row) { res.status(409).json({ error: "not_signed_in", message: "You are not signed in on this site" }); return; }
     void notifySignedOut(qr.projectId, row, now);
-    res.json(serializeCheckin(row));
+    res.json(serializeCheckin(row, await siteClock(qr.projectId)));
   } catch {
     res.status(500).json({ error: "server_error", message: "Sign-out failed" });
   }
@@ -727,7 +857,13 @@ router.post("/projects/:projectId/checkins/:id/sign-out", authenticate, async (r
     }
     const note = typeof req.body?.note === "string" ? req.body.note.trim() : "";
     if (!note) { res.status(400).json({ error: "validation_error", message: "A note is required" }); return; }
-    const target = (await openRowsForProject(project[0].id)).find(r => r.id === req.params.id);
+    // Any row not yet genuinely signed out, including one closed automatically
+    // on an earlier day (the manager confirming when they actually left).
+    const target = (await db.select().from(siteCheckinsTable).where(and(
+      eq(siteCheckinsTable.id, req.params.id), eq(siteCheckinsTable.projectId, project[0].id),
+      isNull(siteCheckinsTable.checkedOutAt),
+      sql`(${siteCheckinsTable.holdStatus} IS NULL OR ${siteCheckinsTable.holdStatus} = 'approved')`,
+    )).limit(1))[0];
     if (!target) { res.status(409).json({ error: "not_signed_in", message: "Already signed out, or not found" }); return; }
     const toClose = await openRowsToClose(project[0].id, target);
     const now = new Date();
@@ -740,7 +876,7 @@ router.post("/projects/:projectId/checkins/:id/sign-out", authenticate, async (r
     const managerName = (await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1))[0]?.name ?? "a manager";
     void notifySignedOut(project[0].id, row, now, { name: managerName, note });
     void logActivity({ userId: req.user!.id, projectId: project[0].id, companyId: project[0].companyId, section: "check-ins", action: "update", itemType: "site_checkin", itemId: row.id, metadata: { signedOut: row.workerName, note }, req });
-    res.json(serializeCheckin(row));
+    res.json(serializeCheckin(row, await siteClock(project[0].id)));
   } catch (err) {
     req.log.error({ err }, "Manual sign-out error");
     res.status(500).json({ error: "server_error", message: "Failed to sign out" });
@@ -770,8 +906,8 @@ router.get("/site/:token/register-match", async (req: Request, res: Response) =>
 router.get("/notifications/:notificationId/checkin", authenticate, async (req: Request, res: Response) => {
   try {
     const n = (await db.select().from(notificationsTable).where(and(eq(notificationsTable.id, req.params.notificationId), eq(notificationsTable.userId, req.user!.id))).limit(1))[0];
-    if (!n || !["check_in", "check_in_blocked", "check_out"].includes(n.type)) { res.status(404).json({ error: "not_found", message: "Not found" }); return; }
-    const meta = (n.metadata ?? {}) as { projectId?: string; workerName?: string; companyName?: string; reason?: string };
+    if (!n || !["check_in", "check_in_blocked", "check_out", "check_in_held", "check_in_auto_closed"].includes(n.type)) { res.status(404).json({ error: "not_found", message: "Not found" }); return; }
+    const meta = (n.metadata ?? {}) as { projectId?: string; workerName?: string; companyName?: string; reason?: string; checkinIds?: string[] };
     const projectId = meta.projectId ?? (n.relatedEntityType === "project" ? n.relatedEntityId : null);
 
     // Older notifications carry only the message text: recover name/company from it.
@@ -794,6 +930,29 @@ router.get("/notifications/:notificationId/checkin", authenticate, async (req: R
     }
     if (!project || project.companyId !== req.user!.companyId) { res.status(404).json({ error: "not_found", message: "Not found" }); return; }
 
+    const clock = await siteClock(project.id);
+
+    if (n.type === "check_in_auto_closed") {
+      // End-of-day list: everyone closed automatically in that run.
+      const ids = Array.isArray(meta.checkinIds) ? meta.checkinIds : [];
+      const rows = ids.length ? await db.select().from(siteCheckinsTable).where(and(inArray(siteCheckinsTable.id, ids), eq(siteCheckinsTable.projectId, project.id))).orderBy(asc(siteCheckinsTable.workerName)) : [];
+      res.json({ kind: "auto_closed", project: { id: project.id, name: project.name }, at: n.createdAt.toISOString(), rows: rows.map(r => ({ ...serializeCheckin(r, clock), photoUrl: r.photoUrl })) });
+      return;
+    }
+
+    if (n.type === "check_in_held") {
+      const decidedByName = checkin?.holdDecidedBy
+        ? (await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, checkin.holdDecidedBy)).limit(1))[0]?.name ?? null
+        : null;
+      res.json({
+        kind: "held", project: { id: project.id, name: project.name }, at: n.createdAt.toISOString(),
+        fallback: { workerName, companyName },
+        checkin: checkin ? { ...serializeCheckin(checkin, clock), photoUrl: checkin.photoUrl, holdDecidedByName: decidedByName } : null,
+        canDecide: await isProjectApprover(req.user!, project.id),
+      });
+      return;
+    }
+
     if (n.type === "check_in_blocked") {
       const reason = meta.reason ?? (/insurance/i.test(n.message) ? "no_valid_insurance" : "not_registered");
       res.json({
@@ -807,7 +966,7 @@ router.get("/notifications/:notificationId/checkin", authenticate, async (req: R
       project: { id: project.id, name: project.name },
       at: n.createdAt.toISOString(),
       fallback: { workerName, companyName },
-      checkin: checkin ? { ...serializeCheckin(checkin), photoUrl: checkin.photoUrl } : null,
+      checkin: checkin ? { ...serializeCheckin(checkin, clock), photoUrl: checkin.photoUrl } : null,
     });
   } catch (err) {
     req.log.error({ err }, "Check-in notification detail error");
@@ -845,15 +1004,15 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
     const confirmedKey = readMatchToken(matchToken, qr.projectId);
     const match = (confirmedKey ? registered.find(r => r.key === confirmedKey) ?? null : null) ?? matchRegistered(registered, workerName, companyName);
 
-    // Already signed in today (by identity OR by typed text): don't create a
-    // second open row; the client offers SIGN OUT instead. An open row from a
-    // PREVIOUS day doesn't block: a new visit is a new row and the old one
-    // stays flagged.
-    const today = londonDateStr(new Date());
+    // Already signed in today, on the site's own day (by identity OR by typed
+    // text): don't create a second open row; the client offers SIGN OUT
+    // instead. An open row from a PREVIOUS day doesn't block.
+    const clock = await siteClock(qr.projectId);
+    const now = new Date();
+    const today = siteDateStr(now, clock.tz);
     const typedN = normText(workerName), typedC = normText(companyName);
-    const alreadyOpen = (await openRowsForProject(qr.projectId)).find(c =>
-      londonDateStr(c.checkedInAt) === today &&
-      ((match && c.personKey === match.key) || (normText(c.workerName) === typedN && normText(c.companyName ?? "") === typedC)));
+    const sameIdentity = (c: OpenRow) => (match && c.personKey === match.key) || (normText(c.workerName) === typedN && normText(c.companyName ?? "") === typedC);
+    const alreadyOpen = (await openRowsForProject(qr.projectId)).find(c => siteDateStr(c.checkedInAt, clock.tz) === today && sameIdentity(c));
     if (alreadyOpen) {
       res.status(409).json({ error: "already_signed_in", checkinId: alreadyOpen.id, checkedInAt: alreadyOpen.checkedInAt.toISOString() });
       return;
@@ -866,26 +1025,42 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
       return;
     }
 
+    // INSURANCE GATE. Every match tied to a subcontractor card is checked here,
+    // whichever way they were matched (typed details, a confirmed "Did you
+    // mean", a remembered phone, or their own portal login). Same source as the
+    // Contacts card badge: company insurance records plus filed insurance-named
+    // person certificates, judged against today's date. "expiring_soon" still
+    // passes; "expired" or "none" does NOT let them on site: the check-in is
+    // HELD for an admin / PM to approve (with a reason) or refuse.
+    let holdReason: "insurance_none" | "insurance_expired" | null = null;
     if (match.insuranceSubId) {
-      // Same source the Contacts directory's "Insurance OK" badge reads
-      // (company-level insurance_records PLUS any filed insurance-named
-      // person certification) so a contact shown as insured on their card
-      // must pass here too. "expiring_soon" still passes (not yet expired);
-      // only "expired" or "none" blocks.
       const project = await db.select({ companyId: projectsTable.companyId }).from(projectsTable)
         .where(eq(projectsTable.id, qr.projectId)).limit(1);
       const status = project[0] ? await subcontractorInsuranceStatus(match.insuranceSubId, project[0].companyId) : "none";
-
-      if (status === "expired" || status === "none") {
-        await notifyBlockedCheckin(qr.projectId, workerName.trim(), companyName.trim(), "no_valid_insurance");
-        res.status(403).json({ error: "check_in_blocked", reason: "no_valid_insurance" });
-        return;
-      }
+      if (status === "expired") holdReason = "insurance_expired";
+      else if (status === "none") holdReason = "insurance_none";
     }
 
     // Store the registered record's own spelling so every visit reads the same.
     const storedName = match.names.find(n => normText(n) === normText(workerName)) ?? (confirmedKey ? match.names[0] : workerName.trim());
     const storedCompany = match.company ?? companyName.trim();
+
+    // Held responses use 403 so a page loaded before this change still shows
+    // "Access Denied" rather than a success screen.
+    const heldResponse = (row: { id: string; checkedInAt: Date }, reason: string) => res.status(403).json({
+      error: "check_in_held", reason: "no_valid_insurance", held: true, holdReason: reason,
+      holdToken: signHoldToken(qr.projectId, row.id), checkedInAt: row.checkedInAt.toISOString(),
+    });
+
+    if (holdReason) {
+      // Already waiting at the gate today? Same request, not a second one.
+      const pending = (await db.select().from(siteCheckinsTable).where(and(
+        eq(siteCheckinsTable.projectId, qr.projectId),
+        eq(siteCheckinsTable.holdStatus, "pending"),
+        eq(siteCheckinsTable.personKey, match.key),
+      )).orderBy(desc(siteCheckinsTable.checkedInAt)))[0];
+      if (pending && siteDateStr(pending.checkedInAt, clock.tz) === today) { heldResponse(pending, pending.holdReason ?? holdReason); return; }
+    }
 
     const ext = path.extname(req.file.originalname || ".jpg").toLowerCase() || ".jpg";
     const filename = `checkin-${randomUUID()}${ext}`;
@@ -907,15 +1082,73 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
       photoUrl,
       lat: lat ? parseFloat(lat) : null,
       lng: lng ? parseFloat(lng) : null,
+      holdReason,
+      holdStatus: holdReason ? "pending" : null,
     }).returning();
+
+    if (holdReason) {
+      void notifyHeldCheckin(qr.projectId, checkin, holdReason);
+      heldResponse(checkin, holdReason);
+      return;
+    }
 
     // Fire-and-forget: the worker's check-in must not wait on (or fail with)
     // the notification fan-out.
     void notifySuccessfulCheckin(qr.projectId, storedName, storedCompany, checkin.checkedInAt, checkin.id);
 
-    res.status(201).json({ ...serializeCheckin(checkin), deviceToken: signDeviceToken(qr.projectId, storedName, storedCompany) });
+    res.status(201).json({ ...serializeCheckin(checkin, clock), deviceToken: signDeviceToken(qr.projectId, storedName, storedCompany) });
   } catch (err) {
     res.status(500).json({ error: "server_error", message: "Check-in failed" });
+  }
+});
+
+// Public: the held worker's page polls this until a manager decides. On
+// approval it also hands back the remembered-device token a normal check-in gets.
+router.get("/site/:token/hold", async (req: Request, res: Response) => {
+  try {
+    const qr = await db.select().from(qrCodesTable).where(eq(qrCodesTable.token, req.params.token)).then(r => r[0]);
+    if (!qr) { res.status(404).json({ error: "not_found", message: "Invalid site token" }); return; }
+    const checkinId = readHoldToken(req.query.holdToken, qr.projectId);
+    if (!checkinId) { res.status(404).json({ error: "not_found", message: "Not found" }); return; }
+    const row = (await db.select().from(siteCheckinsTable).where(and(eq(siteCheckinsTable.id, checkinId), eq(siteCheckinsTable.projectId, qr.projectId))).limit(1))[0];
+    if (!row) { res.status(404).json({ error: "not_found", message: "Not found" }); return; }
+    res.json({
+      status: row.holdStatus ?? "approved",
+      decidedAt: row.holdDecidedAt ? row.holdDecidedAt.toISOString() : null,
+      ...(row.holdStatus === "approved" ? { deviceToken: signDeviceToken(qr.projectId, row.workerName, row.companyName ?? "") } : {}),
+    });
+  } catch {
+    res.status(500).json({ error: "server_error", message: "Failed to check" });
+  }
+});
+
+// Authenticated: an admin / PM / project approver decides a held check-in.
+// Approve needs a reason; both are recorded (who, when, why) on the row and in
+// the activity log. Only a PENDING hold can be decided.
+router.post("/projects/:projectId/checkins/:id/hold-decision", authenticate, async (req: Request, res: Response) => {
+  try {
+    const project = await db.select({ id: projectsTable.id, companyId: projectsTable.companyId }).from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId))).limit(1);
+    if (!project[0]) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+    if (!(await isProjectApprover(req.user!, project[0].id))) {
+      res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can decide this" });
+      return;
+    }
+    const decision = req.body?.decision;
+    if (decision !== "approve" && decision !== "refuse") { res.status(400).json({ error: "validation_error", message: "decision must be approve or refuse" }); return; }
+    const note = typeof req.body?.note === "string" ? req.body.note.trim().slice(0, 500) : "";
+    if (decision === "approve" && !note) { res.status(400).json({ error: "validation_error", message: "A reason is required to let someone on site without valid insurance" }); return; }
+    const now = new Date();
+    const [row] = await db.update(siteCheckinsTable)
+      .set({ holdStatus: decision === "approve" ? "approved" : "refused", holdDecidedBy: req.user!.id, holdDecidedAt: now, holdNote: note || null })
+      .where(and(eq(siteCheckinsTable.id, req.params.id), eq(siteCheckinsTable.projectId, project[0].id), eq(siteCheckinsTable.holdStatus, "pending")))
+      .returning();
+    if (!row) { res.status(409).json({ error: "not_pending", message: "This check-in has already been decided, or isn't waiting for a decision" }); return; }
+    void logActivity({ userId: req.user!.id, projectId: project[0].id, companyId: project[0].companyId, section: "check-ins", action: "update", itemType: "site_checkin", itemId: row.id, metadata: { insuranceHold: decision === "approve" ? "approved" : "refused", reason: row.holdReason, note: note || null, worker: row.workerName }, req });
+    res.json(serializeCheckin(row, await siteClock(project[0].id)));
+  } catch (err) {
+    req.log.error({ err }, "Hold decision error");
+    res.status(500).json({ error: "server_error", message: "Failed to save the decision" });
   }
 });
 
@@ -937,13 +1170,19 @@ router.get("/checkins", authenticate, async (req: Request, res: Response) => {
         checkoutNote: siteCheckinsTable.checkoutNote,
         checkoutMethod: siteCheckinsTable.checkoutMethod,
         personKey: siteCheckinsTable.personKey,
+        holdReason: siteCheckinsTable.holdReason,
+        holdStatus: siteCheckinsTable.holdStatus,
+        holdNote: siteCheckinsTable.holdNote,
+        holdDecidedAt: siteCheckinsTable.holdDecidedAt,
+        autoClosedAt: siteCheckinsTable.autoClosedAt,
       })
       .from(siteCheckinsTable)
       .innerJoin(projectsTable, eq(projectsTable.id, siteCheckinsTable.projectId))
       .where(eq(projectsTable.companyId, req.user!.companyId))
       .orderBy(desc(siteCheckinsTable.checkedInAt));
 
-    res.json(rows.map(serializeCheckin));
+    const clocks = await siteClocks(rows.map(r => r.projectId));
+    res.json(rows.map(r => serializeCheckin(r, clocks.get(r.projectId) ?? { tz: safeTz(null), close: DEFAULT_SITE_CLOSE })));
   } catch (err) {
     req.log.error({ err }, "List all checkins error");
     res.status(500).json({ error: "server_error", message: "Failed to load check-ins" });
@@ -965,10 +1204,90 @@ router.get("/projects/:projectId/checkins", authenticate, async (req: Request, r
       .where(eq(siteCheckinsTable.projectId, req.params.projectId))
       .orderBy(desc(siteCheckinsTable.checkedInAt));
 
-    res.json(checkins.map(serializeCheckin));
+    const clock = await siteClock(req.params.projectId);
+    res.json(checkins.map(c => serializeCheckin(c, clock)));
   } catch (err) {
     res.status(500).json({ error: "server_error", message: "Failed to load check-ins" });
   }
 });
 
 export default router;
+
+// ---- End of day (#114) ------------------------------------------------------
+// Every few minutes: any check-in still not signed out once its site's close
+// time has passed is closed AUTOMATICALLY. That is not a sign-out (checkedOutAt
+// stays empty; they may still be there): it only stops them counting as on
+// site, and today's register keeps listing them, marked. A hold nobody decided
+// by then lapses. Managers get one end-of-day list per project per run.
+// Idempotent: every update re-checks the row is still open.
+export async function runCheckinAutoClose(now: Date = new Date()): Promise<{ closed: number; lapsed: number }> {
+  const rows = await db.select().from(siteCheckinsTable).where(and(
+    isNull(siteCheckinsTable.checkedOutAt),
+    isNull(siteCheckinsTable.autoClosedAt),
+    sql`coalesce(${siteCheckinsTable.checkoutMethod}, '') <> 'legacy'`,
+    sql`(${siteCheckinsTable.holdStatus} IS NULL OR ${siteCheckinsTable.holdStatus} IN ('approved', 'pending'))`,
+  ));
+  if (rows.length === 0) return { closed: 0, lapsed: 0 };
+  const clocks = await siteClocks(rows.map(r => r.projectId));
+  const closedByProject = new Map<string, { row: typeof rows[number]; due: Date }[]>();
+  let closed = 0, lapsed = 0;
+  for (const r of rows) {
+    const clock = clocks.get(r.projectId) ?? { tz: safeTz(null), close: DEFAULT_SITE_CLOSE };
+    const due = closeDueAfter(r.checkedInAt, clock.tz, clock.close);
+    if (now.getTime() < due.getTime()) continue;
+    if (r.holdStatus === "pending") {
+      const done = await db.update(siteCheckinsTable).set({ holdStatus: "lapsed" })
+        .where(and(eq(siteCheckinsTable.id, r.id), eq(siteCheckinsTable.holdStatus, "pending"))).returning({ id: siteCheckinsTable.id });
+      lapsed += done.length;
+      continue;
+    }
+    const done = await db.update(siteCheckinsTable).set({ autoClosedAt: due })
+      .where(and(eq(siteCheckinsTable.id, r.id), isNull(siteCheckinsTable.checkedOutAt), isNull(siteCheckinsTable.autoClosedAt))).returning({ id: siteCheckinsTable.id });
+    if (done.length === 0) continue;
+    closed++;
+    // Only tell managers about closes from the last day; a backlog of old rows
+    // (the first run after release) is closed quietly.
+    if (now.getTime() - due.getTime() <= 24 * 60 * 60 * 1000) {
+      if (!closedByProject.has(r.projectId)) closedByProject.set(r.projectId, []);
+      closedByProject.get(r.projectId)!.push({ row: r, due });
+    }
+  }
+  for (const [projectId, list] of closedByProject) {
+    try {
+      const rec = await checkinRecipients(projectId);
+      if (!rec) continue;
+      const clock = clocks.get(projectId) ?? { tz: safeTz(null), close: DEFAULT_SITE_CLOSE };
+      const at = list[0].due;
+      const names = list.map(x => `${x.row.workerName}${x.row.companyName ? ` (${x.row.companyName})` : ""}`);
+      const shown = names.slice(0, 8).join(", ") + (names.length > 8 ? ` and ${names.length - 8} more` : "");
+      for (const userId of rec.userIds) {
+        await db.insert(notificationsTable).values({
+          id: generateId(),
+          userId,
+          type: "check_in_auto_closed",
+          title: `${list.length} not signed out at ${rec.projectName}`,
+          message: `Not signed out by ${siteTime(at, clock.tz)} ${siteTzLabel(clock.tz, at)}: ${shown}. They no longer count as on site, but stay on today's register, marked, until signed out.`,
+          relatedEntityId: projectId,
+          relatedEntityType: "project",
+          metadata: { projectId, checkinIds: list.map(x => x.row.id) },
+          read: false,
+        });
+      }
+    } catch {
+      /* alerting is best-effort */
+    }
+  }
+  return { closed, lapsed };
+}
+
+const AUTO_CLOSE_INTERVAL_MS = 5 * 60 * 1000;
+export function scheduleCheckinAutoClose(log: { info: (o: object, m: string) => void; error: (o: object, m: string) => void }): void {
+  const tick = () => {
+    runCheckinAutoClose()
+      .then(r => { if (r.closed || r.lapsed) log.info(r, "check-in auto-close run"); })
+      .catch(err => log.error({ err }, "check-in auto-close failed"));
+  };
+  // First run after boot gives ensureSchema time to add the columns.
+  setTimeout(tick, 60 * 1000).unref?.();
+  setInterval(tick, AUTO_CLOSE_INTERVAL_MS).unref?.();
+}

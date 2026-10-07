@@ -171,6 +171,12 @@ export type ProjectDetail = Project & {
   recentActivity: ActivityItem[];
   siteManagerId?: string | null;
   siteManagerName?: string | null;
+  /** IANA timezone of the site clock (check-in times, "today", the close time). Default Europe/London. */
+  siteTimeZone?: string;
+  /** Human label for the site clock, e.g. "UK time". */
+  siteTzLabel?: string;
+  /** Daily close ("HH:MM", site time). Anyone not signed out by then is closed automatically (not signed out). */
+  siteCloseTime?: string;
 };
 
 export interface CreateProjectRequest {
@@ -196,6 +202,10 @@ export interface UpdateProjectRequest {
   targetEndDate?: string;
   /** Must be the userId of a current member of this project. Null unsets it. */
   siteManagerId?: string | null;
+  /** IANA timezone, e.g. Europe/London. Admin / project manager only. */
+  siteTimeZone?: string;
+  /** Daily close time "HH:MM" on the site clock. Admin / project manager only. */
+  siteCloseTime?: string;
 }
 
 export type DocumentType = (typeof DocumentType)[keyof typeof DocumentType];

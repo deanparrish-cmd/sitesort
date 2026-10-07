@@ -4,6 +4,8 @@ import { projectsTable, projectMembersTable, usersTable, documentsTable, documen
 import { eq, and, count, sql, asc, desc, isNotNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
+import { isValidTimeZone, isValidCloseTime, safeTz, siteTzLabel } from "../lib/site-clock";
+import { isProjectApprover } from "../lib/project-authority";
 
 const router: IRouter = Router();
 
@@ -208,6 +210,9 @@ router.get("/projects/:projectId", authenticate, async (req, res) => {
       recentActivity,
       siteManagerId: p.siteManagerId ?? null,
       siteManagerName,
+      siteTimeZone: safeTz(p.siteTimeZone),
+      siteTzLabel: siteTzLabel(p.siteTimeZone),
+      siteCloseTime: p.siteCloseTime,
     });
   } catch (err) {
     req.log.error({ err }, "Get project error");
@@ -217,8 +222,24 @@ router.get("/projects/:projectId", authenticate, async (req, res) => {
 
 router.patch("/projects/:projectId", authenticate, async (req, res) => {
   try {
-    const { name, address, status, targetEndDate, siteManagerId } = req.body;
+    const { name, address, status, targetEndDate, siteManagerId, siteTimeZone, siteCloseTime } = req.body;
     const updates: Record<string, unknown> = {};
+    // The site clock decides when people stop counting as on site, so only an
+    // admin / PM / project approver may change it.
+    if (siteTimeZone !== undefined || siteCloseTime !== undefined) {
+      if (!(await isProjectApprover(req.user!, req.params.projectId))) {
+        res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can change the site timezone or close time" });
+        return;
+      }
+      if (siteTimeZone !== undefined) {
+        if (!isValidTimeZone(siteTimeZone)) { res.status(400).json({ error: "validation_error", message: "siteTimeZone must be a valid timezone, for example Europe/London" }); return; }
+        updates.siteTimeZone = siteTimeZone;
+      }
+      if (siteCloseTime !== undefined) {
+        if (!isValidCloseTime(siteCloseTime)) { res.status(400).json({ error: "validation_error", message: "siteCloseTime must be a time like 20:00" }); return; }
+        updates.siteCloseTime = siteCloseTime;
+      }
+    }
     if (name) updates.name = name;
     if (address) updates.address = address;
     if (status) updates.status = status;
@@ -251,7 +272,7 @@ router.patch("/projects/:projectId", authenticate, async (req, res) => {
     const siteManagerName = p.siteManagerId
       ? (await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, p.siteManagerId)).limit(1))[0]?.name ?? null
       : null;
-    res.json({ id: p.id, companyId: p.companyId, name: p.name, address: p.address, status: p.status, startDate: p.startDate, targetEndDate: p.targetEndDate ?? null, createdAt: p.createdAt.toISOString(), memberCount: 0, alertCount: 0, progressPercent: 0, siteManagerId: p.siteManagerId ?? null, siteManagerName });
+    res.json({ id: p.id, companyId: p.companyId, name: p.name, address: p.address, status: p.status, startDate: p.startDate, targetEndDate: p.targetEndDate ?? null, createdAt: p.createdAt.toISOString(), memberCount: 0, alertCount: 0, progressPercent: 0, siteManagerId: p.siteManagerId ?? null, siteManagerName, siteTimeZone: safeTz(p.siteTimeZone), siteTzLabel: siteTzLabel(p.siteTimeZone), siteCloseTime: p.siteCloseTime });
   } catch (err) {
     req.log.error({ err }, "Update project error");
     res.status(500).json({ error: "server_error", message: "Failed to update project" });

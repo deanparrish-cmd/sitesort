@@ -14,4 +14,8 @@ export interface UpdateProjectRequest {
   targetEndDate?: Date;
   /** Must be the userId of a current member of this project. Null unsets it. */
   siteManagerId?: string | null;
+  /** IANA timezone, e.g. Europe/London. Admin / project manager only. */
+  siteTimeZone?: string;
+  /** Daily close time "HH:MM" on the site clock. Admin / project manager only. */
+  siteCloseTime?: string;
 }

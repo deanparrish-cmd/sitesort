@@ -5,7 +5,8 @@ import { PageHeader } from "@/components/ui/page-header";
 import { QrCode, Share2, FolderOpen, ChevronDown, ChevronRight } from "lucide-react";
 import { MonthFolder, splitByMonth, monthLabel } from "@/components/ui/month-folder";
 import { useDetail } from "../context";
-import { OnSiteRegister } from "@/components/on-site-register";
+import { OnSiteRegister, checkinStatusLine as statusLine, type Presence } from "@/components/on-site-register";
+import { fmtSiteTime, fmtSiteDate, siteDayKey, siteTzLabel } from "@/lib/site-time";
 
 type Checkin = {
   id: string;
@@ -16,13 +17,19 @@ type Checkin = {
   checkoutMethod?: string | null;
   checkoutNote?: string | null;
   notSignedOut?: boolean;
+  presence?: Presence;
+  holdReason?: string | null;
+  holdStatus?: string | null;
+  holdNote?: string | null;
+  autoClosedAt?: string | null;
+  siteTimeZone?: string;
 };
+
 
 function CheckinCard({ ci, setSharingDoc }: { ci: Checkin; setSharingDoc: (d: any) => void }) {
   const photoSrc = ci.photoUrl.startsWith("/uploads/") ? ci.photoUrl.replace("/uploads/", "/api/uploads/") : ci.photoUrl;
-  const dt = new Date(ci.checkedInAt);
-  const dateStr = dt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-  const timeStr = dt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  const dateStr = fmtSiteDate(ci.checkedInAt, ci.siteTimeZone, { day: "numeric", month: "short", year: "numeric" });
+  const timeStr = fmtSiteTime(ci.checkedInAt, ci.siteTimeZone);
   return (
     <div className="rounded-xl overflow-hidden border bg-card shadow-sm">
       <div className="aspect-square bg-muted relative cursor-pointer" onClick={() => window.open(photoSrc, '_blank', 'noopener,noreferrer')}>
@@ -33,10 +40,8 @@ function CheckinCard({ ci, setSharingDoc }: { ci: Checkin; setSharingDoc: (d: an
         <p className="text-muted-foreground text-xs mt-0.5">{dateStr}</p>
         <div className="flex items-center justify-between gap-2 mt-0.5">
           <p className="text-muted-foreground text-xs">
-            In {timeStr}
-            {ci.checkedOutAt
-              ? ` · Out ${new Date(ci.checkedOutAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}${ci.checkoutMethod === "manual" ? " (by manager)" : ""}`
-              : ci.notSignedOut ? " · Not signed out" : " · On site"}
+            In {timeStr} {siteTzLabel(ci.siteTimeZone, new Date(ci.checkedInAt))}
+            {statusLine(ci)}
           </p>
           <button
             type="button"
@@ -70,14 +75,16 @@ export function CheckinsTab() {
   // never fills up with old photos.
   const [openDays, setOpenDays] = useState<Record<string, boolean>>({});
 
-  const todayKey = new Date().toDateString();
+  // Days are the SITE's days (project timezone), not the viewer's.
+  const tz = (checkins as Checkin[])[0]?.siteTimeZone;
+  const todayKey = siteDayKey(new Date(), tz);
   // This month's earlier days stay visible as individual day folders; whole
   // previous months collapse into one folder per month (June 2026, ...).
   const { current: thisMonth, byMonth } = splitByMonth(checkins as Checkin[], ci => ci.checkedInAt);
   const today: Checkin[] = [];
   const byDay = new Map<string, Checkin[]>(); // insertion order = newest first (API sorts desc)
   for (const ci of thisMonth) {
-    const key = new Date(ci.checkedInAt).toDateString();
+    const key = siteDayKey(ci.checkedInAt, ci.siteTimeZone);
     if (key === todayKey) today.push(ci);
     else {
       if (!byDay.has(key)) byDay.set(key, []);
@@ -140,7 +147,7 @@ export function CheckinsTab() {
                   <div className="space-y-2">
                     {[...byDay.entries()].map(([key, list]) => {
                       const open = !!openDays[key];
-                      const label = new Date(list[0].checkedInAt).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short", year: "numeric" });
+                      const label = fmtSiteDate(list[0].checkedInAt, list[0].siteTimeZone, { weekday: "long", day: "numeric", month: "short", year: "numeric" });
                       return (
                         <div key={key} className="rounded-xl border bg-card overflow-hidden">
                           <button

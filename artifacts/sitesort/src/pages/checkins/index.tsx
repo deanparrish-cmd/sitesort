@@ -4,7 +4,8 @@ import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { Input } from "@/components/ui/input";
 import { ShareModal } from "@/components/share-modal";
-import { OnSiteRegister } from "@/components/on-site-register";
+import { OnSiteRegister, checkinStatusLine, type RegisterCheckin } from "@/components/on-site-register";
+import { fmtSiteTime, fmtSiteDate, siteDayKey, siteTzLabel } from "@/lib/site-time";
 import { useCapabilities } from "@/hooks/use-capabilities";
 import {
   ClipboardCheck, Search, MapPin, Building2, Calendar,
@@ -13,7 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/utils";
 
-type Checkin = {
+type Checkin = RegisterCheckin & {
   id: string;
   projectId: string;
   projectName: string;
@@ -79,8 +80,8 @@ export default function CheckinsPage() {
     return true;
   });
 
-  const today = new Date().toDateString();
-  const todayCount = checkins.filter(c => new Date(c.checkedInAt).toDateString() === today).length;
+  // "Today" is each site's own day (its project timezone).
+  const todayCount = checkins.filter(c => siteDayKey(c.checkedInAt, c.siteTimeZone) === siteDayKey(new Date(), c.siteTimeZone)).length;
   const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
   const weekCount = checkins.filter(c => new Date(c.checkedInAt).getTime() >= weekAgo).length;
 
@@ -150,7 +151,6 @@ export default function CheckinsPage() {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {filtered.map(ci => {
             const src = normaliseUrl(ci.photoUrl);
-            const dt = new Date(ci.checkedInAt);
             return (
               <div key={ci.id} className="rounded-xl overflow-hidden border bg-card shadow-sm group">
                 <div
@@ -166,8 +166,8 @@ export default function CheckinsPage() {
                   <p className="text-xs text-muted-foreground truncate mt-0.5">{ci.projectName}</p>
                   <div className="flex items-center justify-between gap-2 mt-1.5">
                     <p className="text-xs text-muted-foreground">
-                      {dt.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} · {dt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
-                      {ci.checkedOutAt ? ` to ${new Date(ci.checkedOutAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}` : ci.notSignedOut ? " · Not signed out" : ""}
+                      {fmtSiteDate(ci.checkedInAt, ci.siteTimeZone, { day: "numeric", month: "short" })} · {fmtSiteTime(ci.checkedInAt, ci.siteTimeZone)} {siteTzLabel(ci.siteTimeZone, new Date(ci.checkedInAt))}
+                      {checkinStatusLine(ci)}
                     </p>
                     <div className="flex items-center gap-1">
                       <button
@@ -196,7 +196,6 @@ export default function CheckinsPage() {
       {/* Detail overlay */}
       {viewing && (() => {
         const src = normaliseUrl(viewing.photoUrl);
-        const dt = new Date(viewing.checkedInAt);
         return (
           <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setViewing(null)}>
             <div className="bg-card rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden" onClick={e => e.stopPropagation()}>
@@ -236,7 +235,7 @@ export default function CheckinsPage() {
                 </div>
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Calendar className="w-4 h-4 shrink-0" />
-                  <span>{dt.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })} at {dt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
+                  <span>{fmtSiteDate(viewing.checkedInAt, viewing.siteTimeZone, { weekday: "long", day: "numeric", month: "long", year: "numeric" })} at {fmtSiteTime(viewing.checkedInAt, viewing.siteTimeZone)} {siteTzLabel(viewing.siteTimeZone, new Date(viewing.checkedInAt))}{checkinStatusLine(viewing)}</span>
                 </div>
                 {viewing.companyName && (
                   <div className="flex items-center gap-2 text-muted-foreground">

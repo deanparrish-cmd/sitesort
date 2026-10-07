@@ -8,6 +8,7 @@ import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, Shield
 import { formatDate, formatBytes, cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useDetail } from "../context";
+import { siteTimeZoneOptions } from "@/lib/site-time";
 
 export function ProjectDialogs() {
   const {
@@ -29,6 +30,7 @@ export function ProjectDialogs() {
     linkingSubId,
     addPersonToProject,
     onEditSubmit,
+    isProjectApprover,
   } = useDetail();
   const { toast } = useToast();
 
@@ -120,6 +122,21 @@ export function ProjectDialogs() {
             </select>
             <p className="text-xs text-muted-foreground mt-1">Shown to the Team Portal as this project's site manager contact. Only members who've accepted their portal/dashboard invite can be chosen.</p>
           </div>
+          {isProjectApprover && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 [&>*]:min-w-0" data-testid="section-site-clock">
+              <div>
+                <label htmlFor="edit-site-tz" className="text-sm font-semibold mb-1 block">Site timezone</label>
+                <select id="edit-site-tz" {...editRegister("siteTimeZone")} className="flex h-11 w-full rounded-lg border-2 border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:border-primary" data-testid="select-site-timezone">
+                  {siteTimeZoneOptions().map(z => <option key={z} value={z}>{z === "Europe/London" ? "Europe/London (UK time)" : z}</option>)}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="edit-site-close" className="text-sm font-semibold mb-1 block">Site close time</label>
+                <Input id="edit-site-close" type="time" {...editRegister("siteCloseTime")} data-testid="input-site-close-time" />
+              </div>
+              <p className="text-xs text-muted-foreground sm:col-span-2">Check-in times are shown on this site's clock. Anyone still signed in at the close time is closed automatically: they stop counting as on site but stay on that day's register, marked, until signed out. Set it late rather than early, for example after the last shift ends.</p>
+            </div>
+          )}
           <div>
             <label className="text-sm font-semibold mb-1 block">Project Managers / Approvers</label>
             {accepted.length === 0 ? (

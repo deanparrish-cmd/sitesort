@@ -1230,6 +1230,8 @@ export function useProjectDetailState() {
       status: project?.status ?? "active",
       targetEndDate: project?.targetEndDate ?? "",
       siteManagerId: project?.siteManagerId ?? "",
+      siteTimeZone: (project as any)?.siteTimeZone ?? "Europe/London",
+      siteCloseTime: (project as any)?.siteCloseTime ?? "20:00",
     });
     setEditError(null);
     setIsEditOpen(true);
@@ -1247,6 +1249,10 @@ export function useProjectDetailState() {
           status: data.status as UpdateProjectRequestStatus,
           targetEndDate: data.targetEndDate || undefined,
           siteManagerId: data.siteManagerId ? data.siteManagerId : null,
+          // The site clock is admin / PM only (the API enforces it); only send
+          // it when this user may change it and it actually changed.
+          ...(isProjectApprover && data.siteTimeZone && data.siteTimeZone !== (project as any)?.siteTimeZone ? { siteTimeZone: data.siteTimeZone } : {}),
+          ...(isProjectApprover && data.siteCloseTime && data.siteCloseTime !== (project as any)?.siteCloseTime ? { siteCloseTime: data.siteCloseTime } : {}),
         },
       });
       await queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}`] });

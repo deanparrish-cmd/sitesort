@@ -255,6 +255,22 @@ export const GetProjectResponse = zod
       ),
       siteManagerId: zod.string().nullish(),
       siteManagerName: zod.string().nullish(),
+      siteTimeZone: zod
+        .string()
+        .optional()
+        .describe(
+          'IANA timezone of the site clock (check-in times, \"today\", the close time). Default Europe\/London.',
+        ),
+      siteTzLabel: zod
+        .string()
+        .optional()
+        .describe('Human label for the site clock, e.g. \"UK time\".'),
+      siteCloseTime: zod
+        .string()
+        .optional()
+        .describe(
+          'Daily close (\"HH:MM\", site time). Anyone not signed out by then is closed automatically (not signed out).',
+        ),
     }),
   );
 
@@ -275,6 +291,18 @@ export const UpdateProjectBody = zod.object({
     .nullish()
     .describe(
       "Must be the userId of a current member of this project. Null unsets it.",
+    ),
+  siteTimeZone: zod
+    .string()
+    .optional()
+    .describe(
+      "IANA timezone, e.g. Europe\/London. Admin \/ project manager only.",
+    ),
+  siteCloseTime: zod
+    .string()
+    .optional()
+    .describe(
+      'Daily close time \"HH:MM\" on the site clock. Admin \/ project manager only.',
     ),
 });
 

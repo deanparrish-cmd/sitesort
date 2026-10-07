@@ -23,6 +23,9 @@ function notifIcon(type: string) {
     case "trial_ending": return <CreditCard className="w-5 h-5 text-orange-500" />;
     case "payment_failed": return <CreditCard className="w-5 h-5 text-red-500" />;
     case "daily_report": return <ClipboardCheck className="w-5 h-5 text-teal-500" />;
+    case "check_in_held": return <AlertTriangle className="w-5 h-5 text-amber-600" />;
+    case "check_in_blocked":
+    case "check_in_auto_closed": return <AlertTriangle className="w-5 h-5 text-red-500" />;
     default: return <Bell className="w-5 h-5 text-muted-foreground" />;
   }
 }
@@ -35,6 +38,9 @@ function notifBg(type: string) {
     case "trial_ending": return "bg-orange-100";
     case "payment_failed": return "bg-red-100";
     case "daily_report": return "bg-teal-100";
+    case "check_in_held": return "bg-amber-100";
+    case "check_in_blocked":
+    case "check_in_auto_closed": return "bg-red-100";
     default: return "bg-muted";
   }
 }

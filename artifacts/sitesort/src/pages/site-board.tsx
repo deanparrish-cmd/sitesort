@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { fmtSiteTimeLabelled } from "@/lib/site-time";
 import { useRoute } from "wouter";
 import { MapPin, Calendar, FileText, HardHat, ShieldCheck, AlertTriangle, Users, Mail, Phone, Clock, Camera, CheckCircle2, Loader2, Pin, XCircle, Building2 } from "lucide-react";
 import { openDocument } from "@/lib/documents";
@@ -88,6 +89,24 @@ function CheckInCard({
   const [companyName, setCompanyName] = useState("");
   const [status, setStatus] = useState<"idle" | "capturing" | "uploading" | "done" | "error">("idle");
   const [blockedReason, setBlockedReason] = useState<"not_registered" | "no_valid_insurance" | null>(null);
+  // Insurance hold: their check-in is saved but waits for an admin / PM to let
+  // them on site. The page polls its own hold (signed token) until decided.
+  const [doneAt, setDoneAt] = useState<string | null>(null);
+  const [hold, setHold] = useState<{ token: string; reason: string; status: "pending" | "approved" | "refused" | "lapsed" } | null>(null);
+  useEffect(() => {
+    if (!hold || hold.status !== "pending") return;
+    const t = setInterval(() => {
+      fetch(`/api/site/${token}/hold?holdToken=${encodeURIComponent(hold.token)}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => {
+          if (!d || d.status === "pending") return;
+          if (d.status === "approved" && d.deviceToken) writeDeviceToken(d.deviceToken);
+          setHold(h => h ? { ...h, status: d.status } : h);
+        })
+        .catch(() => {});
+    }, 8000);
+    return () => clearInterval(t);
+  }, [hold, token]);
   // "Did you mean...?" for check-in: close matches among the project's registered people.
   type RegSuggest = { label: string; matchToken: string };
   const [regSuggest, setRegSuggest] = useState<RegSuggest[]>([]);
@@ -259,6 +278,11 @@ function CheckInCard({
 
       if (res.status === 403) {
         const body = await res.json();
+        if (body.error === "check_in_held" && body.holdToken) {
+          setHold({ token: body.holdToken, reason: body.holdReason ?? "insurance_none", status: "pending" });
+          setStatus("idle");
+          return;
+        }
         setBlockedReason(body.reason ?? "not_registered");
         setBlockedSuggest(body.suggestions ?? []);
         setStatus("idle");
@@ -279,6 +303,7 @@ function CheckInCard({
 
       const created = await res.json().catch(() => null);
       if (created?.deviceToken) writeDeviceToken(created.deviceToken);
+      if (created?.checkedInAt) setDoneAt(fmtSiteTimeLabelled(created.checkedInAt, created.siteTimeZone));
       setStatus("done");
       setTimeout(() => onCheckedIn(), 2000);
     } catch {
@@ -347,6 +372,54 @@ function CheckInCard({
           <button onClick={notMe} className="w-full text-xs text-gray-500 underline min-h-11" data-testid="button-not-me">
             Not me? Use different details
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Insurance hold: waiting for the site manager, then the decision.
+  if (hold) {
+    const why = hold.reason === "insurance_expired" ? "your insurance on file has expired" : "we don't have your insurance on file";
+    if (hold.status === "approved") {
+      return (
+        <div className="bg-white rounded-2xl shadow-sm border p-6 text-center" data-testid="panel-hold-approved">
+          <CheckCircle2 className="w-14 h-14 text-green-500 mx-auto mb-3" />
+          <h3 className="text-xl font-bold text-gray-900">You're signed in</h3>
+          <p className="text-gray-600 text-sm mt-1 mb-4">The site manager has let you on site. Please get your insurance certificate to them as soon as you can.</p>
+          <button onClick={onCheckedIn} className="w-full bg-orange-600 text-white font-semibold py-3 rounded-xl min-h-11">View site information</button>
+        </div>
+      );
+    }
+    return (
+      <div className="bg-white rounded-2xl shadow-sm border overflow-hidden" data-testid="panel-hold">
+        <div className={`px-5 py-4 flex items-center gap-3 ${hold.status === "pending" ? "bg-gradient-to-r from-amber-600 to-amber-500" : "bg-gradient-to-r from-red-700 to-red-500"}`}>
+          <AlertTriangle className="w-5 h-5 text-white shrink-0" />
+          <h2 className="text-white font-bold text-base">{hold.status === "pending" ? "Please wait: not cleared yet" : "Site access not permitted"}</h2>
+        </div>
+        <div className="p-6 text-center space-y-4">
+          {hold.status === "pending" ? (
+            <>
+              <p className="text-gray-900 font-semibold">Do not go on site yet.</p>
+              <p className="text-gray-600 text-sm">You can't be signed in because {why}. Your site manager has been told and can let you on. This page updates by itself.</p>
+              <div className="flex items-center justify-center gap-2 text-sm text-amber-700"><Loader2 className="w-4 h-4 animate-spin" />Waiting for the site manager</div>
+            </>
+          ) : (
+            <p className="text-gray-600 text-sm">
+              {hold.status === "refused"
+                ? `The site manager has not let you on site because ${why}.`
+                : "Nobody was able to approve you before the end of the day."} Please speak to the site manager.
+            </p>
+          )}
+          {siteManager && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-left space-y-2">
+              <p className="font-bold text-gray-900 text-center break-words">{siteManager.name}</p>
+              {siteManager.phone && (
+                <a href={`tel:${siteManager.phone}`} className="flex items-center justify-center gap-2 bg-white border border-amber-300 rounded-lg px-3 py-2 text-amber-800 text-sm font-medium min-h-11 break-all">
+                  <Phone className="w-4 h-4 shrink-0" /> {siteManager.phone}
+                </a>
+              )}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -435,7 +508,7 @@ function CheckInCard({
         <CheckCircle2 className="w-14 h-14 text-green-500 mx-auto mb-3" />
         <h3 className="text-xl font-bold text-gray-900">Check-In Verified!</h3>
         <p className="text-gray-500 text-sm mt-1 mb-3">
-          Your attendance has been recorded at {new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}.
+          Your attendance has been recorded at {doneAt ?? new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}.
         </p>
         <p className="text-green-600 text-sm font-medium">Loading site information…</p>
       </div>
@@ -602,11 +675,10 @@ export default function SiteBoard() {
   const [error, setError] = useState<string | null>(null);
   const [checkedIn, setCheckedIn] = useState(false);
   // Live count only (never names) of people signed in and not signed out.
-  // HIDDEN (2026-10-07): nobody is ever signed out automatically, so open rows
-  // from previous days inflate the count (5 "on site" since June on a test
-  // project). A wrong head count on a public board is worse than none. Turn
-  // back on only once stale check-ins stop counting (day-scoped count and/or
-  // automatic close at a site close time).
+  // HIDDEN (2026-10-07): it said 5 "on site" on an empty test site because
+  // nobody was ever signed out automatically. #114 fixed the count itself
+  // (automatic close at the site close time; held check-ins never count), so
+  // showing it again is now a product decision (backlog F7), not a bug fix.
   const [onSiteCount, setOnSiteCount] = useState<number | null>(null);
   useEffect(() => {
     if (!token || !SHOW_PUBLIC_ON_SITE_COUNT) return;

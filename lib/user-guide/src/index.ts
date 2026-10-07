@@ -177,7 +177,20 @@ export const PM_GUIDE: GuideSection[] = [
           "The project's Check-Ins tab (and the Check-Ins page) opens with Currently on site: everyone who has signed in and not yet signed out, so you can use it for a roll call.",
           "The public site board (the page the QR code opens) does not show how many people are on site. Use Currently on site here for the real list.",
           "In your notifications and the dashboard activity feed, tap a Check-in, Signed out or Check-in blocked item to open its detail: the photo (tap to enlarge), name, company, in and out times, a link to Currently on site, and for a blocked attempt exactly what they typed and why it was blocked. Sign-outs appear in the feed as well, so a sign-out between two check-ins is easy to see.",
-          "Anyone still signed in from a previous day is flagged Not signed out. They are never closed automatically. Choose Sign out beside their name, add a note (for example, left site at 17:00) and confirm. Admins and project managers can do this.",
+          "At the site close time (20:00 unless you change it), anyone who hasn't signed out is closed automatically. That is not a sign-out: they stop counting as on site, but they stay on Currently on site for the rest of that day, marked Closed automatically, not signed out, so nobody working late drops off the roll call. You get one notification listing who didn't sign out. Once you know they have left, choose Sign out beside their name, add a note (for example, left site at 17:00) and confirm. Admins and project managers can do this, including for earlier days.",
+        ],
+      },
+      {
+        heading: "Insurance at the gate",
+        body: [
+          "When someone from a subcontractor checks in, their insurance is checked against the date, whether they type their details, tap a suggestion, use a remembered phone or have a Team Portal login. If there is no insurance on file, or it has expired, they are not signed in: they wait at the gate and you get a Waiting at the gate notification.",
+          "Open it, or Currently on site, and choose Let on site or Refuse. Letting someone on without valid insurance needs a reason (for example, cert seen on his phone, upload promised today). Your name, the time and the reason are recorded. Their phone updates by itself. If nobody decides by the site close time, the request lapses and they are not on site.",
+        ],
+      },
+      {
+        heading: "Site clock and close time",
+        body: [
+          "Every check-in time is shown on the site's own clock, labelled (for example 07:45 UK time), so it reads the same wherever you are. Admins and project managers set the site timezone and close time in the project's Edit Details. Set the close time late rather than early, after the last shift ends; a night shift that signs in after the close time is closed at the next one.",
         ],
       },
     ],
@@ -377,6 +390,12 @@ export const WORKER_GUIDE: GuideSection[] = [
           "Scan the same QR code again. On the phone you signed in with, you will see Sign out of site straight away; choose it and your time is recorded. When you are signed out, the same phone offers Sign in as your name and company, so you only need to take the photo. Choose Not me if it is someone else's phone.",
           "On a different phone, start typing your name. After three letters, people currently signed in on this site appear (first name and company only) so you can tap yourself and sign out. If your spelling is slightly off, you will be asked Did you mean...? to confirm; nothing is ever signed out without your tap. The same happens when signing in: if your name or company is a close match to someone registered on the project (for example 'I cloud' for 'Amy I Cloud'), you are asked to confirm rather than being turned away. Suggestions show only a first name, a surname initial and the company (for example Amy P, Amy I Cloud); full names are never shown on the public page. The company box suggests companies already on this project, and you can still type a new one.",
           "You can sign in and out as many times as you need in a day, for example for lunch. Each visit is recorded separately. If you forget to sign out, tell your site manager so they can do it for you.",
+        ],
+      },
+      {
+        heading: "If you're asked to wait",
+        body: [
+          "If your insurance isn't on file or has expired, you are not signed in. The page says Please wait: not cleared yet, and your site manager is told. Don't go on site until the page says You're signed in; it updates by itself. Send your insurance certificate to your site manager so it doesn't happen next time.",
         ],
       },
     ],

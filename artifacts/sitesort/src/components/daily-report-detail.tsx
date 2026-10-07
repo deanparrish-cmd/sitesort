@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { fmtSiteTime } from "@/lib/site-time";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -144,7 +145,9 @@ export function DailyReportDetail({
     mistake: "Mistake", work_completed: "Work completed",
   };
   const totalEvents = report.checkinCount + report.documentEventCount + report.photoCount;
-  const time = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  // Daily reports are built on the UK day, so their times read in UK time too,
+  // whatever the viewer's device clock says.
+  const time = (iso: string) => fmtSiteTime(iso, "Europe/London");
   const diaryPresent = hasManagerContent(report.managerReport);
 
   return (
@@ -229,7 +232,7 @@ export function DailyReportDetail({
             {d.subcontractorsOnSite.map((c) => (
               <div key={c.id} className="flex items-center justify-between text-sm border rounded-lg px-3 py-2">
                 <span className="font-medium">{c.workerName}</span>
-                <span className="text-xs text-muted-foreground">checked in {time(c.checkedInAt)}</span>
+                <span className="text-xs text-muted-foreground">checked in {time(c.checkedInAt)} UK time</span>
               </div>
             ))}
           </div>

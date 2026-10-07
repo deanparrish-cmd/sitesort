@@ -4,6 +4,7 @@ import { schedulePermitReminders } from "./lib/permit-reminders";
 import { scheduleDailyReports } from "./lib/daily-reports";
 import { schedulePushFlush } from "./lib/push-triggers";
 import { ensureSchema } from "./lib/ensure-schema";
+import { scheduleCheckinAutoClose } from "./routes/qr";
 import { checkDbConnection } from "@workspace/db";
 
 // Process-level safety net. Previously an unhandled rejection or an uncaught
@@ -67,6 +68,7 @@ async function start(): Promise<void> {
     schedulePermitReminders();
     scheduleDailyReports();
     schedulePushFlush();
+    scheduleCheckinAutoClose(logger);
   });
   server.on("error", (err) => {
     logger.error({ err }, "HTTP server error (failed to bind / listen)");

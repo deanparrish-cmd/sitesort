@@ -77,7 +77,10 @@ function notifIcon(type: string) {
     case "check_out":
       return <LogOut className="w-5 h-5 text-muted-foreground" />;
     case "check_in_blocked":
+    case "check_in_auto_closed":
       return <AlertTriangle className="w-5 h-5 text-red-500" />;
+    case "check_in_held":
+      return <AlertTriangle className="w-5 h-5 text-amber-600" />;
     default:
       return <Bell className="w-5 h-5 text-muted-foreground" />;
   }

@@ -123,6 +123,8 @@ async function buildReportData(
         eq(siteCheckinsTable.projectId, projectId),
         gte(siteCheckinsTable.checkedInAt, startUtc),
         lt(siteCheckinsTable.checkedInAt, endUtc),
+        // A check-in held for insurance only counts once a manager approved it.
+        sql`(${siteCheckinsTable.holdStatus} IS NULL OR ${siteCheckinsTable.holdStatus} = 'approved')`,
       ),
     )
     .orderBy(siteCheckinsTable.checkedInAt);

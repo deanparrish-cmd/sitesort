@@ -1090,3 +1090,16 @@ Removed `upcomingEvents` from `lib/site-board.ts`, OpenAPI `PortalSiteBoard`, bo
 ## 2026-10-07: moved from CLAUDE.md session log (2026-09-18 settled trade-offs)
     4. Public "Did you mean" at sign-in exposes registered contacts' first name + initial + company to anyone with the QR (3+ letters, max 3). Deliberate trade-off.
     5. Portal Site Board still shows non-pinned board content (project, manager, permits, documents, trades; events removed by #112); user confirmed to leave it.
+
+
+## 2026-10-07 (later): moved from CLAUDE.md (2026-09-18 open items 1/2)
+    1. **Prod double check-in (Dean Parrish 18:52 and 18:54) NOT confirmed.** I cannot query prod. Most likely a sign-out in between (sign-outs had no feed item, now they do). To confirm: that row's "Out HH:MM" in the Check-Ins tab. If empty, the 409 guard failed on prod and needs that row.
+    2. **Prod cause of "Amy" vs "Amy Parrish" not confirmed** (mechanism: contact card name vs its primary-contact person name drift). Rows from before `person_key` have no identity link, so an old duplicate pair stays two until signed out.
+
+
+## 2026-10-07: full text of #94 to #98 moved from CLAUDE.md
+94. **Team Portal visual redesign — big/colourful for on-site workers** — portal-only visual redesign: shared `components/portal-ui.tsx` tile/button/pill system, solid-fill status colours, ≥56px tap targets, home quick-access tile grid, CURRENT/SUPERSEDED doc badges. **DEPLOYED+prod-verified** (2026-07-30). *(full detail in CLAUDE_ARCHIVE.md)*
+95. **Fix check-in insurance gate vs contact card split-source, and pinned site-board docs not opening** — unified insurance-status logic (`lib/insurance.ts`) so a self-employed contact insured only via a person-level cert passes check-in like they do on the Contacts card; pinned site-board docs now use the same CAD-aware open helper as everywhere else. **DEPLOYED+prod-verified** (2026-07-30). *(full detail in CLAUDE_ARCHIVE.md)*
+96. **Portal navigation cleanup — hamburger removed, no duplication** — removed the duplicate hamburger/sidebar nav; consolidated Site Issues/Plant & Materials/Daily Report into one conditional "Site Tasks" tile and Settings/Help/Log out onto a Settings tile. **DEPLOYED+prod-verified** (2026-07-30, `typecheck` clean, `check:layout` 104/104). *(full detail in CLAUDE_ARCHIVE.md)*
+97. **Deep-link project alerts, expiry alerts, and overdue invoices to the specific record** — extends `itemDeepLink` to the projects-list "N Alerts" badge, dashboard expiry alerts, and the invoices/dashboard overdue-invoice tiles. **DEPLOYED+prod-verified** (2026-07-30, `main → 2fcca18a`). *(full detail in CLAUDE_ARCHIVE.md)*
+98. **Em-dash/en-dash sweep + app-wide dead-badge deep-link audit** — 53 dash instances fixed across 15 user-facing files; audited every count/badge/alert app-wide and fixed 2 more dead badges (Issues status cards, Contacts Insurance Issues/Payment Hold cards). Added standing CLAUDE.md rules for both (see Key Architecture Notes) so neither regresses again. **DEPLOYED+prod-verified** (2026-07-30). *(full detail in CLAUDE_ARCHIVE.md)*

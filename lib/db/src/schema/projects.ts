@@ -16,6 +16,11 @@ export const projectsTable = pgTable("projects", {
   // Deliberately PM-chosen (never auto-picked) — see lib/site-board.ts. Null
   // means "not set", shown as such rather than falling back to any member.
   siteManagerId: text("site_manager_id").references(() => usersTable.id),
+  // Site clock: IANA timezone every check-in time, "today" and the close time
+  // use, and the daily close ("HH:MM", site time) at which anyone still signed
+  // in is closed automatically (not signed out). Defaults err late.
+  siteTimeZone: text("site_time_zone").notNull().default("Europe/London"),
+  siteCloseTime: text("site_close_time").notNull().default("20:00"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
