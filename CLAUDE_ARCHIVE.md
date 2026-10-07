@@ -1127,3 +1127,7 @@ Removed `upcomingEvents` from `lib/site-board.ts`, OpenAPI `PortalSiteBoard`, bo
 111. **/info pricing cards + plan carried to checkout** — 3 plan cards (`?plan=solo|team|pro`); `/register` stores `sitesort_pending_plan`, `CheckoutGate` auto-opens Stripe for it. *(full text in CLAUDE_ARCHIVE.md)*
 112. **Calendar + ratings/payment holds PM/admin only** — removed `upcomingEvents` from QR + portal boards (spec/codegen too); `GET /calendar-events` manager-only, dashboard calendar hidden for others; `reliabilityRating`/`paymentHold` masked for non-managers, PATCH 403, team `complianceStatus` "hold" masked; /info copy updated. *(full text in CLAUDE_ARCHIVE.md)*
 113. **QR load failure shown as failure + honest photo upload hints** — Site Board tab: failed `GET qr-codes` shows error+Retry+Generate (POST is idempotent, never duplicates); plain Generate only when load OK and empty. `FileDropZone` `hint` prop; photo-only zones say JPG/PNG/WEBP 100MB (dashboard) or +HEIC 15MB (portal). FAQ "portal-no-qr". (2026-10-07)
+
+
+## 2026-10-07: moved from CLAUDE.md session log
+- **2026-09-15 and 2026-09-11:** see CLAUDE_ARCHIVE.md (`4c355d5` shipped #99).
