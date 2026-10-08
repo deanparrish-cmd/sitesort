@@ -4,7 +4,7 @@ import { permitsTable, usersTable, projectsTable } from "@workspace/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
-import { allow, projectApprover, projectApproverFor } from "../lib/authz";
+import { allow, INTERNAL_STAFF, projectApprover, projectApproverFor } from "../lib/authz";
 import { expiryStatus } from "../lib/expiry";
 import { isOverdue } from "../lib/accountability";
 
@@ -32,7 +32,7 @@ async function formatPermit(p: { id: string; projectId: string; type: string; de
   };
 }
 
-router.get("/projects/:projectId/permits", authenticate, async (req, res) => {
+router.get("/projects/:projectId/permits", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const project = await db.select({ id: projectsTable.id }).from(projectsTable)
       .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))

@@ -3,6 +3,7 @@ import multer from "multer";
 import path from "path";
 import { randomUUID } from "crypto";
 import { authenticate } from "../middlewares/auth";
+import { allow, INTERNAL_STAFF } from "../lib/authz";
 import { getBucket, objectKey } from "../lib/gcs";
 import { isProtectedUpload, verifyUploadSignature } from "../lib/signed-uploads";
 
@@ -34,7 +35,7 @@ const upload = multer({
   },
 });
 
-router.post("/upload", authenticate, (req: Request, res: Response, next) => {
+router.post("/upload", authenticate, allow(INTERNAL_STAFF), (req: Request, res: Response, next) => {
   upload.single("file")(req, res, (err) => {
     if (err) {
       // multer errors (file type, size limit) must be caught here — they bypass the route handler

@@ -29,6 +29,19 @@ export function isAuthzMiddleware(fn: unknown): boolean {
   return typeof fn === "function" && (fn as unknown as Record<symbol, unknown>)[AUTHZ] === true;
 }
 
+/**
+ * Register a middleware that already decides who may pass as a declaration,
+ * for routes allow() can't serve. Used for the Team Portal guards
+ * (middlewares/portal.ts): portal tokens are refused by allow() by design, and
+ * requirePortalMember re-checks the caller's live project membership on every
+ * request, which IS the portal's "who may call this".
+ */
+export function declarePolicy<T extends (...args: never[]) => unknown>(fn: T, name: string): T {
+  (fn as unknown as Record<symbol, unknown>)[AUTHZ] = true;
+  Object.defineProperty(fn, "name", { value: name });
+  return fn;
+}
+
 // ---- Current role in the active company, from the DB --------------------------
 const roleCache = new Map<string, { role: string | null; at: number }>();
 const ROLE_TTL_MS = 60 * 1000;
@@ -145,4 +158,41 @@ export function allow(...policies: Policy[]): RequestHandler {
   (mw as unknown as Record<symbol, unknown>)[AUTHZ] = true;
   Object.defineProperty(mw, "name", { value: `allow(${policies.map(p => p.name).join(" or ")})` });
   return mw;
+}
+
+// ---- Fail closed at runtime ---------------------------------------------------------
+/**
+ * Walk the router once at startup. Any route that requires a login (has
+ * `authenticate` in its chain) but declares no policy is made to refuse every
+ * request with 403, and is logged, so a forgotten declaration can't ship as an
+ * open endpoint even if the coverage test is skipped. Returns the keys it closed.
+ * `authenticate` is passed in (rather than imported) to avoid an import cycle.
+ */
+export const closedUndeclaredRoutes: string[] = [];
+export function enforceDeclaredRoutes(router: { stack: unknown[] }, authenticate: unknown, onUndeclared?: (key: string) => void): string[] {
+  const closed: string[] = [];
+  const refuse = (_req: Request, res: Response) => {
+    res.status(403).json({ error: "forbidden", message: "You don't have permission to do that." });
+  };
+  const walk = (stack: any[]) => {
+    for (const layer of stack) {
+      if (layer.route) {
+        const layers: any[] = layer.route.stack ?? [];
+        const authLayer = layers.find(l => l.handle === authenticate);
+        if (!authLayer || layers.some(l => isAuthzMiddleware(l.handle))) continue;
+        authLayer.handle = refuse;
+        const methods = Object.keys(layer.route.methods ?? {}).filter(m => layer.route.methods[m]).map(m => m.toUpperCase());
+        for (const m of methods) {
+          const key = `${m} ${layer.route.path}`;
+          closed.push(key);
+          closedUndeclaredRoutes.push(key);
+          onUndeclared?.(key);
+        }
+      } else if (layer.handle?.stack) {
+        walk(layer.handle.stack);
+      }
+    }
+  };
+  walk(router.stack as any[]);
+  return closed;
 }

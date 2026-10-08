@@ -4,6 +4,7 @@ import { calendarEventsTable, projectsTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { authenticate } from "../middlewares/auth";
+import { allow, COMPANY_MANAGER } from "../lib/authz";
 
 const router: IRouter = Router();
 
@@ -13,7 +14,7 @@ function isManager(role?: string): boolean {
 }
 
 // List all custom calendar events for the company (managers only).
-router.get("/calendar-events", authenticate, async (req, res) => {
+router.get("/calendar-events", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!isManager(req.user!.role)) {
       res.status(403).json({ error: "forbidden", message: "Only managers can view the calendar" });
@@ -29,7 +30,7 @@ router.get("/calendar-events", authenticate, async (req, res) => {
 });
 
 // Create a custom calendar event (managers only).
-router.post("/calendar-events", authenticate, async (req, res) => {
+router.post("/calendar-events", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!isManager(req.user!.role)) {
       res.status(403).json({ error: "forbidden", message: "Only managers can add calendar events" });
@@ -68,7 +69,7 @@ router.post("/calendar-events", authenticate, async (req, res) => {
 });
 
 // Delete a custom calendar event (managers only, tenant-scoped).
-router.delete("/calendar-events/:id", authenticate, async (req, res) => {
+router.delete("/calendar-events/:id", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!isManager(req.user!.role)) {
       res.status(403).json({ error: "forbidden", message: "Only managers can delete calendar events" });

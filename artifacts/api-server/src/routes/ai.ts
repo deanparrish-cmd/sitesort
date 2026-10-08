@@ -4,6 +4,7 @@ import { db } from "@workspace/db";
 import { projectsTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
+import { allow, INTERNAL_STAFF } from "../lib/authz";
 import { transcribeAudio } from "../lib/transcribe";
 
 const router: IRouter = Router();
@@ -15,6 +16,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 
 router.post(
   "/projects/:projectId/transcribe",
   authenticate,
+  allow(INTERNAL_STAFF),
   upload.single("audio"),
   async (req, res) => {
     try {

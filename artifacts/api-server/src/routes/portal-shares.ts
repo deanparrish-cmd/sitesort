@@ -9,6 +9,7 @@ import {
 import { and, eq, isNull, isNotNull, inArray, desc } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
+import { allow, INTERNAL_STAFF, projectApprover } from "../lib/authz";
 import { enqueuePushForMembers } from "../lib/push-triggers";
 import { isProjectApprover } from "../lib/project-authority";
 import { distributeDocumentToUser } from "../lib/document-distribution";
@@ -72,7 +73,7 @@ async function portalAudienceMembers(projectId: string) {
 
 // GET /api/projects/:projectId/portal-audience — trade groups (with portal-member
 // counts, so the dialog can grey empty ones) + individuals, for the share dialog.
-router.get("/projects/:projectId/portal-audience", authenticate, async (req, res) => {
+router.get("/projects/:projectId/portal-audience", authenticate, allow(projectApprover()), async (req, res) => {
   try {
     if (!(await ownedProject(req))) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
     if (!(await requireProjectApprover(req, res))) return;
@@ -117,7 +118,7 @@ router.get("/projects/:projectId/portal-audience", authenticate, async (req, res
 });
 
 // GET /api/projects/:projectId/portal-shares?itemType=&itemId= — current rules for an item.
-router.get("/projects/:projectId/portal-shares", authenticate, async (req, res) => {
+router.get("/projects/:projectId/portal-shares", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     if (!(await ownedProject(req))) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
     const { itemType, itemId } = req.query as { itemType?: string; itemId?: string };
@@ -146,7 +147,7 @@ router.get("/projects/:projectId/portal-shares", authenticate, async (req, res) 
 type Audience = { type: "all" | "trade" | "person"; trade?: string; personId?: string };
 
 // POST /api/projects/:projectId/portal-shares — share an item to portal audiences.
-router.post("/projects/:projectId/portal-shares", authenticate, async (req, res) => {
+router.post("/projects/:projectId/portal-shares", authenticate, allow(projectApprover()), async (req, res) => {
   try {
     if (!(await ownedProject(req))) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
     if (!(await requireProjectApprover(req, res))) return;
@@ -258,7 +259,7 @@ router.post("/projects/:projectId/portal-shares", authenticate, async (req, res)
 });
 
 // DELETE /api/projects/:projectId/portal-shares/:id — remove one share rule.
-router.delete("/projects/:projectId/portal-shares/:id", authenticate, async (req, res) => {
+router.delete("/projects/:projectId/portal-shares/:id", authenticate, allow(projectApprover()), async (req, res) => {
   try {
     if (!(await ownedProject(req))) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
     if (!(await requireProjectApprover(req, res))) return;
@@ -279,7 +280,7 @@ router.delete("/projects/:projectId/portal-shares/:id", authenticate, async (req
 
 // GET /api/projects/:projectId/member-documents — all member-submitted docs for
 // the project (joined with the uploader's name), newest first. Manager-gated.
-router.get("/projects/:projectId/member-documents", authenticate, async (req, res) => {
+router.get("/projects/:projectId/member-documents", authenticate, allow(projectApprover()), async (req, res) => {
   try {
     if (!(await ownedProject(req))) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
     if (!(await requireProjectApprover(req, res))) return;
@@ -326,7 +327,7 @@ router.get("/projects/:projectId/member-documents", authenticate, async (req, re
 
 // POST /api/projects/:projectId/member-documents/:id/review — approve or reject a
 // member-submitted document with an optional note. Manager-gated.
-router.post("/projects/:projectId/member-documents/:id/review", authenticate, async (req, res) => {
+router.post("/projects/:projectId/member-documents/:id/review", authenticate, allow(projectApprover()), async (req, res) => {
   try {
     if (!(await ownedProject(req))) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
     if (!(await requireProjectApprover(req, res))) return;

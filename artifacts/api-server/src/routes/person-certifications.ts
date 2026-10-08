@@ -4,6 +4,7 @@ import { personCertificationsTable, peopleTable } from "@workspace/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
+import { allow, COMPANY_MANAGER, INTERNAL_STAFF } from "../lib/authz";
 import { expiryStatus } from "../lib/expiry";
 import { CreatePersonCertificationBody } from "@workspace/api-zod";
 
@@ -44,7 +45,7 @@ function serialize(c: CertRow) {
   };
 }
 
-router.get("/people/:personId/certifications", authenticate, async (req, res) => {
+router.get("/people/:personId/certifications", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const person = await loadOwnedPerson(req.params.personId, req.user!.companyId);
     if (!person) { res.status(404).json({ error: "not_found", message: "Person not found" }); return; }
@@ -57,7 +58,7 @@ router.get("/people/:personId/certifications", authenticate, async (req, res) =>
   }
 });
 
-router.post("/people/:personId/certifications", authenticate, async (req, res) => {
+router.post("/people/:personId/certifications", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
     const person = await loadOwnedPerson(req.params.personId, req.user!.companyId);
@@ -95,7 +96,7 @@ router.post("/people/:personId/certifications", authenticate, async (req, res) =
   }
 });
 
-router.delete("/people/:personId/certifications/:certId", authenticate, async (req, res) => {
+router.delete("/people/:personId/certifications/:certId", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
     const person = await loadOwnedPerson(req.params.personId, req.user!.companyId);

@@ -4,6 +4,7 @@ import { photosTable, usersTable, notificationsTable, projectMembersTable, proje
 import { eq, and, or, count, inArray, isNotNull, isNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
+import { allow, INTERNAL_STAFF, projectApproverFor } from "../lib/authz";
 import { sendSafetyAlertEmail } from "../lib/email";
 import { isOverdue, issueCategoryFilter } from "../lib/accountability";
 import { logActivity } from "../lib/activity";
@@ -12,6 +13,15 @@ import { notesFor, addNote } from "../lib/portal-submission-notes";
 import { isProjectApprover } from "../lib/project-authority";
 
 const router: IRouter = Router();
+
+// Triaging, archiving, restoring and removing the photo from a site issue is for
+// the issue's project approvers (company admin / PM, per-project PM cover).
+const PHOTO_APPROVER = projectApproverFor("photo", async (req) => {
+  const row = (await db.select({ projectId: photosTable.projectId }).from(photosTable)
+    .innerJoin(projectsTable, eq(projectsTable.id, photosTable.projectId))
+    .where(and(eq(photosTable.id, req.params.photoId), eq(projectsTable.companyId, req.user!.companyId))).limit(1))[0];
+  return row?.projectId ?? null;
+});
 
 // Resolve a user's display name, or null when unassigned.
 async function nameForUser(userId: string | null | undefined): Promise<string | null> {
@@ -68,7 +78,7 @@ async function formatPhoto(p: typeof photosTable.$inferSelect, uploaderName: str
   };
 }
 
-router.get("/projects/:projectId/photos", authenticate, async (req, res) => {
+router.get("/projects/:projectId/photos", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const project = await db.select().from(projectsTable)
       .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
@@ -103,7 +113,7 @@ router.get("/projects/:projectId/photos", authenticate, async (req, res) => {
   }
 });
 
-router.get("/photos/:photoId", authenticate, async (req, res) => {
+router.get("/photos/:photoId", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const rows = await db.select().from(photosTable).where(eq(photosTable.id, req.params.photoId)).limit(1);
     if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Photo not found" }); return; }
@@ -126,7 +136,7 @@ router.get("/photos/:photoId", authenticate, async (req, res) => {
   }
 });
 
-router.patch("/photos/:photoId", authenticate, async (req, res) => {
+router.patch("/photos/:photoId", authenticate, allow(PHOTO_APPROVER), async (req, res) => {
   try {
     const rows = await db.select().from(photosTable).where(eq(photosTable.id, req.params.photoId)).limit(1);
     if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Photo not found" }); return; }
@@ -217,7 +227,7 @@ router.patch("/photos/:photoId", authenticate, async (req, res) => {
 // only; portal members never reach this route at all (portal.ts has no
 // equivalent). Retains the row for audit — see /admin/photos/:photoId in
 // admin.ts for the genuine, admin-only hard delete.
-router.delete("/photos/:photoId", authenticate, async (req, res) => {
+router.delete("/photos/:photoId", authenticate, allow(PHOTO_APPROVER), async (req, res) => {
   try {
     const rows = await db.select().from(photosTable).where(eq(photosTable.id, req.params.photoId)).limit(1);
     if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Photo not found" }); return; }
@@ -248,7 +258,7 @@ router.delete("/photos/:photoId", authenticate, async (req, res) => {
 });
 
 // PATCH /api/photos/:photoId/restore — un-archive (manager-only).
-router.patch("/photos/:photoId/restore", authenticate, async (req, res) => {
+router.patch("/photos/:photoId/restore", authenticate, allow(PHOTO_APPROVER), async (req, res) => {
   try {
     const rows = await db.select().from(photosTable).where(eq(photosTable.id, req.params.photoId)).limit(1);
     if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Photo not found" }); return; }
@@ -280,7 +290,7 @@ router.patch("/photos/:photoId/restore", authenticate, async (req, res) => {
 // DELETE /api/photos/:photoId/photo — remove just the attached image, manager-
 // only. Soft: photoUrl is left in the DB untouched, only hidden from reads
 // (formatPhoto), so it can't corrupt the issue's own history.
-router.delete("/photos/:photoId/photo", authenticate, async (req, res) => {
+router.delete("/photos/:photoId/photo", authenticate, allow(PHOTO_APPROVER), async (req, res) => {
   try {
     const rows = await db.select().from(photosTable).where(eq(photosTable.id, req.params.photoId)).limit(1);
     if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Photo not found" }); return; }
@@ -311,7 +321,7 @@ router.delete("/photos/:photoId/photo", authenticate, async (req, res) => {
 });
 
 // Company-wide snags & safety concerns
-router.get("/issues", authenticate, async (req, res) => {
+router.get("/issues", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const companyProjects = await db.select({ id: projectsTable.id, name: projectsTable.name })
       .from(projectsTable)
@@ -349,7 +359,7 @@ router.get("/issues", authenticate, async (req, res) => {
 
 const INTERNAL_ROLES = ["admin", "project_manager", "site_worker"];
 
-router.post("/projects/:projectId/photos", authenticate, async (req, res) => {
+router.post("/projects/:projectId/photos", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     if (!INTERNAL_ROLES.includes(req.user!.role)) {
       res.status(403).json({ error: "forbidden", message: "Not allowed to log photos" });
@@ -439,7 +449,7 @@ router.post("/projects/:projectId/photos", authenticate, async (req, res) => {
 // POST /api/photos/:photoId/notes — PM-side append-only note (the dashboard
 // counterpart of the portal's POST /portal/site-issues/:issueId/notes).
 // Requires the issue to already be submitted — same rule as the portal side.
-router.post("/photos/:photoId/notes", authenticate, async (req, res) => {
+router.post("/photos/:photoId/notes", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const rows = await db.select().from(photosTable).where(eq(photosTable.id, req.params.photoId)).limit(1);
     if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Photo not found" }); return; }

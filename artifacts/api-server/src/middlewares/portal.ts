@@ -4,6 +4,7 @@ import { projectMembersTable, projectsTable } from "@workspace/db/schema";
 import { and, eq, isNotNull } from "drizzle-orm";
 import { logActivity, isPortalSection, PORTAL_SECTIONS } from "../lib/activity";
 import { checkAndTouchSession } from "../lib/portal-sessions";
+import { declarePolicy } from "../lib/authz";
 
 declare global {
   namespace Express {
@@ -24,7 +25,7 @@ declare global {
 // A 401 here (any reason) tells the client to bounce to the portal login.
 // Tokens issued before this policy shipped have no `sid` → treated as expired,
 // so members simply re-login once.
-export async function requirePortalSession(req: Request, res: Response, next: NextFunction): Promise<void> {
+async function portalSession(req: Request, res: Response, next: NextFunction): Promise<void> {
   const u = req.user;
   if (!u || u.scope !== "portal" || !u.projectId) {
     res.status(403).json({ error: "forbidden", message: "Portal access required." });
@@ -60,7 +61,7 @@ export async function requirePortalSession(req: Request, res: Response, next: Ne
 //      deleting the project_members row → immediate 403, not just a hidden UI),
 //   3. the project still exists.
 // A denial is audited so the PM sees revoked members still trying to get in.
-export async function requirePortalMember(req: Request, res: Response, next: NextFunction): Promise<void> {
+async function portalMember(req: Request, res: Response, next: NextFunction): Promise<void> {
   const u = req.user;
   if (!u || u.scope !== "portal" || !u.projectId) {
     res.status(403).json({ error: "forbidden", message: "Portal access required." });
@@ -107,12 +108,17 @@ export async function requirePortalMember(req: Request, res: Response, next: Nex
   }
 }
 
+// Declared authorisation (lib/authz.ts): the holder of a live portal session,
+// and an active portal member of the token's project.
+export const requirePortalSession = declarePolicy(portalSession, "portalSession");
+export const requirePortalMember = declarePolicy(portalMember, "portalMember");
+
 // Gate for a portal WRITE route. Runs AFTER requirePortalMember (needs
 // req.portalProjectId set). Re-selects the live project_members row and 403s
 // if the requested permission flag is off — enforced server-side so a member
 // without the grant can never write even by calling the endpoint directly.
 export function requirePortalPermission(permission: "canLogIssues" | "canUpdatePlantMaterials" | "canEditDailyReport") {
-  return async function (req: Request, res: Response, next: NextFunction): Promise<void> {
+  return declarePolicy(async function (req: Request, res: Response, next: NextFunction): Promise<void> {
     const u = req.user;
     if (!u || !req.portalProjectId) {
       res.status(403).json({ error: "forbidden", message: "Portal access required." });
@@ -143,7 +149,7 @@ export function requirePortalPermission(permission: "canLogIssues" | "canUpdateP
       req.log.error({ err }, "requirePortalPermission failed");
       res.status(500).json({ error: "server_error", message: "Permission check failed." });
     }
-  };
+  }, `portalPermission(${permission})`);
 }
 
 // Automatic activity audit for portal reads. Mounted once for the whole member

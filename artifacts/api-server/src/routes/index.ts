@@ -31,6 +31,9 @@ import portalSharesRouter from "./portal-shares";
 import plantItemsRouter from "./plant-items";
 import personCertificationsRouter from "./person-certifications";
 import portalMessagesRouter from "./portal-messages";
+import { authenticate } from "../middlewares/auth";
+import { enforceDeclaredRoutes } from "../lib/authz";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -66,5 +69,9 @@ router.use(portalSharesRouter);
 router.use(plantItemsRouter);
 router.use(personCertificationsRouter);
 router.use(portalMessagesRouter);
+
+// Every logged-in route must declare who may call it (lib/authz.ts). One that
+// doesn't is closed (403 for everyone) rather than left open.
+enforceDeclaredRoutes(router, authenticate, key => logger.error({ route: key }, "Undeclared authenticated route closed: add allow(...)"));
 
 export default router;

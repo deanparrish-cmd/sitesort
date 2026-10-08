@@ -3,10 +3,11 @@ import { db } from "@workspace/db";
 import { projectsTable, projectMembersTable, documentsTable, subcontractorsTable, milestonesTable } from "@workspace/db/schema";
 import { eq, and, gt, count } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
+import { allow, INTERNAL_STAFF } from "../lib/authz";
 
 const router: IRouter = Router();
 
-router.get("/onboarding/status", authenticate, async (req, res) => {
+router.get("/onboarding/status", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const cid = req.user!.companyId;
 

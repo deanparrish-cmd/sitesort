@@ -9,6 +9,7 @@ import {
 import { eq, and, inArray, isNull, count, desc } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
+import { allow, INTERNAL_STAFF, projectApprover } from "../lib/authz";
 import { expiryStatus } from "../lib/expiry";
 import { issueCategoryFilter } from "../lib/accountability";
 import { isPinLockedOut, recordFailedPinAttempt, clearPinAttempts } from "../lib/pin-attempts";
@@ -88,7 +89,7 @@ function serializeCloseout(c: typeof projectCloseoutsTable.$inferSelect | undefi
 }
 
 // GET readiness + current close-out record (if any).
-router.get("/projects/:projectId/closeout", authenticate, async (req, res) => {
+router.get("/projects/:projectId/closeout", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
     if (!project) {
@@ -113,7 +114,7 @@ router.get("/projects/:projectId/closeout", authenticate, async (req, res) => {
 
 // POST — PIN-confirmed close-out. Marks the project complete and appends an
 // immutable handover record. Manager-only (admin / project_manager).
-router.post("/projects/:projectId/closeout", authenticate, async (req, res) => {
+router.post("/projects/:projectId/closeout", authenticate, allow(projectApprover()), async (req, res) => {
   try {
     // Approver authority on THIS project (company admin/PM, per-project PM
     // cover, or platform admin) — not just a company-wide role.
@@ -187,7 +188,7 @@ router.post("/projects/:projectId/closeout", authenticate, async (req, res) => {
 
 // POST reopen — return a completed project to active. The close-out audit rows
 // are kept (immutable history); a later re-close appends a new one.
-router.post("/projects/:projectId/closeout/reopen", authenticate, async (req, res) => {
+router.post("/projects/:projectId/closeout/reopen", authenticate, allow(projectApprover()), async (req, res) => {
   try {
     if (!(await isProjectApprover(req.user!, req.params.projectId))) {
       res.status(403).json({ error: "forbidden", message: "Only a project approver can re-open a project." });

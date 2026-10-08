@@ -45,7 +45,7 @@ async function serializeInsuranceRecords(records: InsuranceRow[]) {
 // Reliability ratings and payment holds are private to admins and project managers.
 const canSeeRatings = (role?: string) => role === "admin" || role === "project_manager";
 
-router.get("/subcontractors", authenticate, async (req, res) => {
+router.get("/subcontractors", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const wantArchived = req.query.archived === "true";
     const subs = await db.select().from(subcontractorsTable)
@@ -157,7 +157,7 @@ router.post("/subcontractors", authenticate, allow(COMPANY_MANAGER), async (req,
   }
 });
 
-router.get("/subcontractors/:subcontractorId", authenticate, async (req, res) => {
+router.get("/subcontractors/:subcontractorId", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const subs = await db.select().from(subcontractorsTable)
       .where(and(eq(subcontractorsTable.id, req.params.subcontractorId), eq(subcontractorsTable.companyId, req.user!.companyId)))
@@ -398,7 +398,7 @@ router.patch("/subcontractors/:subcontractorId/insurance/:recordId", authenticat
 // List timestamped notes for a subcontractor (most recent first)
 // ?projectId=<id> → returns general notes + notes scoped to that project
 // no projectId   → returns general notes only (contacts directory view)
-router.get("/subcontractors/:subcontractorId/notes", authenticate, async (req, res) => {
+router.get("/subcontractors/:subcontractorId/notes", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const sub = await db.select({ id: subcontractorsTable.id }).from(subcontractorsTable)
       .where(and(eq(subcontractorsTable.id, req.params.subcontractorId), eq(subcontractorsTable.companyId, req.user!.companyId)))
@@ -495,7 +495,7 @@ router.post("/subcontractors/:subcontractorId/notes", authenticate, allow(INTERN
 // on any project, no activity/distribution/sign-off history) → hard-delete,
 // same cascade cleanup as before; any footprint → archive instead, so past
 // records (which key off users.id, never touched here) keep resolving names.
-router.delete("/subcontractors/:id", authenticate, async (req, res) => {
+router.delete("/subcontractors/:id", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!["admin", "project_manager"].includes(req.user!.role)) {
       res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can delete a subcontractor." });
@@ -540,7 +540,7 @@ router.delete("/subcontractors/:id", authenticate, async (req, res) => {
 
 // PATCH /api/subcontractors/:id/restore — un-archive a previously archived
 // subcontractor. Manager-gated + tenant-scoped.
-router.patch("/subcontractors/:id/restore", authenticate, async (req, res) => {
+router.patch("/subcontractors/:id/restore", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!["admin", "project_manager"].includes(req.user!.role)) {
       res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can restore a subcontractor." });

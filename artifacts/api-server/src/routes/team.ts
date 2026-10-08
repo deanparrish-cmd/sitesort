@@ -4,7 +4,7 @@ import { projectMembersTable, usersTable, subcontractorsTable, insuranceRecordsT
 import { eq, and, isNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
-import { allow, COMPANY_MANAGER, projectApprover } from "../lib/authz";
+import { allow, COMPANY_MANAGER, INTERNAL_STAFF, projectApprover } from "../lib/authz";
 import { expiryStatus } from "../lib/expiry";
 import { revokePortalSessionsForMember } from "../lib/portal-sessions";
 import { canonicalPersonName } from "../lib/person-name";
@@ -58,7 +58,7 @@ function getInsuranceStatus(records: Array<{ expiryDate: string }>): string {
   return "ok";
 }
 
-router.get("/projects/:projectId/members", authenticate, async (req, res) => {
+router.get("/projects/:projectId/members", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const project = await db.select().from(projectsTable)
       .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
@@ -331,7 +331,7 @@ router.post("/projects/:projectId/members", authenticate, allow(projectApprover(
 // (Feature: person-first cards + add flow). Creates the project_members row with
 // personId set right away — no portal acceptance required; inviting them to the
 // portal afterwards is a separate, optional action via the existing pill.
-router.post("/projects/:projectId/members/person", authenticate, async (req, res) => {
+router.post("/projects/:projectId/members/person", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
     const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
@@ -459,7 +459,7 @@ router.post("/projects/:projectId/members/:memberId/insurance-cert", authenticat
   }
 });
 
-router.patch("/projects/:projectId/members/:memberId/contact", authenticate, async (req, res) => {
+router.patch("/projects/:projectId/members/:memberId/contact", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     // Tenant scope + role gate (this endpoint predates both; the Team tab only
     // shows the pencil to managers, but the API must enforce it too).
@@ -528,8 +528,11 @@ router.patch("/projects/:projectId/members/:memberId/contact", authenticate, asy
   }
 });
 
-router.patch("/projects/:projectId/members/:memberId/avatar", authenticate, async (req, res) => {
+router.patch("/projects/:projectId/members/:memberId/avatar", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
+    // Tenant scope: these predate the company check (memberId + projectId only).
+    const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
+    if (!project) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
     const { avatarUrl } = req.body;
     if (!avatarUrl) { res.status(400).json({ error: "validation_error", message: "avatarUrl required" }); return; }
 
@@ -551,8 +554,11 @@ router.patch("/projects/:projectId/members/:memberId/avatar", authenticate, asyn
   }
 });
 
-router.patch("/projects/:projectId/members/:memberId/schedule", authenticate, async (req, res) => {
+router.patch("/projects/:projectId/members/:memberId/schedule", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
+    // Tenant scope: these predate the company check (memberId + projectId only).
+    const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
+    if (!project) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
     const { scheduledDays, siteStartTime, siteEndTime } = req.body;
     await db.update(projectMembersTable)
       .set({
@@ -573,9 +579,12 @@ router.patch("/projects/:projectId/members/:memberId/schedule", authenticate, as
 // materials). Manager-gated: only a PM/admin can change another member's
 // permissions. Enforced server-side on the actual write endpoints via
 // requirePortalPermission — this endpoint only flips the stored flag.
-router.patch("/projects/:projectId/members/:memberId/permissions", authenticate, async (req, res) => {
+router.patch("/projects/:projectId/members/:memberId/permissions", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
+    // Tenant scope: these predate the company check (memberId + projectId only).
+    const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
+    if (!project) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
     const { canLogIssues, canUpdatePlantMaterials, canEditDailyReport } = req.body as { canLogIssues?: boolean; canUpdatePlantMaterials?: boolean; canEditDailyReport?: boolean };
     const updates: Partial<typeof projectMembersTable.$inferInsert> = {};
     if (canLogIssues !== undefined) updates.canLogIssues = canLogIssues;
@@ -598,7 +607,7 @@ router.patch("/projects/:projectId/members/:memberId/permissions", authenticate,
 // admin/project_manager (requireManager, not isProjectApprover) — an
 // existing PM can hand out cover, but a newly-covering member can't chain-
 // grant it to others themselves; keeps who-can-grant simple and centralized.
-router.patch("/projects/:projectId/members/:memberId/authority", authenticate, async (req, res) => {
+router.patch("/projects/:projectId/members/:memberId/authority", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
     const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
@@ -625,7 +634,7 @@ router.patch("/projects/:projectId/members/:memberId/authority", authenticate, a
 // row on the member's very next request as a backstop). Past activity_log /
 // document_distributions / acknowledgment_audit_log rows are untouched —
 // they key off users.id, which is never deleted here.
-router.delete("/projects/:projectId/members/:memberId", authenticate, async (req, res) => {
+router.delete("/projects/:projectId/members/:memberId", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
     const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
@@ -658,7 +667,7 @@ router.delete("/projects/:projectId/members/:memberId", authenticate, async (req
 // subcontractor firm AND every one of its people from this project in one
 // action. Manager-gated, tenant-scoped. Mirrors the single-member removal
 // above per row (revoke session, cancel pending invite, delete).
-router.delete("/projects/:projectId/members/company/:subcontractorId", authenticate, async (req, res) => {
+router.delete("/projects/:projectId/members/company/:subcontractorId", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
     const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);

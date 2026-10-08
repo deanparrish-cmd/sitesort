@@ -7,7 +7,7 @@ import { companiesTable, usersTable, subcontractorsTable } from "@workspace/db/s
 import { eq, and } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { generateToken, authenticate } from "../middlewares/auth";
-import { allow, COMPANY_MANAGER } from "../lib/authz";
+import { allow, ANY_MEMBER, COMPANY_ADMIN, COMPANY_MANAGER } from "../lib/authz";
 import { getMemberships, membershipRole, addMembership, resolveActiveCompany } from "../lib/memberships";
 import { blockToken } from "../lib/token-blocklist";
 import { isLockedOut, recordFailedAttempt, clearAttempts } from "../lib/login-attempts";
@@ -191,7 +191,7 @@ router.post("/auth/login", async (req, res) => {
 
 // POST /api/auth/switch-company — re-issue a token scoped to another company the
 // user belongs to. The old token should be discarded client-side.
-router.post("/auth/switch-company", authenticate, async (req, res) => {
+router.post("/auth/switch-company", authenticate, allow(ANY_MEMBER), async (req, res) => {
   try {
     const { companyId } = req.body;
     if (!companyId) { res.status(400).json({ error: "validation_error", message: "companyId required" }); return; }
@@ -217,7 +217,7 @@ router.post("/auth/switch-company", authenticate, async (req, res) => {
   }
 });
 
-router.post("/auth/logout", authenticate, async (req, res) => {
+router.post("/auth/logout", authenticate, allow(ANY_MEMBER), async (req, res) => {
   try {
     const token = req.headers.authorization!.slice(7);
     const decoded = jwt.decode(token) as { exp: number };
@@ -229,7 +229,7 @@ router.post("/auth/logout", authenticate, async (req, res) => {
   }
 });
 
-router.get("/auth/me", authenticate, async (req, res) => {
+router.get("/auth/me", authenticate, allow(ANY_MEMBER), async (req, res) => {
   try {
     const users = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
     if (users.length === 0) {
@@ -438,7 +438,7 @@ router.post("/auth/reset-pin", async (req, res) => {
   }
 });
 
-router.patch("/auth/me", authenticate, async (req, res) => {
+router.patch("/auth/me", authenticate, allow(ANY_MEMBER), async (req, res) => {
   try {
     const { name, phone, avatarUrl, emailNotifications } = req.body;
     const updates: Record<string, unknown> = {};
@@ -468,7 +468,7 @@ router.patch("/auth/me", authenticate, async (req, res) => {
   }
 });
 
-router.post("/auth/change-password", authenticate, async (req, res) => {
+router.post("/auth/change-password", authenticate, allow(ANY_MEMBER), async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
     if (!currentPassword || !newPassword) {
@@ -504,7 +504,7 @@ router.post("/auth/change-password", authenticate, async (req, res) => {
 // Set, update, or reset the signed-in user's 4-digit sign-off PIN.
 // Requires the current account password (this also serves as the reset path
 // for a signed-in user who has forgotten their PIN).
-router.post("/auth/pin", authenticate, async (req, res) => {
+router.post("/auth/pin", authenticate, allow(ANY_MEMBER), async (req, res) => {
   try {
     const { currentPassword, pin } = req.body ?? {};
     const result = await setUserPin(req.user!.id, currentPassword, pin, req);
@@ -519,7 +519,7 @@ router.post("/auth/pin", authenticate, async (req, res) => {
   }
 });
 
-router.get("/companies/mine", authenticate, async (req, res) => {
+router.get("/companies/mine", authenticate, allow(ANY_MEMBER), async (req, res) => {
   try {
     const rows = await db.select().from(companiesTable).where(eq(companiesTable.id, req.user!.companyId)).limit(1);
     if (rows.length === 0) {
@@ -552,7 +552,7 @@ router.get("/auth/invite/:token", (_req, res) => { res.status(410).json(INVITE_R
 // subcontractor DASHBOARD account. Refused; nothing is created.
 router.post("/auth/invite/:token/accept", (_req, res) => { res.status(410).json(INVITE_RETIRED); });
 
-router.patch("/companies/mine", authenticate, async (req, res) => {
+router.patch("/companies/mine", authenticate, allow(COMPANY_ADMIN), async (req, res) => {
   try {
     if (req.user!.role !== "admin") {
       res.status(403).json({ error: "forbidden", message: "Only admins can update company settings" });

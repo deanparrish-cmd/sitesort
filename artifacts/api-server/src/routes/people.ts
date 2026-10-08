@@ -9,6 +9,7 @@ import {
 import { and, eq, desc, inArray, isNull, isNotNull, sql } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
+import { allow, COMPANY_MANAGER, INTERNAL_STAFF } from "../lib/authz";
 import { sendProjectInviteEmail } from "../lib/invite-email";
 import { sendPushToUser } from "../lib/web-push";
 import { CreateSubcontractorPersonBody, CreatePortalInviteBody, UpdatePersonBody } from "@workspace/api-zod";
@@ -187,7 +188,7 @@ async function loadOwnedProject(projectId: string, companyId: string) {
 // GET /api/people[?projectId=] — flat list of every active person for the
 // company. With projectId, each person carries onProject (already added to
 // that project's team).
-router.get("/people", authenticate, async (req, res) => {
+router.get("/people", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const projectId = typeof req.query.projectId === "string" ? req.query.projectId : undefined;
     const people = await db.select({
@@ -233,7 +234,7 @@ router.get("/people", authenticate, async (req, res) => {
 
 // GET /api/subcontractors/:subcontractorId/people[?projectId=] — list people of a
 // subcontractor firm; with projectId, each carries per-project portal status.
-router.get("/subcontractors/:subcontractorId/people", authenticate, async (req, res) => {
+router.get("/subcontractors/:subcontractorId/people", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
     const sub = await loadOwnedSubcontractor(req.params.subcontractorId, req.user!.companyId);
@@ -256,7 +257,7 @@ router.get("/subcontractors/:subcontractorId/people", authenticate, async (req, 
 // POST /api/subcontractors/:subcontractorId/people — add an individual person to a
 // firm. Dedupes on (subcontractor, email) — a repeat add (e.g. the "add primary
 // contact" one-click fired twice) returns the existing row instead of erroring.
-router.post("/subcontractors/:subcontractorId/people", authenticate, async (req, res) => {
+router.post("/subcontractors/:subcontractorId/people", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
     const sub = await loadOwnedSubcontractor(req.params.subcontractorId, req.user!.companyId);
@@ -297,7 +298,7 @@ router.post("/subcontractors/:subcontractorId/people", authenticate, async (req,
 // if they're on an ACTIVE project; otherwise zero footprint anywhere → hard
 // delete (cascades their invites/memberships); any footprint → archive
 // instead, so past records (keyed off users.id) keep resolving their name.
-router.delete("/people/:personId", authenticate, async (req, res) => {
+router.delete("/people/:personId", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
     const rows = await db.select().from(peopleTable)
@@ -330,7 +331,7 @@ router.delete("/people/:personId", authenticate, async (req, res) => {
 });
 
 // PATCH /api/people/:personId/restore — un-archive a previously archived person.
-router.patch("/people/:personId/restore", authenticate, async (req, res) => {
+router.patch("/people/:personId/restore", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
     const rows = await db.select().from(peopleTable)
@@ -347,7 +348,7 @@ router.patch("/people/:personId/restore", authenticate, async (req, res) => {
 // PATCH /api/people/:personId — update a person's portal contact-visibility flag
 // and/or job title (manager-gated, tenant-scoped). `showContactInPortal: null`
 // resets to the role-based default.
-router.patch("/people/:personId", authenticate, async (req, res) => {
+router.patch("/people/:personId", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
     const rows = await db.select().from(peopleTable)
@@ -430,7 +431,7 @@ router.patch("/people/:personId", authenticate, async (req, res) => {
 // (portal-only individuals not tied to a subcontractor firm) with their portal
 // status for this project. In-house people are just `people` rows with
 // subcontractorId NULL; they are portal-only exactly like subcontractor people.
-router.get("/projects/:projectId/in-house-people", authenticate, async (req, res) => {
+router.get("/projects/:projectId/in-house-people", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
     const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
@@ -453,7 +454,7 @@ router.get("/projects/:projectId/in-house-people", authenticate, async (req, res
 
 // POST /api/projects/:projectId/in-house-people — add an in-house person (portal
 // participant with no subcontractor firm). Dedupes on (company, email).
-router.post("/projects/:projectId/in-house-people", authenticate, async (req, res) => {
+router.post("/projects/:projectId/in-house-people", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
     const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
@@ -496,7 +497,7 @@ router.post("/projects/:projectId/in-house-people", authenticate, async (req, re
 // person becomes a portalOnly account when they accept it (see portal.ts).
 // ==========================================================================
 
-router.post("/projects/:projectId/portal-invites", authenticate, async (req, res) => {
+router.post("/projects/:projectId/portal-invites", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
     const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
@@ -654,7 +655,7 @@ const RESEND_COOLDOWN_MS = 5 * 60 * 1000; // max 1 resend / 5 min per invite
 // POST /api/projects/:projectId/portal-invites/:inviteId/resend — re-send a
 // pending invite's email (manager-gated, rate-limited). Rotates the token (the
 // raw token is never stored) and refreshes the 7-day expiry.
-router.post("/projects/:projectId/portal-invites/:inviteId/resend", authenticate, async (req, res) => {
+router.post("/projects/:projectId/portal-invites/:inviteId/resend", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
     const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
@@ -722,7 +723,7 @@ async function orphanPortalUsers(companyId: string) {
 }
 
 // GET /api/portal-users/orphaned — list them (manager-gated).
-router.get("/portal-users/orphaned", authenticate, async (req, res) => {
+router.get("/portal-users/orphaned", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
     res.json(await orphanPortalUsers(req.user!.companyId));
@@ -735,7 +736,7 @@ router.get("/portal-users/orphaned", authenticate, async (req, res) => {
 // DELETE /api/portal-users/:userId — purge ONE orphaned portal-only account +
 // its non-cascade dependents (distributions, notifications). Refuses to touch a
 // user that isn't portalOnly, isn't in this company, or still has a membership.
-router.delete("/portal-users/:userId", authenticate, async (req, res) => {
+router.delete("/portal-users/:userId", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
     const orphans = await orphanPortalUsers(req.user!.companyId);

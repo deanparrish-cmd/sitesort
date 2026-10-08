@@ -5,6 +5,7 @@ import { documentsTable, documentDistributionsTable, usersTable, projectsTable, 
 import { eq, and, desc } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
+import { allow, COMPANY_MANAGER, INTERNAL_STAFF, projectApprover, projectApproverFor } from "../lib/authz";
 import { enqueuePushForMembers, acceptedPortalMemberUserIds } from "../lib/push-triggers";
 import { removedFromProjectUserIds } from "../lib/project-membership";
 import { isPinLockedOut, recordFailedPinAttempt, clearPinAttempts } from "../lib/pin-attempts";
@@ -13,6 +14,15 @@ import { distributeDocumentToUser } from "../lib/document-distribution";
 import { isProjectApprover } from "../lib/project-authority";
 
 const router: IRouter = Router();
+
+// Editing a document (status, version, revision, PIN sign-off policy) is for
+// the document's project approvers (company admin / PM, per-project PM cover).
+const DOC_APPROVER = projectApproverFor("document", async (req) => {
+  const row = (await db.select({ projectId: documentsTable.projectId }).from(documentsTable)
+    .innerJoin(projectsTable, eq(projectsTable.id, documentsTable.projectId))
+    .where(and(eq(documentsTable.id, req.params.documentId), eq(projectsTable.companyId, req.user!.companyId))).limit(1))[0];
+  return row?.projectId ?? null;
+});
 
 function getDistSummary(dists: Array<{ status: string }>) {
   const total = dists.length;
@@ -72,7 +82,7 @@ router.get("/documents/:documentId/open", async (req, res) => {
   }
 });
 
-router.get("/projects/:projectId/documents", authenticate, async (req, res) => {
+router.get("/projects/:projectId/documents", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const project = await db.select({ id: projectsTable.id }).from(projectsTable)
       .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
@@ -123,7 +133,7 @@ router.get("/projects/:projectId/documents", authenticate, async (req, res) => {
   }
 });
 
-router.post("/projects/:projectId/documents", authenticate, async (req, res) => {
+router.post("/projects/:projectId/documents", authenticate, allow(projectApprover()), async (req, res) => {
   try {
     const project = await db.select({ id: projectsTable.id }).from(projectsTable)
       .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
@@ -248,7 +258,7 @@ router.post("/projects/:projectId/documents", authenticate, async (req, res) => 
   }
 });
 
-router.get("/documents/:documentId", authenticate, async (req, res) => {
+router.get("/documents/:documentId", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const docs = await db.select().from(documentsTable).where(eq(documentsTable.id, req.params.documentId)).limit(1);
     if (docs.length === 0) {
@@ -329,7 +339,7 @@ router.get("/documents/:documentId", authenticate, async (req, res) => {
   }
 });
 
-router.post("/documents/:documentId/acknowledge", authenticate, async (req, res) => {
+router.post("/documents/:documentId/acknowledge", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const { pin } = req.body ?? {};
 
@@ -427,7 +437,7 @@ router.post("/documents/:documentId/acknowledge", authenticate, async (req, res)
   }
 });
 
-router.get("/documents/:documentId/distributions", authenticate, async (req, res) => {
+router.get("/documents/:documentId/distributions", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const docs = await db.select({ projectId: documentsTable.projectId }).from(documentsTable)
       .where(eq(documentsTable.id, req.params.documentId)).limit(1);
@@ -467,7 +477,7 @@ router.get("/documents/:documentId/distributions", authenticate, async (req, res
 
 // Read-only, append-only audit trail for a document's sign-offs.
 // Restricted to admins and project managers (compliance oversight roles).
-router.get("/documents/:documentId/audit-log", authenticate, async (req, res) => {
+router.get("/documents/:documentId/audit-log", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (req.user!.role !== "admin" && req.user!.role !== "project_manager") {
       res.status(403).json({ error: "forbidden", message: "Only admins and project managers can view the audit log." });
@@ -513,7 +523,7 @@ router.get("/documents/:documentId/audit-log", authenticate, async (req, res) =>
   }
 });
 
-router.patch("/documents/:documentId", authenticate, async (req, res) => {
+router.patch("/documents/:documentId", authenticate, allow(DOC_APPROVER), async (req, res) => {
   try {
     const docs = await db.select().from(documentsTable).where(eq(documentsTable.id, req.params.documentId)).limit(1);
     if (!docs[0]) {
@@ -590,7 +600,7 @@ router.patch("/documents/:documentId", authenticate, async (req, res) => {
 // GET /documents/:documentId/revisions — the revision history for a document,
 // walking the supersede chain (previousVersionId) from the requested doc back
 // through its ancestors. Newest first. Tenant-scoped. (F3)
-router.get("/documents/:documentId/revisions", authenticate, async (req, res) => {
+router.get("/documents/:documentId/revisions", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const start = await db.select().from(documentsTable).where(eq(documentsTable.id, req.params.documentId)).limit(1);
     if (!start[0]) {

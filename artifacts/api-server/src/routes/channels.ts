@@ -9,6 +9,7 @@ import {
 } from "@workspace/db/schema";
 import { eq, and, gt, lt, sql, desc, inArray, ne } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
+import { allow, INTERNAL_STAFF } from "../lib/authz";
 import { sendChannelMessage, toggleChannelMessageReaction, isAllowedReactionEmoji } from "../lib/messaging";
 
 const router: IRouter = Router();
@@ -23,7 +24,7 @@ function channelPreview(m: { content: string | null; attachmentType?: string | n
 }
 
 // GET /api/channels — list project channels accessible to the current user, with unread count + last message
-router.get("/channels", authenticate, async (req, res) => {
+router.get("/channels", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const userId = req.user!.id;
     const companyId = req.user!.companyId;
@@ -111,7 +112,7 @@ router.get("/channels", authenticate, async (req, res) => {
 });
 
 // GET /api/channels/search?q= — search channel message content
-router.get("/channels/search", authenticate, async (req, res) => {
+router.get("/channels/search", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const q = (req.query.q as string | undefined)?.trim();
     if (!q || q.length < 2) { res.json([]); return; }
@@ -177,7 +178,7 @@ router.get("/channels/search", authenticate, async (req, res) => {
 
 // GET /api/channels/:projectId/messages — fetch thread + mark read
 // Supports ?before=<id> (load older page), ?after=<id> (poll for new), default = last 50
-router.get("/channels/:projectId/messages", authenticate, async (req, res) => {
+router.get("/channels/:projectId/messages", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const { projectId } = req.params;
     const userId = req.user!.id;
@@ -325,7 +326,7 @@ router.get("/channels/:projectId/messages", authenticate, async (req, res) => {
 });
 
 // POST /api/channels/:projectId/messages — send a channel message
-router.post("/channels/:projectId/messages", authenticate, async (req, res) => {
+router.post("/channels/:projectId/messages", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const { projectId } = req.params;
     const { content, attachmentType, attachmentId, replyToId } = req.body;
@@ -371,7 +372,7 @@ router.post("/channels/:projectId/messages", authenticate, async (req, res) => {
 // message must belong to the caller's active company before it can be reacted
 // to, otherwise any authenticated user could react to another company's
 // messages (and read their reaction counts) by guessing ids.
-router.post("/channel-messages/:id/react", authenticate, async (req, res) => {
+router.post("/channel-messages/:id/react", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const { emoji } = req.body;
     if (!emoji || !isAllowedReactionEmoji(emoji)) {

@@ -6,7 +6,7 @@ import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { isValidTimeZone, isValidCloseTime, safeTz, siteTzLabel } from "../lib/site-clock";
 import { isProjectApprover, COMPANY_MANAGER_ROLES } from "../lib/project-authority";
-import { allow, COMPANY_MANAGER, projectApprover } from "../lib/authz";
+import { allow, COMPANY_MANAGER, INTERNAL_STAFF, projectApprover } from "../lib/authz";
 import { logActivity } from "../lib/activity";
 
 const router: IRouter = Router();
@@ -87,7 +87,7 @@ function planProjectLimit(tier: string, status: string): number {
   return PLAN_PROJECT_LIMITS[tier] ?? 1;
 }
 
-router.get("/projects", authenticate, async (req, res) => {
+router.get("/projects", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const projects = await db.select().from(projectsTable).where(eq(projectsTable.companyId, req.user!.companyId));
 
@@ -181,7 +181,7 @@ router.post("/projects", authenticate, allow(COMPANY_MANAGER), async (req, res) 
   }
 });
 
-router.get("/projects/:projectId", authenticate, async (req, res) => {
+router.get("/projects/:projectId", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const projects = await db.select().from(projectsTable)
       .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
@@ -448,7 +448,7 @@ router.post("/projects/:projectId/tradespeople", authenticate, allow(projectAppr
 
 // ── Milestones ──────────────────────────────────────────────────────────────
 
-router.get("/projects/:projectId/milestones", authenticate, async (req, res) => {
+router.get("/projects/:projectId/milestones", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const project = await db.select({ id: projectsTable.id }).from(projectsTable)
       .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId))).limit(1);
@@ -468,7 +468,7 @@ router.get("/projects/:projectId/milestones", authenticate, async (req, res) => 
   }
 });
 
-router.post("/projects/:projectId/milestones", authenticate, async (req, res) => {
+router.post("/projects/:projectId/milestones", authenticate, allow(projectApprover()), async (req, res) => {
   try {
     const project = await db.select({ id: projectsTable.id }).from(projectsTable)
       .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId))).limit(1);
@@ -489,7 +489,7 @@ router.post("/projects/:projectId/milestones", authenticate, async (req, res) =>
   }
 });
 
-router.patch("/projects/:projectId/milestones/:milestoneId", authenticate, async (req, res) => {
+router.patch("/projects/:projectId/milestones/:milestoneId", authenticate, allow(projectApprover()), async (req, res) => {
   try {
     const project = await db.select({ id: projectsTable.id }).from(projectsTable)
       .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId))).limit(1);
@@ -516,7 +516,7 @@ router.patch("/projects/:projectId/milestones/:milestoneId", authenticate, async
   }
 });
 
-router.delete("/projects/:projectId/milestones/:milestoneId", authenticate, async (req, res) => {
+router.delete("/projects/:projectId/milestones/:milestoneId", authenticate, allow(projectApprover()), async (req, res) => {
   try {
     const project = await db.select({ id: projectsTable.id }).from(projectsTable)
       .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId))).limit(1);

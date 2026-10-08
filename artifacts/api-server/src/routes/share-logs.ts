@@ -4,11 +4,12 @@ import { shareLogsTable, usersTable, projectsTable } from "@workspace/db/schema"
 import { eq, and, desc } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
+import { allow, INTERNAL_STAFF } from "../lib/authz";
 
 const router: IRouter = Router();
 
 // POST /share-logs — record a share action
-router.post("/share-logs", authenticate, async (req, res) => {
+router.post("/share-logs", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const { projectId, entityType, entityId, entityName, method, recipientInfo } = req.body;
     if (!entityType || !entityId || !entityName || !method) {
@@ -49,7 +50,7 @@ router.post("/share-logs", authenticate, async (req, res) => {
 
 // GET /share-logs?projectId=X — all logs for a project
 // GET /share-logs?entityType=X&entityId=Y — logs for a specific item
-router.get("/share-logs", authenticate, async (req, res) => {
+router.get("/share-logs", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const { projectId, entityType, entityId } = req.query as Record<string, string>;
 

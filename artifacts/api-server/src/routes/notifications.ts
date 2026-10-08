@@ -3,10 +3,11 @@ import { db } from "@workspace/db";
 import { notificationsTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
+import { allow, ANY_MEMBER } from "../lib/authz";
 
 const router: IRouter = Router();
 
-router.get("/notifications", authenticate, async (req, res) => {
+router.get("/notifications", authenticate, allow(ANY_MEMBER), async (req, res) => {
   try {
     const notifications = await db.select().from(notificationsTable)
       .where(eq(notificationsTable.userId, req.user!.id))
@@ -29,7 +30,7 @@ router.get("/notifications", authenticate, async (req, res) => {
   }
 });
 
-router.patch("/notifications/:notificationId/read", authenticate, async (req, res) => {
+router.patch("/notifications/:notificationId/read", authenticate, allow(ANY_MEMBER), async (req, res) => {
   try {
     await db.update(notificationsTable)
       .set({ read: true })
@@ -41,7 +42,7 @@ router.patch("/notifications/:notificationId/read", authenticate, async (req, re
   }
 });
 
-router.patch("/notifications/read-all", authenticate, async (req, res) => {
+router.patch("/notifications/read-all", authenticate, allow(ANY_MEMBER), async (req, res) => {
   try {
     await db.update(notificationsTable)
       .set({ read: true })

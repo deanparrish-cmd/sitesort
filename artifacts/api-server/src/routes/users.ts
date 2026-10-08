@@ -8,11 +8,11 @@ import { authenticate, bustMembershipCache } from "../middlewares/auth";
 import { sendInvitationEmail } from "../lib/email";
 import { addMembership, membershipRole } from "../lib/memberships";
 import { parseFullPersonName } from "../lib/name-validation";
-import { allow, COMPANY_MANAGER, DASHBOARD_ROLES, self, bustRoleCache } from "../lib/authz";
+import { allow, COMPANY_MANAGER, DASHBOARD_ROLES, INTERNAL_STAFF, bustRoleCache, self } from "../lib/authz";
 
 const router: IRouter = Router();
 
-router.get("/users", authenticate, async (req, res) => {
+router.get("/users", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     // Team = everyone with a membership in the active company (their role is the
     // membership role in THIS company, which can differ from their home role).
@@ -241,7 +241,7 @@ router.delete("/users/:userId", authenticate, allow(COMPANY_MANAGER), async (req
 });
 
 // List notes for a team member (most recent first)
-router.get("/users/:userId/notes", authenticate, async (req, res) => {
+router.get("/users/:userId/notes", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     // Target must be a member of the active company.
     if (await membershipRole(req.params.userId, req.user!.companyId) === null) { res.status(404).json({ error: "not_found", message: "User not found" }); return; }
@@ -266,7 +266,7 @@ router.get("/users/:userId/notes", authenticate, async (req, res) => {
 });
 
 // Add a note to a team member
-router.post("/users/:userId/notes", authenticate, async (req, res) => {
+router.post("/users/:userId/notes", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     // Target must be a member of the active company.
     if (await membershipRole(req.params.userId, req.user!.companyId) === null) { res.status(404).json({ error: "not_found", message: "User not found" }); return; }

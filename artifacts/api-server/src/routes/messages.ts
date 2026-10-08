@@ -4,6 +4,7 @@ import { messagesTable, usersTable, notificationsTable, documentsTable, photosTa
 import { eq, and, or, desc, lt, gt, sql, inArray, isNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
+import { allow, INTERNAL_STAFF } from "../lib/authz";
 import { logActivity } from "../lib/activity";
 import { sendDirectMessage, toggleMessageReaction, isAllowedReactionEmoji } from "../lib/messaging";
 
@@ -46,7 +47,7 @@ function isUnreadDmRow(
 }
 
 // GET /api/messages/conversations — list conversations for current user (or all if admin/pm)
-router.get("/messages/conversations", authenticate, async (req, res) => {
+router.get("/messages/conversations", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const userId = req.user!.id;
     const companyId = req.user!.companyId;
@@ -151,7 +152,7 @@ router.get("/messages/conversations", authenticate, async (req, res) => {
 
 // GET /api/messages/thread/:userId — messages between current user and given user
 // Supports ?before=<id> (load older page), ?after=<id> (poll for new), default = last 50
-router.get("/messages/thread/:userId", authenticate, async (req, res) => {
+router.get("/messages/thread/:userId", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const me = req.user!.id;
     const other = req.params.userId as string;
@@ -347,7 +348,7 @@ router.get("/messages/thread/:userId", authenticate, async (req, res) => {
 });
 
 // POST /api/messages — send a message
-router.post("/messages", authenticate, async (req, res) => {
+router.post("/messages", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const { recipientId, content, attachmentType, attachmentId, replyToId, projectId } = req.body;
     if (!recipientId || (!content?.trim() && !attachmentId)) {
@@ -383,7 +384,7 @@ router.post("/messages", authenticate, async (req, res) => {
 });
 
 // POST /api/messages/broadcast — send same message to multiple recipients
-router.post("/messages/broadcast", authenticate, async (req, res) => {
+router.post("/messages/broadcast", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const { recipientIds, content, attachmentType, attachmentId } = req.body;
     if (!Array.isArray(recipientIds) || recipientIds.length === 0 || (!content?.trim() && !attachmentId)) {
@@ -435,7 +436,7 @@ router.post("/messages/broadcast", authenticate, async (req, res) => {
 // PATCH /api/messages/:id — edit own message. Project-scoped DMs are
 // permanent (Team Portal messaging is a record, not a draft) — only a legacy
 // company-wide DM (projectId null) can still be edited.
-router.patch("/messages/:id", authenticate, async (req, res) => {
+router.patch("/messages/:id", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const { content } = req.body;
     if (!content?.trim()) {
@@ -461,7 +462,7 @@ router.patch("/messages/:id", authenticate, async (req, res) => {
 });
 
 // DELETE /api/messages/:id — delete own message. Same permanence rule as PATCH.
-router.delete("/messages/:id", authenticate, async (req, res) => {
+router.delete("/messages/:id", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const rows = await db.select().from(messagesTable)
       .where(and(eq(messagesTable.id, req.params.id), eq(messagesTable.senderId, req.user!.id), isNull(messagesTable.projectId)))
@@ -479,13 +480,21 @@ router.delete("/messages/:id", authenticate, async (req, res) => {
 });
 
 // POST /api/messages/:id/react — toggle a reaction (add if absent, remove if present)
-router.post("/messages/:id/react", authenticate, async (req, res) => {
+router.post("/messages/:id/react", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const { emoji } = req.body;
     if (!emoji || !isAllowedReactionEmoji(emoji)) {
       res.status(400).json({ error: "validation_error", message: "Invalid emoji" });
       return;
     }
+    // Only a message in one of the caller's own conversations, in this company.
+    const msg = await db.select({ id: messagesTable.id }).from(messagesTable)
+      .where(and(
+        eq(messagesTable.id, req.params.id),
+        eq(messagesTable.companyId, req.user!.companyId),
+        or(eq(messagesTable.senderId, req.user!.id), eq(messagesTable.recipientId, req.user!.id)),
+      )).limit(1);
+    if (!msg[0]) { res.status(404).json({ error: "not_found", message: "Message not found" }); return; }
     res.json(await toggleMessageReaction(req.params.id, req.user!.id, emoji));
   } catch (err) {
     req.log.error({ err }, "React to message error");
@@ -494,7 +503,7 @@ router.post("/messages/:id/react", authenticate, async (req, res) => {
 });
 
 // GET /api/messages/search?q= — search DM message content
-router.get("/messages/search", authenticate, async (req, res) => {
+router.get("/messages/search", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const q = (req.query.q as string | undefined)?.trim();
     if (!q || q.length < 2) { res.json([]); return; }
@@ -552,7 +561,7 @@ router.get("/messages/search", authenticate, async (req, res) => {
 });
 
 // GET /api/messages/users — list company users to start new conversations with
-router.get("/messages/users", authenticate, async (req, res) => {
+router.get("/messages/users", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     // Everyone who is a member of the active company (role = membership role here).
     const users = await db
@@ -569,7 +578,7 @@ router.get("/messages/users", authenticate, async (req, res) => {
 });
 
 // GET /api/messages/unread-count — total unread for current user
-router.get("/messages/unread-count", authenticate, async (req, res) => {
+router.get("/messages/unread-count", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const rows = await db
       .select({ id: messagesTable.id })

@@ -3,12 +3,13 @@ import { db } from "@workspace/db";
 import { insuranceRecordsTable, subcontractorsTable, permitsTable, projectsTable, documentDistributionsTable, documentsTable, personCertificationsTable, peopleTable, usersTable } from "@workspace/db/schema";
 import { eq, and, inArray, isNull, isNotNull } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
+import { allow, INTERNAL_STAFF } from "../lib/authz";
 import { expiryStatus } from "../lib/expiry";
 import { pinRequiredForDoc } from "../lib/signoff";
 
 const router: IRouter = Router();
 
-router.get("/compliance", authenticate, async (req, res) => {
+router.get("/compliance", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const now = new Date();
     const in30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);

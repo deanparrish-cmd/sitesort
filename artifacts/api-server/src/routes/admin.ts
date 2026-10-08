@@ -27,28 +27,16 @@ import {
 } from "@workspace/db/schema";
 import { eq, gte, lt, and, desc, sql, count, isNotNull, inArray, isNull } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
+import { allow, PLATFORM_ADMIN } from "../lib/authz";
 import { cancelLiveStripeSubscriptions } from "../lib/stripe-cancellation";
 import { runCompanyDeletionQueries } from "../lib/company-deletion";
 
 const router: IRouter = Router();
 
-// Platform Admin — SiteSort's OWN internal-staff flag (users.platformAdmin),
-// completely separate from `role` (a customer's admin/pm/worker role WITHIN
-// their own company — a customer who is "admin" of their own account must
-// never pass this). Checked fresh from the DB on every request rather than
-// trusted from the JWT, so revoking a staff member's access via the Admin
-// section itself (see /admin/users below) takes effect immediately, not just
-// at their next login.
-async function requireAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
-  const userId = (req as Request & { user?: { id?: string } }).user?.id;
-  if (!userId) { res.status(403).json({ error: "forbidden", message: "Admin access required" }); return; }
-  const rows = await db.select({ platformAdmin: usersTable.platformAdmin }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
-  if (!rows[0]?.platformAdmin) {
-    res.status(403).json({ error: "forbidden", message: "Admin access required" });
-    return;
-  }
-  next();
-}
+// Platform Admin: SiteSort's OWN internal-staff flag (users.platformAdmin),
+// completely separate from a customer's role within their own company. Every
+// route here declares allow(PLATFORM_ADMIN), which re-reads the flag from the
+// DB on each request, so revoking it takes effect at once.
 
 function daysAgo(n: number): Date {
   const d = new Date();
@@ -67,7 +55,7 @@ async function n(query: Promise<{ count: unknown }[]>): Promise<number> {
   return Number(row?.count ?? 0);
 }
 
-router.get("/admin/stats", authenticate, requireAdmin, async (req, res) => {
+router.get("/admin/stats", authenticate, allow(PLATFORM_ADMIN), async (req, res) => {
   try {
     const todayStart = daysAgo(0);
     const weekAgo = daysAgo(7);
@@ -371,7 +359,7 @@ router.get("/admin/stats", authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-router.get("/admin/chart-data", authenticate, requireAdmin, async (req, res) => {
+router.get("/admin/chart-data", authenticate, allow(PLATFORM_ADMIN), async (req, res) => {
   try {
     const thirtyDaysAgo = daysAgo(30);
 
@@ -436,7 +424,7 @@ router.get("/admin/chart-data", authenticate, requireAdmin, async (req, res) => 
   }
 });
 
-router.get("/admin/activity", authenticate, requireAdmin, async (req, res) => {
+router.get("/admin/activity", authenticate, allow(PLATFORM_ADMIN), async (req, res) => {
   try {
     const [recentDocs, recentSignOffs, recentPermits, recentQr, recentPhotos, recentUsers, recentInsurance] = await Promise.all([
       db.select({
@@ -531,7 +519,7 @@ router.get("/admin/activity", authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-router.get("/admin/feature-adoption", authenticate, requireAdmin, async (req, res) => {
+router.get("/admin/feature-adoption", authenticate, allow(PLATFORM_ADMIN), async (req, res) => {
   try {
     async function avgDaysToFirst(
       firstActionRows: { userId: string; firstAt: Date }[]
@@ -625,7 +613,7 @@ router.get("/admin/feature-adoption", authenticate, requireAdmin, async (req, re
   }
 });
 
-router.get("/admin/lapsed-users", authenticate, requireAdmin, async (req, res) => {
+router.get("/admin/lapsed-users", authenticate, allow(PLATFORM_ADMIN), async (req, res) => {
   try {
     const sevenDaysAgo = daysAgo(7);
     const fourteenDaysAgo = daysAgo(14);
@@ -659,7 +647,7 @@ router.get("/admin/lapsed-users", authenticate, requireAdmin, async (req, res) =
   }
 });
 
-router.get("/admin/dormant-users", authenticate, requireAdmin, async (req, res) => {
+router.get("/admin/dormant-users", authenticate, allow(PLATFORM_ADMIN), async (req, res) => {
   try {
     const [docsUsers, photosUsers, permitsUsers, signOffUsers] = await Promise.all([
       db.select({ id: documentsTable.uploadedBy }).from(documentsTable).groupBy(documentsTable.uploadedBy),
@@ -698,7 +686,7 @@ router.get("/admin/dormant-users", authenticate, requireAdmin, async (req, res) 
   }
 });
 
-router.get("/admin/export/users", authenticate, requireAdmin, async (req, res) => {
+router.get("/admin/export/users", authenticate, allow(PLATFORM_ADMIN), async (req, res) => {
   try {
     const users = await db.select({
       id: usersTable.id,
@@ -725,7 +713,7 @@ router.get("/admin/export/users", authenticate, requireAdmin, async (req, res) =
   }
 });
 
-router.get("/admin/companies", authenticate, requireAdmin, async (req, res) => {
+router.get("/admin/companies", authenticate, allow(PLATFORM_ADMIN), async (req, res) => {
   try {
     const companies = await db.select().from(companiesTable).orderBy(desc(companiesTable.createdAt));
     const userCounts = await db.select({
@@ -749,7 +737,7 @@ router.get("/admin/companies", authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-router.patch("/admin/companies/:id/beta-access", authenticate, requireAdmin, async (req, res) => {
+router.patch("/admin/companies/:id/beta-access", authenticate, allow(PLATFORM_ADMIN), async (req, res) => {
   try {
     const { betaAccess } = req.body;
     if (typeof betaAccess !== "boolean") {
@@ -814,7 +802,7 @@ router.patch("/admin/companies/:id/beta-access", authenticate, requireAdmin, asy
 //    it for a fresh signup/invite), password randomised, and re-homed to a
 //    surviving company they belong to. Per-user savepoints keep one stubborn
 //    user from aborting the whole transaction.
-router.delete("/admin/companies/:id", authenticate, requireAdmin, async (req, res) => {
+router.delete("/admin/companies/:id", authenticate, allow(PLATFORM_ADMIN), async (req, res) => {
   try {
     const companyId = req.params.id as string;
     const exists = await db.select({ id: companiesTable.id })
@@ -854,7 +842,7 @@ router.delete("/admin/companies/:id", authenticate, requireAdmin, async (req, re
 // user's home company can differ from companies they've also joined — and it
 // runs AFTER this user's own membership row is deleted, inside the SAME
 // transaction, so nothing can race it.
-router.delete("/admin/users/:id", authenticate, requireAdmin, async (req, res) => {
+router.delete("/admin/users/:id", authenticate, allow(PLATFORM_ADMIN), async (req, res) => {
   try {
     const targetUserId = req.params.id as string;
     const target = await db.select({ id: usersTable.id, companyId: usersTable.companyId })
@@ -933,7 +921,7 @@ router.delete("/admin/users/:id", authenticate, requireAdmin, async (req, res) =
 // GET /api/admin/failed-stripe-cancellations — unresolved-first list of
 // Stripe subscription cancellations that failed during a company deletion or
 // beta-access grant. See lib/stripe-cancellation.ts.
-router.get("/admin/failed-stripe-cancellations", authenticate, requireAdmin, async (req, res) => {
+router.get("/admin/failed-stripe-cancellations", authenticate, allow(PLATFORM_ADMIN), async (req, res) => {
   try {
     const rows = await db.select().from(failedStripeCancellationsTable)
       .orderBy(sql`${failedStripeCancellationsTable.resolvedAt} is not null, ${failedStripeCancellationsTable.createdAt} desc`);
@@ -956,7 +944,7 @@ router.get("/admin/failed-stripe-cancellations", authenticate, requireAdmin, asy
 // PATCH /api/admin/failed-stripe-cancellations/:id/resolve — mark handled
 // once you've cancelled the subscription manually in Stripe. Never deleted,
 // so the fact it happened is never lost, only cleared from the active list.
-router.patch("/admin/failed-stripe-cancellations/:id/resolve", authenticate, requireAdmin, async (req, res) => {
+router.patch("/admin/failed-stripe-cancellations/:id/resolve", authenticate, allow(PLATFORM_ADMIN), async (req, res) => {
   try {
     const rows = await db.update(failedStripeCancellationsTable)
       .set({ resolvedAt: new Date(), resolvedByUserId: req.user!.id })
@@ -978,7 +966,7 @@ router.patch("/admin/failed-stripe-cancellations/:id/resolve", authenticate, req
 // archives): this is for clearing real test/mistake data that has no audit
 // value, explicitly admin-gated and explicitly destructive (no soft-delete
 // semantics, no restore). No other table has a foreign key onto photos.id.
-router.delete("/admin/photos/:photoId", authenticate, requireAdmin, async (req, res) => {
+router.delete("/admin/photos/:photoId", authenticate, allow(PLATFORM_ADMIN), async (req, res) => {
   try {
     const rows = await db.select({ id: photosTable.id }).from(photosTable).where(eq(photosTable.id, req.params.photoId)).limit(1);
     if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Photo not found" }); return; }
@@ -990,7 +978,7 @@ router.delete("/admin/photos/:photoId", authenticate, requireAdmin, async (req, 
   }
 });
 
-router.get("/admin/export/activity", authenticate, requireAdmin, async (req, res) => {
+router.get("/admin/export/activity", authenticate, allow(PLATFORM_ADMIN), async (req, res) => {
   try {
     const docs = await db.select({
       type: sql<string>`'document'`,
@@ -1028,7 +1016,7 @@ router.get("/admin/export/activity", authenticate, requireAdmin, async (req, res
 
 // GET /api/admin/users?q= — search users by name/email, for the platform-admin
 // grant/revoke picker. Always returns each match's current platformAdmin flag.
-router.get("/admin/users", authenticate, requireAdmin, async (req, res) => {
+router.get("/admin/users", authenticate, allow(PLATFORM_ADMIN), async (req, res) => {
   try {
     const q = String(req.query.q ?? "").trim().toLowerCase();
     const rows = await db.select({
@@ -1050,7 +1038,7 @@ router.get("/admin/users", authenticate, requireAdmin, async (req, res) => {
 // PATCH /api/admin/users/:id/platform-admin — grant or revoke SiteSort staff
 // access. Self-revoke is blocked so a platform admin can never accidentally
 // lock themselves (and, if they're the only one, everyone) out.
-router.patch("/admin/users/:id/platform-admin", authenticate, requireAdmin, async (req, res) => {
+router.patch("/admin/users/:id/platform-admin", authenticate, allow(PLATFORM_ADMIN), async (req, res) => {
   try {
     const { platformAdmin } = req.body as { platformAdmin?: boolean };
     if (typeof platformAdmin !== "boolean") {

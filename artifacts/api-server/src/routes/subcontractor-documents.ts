@@ -4,6 +4,7 @@ import { subcontractorsTable, subcontractorDocumentsTable, projectsTable, usersT
 import { eq, and, desc, or, isNull, inArray } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
+import { allow, COMPANY_MANAGER, INTERNAL_STAFF } from "../lib/authz";
 import { CreateSubcontractorDocumentBody, UpdateSubcontractorDocumentBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -57,7 +58,7 @@ async function loadOwnedSubcontractor(subcontractorId: string, companyId: string
 // GET /api/subcontractors/:subcontractorId/documents
 // ?projectId=<id> → base (company-wide) docs + that project's extras
 // no projectId    → base docs only (contacts directory view)
-router.get("/subcontractors/:subcontractorId/documents", authenticate, async (req, res) => {
+router.get("/subcontractors/:subcontractorId/documents", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const sub = await loadOwnedSubcontractor(req.params.subcontractorId, req.user!.companyId);
     if (!sub) { res.status(404).json({ error: "not_found", message: "Subcontractor not found" }); return; }
@@ -82,7 +83,7 @@ router.get("/subcontractors/:subcontractorId/documents", authenticate, async (re
 // Auto-supersedes an existing current doc with the same name AND scope
 // (same subcontractor + same projectId, including both-null) unless an
 // explicit supersededDocumentId is given.
-router.post("/subcontractors/:subcontractorId/documents", authenticate, async (req, res) => {
+router.post("/subcontractors/:subcontractorId/documents", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
     const sub = await loadOwnedSubcontractor(req.params.subcontractorId, req.user!.companyId);
@@ -151,7 +152,7 @@ router.post("/subcontractors/:subcontractorId/documents", authenticate, async (r
 
 // PATCH /api/subcontractors/:subcontractorId/documents/:documentId — correct
 // name/type/status. Manager-gated, tenant-scoped.
-router.patch("/subcontractors/:subcontractorId/documents/:documentId", authenticate, async (req, res) => {
+router.patch("/subcontractors/:subcontractorId/documents/:documentId", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
     const sub = await loadOwnedSubcontractor(req.params.subcontractorId, req.user!.companyId);
@@ -181,7 +182,7 @@ router.patch("/subcontractors/:subcontractorId/documents/:documentId", authentic
 
 // GET /api/subcontractors/:subcontractorId/documents/:documentId/revisions —
 // walk the supersede chain (previousVersionId), newest first. Cycle-guarded.
-router.get("/subcontractors/:subcontractorId/documents/:documentId/revisions", authenticate, async (req, res) => {
+router.get("/subcontractors/:subcontractorId/documents/:documentId/revisions", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const sub = await loadOwnedSubcontractor(req.params.subcontractorId, req.user!.companyId);
     if (!sub) { res.status(404).json({ error: "not_found", message: "Subcontractor not found" }); return; }

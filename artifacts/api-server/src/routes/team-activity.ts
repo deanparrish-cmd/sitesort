@@ -5,6 +5,7 @@ import {
 } from "@workspace/db/schema";
 import { and, eq, desc, gte, lte, count, max } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
+import { allow, COMPANY_MANAGER } from "../lib/authz";
 import { revokePortalSessionsForMember } from "../lib/portal-sessions";
 import { removedFromProjectUserIds } from "../lib/project-membership";
 import { SECTION_LABELS } from "../lib/activity";
@@ -46,7 +47,7 @@ function requireManager(req: import("express").Request, res: import("express").R
 // truth, no duplicate create path (the old name+email form was removed).
 
 // GET /api/projects/:projectId/invites
-router.get("/projects/:projectId/invites", authenticate, async (req, res) => {
+router.get("/projects/:projectId/invites", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
     const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
@@ -64,7 +65,7 @@ router.get("/projects/:projectId/invites", authenticate, async (req, res) => {
 // POST /api/projects/:projectId/invites/:inviteId/revoke — cut off access. If the
 // invite was already accepted, the member's project_members row is deleted too,
 // so requirePortalMember 403s them on the very next request (not just hidden UI).
-router.post("/projects/:projectId/invites/:inviteId/revoke", authenticate, async (req, res) => {
+router.post("/projects/:projectId/invites/:inviteId/revoke", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
     const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
@@ -117,7 +118,7 @@ router.post("/projects/:projectId/invites/:inviteId/revoke", authenticate, async
 // ---- Activity reporting (PM) ----
 
 // GET /api/projects/:projectId/activity — filterable feed of member views.
-router.get("/projects/:projectId/activity", authenticate, async (req, res) => {
+router.get("/projects/:projectId/activity", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
     const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
@@ -163,7 +164,7 @@ router.get("/projects/:projectId/activity", authenticate, async (req, res) => {
 });
 
 // GET /api/projects/:projectId/activity/summary — per-member rollup.
-router.get("/projects/:projectId/activity/summary", authenticate, async (req, res) => {
+router.get("/projects/:projectId/activity/summary", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
     const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);

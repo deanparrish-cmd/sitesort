@@ -7,6 +7,7 @@ import {
 import { eq, and, inArray, sql, isNull, isNotNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
+import { allow, COMPANY_MANAGER, INTERNAL_STAFF, projectApprover } from "../lib/authz";
 import { logActivity } from "../lib/activity";
 import { CreatePlantItemBody, UpdatePlantItemBody, CreatePlantItemAttachmentBody } from "@workspace/api-zod";
 import { notesFor, addNote } from "../lib/portal-submission-notes";
@@ -107,7 +108,7 @@ async function serializeItems(items: ItemRow[]) {
 // item stays here until it is explicitly marked off-hired, so plant that has
 // run past its expected off-hire date is never silently dropped. Overdue items
 // (expected off-hire date before today, London time) sort first.
-router.get("/plant-items/on-hire", authenticate, async (req, res) => {
+router.get("/plant-items/on-hire", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     if (!requireInternal(req, res)) return;
     const rows = await db.select({ item: plantItemsTable, projectName: projectsTable.name })
@@ -146,7 +147,7 @@ router.get("/plant-items/on-hire", authenticate, async (req, res) => {
 });
 
 // GET /api/projects/:projectId/plant-items
-router.get("/projects/:projectId/plant-items", authenticate, async (req, res) => {
+router.get("/projects/:projectId/plant-items", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
     if (!project) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
@@ -169,7 +170,7 @@ router.get("/projects/:projectId/plant-items", authenticate, async (req, res) =>
 });
 
 // GET /api/projects/:projectId/plant-items/weekly-report
-router.get("/projects/:projectId/plant-items/weekly-report", authenticate, async (req, res) => {
+router.get("/projects/:projectId/plant-items/weekly-report", authenticate, allow(projectApprover()), async (req, res) => {
   try {
     const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
     if (!project) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
@@ -191,7 +192,7 @@ router.get("/projects/:projectId/plant-items/weekly-report", authenticate, async
 });
 
 // POST /api/projects/:projectId/plant-items
-router.post("/projects/:projectId/plant-items", authenticate, async (req, res) => {
+router.post("/projects/:projectId/plant-items", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     if (!requireInternal(req, res)) return;
     const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
@@ -232,7 +233,7 @@ router.post("/projects/:projectId/plant-items", authenticate, async (req, res) =
 });
 
 // PATCH /api/projects/:projectId/plant-items/:itemId
-router.patch("/projects/:projectId/plant-items/:itemId", authenticate, async (req, res) => {
+router.patch("/projects/:projectId/plant-items/:itemId", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     if (!requireInternal(req, res)) return;
     const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
@@ -274,7 +275,7 @@ router.patch("/projects/:projectId/plant-items/:itemId", authenticate, async (re
 // POST /api/projects/:projectId/plant-items/:itemId/notes — PM-side
 // append-only note (the dashboard counterpart of the portal's
 // POST /portal/plant-materials/:itemId/notes).
-router.post("/projects/:projectId/plant-items/:itemId/notes", authenticate, async (req, res) => {
+router.post("/projects/:projectId/plant-items/:itemId/notes", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     if (!requireInternal(req, res)) return;
     const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
@@ -298,7 +299,7 @@ router.post("/projects/:projectId/plant-items/:itemId/notes", authenticate, asyn
 // POST /api/projects/:projectId/plant-items/:itemId/archive — soft-delete
 // (archive), manager-only. Mirrors DELETE /api/photos/:photoId: the row is
 // retained for audit and hidden from default lists.
-router.post("/projects/:projectId/plant-items/:itemId/archive", authenticate, async (req, res) => {
+router.post("/projects/:projectId/plant-items/:itemId/archive", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
     const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
@@ -322,7 +323,7 @@ router.post("/projects/:projectId/plant-items/:itemId/archive", authenticate, as
 });
 
 // PATCH /api/projects/:projectId/plant-items/:itemId/restore — un-archive (manager-only).
-router.patch("/projects/:projectId/plant-items/:itemId/restore", authenticate, async (req, res) => {
+router.patch("/projects/:projectId/plant-items/:itemId/restore", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
     const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
@@ -345,7 +346,7 @@ router.patch("/projects/:projectId/plant-items/:itemId/restore", authenticate, a
 });
 
 // DELETE /api/projects/:projectId/plant-items/:itemId — manager-only (members can never delete)
-router.delete("/projects/:projectId/plant-items/:itemId", authenticate, async (req, res) => {
+router.delete("/projects/:projectId/plant-items/:itemId", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
     const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
@@ -385,7 +386,7 @@ async function serializeAttachments(rows: AttachmentRow[]) {
 }
 
 // GET /api/projects/:projectId/plant-items/:itemId/attachments
-router.get("/projects/:projectId/plant-items/:itemId/attachments", authenticate, async (req, res) => {
+router.get("/projects/:projectId/plant-items/:itemId/attachments", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
     if (!project) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
@@ -403,7 +404,7 @@ router.get("/projects/:projectId/plant-items/:itemId/attachments", authenticate,
 
 // POST /api/projects/:projectId/plant-items/:itemId/attachments — file already
 // uploaded via the generic /api/upload endpoint (dashboard side, not portal).
-router.post("/projects/:projectId/plant-items/:itemId/attachments", authenticate, async (req, res) => {
+router.post("/projects/:projectId/plant-items/:itemId/attachments", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     if (!requireInternal(req, res)) return;
     const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
@@ -433,7 +434,7 @@ router.post("/projects/:projectId/plant-items/:itemId/attachments", authenticate
 // POST /api/projects/:projectId/plant-items/:itemId/distribute — "Allocate",
 // mirrors documents.ts's distribute handler exactly (pending/viewed/acknowledged
 // tracking), retargeted at plant_item_distributions.
-router.post("/projects/:projectId/plant-items/:itemId/distribute", authenticate, async (req, res) => {
+router.post("/projects/:projectId/plant-items/:itemId/distribute", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     if (!requireInternal(req, res)) return;
     const { userIds } = req.body;
@@ -469,7 +470,7 @@ router.post("/projects/:projectId/plant-items/:itemId/distribute", authenticate,
 });
 
 // GET /api/projects/:projectId/plant-items/:itemId/distributions
-router.get("/projects/:projectId/plant-items/:itemId/distributions", authenticate, async (req, res) => {
+router.get("/projects/:projectId/plant-items/:itemId/distributions", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
     if (!project) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
