@@ -5,7 +5,7 @@ import { randomUUID } from "crypto";
 import { authenticate } from "../middlewares/auth";
 import { allow, INTERNAL_STAFF } from "../lib/authz";
 import { getBucket, objectKey } from "../lib/gcs";
-import { isProtectedUpload, verifyUploadSignature } from "../lib/signed-uploads";
+import { isProtectedUpload, isRetiredUpload, verifyUploadSignature } from "../lib/signed-uploads";
 
 const router: IRouter = Router();
 
@@ -99,6 +99,18 @@ router.get("/uploads/:filename", async (req: Request, res: Response) => {
   }
   if (isProtectedUpload(filename) && !verifyUploadSignature(filename, req.query.exp, req.query.sig)) {
     res.status(403).json({ error: "link_expired", message: "This photo link has expired. Open it again from SiteSort." });
+    return;
+  }
+
+  try {
+    if (await isRetiredUpload(filename)) {
+      res.status(410).json({ error: "gone", message: "This file is no longer available." });
+      return;
+    }
+  } catch (err) {
+    // Fail closed: if we can't tell whether it's a retired file, don't serve it.
+    req.log?.error({ err }, "retired-upload check failed");
+    res.status(503).json({ error: "unavailable", message: "This file can't be opened right now. Try again shortly." });
     return;
   }
 

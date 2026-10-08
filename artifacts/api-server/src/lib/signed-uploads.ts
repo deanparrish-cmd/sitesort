@@ -1,4 +1,6 @@
 import { createHmac, timingSafeEqual } from "crypto";
+import { db } from "@workspace/db";
+import { sql } from "drizzle-orm";
 
 // Check-in photos are workers' faces. Unlike other uploads (capability URLs,
 // see routes/upload.ts) they are served only with a short-lived signature, so
@@ -38,4 +40,23 @@ export function verifyUploadSignature(filename: string, exp: unknown, sig: unkno
   const expected = Buffer.from(mac(filename, e));
   const given = Buffer.from(sig);
   return expected.length === given.length && timingSafeEqual(expected, given);
+}
+
+// Files that belong to a removed feature are never served again. The invoices
+// feature was removed (bebe715) but its table and uploaded attachments remain
+// in the database and storage, with no screen to see or manage them. Their
+// links answer 410 instead of serving financial documents on a permanent URL.
+// (The invoices table is no longer in the Drizzle schema, hence raw SQL.)
+// If the table doesn't exist (a fresh database), nothing is retired; checked once.
+let invoicesTableExists: Promise<boolean> | null = null;
+export async function isRetiredUpload(filename: string): Promise<boolean> {
+  invoicesTableExists ??= db.execute(sql`SELECT to_regclass('public.invoices') IS NOT NULL AS present`)
+    .then(r => Boolean((r.rows[0] as { present?: boolean } | undefined)?.present))
+    .catch(err => { invoicesTableExists = null; throw err; });
+  if (!(await invoicesTableExists)) return false;
+  const rows = await db.execute(sql`
+    SELECT 1 FROM invoices
+    WHERE attachment_url IN (${"/api/uploads/" + filename}, ${"/uploads/" + filename})
+    LIMIT 1`);
+  return rows.rows.length > 0;
 }
