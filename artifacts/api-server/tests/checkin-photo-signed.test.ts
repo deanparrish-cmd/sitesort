@@ -28,7 +28,7 @@ describe("check-in photos need a signed, expiring URL", () => {
     co = await seedCompany();
     admin = await login(co.email);
     qrToken = (await api(`/projects/${co.projectId}/qr-codes`, { method: "POST", token: admin, body: { categories: ["site_board"] } })).json[0].token;
-    await db.insert(subcontractorsTable).values({ id: sub, companyId: co.companyId, companyName: "Signed Ltd", contactName: "Sam Signed", contactEmail: `${sub}@example.test` });
+    await db.insert(subcontractorsTable).values({ id: sub, companyId: co.companyId, companyName: "Signed Ltd", contactName: "Sam Signed", contactEmail: `${sub}@example.test`, contactPhone: "07700 900321" });
     await db.insert(insuranceRecordsTable).values({ id: randomUUID(), subcontractorId: sub, type: "public_liability", certificateUrl: "/api/uploads/y.pdf", expiryDate: "2099-01-01" } as any);
     await db.insert(projectMembersTable).values({ id: randomUUID(), projectId: co.projectId, subcontractorId: sub } as any);
   });
@@ -84,8 +84,8 @@ describe("check-in photos need a signed, expiring URL", () => {
     expect((await fetchUrl(old)).status).toBe(403);
   });
 
-  it("public sign-out by typed name returns no photo or GPS", async () => {
-    const res = await api(`/site/${qrToken}/checkout`, { method: "POST", body: { workerName: "Sam Signed", companyName: "Signed Ltd" } });
+  it("public sign-out returns no photo or GPS", async () => {
+    const res = await api(`/site/${qrToken}/checkout`, { method: "POST", body: { workerName: "Sam Signed", companyName: "Signed Ltd", phone: "07700 900321" } });
     expect(res.status).toBe(200);
     expect(res.json).not.toHaveProperty("photoUrl");
     expect(res.json).not.toHaveProperty("lat");

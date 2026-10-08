@@ -123,67 +123,68 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 58. Dashboard outstanding-invoices widget — top-5 unpaid/overdue card w/ Open/Share/Mark-Paid
 59. Multi-threshold expiry email reminders — permits/insurance certs email at 30/21/14/7/1 days then daily post-expiry; `expiry_reminder_logs` de-dup table
 60. Real email verification on registration — `emailVerified:false`+token, no JWT until verified; gated login
-61. **Team Portal** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md / git history)*
-62. **Daily Site Reports hub (F5)** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md / git history)*
-63. **Per-person Team Portal invites — portal-only for everyone** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md / git history)*
-64. **Deep-links for actionable/to-do items** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md / git history)*
-65. **Team Portal sharing (all/trade/individual) + gated portal visibility** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md / git history)*
-66. **Real invite emails (Resend) + existing-account portal join** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md / git history)*
-67. **Portal session policy + logo nav** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md / git history)*
-68. **Portal freshness + unseen badges + Web Push** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md / git history)*
-69. **F6 — subbie/merchant contact documents** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md / git history)*
-70. **Notification alert-viewer (Next/Previous)** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md / git history)*
-71. **Remove people from projects + archive/hard-delete contacts + first/last name split** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md / git history)*
-72. **Portal-audit fixes + contractor self-upload docs + mobile/PWA** *(detail in CLAUDE_ARCHIVE.md / git history)*
-73. **Plant & Materials tracking + site-issue closure reasons** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md / git history)*
-74. **Person-first contacts: self-employed + certifications + Team tab restructure** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md / git history)*
-75. **Daily Report in the Team Portal + shared dictation button + plant attachment counts** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md / git history)*
-76. **Team Portal Messages — project-scoped DMs, channel access, PM oversight** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md / git history)*
-77. **Minimal-by-default Team Portal + retired doc tabs into filtered Shared with me** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md / git history)*
-78. **Site issue archive/restore + individual photo removal + admin hard delete** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md / git history)*
-79. **Fix stale mirrored contact name on Team tab + portal-invite surname gate** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md / git history)*
-80. **Fix uncaught chunk-load crash after a deploy** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md / git history)*
-81. **Inline portal-permission toggles on Team tab cards** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md / git history)*
-82. **Portal access controls follow-up: card layout, whole-login revoke, invite parity** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md / git history)*
-83. **Portal permission card row order + pre-accept permission parity + full functional verification** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md / git history)*
-84. **Platform Admin restriction (`users.platformAdmin`)** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md / git history)*
-85. **Portal "Log a new item" for Plant & Materials** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md / git history)*
-86. **PIN-based document sign-off (Pending Sign-offs, dashboard + portal)** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md / git history)*
-87. **Activity-entry deep-links + daily reports join Team Portal sharing** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md / git history)*
-88. **Configurable per-document PIN sign-off** *(detail in CLAUDE_ARCHIVE.md / git history)*
-89. **Fix dead Overview-tab "Recent Activity" card** *(detail in CLAUDE_ARCHIVE.md / git history)*
-90. **Three portal fixes: nav/GET permission gating, explicit site manager, verified submit→view already worked.** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md / git history)*
-91. **Document Allocate removed (folded into Share), project-level PM/approver authority added** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md / git history)*
+(61 to 113 deployed; detail in CLAUDE_ARCHIVE.md.)
+61. **Team Portal**
+62. **Daily Site Reports hub (F5)**
+63. **Per-person Team Portal invites — portal-only for everyone**
+64. **Deep-links for actionable/to-do items**
+65. **Team Portal sharing (all/trade/individual) + gated portal visibility**
+66. **Real invite emails (Resend) + existing-account portal join**
+67. **Portal session policy + logo nav**
+68. **Portal freshness + unseen badges + Web Push**
+69. **F6 — subbie/merchant contact documents**
+70. **Notification alert-viewer (Next/Previous)**
+71. **Remove people from projects + archive/hard-delete contacts + first/last name split**
+72. **Portal-audit fixes + contractor self-upload docs + mobile/PWA**
+73. **Plant & Materials tracking + site-issue closure reasons**
+74. **Person-first contacts: self-employed + certifications + Team tab restructure**
+75. **Daily Report in the Team Portal + shared dictation button + plant attachment counts**
+76. **Team Portal Messages — project-scoped DMs, channel access, PM oversight**
+77. **Minimal-by-default Team Portal + retired doc tabs into filtered Shared with me**
+78. **Site issue archive/restore + individual photo removal + admin hard delete**
+79. **Fix stale mirrored contact name on Team tab + portal-invite surname gate**
+80. **Fix uncaught chunk-load crash after a deploy**
+81. **Inline portal-permission toggles on Team tab cards**
+82. **Portal access controls follow-up: card layout, whole-login revoke, invite parity**
+83. **Portal permission card row order + pre-accept permission parity + full functional verification**
+84. **Platform Admin restriction (`users.platformAdmin`)**
+85. **Portal "Log a new item" for Plant & Materials**
+86. **PIN-based document sign-off (Pending Sign-offs, dashboard + portal)**
+87. **Activity-entry deep-links + daily reports join Team Portal sharing**
+88. **Configurable per-document PIN sign-off**
+89. **Fix dead Overview-tab "Recent Activity" card**
+90. **Three portal fixes: nav/GET permission gating, explicit site manager, verified submit→view already worked.**
+91. **Document Allocate removed (folded into Share), project-level PM/approver authority added**
 92. **In-app User Guide (dashboard, portal, invite email) + restyle** — single shared source `lib/user-guide/src/index.ts`, 3 surfaces. **DEPLOYED+prod-verified** (2026-07-27). *(full detail in CLAUDE_ARCHIVE.md)*
 93. **Invoice Allocate + scoped Share (financial-data-safe)** — closed a zero-role-gating gap on `PATCH /invoices/:id`/`POST /share-logs`. **DEPLOYED+prod-verified** (2026-07-27). *(full detail in CLAUDE_ARCHIVE.md)*
 
-94. **Team Portal visual redesign (big/colourful)** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md)*
+94. **Team Portal visual redesign (big/colourful)**
 
-95. **Check-in insurance gate vs contact card unified (`lib/insurance.ts`)** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md)*
+95. **Check-in insurance gate vs contact card unified (`lib/insurance.ts`)**
 
-96. **Portal navigation cleanup** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md)*
+96. **Portal navigation cleanup**
 
-97. **Deep-link project/expiry/overdue-invoice alerts** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md)*
+97. **Deep-link project/expiry/overdue-invoice alerts**
 
-98. **Em-dash sweep + dead-badge audit** **DEPLOYED.** *(detail in CLAUDE_ARCHIVE.md)*
+98. **Em-dash sweep + dead-badge audit**
 
-99. **Construction Programme doc on the Progress tab** *(detail in CLAUDE_ARCHIVE.md)*
-100. **Multi-project Team Portal across companies** *(detail in CLAUDE_ARCHIVE.md)*
+99. **Construction Programme doc on the Progress tab**
+100. **Multi-project Team Portal across companies**
 
-101. **Portal project-switcher polish** *(detail in CLAUDE_ARCHIVE.md)*
-102. **On-hire plant on dashboard** *(detail in CLAUDE_ARCHIVE.md)*
-103. **QR site sign-out + live on-site register** *(detail in CLAUDE_ARCHIVE.md)*
-104. **Photos inside a daily site report** *(detail in CLAUDE_ARCHIVE.md)*
-105. **Portal report photos + public on-site count** *(detail in CLAUDE_ARCHIVE.md)*
-106. **QR sign-in/out: remembered device, name lookup, near-match** *(detail in CLAUDE_ARCHIVE.md)*
-107. **Permits-tab overdue pill deep-links** *(detail in CLAUDE_ARCHIVE.md)*
-108. **Check-in notification detail; identity-linked check-ins** *(detail in CLAUDE_ARCHIVE.md)*
-109. **Site QR restricted to admin/PM (server)** *(detail in CLAUDE_ARCHIVE.md)*
-110. **Public suggestions show initials only** *(detail in CLAUDE_ARCHIVE.md)*
+101. **Portal project-switcher polish**
+102. **On-hire plant on dashboard**
+103. **QR site sign-out + live on-site register**
+104. **Photos inside a daily site report**
+105. **Portal report photos + public on-site count**
+106. **QR sign-in/out: remembered device, name lookup, near-match**
+107. **Permits-tab overdue pill deep-links**
+108. **Check-in notification detail; identity-linked check-ins**
+109. **Site QR restricted to admin/PM (server)**
+110. **Public suggestions show initials only**
 
-111. **/info pricing cards + plan carried to checkout** *(detail in CLAUDE_ARCHIVE.md)*
-112. **Calendar + ratings/payment holds PM/admin only** *(detail in CLAUDE_ARCHIVE.md)*
-113. **QR load failure shown as failure + honest photo hints** *(detail in CLAUDE_ARCHIVE.md)*
+111. **/info pricing cards + plan carried to checkout**
+112. **Calendar + ratings/payment holds PM/admin only**
+113. **QR load failure shown as failure + honest photo hints**
 114. **Insurance gate on every check-in path + manager override; end-of-day auto-close; per-site clock** — held check-ins (`site_checkins.hold_*`, 403 `check_in_held`, admin/PM `hold-decision`), `projects.site_time_zone`/`site_close_time`, `runCheckinAutoClose` sets `auto_closed_at` (NOT a sign-out). Test: `site-checkin-insurance-hold.test.ts`. *(full detail in CLAUDE_ARCHIVE.md)* (2026-10-07)
 115. **Project edit/create role-gated on the server** — `PATCH /projects/:id` approver-only (`isProjectApprover`), status must be active/on_hold/complete, "complete" only via PIN close-out (400 `use_closeout`), reopen approver-only; status + site-manager changes logged to activity_log (who/from/to). `POST /projects` company admin/PM only. Edit Details shown to project approvers; approvers section company-manager only. Tests: `project-edit-roles.test.ts` (direct API calls per role). (2026-10-07)
 116. **Shared authz layer + 3 critical holes closed** — `lib/authz.ts` `allow(...policies)` (role re-read from company_members, 60s cache, `bustRoleCache` on change). Fixed: `POST/PATCH/DELETE /users` (manager only; only admin grants/changes/removes admin; role enum), insurance `POST/PATCH` + team insurance-cert (company manager), `GET /checkins` (company manager), `GET /projects/:id/checkins` (approver or site manager); Check-Ins tab hidden otherwise. Email never sent to reserved test domains. Tests: `authz-critical.test.ts`, `authz-coverage.test.ts`. (2026-10-07)
@@ -191,6 +192,8 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 118. **High batch on the authz layer** — public-board pins (approver), billing (admin), test-email (platform admin, own address only), permits (approver, `projectApproverFor`), contact create/edit (manager), notes (internal staff), adding people/trades to projects (approver). Test: `authz-high.test.ts`. Legacy undeclared baseline now 212. (2026-10-07)
 119. **Check-in photos: signed, expiring URLs** — `lib/signed-uploads.ts`: `checkin-*` uploads served ONLY with `?exp=&sig=` (HMAC off JWT_SECRET, valid 1 to 2h, hour-stable); bare/expired = 403. Signed wherever a logged-in route returns one. Public QR responses (`/site/:token/checkin`, `/checkout`) drop photoUrl/lat/lng/personKey (`publicCheckin`). Share buttons removed from check-ins (links would expire). Prod exposure query: `reports/checkin-photo-exposure.sql`. Test: `checkin-photo-signed.test.ts`. (2026-10-08)
 120. **Declaration sweep complete; undeclared routes fail closed** — all 212 legacy routes declared (admin = `PLATFORM_ADMIN`; portal via declared guards). Holes closed (site worker via direct API): milestones create/edit/delete (now approver), document upload (approver), member avatar/schedule/permissions (manager + company check; avatar/schedule/permissions had NO tenant check), DM reactions on others' messages. Legacy JSON deleted; runtime `enforceDeclaredRoutes` in `routes/index.ts`. Reads kept as today (company-wide for staff) pending the read-access decision. Tests: `authz-sweep.test.ts`, `authz-coverage.test.ts`. (2026-10-08)
+121. **Staff notes private** — `/users/:id/notes` admin/PM only, never the subject, scoped by new `user_notes.company_id` (ensure-schema backfill; NULL = hidden). Was readable by all staff incl. the subject and by other companies' managers. Invoice attachments (removed feature) answer 410 (`isRetiredUpload`). Test: `staff-notes-private.test.ts`, `retired-invoice-files.test.ts`. (2026-10-08)
+122. **QR board sign-out needs proof** — public `/site/:token/who` + `/status` removed; `/checkout` needs the remembered-device token or name+company+mobile on file (`phonesForKey`, one refusal for every failure). Board: "Already on site and leaving? Sign out" panel. Test: `site-signout-matching.test.ts`. (2026-10-08)
 
 ## Uploads / File Serving
 
@@ -226,12 +229,14 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 ## Session Log
 
 Full session-by-session detail in CLAUDE_ARCHIVE.md. Recent sessions (newest first):
-- **2026-10-08 SESSION (`main` after #120):**
-  - **Done:** #119 check-in photos signed/expiring + public QR responses stripped of photo/GPS/identity key + check-in Share buttons removed; #120 all routes declared, legacy list deleted, runtime fail-closed. CLAUDE.md trimmed under 30k.
-  - **Read-access gap SCOPED, NOT FIXED (user wants the whole shape first):** daily reports (all staff, every project, names + check-in times + photo URL); notification detail stays readable by a former site manager; public QR `/who` lets anyone with the board token enumerate on-site first names + company 3 letters at a time and sign them out by id (`/register-match` does the same for the registered roster); `/companies` lists every firm on the project; staff notes about colleagues readable by all staff; site-photo GPS + uploader in portal "Shared with me"; all other uploads (site/issue/report photos, avatars) still capability URLs without login; company PMs see every project's check-ins. Decision needed: project-membership scoping for site workers.
-  - **Waiting on user:** Publish, prod results of `reports/prod-access-review.sql`, `reports/amy-checkins-query.sql`, and NEW `reports/checkin-photo-exposure.sql`.
+- **2026-10-08 SESSION CLOSE (`main` → `82b279f`+, NOT yet Published after #121):**
+  - **Completed:** #119 check-in photos signed/expiring (retested on prod by user: bare URL 403); #120 all 212 routes declared, legacy list deleted, undeclared routes fail closed at boot; invoice attachments 410 (removed feature, files still in storage); #121 staff notes managers-only/never subject/company-scoped (`user_notes.company_id`); #122 board sign-out needs device token or mobile on file, `/who` + `/status` removed.
+  - **Holes fixed today (beyond the asks):** public sign-out returned photo+GPS+identity key; site worker could create/edit/delete milestones, upload documents, edit member avatar/schedule/permissions (those 3 also had NO company check); DM reactions on others' messages; staff notes crossed companies.
+  - **User decisions (binding):** site workers members-only (project list, reads AND writes; go ROUTE BY ROUTE and list which routes serve each kind of data; "blocking a screen isn't blocking the data"); site workers lose share log, manager notes (done) and full Compliance view (keep contacts/staff list); PMs stay company-wide ("assigned PM" parked as a feature after file work); invoice files+rows+table to be DELETED after user sends prod count; file links: login-only = insurance, person certs, contact/sub docs, portal uploads, invoices, site/issue/report/note photos, plant attachments; shareable = drawings, project docs, permits via per-share links (30 days or until superseded, 3-day reminder, revision on landing page, request-access page approved by sender or any approver); existing raw links CUT on the day, no grace.
+  - **Open / found:** anyone can still sign someone IN at the board with any photo (phone-number-first sign-in planned); few records have a mobile number, so phone sign-out often unavailable; `/site/:token/register-match` and `/companies` still public (near-miss names, firm list); former site manager keeps check-in detail via old notifications; portal issue photos carry GPS; `/api/documents/:id/open` public with doc id; daily reports expose check-in names + signed photo links to all staff (fixed by site-worker scoping); `portal-report-photos` flaked once; stale dev QR code `c7cdce8b…` on "Test Project" from a killed layout run.
+  - **Next session, in order:** (0) ASK: Publish done? Prod results of `reports/` prod-access-review, amy-checkins-query, checkin-photo-exposure, file-link-exposure, staff-notes-review. (1) Rerun `pnpm run validate` clean: last full run 185/186 (only failure self-inflicted: my browser check deleted its QR mid-sweep); the rerun was killed under load (avg ~8), unrelated 500s/timeouts; board panel verified by hand at 360/768. (2) Delete invoice files/rows/table once count is in. (3) Part A login-only signing. (4) Share links. (5) Site-worker scoping route by route. Restart the local :8080 workflow (Replit Stop/Run) to load today's code; tests used a :8090 copy (`PORT=8090 node dist/index.mjs`, `API_BASE=http://localhost:8090/api npx vitest run`).
 - **2026-10-07 (#113 to #118, full entry in CLAUDE_ARCHIVE.md):** still open: Amy merge PARKED (merge BY ROW ID ONLY after user confirms); one person across several companies (per-card insurance, double counting); planned phone-number-first QR sign-in, insurance exemption on a card, audit log (who created users, filed/approved certs, read check-in/GPS); gaps: no drawing/PDF on daily reports, portal rejects DWG/DXF, daily-report day windows UK-only. Contractor test = Team Portal only.
-- **Dev gotchas (from 2026-09-18, full text in CLAUDE_ARCHIVE.md):** rebuild+restart api-server after backend changes (`cd artifacts/api-server && NODE_ENV=development node ./build.mjs && PORT=8080 node dist/index.mjs`), vitest hits live :8080. `db push` hangs: use `psql "$DATABASE_URL"` + `ensure-schema.ts`. Run `pnpm run typecheck` after schema changes. Headless QR check-in needs geolocation permission. Push via `push-delta.ts` (403 = wait ~4 min), verify with `verify-push.ts`. Wait ~500ms before fixture teardown. Delete `tmp-*` dev rows.
+- **Dev gotchas (from 2026-09-18, full text in CLAUDE_ARCHIVE.md):** rebuild+restart api-server after backend changes (`cd artifacts/api-server && NODE_ENV=development node ./build.mjs && PORT=8080 node dist/index.mjs`), vitest hits live :8080. `db push` hangs: use `psql "$DATABASE_URL"` + `ensure-schema.ts`. Run `pnpm run typecheck` after schema changes. Headless QR check-in needs geolocation permission. Push via `push-delta.ts` (403 = wait ~4 min), verify with `verify-push.ts`. Wait ~500ms before teardown.
 - **2026-07-30 and earlier:** see CLAUDE_ARCHIVE.md. `git pull` reports divergent branches (GitHub holds `sync:` copies); local `main` is the source of truth, never merge.
 - **PD backlog**: **F7** Site Board on-site count, **F8** Timeline link, **F9/F10** spikes.
 - **Infra:** GitHub push ≠ deploy; prod = Replit **Publish** (~1-3min lag). Stripe **LIVE**. Verify via browser-check skill.

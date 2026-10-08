@@ -125,9 +125,10 @@ function CheckInCard({
   const [signedOutLabel, setSignedOutLabel] = useState("");
   // Remembered device: server-verified token, per project.
   const [device, setDevice] = useState<{ workerName: string; companyName: string } | null>(null);
-  // Live lookup while typing: people signed in on this site matching what was typed.
-  type Who = { checkinId: string; label: string; checkedInAt: string };
-  const [who, setWho] = useState<{ exact: Who | null; matches: Who[]; suggestions: Who[] }>({ exact: null, matches: [], suggestions: [] });
+  // Signing out without a remembered device needs the mobile number on file:
+  // nobody can sign someone else out by name alone.
+  const [signOutMode, setSignOutMode] = useState(false);
+  const [phone, setPhone] = useState("");
   const [companies, setCompanies] = useState<string[]>([]);
   const deviceKey = `sitesort_site_device_${token}`;
 
@@ -157,25 +158,6 @@ function CheckInCard({
     fetch(`/api/site/${token}/companies`).then(r => r.ok ? r.json() : []).then(setCompanies).catch(() => {});
   }, [token]);
 
-  // Debounced who's-on-site lookup, only once 3+ letters of a name are typed and
-  // only when we are not showing the remembered-device card.
-  useEffect(() => {
-    if (device || signedIn) { setWho({ exact: null, matches: [], suggestions: [] }); return; }
-    if (name.trim().length < 3) { setWho({ exact: null, matches: [], suggestions: [] }); return; }
-    const h = setTimeout(() => {
-      fetch(`/api/site/${token}/who?workerName=${encodeURIComponent(name.trim())}&companyName=${encodeURIComponent(companyName.trim())}`)
-        .then(r => r.ok ? r.json() : null)
-        .then(d => {
-          if (!d) return;
-          if (d.exact) { setSignedIn({ checkedInAt: d.exact.checkedInAt, checkinId: d.exact.checkinId }); return; }
-          setWho({ exact: null, matches: d.matches ?? [], suggestions: d.suggestions ?? [] });
-        })
-        .catch(() => {});
-    }, 400);
-    return () => clearTimeout(h);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name, companyName, device, signedIn, token]);
-
   // Check-in near-match: once 3+ letters are typed and the typed details are not
   // an exact registered person, suggest close registered names/companies. The
   // user must tap to accept; nothing is ever matched silently.
@@ -201,26 +183,37 @@ function CheckInCard({
     setStatus(capturedFile ? "capturing" : "idle");
   };
 
-  const doSignOut = async (opts: { checkinId?: string; label?: string }) => {
+  const doSignOut = async () => {
+    // A remembered device proves who this is; otherwise the mobile number does.
+    const deviceToken = readDeviceToken();
+    if (!deviceToken && !phone.trim()) {
+      setErrorMsg("Enter the mobile number we have on file for you to sign out.");
+      return;
+    }
     setSigningOut(true);
     setErrorMsg("");
     try {
       const r = await fetch(`/api/site/${token}/checkout`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(opts.checkinId ? { checkinId: opts.checkinId } : { workerName: name.trim(), companyName: companyName.trim() }),
+        body: JSON.stringify(deviceToken ? { deviceToken } : { workerName: name.trim(), companyName: companyName.trim(), phone: phone.trim() }),
       });
       if (r.status === 409) {
         setSignedIn(null);
-        setWho({ exact: null, matches: [], suggestions: [] });
-        setErrorMsg("We could not find an open sign-in to close. If you are still signed in, type your name to find it, or ask your site manager.");
+        setErrorMsg("We could not find an open sign-in to close. If you are still on site, ask your site manager.");
+        return;
+      }
+      if (r.status === 403 || r.status === 400) {
+        const d = await r.json().catch(() => ({}));
+        setErrorMsg(d.message ?? "We couldn't confirm it's you. Ask your site manager to sign you out.");
         return;
       }
       if (!r.ok) throw new Error("failed");
       const d = await r.json();
       setSignedIn(null);
-      setWho({ exact: null, matches: [], suggestions: [] });
-      setSignedOutLabel(opts.label ?? name.trim());
+      setSignOutMode(false);
+      setPhone("");
+      setSignedOutLabel(d.workerName ?? name.trim());
       setSignedOutAt(d.checkedOutAt);
     } catch {
       setErrorMsg("Sign-out failed. Please try again.");
@@ -228,7 +221,7 @@ function CheckInCard({
       setSigningOut(false);
     }
   };
-  const handleSignOut = () => doSignOut({ checkinId: signedIn?.checkinId, label: name.trim() });
+  const handleSignOut = () => doSignOut();
 
   const notMe = () => {
     writeDeviceToken(null);
@@ -357,6 +350,22 @@ function CheckInCard({
             <strong>{name.trim()}</strong> ({companyName.trim()}) signed in at {hhmm(signedIn.checkedInAt)}
             {new Date(signedIn.checkedInAt).toDateString() !== new Date().toDateString() && " on " + new Date(signedIn.checkedInAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}.
           </p>
+          {!readDeviceToken() && (
+            <div>
+              <label htmlFor="signout-phone" className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">Your mobile number</label>
+              <input
+                id="signout-phone"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                placeholder="The number on your contact record"
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                data-testid="input-signout-phone"
+              />
+            </div>
+          )}
           {errorMsg && <p className="text-red-500 text-sm">{errorMsg}</p>}
           <button
             onClick={handleSignOut}
@@ -547,7 +556,7 @@ function CheckInCard({
           </div>
         )}
 
-        {!device && !signedIn && regSuggest.length > 0 && who.matches.length === 0 && (
+        {!device && !signedIn && regSuggest.length > 0 && (
           <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 space-y-2" data-testid="panel-register-suggestions">
             <p className="text-xs font-semibold text-blue-800">These details don't match anyone on this project yet. Did you mean:</p>
             {regSuggest.map(sug => (
@@ -559,28 +568,6 @@ function CheckInCard({
               >
                 <span className="text-sm font-semibold text-gray-900 break-words min-w-0">Did you mean {sug.label}?</span>
                 <span className="text-xs text-orange-600 font-bold shrink-0">Yes, that's me</span>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {!device && (who.matches.length > 0 || who.suggestions.length > 0) && (
-          <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 space-y-2" data-testid="panel-on-site-matches">
-            <p className="text-xs font-semibold text-blue-800">
-              {who.matches.length > 0 ? "Already signed in on this site? Tap yourself to sign out." : "Did you mean one of these? Tap to confirm and sign out."}
-            </p>
-            {(who.matches.length > 0 ? who.matches : who.suggestions).map(m => (
-              <button
-                key={m.checkinId}
-                onClick={() => doSignOut({ checkinId: m.checkinId, label: m.label })}
-                disabled={signingOut}
-                className="w-full flex items-center justify-between gap-3 bg-white border border-blue-200 rounded-xl px-4 py-3 min-h-11 text-left disabled:opacity-60"
-                data-testid={`button-sign-out-match-${m.checkinId}`}
-              >
-                <span className="text-sm font-semibold text-gray-900 break-words min-w-0">
-                  {who.matches.length === 0 && "Did you mean "}{m.label}{who.matches.length === 0 && "?"}
-                </span>
-                <span className="text-xs text-red-600 font-bold shrink-0">Sign out</span>
               </button>
             ))}
           </div>
@@ -654,6 +641,41 @@ function CheckInCard({
               : <><CheckCircle2 className="w-5 h-5" /> Confirm Check-In</>}
           </button>
         )}
+
+        {!device && status !== "capturing" && status !== "uploading" && (signOutMode ? (
+          <div className="rounded-xl border border-gray-200 p-4 space-y-3" data-testid="panel-sign-out-by-phone">
+            <p className="text-sm text-gray-700">Leaving site? Enter your name and company above, and the mobile number on your contact record.</p>
+            <div>
+              <label htmlFor="signout-phone-form" className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">Your mobile number</label>
+              <input
+                id="signout-phone-form"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                data-testid="input-signout-phone-form"
+              />
+            </div>
+            <button
+              onClick={() => {
+                if (!name.trim() || !companyName.trim()) { setErrorMsg("Enter your name and company to sign out."); return; }
+                void doSignOut();
+              }}
+              disabled={signingOut}
+              className="w-full bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 min-h-11"
+              data-testid="button-sign-out-by-phone"
+            >
+              {signingOut ? <><Loader2 className="w-5 h-5 animate-spin" /> Signing out…</> : "Sign out of site"}
+            </button>
+            <button onClick={() => { setSignOutMode(false); setErrorMsg(""); }} className="w-full text-xs text-gray-500 underline min-h-11">Back to check-in</button>
+          </div>
+        ) : (
+          <button onClick={() => { setSignOutMode(true); setErrorMsg(""); }} className="w-full text-sm text-gray-600 underline min-h-11" data-testid="button-signing-out">
+            Already on site and leaving? Sign out
+          </button>
+        ))}
 
         <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-500 space-y-1">
           <p className="font-semibold text-gray-600">Check-in requirements:</p>

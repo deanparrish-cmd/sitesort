@@ -30,7 +30,8 @@ describe("site check-in identity", () => {
     const res = await fetch(`${API_BASE}/site/${qrToken}/checkin`, { method: "POST", body: fd });
     return { status: res.status, json: await res.json().catch(() => null) };
   }
-  const checkOut = (body: object) => api(`/site/${qrToken}/checkout`, { method: "POST", body });
+  // Public sign-out needs the mobile number on file (#122).
+  const checkOut = (body: object) => api(`/site/${qrToken}/checkout`, { method: "POST", body: { phone: "07700 900456", ...body } });
 
   beforeAll(async () => {
     co = await seedCompany();
@@ -39,7 +40,7 @@ describe("site check-in identity", () => {
     qrToken = qr.json[0].token;
     // A contact "Amy" at "Amy I Cloud" whose primary-contact PERSON is "Amy Parrish" (names drifted apart).
     await db.insert(subcontractorsTable).values({ id: subId, companyId: co.companyId, companyName: "Amy I Cloud", contactName: "Amy", contactEmail: "amy@example.test" });
-    await db.insert(peopleTable).values({ id: personId, companyId: co.companyId, name: "Amy Parrish", email: "amyp@example.test", subcontractorId: subId, isPrimaryContact: true });
+    await db.insert(peopleTable).values({ id: personId, companyId: co.companyId, name: "Amy Parrish", email: "amyp@example.test", phone: "07700 900456", subcontractorId: subId, isPrimaryContact: true });
     await db.insert(projectMembersTable).values({ id: randomUUID(), projectId: co.projectId, subcontractorId: subId } as any);
     await db.insert(insuranceRecordsTable).values({ id: randomUUID(), subcontractorId: subId, type: "public_liability", certificateUrl: "/api/uploads/x.pdf", expiryDate: "2099-01-01" } as any);
   });
@@ -67,10 +68,8 @@ describe("site check-in identity", () => {
     const dup = await checkIn("amy  parrish", "AMY I CLOUD");
     expect(dup.status).toBe(409);
     expect(dup.json.error).toBe("already_signed_in");
-    // count and status treat them as one
+    // the count treats them as one
     expect((await api(`/site/${qrToken}/on-site-count`)).json.count).toBe(1);
-    const who = await api(`/site/${qrToken}/who?workerName=Amy%20Parrish&companyName=Amy%20I%20Cloud`);
-    expect(who.json.exact?.checkinId).toBe(a.json.id);
   });
 
   it("signing out under the other spelling closes that person's presence", async () => {

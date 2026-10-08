@@ -613,6 +613,38 @@ async function loadRegistered(projectId: string): Promise<Registered[]> {
 // case-insensitive. If several records match, one tied to a subcontractor card
 // wins, so a match can never dodge an insurance check that another matching
 // record would have run. Otherwise users, then contacts, then people.
+// Mobile numbers on file for a registered identity (#122): the person's own,
+// their login's, and their card's contact number when they are its primary.
+async function phonesForKey(key: string): Promise<string[]> {
+  const [kind, id] = [key.slice(0, key.indexOf(":")), key.slice(key.indexOf(":") + 1)];
+  const out: (string | null)[] = [];
+  if (kind === "person") {
+    const p = (await db.select({ phone: peopleTable.phone, userId: peopleTable.userId, subId: peopleTable.subcontractorId, primary: peopleTable.isPrimaryContact })
+      .from(peopleTable).where(eq(peopleTable.id, id)).limit(1))[0];
+    if (p) {
+      out.push(p.phone);
+      if (p.userId) out.push((await db.select({ phone: usersTable.phone }).from(usersTable).where(eq(usersTable.id, p.userId)).limit(1))[0]?.phone ?? null);
+      if (p.subId && p.primary) out.push((await db.select({ phone: subcontractorsTable.contactPhone }).from(subcontractorsTable).where(eq(subcontractorsTable.id, p.subId)).limit(1))[0]?.phone ?? null);
+    }
+  } else if (kind === "sub") {
+    out.push((await db.select({ phone: subcontractorsTable.contactPhone }).from(subcontractorsTable).where(eq(subcontractorsTable.id, id)).limit(1))[0]?.phone ?? null);
+  } else if (kind === "user") {
+    out.push((await db.select({ phone: usersTable.phone }).from(usersTable).where(eq(usersTable.id, id)).limit(1))[0]?.phone ?? null);
+  }
+  return out.filter((v): v is string => !!v && normPhone(v).length >= 9);
+}
+// Digits only, UK +44 / 0044 folded to a leading 0.
+function normPhone(raw: string): string {
+  let d = raw.replace(/\D/g, "");
+  if (d.startsWith("0044")) d = "0" + d.slice(4);
+  else if (d.startsWith("44") && d.length >= 12) d = "0" + d.slice(2);
+  return d;
+}
+export function samePhone(a: string, b: string): boolean {
+  const x = normPhone(a), y = normPhone(b);
+  return x.length >= 9 && x === y;
+}
+
 function matchRegistered(records: Registered[], typedName: string, typedCompany: string): Registered | null {
   const n = normText(typedName), c = normText(typedCompany);
   const order = { user: 0, contact: 1, person: 2 } as const;
@@ -670,9 +702,6 @@ function publicLabel(fullName: string, company: string | null | undefined): stri
   const initial = parts.length > 1 ? ` ${parts[parts.length - 1][0].toUpperCase()}` : "";
   return `${first}${initial}${company ? `, ${company}` : ""}`;
 }
-function publicLabels(rows: OpenRow[]): Map<string, string> {
-  return new Map(rows.map(r => [r.id, publicLabel(r.workerName, r.companyName)]));
-}
 
 // "Did you mean" confirmation: a short-lived signed token naming ONLY the
 // registered record (key), never a name, so tapping a suggestion can check the
@@ -703,48 +732,10 @@ function readDeviceToken(raw: unknown, projectId: string): { workerName: string;
   } catch { return null; }
 }
 
-// Public: who on THIS site matches what the visitor has typed?
-//  - exact: their own open sign-in (normalised name + company)
-//  - matches: people signed in whose name contains the typed text, ONLY once at
-//    least 3 letters are typed (never a full public list). First name + company.
-//  - suggestions: near-misses (typos) offered as "Did you mean...?" only when
-//    there is no exact match. The client always asks the user to confirm.
-router.get("/site/:token/who", async (req: Request, res: Response) => {
-  try {
-    const workerName = String(req.query.workerName ?? "");
-    const companyName = String(req.query.companyName ?? "");
-    const qr = await db.select().from(qrCodesTable).where(eq(qrCodesTable.token, req.params.token)).then(r => r[0]);
-    if (!qr) { res.status(404).json({ error: "not_found", message: "Invalid site token" }); return; }
-
-    const typedName = normText(workerName);
-    const typedCompany = normText(companyName);
-    const open = typedName.length >= 3 ? await openRowsForProject(qr.projectId) : [];
-    const labels = publicLabels(open);
-    const shape = (r: OpenRow) => ({ checkinId: r.id, label: labels.get(r.id), checkedInAt: r.checkedInAt.toISOString() });
-
-    const typedKey = typedCompany && typedName.length >= 3 ? matchRegistered(await loadRegistered(qr.projectId), typedName, typedCompany)?.key ?? null : null;
-    const exact = typedCompany ? open.find(r => (typedKey && r.personKey === typedKey) || (normText(r.workerName) === typedName && normText(r.companyName ?? "") === typedCompany)) : undefined;
-    if (exact) { res.json({ exact: shape(exact), matches: [], suggestions: [] }); return; }
-
-    const tokens = (r: OpenRow) => normText(r.workerName).split(" ");
-    const matches = open.filter(r => normText(r.workerName).includes(typedName) || tokens(r).some(t => t.startsWith(typedName)));
-    let suggestions: OpenRow[] = [];
-    if (matches.length === 0) {
-      suggestions = open.filter(r => {
-        const nameClose = isClose(typedName, normText(r.workerName));
-        if (!nameClose) return false;
-        return !typedCompany || isClose(typedCompany, normText(r.companyName ?? "")) || normText(r.companyName ?? "").includes(typedCompany) || typedCompany.includes(normText(r.companyName ?? ""));
-      });
-      // A typed name that is a typo AND a company that only partly matches also counts
-      if (suggestions.length === 0 && typedName.includes(" ")) {
-        suggestions = open.filter(r => isClose(typedName, normText(r.workerName)));
-      }
-    }
-    res.json({ exact: null, matches: matches.slice(0, 8).map(shape), suggestions: suggestions.slice(0, 5).map(shape) });
-  } catch {
-    res.status(500).json({ error: "server_error", message: "Failed to look up" });
-  }
-});
+// (#122) The public "who's on site" lookup is gone: anyone at the gate could
+// list who was on site three letters at a time. The board now only knows the
+// person on a remembered device (/device), and sign-out needs that device or
+// the person's phone number on file (/checkout).
 
 // Public: verify a remembered-device token and report current status.
 router.get("/site/:token/device", async (req: Request, res: Response) => {
@@ -803,41 +794,33 @@ async function openRowsToClose(projectId: string, target: OpenRow): Promise<Open
 
 // Public: is this person currently signed in on this site? Drives whether the
 // QR page offers SIGN IN or SIGN OUT. Returns only a boolean + their own times.
-router.get("/site/:token/status", async (req: Request, res: Response) => {
-  try {
-    const workerName = String(req.query.workerName ?? "");
-    const companyName = String(req.query.companyName ?? "");
-    if (!workerName.trim() || !companyName.trim()) {
-      res.status(400).json({ error: "validation_error", message: "workerName and companyName required" });
-      return;
-    }
-    const qr = await db.select().from(qrCodesTable).where(eq(qrCodesTable.token, req.params.token)).then(r => r[0]);
-    if (!qr) { res.status(404).json({ error: "not_found", message: "Invalid site token" }); return; }
-    const open = await openCheckinsFor(qr.projectId, workerName, companyName);
-    const latest = open[0];
-    res.json({ onSite: !!latest, checkinId: latest?.id ?? null, checkedInAt: latest ? latest.checkedInAt.toISOString() : null });
-  } catch {
-    res.status(500).json({ error: "server_error", message: "Failed to check status" });
-  }
-});
-
 // Public: sign out. Closes the person's most recent open cycle only; an older
 // unclosed cycle from a previous day stays flagged for a manager.
+// (#122) The caller must prove who they are: the remembered-device token this
+// phone got at check-in, or name + company + the mobile number on their record.
+// Before #122 anyone could sign anyone out by name or by an on-site list id,
+// emptying the fire roll of people still on site.
+const IDENTITY_NOT_CONFIRMED = { error: "identity_not_confirmed", message: "We couldn't confirm it's you. Ask your site manager to sign you out." };
 router.post("/site/:token/checkout", async (req: Request, res: Response) => {
   try {
-    const { workerName, companyName, checkinId } = req.body ?? {};
+    const { deviceToken, workerName, companyName, phone } = req.body ?? {};
     const qr = await db.select().from(qrCodesTable).where(eq(qrCodesTable.token, req.params.token)).then(r => r[0]);
     if (!qr) { res.status(404).json({ error: "not_found", message: "Invalid site token" }); return; }
-    // Either the visitor tapped a specific person from the on-site suggestions
-    // (checkinId, project-scoped, still open), or typed name + company.
     let open: OpenRow[];
-    if (typeof checkinId === "string" && checkinId) {
-      open = (await openRowsForProject(qr.projectId)).filter(r => r.id === checkinId);
+    if (typeof deviceToken === "string" && deviceToken) {
+      const who = readDeviceToken(deviceToken, qr.projectId);
+      if (!who) { res.status(403).json(IDENTITY_NOT_CONFIRMED); return; }
+      open = await openCheckinsFor(qr.projectId, who.workerName, who.companyName);
     } else {
-      if (!workerName?.trim() || !companyName?.trim()) {
-        res.status(400).json({ error: "validation_error", message: "workerName and companyName required" });
+      if (typeof workerName !== "string" || typeof companyName !== "string" || typeof phone !== "string" || !workerName.trim() || !companyName.trim() || !phone.trim()) {
+        res.status(400).json({ error: "validation_error", message: "Enter your name, company and mobile number." });
         return;
       }
+      // One answer for "not registered", "no phone on file" and "wrong number",
+      // so the form can't be used to test who is registered or on site.
+      const match = matchRegistered(await loadRegistered(qr.projectId), workerName, companyName);
+      const phones = match ? await phonesForKey(match.key) : [];
+      if (!match || !phones.some(p => samePhone(p, phone))) { res.status(403).json(IDENTITY_NOT_CONFIRMED); return; }
       open = await openCheckinsFor(qr.projectId, workerName, companyName);
     }
     if (!open[0]) { res.status(409).json({ error: "not_signed_in", message: "You are not signed in on this site" }); return; }
