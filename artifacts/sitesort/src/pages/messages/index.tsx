@@ -1370,11 +1370,14 @@ export default function MessagesPage() {
                                 className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground text-sm"
                                 title="React"
                               >😊</button>
-                              <button
-                                onClick={() => saveToNotes(msg)}
-                                className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-                                title={`Save to ${activeConv?.otherName ?? "contact"}'s notes`}
-                              ><StickyNote className="w-3 h-3" /></button>
+                              {/* Staff notes are managers-only (server enforces it too) */}
+                              {isManager && (
+                                <button
+                                  onClick={() => saveToNotes(msg)}
+                                  className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                                  title={`Save to ${activeConv?.otherName ?? "contact"}'s notes`}
+                                ><StickyNote className="w-3 h-3" /></button>
+                              )}
                               {/* Project-scoped DMs are permanent — no edit/delete
                                   (matches the server, which 404s these for a
                                   message with a projectId; legacy company-wide

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCapabilities } from "@/hooks/use-capabilities";
+import { useGetMe } from "@workspace/api-client-react";
 
 // Mirrors the server-side rule in artifacts/api-server/src/lib/name-validation.ts —
 // first name + surname, 2+ characters each.
@@ -96,6 +97,8 @@ function WhatsAppIcon({ className }: { className?: string }) {
 
 export default function TeamPage() {
   const caps = useCapabilities();
+  const { data: me } = useGetMe();
+  const myId = me?.id;
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -429,14 +432,16 @@ export default function TeamPage() {
                           </div>
 
                           <div className="flex items-center gap-0.5">
-                            {/* Notes */}
-                            <button
-                              onClick={() => openNotes(m)}
-                              className="p-1.5 rounded-lg text-muted-foreground hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
-                              title="Notes & reminders"
-                            >
-                              <StickyNote className="w-4 h-4" />
-                            </button>
+                            {/* Notes: a manager's private record, never shown to the person it's about */}
+                            {caps.canManageTeam && m.id !== myId && (
+                              <button
+                                onClick={() => openNotes(m)}
+                                className="p-1.5 rounded-lg text-muted-foreground hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
+                                title="Notes & reminders"
+                              >
+                                <StickyNote className="w-4 h-4" />
+                              </button>
+                            )}
 
                             {/* Share */}
                             {!isDeleted && (

@@ -240,9 +240,20 @@ router.delete("/users/:userId", authenticate, allow(COMPANY_MANAGER), async (req
   }
 });
 
+// Notes & reminders about a member of staff are a manager's private record
+// (#121): company admin / PM only, never the person they're about, and only
+// notes written in the active company. Before #121 every member of staff,
+// including the subject, could read them.
+const notSubject = (req: import("express").Request, res: import("express").Response): boolean => {
+  if (req.params.userId !== req.user!.id) return true;
+  res.status(403).json({ error: "forbidden", message: "Notes about you are private to your managers." });
+  return false;
+};
+
 // List notes for a team member (most recent first)
-router.get("/users/:userId/notes", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
+router.get("/users/:userId/notes", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
+    if (!notSubject(req, res)) return;
     // Target must be a member of the active company.
     if (await membershipRole(req.params.userId, req.user!.companyId) === null) { res.status(404).json({ error: "not_found", message: "User not found" }); return; }
 
@@ -255,7 +266,7 @@ router.get("/users/:userId/notes", authenticate, allow(INTERNAL_STAFF), async (r
       })
       .from(userNotesTable)
       .leftJoin(usersTable, eq(usersTable.id, userNotesTable.authorId))
-      .where(eq(userNotesTable.userId, req.params.userId))
+      .where(and(eq(userNotesTable.userId, req.params.userId), eq(userNotesTable.companyId, req.user!.companyId)))
       .orderBy(desc(userNotesTable.createdAt));
 
     res.json(notes.map(n => ({ id: n.id, body: n.body, authorName: n.authorName ?? "Unknown", createdAt: n.createdAt.toISOString() })));
@@ -266,8 +277,9 @@ router.get("/users/:userId/notes", authenticate, allow(INTERNAL_STAFF), async (r
 });
 
 // Add a note to a team member
-router.post("/users/:userId/notes", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
+router.post("/users/:userId/notes", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
+    if (!notSubject(req, res)) return;
     // Target must be a member of the active company.
     if (await membershipRole(req.params.userId, req.user!.companyId) === null) { res.status(404).json({ error: "not_found", message: "User not found" }); return; }
 
@@ -276,7 +288,7 @@ router.post("/users/:userId/notes", authenticate, allow(INTERNAL_STAFF), async (
 
     const id = generateId();
     const [inserted] = await db.insert(userNotesTable).values({
-      id, userId: req.params.userId, authorId: req.user!.id, body: body.trim(),
+      id, userId: req.params.userId, authorId: req.user!.id, companyId: req.user!.companyId, body: body.trim(),
     }).returning({ createdAt: userNotesTable.createdAt });
 
     const author = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
