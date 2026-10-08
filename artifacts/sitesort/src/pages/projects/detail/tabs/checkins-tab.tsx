@@ -2,7 +2,7 @@ import { useState } from "react";
 import { TabsContent } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
-import { QrCode, Share2, FolderOpen, ChevronDown, ChevronRight } from "lucide-react";
+import { QrCode, FolderOpen, ChevronDown, ChevronRight } from "lucide-react";
 import { MonthFolder, splitByMonth, monthLabel } from "@/components/ui/month-folder";
 import { useDetail } from "../context";
 import { OnSiteRegister, checkinStatusLine as statusLine, type Presence } from "@/components/on-site-register";
@@ -26,7 +26,9 @@ type Checkin = {
 };
 
 
-function CheckinCard({ ci, setSharingDoc }: { ci: Checkin; setSharingDoc: (d: any) => void }) {
+// No Share button: check-in photos are workers' faces and their links expire
+// within two hours (server-signed), so they are viewed here, never forwarded.
+function CheckinCard({ ci }: { ci: Checkin }) {
   const photoSrc = ci.photoUrl.startsWith("/uploads/") ? ci.photoUrl.replace("/uploads/", "/api/uploads/") : ci.photoUrl;
   const dateStr = fmtSiteDate(ci.checkedInAt, ci.siteTimeZone, { day: "numeric", month: "short", year: "numeric" });
   const timeStr = fmtSiteTime(ci.checkedInAt, ci.siteTimeZone);
@@ -38,20 +40,10 @@ function CheckinCard({ ci, setSharingDoc }: { ci: Checkin; setSharingDoc: (d: an
       <div className="p-3">
         <p className="font-semibold text-sm truncate">{ci.workerName}</p>
         <p className="text-muted-foreground text-xs mt-0.5">{dateStr}</p>
-        <div className="flex items-center justify-between gap-2 mt-0.5">
-          <p className="text-muted-foreground text-xs">
-            In {timeStr} {siteTzLabel(ci.siteTimeZone, new Date(ci.checkedInAt))}
-            {statusLine(ci)}
-          </p>
-          <button
-            type="button"
-            onClick={() => setSharingDoc({ type: "photo", id: ci.id, name: `Check-in: ${ci.workerName}`, version: null, fileUrl: photoSrc })}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-xs font-medium text-muted-foreground hover:text-primary hover:bg-muted transition-colors shrink-0"
-            title="Share check-in"
-          >
-            <Share2 className="w-3.5 h-3.5" />Share
-          </button>
-        </div>
+        <p className="text-muted-foreground text-xs mt-0.5">
+          In {timeStr} {siteTzLabel(ci.siteTimeZone, new Date(ci.checkedInAt))}
+          {statusLine(ci)}
+        </p>
       </div>
     </div>
   );
@@ -61,7 +53,6 @@ export function CheckinsTab() {
   const {
     checkins,
     siteBoardUrl,
-    setSharingDoc,
     setCheckins,
     projectId,
     isProjectApprover,
@@ -136,7 +127,7 @@ export function CheckinsTab() {
                   </Card>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {today.map(ci => <CheckinCard key={ci.id} ci={ci} setSharingDoc={setSharingDoc} />)}
+                    {today.map(ci => <CheckinCard key={ci.id} ci={ci} />)}
                   </div>
                 )}
               </div>
@@ -163,7 +154,7 @@ export function CheckinsTab() {
                           </button>
                           {open && (
                             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 p-4 pt-1">
-                              {list.map(ci => <CheckinCard key={ci.id} ci={ci} setSharingDoc={setSharingDoc} />)}
+                              {list.map(ci => <CheckinCard key={ci.id} ci={ci} />)}
                             </div>
                           )}
                         </div>
@@ -179,7 +170,7 @@ export function CheckinsTab() {
                     {[...byMonth.entries()].map(([key, list]) => (
                       <MonthFolder key={key} label={monthLabel(key)} count={list.length} countLabel="check-in" testId={`button-checkin-month-${key}`}>
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 p-4 pt-1">
-                          {list.map(ci => <CheckinCard key={ci.id} ci={ci} setSharingDoc={setSharingDoc} />)}
+                          {list.map(ci => <CheckinCard key={ci.id} ci={ci} />)}
                         </div>
                       </MonthFolder>
                     ))}

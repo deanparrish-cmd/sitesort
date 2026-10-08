@@ -60,7 +60,9 @@ describe("site check-in identity", () => {
   it("'Amy' and 'Amy Parrish' resolve to ONE person: same identity key, second sign-in while open is refused", async () => {
     const a = await checkIn("Amy", "Amy I Cloud");
     expect(a.status).toBe(201);
-    expect(a.json.personKey).toBe(`person:${personId}`);
+    // The public response no longer carries the identity key; read the row.
+    expect(a.json).not.toHaveProperty("personKey");
+    expect((await db.select().from(siteCheckinsTable).where(eq(siteCheckinsTable.id, a.json.id)))[0].personKey).toBe(`person:${personId}`);
     // the other spelling, same human, while still signed in
     const dup = await checkIn("amy  parrish", "AMY I CLOUD");
     expect(dup.status).toBe(409);
@@ -80,7 +82,7 @@ describe("site check-in identity", () => {
   it("a second in/out cycle later is a NEW row under the same identity", async () => {
     const again = await checkIn("Amy Parrish", "Amy I Cloud");
     expect(again.status).toBe(201);
-    expect(again.json.personKey).toBe(`person:${personId}`);
+    expect((await db.select().from(siteCheckinsTable).where(eq(siteCheckinsTable.id, again.json.id)))[0].personKey).toBe(`person:${personId}`);
     await checkOut({ workerName: "Amy", companyName: "Amy I Cloud" });
     const rows = await db.select().from(siteCheckinsTable).where(eq(siteCheckinsTable.projectId, co.projectId));
     expect(rows).toHaveLength(2);
@@ -176,7 +178,7 @@ describe("site check-in identity", () => {
     const good = await fetch(`${API_BASE}/site/${qrToken}/checkin`, { method: "POST", body: fd(tok) });
     expect(good.status).toBe(201);
     const row = await good.json();
-    expect(row.personKey).toBe(`person:${personId}`);
+    expect((await db.select().from(siteCheckinsTable).where(eq(siteCheckinsTable.id, row.id)))[0].personKey).toBe(`person:${personId}`);
     expect(row.companyName).toBe("Amy I Cloud"); // the record's own spelling, not the typo
     await checkOut({ workerName: "Amy", companyName: "Amy I Cloud" });
   });

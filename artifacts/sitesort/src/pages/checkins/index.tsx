@@ -3,13 +3,12 @@ import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { Input } from "@/components/ui/input";
-import { ShareModal } from "@/components/share-modal";
 import { OnSiteRegister, checkinStatusLine, type RegisterCheckin } from "@/components/on-site-register";
 import { fmtSiteTime, fmtSiteDate, siteDayKey, siteTzLabel } from "@/lib/site-time";
 import { useCapabilities } from "@/hooks/use-capabilities";
 import {
   ClipboardCheck, Search, MapPin, Building2, Calendar,
-  ExternalLink, Share2, X, Users,
+  ExternalLink, X, Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/utils";
@@ -45,7 +44,6 @@ export default function CheckinsPage() {
   const [q, setQ] = useState("");
   const [projectFilter, setProjectFilter] = useState("all");
   const [viewing, setViewing] = useState<Checkin | null>(null);
-  const [shareItem, setShareItem] = useState<{ id: string; name: string; fileUrl: string; projectId: string } | null>(null);
 
   const caps = useCapabilities();
   // Company-wide check-ins (names, photos, GPS) are admin / PM only; the API refuses everyone else.
@@ -190,13 +188,6 @@ export default function CheckinsPage() {
                       >
                         <ExternalLink className="w-3.5 h-3.5" />
                       </button>
-                      <button
-                        onClick={() => setShareItem({ id: ci.id, name: `Check-in: ${ci.workerName}`, fileUrl: src, projectId: ci.projectId })}
-                        className="p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
-                        title="Share"
-                      >
-                        <Share2 className="w-3.5 h-3.5" />
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -224,12 +215,6 @@ export default function CheckinsPage() {
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-background hover:bg-muted transition-colors text-sm font-medium"
                   >
                     <ExternalLink className="w-3.5 h-3.5" /> Open
-                  </button>
-                  <button
-                    onClick={() => { setShareItem({ id: viewing.id, name: `Check-in: ${viewing.workerName}`, fileUrl: src, projectId: viewing.projectId }); setViewing(null); }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-background hover:bg-muted transition-colors text-sm font-medium"
-                  >
-                    <Share2 className="w-3.5 h-3.5" /> Share
                   </button>
                   <button onClick={() => setViewing(null)} className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground">
                     <X className="w-4 h-4" />
@@ -275,15 +260,6 @@ export default function CheckinsPage() {
         );
       })()}
 
-      <ShareModal
-        open={!!shareItem}
-        onClose={() => setShareItem(null)}
-        entityType="photo"
-        entityId={shareItem?.id ?? ""}
-        entityName={shareItem?.name ?? ""}
-        fileUrl={shareItem?.fileUrl}
-        projectId={shareItem?.projectId}
-      />
     </SidebarLayout>
   );
 }

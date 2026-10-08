@@ -7,6 +7,7 @@ import { generateDailyReportForProject, hasManagerContent, upsertManagerReport, 
 import { generateId } from "../lib/id";
 import { enqueuePushForMembers, acceptedPortalMemberUserIds } from "../lib/push-triggers";
 import { notesFor, addNote } from "../lib/portal-submission-notes";
+import { signUploadUrl } from "../lib/signed-uploads";
 
 // A report's narrative only counts as "there" for the PM once its author has
 // submitted it — a portal member's still-in-progress draft doesn't show.
@@ -20,6 +21,13 @@ async function nameForReportsUser(userId: string | null): Promise<string | null>
 }
 
 const router: IRouter = Router();
+
+// The stored snapshot keeps bare check-in photo URLs; sign them on the way out.
+function signReportData(data: unknown): unknown {
+  const d = data as { subcontractorsOnSite?: { photoUrl?: string | null }[] } | null;
+  if (!d || !Array.isArray(d.subcontractorsOnSite)) return data;
+  return { ...d, subcontractorsOnSite: d.subcontractorsOnSite.map(c => ({ ...c, photoUrl: signUploadUrl(c.photoUrl ?? null) })) };
+}
 
 const INTERNAL_ROLES = ["admin", "project_manager", "site_worker"];
 
@@ -194,7 +202,7 @@ router.get("/daily-reports/:id", authenticate, async (req, res) => {
       checkinCount: report.checkinCount,
       documentEventCount: report.documentEventCount,
       photoCount: report.photoCount,
-      data: report.data,
+      data: signReportData(report.data),
       managerReport: hasSubmittedContent(report.managerReport, report.submittedAt) ? report.managerReport : null,
       authorName: report.authorName ?? null,
       authoredAt: report.authoredAt ? report.authoredAt.toISOString() : null,

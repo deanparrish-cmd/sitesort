@@ -13,6 +13,7 @@ import multer from "multer";
 import path from "path";
 import { randomUUID } from "crypto";
 import { getBucket, objectKey } from "../lib/gcs";
+import { signUploadUrl } from "../lib/signed-uploads";
 import { siteDateStr, siteTime, siteTzLabel, closeDueAfter, safeTz, DEFAULT_SITE_CLOSE } from "../lib/site-clock";
 import { isProjectApprover } from "../lib/project-authority";
 import { logActivity } from "../lib/activity";
@@ -436,14 +437,22 @@ export function checkinState(c: StateRow, clock: SiteClock, now: Date = new Date
     siteTzLabel: siteTzLabel(clock.tz, c.checkedInAt),
   };
 }
-function serializeCheckin<T extends StateRow & { holdDecidedAt?: Date | null }>(c: T, clock: SiteClock) {
+function serializeCheckin<T extends StateRow & { holdDecidedAt?: Date | null; photoUrl?: string | null }>(c: T, clock: SiteClock) {
   return {
     ...c,
+    // Check-in photos are served only with a short-lived signature.
+    ...("photoUrl" in c ? { photoUrl: signUploadUrl(c.photoUrl) } : {}),
     checkedInAt: c.checkedInAt.toISOString(),
     checkedOutAt: c.checkedOutAt ? c.checkedOutAt.toISOString() : null,
     holdDecidedAt: c.holdDecidedAt ? c.holdDecidedAt.toISOString() : null,
     ...checkinState(c, clock),
   };
+}
+// Public QR responses (the person at the gate, no login) never carry the photo,
+// GPS or identity key: anyone can type a name and company at the sign-out screen.
+function publicCheckin<T extends StateRow & { holdDecidedAt?: Date | null; photoUrl?: string | null; lat?: number | null; lng?: number | null; personKey?: string | null }>(c: T, clock: SiteClock) {
+  const { photoUrl: _p, lat: _la, lng: _ln, personKey: _k, ...rest } = serializeCheckin(c, clock);
+  return rest;
 }
 // The person's currently-open cycles on a project (name + company, case-insensitive),
 // newest first.
@@ -842,7 +851,7 @@ router.post("/site/:token/checkout", async (req: Request, res: Response) => {
     const row = closed.find(r => r.id === targetRow.id);
     if (!row) { res.status(409).json({ error: "not_signed_in", message: "You are not signed in on this site" }); return; }
     void notifySignedOut(qr.projectId, row, now);
-    res.json(serializeCheckin(row, await siteClock(qr.projectId)));
+    res.json(publicCheckin(row, await siteClock(qr.projectId)));
   } catch {
     res.status(500).json({ error: "server_error", message: "Sign-out failed" });
   }
@@ -941,7 +950,7 @@ router.get("/notifications/:notificationId/checkin", authenticate, allow(ANY_MEM
       // End-of-day list: everyone closed automatically in that run.
       const ids = Array.isArray(meta.checkinIds) ? meta.checkinIds : [];
       const rows = ids.length ? await db.select().from(siteCheckinsTable).where(and(inArray(siteCheckinsTable.id, ids), eq(siteCheckinsTable.projectId, project.id))).orderBy(asc(siteCheckinsTable.workerName)) : [];
-      res.json({ kind: "auto_closed", project: { id: project.id, name: project.name }, at: n.createdAt.toISOString(), rows: rows.map(r => ({ ...serializeCheckin(r, clock), photoUrl: r.photoUrl })) });
+      res.json({ kind: "auto_closed", project: { id: project.id, name: project.name }, at: n.createdAt.toISOString(), rows: rows.map(r => ({ ...serializeCheckin(r, clock), photoUrl: signUploadUrl(r.photoUrl) })) });
       return;
     }
 
@@ -952,7 +961,7 @@ router.get("/notifications/:notificationId/checkin", authenticate, allow(ANY_MEM
       res.json({
         kind: "held", project: { id: project.id, name: project.name }, at: n.createdAt.toISOString(),
         fallback: { workerName, companyName },
-        checkin: checkin ? { ...serializeCheckin(checkin, clock), photoUrl: checkin.photoUrl, holdDecidedByName: decidedByName } : null,
+        checkin: checkin ? { ...serializeCheckin(checkin, clock), photoUrl: signUploadUrl(checkin.photoUrl), holdDecidedByName: decidedByName } : null,
         canDecide: await isProjectApprover(req.user!, project.id),
       });
       return;
@@ -971,7 +980,7 @@ router.get("/notifications/:notificationId/checkin", authenticate, allow(ANY_MEM
       project: { id: project.id, name: project.name },
       at: n.createdAt.toISOString(),
       fallback: { workerName, companyName },
-      checkin: checkin ? { ...serializeCheckin(checkin, clock), photoUrl: checkin.photoUrl } : null,
+      checkin: checkin ? { ...serializeCheckin(checkin, clock), photoUrl: signUploadUrl(checkin.photoUrl) } : null,
     });
   } catch (err) {
     req.log.error({ err }, "Check-in notification detail error");
@@ -1101,7 +1110,7 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
     // the notification fan-out.
     void notifySuccessfulCheckin(qr.projectId, storedName, storedCompany, checkin.checkedInAt, checkin.id);
 
-    res.status(201).json({ ...serializeCheckin(checkin, clock), deviceToken: signDeviceToken(qr.projectId, storedName, storedCompany) });
+    res.status(201).json({ ...publicCheckin(checkin, clock), deviceToken: signDeviceToken(qr.projectId, storedName, storedCompany) });
   } catch (err) {
     res.status(500).json({ error: "server_error", message: "Check-in failed" });
   }

@@ -584,7 +584,8 @@ export async function addReportPhotos(params: {
   const raw = Array.isArray(params.input) ? params.input : [];
   const photos = raw
     .map((p: any) => ({ photoUrl: typeof p?.photoUrl === "string" ? p.photoUrl : "", caption: typeof p?.caption === "string" ? p.caption.trim().slice(0, 300) : "" }))
-    .filter((p) => /^\/(api\/)?uploads\/[^/]+$/.test(p.photoUrl));
+    // Own uploads only; never a check-in photo (those are signed, short-lived).
+    .filter((p) => /^\/(api\/)?uploads\/(?!checkin-)[^/?#]+$/.test(p.photoUrl));
   if (photos.length === 0 || photos.length > REPORT_PHOTO_MAX) return { error: `Add between 1 and ${REPORT_PHOTO_MAX} photos` };
   // Sequential reference numbers from one count, mirroring POST /projects/:id/photos.
   const [{ total }] = await db.select({ total: count() }).from(photosTable);

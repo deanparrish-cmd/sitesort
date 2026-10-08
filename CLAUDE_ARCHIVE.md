@@ -1131,3 +1131,9 @@ Removed `upcomingEvents` from `lib/site-board.ts`, OpenAPI `PortalSiteBoard`, bo
 
 ## 2026-10-07: moved from CLAUDE.md session log
 - **2026-09-15 and 2026-09-11:** see CLAUDE_ARCHIVE.md (`4c355d5` shipped #99).
+
+
+## 2026-10-08: moved from CLAUDE.md session log
+- **2026-09-18 SESSION CLOSE (`main → a0c5d874`):** #101 to #110 shipped (detail in CLAUDE_ARCHIVE.md). Still open:
+    (Items 1/2 superseded by the 2026-10-07 entry; moved to CLAUDE_ARCHIVE.md.)
+  - **Notes for next session:** (a) after ANY backend change rebuild + restart the local api-server (`cd artifacts/api-server && NODE_ENV=development node ./build.mjs && PORT=8080 node dist/index.mjs`); vitest hits the LIVE :8080 server, so tests run against stale code otherwise. (b) `pnpm --filter @workspace/db run push` hangs interactively; apply the same SQL via `psql "$DATABASE_URL"` AND add it to `ensure-schema.ts`. (c) After a schema change run `pnpm run typecheck` (rebuilds lib declarations) before trusting api-server type errors. (d) Headless Chromium hangs the QR check-in unless geolocation permission is granted in the context. (e) Push with `push-delta.ts`; if GitHub returns 403 rate limit wait ~4 min and retry; verify with `verify-push.ts <ref>`. (f) Fire-and-forget notification inserts can race test teardown; wait ~500ms before deleting fixtures. (g) delete any `tmp-*` dev rows.

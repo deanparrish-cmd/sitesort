@@ -4,6 +4,7 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { authenticate } from "../middlewares/auth";
 import { getBucket, objectKey } from "../lib/gcs";
+import { isProtectedUpload, verifyUploadSignature } from "../lib/signed-uploads";
 
 const router: IRouter = Router();
 
@@ -86,10 +87,17 @@ router.post("/upload", authenticate, (req: Request, res: Response, next) => {
 // TODO post-launch: switch to short-lived signed GCS URLs minted by an
 // authenticated /api/uploads/:filename/url endpoint, then update the frontend
 // to resolve URLs through it.
+// Exception: check-in photos (workers' faces) need a short-lived signature
+// minted by the authenticated endpoint that handed out the URL
+// (lib/signed-uploads.ts). A bare or expired check-in photo URL gets 403.
 router.get("/uploads/:filename", async (req: Request, res: Response) => {
   const { filename } = req.params;
   if (!filename || filename.includes("/") || filename.includes("..")) {
     res.status(400).json({ error: "invalid_filename" });
+    return;
+  }
+  if (isProtectedUpload(filename) && !verifyUploadSignature(filename, req.query.exp, req.query.sig)) {
+    res.status(403).json({ error: "link_expired", message: "This photo link has expired. Open it again from SiteSort." });
     return;
   }
 
