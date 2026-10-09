@@ -751,6 +751,8 @@ export async function ensureSchema(): Promise<void> {
     // Check-in identity link + structured notification detail (check-in notifications open a detail view).
     await pool.query(`ALTER TABLE site_checkins ADD COLUMN IF NOT EXISTS person_key text`);
     await pool.query(`ALTER TABLE site_checkins ADD COLUMN IF NOT EXISTS typed_phone text`);
+    await pool.query(`ALTER TABLE project_members ADD COLUMN IF NOT EXISTS register_opened_at timestamp`);
+    await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS fire_roll_alerted_on text`);
     await pool.query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS metadata jsonb`);
     // Insurance hold + manager override, automatic close at the site close time,
     // and the per-project site clock (#114).

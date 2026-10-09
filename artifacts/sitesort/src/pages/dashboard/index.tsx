@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import {
+import { Flame,
   Building2, AlertTriangle, ChevronLeft, ChevronRight, ArrowRight, ArrowDown,
   ShieldAlert, FileSignature, Users, Bell, Search,
   MessageSquare, Camera, FilePlus, Plus, AlertCircle, CreditCard,
@@ -456,6 +456,8 @@ export default function Dashboard() {
   type OnboardingStatus = { hasProject: boolean; hasTeamMember: boolean; hasDocument: boolean; hasSubcontractor: boolean; hasMilestone: boolean };
   const [onboarding, setOnboarding] = useState<OnboardingStatus | null>(null);
   const [plantOnHire, setPlantOnHire] = useState<OnHirePlant[]>([]);
+  // Fire-roll readiness per project that uses the gate (#125).
+  const [fireRoll, setFireRoll] = useState<{ projectId: string; projectName: string; status: string; checks: { status: string; label: string }[] }[]>([]);
   const [onboardingDismissed, setOnboardingDismissed] = useState(() => localStorage.getItem("sitesort_onboarding_dismissed") === "1");
 
   useEffect(() => {
@@ -466,6 +468,7 @@ export default function Dashboard() {
     fetch("/api/auth/me", { headers: h }).then(r => r.ok ? r.json() : null).then(u => { if (u?.name) setUserName(u.name.split(" ")[0]); }).catch(() => {});
     fetch("/api/onboarding/status", { headers: h }).then(r => r.ok ? r.json() : null).then(setOnboarding).catch(() => {});
     fetch("/api/plant-items/on-hire", { headers: h }).then(r => r.ok ? r.json() : []).then(setPlantOnHire).catch(() => {});
+    fetch("/api/fire-roll", { headers: h }).then(r => r.ok ? r.json() : []).then(setFireRoll).catch(() => {});
   }, []);
 
   const [search, setSearch] = useState("");
@@ -577,12 +580,24 @@ export default function Dashboard() {
         severity: "warning",
       });
 
+    // Fire roll not ready / needs a check: each names one project, opens it.
+    for (const f of fireRoll) {
+      if (f.status !== "red" && f.status !== "amber") continue;
+      const worstCheck = f.checks.find(c => c.status === f.status);
+      items.push({
+        icon: <Flame className="w-4 h-4" />,
+        label: `${f.projectName}: ${f.status === "red" ? "fire roll not ready" : "fire roll needs a check"}${worstCheck ? ` · ${worstCheck.label}` : ""}`,
+        href: `/projects/${f.projectId}?tab=overview`,
+        severity: f.status === "red" ? "critical" : "warning",
+      });
+    }
+
     // Unread messages
     if (unreadMessages > 0)
       items.push({ icon: <MessageSquare className="w-4 h-4" />, label: `${unreadMessages} unread message${unreadMessages > 1 ? "s" : ""}`, href: "/messages?filter=unread", severity: "warning" });
 
     return items;
-  }, [expiryAlerts, compliance, unreadMessages]);
+  }, [expiryAlerts, compliance, unreadMessages, fireRoll]);
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";

@@ -51,7 +51,7 @@ import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { WORKER_GUIDE, workerFaq } from "@workspace/user-guide";
 import { GuideSectionGrid, GuideFaqAccordion } from "@/components/user-guide-view";
 import { PortalTile, PortalLinkRow, PortalButton, type TileTheme } from "@/components/portal-ui";
-import { SiteRegisterView } from "@/components/portal-site-register";
+import { SiteRegisterView, registerSavedToday } from "@/components/portal-site-register";
 
 // Wayfinding colour per Home-screen quick-access tile — a distinct hue per
 // destination, never one of the green/amber/red status colours (those are
@@ -601,6 +601,12 @@ function HomeQuickAccess({ member }: { member: Record<string, unknown> | undefin
   const siteTasksUnseen = grantedTasks.reduce((sum, k) => sum + (counts[k] ?? 0), 0);
   return (
     <div className="grid grid-cols-2 gap-3">
+      {!!member?.canSeeSiteRegister && !registerSavedToday() && (
+        <Link href="/portal/site-register" className="col-span-2 flex flex-wrap items-center gap-2 rounded-2xl border-2 border-warning bg-warning/15 px-4 py-3 min-h-14 font-bold" data-testid="banner-open-register">
+          <AlertTriangle className="w-5 h-5 shrink-0" />
+          <span className="min-w-0">Open the Site Register so your phone has today's fire roll.</span>
+        </Link>
+      )}
       {!!member?.canSeeSiteRegister && (
         <div className="col-span-2">
           <PortalTile href="/portal/site-register" label="Site Register: who's on site" Icon={SECTION_NAV.find(s => s.key === "site-register")!.Icon} theme={TILE_THEME["site-register"]} />

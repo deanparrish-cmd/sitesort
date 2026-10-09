@@ -19,6 +19,7 @@ type HeldRow = Row & {
 export type SiteRegister = {
   projectId: string; projectName: string; generatedAt: string; siteTimeZone: string; siteTzLabel: string; siteDate: string;
   onSite: Row[]; notSignedOut: Row[]; held: HeldRow[];
+  readiness?: { status: "green" | "amber" | "red" | "not_in_use"; checks: { key: string; status: "green" | "amber" | "red"; label: string; fix?: string }[] } | null;
 };
 type Cached = { data: SiteRegister; savedAt: string };
 
@@ -53,6 +54,12 @@ export function clearSiteRegisterCaches(): void {
     }
   } catch { /* nothing saved */ }
 }
+/** Whether this phone already holds today's register (drives the Home prompt). */
+export function registerSavedToday(): boolean {
+  const c = readCache();
+  return !!c && sameDay(c.savedAt, new Date());
+}
+
 /** The most recent saved register on this device, for the login screen. */
 export function lastSavedRegister(): { projectName: string; savedAt: string } | null {
   const c = readCache();
@@ -231,6 +238,28 @@ function SignOutPanel({ r, online, onCancel, onDone }: { r: Row; online: boolean
   );
 }
 
+// Fire-roll readiness (#125), as of this copy: anything not right yet, so the
+// site manager knows what to sort (or who to ask) before he relies on it.
+function ReadinessStrip({ r }: { r: SiteRegister["readiness"] }) {
+  if (!r || r.status === "not_in_use") return null;
+  const problems = r.checks.filter(c => c.status !== "green" && c.key !== "today");
+  if (problems.length === 0) return null;
+  const bad = problems.some(c => c.status === "red");
+  return (
+    <section className={cn("rounded-2xl border-2 p-4 space-y-2", bad ? "border-destructive bg-destructive/10" : "border-warning bg-warning/15")} data-testid="register-readiness">
+      <p className="text-base font-bold">{bad ? "Fire roll not ready" : "Fire roll: check these"}</p>
+      <ul className="space-y-2">
+        {problems.map(c => (
+          <li key={c.key} className="text-sm break-words">
+            <span className="font-semibold">{c.label}</span>{c.fix ? ` ${c.fix}` : ""}
+          </li>
+        ))}
+      </ul>
+      {bad && <p className="text-sm">Your project manager has been told.</p>}
+    </section>
+  );
+}
+
 function useNow(ms = 10_000) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => { const t = setInterval(() => setNow(new Date()), ms); return () => clearInterval(t); }, [ms]);
@@ -294,6 +323,7 @@ export function SiteRegisterView({ projectId }: { projectId?: string | null }) {
         <p className="text-sm text-muted-foreground break-words">{data.projectName} · times in {data.siteTzLabel}</p>
       </div>
       <LastUpdated savedAt={cached.savedAt} live={live} refreshing={refreshing} onRefresh={() => void load()} now={now} />
+      <ReadinessStrip r={data.readiness} />
       {flash && (
         <div className="rounded-xl border-2 border-success bg-success/10 p-3 flex flex-wrap items-center gap-2" role="status">
           <CheckCircle2 className="w-5 h-5 shrink-0" /><span className="text-base font-semibold min-w-0 break-words">{flash}</span>

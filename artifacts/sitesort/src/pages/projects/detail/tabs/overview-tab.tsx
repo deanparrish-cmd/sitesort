@@ -8,6 +8,7 @@ import { FileDropZone, DASHBOARD_PHOTO_HINT } from "@/components/ui/file-drop-zo
 import { Textarea } from "@/components/ui/textarea";
 import { formatDate, formatBytes, cn } from "@/lib/utils";
 import { useDetail } from "../context";
+import { FireRollCard } from "@/components/fire-roll-card";
 
 export function OverviewTab() {
   const {
@@ -37,6 +38,7 @@ export function OverviewTab() {
     <>
         <TabsContent value="overview">
           <div className="space-y-6">
+            <FireRollCard projectId={projectId} />
             <RecentActivityGlance projectId={projectId} canManage={caps.canManageProjects} />
             {(caps.canLogPhoto || caps.canUploadDocument) && (
               <Card id="section-post-update" className="scroll-mt-24">

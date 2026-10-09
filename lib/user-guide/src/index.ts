@@ -200,6 +200,7 @@ export const PM_GUIDE: GuideSection[] = [
         body: [
           "The project's site manager, and anyone you give PM cover on the project's Team tab, can run the gate from the Team Portal: the Site Register shows who is on site now, who is waiting at the gate (let on or refuse), and lets them sign someone out with a note. They get a phone notification when someone is waiting, if they've turned notifications on.",
           "Set this up before you need it: name the site manager in Edit Details, or tick PM cover, and make sure they have accepted their Team Portal invite.",
+          "The project's Overview shows Fire roll: Ready, Check or Not ready, with what's missing and where to fix it: nobody named, Team Portal invite not accepted, notifications off, nobody signing in at the QR code this week, or today's register not opened. It's Not ready once people have signed in today and nobody has opened the Site Register, because the copy on the phone would be out of date. While it's Not ready, you and the site manager get one alert a day, and it shows under Needs Attention on your dashboard.",
         ],
       },
       {
@@ -426,6 +427,7 @@ export const WORKER_GUIDE: GuideSection[] = [
           "If you're the project's site manager, or covering for the project manager, Home shows a Site Register tile. It lists everyone on site now, for a roll call or a fire, and anyone who didn't sign out before the site closed.",
           "Check Last updated before you count heads. With signal it refreshes every 30 seconds. With no signal you see the copy saved on your phone, marked No signal, with the time it was taken. Open the Site Register once a day with signal so the saved copy is today's.",
           "If you've been signed out, the sign-in screen has Open the saved site register, which works with no signal.",
+          "Until you open the Site Register each day, Home reminds you. If anything else needs sorting (for example notifications are off), it's listed at the top of the Site Register. If the fire roll isn't ready, you and the project manager get one alert that day.",
         ],
         callout: {
           tone: "tip",

@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db } from "@workspace/db";
-import { qrCodesTable, qrBoardPinsTable, documentsTable, projectsTable, projectMembersTable, usersTable, permitsTable, photosTable, siteCheckinsTable, subcontractorsTable, calendarEventsTable, companyMembersTable, notificationsTable, peopleTable, companiesTable } from "@workspace/db/schema";
+import { qrCodesTable, qrBoardPinsTable, documentsTable, projectsTable, projectMembersTable, usersTable, permitsTable, photosTable, siteCheckinsTable, subcontractorsTable, calendarEventsTable, companyMembersTable, notificationsTable, peopleTable, companiesTable, pushSubscriptionsTable, projectInvitesTable } from "@workspace/db/schema";
 import { eq, and, or, desc, asc, inArray, isNull, sql } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
@@ -1166,6 +1166,8 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
     // Fire-and-forget: the worker's check-in must not wait on (or fail with)
     // the notification fan-out.
     void notifySuccessfulCheckin(qr.projectId, storedName, storedCompany, checkin.checkedInAt, checkin.id);
+    // First arrival and nobody has opened today's register: alert now, not in 5 minutes.
+    void runFireRollAlerts(new Date(), qr.projectId).catch(() => {});
 
     res.status(201).json({ ...publicCheckin(checkin, clock), deviceToken: signDeviceToken(qr.projectId, storedName, storedCompany, match.key) });
   } catch (err) {
@@ -1298,6 +1300,171 @@ router.get("/projects/:projectId/checkins", authenticate, allow(projectApprover(
 });
 
 // ==========================================================================
+// FIRE-ROLL READINESS (#125)
+// Everything the Site Register needs to be right on the day, checked by the
+// system instead of a guide: who runs it, can they get in, will they hear
+// about the gate, is the board in use, and is today's copy on their phone.
+// Red = the fire roll would be missing or wrong. Projects without a site QR
+// code don't use the gate: "not_in_use", never alerted.
+// ==========================================================================
+type Light = "green" | "amber" | "red";
+export type FireRollCheck = { key: string; status: Light; label: string; fix?: string };
+export type FireRollReadiness = {
+  projectId: string; projectName: string; status: Light | "not_in_use"; checks: FireRollCheck[];
+  holders: { userId: string; name: string; role: "site_manager" | "cover"; portal: boolean }[];
+  siteDate: string;
+};
+const worst = (a: Light[]): Light => a.includes("red") ? "red" : a.includes("amber") ? "amber" : "green";
+
+export async function fireRollReadiness(projectId: string, now: Date = new Date()): Promise<FireRollReadiness | null> {
+  const p = (await db.select({ id: projectsTable.id, name: projectsTable.name, siteManagerId: projectsTable.siteManagerId }).from(projectsTable).where(eq(projectsTable.id, projectId)).limit(1))[0];
+  if (!p) return null;
+  const clock = await siteClock(projectId);
+  const siteDate = siteDateStr(now, clock.tz);
+  const base = { projectId, projectName: p.name, siteDate };
+  const qrs = await db.select({ id: qrCodesTable.id }).from(qrCodesTable).where(eq(qrCodesTable.projectId, projectId)).limit(1);
+  if (qrs.length === 0) {
+    return { ...base, status: "not_in_use", holders: [], checks: [{ key: "qr", status: "amber", label: "No site QR code yet, so the site register isn't in use on this project.", fix: "Create one on the Site Board tab if people sign in here." }] };
+  }
+
+  const holderIds = await registerHolderIds(projectId);
+  const members = holderIds.length ? await db.select({
+    userId: projectMembersTable.userId, personId: projectMembersTable.personId, openedAt: projectMembersTable.registerOpenedAt, name: usersTable.name,
+  }).from(projectMembersTable).innerJoin(usersTable, eq(usersTable.id, projectMembersTable.userId))
+    .where(and(eq(projectMembersTable.projectId, projectId), inArray(projectMembersTable.userId, holderIds))) : [];
+  const byUser = new Map<string, { name: string; portal: boolean; openedAt: Date | null }>();
+  for (const m of members) {
+    const prev = byUser.get(m.userId as string);
+    byUser.set(m.userId as string, {
+      name: m.name, portal: (prev?.portal ?? false) || !!m.personId,
+      openedAt: [prev?.openedAt, m.openedAt].filter((d): d is Date => !!d).sort((a, b) => b.getTime() - a.getTime())[0] ?? null,
+    });
+  }
+  const holders = holderIds.map(id => ({ userId: id, name: byUser.get(id)?.name ?? "", role: (id === p.siteManagerId ? "site_manager" : "cover") as "site_manager" | "cover", portal: !!byUser.get(id)?.portal }));
+  const checks: FireRollCheck[] = [];
+
+  // 1. Someone runs the gate.
+  if (holders.length === 0) {
+    checks.push({ key: "who", status: "red", label: "No site manager is named and nobody has PM cover.", fix: "Name the site manager in Edit Details, or tick PM cover for someone on the Team tab." });
+    return { ...base, status: "red", holders, checks };
+  }
+  checks.push({ key: "who", status: "green", label: `Run by ${holders.map(h => `${h.name} (${h.role === "site_manager" ? "site manager" : "PM cover"})`).join(", ")}.` });
+
+  // 2. They can get into the Team Portal.
+  const ready = holders.filter(h => h.portal);
+  if (ready.length === 0) {
+    const pending = await db.select({ id: projectInvitesTable.id }).from(projectInvitesTable)
+      .innerJoin(peopleTable, eq(peopleTable.id, projectInvitesTable.personId))
+      .where(and(eq(projectInvitesTable.projectId, projectId), eq(projectInvitesTable.status, "pending"), inArray(peopleTable.userId, holders.map(h => h.userId)))).limit(1);
+    checks.push(pending.length
+      ? { key: "access", status: "red", label: `${holders[0].name} hasn't accepted their Team Portal invite, so they can't open the Site Register.`, fix: "Ask them to accept it, or resend it from the Team Portal tab." }
+      : { key: "access", status: "red", label: `${holders.map(h => h.name).join(", ")} ${holders.length > 1 ? "have" : "has"} no Team Portal access, so the Site Register can't be opened.`, fix: "Invite them to the Team Portal from the Team tab." });
+    return { ...base, status: "red", holders, checks };
+  }
+  checks.push({ key: "access", status: "green", label: "Team Portal access accepted." });
+
+  // 3. They'll hear about people at the gate.
+  const subs = await db.select({ userId: pushSubscriptionsTable.userId }).from(pushSubscriptionsTable)
+    .where(and(eq(pushSubscriptionsTable.projectId, projectId), inArray(pushSubscriptionsTable.userId, ready.map(h => h.userId))));
+  checks.push(subs.length
+    ? { key: "notify", status: "green", label: "Phone notifications on." }
+    : { key: "notify", status: "amber", label: "Notifications are off, so nobody on site hears when someone is waiting at the gate.", fix: "Turn them on in Team Portal Settings." });
+
+  // 4. The board is actually in use at the gate.
+  const recent = await db.select({ id: siteCheckinsTable.id }).from(siteCheckinsTable)
+    .where(and(eq(siteCheckinsTable.projectId, projectId), sql`${siteCheckinsTable.checkedInAt} > now() - interval '7 days'`)).limit(1);
+  checks.push(recent.length
+    ? { key: "board", status: "green", label: "People are signing in at the site QR code." }
+    : { key: "board", status: "amber", label: "Nobody has signed in at the site QR code in the last week.", fix: "Check the QR code is posted at the gate." });
+
+  // 5. Today's register is on their phone. Red once people have signed in
+  // today and nobody has opened it: the saved copy would be a wrong fire roll.
+  const openedToday = ready.some(h => { const o = byUser.get(h.userId)?.openedAt; return !!o && siteDateStr(o, clock.tz) === siteDate; });
+  if (openedToday) {
+    checks.push({ key: "today", status: "green", label: "Site Register opened today." });
+  } else {
+    const todays = await db.select({ checkedInAt: siteCheckinsTable.checkedInAt }).from(siteCheckinsTable)
+      .where(and(eq(siteCheckinsTable.projectId, projectId), sql`${siteCheckinsTable.checkedInAt} > now() - interval '36 hours'`,
+        sql`(${siteCheckinsTable.holdStatus} IS NULL OR ${siteCheckinsTable.holdStatus} = 'approved')`));
+    const arrived = todays.some(r => siteDateStr(r.checkedInAt, clock.tz) === siteDate);
+    checks.push(arrived
+      ? { key: "today", status: "red", label: "People have signed in today but the Site Register hasn't been opened, so the copy on the phone is out of date.", fix: "Open the Site Register in the Team Portal with signal." }
+      : { key: "today", status: "amber", label: "Site Register not opened yet today.", fix: "Open it in the Team Portal once people start arriving." });
+  }
+  return { ...base, status: worst(checks.map(c => c.status)), holders, checks };
+}
+
+// One alert a day while red: a push to the site manager / cover who can open
+// the Team Portal, and a notification to the company's admins and PMs (they
+// fix missing invites and cover). Only during the site day (07:00 to close),
+// and never for a project that doesn't use the gate.
+const FIRE_ROLL_DAY_START = "07:00";
+export async function runFireRollAlerts(now: Date = new Date(), onlyProjectId?: string): Promise<number> {
+  const projects = await db.select({ id: projectsTable.id, companyId: projectsTable.companyId, alertedOn: projectsTable.fireRollAlertedOn })
+    .from(projectsTable)
+    .where(and(eq(projectsTable.status, "active"), onlyProjectId ? eq(projectsTable.id, onlyProjectId) : sql`true`,
+      sql`EXISTS (SELECT 1 FROM qr_codes q WHERE q.project_id = ${projectsTable.id})`));
+  let sent = 0;
+  for (const proj of projects) {
+    const clock = await siteClock(proj.id);
+    const hhmm = siteTime(now, clock.tz);
+    if (hhmm < FIRE_ROLL_DAY_START || hhmm >= clock.close) continue;
+    const r = await fireRollReadiness(proj.id, now);
+    if (!r || r.status !== "red" || proj.alertedOn === r.siteDate) continue;
+    // Claim today's alert first, so two runs can't both send it.
+    const claimed = await db.update(projectsTable).set({ fireRollAlertedOn: r.siteDate })
+      .where(and(eq(projectsTable.id, proj.id), sql`${projectsTable.fireRollAlertedOn} IS DISTINCT FROM ${r.siteDate}`)).returning({ id: projectsTable.id });
+    if (!claimed.length) continue;
+    const reasons = r.checks.filter(c => c.status === "red");
+    const body = reasons.map(c => c.label).join(" ");
+    for (const h of r.holders.filter(x => x.portal)) {
+      void sendPushToMember(h.userId, proj.id, { title: `Fire roll not ready: ${r.projectName}`, body, url: "/portal/site-register", tag: `fire-roll-${proj.id}` }).catch(() => {});
+    }
+    const managers = await db.select({ userId: companyMembersTable.userId }).from(companyMembersTable)
+      .innerJoin(usersTable, eq(usersTable.id, companyMembersTable.userId))
+      .where(and(eq(companyMembersTable.companyId, proj.companyId), inArray(companyMembersTable.role, ["admin", "project_manager"]), eq(usersTable.portalOnly, false)));
+    for (const m of managers) {
+      await db.insert(notificationsTable).values({
+        id: generateId(), userId: m.userId, type: "fire_roll_not_ready",
+        title: `Fire roll not ready: ${r.projectName}`,
+        message: `${body} ${reasons.map(c => c.fix).filter(Boolean).join(" ")}`.trim(),
+        relatedEntityId: proj.id, relatedEntityType: "project",
+        metadata: { projectId: proj.id, checks: reasons.map(c => c.key) }, read: false,
+      });
+    }
+    sent++;
+  }
+  return sent;
+}
+
+// Dashboard: one project's readiness (its approvers) and the company's
+// projects that use the gate (admins / PMs, for Needs Attention).
+router.get("/projects/:projectId/fire-roll", authenticate, allow(projectApprover()), async (req: Request, res: Response) => {
+  try {
+    const owned = await db.select({ id: projectsTable.id }).from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId))).limit(1);
+    if (!owned[0]) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+    res.json(await fireRollReadiness(req.params.projectId));
+  } catch (err) {
+    req.log.error({ err }, "Fire roll readiness error");
+    res.status(500).json({ error: "server_error", message: "Failed to check the fire roll" });
+  }
+});
+router.get("/fire-roll", authenticate, allow(COMPANY_MANAGER), async (req: Request, res: Response) => {
+  try {
+    const projects = await db.select({ id: projectsTable.id }).from(projectsTable)
+      .where(and(eq(projectsTable.companyId, req.user!.companyId), eq(projectsTable.status, "active"),
+        sql`EXISTS (SELECT 1 FROM qr_codes q WHERE q.project_id = ${projectsTable.id})`));
+    const out: FireRollReadiness[] = [];
+    for (const p of projects) { const r = await fireRollReadiness(p.id); if (r) out.push(r); }
+    res.json(out);
+  } catch (err) {
+    req.log.error({ err }, "Fire roll list error");
+    res.status(500).json({ error: "server_error", message: "Failed to check the fire roll" });
+  }
+});
+
+// ==========================================================================
 // TEAM PORTAL SITE REGISTER (#124)
 // The designated site manager and anyone given PM cover on the project run
 // the gate from their phone when the PM isn't there: who is on site now (the
@@ -1321,6 +1488,9 @@ const siteRegisterGuards = [authenticate, requirePortalSession, requirePortalMem
 router.get("/portal/site-register", ...siteRegisterGuards, async (req: Request, res: Response) => {
   try {
     const projectId = req.portalProjectId!;
+    // Readiness check 5: today's copy is now on this phone.
+    await db.update(projectMembersTable).set({ registerOpenedAt: new Date() })
+      .where(and(eq(projectMembersTable.projectId, projectId), eq(projectMembersTable.userId, req.user!.id)));
     const project = (await db.select({ name: projectsTable.name, companyId: projectsTable.companyId }).from(projectsTable).where(eq(projectsTable.id, projectId)).limit(1))[0];
     const clock = await siteClock(projectId);
     const now = new Date();
@@ -1360,6 +1530,7 @@ router.get("/portal/site-register", ...siteRegisterGuards, async (req: Request, 
       projectId, projectName: project?.name ?? "", generatedAt: now.toISOString(),
       siteTimeZone: clock.tz, siteTzLabel: siteTzLabel(clock.tz, now), siteDate: siteDateStr(now, clock.tz),
       onSite, notSignedOut, held,
+      readiness: await fireRollReadiness(projectId, now),
     });
   } catch (err) {
     req.log.error({ err }, "Portal site register error");
@@ -1462,6 +1633,9 @@ export function scheduleCheckinAutoClose(log: { info: (o: object, m: string) => 
     runCheckinAutoClose()
       .then(r => { if (r.closed || r.lapsed) log.info(r, "check-in auto-close run"); })
       .catch(err => log.error({ err }, "check-in auto-close failed"));
+    runFireRollAlerts()
+      .then(n => { if (n) log.info({ projects: n }, "fire-roll not-ready alerts sent"); })
+      .catch(err => log.error({ err }, "fire-roll alerts failed"));
   };
   // First run after boot gives ensureSchema time to add the columns.
   setTimeout(tick, 60 * 1000).unref?.();

@@ -73,6 +73,10 @@ export async function navigateToNotification(n: NotificationLike, navigate: (to:
     navigate(`/projects/${id}?tab=teamportal`);
     return true;
   }
+  if (n.type === "fire_roll_not_ready") {
+    navigate(`/projects/${id}?tab=overview`);
+    return true;
+  }
   if (n.type === "portal_plant_item_logged") {
     navigate(`/projects/${id}?tab=plant`);
     return true;

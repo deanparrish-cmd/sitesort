@@ -78,7 +78,9 @@ describe("check-in photos need a signed, expiring URL", () => {
 
   it("a tampered or expired signature is refused", async () => {
     const signed = signUploadUrl(bareUrl);
-    expect((await fetchUrl(signed.replace(/sig=./, "sig=X"))).status).toBe(403);
+    // Always a DIFFERENT first character (a fixed "X" did nothing when the sig began with X).
+    const tampered = signed.replace(/sig=(.)/, (_m, c: string) => `sig=${c === "X" ? "Y" : "X"}`);
+    expect((await fetchUrl(tampered)).status).toBe(403);
     const old = signUploadUrl(bareUrl, Date.now() - 3 * 3_600_000);
     expect((await fetchUrl(old)).status).toBe(403);
   });

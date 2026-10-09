@@ -37,6 +37,9 @@ export const projectMembersTable = pgTable("project_members", {
   // changing their company-wide role. Multiple people per project may hold this,
   // so PM actions aren't a single point of failure. See lib/project-authority.ts.
   isProjectManager: boolean("is_project_manager").notNull().default(false),
+  // When this member (site manager / PM cover) last loaded the portal Site
+  // Register with signal: drives the fire-roll readiness check (#125).
+  registerOpenedAt: timestamp("register_opened_at"),
   addedAt: timestamp("added_at").notNull().defaultNow(),
 }, (t) => ({
   // Team Portal: a user is a member of a project at most once (the same email

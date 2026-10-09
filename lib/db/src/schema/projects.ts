@@ -21,6 +21,9 @@ export const projectsTable = pgTable("projects", {
   // in is closed automatically (not signed out). Defaults err late.
   siteTimeZone: text("site_time_zone").notNull().default("Europe/London"),
   siteCloseTime: text("site_close_time").notNull().default("20:00"),
+  // Site-local date (YYYY-MM-DD) of the last "fire roll not ready" alert, so
+  // it goes out at most once a day while the project is red (#125).
+  fireRollAlertedOn: text("fire_roll_alerted_on"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
