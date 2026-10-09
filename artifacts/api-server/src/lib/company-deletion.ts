@@ -68,7 +68,7 @@ export async function runCompanyDeletionQueries(tx: Tx, companyId: string): Prom
     await tx.execute(sql`delete from channel_message_reactions where channel_message_id in (select id from channel_messages where project_id = any(${pgArr(P)}::text[]))`);
     for (const t of [
       "activity_log", "calendar_events", "channel_reads", "channel_messages",
-      "daily_notes", "daily_reports", "documents", "invoices", "messages",
+      "daily_notes", "daily_reports", "documents", "messages",
       "milestones", "pending_pushes", "permits", "photos", "plant_items",
       "portal_member_documents", "portal_sessions", "portal_shares",
       "portal_submission_notes", "project_closeouts", "project_invites",
@@ -101,7 +101,13 @@ export async function runCompanyDeletionQueries(tx: Tx, companyId: string): Prom
   // ── 4. Remaining company-scoped rows ─────────────────────────────────
   await tx.execute(sql`delete from message_reactions where message_id in (select id from messages where company_id = ${companyId})`);
   await tx.execute(sql`delete from channel_message_reactions where channel_message_id in (select id from channel_messages where company_id = ${companyId})`);
-  for (const t of ["calendar_events", "channel_messages", "messages", "invoices", "project_invites", "share_logs", "company_members"]) {
+  // The removed invoices table survives only until lib/invoice-removal.ts has
+  // run; its rows reference companies, projects and users, so clear them first.
+  const inv = await tx.execute(sql`SELECT to_regclass('public.invoices') IS NOT NULL AS present`);
+  if ((inv.rows[0] as { present?: boolean } | undefined)?.present) {
+    await tx.execute(sql`delete from invoices where company_id = ${companyId}${P.length ? sql` or project_id = any(${pgArr(P)}::text[])` : sql``}`);
+  }
+  for (const t of ["calendar_events", "channel_messages", "messages", "project_invites", "share_logs", "company_members"]) {
     await tx.execute(sql`delete from ${sql.identifier(t)} where company_id = ${companyId}`);
   }
 

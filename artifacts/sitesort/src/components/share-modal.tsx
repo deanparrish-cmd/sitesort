@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { QRCodeCanvas } from "qrcode.react";
 import { cn } from "@/lib/utils";
+import { itemDeepLink } from "@/lib/deep-link";
 import { useCapabilities } from "@/hooks/use-capabilities";
 import {
   Share2, Mail, MessageCircle, Users, ExternalLink, X,
@@ -90,7 +91,13 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
   // Pinning publishes to the PUBLIC site board: admins / PMs only (the API enforces it).
   const canPinRole = useCapabilities().isManager;
   const canPin = isPortalEntity && !!projectId && canPinRole;
-  const linkForSharing = fullUrl;
+  // Login-only files (insurance, certificates, site photos, plant attachments,
+  // contact documents) come from the server with a short-lived signature. Never
+  // send that link out: share a link to the record instead, which needs a
+  // SiteSort login to open.
+  const loginOnly = !!fileUrl && /[?&]sig=/.test(fileUrl);
+  const recordPath = loginOnly && effectiveProjectId ? itemDeepLink(effectiveProjectId, entityType, entityId) : null;
+  const linkForSharing = loginOnly ? (recordPath ? `${window.location.origin}${recordPath}` : null) : fullUrl;
   const hasContent = !!(linkForSharing || shareText);
 
   useEffect(() => {
@@ -180,7 +187,9 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
     const details = additionalInfo ? `\n\n${additionalInfo}` : "";
     const body = shareText && !linkForSharing
       ? encodeURIComponent(`${shareText}${details}`)
-      : encodeURIComponent(`Hi,\n\nPlease find "${entityName}"${versionSuffix} here:\n\n${linkForSharing}${details}`);
+      : loginOnly
+        ? encodeURIComponent(`Hi,\n\n"${entityName}"${versionSuffix} is in SiteSort. Log in to view it:\n\n${linkForSharing}${details}`)
+        : encodeURIComponent(`Hi,\n\nPlease find "${entityName}"${versionSuffix} here:\n\n${linkForSharing}${details}`);
     window.open(`mailto:?subject=${subject}&body=${body}`);
     logShare("email");
   };
@@ -190,7 +199,7 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
     const details = additionalInfo ? `\n\n${additionalInfo}` : "";
     const text = shareText && !linkForSharing
       ? encodeURIComponent(`${shareText}${details}`)
-      : encodeURIComponent(`${entityName}${versionSuffix}\n${linkForSharing}${details}`);
+      : encodeURIComponent(`${entityName}${versionSuffix}${loginOnly ? " (log in to SiteSort to view)" : ""}\n${linkForSharing}${details}`);
     window.open(`https://wa.me/?text=${text}`, "_blank");
     logShare("whatsapp");
   };
@@ -303,6 +312,15 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
                   <MessageCircle className="w-4 h-4 text-green-500" /> WhatsApp
                 </button>
               </div>
+              {loginOnly && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  {linkForSharing
+                    ? "This file needs a SiteSort login, so this sends a link to it in SiteSort, not the file itself."
+                    : isPortalEntity
+                      ? "This file needs a SiteSort login, so it can't be sent as a link. Share it through the Team Portal below."
+                      : "This file needs a SiteSort login, so it can't be sent as a link."}
+                </p>
+              )}
             </div>
 
             {/* Team Portal — only for portal-shareable entities (document/photo/permit) */}
@@ -445,12 +463,12 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
         {/* ── QR tab ── */}
         {tab === "qr" && (
           <div className="flex flex-col items-center gap-4 py-2">
-            {fullUrl ? (
+            {linkForSharing ? (
               <>
                 <div className="p-4 bg-white rounded-xl border shadow-sm">
-                  <QRCodeCanvas ref={canvasRef} value={fullUrl} size={200} level="H" includeMargin={false} />
+                  <QRCodeCanvas ref={canvasRef} value={linkForSharing} size={200} level="H" includeMargin={false} />
                 </div>
-                <p className="text-xs text-muted-foreground text-center break-all max-w-xs px-2">{fullUrl}</p>
+                <p className="text-xs text-muted-foreground text-center break-all max-w-xs px-2">{linkForSharing}</p>
                 <div className="flex gap-2">
                   <button
                     onClick={downloadQr}
@@ -459,7 +477,7 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
                     <Download className="w-4 h-4" /> Download PNG
                   </button>
                   <button
-                    onClick={() => { navigator.clipboard.writeText(fullUrl).catch(() => {}); }}
+                    onClick={() => { navigator.clipboard.writeText(linkForSharing).catch(() => {}); }}
                     className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-background hover:bg-muted transition-colors text-sm font-medium"
                   >
                     Copy Link
@@ -509,7 +527,7 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
                 )}
               </>
             ) : (
-              <p className="text-sm text-muted-foreground py-8 text-center">No file available for QR code.</p>
+              <p className="text-sm text-muted-foreground py-8 text-center">{loginOnly ? "This file needs a SiteSort login, so it has no QR code." : "No file available for QR code."}</p>
             )}
           </div>
         )}

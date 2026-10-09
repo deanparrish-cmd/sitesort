@@ -1,5 +1,16 @@
 # SiteSort – Session Log Archive
 
+## Feature #126 + 2026-10-09 (2) session, full text
+126. **Fire-roll backup check + invoices removed** — readiness check `cover`: only one person able to open the Site Register = amber (no alert), 2+ = green; Overview links it to the Team tab. Invoices: `lib/invoice-removal.ts` runs after ensureSchema at boot, logs every row, deletes each attachment from storage, then (only if all deletes succeed) drops `invoices` + `messages.invoice_id`; no-op once the table is gone (safe to keep). `isRetiredUpload` survives a table dropped by another instance (42P01); company deletion guards the table. Old instances answer 503 for uploads during the publish overlap. Tests: `invoice-removal.test.ts`, `fire-roll-readiness.test.ts`. (2026-10-09)
+- **2026-10-09 (2):** prod review run (`reports/prod-review-combined.sql`, one SELECT, 23 checks). Closed: A2/B1 = 0 (#123 boot step ran); Dean 18 Sep = sign-out then re-entry; missing mobiles 4 of 8 (gate capture mops up); no check-in photo ever left (C1-C3 = 0); old open check-ins never counted (auto_closed/legacy). Built #126. Given to user to run in the prod console (no prod DB access here): A1 delete of 2 dead admin memberships by id; Amy merge = set person_key on 3 rows (6ceddc71, 9fe3e877, a2626e2c) to person:25f8a59f. DEAN rows NOT touched: he's deliberately set up twice for two companies, user confirms which Dean later. Invoice deletion: user dumps the 4 prod rows to a report BEFORE publishing.
+
+## Session log lines moved from CLAUDE.md (2026-10-09, second session)
+Uploads note: - Vite proxy for `/uploads` was also added (`artifacts/sitesort/vite.config.ts`) as a belt-and-braces measure, but the `/api/uploads` path is the reliable one
+- **PD backlog**: **F7** Site Board on-site count, **F8** Timeline link, **F9/F10** spikes.
+2026-10-08 - **Open / found:** `/api/documents/:id/open` public with doc id; former site manager keeps check-in detail via old notifications; portal issue photos carry GPS; daily reports expose check-in names + signed photo links to all staff; `req.ip` is the proxy (no trust proxy) so the #124 miss limit is effectively per board; push needs the site manager to enable notifications.
+- **2026-10-07 (#113 to #118):** open items moved to CLAUDE_ARCHIVE.md (Amy = ONE person, parked, merge by row id only; multi-company person; audit log; daily-report gaps).
+- **2026-07-30 and earlier:** see CLAUDE_ARCHIVE.md. `git pull` reports divergent branches (GitHub holds `sync:` copies); local `main` is the source of truth, never merge.
+
 ## Feature #125 full detail (condensed in CLAUDE.md, 2026-10-09)
 125. **Fire-roll readiness + daily alert** — `fireRollReadiness()` per project with a QR code (else not_in_use, never alerted): red = nobody named / no portal access / people signed in today but register not opened; amber = notifications off, board unused 7 days, not opened yet. `GET /projects/:id/fire-roll`, `GET /fire-roll`, readiness in portal register; Overview card, Needs Attention, portal strip + Home banner. `runFireRollAlerts` (5-min job + after each check-in): one alert/site-day 07:00 to close while red (`projects.fire_roll_alerted_on`), push to holders + `fire_roll_not_ready` notification to admins/PMs. `project_members.register_opened_at`. Test: `fire-roll-readiness.test.ts`. (2026-10-09)
 

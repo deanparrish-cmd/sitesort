@@ -5,6 +5,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { signUploadsInResponses } from "./lib/signed-uploads";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendDist = path.resolve(__dirname, "../../sitesort/dist/public");
@@ -35,6 +36,8 @@ app.use(cors());
 app.use("/api/billing/webhook", express.raw({ type: "application/json" }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+// Upload links leave signed (login-only files) and come back bare.
+app.use("/api", signUploadsInResponses);
 
 app.use("/api", router);
 

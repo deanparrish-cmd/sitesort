@@ -1363,6 +1363,12 @@ export async function fireRollReadiness(projectId: string, now: Date = new Date(
   }
   checks.push({ key: "access", status: "green", label: "Team Portal access accepted." });
 
+  // 2b. Someone else can take over. One person alone is a single point of
+  // failure: if they're off site, nobody has the fire roll on their phone.
+  checks.push(ready.length > 1
+    ? { key: "cover", status: "green", label: `${ready.length} people can open the Site Register.` }
+    : { key: "cover", status: "amber", label: `Only ${ready[0].name} can open the Site Register. If they're off site, nobody has the fire roll.`, fix: "Tick PM cover for a second person on the Team tab and invite them to the Team Portal." });
+
   // 3. They'll hear about people at the gate.
   const subs = await db.select({ userId: pushSubscriptionsTable.userId }).from(pushSubscriptionsTable)
     .where(and(eq(pushSubscriptionsTable.projectId, projectId), inArray(pushSubscriptionsTable.userId, ready.map(h => h.userId))));

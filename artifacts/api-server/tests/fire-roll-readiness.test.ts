@@ -22,6 +22,7 @@ describe("fire-roll readiness and the daily alert", () => {
   let admin = "";
   let manager: PortalMemberFixture;
   let managerToken = "";
+  let cover: PortalMemberFixture | undefined;
   const sfx = randomUUID().slice(0, 8);
   const workerId = `tfr-wk-${sfx}`;
   const readiness = async () => (await api(`/projects/${co.projectId}/fire-roll`, { token: admin })).json;
@@ -45,6 +46,7 @@ describe("fire-roll readiness and the daily alert", () => {
       await db.delete(portalSessionsTable).where(eq(portalSessionsTable.userId, manager.userId));
       await cleanupPortalMember(manager, [co.projectId]);
     }
+    if (cover) await cleanupPortalMember(cover, [co.projectId]);
     await cleanupFixtures([co]);
   });
 
@@ -85,6 +87,7 @@ describe("fire-roll readiness and the daily alert", () => {
     const r = await readiness();
     expect(r.status).toBe("amber");
     expect(check(r, "access").status).toBe("green");
+    expect(check(r, "cover").status).toBe("amber"); // nobody to take over
     expect(check(r, "notify").status).toBe("amber");
     expect(check(r, "board").status).toBe("amber");
     expect(check(r, "today").status).toBe("amber");
@@ -117,7 +120,14 @@ describe("fire-roll readiness and the daily alert", () => {
     expect(check(reg.json.readiness, "today").status).toBe("green");
     expect(check(reg.json.readiness, "board").status).toBe("green");
     await db.insert(pushSubscriptionsTable).values({ id: randomUUID(), userId: manager.userId, projectId: co.projectId, endpoint: `https://push.example.test/${sfx}`, p256dh: "x", auth: "y" });
+    // Still amber: the site manager is the only one who can open the register.
+    expect((await readiness()).status).toBe("amber");
+    // A second person on the Team Portal with PM cover is the backup.
+    cover = await seedCrossTenantPortalMember([co], [admin]);
+    await db.update(projectMembersTable).set({ isProjectManager: true })
+      .where(and(eq(projectMembersTable.projectId, co.projectId), eq(projectMembersTable.userId, cover.userId)));
     const r = await readiness();
+    expect(check(r, "cover").status).toBe("green");
     expect(r.status).toBe("green");
     expect(r.checks.every((c: any) => c.status === "green")).toBe(true);
   });

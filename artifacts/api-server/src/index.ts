@@ -4,6 +4,7 @@ import { schedulePermitReminders } from "./lib/permit-reminders";
 import { scheduleDailyReports } from "./lib/daily-reports";
 import { schedulePushFlush } from "./lib/push-triggers";
 import { ensureSchema } from "./lib/ensure-schema";
+import { removeInvoices } from "./lib/invoice-removal";
 import { scheduleCheckinAutoClose } from "./routes/qr";
 import { checkDbConnection } from "@workspace/db";
 
@@ -80,6 +81,10 @@ async function start(): Promise<void> {
   // checks the DB live per-request (not off this), so it isn't blocked by this.
   await logDbStatus();
   await withTimeout(ensureSchema(), 30_000, "ensureSchema");
+  await withTimeout(
+    removeInvoices().catch(err => logger.error({ err }, "invoice removal failed; table kept, will retry next boot")),
+    60_000, "removeInvoices",
+  );
 }
 
 start().catch((err) => {

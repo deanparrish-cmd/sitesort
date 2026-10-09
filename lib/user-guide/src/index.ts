@@ -112,6 +112,7 @@ export const PM_GUIDE: GuideSection[] = [
         heading: "Share a document, photo or permit",
         body: [
           "Click Share on any document, photo or permit. Choose Everyone, one or more trades, or specific people. This both notifies the recipients and makes the item visible to them in their portal: one action does both.",
+          "Site photos, insurance certificates, qualifications, plant paperwork and contact documents need a SiteSort login to open. Email and WhatsApp send a link to the item in SiteSort, not the file itself, so share these through the Team Portal when the person doesn't use the dashboard.",
         ],
         callout: {
           tone: "tip",
@@ -200,7 +201,7 @@ export const PM_GUIDE: GuideSection[] = [
         body: [
           "The project's site manager, and anyone you give PM cover on the project's Team tab, can run the gate from the Team Portal: the Site Register shows who is on site now, who is waiting at the gate (let on or refuse), and lets them sign someone out with a note. They get a phone notification when someone is waiting, if they've turned notifications on.",
           "Set this up before you need it: name the site manager in Edit Details, or tick PM cover, and make sure they have accepted their Team Portal invite.",
-          "The project's Overview shows Fire roll: Ready, Check or Not ready, with what's missing and where to fix it: nobody named, Team Portal invite not accepted, notifications off, nobody signing in at the QR code this week, or today's register not opened. It's Not ready once people have signed in today and nobody has opened the Site Register, because the copy on the phone would be out of date. While it's Not ready, you and the site manager get one alert a day, and it shows under Needs Attention on your dashboard.",
+          "The project's Overview shows Fire roll: Ready, Check or Not ready, with what's missing and where to fix it: nobody named, Team Portal invite not accepted, only one person able to open the Site Register (no backup if they're off site), notifications off, nobody signing in at the QR code this week, or today's register not opened. It's Not ready once people have signed in today and nobody has opened the Site Register, because the copy on the phone would be out of date. While it's Not ready, you and the site manager get one alert a day, and it shows under Needs Attention on your dashboard.",
         ],
       },
       {

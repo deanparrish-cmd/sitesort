@@ -98,7 +98,8 @@ describe("subcontractor insurance add (Contacts workflow)", () => {
     const detail = await api(`/subcontractors/${created.json.id}`, { token: tokenA });
     const pliRecords = detail.json.insuranceRecords.filter((r: any) => r.type === "public_liability");
     expect(pliRecords.length).toBe(1);
-    expect(pliRecords[0].certificateUrl).toBe("/uploads/new-cert.pdf");
+    // Login-only: handed out signed (lib/signed-uploads.ts).
+    expect(pliRecords[0].certificateUrl).toMatch(/^\/api\/uploads\/new-cert\.pdf\?exp=\d+&sig=/);
   });
 
   it("cannot add insurance to another company's contact", async () => {

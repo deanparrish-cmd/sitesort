@@ -24,7 +24,7 @@ const STATUS_PILL = {
 
 // Where each problem is fixed, on this project.
 function fixHref(projectId: string, key: string): string | null {
-  if (key === "who") return `/projects/${projectId}?tab=team`;
+  if (key === "who" || key === "cover") return `/projects/${projectId}?tab=team`;
   if (key === "access") return `/projects/${projectId}?tab=teamportal`;
   if (key === "qr" || key === "board") return `/projects/${projectId}?tab=qr`;
   return null;

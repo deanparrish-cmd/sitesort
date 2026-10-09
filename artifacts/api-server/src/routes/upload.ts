@@ -5,7 +5,7 @@ import { randomUUID } from "crypto";
 import { authenticate } from "../middlewares/auth";
 import { allow, INTERNAL_STAFF } from "../lib/authz";
 import { getBucket, objectKey } from "../lib/gcs";
-import { isProtectedUpload, isRetiredUpload, verifyUploadSignature } from "../lib/signed-uploads";
+import { isRetiredUpload, shareableUploads, verifyUploadSignature } from "../lib/signed-uploads";
 
 const router: IRouter = Router();
 
@@ -81,25 +81,30 @@ router.post("/upload", authenticate, allow(INTERNAL_STAFF), (req: Request, res: 
   }
 });
 
-// File access is gated by the unguessable random UUID in the filename
-// (capability-URL model, same as Dropbox/Drive share links). Browser <img> and
-// <a> tags can't send Authorization headers, so requiring a Bearer token here
-// would break avatars, project photos, and document downloads across the app.
-// TODO post-launch: switch to short-lived signed GCS URLs minted by an
-// authenticated /api/uploads/:filename/url endpoint, then update the frontend
-// to resolve URLs through it.
-// Exception: check-in photos (workers' faces) need a short-lived signature
-// minted by the authenticated endpoint that handed out the URL
-// (lib/signed-uploads.ts). A bare or expired check-in photo URL gets 403.
+// Login-only by default: a file is served only with the short-lived signature
+// the server adds to upload links in its JSON responses (lib/signed-uploads.ts),
+// so whoever was allowed to see the record can open its file, and a leaked link
+// stops working. Drawings, project documents and permits are still served from
+// the bare link until per-share links replace them.
 router.get("/uploads/:filename", async (req: Request, res: Response) => {
   const { filename } = req.params;
   if (!filename || filename.includes("/") || filename.includes("..")) {
     res.status(400).json({ error: "invalid_filename" });
     return;
   }
-  if (isProtectedUpload(filename) && !verifyUploadSignature(filename, req.query.exp, req.query.sig)) {
-    res.status(403).json({ error: "link_expired", message: "This photo link has expired. Open it again from SiteSort." });
-    return;
+  if (!verifyUploadSignature(filename, req.query.exp, req.query.sig)) {
+    let shareable = false;
+    try {
+      shareable = (await shareableUploads([filename])).has(filename);
+    } catch (err) {
+      req.log?.error({ err }, "shareable-upload check failed");
+      res.status(503).json({ error: "unavailable", message: "This file can't be opened right now. Try again shortly." });
+      return;
+    }
+    if (!shareable) {
+      res.status(403).json({ error: "link_expired", message: "This link has expired or needs a login. Open it again from SiteSort." });
+      return;
+    }
   }
 
   try {
