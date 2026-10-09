@@ -73,6 +73,15 @@ interface SiteManager {
   phone: string | null;
 }
 
+// Phone-first check-in (#124). The mobile number is the key: a number on file
+// for someone on this project identifies them ("Is this you?"). An unknown
+// number still gets a sign-in, but it waits at the gate for the site manager
+// (name, company and the number are passed on, and the number is filed when
+// they're let on). Nobody can look up names, list the roster or pick a company
+// from a list any more.
+const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-orange-400 min-w-0";
+const labelCls = "block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider";
+
 function CheckInCard({
   token,
   projectName,
@@ -85,14 +94,41 @@ function CheckInCard({
   onCheckedIn: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  // phone: ask for the number. confirm: "Is this you?". details: number not on
+  // file, so name + company. ready: identity settled, take the photo.
+  const [step, setStep] = useState<"phone" | "confirm" | "details" | "ready">("phone");
+  const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
   const [companyName, setCompanyName] = useState("");
-  const [status, setStatus] = useState<"idle" | "capturing" | "uploading" | "done" | "error">("idle");
-  const [blockedReason, setBlockedReason] = useState<"not_registered" | "no_valid_insurance" | null>(null);
-  // Insurance hold: their check-in is saved but waits for an admin / PM to let
-  // them on site. The page polls its own hold (signed token) until decided.
+  type Match = { label: string; matchToken: string };
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [confirmed, setConfirmed] = useState<Match | null>(null);
+  const [looking, setLooking] = useState(false);
+  // The board has paused number lookups (someone tried too many wrong ones):
+  // everyone gives name + company and waits for the site manager meanwhile.
+  const [checkingPaused, setCheckingPaused] = useState(false);
+  const [status, setStatus] = useState<"idle" | "capturing" | "uploading" | "done">("idle");
   const [doneAt, setDoneAt] = useState<string | null>(null);
   const [hold, setHold] = useState<{ token: string; reason: string; status: "pending" | "approved" | "refused" | "lapsed" } | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [capturedFile, setCapturedFile] = useState<File | null>(null);
+  const [errorMsg, setErrorMsg] = useState("");
+  // Sign-out state: `signedIn` is set when the server says this person is
+  // currently on site (offer SIGN OUT); `signedOutAt` shows the confirmation.
+  const [signedIn, setSignedIn] = useState<{ checkedInAt: string; checkinId?: string } | null>(null);
+  const [signedOutAt, setSignedOutAt] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
+  const [signedOutLabel, setSignedOutLabel] = useState("");
+  const [signOutMode, setSignOutMode] = useState(false);
+  // Remembered device: server-verified token, per project.
+  const [device, setDevice] = useState<{ workerName: string; companyName: string } | null>(null);
+  const [useDevice, setUseDevice] = useState(false);
+  const deviceKey = `sitesort_site_device_${token}`;
+
+  // Storage can be unavailable (private mode, blocked site data): never throw.
+  const readDeviceToken = (): string | null => { try { return localStorage.getItem(deviceKey); } catch { return null; } };
+  const writeDeviceToken = (v: string | null) => { try { if (v) localStorage.setItem(deviceKey, v); else localStorage.removeItem(deviceKey); } catch { /* fall back to the number */ } };
+
   useEffect(() => {
     if (!hold || hold.status !== "pending") return;
     const t = setInterval(() => {
@@ -106,35 +142,8 @@ function CheckInCard({
         .catch(() => {});
     }, 8000);
     return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hold, token]);
-  // "Did you mean...?" for check-in: close matches among the project's registered people.
-  type RegSuggest = { label: string; matchToken: string };
-  const [regSuggest, setRegSuggest] = useState<RegSuggest[]>([]);
-  const [blockedSuggest, setBlockedSuggest] = useState<RegSuggest[]>([]);
-  // A "Did you mean" the visitor tapped: a signed token (never a full name) sent with the check-in.
-  const [confirmed, setConfirmed] = useState<RegSuggest | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
-  const [capturedFile, setCapturedFile] = useState<File | null>(null);
-  const [errorMsg, setErrorMsg] = useState("");
-  // Sign-out state: `signedIn` is set when the server says this person is
-  // currently on site (offer SIGN OUT); `signedOutAt` shows the confirmation.
-  // checkinId is set when we know exactly which open sign-in to close.
-  const [signedIn, setSignedIn] = useState<{ checkedInAt: string; checkinId?: string } | null>(null);
-  const [signedOutAt, setSignedOutAt] = useState<string | null>(null);
-  const [signingOut, setSigningOut] = useState(false);
-  const [signedOutLabel, setSignedOutLabel] = useState("");
-  // Remembered device: server-verified token, per project.
-  const [device, setDevice] = useState<{ workerName: string; companyName: string } | null>(null);
-  // Signing out without a remembered device needs the mobile number on file:
-  // nobody can sign someone else out by name alone.
-  const [signOutMode, setSignOutMode] = useState(false);
-  const [phone, setPhone] = useState("");
-  const [companies, setCompanies] = useState<string[]>([]);
-  const deviceKey = `sitesort_site_device_${token}`;
-
-  // Storage can be unavailable (private mode, blocked site data): never throw.
-  const readDeviceToken = (): string | null => { try { return localStorage.getItem(deviceKey); } catch { return null; } };
-  const writeDeviceToken = (v: string | null) => { try { if (v) localStorage.setItem(deviceKey, v); else localStorage.removeItem(deviceKey); } catch { /* fall back to typing */ } };
 
   // On scan: if this device remembers someone, offer one tap sign-in/out for them.
   useEffect(() => {
@@ -145,65 +154,48 @@ function CheckInCard({
       .then(d => {
         if (!d?.valid) { writeDeviceToken(null); return; }
         setDevice({ workerName: d.workerName, companyName: d.companyName });
-        setName(d.workerName);
-        setCompanyName(d.companyName);
         if (d.onSite) setSignedIn({ checkedInAt: d.checkedInAt, checkinId: d.checkinId });
       })
       .catch(() => { /* offline: normal form */ });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  // Company autocomplete from the project's existing contacts (free text still allowed).
-  useEffect(() => {
-    fetch(`/api/site/${token}/companies`).then(r => r.ok ? r.json() : []).then(setCompanies).catch(() => {});
-  }, [token]);
-
-  // Check-in near-match: once 3+ letters are typed and the typed details are not
-  // an exact registered person, suggest close registered names/companies. The
-  // user must tap to accept; nothing is ever matched silently.
-  useEffect(() => {
-    if (device || signedIn || confirmed || name.trim().length < 3) { setRegSuggest([]); return; }
-    const h = setTimeout(() => {
-      fetch(`/api/site/${token}/register-match?workerName=${encodeURIComponent(name.trim())}&companyName=${encodeURIComponent(companyName.trim())}`)
-        .then(r => r.ok ? r.json() : null)
-        .then(d => setRegSuggest(d && !d.registered ? (d.suggestions ?? []) : []))
-        .catch(() => {});
-    }, 500);
-    return () => clearTimeout(h);
-  }, [name, companyName, device, signedIn, confirmed, token]);
-
-  const useSuggestion = (sug: RegSuggest) => {
-    // Nothing is filled in with a real name: we keep what was typed and send the
-    // signed confirmation with the check-in.
-    setConfirmed(sug);
-    setRegSuggest([]);
-    setBlockedSuggest([]);
-    setBlockedReason(null);
-    setErrorMsg("");
-    setStatus(capturedFile ? "capturing" : "idle");
+  const digits = (v: string) => v.replace(/\D/g, "");
+  const lookUp = async () => {
+    if (digits(phone).length < 9) { setErrorMsg("Enter your mobile number."); return; }
+    setLooking(true); setErrorMsg("");
+    try {
+      const r = await fetch(`/api/site/${token}/identify`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ phone: phone.trim() }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { setErrorMsg(d.message ?? "Something went wrong. Please try again."); return; }
+      const found: Match[] = d.matches ?? [];
+      setCheckingPaused(!!d.checkingPaused);
+      setMatches(found);
+      if (found.length > 0) setStep("confirm");
+      else setStep("details");
+    } catch {
+      setErrorMsg("No connection. Please try again.");
+    } finally { setLooking(false); }
   };
 
   const doSignOut = async () => {
     // A remembered device proves who this is; otherwise the mobile number does.
     const deviceToken = readDeviceToken();
-    if (!deviceToken && !phone.trim()) {
-      setErrorMsg("Enter the mobile number we have on file for you to sign out.");
-      return;
-    }
+    if (!deviceToken && digits(phone).length < 9) { setErrorMsg("Enter your mobile number to sign out."); return; }
     setSigningOut(true);
     setErrorMsg("");
     try {
       const r = await fetch(`/api/site/${token}/checkout`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(deviceToken ? { deviceToken } : { workerName: name.trim(), companyName: companyName.trim(), phone: phone.trim() }),
+        body: JSON.stringify(deviceToken ? { deviceToken } : { phone: phone.trim() }),
       });
       if (r.status === 409) {
         setSignedIn(null);
         setErrorMsg("We could not find an open sign-in to close. If you are still on site, ask your site manager.");
         return;
       }
-      if (r.status === 403 || r.status === 400) {
+      if (r.status === 403 || r.status === 400 || r.status === 429) {
         const d = await r.json().catch(() => ({}));
         setErrorMsg(d.message ?? "We couldn't confirm it's you. Ask your site manager to sign you out.");
         return;
@@ -213,7 +205,7 @@ function CheckInCard({
       setSignedIn(null);
       setSignOutMode(false);
       setPhone("");
-      setSignedOutLabel(d.workerName ?? name.trim());
+      setSignedOutLabel(d.workerName ?? device?.workerName ?? "You");
       setSignedOutAt(d.checkedOutAt);
     } catch {
       setErrorMsg("Sign-out failed. Please try again.");
@@ -221,16 +213,27 @@ function CheckInCard({
       setSigningOut(false);
     }
   };
-  const handleSignOut = () => doSignOut();
+
+  const reset = () => {
+    setStep("phone");
+    setName("");
+    setCompanyName("");
+    setMatches([]);
+    setConfirmed(null);
+    setUseDevice(false);
+    setStatus("idle");
+    setPreview(null);
+    setCapturedFile(null);
+    setErrorMsg("");
+    if (fileRef.current) fileRef.current.value = "";
+  };
 
   const notMe = () => {
     writeDeviceToken(null);
     setDevice(null);
     setSignedIn(null);
     setSignedOutAt(null);
-    setName("");
-    setCompanyName("");
-    setErrorMsg("");
+    reset();
   };
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -241,11 +244,11 @@ function CheckInCard({
     setStatus("capturing");
   };
 
-  const handleCheckin = async () => {
-    if (!name.trim()) { setErrorMsg("Please enter your name."); return; }
-    if (!companyName.trim()) { setErrorMsg("Please enter your company name."); return; }
-    if (!capturedFile) { fileRef.current?.click(); return; }
+  // Who the photo is stamped with, before the server confirms.
+  const stampName = useDevice && device ? device.workerName : confirmed ? confirmed.label.split(",")[0] : name.trim();
 
+  const handleCheckin = async () => {
+    if (!capturedFile) { fileRef.current?.click(); return; }
     setStatus("uploading");
     setErrorMsg("");
     try {
@@ -258,30 +261,35 @@ function CheckInCard({
         lng = pos.coords.longitude;
       } catch { /* GPS optional */ }
 
-      const stamped = await stampPhoto(capturedFile, projectName, name.trim());
+      const stamped = await stampPhoto(capturedFile, projectName, stampName);
       const fd = new FormData();
       fd.append("photo", stamped, "checkin.jpg");
-      fd.append("workerName", name.trim());
-      fd.append("companyName", companyName.trim());
-      if (confirmed) fd.append("matchToken", confirmed.matchToken);
+      const deviceToken = useDevice ? readDeviceToken() : null;
+      if (deviceToken) fd.append("deviceToken", deviceToken);
+      else if (confirmed) fd.append("matchToken", confirmed.matchToken);
+      else {
+        fd.append("phone", phone.trim());
+        fd.append("workerName", name.trim());
+        fd.append("companyName", companyName.trim());
+      }
       if (lat !== null) fd.append("lat", String(lat));
       if (lng !== null) fd.append("lng", String(lng));
 
       const res = await fetch(`/api/site/${token}/checkin`, { method: "POST", body: fd });
 
       if (res.status === 403) {
-        const body = await res.json();
+        const body = await res.json().catch(() => ({}));
         if (body.error === "check_in_held" && body.holdToken) {
           setHold({ token: body.holdToken, reason: body.holdReason ?? "insurance_none", status: "pending" });
           setStatus("idle");
           return;
         }
-        setBlockedReason(body.reason ?? "not_registered");
-        setBlockedSuggest(body.suggestions ?? []);
-        setStatus("idle");
+        // The remembered device or the "Is this you?" tap no longer holds: start again with the number.
+        if (useDevice) { writeDeviceToken(null); setDevice(null); }
+        reset();
+        setErrorMsg(body.message ?? "We couldn't confirm it's you. Enter your mobile number.");
         return;
       }
-
       if (res.status === 409) {
         // Already signed in: offer SIGN OUT instead of a second sign-in.
         const body = await res.json().catch(() => ({}));
@@ -291,7 +299,12 @@ function CheckInCard({
         setCapturedFile(null);
         return;
       }
-
+      if (res.status === 400 || res.status === 429) {
+        const body = await res.json().catch(() => ({}));
+        setErrorMsg(body.message ?? "Please check your details.");
+        setStatus("capturing");
+        return;
+      }
       if (!res.ok) throw new Error("Upload failed");
 
       const created = await res.json().catch(() => null);
@@ -305,21 +318,8 @@ function CheckInCard({
     }
   };
 
-  const reset = () => {
-    setStatus("idle");
-    setName("");
-    setCompanyName("");
-    setPreview(null);
-    setCapturedFile(null);
-    setErrorMsg("");
-    setBlockedReason(null);
-    setBlockedSuggest([]);
-    setRegSuggest([]);
-    setConfirmed(null);
-    if (fileRef.current) fileRef.current.value = "";
-  };
-
   const hhmm = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  const who = device ? `${device.workerName} (${device.companyName})` : "You";
 
   if (signedOutAt) {
     return (
@@ -328,7 +328,7 @@ function CheckInCard({
         <h3 className="text-xl font-bold text-gray-900">Signed out</h3>
         <p className="text-gray-500 text-sm break-words">{signedOutLabel}, you signed out at {hhmm(signedOutAt)}. Scan again to sign back in.</p>
         <button
-          onClick={() => setSignedOutAt(null)}
+          onClick={() => { setSignedOutAt(null); reset(); }}
           className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl min-h-11"
           data-testid="button-sign-back-in"
         >
@@ -347,28 +347,19 @@ function CheckInCard({
         </div>
         <div className="p-5 space-y-4">
           <p className="text-gray-600 text-sm break-words">
-            <strong>{name.trim()}</strong> ({companyName.trim()}) signed in at {hhmm(signedIn.checkedInAt)}
+            <strong>{who}</strong> signed in at {hhmm(signedIn.checkedInAt)}
             {new Date(signedIn.checkedInAt).toDateString() !== new Date().toDateString() && " on " + new Date(signedIn.checkedInAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}.
           </p>
           {!readDeviceToken() && (
             <div>
-              <label htmlFor="signout-phone" className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">Your mobile number</label>
-              <input
-                id="signout-phone"
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel"
-                value={phone}
-                onChange={e => setPhone(e.target.value)}
-                placeholder="The number on your contact record"
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-                data-testid="input-signout-phone"
-              />
+              <label htmlFor="signout-phone" className={labelCls}>Your mobile number</label>
+              <input id="signout-phone" type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={e => setPhone(e.target.value)}
+                placeholder="e.g. 07700 900123" className={inputCls} data-testid="input-signout-phone" />
             </div>
           )}
           {errorMsg && <p className="text-red-500 text-sm">{errorMsg}</p>}
           <button
-            onClick={handleSignOut}
+            onClick={() => void doSignOut()}
             disabled={signingOut}
             className="w-full bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 min-h-11"
             data-testid="button-sign-out"
@@ -379,22 +370,28 @@ function CheckInCard({
             View site information
           </button>
           <button onClick={notMe} className="w-full text-xs text-gray-500 underline min-h-11" data-testid="button-not-me">
-            Not me? Use different details
+            Not me? Use a different number
           </button>
         </div>
       </div>
     );
   }
 
-  // Insurance hold: waiting for the site manager, then the decision.
+  // Held: waiting for the site manager, then the decision.
   if (hold) {
-    const why = hold.reason === "insurance_expired" ? "your insurance on file has expired" : "we don't have your insurance on file";
+    const why = hold.reason === "unverified"
+      ? "your mobile number isn't on file for this project"
+      : hold.reason === "insurance_expired" ? "your insurance on file has expired" : "we don't have your insurance on file";
     if (hold.status === "approved") {
       return (
         <div className="bg-white rounded-2xl shadow-sm border p-6 text-center" data-testid="panel-hold-approved">
           <CheckCircle2 className="w-14 h-14 text-green-500 mx-auto mb-3" />
           <h3 className="text-xl font-bold text-gray-900">You're signed in</h3>
-          <p className="text-gray-600 text-sm mt-1 mb-4">The site manager has let you on site. Please get your insurance certificate to them as soon as you can.</p>
+          <p className="text-gray-600 text-sm mt-1 mb-4">
+            {hold.reason === "unverified"
+              ? "The site manager has let you on site. Next time, your mobile number signs you straight in."
+              : "The site manager has let you on site. Please get your insurance certificate to them as soon as you can."}
+          </p>
           <button onClick={onCheckedIn} className="w-full bg-orange-600 text-white font-semibold py-3 rounded-xl min-h-11">View site information</button>
         </div>
       );
@@ -434,82 +431,6 @@ function CheckInCard({
     );
   }
 
-  // Access blocked screen
-  if (blockedReason) {
-    return (
-      <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-        <div className="bg-gradient-to-r from-red-700 to-red-500 px-5 py-4 flex items-center gap-3">
-          <XCircle className="w-5 h-5 text-white" />
-          <h2 className="text-white font-bold text-base">Site Access Not Permitted</h2>
-        </div>
-        <div className="p-6 text-center space-y-4">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto">
-            <AlertTriangle className="w-8 h-8 text-red-500" />
-          </div>
-          <div>
-            <p className="font-bold text-gray-900 text-lg mb-1">Access Denied</p>
-            <p className="text-gray-600 text-sm">
-              {blockedReason === "not_registered"
-                ? "We couldn't match your details to anyone registered on this project. Check your name is entered as it appears on the project team, or contact the site manager."
-                : "Your insurance certificate has expired or has not been submitted to the site manager."}
-            </p>
-          </div>
-
-          {blockedReason === "not_registered" && blockedSuggest.length > 0 && (
-            <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 space-y-2 text-left" data-testid="panel-blocked-suggestions">
-              <p className="text-xs font-semibold text-blue-800">Did you mean one of these? Tap to use those details and try again.</p>
-              {blockedSuggest.map(sug => (
-                <button
-                  key={sug.label}
-                  onClick={() => useSuggestion(sug)}
-                  className="w-full flex items-center justify-between gap-3 bg-white border border-blue-200 rounded-xl px-4 py-3 min-h-11 text-left"
-                  data-testid="button-use-blocked-suggestion"
-                >
-                  <span className="text-sm font-semibold text-gray-900 break-words min-w-0">Did you mean {sug.label}?</span>
-                  <span className="text-xs text-orange-600 font-bold shrink-0">Use these</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-left">
-            <p className="text-amber-800 font-semibold text-sm text-center mb-3">
-              Please contact the site manager before entering the site.
-            </p>
-            {siteManager ? (
-              <div className="space-y-2">
-                <p className="font-bold text-gray-900 text-center">{siteManager.name}</p>
-                <a
-                  href={`mailto:${siteManager.email}`}
-                  className="flex items-center justify-center gap-2 bg-white border border-amber-300 rounded-lg px-3 py-2 text-amber-800 text-sm font-medium hover:bg-amber-50 transition-colors"
-                >
-                  <Mail className="w-4 h-4" /> {siteManager.email}
-                </a>
-                {siteManager.phone && (
-                  <a
-                    href={`tel:${siteManager.phone}`}
-                    className="flex items-center justify-center gap-2 bg-white border border-amber-300 rounded-lg px-3 py-2 text-amber-800 text-sm font-medium hover:bg-amber-50 transition-colors"
-                  >
-                    <Phone className="w-4 h-4" /> {siteManager.phone}
-                  </a>
-                )}
-              </div>
-            ) : (
-              <p className="text-amber-700 text-sm text-center">Contact the site manager for assistance.</p>
-            )}
-          </div>
-
-          <button
-            onClick={reset}
-            className="text-sm text-orange-600 font-medium hover:underline"
-          >
-            Try again with different details
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   // Success screen
   if (status === "done") {
     return (
@@ -524,6 +445,43 @@ function CheckInCard({
     );
   }
 
+  const photoStep = step === "ready" || useDevice;
+  const photoButtons = (
+    <>
+      {preview && (
+        <div className="relative rounded-xl overflow-hidden border">
+          <img src={preview} alt="Check-in photo" className="w-full object-contain max-h-72 bg-gray-100" />
+          <button
+            onClick={() => { setPreview(null); setCapturedFile(null); setStatus("idle"); if (fileRef.current) fileRef.current.value = ""; }}
+            className="absolute top-2 right-2 bg-black/50 text-white rounded-full px-2 py-0.5 text-xs"
+          >
+            Retake
+          </button>
+        </div>
+      )}
+      {status !== "capturing" && status !== "uploading" ? (
+        <button
+          onClick={() => { setErrorMsg(""); fileRef.current?.click(); }}
+          className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors min-h-11"
+          data-testid="button-take-photo"
+        >
+          <Camera className="w-5 h-5" /> Take Check-In Photo
+        </button>
+      ) : (
+        <button
+          onClick={handleCheckin}
+          disabled={status === "uploading"}
+          className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors min-h-11"
+          data-testid="button-confirm-checkin"
+        >
+          {status === "uploading"
+            ? <><Loader2 className="w-5 h-5 animate-spin" /> Verifying &amp; Submitting…</>
+            : <><CheckCircle2 className="w-5 h-5" /> Confirm Check-In</>}
+        </button>
+      )}
+    </>
+  );
+
   return (
     <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
       <div className="bg-gradient-to-r from-orange-600 to-orange-500 px-5 py-4 flex items-center gap-3">
@@ -531,138 +489,33 @@ function CheckInCard({
         <h2 className="text-white font-bold text-base">Site Check-In Required</h2>
       </div>
       <div className="p-5 space-y-4">
-        <p className="text-gray-500 text-sm">
-          Complete your check-in to access site information. Your details must match the registered contacts for this project.
-        </p>
+        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFileChange} />
 
-        {device && !signedIn && (
+        {device && !useDevice && step === "phone" && !signOutMode && (
           <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 space-y-2" data-testid="card-remembered-device">
             <p className="text-sm text-gray-700 break-words">Welcome back, <strong>{device.workerName}</strong> ({device.companyName}).</p>
             <button
-              onClick={() => setDevice(null)}
+              onClick={() => { setUseDevice(true); setErrorMsg(""); }}
               className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl min-h-11"
               data-testid="button-sign-in-as"
             >
               Sign in as {device.workerName}, {device.companyName}
             </button>
-            <button onClick={notMe} className="w-full text-xs text-gray-500 underline min-h-11" data-testid="button-not-me-device">Not me? Use different details</button>
+            <button onClick={notMe} className="w-full text-xs text-gray-500 underline min-h-11" data-testid="button-not-me-device">Not me? Use a different number</button>
           </div>
         )}
 
-        {confirmed && (
-          <div className="rounded-xl border border-green-200 bg-green-50 p-3 flex items-center justify-between gap-3" data-testid="chip-confirmed-match">
-            <p className="text-sm text-green-900 break-words min-w-0">Checking in as <strong>{confirmed.label}</strong></p>
-            <button onClick={() => setConfirmed(null)} className="text-xs text-gray-600 underline shrink-0 min-h-11" data-testid="button-clear-confirmed">Change</button>
-          </div>
-        )}
-
-        {!device && !signedIn && regSuggest.length > 0 && (
-          <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 space-y-2" data-testid="panel-register-suggestions">
-            <p className="text-xs font-semibold text-blue-800">These details don't match anyone on this project yet. Did you mean:</p>
-            {regSuggest.map(sug => (
-              <button
-                key={sug.label}
-                onClick={() => useSuggestion(sug)}
-                className="w-full flex items-center justify-between gap-3 bg-white border border-blue-200 rounded-xl px-4 py-3 min-h-11 text-left"
-                data-testid="button-use-register-suggestion"
-              >
-                <span className="text-sm font-semibold text-gray-900 break-words min-w-0">Did you mean {sug.label}?</span>
-                <span className="text-xs text-orange-600 font-bold shrink-0">Yes, that's me</span>
-              </button>
-            ))}
-          </div>
-        )}
-
-        <div>
-          <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">Your Name</label>
-          <input
-            type="text"
-            value={name}
-            onChange={e => { setName(e.target.value); setConfirmed(null); }}
-            placeholder="e.g. John Smith"
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
-            <Building2 className="w-3.5 h-3.5" /> Company Name
-          </label>
-          <input
-            type="text"
-            value={companyName}
-            onChange={e => { setCompanyName(e.target.value); setConfirmed(null); }}
-            list="site-companies"
-            autoComplete="organization"
-            placeholder="e.g. Acme Electrical Ltd"
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-          />
-          <datalist id="site-companies">
-            {companies.map(c => <option key={c} value={c} />)}
-          </datalist>
-        </div>
-
-        {preview && (
-          <div className="relative rounded-xl overflow-hidden border">
-            <img src={preview} alt="Check-in photo" className="w-full object-contain max-h-72 bg-gray-100" />
-            <button
-              onClick={() => { setPreview(null); setCapturedFile(null); setStatus("idle"); if (fileRef.current) fileRef.current.value = ""; }}
-              className="absolute top-2 right-2 bg-black/50 text-white rounded-full px-2 py-0.5 text-xs"
-            >
-              Retake
-            </button>
-          </div>
-        )}
-
-        {errorMsg && <p className="text-red-500 text-sm">{errorMsg}</p>}
-
-        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFileChange} />
-
-        {status !== "capturing" && status !== "uploading" ? (
-          <button
-            onClick={() => {
-              if (!name.trim()) { setErrorMsg("Please enter your name."); return; }
-              if (!companyName.trim()) { setErrorMsg("Please enter your company name."); return; }
-              setErrorMsg("");
-              fileRef.current?.click();
-            }}
-            className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
-          >
-            <Camera className="w-5 h-5" /> Take Check-In Photo
-          </button>
-        ) : (
-          <button
-            onClick={handleCheckin}
-            disabled={status === "uploading"}
-            className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
-          >
-            {status === "uploading"
-              ? <><Loader2 className="w-5 h-5 animate-spin" /> Verifying &amp; Submitting…</>
-              : <><CheckCircle2 className="w-5 h-5" /> Confirm Check-In</>}
-          </button>
-        )}
-
-        {!device && status !== "capturing" && status !== "uploading" && (signOutMode ? (
+        {signOutMode ? (
           <div className="rounded-xl border border-gray-200 p-4 space-y-3" data-testid="panel-sign-out-by-phone">
-            <p className="text-sm text-gray-700">Leaving site? Enter your name and company above, and the mobile number on your contact record.</p>
+            <p className="text-sm text-gray-700">Leaving site? Enter the mobile number you signed in with.</p>
             <div>
-              <label htmlFor="signout-phone-form" className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">Your mobile number</label>
-              <input
-                id="signout-phone-form"
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel"
-                value={phone}
-                onChange={e => setPhone(e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-                data-testid="input-signout-phone-form"
-              />
+              <label htmlFor="signout-phone-form" className={labelCls}>Your mobile number</label>
+              <input id="signout-phone-form" type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={e => setPhone(e.target.value)}
+                placeholder="e.g. 07700 900123" className={inputCls} data-testid="input-signout-phone-form" />
             </div>
+            {errorMsg && <p className="text-red-500 text-sm">{errorMsg}</p>}
             <button
-              onClick={() => {
-                if (!name.trim() || !companyName.trim()) { setErrorMsg("Enter your name and company to sign out."); return; }
-                void doSignOut();
-              }}
+              onClick={() => void doSignOut()}
               disabled={signingOut}
               className="w-full bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 min-h-11"
               data-testid="button-sign-out-by-phone"
@@ -671,15 +524,93 @@ function CheckInCard({
             </button>
             <button onClick={() => { setSignOutMode(false); setErrorMsg(""); }} className="w-full text-xs text-gray-500 underline min-h-11">Back to check-in</button>
           </div>
-        ) : (
-          <button onClick={() => { setSignOutMode(true); setErrorMsg(""); }} className="w-full text-sm text-gray-600 underline min-h-11" data-testid="button-signing-out">
-            Already on site and leaving? Sign out
-          </button>
-        ))}
+        ) : useDevice && device ? (
+          <>
+            <p className="text-sm text-gray-700 break-words">Signing in as <strong>{device.workerName}</strong> ({device.companyName}). Take your photo to finish.</p>
+            {errorMsg && <p className="text-red-500 text-sm">{errorMsg}</p>}
+            {photoButtons}
+            <button onClick={() => { setUseDevice(false); setStatus("idle"); setPreview(null); setCapturedFile(null); }} className="w-full text-xs text-gray-500 underline min-h-11">Back</button>
+          </>
+        ) : step === "phone" ? (
+          <>
+            <p className="text-gray-600 text-sm">Sign in with your mobile number. If we have it on file for this project, you're signed straight in.</p>
+            <div>
+              <label htmlFor="checkin-phone" className={labelCls}><span className="inline-flex items-center gap-1.5"><Phone className="w-3.5 h-3.5" /> Your mobile number</span></label>
+              <input id="checkin-phone" type="tel" inputMode="tel" autoComplete="tel" value={phone}
+                onChange={e => setPhone(e.target.value)} onKeyDown={e => { if (e.key === "Enter") void lookUp(); }}
+                placeholder="e.g. 07700 900123" className={inputCls} data-testid="input-checkin-phone" />
+            </div>
+            {errorMsg && <p className="text-red-500 text-sm">{errorMsg}</p>}
+            <button onClick={() => void lookUp()} disabled={looking}
+              className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 min-h-11"
+              data-testid="button-checkin-continue">
+              {looking ? <><Loader2 className="w-5 h-5 animate-spin" /> Checking…</> : "Continue"}
+            </button>
+            <button onClick={() => { setSignOutMode(true); setErrorMsg(""); }} className="w-full text-sm text-gray-600 underline min-h-11" data-testid="button-signing-out">
+              Already on site and leaving? Sign out
+            </button>
+          </>
+        ) : step === "confirm" ? (
+          <div className="space-y-3" data-testid="panel-is-this-you">
+            <p className="text-sm font-semibold text-gray-900">Is this you?</p>
+            {matches.map(m => (
+              <button key={m.matchToken} onClick={() => { setConfirmed(m); setStep("ready"); setErrorMsg(""); }}
+                className="w-full flex items-center justify-between gap-3 bg-white border-2 border-orange-200 rounded-xl px-4 py-3 min-h-11 text-left"
+                data-testid="button-this-is-me">
+                <span className="text-base font-semibold text-gray-900 break-words min-w-0">{m.label}</span>
+                <span className="text-xs text-orange-600 font-bold shrink-0">Yes, that's me</span>
+              </button>
+            ))}
+            <button onClick={() => { setStep("details"); setErrorMsg(""); }} className="w-full text-sm text-gray-600 underline min-h-11" data-testid="button-not-these">
+              No, that's not me
+            </button>
+            <button onClick={reset} className="w-full text-xs text-gray-500 underline min-h-11">Use a different number</button>
+          </div>
+        ) : step === "details" ? (
+          <div className="space-y-4" data-testid="panel-number-not-on-file">
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 break-words">
+              {checkingPaused
+                ? <>We can't check mobile numbers just now. Enter your name and company and the site manager will let you on.</>
+                : <>We don't have <strong>{phone.trim()}</strong> on file for this project. Enter your name and company and the site manager will let you on. Once they do, this number signs you straight in next time.</>}
+            </div>
+            <div>
+              <label htmlFor="checkin-name" className={labelCls}>Your name</label>
+              <input id="checkin-name" type="text" autoComplete="name" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. John Smith" className={inputCls} data-testid="input-checkin-name" />
+            </div>
+            <div>
+              <label htmlFor="checkin-company" className={labelCls}><span className="inline-flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5" /> Company name</span></label>
+              <input id="checkin-company" type="text" autoComplete="organization" value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="e.g. Acme Electrical Ltd" className={inputCls} data-testid="input-checkin-company" />
+            </div>
+            {errorMsg && <p className="text-red-500 text-sm">{errorMsg}</p>}
+            <button
+              onClick={() => {
+                if (!name.trim()) { setErrorMsg("Please enter your name."); return; }
+                if (!companyName.trim()) { setErrorMsg("Please enter your company name."); return; }
+                setErrorMsg(""); setStep("ready");
+              }}
+              className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl min-h-11"
+              data-testid="button-details-continue"
+            >
+              Continue
+            </button>
+            <button onClick={reset} className="w-full text-xs text-gray-500 underline min-h-11">Use a different number</button>
+          </div>
+        ) : photoStep ? (
+          <>
+            <div className="rounded-xl border border-green-200 bg-green-50 p-3 flex flex-wrap items-center justify-between gap-2" data-testid="chip-confirmed-match">
+              <p className="text-sm text-green-900 break-words min-w-0">
+                {confirmed ? <>Checking in as <strong>{confirmed.label}</strong></> : <>Checking in as <strong>{name.trim()}</strong>, {companyName.trim()}. The site manager will need to let you on.</>}
+              </p>
+              <button onClick={reset} className="text-xs text-gray-600 underline shrink-0 min-h-11" data-testid="button-clear-confirmed">Change</button>
+            </div>
+            {errorMsg && <p className="text-red-500 text-sm">{errorMsg}</p>}
+            {photoButtons}
+          </>
+        ) : null}
 
         <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-500 space-y-1">
           <p className="font-semibold text-gray-600">Check-in requirements:</p>
-          <p>✓ You must be registered on this project (team member or subcontractor)</p>
+          <p>✓ Your mobile number, or the site manager lets you on</p>
           <p>✓ Subcontractors must have a valid insurance certificate on record</p>
           <p>✓ Site photo required</p>
         </div>

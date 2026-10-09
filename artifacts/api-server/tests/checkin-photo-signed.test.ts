@@ -47,8 +47,7 @@ describe("check-in photos need a signed, expiring URL", () => {
   it("the public check-in response carries no photo, GPS or identity key", async () => {
     const fd = new FormData();
     fd.append("photo", new Blob([JPG], { type: "image/jpeg" }), "c.jpg");
-    fd.append("workerName", "Sam Signed");
-    fd.append("companyName", "Signed Ltd");
+    fd.append("phone", "07700 900321");
     fd.append("lat", "51.5");
     fd.append("lng", "-0.1");
     const res = await fetch(`${API_BASE}/site/${qrToken}/checkin`, { method: "POST", body: fd });

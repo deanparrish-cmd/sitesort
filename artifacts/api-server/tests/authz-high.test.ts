@@ -6,7 +6,7 @@ import {
   usersTable, companyMembersTable, projectMembersTable, projectsTable, subcontractorsTable,
   permitsTable, qrBoardPinsTable, subcontractorNotesTable, activityLogTable,
 } from "@workspace/db/schema";
-import { seedCompany, cleanupFixtures, api, login, type Fixture } from "./helpers";
+import { seedCompany, cleanupFixtures, api, login, dashboardToken, type Fixture } from "./helpers";
 import { generateToken } from "../src/middlewares/auth";
 
 /**
@@ -34,7 +34,7 @@ describe("High batch: role checks below the buttons", () => {
       await db.insert(usersTable).values({ id: uid, companyId: co.companyId, email: `${uid}@example.test`, passwordHash: owner.passwordHash, name: `Name ${uid}`, role, emailVerified: true });
       await db.insert(companyMembersTable).values({ id: randomUUID(), userId: uid, companyId: co.companyId, role });
       if (project) await db.insert(projectMembersTable).values({ id: randomUUID(), projectId: co.projectId, userId: uid, isProjectManager: !!project.isProjectManager } as any);
-      return login(`${uid}@example.test`);
+      return dashboardToken(uid, co.companyId, role, `${uid}@example.test`);
     };
     tok.pm = await add(id.pm, "project_manager", {});
     tok.worker = await add(id.worker, "site_worker", {});
@@ -60,15 +60,17 @@ describe("High batch: role checks below the buttons", () => {
     await cleanupFixtures([co, other]);
   });
 
-  it("public board pins: a site worker can't pin or unpin; approvers (incl. per-project cover) can; staff can still see what's pinned", async () => {
+  it("public board pins: a site worker can't pin, unpin or read them (Team Portal only, #123); approvers can", async () => {
     const body = { itemType: "document", itemId: `doc-${sfx}` };
     expect((await api(`/projects/${co.projectId}/qr-pins`, { method: "POST", token: tok.worker, body })).status).toBe(403);
     expect([401, 403]).toContain((await api(`/projects/${co.projectId}/qr-pins`, { method: "POST", token: tok.oldSub, body })).status);
     expect(await db.select().from(qrBoardPinsTable).where(eq(qrBoardPinsTable.projectId, co.projectId))).toHaveLength(0);
-    expect((await api(`/projects/${co.projectId}/qr-pins`, { method: "POST", token: tok.cover, body })).status).toBe(201);
+    expect((await api(`/projects/${co.projectId}/qr-pins`, { method: "POST", token: tok.cover, body })).status).toBe(403);
+    expect((await api(`/projects/${co.projectId}/qr-pins`, { method: "POST", token: tok.pm, body })).status).toBe(201);
     expect((await api(`/projects/${co.projectId}/qr-pins`, { method: "DELETE", token: tok.worker, body })).status).toBe(403);
     expect(await db.select().from(qrBoardPinsTable).where(eq(qrBoardPinsTable.projectId, co.projectId))).toHaveLength(1);
-    expect((await api(`/projects/${co.projectId}/qr-pins`, { token: tok.worker })).status).toBe(200);
+    expect((await api(`/projects/${co.projectId}/qr-pins`, { token: tok.worker })).status).toBe(403);
+    expect((await api(`/projects/${co.projectId}/qr-pins`, { token: tok.pm })).status).toBe(200);
   });
 
   it("billing: only the company admin reaches it; a site worker or PM calling directly is refused", async () => {
@@ -94,16 +96,17 @@ describe("High batch: role checks below the buttons", () => {
     expect((await api(`/permits/${permitId}`, { method: "DELETE", token: tok.otherAdmin })).status).toBe(403);
     const [p] = await db.select().from(permitsTable).where(eq(permitsTable.id, permitId));
     expect(p.description).toBe("Welding bay");
-    expect((await api(`/permits/${permitId}`, { method: "PATCH", token: tok.cover, body: { description: "Welding bay 2" } })).status).toBe(200);
+    expect((await api(`/permits/${permitId}`, { method: "PATCH", token: tok.cover, body: { description: "Welding bay 2" } })).status).toBe(403);
+    expect((await api(`/permits/${permitId}`, { method: "PATCH", token: tok.pm, body: { description: "Welding bay 2" } })).status).toBe(200);
     expect((await api(`/projects/${co.projectId}/permits`, { method: "POST", token: tok.pm, body: create })).status).toBe(201);
   });
 
-  it("contact cards: a site worker can't create or edit them, but can add a note", async () => {
+  it("contact cards: a site worker can't create or edit them, or add a note (Team Portal only, #123)", async () => {
     expect((await api("/subcontractors", { method: "POST", token: tok.worker, body: { companyName: "Rogue Ltd", contactFirstName: "Rog", contactLastName: "Ue", contactEmail: `rogue-${sfx}@example.test`, trades: ["groundworks"] } })).status).toBe(403);
     expect((await api(`/subcontractors/${card}`, { method: "PATCH", token: tok.worker, body: { companyName: "Renamed Ltd" } })).status).toBe(403);
     const [c] = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.id, card));
     expect(c.companyName).toBe("Card Ltd");
-    expect((await api(`/subcontractors/${card}/notes`, { method: "POST", token: tok.worker, body: { body: "Arrived late", content: "Arrived late", note: "Arrived late" } })).status).not.toBe(403);
+    expect((await api(`/subcontractors/${card}/notes`, { method: "POST", token: tok.worker, body: { body: "Arrived late", content: "Arrived late", note: "Arrived late" } })).status).toBe(403);
     expect([401, 403]).toContain((await api(`/subcontractors/${card}/notes`, { method: "POST", token: tok.oldSub, body: { note: "x" } })).status);
   });
 
@@ -114,6 +117,7 @@ describe("High batch: role checks below the buttons", () => {
     expect((await api(`/projects/${co.projectId}/trades`, { method: "POST", token: tok.worker, body: { trade: "roofing" } })).status).toBe(403);
     const members = await db.select().from(projectMembersTable).where(eq(projectMembersTable.projectId, co.projectId));
     expect(members.some(m => m.subcontractorId === card)).toBe(false);
-    expect((await api(`/projects/${co.projectId}/members/link`, { method: "POST", token: tok.cover, body: { subcontractorId: card } })).status).toBe(201);
+    expect((await api(`/projects/${co.projectId}/members/link`, { method: "POST", token: tok.cover, body: { subcontractorId: card } })).status).toBe(403);
+    expect((await api(`/projects/${co.projectId}/members/link`, { method: "POST", token: tok.pm, body: { subcontractorId: card } })).status).toBe(201);
   });
 });

@@ -60,21 +60,25 @@ describe("site sign-out matching", () => {
     expect(row.checkedOutAt).toBeNull();
   });
 
-  it("a wrong number and an unregistered name get the same refusal", async () => {
-    const wrong = await checkout({ workerName: "Paul Smith", companyName: "Acme Construction", phone: "07700 900999" });
-    const unknown = await checkout({ workerName: "Paula Jones", companyName: "Acme Construction", phone: "07700 900123" });
+  it("a number nobody has, and a name with someone else's number, get the same refusal (#124: the number decides)", async () => {
+    const wrong = await checkout({ phone: "07700 900999" });
+    const named = await checkout({ workerName: "Paula Jones", companyName: "Acme Construction", phone: "07700 900998" });
     expect(wrong.status).toBe(403);
-    expect(unknown.status).toBe(403);
-    expect(wrong.json).toEqual(unknown.json);
+    expect(named.status).toBe(403);
+    expect(wrong.json).toEqual(named.json);
     expect(wrong.json.error).toBe("identity_not_confirmed");
+    const [paula] = await db.select().from(siteCheckinsTable).where(eq(siteCheckinsTable.id, rowIds[1]));
+    expect(paula.checkedOutAt).toBeNull();
   });
 
-  it("the right mobile number signs the person out, in any common format", async () => {
-    const out = await checkout({ workerName: "  PAUL   smith ", companyName: "acme  construction", phone: "+44 7700 900123" });
+  it("the right mobile number signs the person out, in any common format, including an older row with no identity link", async () => {
+    const out = await checkout({ phone: "+44 7700 900123" });
     expect(out.status).toBe(200);
     expect(out.json.checkoutMethod).toBe("self");
+    expect(out.json.workerName).toBe("Paul Smith");
     expect(out.json).not.toHaveProperty("photoUrl");
-    expect((await checkout({ workerName: "Paul Smith", companyName: "Acme Construction", phone: "07700900123" })).status).toBe(409);
+    // Nothing open any more: same refusal as an unknown number.
+    expect((await checkout({ phone: "07700900123" })).status).toBe(403);
   });
 
   it("a remembered-device token signs out its own person; another project's token or garbage is refused", async () => {
@@ -96,10 +100,8 @@ describe("site sign-out matching", () => {
     expect((await api(`/site/${qrToken}/device?deviceToken=garbage`)).json.valid).toBe(false);
   });
 
-  it("company autocomplete returns names only", async () => {
-    const r = await api(`/site/${qrToken}/companies`);
-    expect(r.status).toBe(200);
-    expect(Array.isArray(r.json)).toBe(true);
-    expect(r.json.every((n: unknown) => typeof n === "string")).toBe(true);
+  it("the company list and the name lookup are gone (#124)", async () => {
+    expect((await api(`/site/${qrToken}/companies`)).status).toBe(404);
+    expect((await api(`/site/${qrToken}/register-match?workerName=Paul%20Smith&companyName=Acme`)).status).toBe(404);
   });
 });

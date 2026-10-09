@@ -215,3 +215,14 @@ export async function createTestDocument(projectId: string, adminToken: string, 
 export async function cleanupTestDocuments(documentIds: string[]) {
   if (documentIds.length) await db.delete(documentsTable).where(inArray(documentsTable.id, documentIds));
 }
+
+// Site workers (#123) and subcontractors (#117) can't log in to the dashboard.
+// Tests that prove a route still refuses them use a signed dashboard token, as
+// if left over from before the change.
+export async function dashboardToken(id: string, companyId: string, role: string, email: string): Promise<string> {
+  if (role === "site_worker" || role === "subcontractor") {
+    const { generateToken } = await import("../src/middlewares/auth");
+    return generateToken({ id, companyId, role, email });
+  }
+  return login(email);
+}

@@ -456,6 +456,11 @@ async function setupFixtures(appToken: string): Promise<FixtureData> {
     method: "PATCH",
     body: JSON.stringify({ canLogIssues: true, canUpdatePlantMaterials: true, canEditDailyReport: true }),
   });
+  // PM cover on the fixture member renders the Site Register (#124) for real.
+  await apiJson(`/api/projects/${projectId}/members/${fixtureMember.id}/authority`, appToken, {
+    method: "PATCH",
+    body: JSON.stringify({ isProjectManager: true }),
+  });
   // Give the demo manager project authority as well so conditional Team Portal
   // project tabs are rendered instead of silently omitted by capability gating.
   const managerMember = members.find((member) => member.userId);
@@ -467,13 +472,14 @@ async function setupFixtures(appToken: string): Promise<FixtureData> {
   }
 
   const context = await apiJson("/api/portal/me", portalToken) as {
-    member?: { canLogIssues?: boolean; canUpdatePlantMaterials?: boolean; canEditDailyReport?: boolean };
+    member?: { canLogIssues?: boolean; canUpdatePlantMaterials?: boolean; canEditDailyReport?: boolean; canSeeSiteRegister?: boolean };
     sections?: unknown[];
   };
   if (
     !context.member?.canLogIssues ||
     !context.member?.canUpdatePlantMaterials ||
     !context.member?.canEditDailyReport ||
+    !context.member?.canSeeSiteRegister ||
     !Array.isArray(context.sections) ||
     context.sections.length === 0
   ) {

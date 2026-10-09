@@ -6,7 +6,7 @@ import {
   usersTable, companyMembersTable, projectMembersTable, projectsTable, subcontractorsTable,
   insuranceRecordsTable, siteCheckinsTable, activityLogTable, notificationsTable,
 } from "@workspace/db/schema";
-import { seedCompany, cleanupFixtures, api, login, type Fixture } from "./helpers";
+import { seedCompany, cleanupFixtures, api, login, dashboardToken, type Fixture } from "./helpers";
 import { generateToken } from "../src/middlewares/auth";
 
 /**
@@ -38,15 +38,14 @@ describe("critical authorisation fixes, by direct API call per role", () => {
       if (project) await db.insert(projectMembersTable).values({ id: randomUUID(), projectId: co.projectId, userId: uid, isProjectManager: !!project.isProjectManager } as any);
       // A subcontractor can't log in to the dashboard any more (#117); use a
       // signed dashboard token as if left over from before, to prove it's refused.
-      if (role === "subcontractor") return generateToken({ id: uid, companyId: co.companyId, role, email: `${uid}@example.test` });
-      return login(`${uid}@example.test`);
+      return dashboardToken(uid, co.companyId, role, `${uid}@example.test`);
     };
     tok.pm = await add(id.pm, "project_manager", {});
     tok.worker = await add(id.worker, "site_worker", {});
     tok.sub = await add(id.sub, "subcontractor", {});
     tok.cover = await add(id.cover, "site_worker", { isProjectManager: true });
     tok.sitemgr = await add(id.sitemgr, "site_worker", {});
-    tok.demoted = await add(id.demoted, "project_manager", {});
+    tok.demoted = await add(id.demoted, "admin", {});
     await add(id.admin2, "admin", null);
     await db.insert(subcontractorsTable).values({ id: card, companyId: co.companyId, companyName: "Forge Ltd", contactName: "For Ger", contactEmail: `fg-${sfx}@example.test` });
     await db.insert(siteCheckinsTable).values({ id: `tcz-ci-${sfx}`, projectId: co.projectId, workerName: "Private Person", companyName: "Other Ltd", photoUrl: "/api/uploads/x.jpg", lat: 53.8, lng: -1.5 });
@@ -81,9 +80,12 @@ describe("critical authorisation fixes, by direct API call per role", () => {
     expect(await usersByEmail(newEmail("sb"))).toHaveLength(0);
   });
 
-  it("a PM can add staff but not admins; an admin can add an admin; unknown roles are rejected", async () => {
+  it("a PM can add a PM but not admins; an admin can add an admin; site workers and unknown roles are rejected", async () => {
     expect((await api("/users", { method: "POST", token: tok.pm, body: { email: newEmail("pmadm"), name: "Not Allowed", role: "admin" } })).status).toBe(403);
-    expect((await api("/users", { method: "POST", token: tok.pm, body: { email: newEmail("pmok"), name: "Site Person", role: "site_worker" } })).status).toBe(201);
+    expect((await api("/users", { method: "POST", token: tok.pm, body: { email: newEmail("pmok"), name: "Project Person", role: "project_manager" } })).status).toBe(201);
+    // Site workers are Team Portal only (#123): never a dashboard account.
+    expect((await api("/users", { method: "POST", token: tok.admin, body: { email: newEmail("sw"), name: "Site Person", role: "site_worker" } })).status).toBe(400);
+    expect(await usersByEmail(newEmail("sw"))).toHaveLength(0);
     expect((await api("/users", { method: "POST", token: tok.admin, body: { email: newEmail("bad"), name: "Bad Role", role: "superuser" } })).status).toBe(400);
     expect((await api("/users", { method: "POST", token: tok.admin, body: { email: newEmail("adm"), name: "Real Admin", role: "admin" } })).status).toBe(201);
   });
@@ -91,7 +93,8 @@ describe("critical authorisation fixes, by direct API call per role", () => {
   it("a PM can't promote anyone (themselves included) to admin, demote an admin, or remove one", async () => {
     expect((await api(`/users/${id.worker}`, { method: "PATCH", token: tok.pm, body: { role: "admin" } })).status).toBe(403);
     expect((await api(`/users/${id.pm}`, { method: "PATCH", token: tok.pm, body: { role: "admin" } })).status).toBe(403);
-    expect((await api(`/users/${id.admin2}`, { method: "PATCH", token: tok.pm, body: { role: "site_worker" } })).status).toBe(403);
+    expect((await api(`/users/${id.admin2}`, { method: "PATCH", token: tok.pm, body: { role: "project_manager" } })).status).toBe(403);
+    expect((await api(`/users/${id.pm}`, { method: "PATCH", token: tok.admin, body: { role: "site_worker" } })).status).toBe(400);
     expect((await api(`/users/${id.admin2}`, { method: "DELETE", token: tok.pm })).status).toBe(403);
     expect((await api(`/users/${id.worker}`, { method: "PATCH", token: tok.worker, body: { role: "admin" } })).status).toBe(403);
     const roles = await db.select().from(companyMembersTable).where(inArray(companyMembersTable.userId, [id.worker, id.pm, id.admin2]));
@@ -99,10 +102,10 @@ describe("critical authorisation fixes, by direct API call per role", () => {
   });
 
   it("a demotion takes effect at once, not when the old login expires", async () => {
-    expect((await api("/users", { method: "POST", token: tok.demoted, body: { email: newEmail("dm1"), name: "Before Demotion", role: "site_worker" } })).status).toBe(201);
-    expect((await api(`/users/${id.demoted}`, { method: "PATCH", token: tok.admin, body: { role: "site_worker" } })).status).toBe(200);
-    // Same (old) token still says project_manager inside; the server re-reads the role.
-    expect((await api("/users", { method: "POST", token: tok.demoted, body: { email: newEmail("dm2"), name: "After Demotion", role: "site_worker" } })).status).toBe(403);
+    expect((await api("/users", { method: "POST", token: tok.demoted, body: { email: newEmail("dm1"), name: "Before Demotion", role: "admin" } })).status).toBe(201);
+    expect((await api(`/users/${id.demoted}`, { method: "PATCH", token: tok.admin, body: { role: "project_manager" } })).status).toBe(200);
+    // Same (old) token still says admin inside; the server re-reads the role.
+    expect((await api("/users", { method: "POST", token: tok.demoted, body: { email: newEmail("dm2"), name: "After Demotion", role: "admin" } })).status).toBe(403);
   });
 
   // ---- 2. Insurance forging -----------------------------------------------------
@@ -137,8 +140,10 @@ describe("critical authorisation fixes, by direct API call per role", () => {
     expect((await api(path, { token: tok.sub })).status).toBe(403);
     expect((await api(path, { token: tok.sitemgr })).status).toBe(403);
     expect((await api(`/projects/${co.projectId}`, { method: "PATCH", token: tok.admin, body: { siteManagerId: id.sitemgr } })).status).toBe(200);
-    expect((await api(path, { token: tok.sitemgr })).status).toBe(200);
-    expect((await api(path, { token: tok.cover })).status).toBe(200);
+    // Site workers are Team Portal only (#123): a designated site manager or a
+    // per-project PM cover who is a site worker no longer reaches the dashboard.
+    expect((await api(path, { token: tok.sitemgr })).status).toBe(403);
+    expect((await api(path, { token: tok.cover })).status).toBe(403);
     expect((await api(path, { token: tok.admin })).status).toBe(200);
   });
 });

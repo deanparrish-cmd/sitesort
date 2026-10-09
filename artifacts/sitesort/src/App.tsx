@@ -83,6 +83,7 @@ const DailyReportsPage = lazyWithRetry(() => import("@/pages/daily-reports"));
 const PortalLogin = lazyWithRetry(() => import("@/pages/portal/login"));
 const PortalAccept = lazyWithRetry(() => import("@/pages/portal/accept"));
 const PortalSection = lazyWithRetry(() => import("@/pages/portal/section"));
+const PortalRegisterCopy = lazyWithRetry(() => import("@/components/portal-site-register").then(m => ({ default: m.SiteRegisterCopyPage })));
 
 // Set up the fetch interceptor for auth
 setupApiInterceptor();
@@ -150,6 +151,7 @@ function Router() {
       <Route path="/portal/accept/:token" component={PortalAccept} />
       <Route path="/portal/forgot-password" component={PortalForgotPassword} />
       <Route path="/portal/reset-password" component={PortalResetPassword} />
+      <Route path="/portal/register-copy" component={PortalRegisterCopy} />
       <Route path="/portal" ><Redirect to="/portal/overview" /></Route>
       <Route path="/portal/:section" component={PortalSection} />
 

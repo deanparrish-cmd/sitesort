@@ -6,7 +6,7 @@
 // shell + its current asset hashes when online); immutable /assets/* build files
 // are cache-first (fast, and safe because their filename hash changes on rebuild);
 // everything else same-origin is network-first with a cache fallback.
-const CACHE = "sitesort-portal-v4";
+const CACHE = "sitesort-portal-v5";
 const SHELL = ["/index.html", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {
@@ -81,9 +81,19 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin || url.pathname.startsWith("/api/")) return;
 
   // HTML navigations: network-first → the installed PWA always loads the latest
-  // deployed shell online; the cached shell is only an offline fallback.
+  // deployed shell online; the cached shell is only an offline fallback. Each
+  // successful load refreshes that fallback, so offline it opens the same build
+  // whose (hashed, cached) files were last used, not the one from install day.
+  // That is what lets the Team Portal site register open with no signal (#124).
   if (req.mode === "navigate") {
-    event.respondWith(fetch(req).catch(() => caches.match("/index.html")));
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          if (res && res.status === 200 && res.type === "basic") { const copy = res.clone(); caches.open(CACHE).then((c) => c.put("/index.html", copy)); }
+          return res;
+        })
+        .catch(() => caches.match("/index.html"))
+    );
     return;
   }
 

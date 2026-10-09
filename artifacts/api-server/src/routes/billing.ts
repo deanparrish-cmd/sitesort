@@ -225,7 +225,7 @@ async function handleTrialWillEnd(subscription: Stripe.Subscription): Promise<vo
     .select({ id: usersTable.id })
     .from(companyMembersTable)
     .innerJoin(usersTable, eq(usersTable.id, companyMembersTable.userId))
-    .where(and(eq(companyMembersTable.companyId, companyId), eq(companyMembersTable.role, "admin")));
+    .where(and(eq(companyMembersTable.companyId, companyId), eq(companyMembersTable.role, "admin"), eq(usersTable.portalOnly, false)));
 
   if (admins.length === 0) return;
 
@@ -262,7 +262,7 @@ async function handlePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
     .select({ id: usersTable.id })
     .from(companyMembersTable)
     .innerJoin(usersTable, eq(usersTable.id, companyMembersTable.userId))
-    .where(and(eq(companyMembersTable.companyId, companyId), eq(companyMembersTable.role, "admin")));
+    .where(and(eq(companyMembersTable.companyId, companyId), eq(companyMembersTable.role, "admin"), eq(usersTable.portalOnly, false)));
 
   if (admins.length === 0) return;
 

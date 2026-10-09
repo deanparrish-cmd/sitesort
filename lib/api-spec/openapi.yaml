@@ -5506,7 +5506,14 @@ components:
         hasPin:
           type: boolean
           description: Whether this member has already set their sign-off PIN.
-      required: [userId, name, role, email, canLogIssues, canUpdatePlantMaterials, canEditDailyReport, hasPin]
+        mobile:
+          type: string
+          nullable: true
+          description: The member's mobile number on file (signs them in at the site gate).
+        canSeeSiteRegister:
+          type: boolean
+          description: The project's designated site manager, or a member given PM cover on this project. Sees the on-site register and decides gate holds.
+      required: [userId, name, role, email, canLogIssues, canUpdatePlantMaterials, canEditDailyReport, hasPin, canSeeSiteRegister]
 
     PortalLoginRequest:
       type: object

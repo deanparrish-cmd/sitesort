@@ -151,13 +151,17 @@ export async function runCompanyDeletionQueries(tx: Tx, companyId: string): Prom
         const home = fallbackCompany.get(uid);
         const tombstone = `deleted-${uid}@removed.invalid`;
         if (home) {
-          await tx.execute(sql`update users set email = ${tombstone}, password_hash = ${randomBytes(32).toString("hex")}, portal_only = true, company_id = ${home} where id = ${uid}`);
+          await tx.execute(sql`update users set email = ${tombstone}, password_hash = ${randomBytes(32).toString("hex")}, portal_only = true, sessions_invalid_before = now(), company_id = ${home} where id = ${uid}`);
         } else {
           // No surviving membership to re-home to — keep their current
           // company_id valid by leaving the company row in place is not an
           // option (we're deleting it), so park them on the oldest company.
-          await tx.execute(sql`update users set email = ${tombstone}, password_hash = ${randomBytes(32).toString("hex")}, portal_only = true, company_id = (select id from companies where id <> ${companyId} order by created_at asc limit 1) where id = ${uid}`);
+          await tx.execute(sql`update users set email = ${tombstone}, password_hash = ${randomBytes(32).toString("hex")}, portal_only = true, sessions_invalid_before = now(), company_id = (select id from companies where id <> ${companyId} order by created_at asc limit 1) where id = ${uid}`);
         }
+        // Its memberships everywhere went in step 5; a scrubbed account must not
+        // regain one. sessions_invalid_before ends any dashboard token it still
+        // holds (portal_only already refuses them, this is the belt-and-braces).
+        await tx.execute(sql`delete from company_members where user_id = ${uid}`);
         scrubbed.push(uid);
       }
     }

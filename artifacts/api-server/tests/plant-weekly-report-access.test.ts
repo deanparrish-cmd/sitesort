@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { projectMembersTable } from "@workspace/db/schema";
-import { api, cleanupFixtures, login, seedCompany, type Fixture } from "./helpers";
+import { api, cleanupFixtures, login, dashboardToken, seedCompany, type Fixture } from "./helpers";
 
 describe("weekly hired-plant report access", () => {
   let manager: Fixture;
@@ -17,7 +17,7 @@ describe("weekly hired-plant report access", () => {
     siteWorker = await seedCompany({ role: "site_worker" });
     fixtures.push(manager, siteWorker);
     managerToken = await login(manager.email);
-    siteWorkerToken = await login(siteWorker.email);
+    siteWorkerToken = await dashboardToken(siteWorker.userId, siteWorker.companyId, "site_worker", siteWorker.email);
   });
 
   afterAll(async () => {
@@ -34,7 +34,7 @@ describe("weekly hired-plant report access", () => {
     expect(json).toEqual([]);
   });
 
-  it("denies a non-manager until they receive project-specific authority", async () => {
+  it("denies a site worker even with per-project PM cover: site workers use the Team Portal (#123)", async () => {
     const denied = await api(`/projects/${siteWorker.projectId}/plant-items/weekly-report`, {
       token: siteWorkerToken,
     });
@@ -51,7 +51,6 @@ describe("weekly hired-plant report access", () => {
     const allowed = await api(`/projects/${siteWorker.projectId}/plant-items/weekly-report`, {
       token: siteWorkerToken,
     });
-    expect(allowed.status).toBe(200);
-    expect(allowed.json).toEqual([]);
+    expect(allowed.status).toBe(403);
   });
 });

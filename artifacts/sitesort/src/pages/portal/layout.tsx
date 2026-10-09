@@ -11,8 +11,10 @@ import { ToastAction } from "@/components/ui/toast";
 import {
   Home, AlertTriangle,
   Inbox, HardHat,
-  Settings, FolderUp, Wrench, ClipboardList, MessageSquare, QrCode, FileCheck, HelpCircle,
+  Settings, FolderUp, Wrench, ClipboardList, MessageSquare, QrCode, FileCheck, HelpCircle, Users,
 } from "lucide-react";
+import { ApiError } from "@workspace/api-client-react";
+import { clearSiteRegisterCaches } from "@/components/portal-site-register";
 
 // The canonical list of every portal destination — order + labels + icons.
 // `key` matches the URL segment (/portal/:key) AND the server section
@@ -26,7 +28,7 @@ import {
 // SiteTasksView) — never individually top-level. This array remains the
 // one source of truth for label/icon/permission so tile-gating, the Site
 // Tasks hub, and the PWA unseen-badge total can never disagree.
-export const SECTION_NAV: { key: string; label: string; Icon: typeof Home; permission?: "canLogIssues" | "canUpdatePlantMaterials" | "canEditDailyReport" }[] = [
+export const SECTION_NAV: { key: string; label: string; Icon: typeof Home; permission?: "canLogIssues" | "canUpdatePlantMaterials" | "canEditDailyReport" | "canSeeSiteRegister" }[] = [
   { key: "overview", label: "Home", Icon: Home },
   { key: "messages", label: "Messages", Icon: MessageSquare },
   { key: "shared", label: "Shared with me", Icon: Inbox },
@@ -38,9 +40,12 @@ export const SECTION_NAV: { key: string; label: string; Icon: typeof Home; permi
   { key: "site-issues", label: "Site Issues", Icon: AlertTriangle, permission: "canLogIssues" },
   { key: "plant-materials", label: "Plant & Materials", Icon: Wrench, permission: "canUpdatePlantMaterials" },
   { key: "daily-report", label: "Daily Report", Icon: ClipboardList, permission: "canEditDailyReport" },
+  // #124: the designated site manager and anyone with PM cover. Its own
+  // big tile on Home (it's the fire roll), never inside Site Tasks.
+  { key: "site-register", label: "Site Register", Icon: Users, permission: "canSeeSiteRegister" },
 ];
 
-export function portalLogout(setLocation: (to: string) => void) {
+export function portalLogout(setLocation: (to: string) => void, opts: { byUser?: boolean } = {}) {
   // Clean up this device's push subscription (a logged-out device must stop
   // receiving), end the session SERVER-SIDE (revoked, not just cleared locally),
   // then drop the local token and return to login. All best-effort.
@@ -50,6 +55,10 @@ export function portalLogout(setLocation: (to: string) => void) {
     void fetch("/api/portal/logout", { method: "POST", headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
   }
   localStorage.removeItem("sitesort_portal_token");
+  // A deliberate logout takes the saved site register off this phone. An
+  // expired session keeps it, so the fire roll can still be read from the
+  // login screen with no signal.
+  if (opts.byUser) clearSiteRegisterCaches();
   setLocation("/portal/login");
 }
 
@@ -61,7 +70,16 @@ export function PortalLayout({ active, children }: { active: string; children: R
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const token = typeof window !== "undefined" ? localStorage.getItem("sitesort_portal_token") : null;
-  const { data, isLoading, isError } = useGetPortalContext({ query: { enabled: !!token, retry: false, queryKey: getGetPortalContextQueryKey() } });
+  const { data, isLoading, isError, error } = useGetPortalContext({ query: { enabled: !!token, retry: false, queryKey: getGetPortalContextQueryKey() } });
+  // Only a real refusal from the server (session ended, access removed) logs
+  // the member out. No signal is not a logout: the page still renders (the
+  // site register shows its saved copy), with the project name remembered.
+  const authFailed = isError && error instanceof ApiError && [401, 403, 404, 410].includes(error.status);
+  const offline = (isError && !authFailed) || (!data && typeof navigator !== "undefined" && navigator.onLine === false);
+  useEffect(() => {
+    if (data?.project?.name) { try { localStorage.setItem("sitesort_portal_project_name", data.project.name); } catch { /* optional */ } }
+  }, [data?.project?.name]);
+  const projectName = data?.project.name ?? (offline ? (() => { try { return localStorage.getItem("sitesort_portal_project_name"); } catch { return null; } })() : null);
   // Unseen counts per section — feeds the PWA app-icon badge below and each
   // tile's own unseen dot (fetched independently by HomeQuickAccess/the Site
   // Tasks hub, which need it before this shell has mounted its children).
@@ -146,12 +164,17 @@ export function PortalLayout({ active, children }: { active: string; children: R
 
   useEffect(() => {
     // Token invalid / access revoked → bounce to login.
-    if (isError) portalLogout(setLocation);
-  }, [isError, setLocation]);
+    if (authFailed) portalLogout(setLocation);
+  }, [authFailed, setLocation]);
 
-  if (!token || isLoading || isError) {
+  // The site register (#124) never waits for the context call: it must open
+  // from the copy saved on the phone the moment it's tapped, signal or not.
+  // Elsewhere, a phone that knows it's offline doesn't sit on a spinner either.
+  const phoneOffline = typeof navigator !== "undefined" && navigator.onLine === false;
+  const waitForContext = isLoading && active !== "site-register" && !phoneOffline;
+  if (!token || waitForContext || authFailed) {
     return (
-      <div className="min-h-screen w-full flex items-center justify-center bg-background">
+      <div className="min-h-screen w-full flex items-center justify-center bg-background" data-portal-loading={!token ? "no-token" : authFailed ? "auth" : "loading"}>
         <Spinner className="size-8 text-primary" />
       </div>
     );
@@ -174,9 +197,9 @@ export function PortalLayout({ active, children }: { active: string; children: R
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 text-primary">
             <HardHat className="w-4 h-4 shrink-0" />
-            <span className="font-display font-bold truncate">{data?.project.name}</span>
+            <span className="font-display font-bold truncate">{projectName}</span>
           </div>
-          <p className="text-xs text-muted-foreground">Team Portal</p>
+          <p className="text-xs text-muted-foreground">{offline ? "Team Portal · no signal" : "Team Portal"}</p>
         </div>
         {active !== "overview" && (
           <Link

@@ -3,7 +3,8 @@ import { Link, useLocation, useSearch } from "wouter";
 import { usePortalLogin } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Mail, Lock, Eye, EyeOff, HardHat } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, HardHat, Users } from "lucide-react";
+import { lastSavedRegister } from "@/components/portal-site-register";
 
 // Member portal login — deliberately SEPARATE from the PM /login. Stores a
 // project-scoped token under `sitesort_portal_token` (not `sitesort_token`), so
@@ -105,10 +106,36 @@ export default function PortalLogin() {
             </p>
           </form>
 
+        <SavedRegisterLink />
+
         <p className="mt-6 text-center text-xs text-muted-foreground">
           Invited to a project? Use the link your manager shared to set your password.
         </p>
       </div>
     </div>
+  );
+}
+
+// A site manager whose session ran out (or with no signal) can still read the
+// fire roll saved on this phone (#124), straight from the sign-in screen.
+function SavedRegisterLink() {
+  const [saved] = useState(() => lastSavedRegister());
+  if (!saved) return null;
+  const at = new Date(saved.savedAt);
+  const when = at.toDateString() === new Date().toDateString()
+    ? at.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
+    : at.toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  return (
+    <Link
+      href="/portal/register-copy"
+      className="mt-6 flex items-center gap-3 rounded-xl border-2 border-primary/40 bg-card px-4 py-3 min-h-14 min-w-0"
+      data-testid="link-saved-register"
+    >
+      <Users className="w-6 h-6 text-primary shrink-0" />
+      <span className="min-w-0">
+        <span className="block font-bold">Open the saved site register</span>
+        <span className="block text-sm text-muted-foreground break-words">{saved.projectName}, saved at {when}. Works with no signal.</span>
+      </span>
+    </Link>
   );
 }

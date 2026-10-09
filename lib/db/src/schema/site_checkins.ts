@@ -31,7 +31,11 @@ export const siteCheckinsTable = pgTable("site_checkins", {
   // 'lapsed' (nobody decided before the site close time). The decision is
   // recorded: holdDecidedBy / holdDecidedAt / holdNote (reason, required to
   // approve). NULL holdStatus = a normal check-in that never needed a decision.
+  // #124 adds 'unverified': the mobile number typed at the gate isn't on file
+  // for anyone on the project. typedPhone keeps that number so the manager can
+  // see it, and on approval it fills in the matched record's empty mobile.
   holdReason: text("hold_reason"),
+  typedPhone: text("typed_phone"),
   holdStatus: text("hold_status"),
   holdDecidedBy: text("hold_decided_by").references(() => usersTable.id, { onDelete: "set null" }),
   holdDecidedAt: timestamp("hold_decided_at"),

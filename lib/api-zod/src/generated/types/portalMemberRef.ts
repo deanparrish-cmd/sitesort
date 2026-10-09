@@ -16,4 +16,8 @@ export interface PortalMemberRef {
   canEditDailyReport: boolean;
   /** Whether this member has already set their sign-off PIN. */
   hasPin: boolean;
+  /** The member's mobile number on file (signs them in at the site gate). */
+  mobile?: string | null;
+  /** The project's designated site manager, or a member given PM cover on this project. Sees the on-site register and decides gate holds. */
+  canSeeSiteRegister: boolean;
 }

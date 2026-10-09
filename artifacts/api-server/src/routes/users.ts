@@ -41,6 +41,15 @@ router.get("/users", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
 // Adding someone to the company: admin / PM only, and only an ADMIN can make
 // someone an admin (before #116 any logged-in user, even a site worker, could
 // create an admin account by calling this directly).
+// Admins of a company who can actually log in: a portal-only or deleted
+// (scrubbed) account still holding an admin row doesn't count, so it can't
+// stand in for "another admin" when the last real one is removed (#123).
+async function liveAdmins(companyId: string) {
+  return db.select({ id: companyMembersTable.userId }).from(companyMembersTable)
+    .innerJoin(usersTable, eq(usersTable.id, companyMembersTable.userId))
+    .where(and(eq(companyMembersTable.companyId, companyId), eq(companyMembersTable.role, "admin"), eq(usersTable.portalOnly, false)));
+}
+
 router.post("/users", authenticate, allow(COMPANY_MANAGER), async (req, res) => {
   try {
     const { email, role, phone, roleTitle } = req.body;
@@ -49,7 +58,7 @@ router.post("/users", authenticate, allow(COMPANY_MANAGER), async (req, res) => 
       return;
     }
     if (!(DASHBOARD_ROLES as readonly string[]).includes(role)) {
-      res.status(400).json({ error: "validation_error", message: role === "subcontractor" ? "Subcontractors join through the Team Portal, not the dashboard. Invite them to the project's Team Portal instead." : "role must be admin, project_manager or site_worker" });
+      res.status(400).json({ error: "validation_error", message: role === "subcontractor" || role === "site_worker" ? "Site workers and subcontractors join through the Team Portal, not the dashboard. Invite them to the project's Team Portal instead." : "role must be admin or project_manager" });
       return;
     }
     if (role === "admin" && res.locals.role !== "admin") {
@@ -72,6 +81,12 @@ router.post("/users", authenticate, allow(COMPANY_MANAGER), async (req, res) => 
     // (they keep their own login) instead of rejecting the email.
     if (existing.length > 0) {
       const linkedUser = existing[0];
+      // A Team Portal account can't open the dashboard, so linking it as a
+      // PM/admin would add a team member who can never log in (#123).
+      if (linkedUser.portalOnly) {
+        res.status(400).json({ error: "portal_account", message: `${email} is a Team Portal account, so it can't be added to the dashboard team. Use a different email address for their dashboard login.` });
+        return;
+      }
       const added = await addMembership(linkedUser.id, req.user!.companyId, role);
       if (!added) {
         res.status(400).json({ error: "already_member", message: `${linkedUser.name} is already on your team.` });
@@ -154,7 +169,7 @@ router.patch("/users/:userId", authenticate, allow(COMPANY_MANAGER, self()), asy
     // Role is per-company → update the membership for THIS company.
     if (role !== undefined && role !== currentRole) {
       if (!(DASHBOARD_ROLES as readonly string[]).includes(role)) {
-        res.status(400).json({ error: "validation_error", message: role === "subcontractor" ? "Subcontractors join through the Team Portal, not the dashboard." : "role must be admin, project_manager or site_worker" });
+        res.status(400).json({ error: "validation_error", message: role === "subcontractor" || role === "site_worker" ? "Site workers and subcontractors join through the Team Portal, not the dashboard." : "role must be admin or project_manager" });
         return;
       }
       // Granting admin, or changing an admin's role, is admin-only: a PM can't
@@ -164,8 +179,7 @@ router.patch("/users/:userId", authenticate, allow(COMPANY_MANAGER, self()), asy
         return;
       }
       if (currentRole === "admin") {
-        const admins = await db.select({ id: companyMembersTable.userId }).from(companyMembersTable)
-          .where(and(eq(companyMembersTable.companyId, req.user!.companyId), eq(companyMembersTable.role, "admin")));
+        const admins = await liveAdmins(req.user!.companyId);
         if (admins.length <= 1) { res.status(400).json({ error: "validation_error", message: "You can't remove the only admin." }); return; }
       }
       await db.update(companyMembersTable).set({ role })
@@ -207,8 +221,7 @@ router.delete("/users/:userId", authenticate, allow(COMPANY_MANAGER), async (req
       return;
     }
     if (targetRole === "admin") {
-      const admins = await db.select({ id: companyMembersTable.userId }).from(companyMembersTable)
-        .where(and(eq(companyMembersTable.companyId, req.user!.companyId), eq(companyMembersTable.role, "admin")));
+      const admins = await liveAdmins(req.user!.companyId);
       if (admins.length <= 1) {
         res.status(400).json({ error: "validation_error", message: "You can't remove the only admin." });
         return;

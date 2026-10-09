@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { canSeeSiteRegister } from "./qr";
 import multer from "multer";
 import { createHash } from "crypto";
 import bcrypt from "bcryptjs";
@@ -997,7 +998,7 @@ router.get("/portal/me", ...portalGuards, async (req, res) => {
   const pid = req.portalProjectId!;
   const proj = await loadProject(pid);
   if (!proj) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
-  const urow = await db.select({ name: usersTable.name, pinHash: usersTable.pinHash }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
+  const urow = await db.select({ name: usersTable.name, pinHash: usersTable.pinHash, phone: usersTable.phone }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
   const permRow = await db.select({
     canLogIssues: projectMembersTable.canLogIssues,
     canUpdatePlantMaterials: projectMembersTable.canUpdatePlantMaterials,
@@ -1016,9 +1017,31 @@ router.get("/portal/me", ...portalGuards, async (req, res) => {
       canUpdatePlantMaterials: permRow[0]?.canUpdatePlantMaterials ?? false,
       canEditDailyReport: permRow[0]?.canEditDailyReport ?? false,
       hasPin: !!urow[0]?.pinHash,
+      canSeeSiteRegister: await canSeeSiteRegister(req.user!.id, pid),
+      mobile: urow[0]?.phone ?? null,
     },
     sections: PORTAL_SECTIONS,
   });
+});
+
+// PUT /api/portal/me/mobile — the member files their own mobile number (#124).
+// It's what signs them in at the site gate, so it comes from the person
+// themselves rather than office typing. Stored on their login, which the gate
+// reads for every record linked to it.
+router.put("/portal/me/mobile", ...portalGuards, async (req, res) => {
+  try {
+    const raw = typeof req.body?.mobile === "string" ? req.body.mobile.trim() : "";
+    const digits = raw.replace(/\D/g, "");
+    if (digits.length < 9 || digits.length > 15 || raw.length > 40) {
+      res.status(400).json({ error: "validation_error", message: "Enter a mobile number, e.g. 07700 900123." });
+      return;
+    }
+    await db.update(usersTable).set({ phone: raw }).where(eq(usersTable.id, req.user!.id));
+    res.json({ mobile: raw });
+  } catch (err) {
+    req.log.error({ err }, "Portal mobile update error");
+    res.status(500).json({ error: "server_error", message: "Failed to save your mobile number" });
+  }
 });
 
 // POST /api/portal/pin — set/update/reset the signed-in member's sign-off PIN.
@@ -2115,7 +2138,8 @@ router.post("/portal/plant-materials", authenticate, requirePortalSession, requi
         const creator = (await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1))[0];
         const managers = await db.select({ userId: companyMembersTable.userId })
           .from(companyMembersTable)
-          .where(and(eq(companyMembersTable.companyId, proj.companyId), inArray(companyMembersTable.role, ["admin", "project_manager"])));
+          .innerJoin(usersTable, eq(usersTable.id, companyMembersTable.userId))
+          .where(and(eq(companyMembersTable.companyId, proj.companyId), inArray(companyMembersTable.role, ["admin", "project_manager"]), eq(usersTable.portalOnly, false)));
         for (const userId of [...new Set(managers.map(m => m.userId))]) {
           await db.insert(notificationsTable).values({
             id: generateId(), userId, type: "portal_plant_item_logged",
@@ -2512,7 +2536,8 @@ router.post("/portal/my-documents", authenticate, requirePortalSession, requireP
         const uploader = (await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1))[0];
         const managers = await db.select({ userId: companyMembersTable.userId })
           .from(companyMembersTable)
-          .where(and(eq(companyMembersTable.companyId, proj.companyId), inArray(companyMembersTable.role, ["admin", "project_manager"])));
+          .innerJoin(usersTable, eq(usersTable.id, companyMembersTable.userId))
+          .where(and(eq(companyMembersTable.companyId, proj.companyId), inArray(companyMembersTable.role, ["admin", "project_manager"]), eq(usersTable.portalOnly, false)));
         const managerIds = [...new Set(managers.map(m => m.userId))];
         for (const userId of managerIds) {
           await db.insert(notificationsTable).values({

@@ -17,7 +17,9 @@ import { signUploadUrl } from "../lib/signed-uploads";
 import { siteDateStr, siteTime, siteTzLabel, closeDueAfter, safeTz, DEFAULT_SITE_CLOSE } from "../lib/site-clock";
 import { isProjectApprover } from "../lib/project-authority";
 import { logActivity } from "../lib/activity";
-import { allow, COMPANY_MANAGER, ANY_MEMBER, INTERNAL_STAFF, projectApprover, projectSiteManager } from "../lib/authz";
+import { allow, COMPANY_MANAGER, ANY_MEMBER, INTERNAL_STAFF, projectApprover, projectSiteManager, declarePolicy } from "../lib/authz";
+import { sendPushToMember } from "../lib/web-push";
+import { requirePortalSession, requirePortalMember } from "../middlewares/portal";
 
 const checkinUpload = multer({
   storage: multer.memoryStorage(),
@@ -30,10 +32,6 @@ const checkinUpload = multer({
 
 const router: IRouter = Router();
 
-// Best-effort: alert the project's managers (owner company users with an admin /
-// project_manager role) when a worker is turned away at check-in, so a blocked
-// arrival never goes unseen. Never throws — a failed alert must not fail the
-// check-in response.
 // Who hears about check-in activity on a project: the owner company's
 // admins / project managers PLUS the project's designated site manager
 // (projects.site_manager_id — a designation, not a role, so they're included
@@ -47,44 +45,15 @@ async function checkinRecipients(projectId: string): Promise<{ projectName: stri
   if (!proj) return null;
   const managers = await db.select({ userId: companyMembersTable.userId })
     .from(companyMembersTable)
+    .innerJoin(usersTable, eq(usersTable.id, companyMembersTable.userId))
     .where(and(
       eq(companyMembersTable.companyId, proj.companyId),
       inArray(companyMembersTable.role, ["admin", "project_manager"]),
+      eq(usersTable.portalOnly, false),
     ));
   const ids = new Set(managers.map(m => m.userId));
   if (proj.siteManagerId) ids.add(proj.siteManagerId);
   return { projectName: proj.name, userIds: [...ids] };
-}
-
-async function notifyBlockedCheckin(
-  projectId: string,
-  workerName: string,
-  companyName: string,
-  reason: "not_registered" | "no_valid_insurance",
-): Promise<void> {
-  try {
-    const rec = await checkinRecipients(projectId);
-    if (!rec) return;
-    const reasonText = reason === "not_registered"
-      ? "they are not registered on this project"
-      : "they have no valid insurance on file";
-    for (const userId of rec.userIds) {
-      await db.insert(notificationsTable).values({
-        id: generateId(),
-        userId,
-        type: "check_in_blocked",
-        title: `Check-in blocked at ${rec.projectName}`,
-        message: `${workerName} (${companyName}) was blocked from checking in: ${reasonText}.`,
-        relatedEntityId: projectId,
-        relatedEntityType: "project",
-        // What they typed and why: the detail view can't rely on parsing the message.
-        metadata: { projectId, workerName, companyName, reason },
-        read: false,
-      });
-    }
-  } catch {
-    /* alerting is best-effort */
-  }
 }
 
 // Best-effort: tell the same audience (managers + site manager) who arrived
@@ -166,7 +135,17 @@ async function notifyHeldCheckin(projectId: string, row: { id: string; workerNam
   try {
     const rec = await checkinRecipients(projectId);
     if (!rec) return;
-    const why = holdReason === "insurance_expired" ? "their insurance has expired" : "there is no insurance on file for them";
+    const why = holdReasonText(holdReason);
+    // The people deciding on site (#124): the site manager and anyone with PM
+    // cover get a push on their phone, straight to the portal register.
+    for (const userId of await registerHolderIds(projectId)) {
+      void sendPushToMember(userId, projectId, {
+        title: `Waiting at the gate: ${rec.projectName}`,
+        body: `${row.workerName}${row.companyName ? ` (${row.companyName})` : ""}: ${why}. Approve or refuse.`,
+        url: "/portal/site-register",
+        tag: `hold-${row.id}`,
+      }).catch(() => {});
+    }
     for (const userId of rec.userIds) {
       await db.insert(notificationsTable).values({
         id: generateId(),
@@ -183,6 +162,28 @@ async function notifyHeldCheckin(projectId: string, row: { id: string; workerNam
   } catch {
     /* alerting is best-effort */
   }
+}
+
+function holdReasonText(reason: string | null | undefined): string {
+  if (reason === "unverified") return "the mobile number they gave isn't on file for anyone on this project";
+  if (reason === "insurance_expired") return "their insurance has expired";
+  return "there is no insurance on file for them";
+}
+
+// Who runs the gate when the PM isn't there (#124): the project's designated
+// site manager and every member given PM cover on this project, as long as
+// they're still on the project's team. Used for the portal register and the
+// hold pushes.
+async function registerHolderIds(projectId: string): Promise<string[]> {
+  const p = (await db.select({ siteManagerId: projectsTable.siteManagerId }).from(projectsTable).where(eq(projectsTable.id, projectId)).limit(1))[0];
+  const rows = await db.select({ userId: projectMembersTable.userId, isPm: projectMembersTable.isProjectManager }).from(projectMembersTable)
+    .where(and(eq(projectMembersTable.projectId, projectId), sql`${projectMembersTable.userId} IS NOT NULL`));
+  const ids = new Set(rows.filter(r => r.isPm).map(r => r.userId as string));
+  if (p?.siteManagerId && rows.some(r => r.userId === p.siteManagerId)) ids.add(p.siteManagerId);
+  return [...ids];
+}
+export async function canSeeSiteRegister(userId: string, projectId: string): Promise<boolean> {
+  return (await registerHolderIds(projectId)).includes(userId);
 }
 
 // The held worker's page polls its own hold with this signed token (names the
@@ -464,6 +465,15 @@ async function openCheckinsFor(projectId: string, workerName: string, companyNam
   return open.filter(r => (key && r.personKey === key) || (normText(r.workerName) === n && normText(r.companyName ?? "") === c));
 }
 
+// Open cycles for registered identities (newest first). Rows from before the
+// identity link existed (no personKey) count when their name + company match
+// the record exactly.
+async function openRowsForRecords(projectId: string, recs: Registered[]) {
+  const keys = recs.map(r => r.key);
+  return (await openRowsForProject(projectId)).filter(r =>
+    r.personKey ? keys.includes(r.personKey) : !!matchRegistered(recs, r.workerName, r.companyName ?? ""));
+}
+
 // Count-only view of the "Currently on site" register for the PUBLIC board.
 // Distinct PEOPLE who are on_site right now (not held, not past the close
 // time); one identity (or, for older rows, one name + company) counts once.
@@ -494,30 +504,6 @@ router.get("/site/:token/on-site-count", async (req: Request, res: Response) => 
 // this stays consistent with the SQL comparison in openCheckinsFor.
 function normText(v: string): string {
   return v.trim().replace(/\s+/g, " ").toLowerCase();
-}
-// Optimal string alignment distance: like Levenshtein, but swapping two
-// adjacent letters ("Pual" for "Paul") costs 1 edit, the most common typo.
-function editDistance(a: string, b: string): number {
-  if (a === b) return 0;
-  const d: number[][] = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
-  for (let j = 0; j <= b.length; j++) d[0][j] = j;
-  for (let i = 1; i <= a.length; i++) {
-    for (let j = 1; j <= b.length; j++) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
-      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
-    }
-  }
-  return d[a.length][b.length];
-}
-// "Close" = within ~20% edits (min 1, max 3). Catches small typos and swaps.
-function isClose(typed: string, actual: string): boolean {
-  if (!typed || !actual) return false;
-  const limit = Math.min(3, Math.max(1, Math.floor(Math.max(typed.length, actual.length) * 0.2)));
-  return editDistance(typed, actual) <= limit;
-}
-function firstName(full: string): string {
-  return full.trim().split(/\s+/)[0] ?? full;
 }
 
 // ---- Registered people for a project (who may check in) ---------------------
@@ -654,31 +640,6 @@ function matchRegistered(records: Registered[], typedName: string, typedCompany:
   return hits[0] ?? null;
 }
 
-// Close-but-not-exact registered people, for "Did you mean...?" at check-in.
-// Only for 3+ typed letters; at most 3; the client always asks for a tap.
-function nearRegistered(records: Registered[], typedName: string, typedCompany: string): { key: string; label: string }[] {
-  const n = normText(typedName), c = normText(typedCompany);
-  if (n.length < 3) return [];
-  const scored: { r: Registered; name: string; score: number }[] = [];
-  for (const r of records) {
-    for (const nm of r.names) {
-      const full = normText(nm);
-      const tokens = full.split(" ");
-      const nameClose = isClose(n, full) || tokens.some(t => t === n || (n.length >= 3 && t.startsWith(n))) || full.startsWith(n) || tokens.some(t => isClose(n, t));
-      if (!nameClose) continue;
-      const rc = normText(r.company ?? "");
-      const companyFine = !c || !r.companyRequired || rc === c || isClose(c, rc) || rc.includes(c) || c.includes(rc);
-      if (!companyFine) continue;
-      scored.push({ r, name: nm, score: (full === n ? 0 : isClose(n, full) ? 1 : 2) + (rc === c ? 0 : 1) });
-    }
-  }
-  const seen = new Set<string>();
-  return scored.sort((a, b) => a.score - b.score).filter(x => (seen.has(x.r.key) ? false : (seen.add(x.r.key), true))).slice(0, 3).map(x => ({
-    key: x.r.key,
-    label: publicLabel(x.name, x.r.company),
-  }));
-}
-
 type OpenRow = typeof siteCheckinsTable.$inferSelect;
 // Rows a person could still be "in" for sign-in / sign-out purposes: not
 // signed out, not a legacy row, not a pending / refused / lapsed insurance
@@ -694,6 +655,11 @@ async function openRowsForProject(projectId: string): Promise<OpenRow[]> {
     sql`(${siteCheckinsTable.autoClosedAt} IS NULL OR ${siteCheckinsTable.autoClosedAt} > now() - interval '12 hours')`,
   )).orderBy(desc(siteCheckinsTable.checkedInAt));
 }
+// The fullest accepted spelling of a record's name ("Amy Parrish" over "Amy").
+function fullName(r: Registered): string {
+  return [...r.names].sort((a, b) => b.trim().split(/\s+/).length - a.trim().split(/\s+/).length || b.length - a.length)[0] ?? "";
+}
+
 // Public label = first name + surname initial + company ("Amy P, Amy I Cloud").
 // Full names never go out on the public endpoints.
 function publicLabel(fullName: string, company: string | null | undefined): string {
@@ -720,17 +686,109 @@ function readMatchToken(raw: unknown, projectId: string): string | null {
 // Remembered-device token: a signed, project-scoped record of who last signed
 // in from this device. Nothing new is stored server-side.
 const DEVICE_TOKEN_TTL = "180d";
-function signDeviceToken(projectId: string, workerName: string, companyName: string): string {
-  return jwt.sign({ kind: "site-device", projectId, workerName, companyName }, process.env.JWT_SECRET as string, { expiresIn: DEVICE_TOKEN_TTL });
+// #124: it also carries the registered identity key, so a remembered phone
+// signs in as that person without typing anything. Older tokens (names only)
+// still resolve by an exact name + company match.
+function signDeviceToken(projectId: string, workerName: string, companyName: string, key?: string | null): string {
+  return jwt.sign({ kind: "site-device", projectId, workerName, companyName, ...(key ? { key } : {}) }, process.env.JWT_SECRET as string, { expiresIn: DEVICE_TOKEN_TTL });
 }
-function readDeviceToken(raw: unknown, projectId: string): { workerName: string; companyName: string } | null {
+function readDeviceToken(raw: unknown, projectId: string): { workerName: string; companyName: string; key: string | null } | null {
   if (typeof raw !== "string" || !raw) return null;
   try {
     const p = jwt.verify(raw, process.env.JWT_SECRET as string) as any;
     if (p?.kind !== "site-device" || p.projectId !== projectId) return null;
-    return { workerName: String(p.workerName), companyName: String(p.companyName) };
+    return { workerName: String(p.workerName), companyName: String(p.companyName), key: typeof p.key === "string" ? p.key : null };
   } catch { return null; }
 }
+// The registered record a remembered device stands for, if still on the project.
+function deviceRecord(records: Registered[], who: { workerName: string; companyName: string; key: string | null }): Registered | null {
+  return (who.key ? records.find(r => r.key === who.key) : null) ?? matchRegistered(records, who.workerName, who.companyName);
+}
+
+// ---- Phone-first identity (#124) ----------------------------------------------
+// The gate asks for a mobile number first. A number on file for someone on
+// the project identifies them (first name + surname initial + company are
+// shown back so they can confirm). Nothing else about the project's people is
+// public: no name lookups, no suggestions, no company list.
+async function recordsForPhone(records: Registered[], phone: string): Promise<Registered[]> {
+  const seen = new Set<string>();
+  const out: Registered[] = [];
+  const order = { user: 0, contact: 1, person: 2 } as const;
+  // Same priority as matchRegistered: a record tied to a card wins, so a
+  // phone match can't dodge an insurance check.
+  const sorted = [...records].sort((a, b) => Number(!b.insuranceSubId) - Number(!a.insuranceSubId) || order[a.kind] - order[b.kind]);
+  for (const r of sorted) {
+    if (seen.has(r.key)) continue;
+    seen.add(r.key);
+    if ((await phonesForKey(r.key)).some(p => samePhone(p, phone))) out.push(r);
+  }
+  return out;
+}
+
+// Numbers that find nobody are limited per network address and board, so the
+// gate can't be used to try number after number. Only MISSES count: a whole
+// crew arriving on the site's wifi (one address) with their numbers on file is
+// never slowed down.
+const PHONE_MISSES = 60, PHONE_WINDOW_MS = 10 * 60_000;
+const phoneMisses = new Map<string, number[]>();
+function recentMisses(req: Request, token: string): number[] {
+  const now = Date.now();
+  return (phoneMisses.get(`${req.ip}|${token}`) ?? []).filter(t => now - t < PHONE_WINDOW_MS);
+}
+function phoneRateLimited(req: Request, token: string): boolean {
+  return recentMisses(req, token).length >= PHONE_MISSES;
+}
+function notePhoneMiss(req: Request, token: string): void {
+  const now = Date.now();
+  phoneMisses.set(`${req.ip}|${token}`, [...recentMisses(req, token), now]);
+  if (phoneMisses.size > 5000) for (const [key, ts] of phoneMisses) if (!ts.some(t => now - t < PHONE_WINDOW_MS)) phoneMisses.delete(key);
+}
+// Sign-out only: at the gate itself the limit never turns anyone away (see
+// /identify and /checkin: a limited board stops LOOKING UP numbers and holds
+// everyone for the site manager instead).
+const TOO_MANY_TRIES = { error: "too_many_tries", message: "We can't check numbers just now. Ask your site manager to sign you out." };
+
+// Fill in a registered record's mobile number, only where none is on file.
+// Used when a manager approves someone who gave their number at the gate.
+async function fillPhoneForKey(key: string, phone: string): Promise<boolean> {
+  if ((await phonesForKey(key)).length > 0) return false;
+  const [kind, id] = [key.slice(0, key.indexOf(":")), key.slice(key.indexOf(":") + 1)];
+  const value = phone.trim().slice(0, 40);
+  if (kind === "person") await db.update(peopleTable).set({ phone: value }).where(eq(peopleTable.id, id));
+  else if (kind === "sub") await db.update(subcontractorsTable).set({ contactPhone: value }).where(eq(subcontractorsTable.id, id));
+  else if (kind === "user") await db.update(usersTable).set({ phone: value }).where(eq(usersTable.id, id));
+  else return false;
+  return true;
+}
+
+// Public (#124): step one at the gate. A mobile number on file for someone on
+// this project returns who that is (first name, surname initial, company) and a
+// short-lived signed token naming the record, for the "Is this you?" tap. An
+// unknown number returns no matches; the visitor then gives their name and
+// company and waits for the site manager (an "unverified" hold).
+router.post("/site/:token/identify", async (req: Request, res: Response) => {
+  try {
+    const qr = await db.select().from(qrCodesTable).where(eq(qrCodesTable.token, req.params.token)).then(r => r[0]);
+    if (!qr) { res.status(404).json({ error: "not_found", message: "Invalid site token" }); return; }
+    const phone = typeof req.body?.phone === "string" ? req.body.phone : "";
+    if (normPhone(phone).length < 9) { res.status(400).json({ error: "validation_error", message: "Enter your mobile number." }); return; }
+    // Someone has been trying number after number at this board: stop looking
+    // numbers up for a while, but never turn a worker away. No matches sends
+    // him to name + company, which is held for the site manager.
+    if (phoneRateLimited(req, req.params.token)) { res.json({ matches: [], checkingPaused: true }); return; }
+    // One choice per distinct label: an in-house person with a portal login is
+    // on the project as both a login and a person, the same human.
+    const seenLabels = new Set<string>();
+    const matches = (await recordsForPhone(await loadRegistered(qr.projectId), phone))
+      .map(r => ({ label: publicLabel(fullName(r), r.company), matchToken: signMatchToken(qr.projectId, r.key) }))
+      .filter(m => !seenLabels.has(m.label) && !!seenLabels.add(m.label))
+      .slice(0, 3);
+    if (matches.length === 0) notePhoneMiss(req, req.params.token);
+    res.json({ matches });
+  } catch {
+    res.status(500).json({ error: "server_error", message: "Failed to look up" });
+  }
+});
 
 // (#122) The public "who's on site" lookup is gone: anyone at the gate could
 // list who was on site three letters at a time. The board now only knows the
@@ -744,35 +802,11 @@ router.get("/site/:token/device", async (req: Request, res: Response) => {
     if (!qr) { res.status(404).json({ error: "not_found", message: "Invalid site token" }); return; }
     const who = readDeviceToken(req.query.deviceToken, qr.projectId);
     if (!who) { res.json({ valid: false }); return; }
-    const open = await openCheckinsFor(qr.projectId, who.workerName, who.companyName);
+    const rec = deviceRecord(await loadRegistered(qr.projectId), who);
+    const open = rec ? await openRowsForRecords(qr.projectId, [rec]) : await openCheckinsFor(qr.projectId, who.workerName, who.companyName);
     res.json({ valid: true, workerName: who.workerName, companyName: who.companyName, onSite: !!open[0], checkinId: open[0]?.id ?? null, checkedInAt: open[0] ? open[0].checkedInAt.toISOString() : null });
   } catch {
     res.status(500).json({ error: "server_error", message: "Failed to check device" });
-  }
-});
-
-// Public: company names already linked to this project, for autocomplete at
-// sign-in. Free text is still allowed for anything not listed.
-router.get("/site/:token/companies", async (req: Request, res: Response) => {
-  try {
-    const qr = await db.select().from(qrCodesTable).where(eq(qrCodesTable.token, req.params.token)).then(r => r[0]);
-    if (!qr) { res.status(404).json({ error: "not_found", message: "Invalid site token" }); return; }
-    const own = await db.select({ name: companiesTable.name }).from(projectsTable)
-      .innerJoin(companiesTable, eq(companiesTable.id, projectsTable.companyId))
-      .where(eq(projectsTable.id, qr.projectId));
-    const linked = await db.select({ name: subcontractorsTable.companyName })
-      .from(projectMembersTable)
-      .innerJoin(subcontractorsTable, eq(subcontractorsTable.id, projectMembersTable.subcontractorId))
-      .where(eq(projectMembersTable.projectId, qr.projectId));
-    const viaPeople = await db.select({ name: subcontractorsTable.companyName })
-      .from(projectMembersTable)
-      .innerJoin(peopleTable, eq(peopleTable.id, projectMembersTable.personId))
-      .innerJoin(subcontractorsTable, eq(subcontractorsTable.id, peopleTable.subcontractorId))
-      .where(and(eq(projectMembersTable.projectId, qr.projectId), isNull(peopleTable.archivedAt)));
-    const names = [...new Set([...own, ...linked, ...viaPeople].map(r => (r.name ?? "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-    res.json(names);
-  } catch {
-    res.status(500).json({ error: "server_error", message: "Failed to load companies" });
   }
 });
 
@@ -796,32 +830,34 @@ async function openRowsToClose(projectId: string, target: OpenRow): Promise<Open
 // QR page offers SIGN IN or SIGN OUT. Returns only a boolean + their own times.
 // Public: sign out. Closes the person's most recent open cycle only; an older
 // unclosed cycle from a previous day stays flagged for a manager.
-// (#122) The caller must prove who they are: the remembered-device token this
-// phone got at check-in, or name + company + the mobile number on their record.
-// Before #122 anyone could sign anyone out by name or by an on-site list id,
-// emptying the fire roll of people still on site.
+// (#122, #124) The caller must prove who they are: the remembered-device token
+// this phone got at check-in, or their mobile number (on file, or the one they
+// gave at the gate when a manager let them on). Before #122 anyone could sign
+// anyone out by name, emptying the fire roll of people still on site.
 const IDENTITY_NOT_CONFIRMED = { error: "identity_not_confirmed", message: "We couldn't confirm it's you. Ask your site manager to sign you out." };
 router.post("/site/:token/checkout", async (req: Request, res: Response) => {
   try {
-    const { deviceToken, workerName, companyName, phone } = req.body ?? {};
+    const { deviceToken, phone } = req.body ?? {};
     const qr = await db.select().from(qrCodesTable).where(eq(qrCodesTable.token, req.params.token)).then(r => r[0]);
     if (!qr) { res.status(404).json({ error: "not_found", message: "Invalid site token" }); return; }
     let open: OpenRow[];
     if (typeof deviceToken === "string" && deviceToken) {
       const who = readDeviceToken(deviceToken, qr.projectId);
       if (!who) { res.status(403).json(IDENTITY_NOT_CONFIRMED); return; }
-      open = await openCheckinsFor(qr.projectId, who.workerName, who.companyName);
+      const rec = deviceRecord(await loadRegistered(qr.projectId), who);
+      open = rec ? await openRowsForRecords(qr.projectId, [rec]) : await openCheckinsFor(qr.projectId, who.workerName, who.companyName);
     } else {
-      if (typeof workerName !== "string" || typeof companyName !== "string" || typeof phone !== "string" || !workerName.trim() || !companyName.trim() || !phone.trim()) {
-        res.status(400).json({ error: "validation_error", message: "Enter your name, company and mobile number." });
+      if (typeof phone !== "string" || normPhone(phone).length < 9) {
+        res.status(400).json({ error: "validation_error", message: "Enter your mobile number." });
         return;
       }
-      // One answer for "not registered", "no phone on file" and "wrong number",
-      // so the form can't be used to test who is registered or on site.
-      const match = matchRegistered(await loadRegistered(qr.projectId), workerName, companyName);
-      const phones = match ? await phonesForKey(match.key) : [];
-      if (!match || !phones.some(p => samePhone(p, phone))) { res.status(403).json(IDENTITY_NOT_CONFIRMED); return; }
-      open = await openCheckinsFor(qr.projectId, workerName, companyName);
+      if (phoneRateLimited(req, req.params.token)) { res.status(429).json(TOO_MANY_TRIES); return; }
+      // One answer for "unknown number" and "not signed in by that number", so
+      // the form can't be used to test who is registered or on site.
+      const recs = await recordsForPhone(await loadRegistered(qr.projectId), phone);
+      const byRecord = new Set((await openRowsForRecords(qr.projectId, recs)).map(r => r.id));
+      open = (await openRowsForProject(qr.projectId)).filter(r => byRecord.has(r.id) || (!!r.typedPhone && samePhone(r.typedPhone, phone)));
+      if (!open[0]) { notePhoneMiss(req, req.params.token); res.status(403).json(IDENTITY_NOT_CONFIRMED); return; }
     }
     if (!open[0]) { res.status(409).json({ error: "not_signed_in", message: "You are not signed in on this site" }); return; }
     const targetRow = open[0];
@@ -840,61 +876,57 @@ router.post("/site/:token/checkout", async (req: Request, res: Response) => {
   }
 });
 
-// Authenticated: a manager signs someone out on their behalf (forgot to sign
-// out), with a required note. Admin / project manager / project approver only.
+// A manager (dashboard) or the site manager / cover (portal, #124) signs
+// someone out on their behalf (forgot to sign out), with a required note.
+type Outcome = { status: number; body: unknown };
+async function managerSignOut(projectId: string, checkinId: string, actorId: string, rawNote: unknown, req: Request): Promise<Outcome> {
+  const project = (await db.select({ id: projectsTable.id, companyId: projectsTable.companyId }).from(projectsTable).where(eq(projectsTable.id, projectId)).limit(1))[0];
+  if (!project) return { status: 404, body: { error: "not_found", message: "Project not found" } };
+  const note = typeof rawNote === "string" ? rawNote.trim() : "";
+  if (!note) return { status: 400, body: { error: "validation_error", message: "A note is required" } };
+  // Any row not yet genuinely signed out, including one closed automatically
+  // on an earlier day (the manager confirming when they actually left).
+  const target = (await db.select().from(siteCheckinsTable).where(and(
+    eq(siteCheckinsTable.id, checkinId), eq(siteCheckinsTable.projectId, project.id),
+    isNull(siteCheckinsTable.checkedOutAt),
+    sql`(${siteCheckinsTable.holdStatus} IS NULL OR ${siteCheckinsTable.holdStatus} = 'approved')`,
+  )).limit(1))[0];
+  if (!target) return { status: 409, body: { error: "not_signed_in", message: "Already signed out, or not found" } };
+  const toClose = await openRowsToClose(project.id, target);
+  const now = new Date();
+  const closed = await db.update(siteCheckinsTable)
+    .set({ checkedOutAt: now, checkedOutBy: actorId, checkoutNote: note.slice(0, 500), checkoutMethod: "manual" })
+    .where(and(inArray(siteCheckinsTable.id, toClose.map(r => r.id)), eq(siteCheckinsTable.projectId, project.id), isNull(siteCheckinsTable.checkedOutAt)))
+    .returning();
+  const row = closed.find(r => r.id === target.id);
+  if (!row) return { status: 409, body: { error: "not_signed_in", message: "Already signed out, or not found" } };
+  const managerName = (await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, actorId)).limit(1))[0]?.name ?? "a manager";
+  void notifySignedOut(project.id, row, now, { name: managerName, note });
+  void logActivity({ userId: actorId, projectId: project.id, companyId: project.companyId, section: "check-ins", action: "update", itemType: "site_checkin", itemId: row.id, metadata: { signedOut: row.workerName, note }, req });
+  return { status: 200, body: serializeCheckin(row, await siteClock(project.id)) };
+}
+
 router.post("/projects/:projectId/checkins/:id/sign-out", authenticate, allow(projectApprover()), async (req: Request, res: Response) => {
   try {
-    const project = await db.select({ id: projectsTable.id, companyId: projectsTable.companyId }).from(projectsTable)
+    const project = await db.select({ id: projectsTable.id }).from(projectsTable)
       .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId))).limit(1);
     if (!project[0]) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
     if (!(await isProjectApprover(req.user!, project[0].id))) {
       res.status(403).json({ error: "forbidden", message: "Only a manager can sign someone out" });
       return;
     }
-    const note = typeof req.body?.note === "string" ? req.body.note.trim() : "";
-    if (!note) { res.status(400).json({ error: "validation_error", message: "A note is required" }); return; }
-    // Any row not yet genuinely signed out, including one closed automatically
-    // on an earlier day (the manager confirming when they actually left).
-    const target = (await db.select().from(siteCheckinsTable).where(and(
-      eq(siteCheckinsTable.id, req.params.id), eq(siteCheckinsTable.projectId, project[0].id),
-      isNull(siteCheckinsTable.checkedOutAt),
-      sql`(${siteCheckinsTable.holdStatus} IS NULL OR ${siteCheckinsTable.holdStatus} = 'approved')`,
-    )).limit(1))[0];
-    if (!target) { res.status(409).json({ error: "not_signed_in", message: "Already signed out, or not found" }); return; }
-    const toClose = await openRowsToClose(project[0].id, target);
-    const now = new Date();
-    const closed = await db.update(siteCheckinsTable)
-      .set({ checkedOutAt: now, checkedOutBy: req.user!.id, checkoutNote: note.slice(0, 500), checkoutMethod: "manual" })
-      .where(and(inArray(siteCheckinsTable.id, toClose.map(r => r.id)), eq(siteCheckinsTable.projectId, project[0].id), isNull(siteCheckinsTable.checkedOutAt)))
-      .returning();
-    const row = closed.find(r => r.id === target.id);
-    if (!row) { res.status(409).json({ error: "not_signed_in", message: "Already signed out, or not found" }); return; }
-    const managerName = (await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1))[0]?.name ?? "a manager";
-    void notifySignedOut(project[0].id, row, now, { name: managerName, note });
-    void logActivity({ userId: req.user!.id, projectId: project[0].id, companyId: project[0].companyId, section: "check-ins", action: "update", itemType: "site_checkin", itemId: row.id, metadata: { signedOut: row.workerName, note }, req });
-    res.json(serializeCheckin(row, await siteClock(project[0].id)));
+    const out = await managerSignOut(project[0].id, req.params.id, req.user!.id, req.body?.note, req);
+    res.status(out.status).json(out.body);
   } catch (err) {
     req.log.error({ err }, "Manual sign-out error");
     res.status(500).json({ error: "server_error", message: "Failed to sign out" });
   }
 });
 
-// Public: at check-in, is what was typed a registered person? If not, close
-// matches ("Did you mean...?") so a company/name typo is suggested, not just blocked.
-router.get("/site/:token/register-match", async (req: Request, res: Response) => {
-  try {
-    const workerName = String(req.query.workerName ?? "");
-    const companyName = String(req.query.companyName ?? "");
-    const qr = await db.select().from(qrCodesTable).where(eq(qrCodesTable.token, req.params.token)).then(r => r[0]);
-    if (!qr) { res.status(404).json({ error: "not_found", message: "Invalid site token" }); return; }
-    if (normText(workerName).length < 3) { res.json({ registered: false, suggestions: [] }); return; }
-    const records = await loadRegistered(qr.projectId);
-    if (matchRegistered(records, workerName, companyName)) { res.json({ registered: true, suggestions: [] }); return; }
-    res.json({ registered: false, suggestions: nearRegistered(records, workerName, companyName).map(({ key, label }) => ({ label, matchToken: signMatchToken(qr.projectId, key) })) });
-  } catch {
-    res.status(500).json({ error: "server_error", message: "Failed to look up" });
-  }
-});
+// (#124) The public name lookup ("register-match") and the company list are
+// gone: with them anyone holding the board link could test guessed names and
+// list the roster three letters at a time. The gate identifies people by
+// mobile number instead (/identify).
 
 // Authenticated: the detail behind a check-in / check-in-blocked / sign-out
 // notification (opened from the activity feed). Scoped to the notification's
@@ -971,14 +1003,31 @@ router.get("/notifications/:notificationId/checkin", authenticate, allow(ANY_MEM
   }
 });
 
-// Public check-in endpoint — validates contact registration and insurance before recording
+async function saveCheckinPhoto(file: Express.Multer.File): Promise<string> {
+  const ext = path.extname(file.originalname || ".jpg").toLowerCase() || ".jpg";
+  const filename = `checkin-${randomUUID()}${ext}`;
+  await getBucket().file(objectKey(filename)).save(file.buffer, {
+    contentType: file.mimetype,
+    resumable: false,
+    metadata: { metadata: { originalName: file.originalname } },
+  });
+  return `/api/uploads/${filename}`;
+}
+
+// Public check-in endpoint (#124: phone first). Who is this?
+//   - a remembered device (deviceToken), or
+//   - the "Is this you?" tap after /identify found their mobile (matchToken), or
+//   - a mobile number on file sent directly with the check-in.
+// Any of those is a VERIFIED identity, then the insurance gate runs as before.
+// Otherwise (number not on file for anyone) the visitor gives name, company
+// and mobile and the check-in is HELD as "unverified" for the site manager:
+// nobody is turned away, but nobody reaches the fire roll unverified either.
 router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: Request, res: Response) => {
   try {
-    const { workerName, companyName, lat, lng, matchToken } = req.body;
-    if (!workerName?.trim() || !companyName?.trim()) {
-      res.status(400).json({ error: "validation_error", message: "workerName and companyName required" });
-      return;
-    }
+    const { lat, lng, matchToken, deviceToken } = req.body;
+    const workerName = typeof req.body.workerName === "string" ? req.body.workerName : "";
+    const companyName = typeof req.body.companyName === "string" ? req.body.companyName : "";
+    const phone = typeof req.body.phone === "string" ? req.body.phone : "";
     if (!req.file) {
       res.status(400).json({ error: "validation_error", message: "photo required" });
       return;
@@ -992,14 +1041,32 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
       return;
     }
 
-    // Who is this? Resolve against the project's registered people (users,
-    // contacts, team people) with the same rules as ever, then remember WHICH
-    // record matched so "Amy" and "Amy Parrish" can't become two people.
     const registered = await loadRegistered(qr.projectId);
-    // Either an exact match on what was typed, or a person the visitor confirmed
-    // from a "Did you mean...?" suggestion (signed token naming the record).
-    const confirmedKey = readMatchToken(matchToken, qr.projectId);
-    const match = (confirmedKey ? registered.find(r => r.key === confirmedKey) ?? null : null) ?? matchRegistered(registered, workerName, companyName);
+    let match: Registered | null = null;
+    if (typeof deviceToken === "string" && deviceToken) {
+      const who = readDeviceToken(deviceToken, qr.projectId);
+      match = who ? deviceRecord(registered, who) : null;
+      if (!match) { res.status(403).json({ error: "identity_not_confirmed", message: "We couldn't confirm it's you. Enter your mobile number." }); return; }
+    } else if (typeof matchToken === "string" && matchToken) {
+      const key = readMatchToken(matchToken, qr.projectId);
+      match = key ? registered.find(r => r.key === key) ?? null : null;
+      if (!match) { res.status(403).json({ error: "identity_not_confirmed", message: "That took too long. Enter your mobile number again." }); return; }
+    } else {
+      if (normPhone(phone).length < 9) { res.status(400).json({ error: "validation_error", message: "Enter your mobile number." }); return; }
+      // Limited board: no number lookups, so it's a hold (needs name + company).
+      const limited = phoneRateLimited(req, req.params.token);
+      // A number on its own signs in whoever it's on file for. Once a name is
+      // given ("No, that's not me" at the gate, or the number isn't on file)
+      // the number proves nothing about that name: always a hold for the
+      // site manager, never a sign-in as the number's owner.
+      const named = !!workerName.trim() || !!companyName.trim();
+      match = named || limited ? null : (await recordsForPhone(registered, phone))[0] ?? null;
+      if (!match) notePhoneMiss(req, req.params.token);
+      if (!match && (!workerName.trim() || !companyName.trim())) {
+        res.status(400).json({ error: "validation_error", message: "Enter your name and company." });
+        return;
+      }
+    }
 
     // Already signed in today, on the site's own day (by identity OR by typed
     // text): don't create a second open row; the client offers SIGN OUT
@@ -1008,23 +1075,45 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
     const now = new Date();
     const today = siteDateStr(now, clock.tz);
     const typedN = normText(workerName), typedC = normText(companyName);
-    const sameIdentity = (c: OpenRow) => (match && c.personKey === match.key) || (normText(c.workerName) === typedN && normText(c.companyName ?? "") === typedC);
+    const sameIdentity = (c: OpenRow) => match ? c.personKey === match.key : (normText(c.workerName) === typedN && normText(c.companyName ?? "") === typedC);
     const alreadyOpen = (await openRowsForProject(qr.projectId)).find(c => siteDateStr(c.checkedInAt, clock.tz) === today && sameIdentity(c));
     if (alreadyOpen) {
       res.status(409).json({ error: "already_signed_in", checkinId: alreadyOpen.id, checkedInAt: alreadyOpen.checkedInAt.toISOString() });
       return;
     }
 
+    // Held responses use 403 so a page loaded before this change still shows
+    // "Access Denied" rather than a success screen.
+    const heldResponse = (row: { id: string; checkedInAt: Date }, reason: string) => res.status(403).json({
+      error: "check_in_held", reason: reason === "unverified" ? "unverified" : "no_valid_insurance", held: true, holdReason: reason,
+      holdToken: signHoldToken(qr.projectId, row.id), checkedInAt: row.checkedInAt.toISOString(),
+    });
+
     if (!match) {
-      // Not registered as typed: block, but offer close matches ("Did you mean?").
-      await notifyBlockedCheckin(qr.projectId, workerName.trim(), companyName.trim(), "not_registered");
-      res.status(403).json({ error: "check_in_blocked", reason: "not_registered", suggestions: nearRegistered(registered, workerName, companyName).map(({ key, label }) => ({ label, matchToken: signMatchToken(qr.projectId, key) })) });
+      // UNVERIFIED: number not on file. Note who they say they are (an exact
+      // registered name + company, if any) so approval can file their number.
+      const claimed = matchRegistered(registered, workerName, companyName);
+      const pending = (await db.select().from(siteCheckinsTable).where(and(
+        eq(siteCheckinsTable.projectId, qr.projectId), eq(siteCheckinsTable.holdStatus, "pending"), eq(siteCheckinsTable.holdReason, "unverified"),
+      )).orderBy(desc(siteCheckinsTable.checkedInAt))).find(r => siteDateStr(r.checkedInAt, clock.tz) === today &&
+        normText(r.workerName) === typedN && normText(r.companyName ?? "") === typedC && !!r.typedPhone && samePhone(r.typedPhone, phone));
+      if (pending) { heldResponse(pending, "unverified"); return; }
+      const photoUrl = await saveCheckinPhoto(req.file);
+      const [row] = await db.insert(siteCheckinsTable).values({
+        id: generateId(), projectId: qr.projectId,
+        workerName: workerName.trim().slice(0, 200), companyName: companyName.trim().slice(0, 200),
+        personKey: claimed?.key ?? null, typedPhone: phone.trim().slice(0, 40), photoUrl,
+        lat: lat ? parseFloat(lat) : null, lng: lng ? parseFloat(lng) : null,
+        holdReason: "unverified", holdStatus: "pending",
+      }).returning();
+      void notifyHeldCheckin(qr.projectId, row, "unverified");
+      heldResponse(row, "unverified");
       return;
     }
 
     // INSURANCE GATE. Every match tied to a subcontractor card is checked here,
-    // whichever way they were matched (typed details, a confirmed "Did you
-    // mean", a remembered phone, or their own portal login). Same source as the
+    // whichever way they were identified (a remembered device, their mobile
+    // number on file, or the "Is this you?" tap after it). Same source as the
     // Contacts card badge: company insurance records plus filed insurance-named
     // person certificates, judged against today's date. "expiring_soon" still
     // passes; "expired" or "none" does NOT let them on site: the check-in is
@@ -1039,15 +1128,8 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
     }
 
     // Store the registered record's own spelling so every visit reads the same.
-    const storedName = match.names.find(n => normText(n) === normText(workerName)) ?? (confirmedKey ? match.names[0] : workerName.trim());
+    const storedName = fullName(match) || workerName.trim();
     const storedCompany = match.company ?? companyName.trim();
-
-    // Held responses use 403 so a page loaded before this change still shows
-    // "Access Denied" rather than a success screen.
-    const heldResponse = (row: { id: string; checkedInAt: Date }, reason: string) => res.status(403).json({
-      error: "check_in_held", reason: "no_valid_insurance", held: true, holdReason: reason,
-      holdToken: signHoldToken(qr.projectId, row.id), checkedInAt: row.checkedInAt.toISOString(),
-    });
 
     if (holdReason) {
       // Already waiting at the gate today? Same request, not a second one.
@@ -1055,20 +1137,12 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
         eq(siteCheckinsTable.projectId, qr.projectId),
         eq(siteCheckinsTable.holdStatus, "pending"),
         eq(siteCheckinsTable.personKey, match.key),
+        sql`${siteCheckinsTable.holdReason} <> 'unverified'`,
       )).orderBy(desc(siteCheckinsTable.checkedInAt)))[0];
       if (pending && siteDateStr(pending.checkedInAt, clock.tz) === today) { heldResponse(pending, pending.holdReason ?? holdReason); return; }
     }
 
-    const ext = path.extname(req.file.originalname || ".jpg").toLowerCase() || ".jpg";
-    const filename = `checkin-${randomUUID()}${ext}`;
-    const key = objectKey(filename);
-    await getBucket().file(key).save(req.file.buffer, {
-      contentType: req.file.mimetype,
-      resumable: false,
-      metadata: { metadata: { originalName: req.file.originalname } },
-    });
-
-    const photoUrl = `/api/uploads/${filename}`;
+    const photoUrl = await saveCheckinPhoto(req.file);
     const id = generateId();
     const [checkin] = await db.insert(siteCheckinsTable).values({
       id,
@@ -1093,7 +1167,7 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
     // the notification fan-out.
     void notifySuccessfulCheckin(qr.projectId, storedName, storedCompany, checkin.checkedInAt, checkin.id);
 
-    res.status(201).json({ ...publicCheckin(checkin, clock), deviceToken: signDeviceToken(qr.projectId, storedName, storedCompany) });
+    res.status(201).json({ ...publicCheckin(checkin, clock), deviceToken: signDeviceToken(qr.projectId, storedName, storedCompany, match.key) });
   } catch (err) {
     res.status(500).json({ error: "server_error", message: "Check-in failed" });
   }
@@ -1112,37 +1186,50 @@ router.get("/site/:token/hold", async (req: Request, res: Response) => {
     res.json({
       status: row.holdStatus ?? "approved",
       decidedAt: row.holdDecidedAt ? row.holdDecidedAt.toISOString() : null,
-      ...(row.holdStatus === "approved" ? { deviceToken: signDeviceToken(qr.projectId, row.workerName, row.companyName ?? "") } : {}),
+      ...(row.holdStatus === "approved" ? { deviceToken: signDeviceToken(qr.projectId, row.workerName, row.companyName ?? "", row.personKey) } : {}),
     });
   } catch {
     res.status(500).json({ error: "server_error", message: "Failed to check" });
   }
 });
 
-// Authenticated: an admin / PM / project approver decides a held check-in.
-// Approve needs a reason; both are recorded (who, when, why) on the row and in
-// the activity log. Only a PENDING hold can be decided.
+// A held check-in is decided by an admin / PM / project approver (dashboard)
+// or the site manager / cover (portal, #124). Approve needs a reason; both are
+// recorded (who, when, why) on the row and in the activity log. Only a PENDING
+// hold can be decided. Approving an "unverified" hold files the mobile number
+// they gave on the record they named, if that record has none yet.
+async function decideHold(projectId: string, checkinId: string, actorId: string, body: { decision?: unknown; note?: unknown } | undefined, req: Request): Promise<Outcome> {
+  const project = (await db.select({ id: projectsTable.id, companyId: projectsTable.companyId }).from(projectsTable).where(eq(projectsTable.id, projectId)).limit(1))[0];
+  if (!project) return { status: 404, body: { error: "not_found", message: "Project not found" } };
+  const decision = body?.decision;
+  if (decision !== "approve" && decision !== "refuse") return { status: 400, body: { error: "validation_error", message: "decision must be approve or refuse" } };
+  const note = typeof body?.note === "string" ? body.note.trim().slice(0, 500) : "";
+  if (decision === "approve" && !note) return { status: 400, body: { error: "validation_error", message: "Give a reason for letting them on site" } };
+  const now = new Date();
+  const [row] = await db.update(siteCheckinsTable)
+    .set({ holdStatus: decision === "approve" ? "approved" : "refused", holdDecidedBy: actorId, holdDecidedAt: now, holdNote: note || null })
+    .where(and(eq(siteCheckinsTable.id, checkinId), eq(siteCheckinsTable.projectId, project.id), eq(siteCheckinsTable.holdStatus, "pending")))
+    .returning();
+  if (!row) return { status: 409, body: { error: "not_pending", message: "This check-in has already been decided, or isn't waiting for a decision" } };
+  let phoneFiled = false;
+  if (decision === "approve" && row.holdReason === "unverified" && row.personKey && row.typedPhone) {
+    phoneFiled = await fillPhoneForKey(row.personKey, row.typedPhone).catch(() => false);
+  }
+  void logActivity({ userId: actorId, projectId: project.id, companyId: project.companyId, section: "check-ins", action: "update", itemType: "site_checkin", itemId: row.id, metadata: { insuranceHold: decision === "approve" ? "approved" : "refused", reason: row.holdReason, note: note || null, worker: row.workerName, ...(phoneFiled ? { mobileFiled: true } : {}) }, req });
+  return { status: 200, body: { ...serializeCheckin(row, await siteClock(project.id)), phoneFiled } };
+}
+
 router.post("/projects/:projectId/checkins/:id/hold-decision", authenticate, allow(projectApprover()), async (req: Request, res: Response) => {
   try {
-    const project = await db.select({ id: projectsTable.id, companyId: projectsTable.companyId }).from(projectsTable)
+    const project = await db.select({ id: projectsTable.id }).from(projectsTable)
       .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId))).limit(1);
     if (!project[0]) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
     if (!(await isProjectApprover(req.user!, project[0].id))) {
       res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can decide this" });
       return;
     }
-    const decision = req.body?.decision;
-    if (decision !== "approve" && decision !== "refuse") { res.status(400).json({ error: "validation_error", message: "decision must be approve or refuse" }); return; }
-    const note = typeof req.body?.note === "string" ? req.body.note.trim().slice(0, 500) : "";
-    if (decision === "approve" && !note) { res.status(400).json({ error: "validation_error", message: "A reason is required to let someone on site without valid insurance" }); return; }
-    const now = new Date();
-    const [row] = await db.update(siteCheckinsTable)
-      .set({ holdStatus: decision === "approve" ? "approved" : "refused", holdDecidedBy: req.user!.id, holdDecidedAt: now, holdNote: note || null })
-      .where(and(eq(siteCheckinsTable.id, req.params.id), eq(siteCheckinsTable.projectId, project[0].id), eq(siteCheckinsTable.holdStatus, "pending")))
-      .returning();
-    if (!row) { res.status(409).json({ error: "not_pending", message: "This check-in has already been decided, or isn't waiting for a decision" }); return; }
-    void logActivity({ userId: req.user!.id, projectId: project[0].id, companyId: project[0].companyId, section: "check-ins", action: "update", itemType: "site_checkin", itemId: row.id, metadata: { insuranceHold: decision === "approve" ? "approved" : "refused", reason: row.holdReason, note: note || null, worker: row.workerName }, req });
-    res.json(serializeCheckin(row, await siteClock(project[0].id)));
+    const out = await decideHold(project[0].id, req.params.id, req.user!.id, req.body, req);
+    res.status(out.status).json(out.body);
   } catch (err) {
     req.log.error({ err }, "Hold decision error");
     res.status(500).json({ error: "server_error", message: "Failed to save the decision" });
@@ -1207,6 +1294,96 @@ router.get("/projects/:projectId/checkins", authenticate, allow(projectApprover(
     res.json(checkins.map(c => serializeCheckin(c, clock)));
   } catch (err) {
     res.status(500).json({ error: "server_error", message: "Failed to load check-ins" });
+  }
+});
+
+// ==========================================================================
+// TEAM PORTAL SITE REGISTER (#124)
+// The designated site manager and anyone given PM cover on the project run
+// the gate from their phone when the PM isn't there: who is on site now (the
+// fire roll), who is waiting at the gate, approve / refuse, sign someone out.
+// Nothing else (permits, documents, milestones, close-out) moves to the portal.
+// ==========================================================================
+const requireSiteRegister = declarePolicy(async function (req: Request, res: Response, next: import("express").NextFunction): Promise<void> {
+  try {
+    if (!req.portalProjectId || !(await canSeeSiteRegister(req.user!.id, req.portalProjectId))) {
+      res.status(403).json({ error: "forbidden", message: "Only the site manager or someone covering for the project manager can see the site register." });
+      return;
+    }
+    next();
+  } catch (err) {
+    req.log.error({ err }, "requireSiteRegister failed");
+    res.status(500).json({ error: "server_error", message: "Permission check failed." });
+  }
+}, "siteManagerOrCover");
+const siteRegisterGuards = [authenticate, requirePortalSession, requirePortalMember, requireSiteRegister];
+
+router.get("/portal/site-register", ...siteRegisterGuards, async (req: Request, res: Response) => {
+  try {
+    const projectId = req.portalProjectId!;
+    const project = (await db.select({ name: projectsTable.name, companyId: projectsTable.companyId }).from(projectsTable).where(eq(projectsTable.id, projectId)).limit(1))[0];
+    const clock = await siteClock(projectId);
+    const now = new Date();
+    // Today's site day can't start more than ~36h back; open rows are kept regardless.
+    const rows = await db.select().from(siteCheckinsTable).where(and(
+      eq(siteCheckinsTable.projectId, projectId),
+      or(sql`${siteCheckinsTable.checkedInAt} > now() - interval '48 hours'`, isNull(siteCheckinsTable.checkedOutAt)),
+    )).orderBy(desc(siteCheckinsTable.checkedInAt));
+    const registered = await loadRegistered(projectId);
+    const byKey = new Map(registered.map(r => [r.key, r]));
+    const seen = new Set<string>();
+    const onSite: object[] = [], notSignedOut: object[] = [], held: object[] = [];
+    for (const r of rows) {
+      const st = checkinState(r, clock, now);
+      const base = { id: r.id, workerName: r.workerName, companyName: r.companyName, checkedInAt: r.checkedInAt.toISOString() };
+      if (st.presence === "held") {
+        const claimed = r.personKey ? byKey.get(r.personKey) : undefined;
+        const insurance = claimed?.insuranceSubId && project ? await subcontractorInsuranceStatus(claimed.insuranceSubId, project.companyId) : null;
+        held.push({
+          ...base, holdReason: r.holdReason, why: holdReasonText(r.holdReason),
+          typedPhone: r.holdReason === "unverified" ? r.typedPhone : null,
+          claimed: claimed ? { name: fullName(claimed) || r.workerName, company: claimed.company } : null,
+          insurance, photoUrl: signUploadUrl(r.photoUrl),
+        });
+        continue;
+      }
+      if (st.presence !== "on_site" && st.presence !== "auto_closed_today") continue;
+      // One person, one line (newest row wins).
+      const ident = r.personKey ?? `${normText(r.workerName)}|${normText(r.companyName ?? "")}`;
+      if (seen.has(ident)) continue;
+      seen.add(ident);
+      (st.presence === "on_site" ? onSite : notSignedOut).push({ ...base, autoClosedAt: st.autoClosedAt });
+    }
+    const byName = (a: any, b: any) => String(a.workerName).localeCompare(String(b.workerName));
+    onSite.sort(byName); notSignedOut.sort(byName);
+    res.json({
+      projectId, projectName: project?.name ?? "", generatedAt: now.toISOString(),
+      siteTimeZone: clock.tz, siteTzLabel: siteTzLabel(clock.tz, now), siteDate: siteDateStr(now, clock.tz),
+      onSite, notSignedOut, held,
+    });
+  } catch (err) {
+    req.log.error({ err }, "Portal site register error");
+    res.status(500).json({ error: "server_error", message: "Failed to load the site register" });
+  }
+});
+
+router.post("/portal/site-register/:id/sign-out", ...siteRegisterGuards, async (req: Request, res: Response) => {
+  try {
+    const out = await managerSignOut(req.portalProjectId!, req.params.id, req.user!.id, req.body?.note, req);
+    res.status(out.status).json(out.body);
+  } catch (err) {
+    req.log.error({ err }, "Portal sign-out error");
+    res.status(500).json({ error: "server_error", message: "Failed to sign out" });
+  }
+});
+
+router.post("/portal/site-register/:id/hold-decision", ...siteRegisterGuards, async (req: Request, res: Response) => {
+  try {
+    const out = await decideHold(req.portalProjectId!, req.params.id, req.user!.id, req.body, req);
+    res.status(out.status).json(out.body);
+  } catch (err) {
+    req.log.error({ err }, "Portal hold decision error");
+    res.status(500).json({ error: "server_error", message: "Failed to save the decision" });
   }
 });
 

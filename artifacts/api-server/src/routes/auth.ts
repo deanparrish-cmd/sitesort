@@ -7,7 +7,7 @@ import { companiesTable, usersTable, subcontractorsTable } from "@workspace/db/s
 import { eq, and } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { generateToken, authenticate } from "../middlewares/auth";
-import { allow, ANY_MEMBER, COMPANY_ADMIN, COMPANY_MANAGER } from "../lib/authz";
+import { allow, ANY_MEMBER, COMPANY_ADMIN, COMPANY_MANAGER, isDashboardRole } from "../lib/authz";
 import { getMemberships, membershipRole, addMembership, resolveActiveCompany } from "../lib/memberships";
 import { blockToken } from "../lib/token-blocklist";
 import { isLockedOut, recordFailedAttempt, clearAttempts } from "../lib/login-attempts";
@@ -165,10 +165,10 @@ router.post("/auth/login", async (req, res) => {
     // A user can belong to several companies. Land them in their home company
     // (or first membership) and let them switch in-app. companyId/role in the
     // token always reflect the ACTIVE company.
-    // Only DASHBOARD roles open the dashboard (#117). A subcontractor-role
-    // membership never does: they use the Team Portal. If every membership is
-    // subcontractor, refuse like a portal-only account.
-    const memberships = (await getMemberships(user.id)).filter(m => m.role !== "subcontractor");
+    // Only DASHBOARD roles (admin, PM) open the dashboard (#117, #123). A
+    // subcontractor or site worker membership never does: they use the Team
+    // Portal. If no membership is a dashboard role, refuse like a portal-only account.
+    const memberships = (await getMemberships(user.id)).filter(m => isDashboardRole(m.role));
     if (memberships.length === 0) {
       res.status(403).json({ error: "use_portal", message: "This account uses the Team Portal. Please use the portal login link your project manager shared with you." });
       return;
@@ -198,13 +198,13 @@ router.post("/auth/switch-company", authenticate, allow(ANY_MEMBER), async (req,
 
     const role = await membershipRole(req.user!.id, companyId);
     if (role === null) { res.status(403).json({ error: "forbidden", message: "You are not a member of that company." }); return; }
-    if (role === "subcontractor") { res.status(403).json({ error: "use_portal", message: "You join that company's projects through the Team Portal." }); return; }
+    if (!isDashboardRole(role)) { res.status(403).json({ error: "use_portal", message: "You join that company's projects through the Team Portal." }); return; }
 
     const users = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
     const user = users[0];
     if (!user) { res.status(404).json({ error: "not_found", message: "User not found" }); return; }
 
-    const memberships = await getMemberships(user.id);
+    const memberships = (await getMemberships(user.id)).filter(m => isDashboardRole(m.role));
     const token = generateToken({ id: user.id, companyId, role, email: user.email });
     res.json({
       user: { id: user.id, companyId, email: user.email, name: user.name, role, phone: user.phone ?? null, createdAt: user.createdAt.toISOString(), lastActiveAt: user.lastActiveAt?.toISOString() ?? null },
@@ -239,7 +239,7 @@ router.get("/auth/me", authenticate, allow(ANY_MEMBER), async (req, res) => {
     const user = users[0];
     // companyId/role reflect the ACTIVE company (from the token), not the home
     // company row — so a switched user sees the right context.
-    const memberships = await getMemberships(user.id);
+    const memberships = (await getMemberships(user.id)).filter(m => isDashboardRole(m.role));
     res.json({ id: user.id, companyId: req.user!.companyId, email: user.email, name: user.name, role: req.user!.role, phone: user.phone ?? null, avatarUrl: user.avatarUrl ?? null, hasPin: !!user.pinHash, emailNotifications: user.emailNotifications, memberships, createdAt: user.createdAt.toISOString(), lastActiveAt: user.lastActiveAt?.toISOString() ?? null, platformAdmin: user.platformAdmin });
   } catch (err) {
     req.log.error({ err }, "Get me error");

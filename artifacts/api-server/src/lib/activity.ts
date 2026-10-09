@@ -24,6 +24,7 @@ export const PORTAL_SECTIONS = [
   "daily-report",
   "messages",
   "my-documents",
+  "site-register",
 ] as const;
 
 export type PortalSection = (typeof PORTAL_SECTIONS)[number];
@@ -48,6 +49,7 @@ export const SECTION_LABELS: Record<string, string> = {
   general: "General",
   "plant-materials": "Plant & Materials",
   "daily-report": "Daily Report",
+  "site-register": "Site Register",
   messages: "Messages",
 };
 

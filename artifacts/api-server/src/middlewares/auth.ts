@@ -5,7 +5,7 @@ import { logActivity } from "../lib/activity";
 import { db } from "@workspace/db";
 import { usersTable, companyMembersTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
-import { currentRole } from "../lib/authz";
+import { currentRole, isDashboardRole } from "../lib/authz";
 
 if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET environment variable is required");
 const JWT_SECRET: string = process.env.JWT_SECRET;
@@ -53,7 +53,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     // the portal_sessions table (revoked on reset), so this check targets
     // dashboard tokens; the 60s cache keeps the hot path off the DB.
     if (typeof payload.iat === "number" && !payload.sid) {
-      const invalidBefore = await getSessionsInvalidBefore(payload.id);
+      const invalidBefore = (await getAccountState(payload.id)).invalidBefore;
       if (invalidBefore && payload.iat * 1000 < invalidBefore.getTime()) {
         res.status(401).json({ error: "unauthorized", message: "Session expired. Please sign in again." });
         return;
@@ -66,20 +66,27 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     // immediately instead of when the 30-day token expires. Portal tokens are
     // governed by portal_sessions (revoked server-side), so skip them here.
     if (payload.scope !== "portal") {
+      // A portal-only account (or a deleted, scrubbed one) never uses a
+      // dashboard token, even one issued before it became portal-only (#123).
+      if ((await getAccountState(payload.id)).portalOnly) {
+        res.status(403).json({ error: "use_portal", message: "This account uses the Team Portal. Please use the portal login link your project manager shared with you." });
+        return;
+      }
       if (!(await hasMembership(payload.id, payload.companyId))) {
         res.status(401).json({ error: "unauthorized", message: "You no longer have access to this company. Please sign in again." });
         return;
       }
       // The role in a dashboard token is a 30-day-old snapshot. Use the CURRENT
       // role from company_members (60s cache, busted on change) everywhere, so
-      // a demotion applies at once (#117). A subcontractor role never opens the
-      // dashboard, even with an older token: they use the Team Portal.
+      // a demotion applies at once (#117). Only admin / PM open the dashboard;
+      // subcontractors and site workers use the Team Portal, even with an older
+      // token (#123).
       const role = await currentRole(payload.id, payload.companyId);
-      if (!role || role === "subcontractor") {
+      if (!isDashboardRole(role)) {
         res.status(403).json({ error: "use_portal", message: "This account uses the Team Portal. Please use the portal login link your project manager shared with you." });
         return;
       }
-      payload.role = role;
+      payload.role = role!;
     }
 
     req.user = payload;
@@ -114,19 +121,21 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
   }
 }
 
-// 60s per-user cache over users.sessions_invalid_before so the reset-
-// invalidation check doesn't hit the DB on every authenticated request.
-// completePasswordReset busts the local entry so the cutoff is immediate
-// in-process; other instances converge within the TTL.
-const invalidBeforeCache = new Map<string, { value: Date | null; fetchedAt: number }>();
+// 60s per-user cache over users.sessions_invalid_before + portal_only so the
+// reset-invalidation and portal-only checks don't hit the DB on every
+// authenticated request. completePasswordReset busts the local entry so the
+// cutoff is immediate in-process; other instances converge within the TTL.
+// A missing user reads as portal-only, so a token for a deleted account is dead.
+type AccountState = { invalidBefore: Date | null; portalOnly: boolean };
+const invalidBeforeCache = new Map<string, { value: AccountState; fetchedAt: number }>();
 const INVALID_BEFORE_TTL_MS = 60 * 1000;
 
-async function getSessionsInvalidBefore(userId: string): Promise<Date | null> {
+async function getAccountState(userId: string): Promise<AccountState> {
   const cached = invalidBeforeCache.get(userId);
   if (cached && Date.now() - cached.fetchedAt < INVALID_BEFORE_TTL_MS) return cached.value;
-  const rows = await db.select({ sessionsInvalidBefore: usersTable.sessionsInvalidBefore })
+  const rows = await db.select({ sessionsInvalidBefore: usersTable.sessionsInvalidBefore, portalOnly: usersTable.portalOnly })
     .from(usersTable).where(eq(usersTable.id, userId)).limit(1);
-  const value = rows[0]?.sessionsInvalidBefore ?? null;
+  const value = { invalidBefore: rows[0]?.sessionsInvalidBefore ?? null, portalOnly: rows[0] ? rows[0].portalOnly : true };
   invalidBeforeCache.set(userId, { value, fetchedAt: Date.now() });
   return value;
 }

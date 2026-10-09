@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "@workspace/db";
 import { eq, inArray, or } from "drizzle-orm";
 import { usersTable, companyMembersTable, userNotesTable } from "@workspace/db/schema";
-import { seedCompany, cleanupFixtures, api, login, type Fixture } from "./helpers";
+import { seedCompany, cleanupFixtures, api, login, dashboardToken, type Fixture } from "./helpers";
 
 /**
  * #121: notes & reminders about a member of staff are a manager's private
@@ -27,7 +27,7 @@ describe("staff notes are private to managers", () => {
     const add = async (uid: string, role: string) => {
       await db.insert(usersTable).values({ id: uid, companyId: co.companyId, email: `${uid}@example.test`, passwordHash: owner.passwordHash, name: `Name ${uid}`, role, emailVerified: true });
       await db.insert(companyMembersTable).values({ id: randomUUID(), userId: uid, companyId: co.companyId, role });
-      return login(`${uid}@example.test`);
+      return dashboardToken(uid, co.companyId, role, `${uid}@example.test`);
     };
     tok.pm = await add(id.pm, "project_manager");
     tok.worker = await add(id.worker, "site_worker");

@@ -6,7 +6,7 @@ import {
   siteCheckinsTable, qrCodesTable, subcontractorsTable, peopleTable, projectMembersTable,
   insuranceRecordsTable, notificationsTable, usersTable, companyMembersTable, projectsTable,
 } from "@workspace/db/schema";
-import { seedCompany, cleanupFixtures, api, login, API_BASE, type Fixture } from "./helpers";
+import { seedCompany, cleanupFixtures, api, login, dashboardToken, API_BASE, type Fixture } from "./helpers";
 import { checkinState, runCheckinAutoClose } from "../src/routes/qr";
 import { closeDueAfter, wallClockUtc } from "../src/lib/site-clock";
 
@@ -15,6 +15,7 @@ import { closeDueAfter, wallClockUtc } from "../src/lib/site-clock";
  * portal login included), a failed check HOLDS the check-in for an admin / PM
  * decision that is recorded, expiry is judged against today, and the end-of-day
  * close never makes anyone vanish from today's register.
+ * #124: people are identified by the mobile number on their record.
  */
 const JPG = Buffer.from("/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=", "base64");
 const dayStr = (offsetDays: number) => new Date(Date.now() + offsetDays * 86_400_000).toISOString().slice(0, 10);
@@ -33,11 +34,11 @@ describe("site check-in insurance gate, hold + override, auto-close", () => {
   const workerUserId = `tusr-worker-${sfx}`;
   const portalPersonId = `tper-portal-${sfx}`;
 
-  async function checkIn(name: string, company: string, extra: Record<string, string> = {}) {
+  const PHONE = { pat: "07700 900101", una: "07700900102", lee: "+44 7700 900103", cara: "07700-900-104", owner: "07700900105" };
+  async function checkIn(phone: string, extra: Record<string, string> = {}) {
     const fd = new FormData();
     fd.append("photo", new Blob([JPG], { type: "image/jpeg" }), "c.jpg");
-    fd.append("workerName", name);
-    fd.append("companyName", company);
+    fd.append("phone", phone);
     for (const [k, v] of Object.entries(extra)) fd.append(k, v);
     const res = await fetch(`${API_BASE}/site/${qrToken}/checkin`, { method: "POST", body: fd });
     return { status: res.status, json: await res.json().catch(() => null) };
@@ -55,9 +56,9 @@ describe("site check-in insurance gate, hold + override, auto-close", () => {
 
     // Three cards: no insurance, insurance that lapsed last week, valid insurance.
     await db.insert(subcontractorsTable).values([
-      { id: uninsuredSub, companyId: co.companyId, companyName: "Uninsured Ltd", contactName: "Una Nobody", contactEmail: `una-${sfx}@example.test` },
-      { id: expiredSub, companyId: co.companyId, companyName: "Lapsed Ltd", contactName: "Lee Lapsed", contactEmail: `lee-${sfx}@example.test` },
-      { id: insuredSub, companyId: co.companyId, companyName: "Covered Ltd", contactName: "Cara Covered", contactEmail: `cara-${sfx}@example.test` },
+      { id: uninsuredSub, companyId: co.companyId, companyName: "Uninsured Ltd", contactName: "Una Nobody", contactEmail: `una-${sfx}@example.test`, contactPhone: PHONE.una },
+      { id: expiredSub, companyId: co.companyId, companyName: "Lapsed Ltd", contactName: "Lee Lapsed", contactEmail: `lee-${sfx}@example.test`, contactPhone: PHONE.lee },
+      { id: insuredSub, companyId: co.companyId, companyName: "Covered Ltd", contactName: "Cara Covered", contactEmail: `cara-${sfx}@example.test`, contactPhone: PHONE.cara },
     ]);
     await db.insert(insuranceRecordsTable).values([
       { id: randomUUID(), subcontractorId: expiredSub, type: "public_liability", certificateUrl: "/api/uploads/x.pdf", expiryDate: dayStr(-7) } as any,
@@ -70,17 +71,18 @@ describe("site check-in insurance gate, hold + override, auto-close", () => {
     // A subcontractor who joined the Team Portal: a USER account whose project
     // membership points at a person on the UNINSURED card. This was the bypass.
     await db.insert(usersTable).values({ id: portalUserId, companyId: co.companyId, email: `portal-${sfx}@example.test`, passwordHash: owner.passwordHash, name: "Pat Portal", role: "subcontractor", emailVerified: true, portalOnly: true });
-    await db.insert(peopleTable).values({ id: portalPersonId, companyId: co.companyId, name: "Pat Portal", email: `portal-${sfx}@example.test`, subcontractorId: uninsuredSub, userId: portalUserId });
+    await db.insert(peopleTable).values({ id: portalPersonId, companyId: co.companyId, name: "Pat Portal", email: `portal-${sfx}@example.test`, phone: PHONE.pat, subcontractorId: uninsuredSub, userId: portalUserId });
     await db.insert(projectMembersTable).values({ id: randomUUID(), projectId: co.projectId, userId: portalUserId, personId: portalPersonId } as any);
 
     // A site worker in the same company (not allowed to decide holds or change the site clock).
     await db.insert(usersTable).values({ id: workerUserId, companyId: co.companyId, email: `worker-${sfx}@example.test`, passwordHash: owner.passwordHash, name: "Wes Worker", role: "site_worker", emailVerified: true });
     await db.insert(companyMembersTable).values({ id: randomUUID(), userId: workerUserId, companyId: co.companyId, role: "site_worker" });
     await db.insert(projectMembersTable).values({ id: randomUUID(), projectId: co.projectId, userId: workerUserId } as any);
-    worker = await login(`worker-${sfx}@example.test`);
+    worker = await dashboardToken(workerUserId, co.companyId, "site_worker", `worker-${sfx}@example.test`);
 
     // The owner is an in-house member of the project too.
     await db.insert(projectMembersTable).values({ id: randomUUID(), projectId: co.projectId, userId: co.userId } as any);
+    await db.update(usersTable).set({ phone: PHONE.owner }).where(eq(usersTable.id, co.userId));
   });
 
   afterAll(async () => {
@@ -98,7 +100,7 @@ describe("site check-in insurance gate, hold + override, auto-close", () => {
   });
 
   it("a subcontractor's own portal login no longer skips the insurance check: held, not on site", async () => {
-    const r = await checkIn("Pat Portal", "Uninsured Ltd");
+    const r = await checkIn(PHONE.pat);
     expect(r.status).toBe(403);
     expect(r.json.error).toBe("check_in_held");
     expect(r.json.holdReason).toBe("insurance_none");
@@ -109,34 +111,40 @@ describe("site check-in insurance gate, hold + override, auto-close", () => {
     expect(await count()).toBe(0);
   });
 
-  it("they can't pass as in-house staff by giving this company's name", async () => {
-    const r = await checkIn("Pat Portal", ownCompany);
+  it("an unknown number can't pass as in-house staff by giving this company's name: held as unverified", async () => {
+    const r = await checkIn("07700900199", { workerName: "Pat Portal", companyName: ownCompany });
     expect(r.status).toBe(403);
-    expect(r.json.reason).toBe("not_registered");
+    expect(r.json.error).toBe("check_in_held");
+    expect(r.json.holdReason).toBe("unverified");
+    const rows = (await rowsFor("Pat Portal")).filter(x => x.holdReason === "unverified");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].personKey).toBeNull(); // not a registered name + company
+    expect(await count()).toBe(0);
+    await db.delete(siteCheckinsTable).where(eq(siteCheckinsTable.id, rows[0].id));
   });
 
   it("a repeat attempt while waiting returns the same hold, not a second row", async () => {
-    const r = await checkIn("Pat Portal", "Uninsured Ltd");
+    const r = await checkIn(PHONE.pat);
     expect(r.json.error).toBe("check_in_held");
     expect(await rowsFor("Pat Portal")).toHaveLength(1);
   });
 
   it("the contact-card path: no insurance holds; insurance that lapsed last week holds as expired; valid passes", async () => {
-    expect((await checkIn("Una Nobody", "Uninsured Ltd")).json.holdReason).toBe("insurance_none");
-    const lapsed = await checkIn("Lee Lapsed", "Lapsed Ltd");
+    expect((await checkIn(PHONE.una)).json.holdReason).toBe("insurance_none");
+    const lapsed = await checkIn(PHONE.lee);
     expect(lapsed.status).toBe(403);
     expect(lapsed.json.holdReason).toBe("insurance_expired");
-    const ok = await checkIn("Cara Covered", "Covered Ltd");
+    const ok = await checkIn(PHONE.cara);
     expect(ok.status).toBe(201);
     expect(ok.json.presence).toBe("on_site");
     expect(ok.json.siteTzLabel).toBe("UK time");
     expect(await count()).toBe(1);
   });
 
-  it("in-house staff check in without a subcontractor insurance check, using their own company name", async () => {
-    const owner = (await db.select().from(usersTable).where(eq(usersTable.id, co.userId)))[0];
-    const r = await checkIn(owner.name, ownCompany);
+  it("in-house staff check in by their mobile number without a subcontractor insurance check", async () => {
+    const r = await checkIn(PHONE.owner);
     expect(r.status).toBe(201);
+    expect(r.json.companyName).toBe(ownCompany);
   });
 
   it("only an admin / PM decides; approving needs a reason and is recorded; the worker's page sees it", async () => {
@@ -156,7 +164,7 @@ describe("site check-in insurance gate, hold + override, auto-close", () => {
     expect((await api(path, { method: "POST", token: admin, body: { decision: "refuse" } })).status).toBe(409);
 
     // The worker's page polls with its hold token.
-    const first = await checkIn("Una Nobody", "Uninsured Ltd"); // repeat -> same pending hold, fresh token
+    const first = await checkIn(PHONE.una); // repeat -> same pending hold, fresh token
     const status = await api(`/site/${qrToken}/hold?holdToken=${encodeURIComponent(first.json.holdToken)}`);
     expect(status.json.status).toBe("pending");
     const una = (await rowsFor("Una Nobody"))[0];

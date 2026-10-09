@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "@workspace/db";
 import { eq, and, inArray, desc } from "drizzle-orm";
 import { usersTable, companyMembersTable, projectMembersTable, projectsTable, companiesTable, activityLogTable } from "@workspace/db/schema";
-import { seedCompany, cleanupFixtures, api, login, type Fixture } from "./helpers";
+import { seedCompany, cleanupFixtures, api, login, dashboardToken, type Fixture } from "./helpers";
 import { generateToken } from "../src/middlewares/auth";
 
 /**
@@ -37,8 +37,7 @@ describe("project edit and create: role checks below the buttons", () => {
       await db.insert(companyMembersTable).values({ id: randomUUID(), userId: id, companyId: co.companyId, role });
       if (onProject) await db.insert(projectMembersTable).values({ id: randomUUID(), projectId: co.projectId, userId: id, isProjectManager: !!onProject.isProjectManager } as any);
       // Subcontractors can't log in to the dashboard (#117): use a leftover-style signed token.
-      if (role === "subcontractor") return generateToken({ id, companyId: co.companyId, role, email: `${id}@example.test` });
-      return login(`${id}@example.test`);
+      return dashboardToken(id, co.companyId, role, `${id}@example.test`);
     };
     admin = await login(co.email);
     pm = await addUser(ids.pm, "project_manager", {});
@@ -92,10 +91,11 @@ describe("project edit and create: role checks below the buttons", () => {
     expect((await patch(otherAdmin, { name: "Hijacked" })).status).toBe(404);
   });
 
-  it("company admin, company PM and per-project PM cover can edit", async () => {
+  it("company admin and company PM can edit; a site worker with per-project PM cover can't (Team Portal only, #123)", async () => {
     expect((await patch(admin, { name: "Renamed by admin" })).status).toBe(200);
     expect((await patch(pm, { name: "Renamed by PM" })).status).toBe(200);
-    expect((await patch(cover, { address: "2 Right Road" })).status).toBe(200);
+    expect((await patch(cover, { address: "1 Wrong Road" })).status).toBe(403);
+    expect((await patch(pm, { address: "2 Right Road" })).status).toBe(200);
     expect((await project()).address).toBe("2 Right Road");
   });
 
@@ -116,10 +116,11 @@ describe("project edit and create: role checks below the buttons", () => {
     await db.update(projectsTable).set({ status: "complete" }).where(eq(projectsTable.id, co.projectId)); // as the close-out does
     expect((await patch(worker, { status: "active" })).status).toBe(403);
     expect((await project()).status).toBe("complete");
-    const reopen = await patch(cover, { status: "active" });
+    expect((await patch(cover, { status: "active" })).status).toBe(403);
+    const reopen = await patch(pm, { status: "active" });
     expect(reopen.status).toBe(200);
     const last = await lastLog();
-    expect(last.userId).toBe(ids.cover);
+    expect(last.userId).toBe(ids.pm);
     expect(JSON.parse(last.metadata!)).toEqual({ status: { from: "complete", to: "active" } });
   });
 

@@ -63,9 +63,13 @@ export function bustRoleCache(userId: string, companyId: string): void {
 
 // ---- Policies ---------------------------------------------------------------------
 export const COMPANY_ROLES = ["admin", "project_manager", "site_worker", "subcontractor"] as const;
-// Roles a DASHBOARD login may hold. Anyone outside the company (subcontractors,
-// contractors) joins through the Team Portal only (#117), never the dashboard.
-export const DASHBOARD_ROLES = ["admin", "project_manager", "site_worker"] as const;
+// Roles a DASHBOARD login may hold: company admins and project managers only.
+// Subcontractors (#117) and site workers (#123) join through the Team Portal,
+// never the dashboard.
+export const DASHBOARD_ROLES = ["admin", "project_manager"] as const;
+export function isDashboardRole(role: string | null | undefined): boolean {
+  return !!role && (DASHBOARD_ROLES as readonly string[]).includes(role);
+}
 
 export function companyRole(...roles: string[]): Policy {
   return { name: `companyRole(${roles.join("|")})`, check: (_req, role) => !!role && roles.includes(role) };

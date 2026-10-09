@@ -3132,6 +3132,17 @@ export const PortalLoginResponse = zod.object({
       hasPin: zod
         .boolean()
         .describe("Whether this member has already set their sign-off PIN."),
+      mobile: zod
+        .string()
+        .nullish()
+        .describe(
+          "The member's mobile number on file (signs them in at the site gate).",
+        ),
+      canSeeSiteRegister: zod
+        .boolean()
+        .describe(
+          "The project's designated site manager, or a member given PM cover on this project. Sees the on-site register and decides gate holds.",
+        ),
     })
     .optional(),
   projects: zod
@@ -3234,6 +3245,17 @@ export const AcceptPortalInviteResponse = zod.object({
       hasPin: zod
         .boolean()
         .describe("Whether this member has already set their sign-off PIN."),
+      mobile: zod
+        .string()
+        .nullish()
+        .describe(
+          "The member's mobile number on file (signs them in at the site gate).",
+        ),
+      canSeeSiteRegister: zod
+        .boolean()
+        .describe(
+          "The project's designated site manager, or a member given PM cover on this project. Sees the on-site register and decides gate holds.",
+        ),
     })
     .optional(),
   projects: zod
@@ -3295,6 +3317,17 @@ export const PortalSwitchProjectResponse = zod.object({
       hasPin: zod
         .boolean()
         .describe("Whether this member has already set their sign-off PIN."),
+      mobile: zod
+        .string()
+        .nullish()
+        .describe(
+          "The member's mobile number on file (signs them in at the site gate).",
+        ),
+      canSeeSiteRegister: zod
+        .boolean()
+        .describe(
+          "The project's designated site manager, or a member given PM cover on this project. Sees the on-site register and decides gate holds.",
+        ),
     })
     .optional(),
   projects: zod
@@ -3367,6 +3400,17 @@ export const GetPortalContextResponse = zod.object({
     hasPin: zod
       .boolean()
       .describe("Whether this member has already set their sign-off PIN."),
+    mobile: zod
+      .string()
+      .nullish()
+      .describe(
+        "The member's mobile number on file (signs them in at the site gate).",
+      ),
+    canSeeSiteRegister: zod
+      .boolean()
+      .describe(
+        "The project's designated site manager, or a member given PM cover on this project. Sees the on-site register and decides gate holds.",
+      ),
   }),
   sections: zod.array(zod.string()),
 });

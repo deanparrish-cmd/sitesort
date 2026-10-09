@@ -5,7 +5,7 @@ import { db } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { usersTable, companyMembersTable, qrCodesTable, projectMembersTable } from "@workspace/db/schema";
 import {
-  seedCompany, cleanupFixtures, api, login, TEST_PASSWORD, type Fixture,
+  seedCompany, cleanupFixtures, api, login, dashboardToken, TEST_PASSWORD, type Fixture,
   seedCrossTenantPortalMember, portalLogin, cleanupPortalMember, type PortalMemberFixture,
 } from "./helpers";
 
@@ -31,7 +31,7 @@ describe("site QR code access", () => {
     await db.insert(usersTable).values({ id, companyId: co.companyId, email, passwordHash: await bcrypt.hash(TEST_PASSWORD, 10), name: `T ${role}`, role, emailVerified: true, portalOnly: false });
     await db.insert(companyMembersTable).values({ id: `test-mem-${id}`, userId: id, companyId: co.companyId, role });
     extraUserIds.push(id);
-    return login(email);
+    return dashboardToken(id, co.companyId, role, email);
   }
 
   beforeAll(async () => {

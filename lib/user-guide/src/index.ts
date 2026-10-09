@@ -69,7 +69,7 @@ export const PM_GUIDE: GuideSection[] = [
       {
         heading: "Then add them to a project",
         body: [
-          "Open a project's Team tab and use Add to Project to bring in anyone already in your Contacts directory. Your own staff (admins, project managers, site workers) are managed separately under In House Team.",
+          "Open a project's Team tab and use Add to Project to bring in anyone already in your Contacts directory. Your own dashboard users (admins and project managers) are managed separately under In House Team. Site workers use the Team Portal: invite them from the project.",
         ],
       },
       {
@@ -176,15 +176,30 @@ export const PM_GUIDE: GuideSection[] = [
         body: [
           "The project's Check-Ins tab (and the Check-Ins page) opens with Currently on site: everyone who has signed in and not yet signed out, so you can use it for a roll call.",
           "The public site board (the page the QR code opens) does not show how many people are on site. Use Currently on site here for the real list.",
-          "In your notifications and the dashboard activity feed, tap a Check-in, Signed out or Check-in blocked item to open its detail: the photo (tap to enlarge), name, company, in and out times, a link to Currently on site, and for a blocked attempt exactly what they typed and why it was blocked. Sign-outs appear in the feed as well, so a sign-out between two check-ins is easy to see.",
+          "In your notifications and the dashboard activity feed, tap a Check-in, Signed out or Waiting at the gate item to open its detail: the photo (tap to enlarge), name, company, in and out times and a link to Currently on site. Sign-outs appear in the feed as well, so a sign-out between two check-ins is easy to see.",
           "At the site close time (20:00 unless you change it), anyone who hasn't signed out is closed automatically. That is not a sign-out: they stop counting as on site, but they stay on Currently on site for the rest of that day, marked Closed automatically, not signed out, so nobody working late drops off the roll call. You get one notification listing who didn't sign out. Once you know they have left, choose Sign out beside their name, add a note (for example, left site at 17:00) and confirm. Admins and project managers can do this, including for earlier days.",
         ],
       },
       {
-        heading: "Insurance at the gate",
+        heading: "Signing in with a mobile number",
         body: [
-          "When someone from a subcontractor checks in, their insurance is checked against the date, whether they type their details, tap a suggestion, use a remembered phone or have a Team Portal login. If there is no insurance on file, or it has expired, they are not signed in: they wait at the gate and you get a Waiting at the gate notification.",
-          "Open it, or Currently on site, and choose Let on site or Refuse. Letting someone on without valid insurance needs a reason (for example, cert seen on his phone, upload promised today). Your name, the time and the reason are recorded. Their phone updates by itself. If nobody decides by the site close time, the request lapses and they are not on site.",
+          "People sign in at the gate with their mobile number. If it's on file for someone on the project, they see their first name, surname initial and company, confirm it's them and take the photo. Nobody can look up names or see who is registered.",
+          "Most people need a mobile on their record for this. Add it on their contact or team record, or they can add their own in the Team Portal under Settings.",
+          "If the number isn't on file, they give their name and company and wait at the gate for you to let them on. When you do, the number is saved to the record with that name and company (if it had none), so next time it signs them straight in.",
+        ],
+      },
+      {
+        heading: "Waiting at the gate",
+        body: [
+          "Someone waits at the gate when their mobile isn't on file, or when they're from a subcontractor with no insurance on file or insurance that has expired. They are not signed in and not on the roll call. You get a Waiting at the gate notification.",
+          "Open it, or Currently on site, and choose Let on site or Refuse. Letting someone on needs a reason (for example, checked photo ID, or cert seen on his phone, upload promised today). Your name, the time and the reason are recorded. Their phone updates by itself. If nobody decides by the site close time, the request lapses and they are not on site.",
+        ],
+      },
+      {
+        heading: "When you're away: site manager and cover",
+        body: [
+          "The project's site manager, and anyone you give PM cover on the project's Team tab, can run the gate from the Team Portal: the Site Register shows who is on site now, who is waiting at the gate (let on or refuse), and lets them sign someone out with a note. They get a phone notification when someone is waiting, if they've turned notifications on.",
+          "Set this up before you need it: name the site manager in Edit Details, or tick PM cover, and make sure they have accepted their Team Portal invite.",
         ],
       },
       {
@@ -377,7 +392,8 @@ export const WORKER_GUIDE: GuideSection[] = [
       {
         heading: "Scan the site board",
         body: [
-          "Scan the QR code posted at the site entrance. Complete your check-in (your details are matched against the project's contacts), then take a photo when prompted. It's automatically stamped with your name, the date and the project.",
+          "Scan the QR code posted at the site entrance and enter your mobile number. If it's on file, you see your first name, surname initial and company: choose Yes, that's me, then take a photo when prompted. It's automatically stamped with your name, the date and the project.",
+          "If your number isn't on file, enter your name and company. You wait at the gate until your site manager lets you on, and from then on your number signs you straight in. You can add or change your own number in the Team Portal under Settings.",
         ],
         callout: {
           tone: "tip",
@@ -388,15 +404,39 @@ export const WORKER_GUIDE: GuideSection[] = [
         heading: "Sign out when you leave",
         body: [
           "Scan the same QR code again. On the phone you signed in with, you will see Sign out of site straight away; choose it and your time is recorded. When you are signed out, the same phone offers Sign in as your name and company, so you only need to take the photo. Choose Not me if it is someone else's phone.",
-          "On a different phone, choose Already on site and leaving? Sign out, enter your name and company, and the mobile number on your contact record. If the number doesn't match, or there is no number on your record, ask your site manager to sign you out. Nobody can see who else is signed in, and nobody can sign you out by typing your name.",
-          "When signing in, if your name or company is a close match to someone registered on the project (for example 'I cloud' for 'Amy I Cloud'), you are asked Did you mean...? to confirm rather than being turned away. Suggestions show only a first name, a surname initial and the company (for example Amy P, Amy I Cloud); full names are never shown on the public page. The company box suggests companies already on this project, and you can still type a new one.",
+          "On a different phone, choose Already on site and leaving? Sign out and enter the mobile number you signed in with. If it isn't recognised, ask your site manager to sign you out. Nobody can see who else is signed in, and nobody can sign you out by typing your name.",
           "You can sign in and out as many times as you need in a day, for example for lunch. Each visit is recorded separately. If you forget to sign out, tell your site manager so they can do it for you.",
         ],
       },
       {
         heading: "If you're asked to wait",
         body: [
-          "If your insurance isn't on file or has expired, you are not signed in. The page says Please wait: not cleared yet, and your site manager is told. Don't go on site until the page says You're signed in; it updates by itself. Send your insurance certificate to your site manager so it doesn't happen next time.",
+          "If your mobile number isn't on file, or your insurance isn't on file or has expired, you are not signed in. The page says Please wait: not cleared yet, and your site manager is told. Don't go on site until the page says You're signed in; it updates by itself. Send your insurance certificate to your site manager so it doesn't happen next time.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "site-register",
+    title: "Site Register (site managers and cover)",
+    steps: [
+      {
+        heading: "Who is on site",
+        body: [
+          "If you're the project's site manager, or covering for the project manager, Home shows a Site Register tile. It lists everyone on site now, for a roll call or a fire, and anyone who didn't sign out before the site closed.",
+          "Check Last updated before you count heads. With signal it refreshes every 30 seconds. With no signal you see the copy saved on your phone, marked No signal, with the time it was taken. Open the Site Register once a day with signal so the saved copy is today's.",
+          "If you've been signed out, the sign-in screen has Open the saved site register, which works with no signal.",
+        ],
+        callout: {
+          tone: "tip",
+          text: "Turn on notifications in Settings so you hear when someone is waiting at the gate.",
+        },
+      },
+      {
+        heading: "People waiting at the gate",
+        body: [
+          "Someone waits at the gate when their mobile isn't on file, or their insurance is missing or out of date. You see their photo, name, company and the number they gave. Choose Let on site with a reason (for example, checked photo ID), or Refuse. They aren't on the roll call until you let them on.",
+          "Use Sign out beside a name, with a note, for someone who left without signing out. You need signal for all of these.",
         ],
       },
     ],
@@ -505,7 +545,7 @@ export const FAQ: FaqItem[] = [
   {
     id: "check-in-how",
     question: "How do I check in on site?",
-    answer: "Scan the QR code posted at the site entrance, complete your check-in details, then take the photo when prompted. It's stamped automatically. No portal login is needed for this step.",
+    answer: "Scan the QR code posted at the site entrance, enter your mobile number, confirm it's you, then take the photo when prompted. It's stamped automatically. No portal login is needed for this step.",
     audience: "worker",
   },
   {

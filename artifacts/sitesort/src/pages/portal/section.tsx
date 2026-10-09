@@ -51,6 +51,7 @@ import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { WORKER_GUIDE, workerFaq } from "@workspace/user-guide";
 import { GuideSectionGrid, GuideFaqAccordion } from "@/components/user-guide-view";
 import { PortalTile, PortalLinkRow, PortalButton, type TileTheme } from "@/components/portal-ui";
+import { SiteRegisterView } from "@/components/portal-site-register";
 
 // Wayfinding colour per Home-screen quick-access tile — a distinct hue per
 // destination, never one of the green/amber/red status colours (those are
@@ -65,6 +66,7 @@ const TILE_THEME: Record<string, TileTheme> = {
   "plant-materials": "amber",
   "daily-report": "green",
   "site-tasks": "rose",
+  "site-register": "sky",
   settings: "slate",
 };
 
@@ -599,6 +601,11 @@ function HomeQuickAccess({ member }: { member: Record<string, unknown> | undefin
   const siteTasksUnseen = grantedTasks.reduce((sum, k) => sum + (counts[k] ?? 0), 0);
   return (
     <div className="grid grid-cols-2 gap-3">
+      {!!member?.canSeeSiteRegister && (
+        <div className="col-span-2">
+          <PortalTile href="/portal/site-register" label="Site Register: who's on site" Icon={SECTION_NAV.find(s => s.key === "site-register")!.Icon} theme={TILE_THEME["site-register"]} />
+        </div>
+      )}
       {tiles.map(t => (
         <PortalTile key={t.key} href={`/portal/${t.key}`} label={t.label} Icon={t.Icon} theme={TILE_THEME[t.key] ?? "slate"} unseen={counts[t.key] ?? 0} />
       ))}
@@ -846,6 +853,9 @@ function HomeView() {
     <div className="space-y-6">
       {/* New project invitations first — the one thing that must not be missed. */}
       <PendingInvitesCard />
+
+      {/* No mobile on file yet: ask for it (it's their sign-in at the gate). */}
+      <MobileCard prompt />
 
       {/* Quick access — big coloured tiles to where a worker needs to go. */}
       <HomeQuickAccess member={ctx?.member as Record<string, unknown> | undefined} />
@@ -2277,6 +2287,45 @@ function AddToHomeScreenCard() {
 }
 
 // Portal member Settings — notification preferences (per member, per device).
+// The member's own mobile number (#124): it's what signs them in at the site
+// gate, so they can add or correct it themselves. `prompt` is the Home-screen
+// version, shown only while no number is on file.
+function MobileCard({ prompt = false }: { prompt?: boolean }) {
+  const { data: ctx } = useGetPortalContext();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const current = ctx?.member.mobile ?? null;
+  const [value, setValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  useEffect(() => { setValue(current ?? ""); }, [current]);
+  if (!ctx || (prompt && current)) return null;
+  const save = async () => {
+    setBusy(true); setErr("");
+    try {
+      const r = await fetch("/api/portal/me/mobile", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mobile: value }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { setErr(d.message ?? "That didn't save. Try again."); return; }
+      toast({ title: "Mobile number saved", description: "Use it to sign in at the site gate." });
+      await queryClient.invalidateQueries({ queryKey: getGetPortalContextQueryKey() });
+    } catch { setErr("No connection. Try again."); } finally { setBusy(false); }
+  };
+  return (
+    <Card className={cn("space-y-3", prompt && "border-2 border-primary/40")} data-testid={prompt ? "card-add-mobile" : "card-mobile"}>
+      <div className="min-w-0">
+        <p className="text-base font-bold">{prompt ? "Add your mobile number" : "Your mobile number"}</p>
+        <p className="text-sm text-muted-foreground">It signs you in at the site gate. Without it, you wait for the site manager to let you on.</p>
+      </div>
+      <label htmlFor={prompt ? "portal-mobile-prompt" : "portal-mobile"} className="sr-only">Mobile number</label>
+      <input id={prompt ? "portal-mobile-prompt" : "portal-mobile"} type="tel" inputMode="tel" autoComplete="tel" value={value}
+        onChange={e => setValue(e.target.value)} placeholder="e.g. 07700 900123"
+        className="w-full min-w-0 border-2 border-input rounded-xl px-4 min-h-14 text-base bg-background" />
+      {err && <p className="text-sm text-destructive font-semibold">{err}</p>}
+      <PortalButton onClick={save} disabled={busy || !value.trim() || value.trim() === current}>{busy ? "Saving" : "Save number"}</PortalButton>
+    </Card>
+  );
+}
+
 function SettingsView() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -2312,6 +2361,7 @@ function SettingsView() {
           <p className="text-sm text-muted-foreground capitalize truncate">{ctx?.member.role}</p>
         </div>
       </Card>
+      <MobileCard />
       <div>
         <SectionTitle>Notifications</SectionTitle>
         <Card>
@@ -2353,7 +2403,7 @@ function SettingsView() {
           (navigation-cleanup redesign: utility items live in one consistent
           place, not competing boxes on Home). */}
       <PortalLinkRow href="/portal/help" label="Help & User Guide" Icon={HelpCircle} theme="sky" />
-      <PortalButton tone="danger-outline" icon={<LogOut className="w-5 h-5" />} onClick={() => portalLogout(setLocation)}>
+      <PortalButton tone="danger-outline" icon={<LogOut className="w-5 h-5" />} onClick={() => portalLogout(setLocation, { byUser: true })}>
         Log out
       </PortalButton>
     </div>
@@ -2489,8 +2539,17 @@ function renderSection(section: string) {
     case "plant-materials": return <PlantMaterialsView />;
     case "daily-report": return <DailyReportView />;
     case "messages": return <MessagesView />;
+    case "site-register": return <SiteRegisterSection />;
     default: return <Empty>Section not found.</Empty>;
   }
+}
+
+// #124: the fire roll + gate decisions for the site manager / PM cover. Works
+// from the copy saved on the phone when there's no signal (the context call
+// may have failed too, so it doesn't wait for it).
+function SiteRegisterSection() {
+  const { data: ctx } = useGetPortalContext();
+  return <SiteRegisterView projectId={ctx?.project?.id ?? null} />;
 }
 
 // Legacy section URLs from the old multi-tab portal: team/progress show the

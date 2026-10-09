@@ -18,11 +18,13 @@ export async function ensureSchema(): Promise<void> {
         CONSTRAINT company_members_user_company_unique UNIQUE (user_id, company_id)
       )
     `);
-    await pool.query(`
-      INSERT INTO company_members (id, user_id, company_id, role)
-      SELECT gen_random_uuid()::text, id, company_id, role FROM users
-      ON CONFLICT (user_id, company_id) DO NOTHING
-    `);
+    // The one-off #57 backfill (one membership per user from users.company_id +
+    // users.role) used to run here on EVERY boot. It brought removed members
+    // back after each restart (removal leaves users.company_id unchanged) and
+    // gave deleted, scrubbed accounts their old admin role in the company they
+    // were moved to (#123). Every account-creating path adds its own membership
+    // now, so the backfill is gone for good.
+
     // Tracks which expiry-reminder emails (30/21/14/7/1 days + expired daily) have
     // been sent, so the daily job fires each milestone exactly once. New table →
     // must exist in prod before the reminder job runs, hence created here too.
@@ -748,6 +750,7 @@ export async function ensureSchema(): Promise<void> {
     await pool.query(`ALTER TABLE photos ADD COLUMN IF NOT EXISTS daily_report_date text`);
     // Check-in identity link + structured notification detail (check-in notifications open a detail view).
     await pool.query(`ALTER TABLE site_checkins ADD COLUMN IF NOT EXISTS person_key text`);
+    await pool.query(`ALTER TABLE site_checkins ADD COLUMN IF NOT EXISTS typed_phone text`);
     await pool.query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS metadata jsonb`);
     // Insurance hold + manager override, automatic close at the site close time,
     // and the per-project site clock (#114).
@@ -771,6 +774,20 @@ export async function ensureSchema(): Promise<void> {
         (SELECT u.company_id FROM users u WHERE u.id = n.author_id))
       WHERE n.company_id IS NULL`);
 
+    // #123: site workers are Team Portal only. An account whose memberships are
+    // all site worker / subcontractor (no admin or PM anywhere) becomes
+    // portal-only, and any dashboard session it holds ends. Accounts with no
+    // membership at all (removed staff) are left alone so they can be re-added.
+    // Idempotent: converted accounts no longer match.
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS sessions_invalid_before timestamp`);
+    const converted = await pool.query(`
+      UPDATE users u SET portal_only = true, sessions_invalid_before = now()
+      WHERE u.portal_only = false
+        AND EXISTS (SELECT 1 FROM company_members m WHERE m.user_id = u.id)
+        AND NOT EXISTS (SELECT 1 FROM company_members m WHERE m.user_id = u.id AND m.role IN ('admin', 'project_manager'))
+      RETURNING u.id
+    `);
+    if (converted.rowCount) logger.info({ userIds: converted.rows.map(r => r.id) }, "ensureSchema: site worker accounts moved to portal-only");
     logger.info("ensureSchema: user_notes.company_id + site_checkins hold/auto-close + projects site clock + site_checkins.person_key + notifications.metadata ready + site_checkins sign-out cols + photos.daily_report_date ready + company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols + portal_shares + portal_sessions + push_subscriptions + pending_pushes + subcontractor_documents + subcontractors/people.archived_at + people.first_name/last_name + subcontractors.contact_first_name/contact_last_name + project_members write-permission cols + activity_log.metadata + photos closure/updated_at cols + plant_items/plant_item_attachments/plant_item_distributions + people.is_primary_contact + person_certifications + primary-contact/project_members backfill + project_members.can_edit_daily_report + messages.project_id + photos archive/photo-removal cols + primary-contact name self-heal ready + photos/daily_reports submitted_at+submitted_by + plant_items portal_draft cols + portal_submission_notes table + submitted-backfill ready + users.platform_admin + Dean/Amy seeded ready + pin_audit_log table ready + documents.require_pin_signoff ready + projects.site_manager_id ready + project_members.is_project_manager ready + accepted-invite/project_members.person_id self-heal ready + failed_stripe_cancellations table ready + users.role_title ready");
   } catch (err) {
     // Don't crash the server — membership lookups fall back to the home company.

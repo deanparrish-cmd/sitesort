@@ -108,7 +108,7 @@ export default function TeamPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [addName, setAddName] = useState("");
   const [addEmail, setAddEmail] = useState("");
-  const [addRole, setAddRole] = useState("site_worker");
+  const [addRole, setAddRole] = useState("project_manager");
   const [addRoleTitle, setAddRoleTitle] = useState("");
   const [addPhone, setAddPhone] = useState("");
   const [addSubmitting, setAddSubmitting] = useState(false);
@@ -170,7 +170,7 @@ export default function TeamPage() {
   const [editTarget, setEditTarget] = useState<TeamMember | null>(null);
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
-  const [editRole, setEditRole] = useState("site_worker");
+  const [editRole, setEditRole] = useState("project_manager");
   const [editRoleTitle, setEditRoleTitle] = useState("");
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState("");
@@ -268,7 +268,7 @@ export default function TeamPage() {
   }
 
   async function openAdd() {
-    setAddName(""); setAddEmail(""); setAddRole("site_worker"); setAddRoleTitle(""); setAddPhone(""); setAddError(""); setAddSuccess("");
+    setAddName(""); setAddEmail(""); setAddRole("project_manager"); setAddRoleTitle(""); setAddPhone(""); setAddError(""); setAddSuccess("");
     setSelectedProjects(new Set());
     setAddOpen(true);
     const res = await fetch("/api/projects", { headers: authHeaders() });
@@ -621,14 +621,14 @@ export default function TeamPage() {
                 onChange={e => setAddRole(e.target.value)}
                 className="w-full h-11 rounded-lg border-2 border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:border-primary"
               >
-                <option value="admin">Admin</option>
                 <option value="project_manager">Project Manager</option>
-                <option value="site_worker">Site Worker</option>
+                <option value="admin">Admin</option>
               </select>
+              <p className="text-xs text-muted-foreground mt-1.5">Site workers and subcontractors don't use the dashboard. Invite them to a project's Team Portal instead.</p>
             </div>
             <div>
               <label className="text-sm font-medium mb-1.5 block">Job Title <span className="text-muted-foreground text-xs">(optional)</span></label>
-              <Input value={addRoleTitle} onChange={e => setAddRoleTitle(e.target.value)} placeholder="e.g. Site Manager, QS, Labourer" />
+              <Input value={addRoleTitle} onChange={e => setAddRoleTitle(e.target.value)} placeholder="e.g. Contracts Manager, QS" />
             </div>
             <div>
               <label className="text-sm font-medium mb-1.5 block">Phone <span className="text-muted-foreground text-xs">(optional)</span></label>
@@ -842,12 +842,12 @@ export default function TeamPage() {
             >
               <option value="admin">Admin</option>
               <option value="project_manager">Project Manager</option>
-              <option value="site_worker">Site Worker</option>
+              {editTarget?.role === "site_worker" && <option value="site_worker" disabled>Site Worker (Team Portal only)</option>}
             </select>
           </div>
           <div>
             <label className="text-sm font-medium mb-1.5 block">Job Title <span className="text-muted-foreground text-xs">(optional)</span></label>
-            <Input value={editRoleTitle} onChange={e => setEditRoleTitle(e.target.value)} placeholder="e.g. Site Manager, QS, Labourer" />
+            <Input value={editRoleTitle} onChange={e => setEditRoleTitle(e.target.value)} placeholder="e.g. Contracts Manager, QS" />
           </div>
           <p className="text-xs text-muted-foreground">Email can't be changed here. It's this person's login.</p>
           {editError && <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{editError}</p>}
