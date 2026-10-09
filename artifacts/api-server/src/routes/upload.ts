@@ -4,7 +4,7 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { authenticate } from "../middlewares/auth";
 import { allow, INTERNAL_STAFF } from "../lib/authz";
-import { getBucket, objectKey } from "../lib/gcs";
+import { findUpload, uploadFile } from "../lib/gcs";
 import { isRetiredUpload, shareableUploads, verifyUploadSignature } from "../lib/signed-uploads";
 
 const router: IRouter = Router();
@@ -53,8 +53,7 @@ router.post("/upload", authenticate, allow(INTERNAL_STAFF), (req: Request, res: 
   try {
     const ext = path.extname(req.file.originalname).toLowerCase();
     const filename = `${randomUUID()}${ext}`;
-    const key = objectKey(filename);
-    const file = getBucket().file(key);
+    const file = uploadFile(filename);
 
     await file.save(req.file.buffer, {
       contentType: req.file.mimetype,
@@ -120,7 +119,7 @@ router.get("/uploads/:filename", async (req: Request, res: Response) => {
   }
 
   try {
-    const file = getBucket().file(objectKey(filename));
+    const file = await findUpload(filename);
     const [exists] = await file.exists();
     if (!exists) {
       res.status(404).json({ error: "not_found" });

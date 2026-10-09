@@ -7,8 +7,9 @@ import { removeInvoices } from "../src/lib/invoice-removal";
 
 /**
  * The removed invoices feature is finished off at boot: its attachment files
- * are deleted from storage, then the table is dropped. Afterwards they're gone
- * and every other upload still serves.
+ * are deleted from storage, then the table is dropped. Afterwards every other
+ * upload still serves. Storage deletes are faked: outside the deployed app the
+ * storage client refuses them (shared production bucket), which is tested too.
  */
 const ORIGIN = API_BASE.replace(/\/api$/, "");
 
@@ -44,10 +45,19 @@ describe("invoice removal", () => {
     expect((await fetch(`${ORIGIN}${otherFile}`)).status).toBe(200);
   });
 
+  it("outside the deployed app the real delete is refused, and nothing is dropped", async () => {
+    // Workspace and production share one bucket: tests never delete files.
+    await expect(removeInvoices()).rejects.toThrow(/disabled outside the deployed app/);
+    const t = await db.execute(sql`SELECT count(*)::int AS n FROM invoices`);
+    expect((t.rows[0] as any).n).toBe(1);
+    expect((await fetch(`${ORIGIN}${invoiceFile}`)).status).not.toBe(404); // still in storage
+  });
+
   it("removal deletes the files, then drops the table", async () => {
-    const r = await removeInvoices();
-    expect(r?.files).toBeGreaterThanOrEqual(1);
-    expect((await fetch(`${ORIGIN}${invoiceFile}`)).status).toBe(404); // really deleted from storage
+    const deleted: string[] = [];
+    const r = await removeInvoices(async f => { deleted.push(f); });
+    expect(r?.files).toBe(1);
+    expect(deleted).toEqual([invoiceFile.match(/uploads\/([^?]+)/)![1]]);
     const t = await db.execute(sql`SELECT to_regclass('public.invoices') IS NOT NULL AS present`);
     expect((t.rows[0] as any).present).toBe(false);
     const col = await db.execute(sql`SELECT 1 FROM information_schema.columns WHERE table_name = 'messages' AND column_name = 'invoice_id'`);

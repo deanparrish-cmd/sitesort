@@ -6,6 +6,7 @@ import { allow, COMPANY_ADMIN } from "../lib/authz";
 import { db } from "@workspace/db";
 import { companiesTable, usersTable, notificationsTable, companyMembersTable, stripeWebhookEventsTable } from "@workspace/db/schema";
 import { generateId } from "../lib/id";
+import { stripeSecretKey } from "../lib/environment";
 
 const router = Router();
 
@@ -35,9 +36,9 @@ type PlanId = keyof typeof PLANS;
 // Billing (checkout, portal, cancel, resume) is the company admin's (#118),
 // matching the Settings > Billing tab.
 router.post("/billing/checkout", authenticate, allow(COMPANY_ADMIN), async (req, res) => {
-  const apiKey = process.env.STRIPE_SECRET_KEY;
+  const apiKey = stripeSecretKey();
   if (!apiKey) {
-    res.status(500).json({ error: "STRIPE_SECRET_KEY is not set" });
+    res.status(500).json({ error: "Stripe is not configured here" });
     return;
   }
 
@@ -279,9 +280,9 @@ async function handlePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
 }
 
 router.post("/billing/webhook", async (req, res) => {
-  const apiKey = process.env.STRIPE_SECRET_KEY;
+  const apiKey = stripeSecretKey();
   if (!apiKey) {
-    res.status(500).json({ error: "STRIPE_SECRET_KEY is not set" });
+    res.status(500).json({ error: "Stripe is not configured here" });
     return;
   }
 
@@ -393,9 +394,9 @@ async function processWebhookEvent(stripe: Stripe, event: Stripe.Event): Promise
 }
 
 router.post("/billing/portal", authenticate, allow(COMPANY_ADMIN), async (req, res) => {
-  const apiKey = process.env.STRIPE_SECRET_KEY;
+  const apiKey = stripeSecretKey();
   if (!apiKey) {
-    res.status(500).json({ error: "STRIPE_SECRET_KEY is not set" });
+    res.status(500).json({ error: "Stripe is not configured here" });
     return;
   }
 
@@ -439,8 +440,8 @@ async function getActiveSubscription(stripe: Stripe, customerId: string): Promis
 }
 
 router.post("/billing/cancel", authenticate, allow(COMPANY_ADMIN), async (req, res) => {
-  const apiKey = process.env.STRIPE_SECRET_KEY;
-  if (!apiKey) { res.status(500).json({ error: "STRIPE_SECRET_KEY is not set" }); return; }
+  const apiKey = stripeSecretKey();
+  if (!apiKey) { res.status(500).json({ error: "Stripe is not configured here" }); return; }
 
   const stripe = new Stripe(apiKey);
   const user = req.user!;
@@ -474,8 +475,8 @@ router.post("/billing/cancel", authenticate, allow(COMPANY_ADMIN), async (req, r
 });
 
 router.post("/billing/resume", authenticate, allow(COMPANY_ADMIN), async (req, res) => {
-  const apiKey = process.env.STRIPE_SECRET_KEY;
-  if (!apiKey) { res.status(500).json({ error: "STRIPE_SECRET_KEY is not set" }); return; }
+  const apiKey = stripeSecretKey();
+  if (!apiKey) { res.status(500).json({ error: "Stripe is not configured here" }); return; }
 
   const stripe = new Stripe(apiKey);
   const user = req.user!;

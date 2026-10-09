@@ -12,7 +12,7 @@ import jwt from "jsonwebtoken";
 import multer from "multer";
 import path from "path";
 import { randomUUID } from "crypto";
-import { getBucket, objectKey } from "../lib/gcs";
+import { uploadFile } from "../lib/gcs";
 import { signUploadUrl } from "../lib/signed-uploads";
 import { siteDateStr, siteTime, siteTzLabel, closeDueAfter, safeTz, DEFAULT_SITE_CLOSE } from "../lib/site-clock";
 import { isProjectApprover } from "../lib/project-authority";
@@ -1006,7 +1006,7 @@ router.get("/notifications/:notificationId/checkin", authenticate, allow(ANY_MEM
 async function saveCheckinPhoto(file: Express.Multer.File): Promise<string> {
   const ext = path.extname(file.originalname || ".jpg").toLowerCase() || ".jpg";
   const filename = `checkin-${randomUUID()}${ext}`;
-  await getBucket().file(objectKey(filename)).save(file.buffer, {
+  await uploadFile(filename).save(file.buffer, {
     contentType: file.mimetype,
     resumable: false,
     metadata: { metadata: { originalName: file.originalname } },

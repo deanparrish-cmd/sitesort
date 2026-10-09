@@ -3,12 +3,13 @@ import { db } from "@workspace/db";
 import { pushSubscriptionsTable } from "@workspace/db/schema";
 import { and, eq } from "drizzle-orm";
 import { logger } from "./logger";
+import { vapidKeys } from "./environment";
 
 // VAPID identity for Web Push. Keys live in Replit Secrets (VAPID_PUBLIC_KEY /
 // VAPID_PRIVATE_KEY) — never committed. If unset, push is DISABLED gracefully:
 // endpoints still work, sends are no-ops, and the frontend hides the enable UI.
-const PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY ?? "";
-const PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY ?? "";
+// Outside the deployed app the workspace's own pair is used (lib/environment.ts).
+const { publicKey: PUBLIC_KEY, privateKey: PRIVATE_KEY } = vapidKeys();
 const SUBJECT = process.env.VAPID_SUBJECT ?? "mailto:support@sitesort.co.uk";
 
 let configured = false;

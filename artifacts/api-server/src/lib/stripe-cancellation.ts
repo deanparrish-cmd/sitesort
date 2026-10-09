@@ -3,6 +3,7 @@ import type { Logger } from "pino";
 import { db } from "@workspace/db";
 import { failedStripeCancellationsTable } from "@workspace/db/schema";
 import { generateId } from "./id";
+import { stripeSecretKey } from "./environment";
 
 // Cancels every live (active/trialing) Stripe subscription for a customer.
 // Used both when granting beta access (so they can never be charged again)
@@ -21,7 +22,7 @@ export async function cancelLiveStripeSubscriptions(
   stripeCustomerId: string | null,
   log: Logger,
 ): Promise<{ cancelled: number; failed: number }> {
-  const apiKey = process.env.STRIPE_SECRET_KEY;
+  const apiKey = stripeSecretKey();
   if (!apiKey || !stripeCustomerId) return { cancelled: 0, failed: 0 };
 
   const stripe = new Stripe(apiKey);

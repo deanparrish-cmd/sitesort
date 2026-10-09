@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import path from "path";
 import multer from "multer";
 import type { Request, Response, NextFunction } from "express";
-import { getBucket, objectKey } from "./gcs";
+import { uploadFile } from "./gcs";
 
 // Shared upload path for every portal-scoped WRITE endpoint (My Documents,
 // Log an Issue, Plant & Materials attachments). Portal-scoped JWTs are
@@ -56,7 +56,7 @@ export function memberUploadSingle(fieldName: string) {
 export async function saveMemberUpload(file: Express.Multer.File, uploadedBy: string, companyId: string): Promise<{ fileUrl: string; fileSize: number }> {
   const ext = path.extname(file.originalname).toLowerCase();
   const filename = `${randomUUID()}${ext}`;
-  await getBucket().file(objectKey(filename)).save(file.buffer, {
+  await uploadFile(filename).save(file.buffer, {
     contentType: file.mimetype,
     resumable: false,
     metadata: {

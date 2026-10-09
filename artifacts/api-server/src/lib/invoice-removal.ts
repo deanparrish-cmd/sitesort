@@ -1,6 +1,6 @@
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
-import { getBucket, objectKey } from "./gcs";
+import { productionUpload } from "./gcs";
 import { logger } from "./logger";
 
 // The invoices feature was removed (bebe715) and its attachment links have
@@ -11,7 +11,7 @@ import { logger } from "./logger";
 // as it was (links still 410) and the next boot tries again. Idempotent: once
 // the table is gone this is a single no-op query.
 export async function removeInvoices(
-  deleteObject: (filename: string) => Promise<void> = f => getBucket().file(objectKey(f)).delete({ ignoreNotFound: true }).then(() => {}),
+  deleteObject: (filename: string) => Promise<void> = f => productionUpload(f).delete({ ignoreNotFound: true }).then(() => {}),
 ): Promise<{ files: number; rows: number } | null> {
   const present = await db.execute(sql`SELECT to_regclass('public.invoices') IS NOT NULL AS present`);
   if (!(present.rows[0] as { present?: boolean } | undefined)?.present) return null;

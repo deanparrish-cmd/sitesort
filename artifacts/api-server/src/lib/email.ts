@@ -1,4 +1,6 @@
 import { Resend } from "resend";
+import { IS_DEPLOYED } from "./environment";
+import { logger } from "./logger";
 import { WORKER_GUIDE } from "@workspace/user-guide";
 
 const FROM = "SiteSort <noreply@mail.sitesort.co.uk>";
@@ -28,6 +30,13 @@ export function isReservedTestAddress(to: string): boolean {
 function send(opts: { to: string; subject: string; html: string; text: string; from?: string }) {
   if (isReservedTestAddress(opts.to)) {
     return Promise.resolve({ data: { id: "skipped-reserved-test-domain" }, error: null });
+  }
+  // Outside the deployed app no email ever leaves: the workspace database holds
+  // real people's addresses (copied rows), and it once sent them certificate
+  // reminders. Logged so a dev can see what would have gone.
+  if (!IS_DEPLOYED) {
+    logger.info({ subject: opts.subject }, "email suppressed outside the deployed app");
+    return Promise.resolve({ data: { id: "suppressed-not-deployed" }, error: null });
   }
   return resend().emails.send({
     from: opts.from ?? FROM,

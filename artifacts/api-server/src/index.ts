@@ -7,6 +7,7 @@ import { ensureSchema } from "./lib/ensure-schema";
 import { removeInvoices } from "./lib/invoice-removal";
 import { scheduleCheckinAutoClose } from "./routes/qr";
 import { checkDbConnection } from "@workspace/db";
+import { IS_DEPLOYED, environmentSummary } from "./lib/environment";
 
 // Process-level safety net. Previously an unhandled rejection or an uncaught
 // exception (e.g. a pg pool idle-client error) would kill the process, and
@@ -66,10 +67,15 @@ async function start(): Promise<void> {
   // into a multi-second window where login could hit nothing at all.
   const server = app.listen(port, "0.0.0.0", () => {
     logger.info({ port, host: "0.0.0.0" }, "Server listening");
-    schedulePermitReminders();
-    scheduleDailyReports();
-    schedulePushFlush();
-    scheduleCheckinAutoClose(logger);
+    logger.info({ environment: environmentSummary() }, "environment");
+    // Scheduled jobs email, push and change live records: deployed app only.
+    // In the workspace they ran against copied rows and emailed real people.
+    if (IS_DEPLOYED) {
+      schedulePermitReminders();
+      scheduleDailyReports();
+      schedulePushFlush();
+      scheduleCheckinAutoClose(logger);
+    }
   });
   server.on("error", (err) => {
     logger.error({ err }, "HTTP server error (failed to bind / listen)");
@@ -81,7 +87,8 @@ async function start(): Promise<void> {
   // checks the DB live per-request (not off this), so it isn't blocked by this.
   await logDbStatus();
   await withTimeout(ensureSchema(), 30_000, "ensureSchema");
-  await withTimeout(
+  // Deletes files from storage: deployed app only (lib/gcs.ts refuses anyway).
+  if (IS_DEPLOYED) await withTimeout(
     removeInvoices().catch(err => logger.error({ err }, "invoice removal failed; table kept, will retry next boot")),
     60_000, "removeInvoices",
   );

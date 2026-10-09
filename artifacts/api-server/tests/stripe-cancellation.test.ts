@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { failedStripeCancellationsTable } from "@workspace/db/schema";
 
 // Mocks the `stripe` package itself, so this test NEVER makes a real network
-// call to Stripe regardless of which key (live or test) is in STRIPE_SECRET_KEY
+// call to Stripe regardless of which key (live or test) is in the environment
 // — safer than hitting a real test-mode key, since it can't accidentally touch
 // the live one. list/cancel are set up per-test below.
 const listMock = vi.fn();
@@ -26,7 +26,7 @@ describe("cancelLiveStripeSubscriptions", () => {
   beforeEach(() => {
     listMock.mockReset();
     cancelMock.mockReset();
-    process.env.STRIPE_SECRET_KEY = "sk_test_fake_for_mocked_test";
+    process.env.STRIPE_TEST_SECRET_KEY = "sk_test_fake_for_mocked_test"; // workspace reads the test key only
   });
 
   afterEach(async () => {

@@ -30,7 +30,7 @@ import { issueCategoryFilter } from "../lib/accountability";
 import { canonicalPersonName } from "../lib/person-name";
 import { PORTAL_SECTIONS } from "../lib/activity";
 import { PortalLoginBody, AcceptPortalInviteBody } from "@workspace/api-zod";
-import { getBucket, objectKey } from "../lib/gcs";
+import { findUpload } from "../lib/gcs";
 import { memberUploadSingle, saveMemberUpload } from "../lib/portal-upload";
 import { isReportLocked, upsertManagerReport, contributorsForReport, hasManagerContent, londonDateStr, listReportPhotos, addReportPhotos } from "../lib/daily-reports";
 import { notesFor, addNote } from "../lib/portal-submission-notes";
@@ -1774,7 +1774,6 @@ router.get("/portal/drawings/download-all", ...portalGuards, async (req, res) =>
     : [];
   if (rows.length === 0) { res.status(404).json({ error: "not_found", message: "No drawings available to download" }); return; }
 
-  const bucket = getBucket();
   const archive = archiver("zip", { zlib: { level: 9 } });
   archive.on("error", (err: Error) => {
     req.log.error({ err }, "Drawings zip error");
@@ -1797,7 +1796,7 @@ router.get("/portal/drawings/download-all", ...portalGuards, async (req, res) =>
     let unique = entryName, n = 1;
     while (used.has(unique)) { unique = entryName.replace(/(\.[^.]+)?$/, `-${n++}$1`); }
     used.add(unique);
-    archive.append(bucket.file(objectKey(filename)).createReadStream(), { name: unique });
+    archive.append((await findUpload(filename)).createReadStream(), { name: unique });
   }
   await archive.finalize();
 });
@@ -1825,7 +1824,7 @@ router.get("/portal/documents/:documentId/download", ...portalGuards, async (req
   if (!/\.[a-z0-9]+$/i.test(downloadName)) {
     downloadName += filename.match(/\.[a-z0-9]+$/i)?.[0] ?? "";
   }
-  const stream = getBucket().file(objectKey(filename)).createReadStream();
+  const stream = (await findUpload(filename)).createReadStream();
   stream.on("error", (err) => {
     req.log.error({ err }, "Document download error");
     if (!res.headersSent) res.status(404).json({ error: "not_found", message: "Document file unavailable" });
@@ -1993,7 +1992,7 @@ router.get("/portal/permits/:permitId/download", ...portalGuards, async (req, re
   if (!/\.[a-z0-9]+$/i.test(downloadName)) {
     downloadName += filename.match(/\.[a-z0-9]+$/i)?.[0] ?? "";
   }
-  const stream = getBucket().file(objectKey(filename)).createReadStream();
+  const stream = (await findUpload(filename)).createReadStream();
   stream.on("error", (err) => {
     req.log.error({ err }, "Permit download error");
     if (!res.headersSent) res.status(404).json({ error: "not_found", message: "Permit file unavailable" });

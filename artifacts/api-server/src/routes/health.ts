@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { HealthCheckResponse } from "@workspace/api-zod";
 import { checkDbConnection } from "@workspace/db";
+import { environmentSummary } from "../lib/environment";
 
 const router: IRouter = Router();
 
@@ -20,6 +21,8 @@ router.get("/health", async (_req, res) => {
     status: dbUp ? "ok" : "degraded",
     db: dbUp ? "up" : "down",
     uptime: Math.round(process.uptime()),
+    // Which outward-facing features are on here (never any secret values).
+    environment: environmentSummary(),
   });
 });
 
