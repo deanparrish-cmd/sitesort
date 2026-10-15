@@ -5,7 +5,7 @@ import { randomUUID } from "crypto";
 import { authenticate } from "../middlewares/auth";
 import { allow, INTERNAL_STAFF } from "../lib/authz";
 import { findUpload, uploadFile } from "../lib/gcs";
-import { isRetiredUpload, shareableUploads, verifyUploadSignature } from "../lib/signed-uploads";
+import { isRetiredUpload, verifyUploadSignature } from "../lib/signed-uploads";
 
 const router: IRouter = Router();
 
@@ -80,11 +80,12 @@ router.post("/upload", authenticate, allow(INTERNAL_STAFF), (req: Request, res: 
   }
 });
 
-// Login-only by default: a file is served only with the short-lived signature
-// the server adds to upload links in its JSON responses (lib/signed-uploads.ts),
-// so whoever was allowed to see the record can open its file, and a leaked link
-// stops working. Drawings, project documents and permits are still served from
-// the bare link until per-share links replace them.
+// Every uploaded file is login-only (#127): served only with the short-lived
+// signature the server adds to upload links in its JSON responses
+// (lib/signed-uploads.ts), so whoever was allowed to see the record can open
+// its file, and a leaked link stops working. Drawings, project documents and
+// permits go outside SiteSort through per-share links (/s/<token>, Part B),
+// never a bare file link; bare links were cut with Part B, no grace period.
 router.get("/uploads/:filename", async (req: Request, res: Response) => {
   const { filename } = req.params;
   if (!filename || filename.includes("/") || filename.includes("..")) {
@@ -92,20 +93,15 @@ router.get("/uploads/:filename", async (req: Request, res: Response) => {
     return;
   }
   if (!verifyUploadSignature(filename, req.query.exp, req.query.sig)) {
-    let shareable = false;
-    try {
-      shareable = (await shareableUploads([filename])).has(filename);
-    } catch (err) {
-      req.log?.error({ err }, "shareable-upload check failed");
-      res.status(503).json({ error: "unavailable", message: "This file can't be opened right now. Try again shortly." });
-      return;
-    }
-    if (!shareable) {
-      res.status(403).json({ error: "link_expired", message: "This link has expired or needs a login. Open it again from SiteSort." });
-      return;
-    }
+    res.status(403).json({ error: "link_expired", message: "This link has expired or needs a login. Open it again from SiteSort." });
+    return;
   }
+  await serveUpload(filename, req, res);
+});
 
+// Streams a stored upload. Callers have already decided the requester may see
+// it (a valid signature, or a live share link).
+export async function serveUpload(filename: string, req: Request, res: Response): Promise<void> {
   try {
     if (await isRetiredUpload(filename)) {
       res.status(410).json({ error: "gone", message: "This file is no longer available." });
@@ -154,6 +150,6 @@ router.get("/uploads/:filename", async (req: Request, res: Response) => {
     req.log?.error({ err }, "object storage serve failed");
     res.status(500).json({ error: "serve_failed" });
   }
-});
+}
 
 export default router;

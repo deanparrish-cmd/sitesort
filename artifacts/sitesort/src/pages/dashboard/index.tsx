@@ -14,6 +14,7 @@ import { Flame,
   MessageSquare, Camera, FilePlus, Plus, AlertCircle, CreditCard,
   FileText, CheckCircle2, Clock, TrendingUp, Zap, X, Circle, ClipboardCheck,
   Lock, Sparkles, Trash2, UserCheck, Wrench, LogOut,
+  KeyRound,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { AlertViewer } from "@/components/alert-viewer";
@@ -458,6 +459,7 @@ export default function Dashboard() {
   const [plantOnHire, setPlantOnHire] = useState<OnHirePlant[]>([]);
   // Fire-roll readiness per project that uses the gate (#125).
   const [fireRoll, setFireRoll] = useState<{ projectId: string; projectName: string; status: string; checks: { status: string; label: string }[] }[]>([]);
+  const [accessRequests, setAccessRequests] = useState<{ pending: number; onlyId: string | null }>({ pending: 0, onlyId: null });
   const [onboardingDismissed, setOnboardingDismissed] = useState(() => localStorage.getItem("sitesort_onboarding_dismissed") === "1");
 
   useEffect(() => {
@@ -469,6 +471,7 @@ export default function Dashboard() {
     fetch("/api/onboarding/status", { headers: h }).then(r => r.ok ? r.json() : null).then(setOnboarding).catch(() => {});
     fetch("/api/plant-items/on-hire", { headers: h }).then(r => r.ok ? r.json() : []).then(setPlantOnHire).catch(() => {});
     fetch("/api/fire-roll", { headers: h }).then(r => r.ok ? r.json() : []).then(setFireRoll).catch(() => {});
+    fetch("/api/share-requests/count", { headers: h }).then(r => r.ok ? r.json() : null).then(d => { if (d) setAccessRequests(d); }).catch(() => {});
   }, []);
 
   const [search, setSearch] = useState("");
@@ -592,12 +595,22 @@ export default function Dashboard() {
       });
     }
 
+    // Access requests from people whose shared link stopped working: one
+    // opens that request, several open the list.
+    if (accessRequests.pending > 0)
+      items.push({
+        icon: <KeyRound className="w-4 h-4" />,
+        label: `${accessRequests.pending} access request${accessRequests.pending > 1 ? "s" : ""} waiting`,
+        href: accessRequests.onlyId ? `/share-requests?request=${accessRequests.onlyId}` : "/share-requests",
+        severity: "warning",
+      });
+
     // Unread messages
     if (unreadMessages > 0)
       items.push({ icon: <MessageSquare className="w-4 h-4" />, label: `${unreadMessages} unread message${unreadMessages > 1 ? "s" : ""}`, href: "/messages?filter=unread", severity: "warning" });
 
     return items;
-  }, [expiryAlerts, compliance, unreadMessages, fireRoll]);
+  }, [expiryAlerts, compliance, unreadMessages, fireRoll, accessRequests]);
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";

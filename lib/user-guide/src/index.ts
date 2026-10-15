@@ -119,6 +119,18 @@ export const PM_GUIDE: GuideSection[] = [
           text: "Trade shares also reach anyone invited to that trade later, so you don't need to re-share when a new person joins.",
         },
       },
+      {
+        heading: "Send a drawing, document or permit outside SiteSort",
+        body: [
+          "Drawings, project documents and permits can go to anyone, such as an architect or a supplier, by Email, WhatsApp, QR code or Copy Link in the Share window. Each share makes its own link that opens a page showing the name and revision, with an Open button. No login needed.",
+          "A link works for 30 days, or until a newer revision replaces it, whichever comes first. Three days before a link you sent expires, you get a reminder so you can send a fresh one if they still need it.",
+          "The History tab in the Share window lists every link sent, whether it still works and how many times it was opened. Tap Stop link to turn one off straight away, for example if it went to the wrong person.",
+        ],
+        callout: {
+          tone: "tip",
+          text: "If someone opens a link that has stopped working, they can ask for access. You (and any project manager on that project) get a notification, and it waits under Access requests in the sidebar and in Needs Attention on the dashboard until someone decides. Approving emails them a new link to the current revision.",
+        },
+      },
     ],
   },
   {
@@ -527,6 +539,12 @@ export const WORKER_GUIDE: GuideSection[] = [
 ];
 
 export const FAQ: FaqItem[] = [
+  {
+    id: "share-link-stopped",
+    question: "Someone says the link I sent them has stopped working",
+    answer: "Links to drawings, documents and permits work for 30 days, or until a newer revision is uploaded. On the page they land on, they can tap Request access; you'll get a notification, and approving it from Access requests emails them a link to the current revision. Or just share it with them again.",
+    audience: "pm",
+  },
   {
     id: "switch-projects",
     question: "Can I use the portal for projects at different companies?",

@@ -9,10 +9,8 @@ import type { Request, Response, NextFunction } from "express";
 // allowed to receive the response is allowed to open the file; a link that
 // leaks (copied, forwarded, left in a browser history) stops working.
 //
-// Exception, until per-share links replace them (Part B): drawings, project
-// documents and permits are meant to be shared outside SiteSort, so a file
-// referenced by documents.file_url or permits.document_url is still served
-// from its bare URL and is never signed.
+// Drawings, project documents and permits are no exception (Part B): they go
+// outside SiteSort only through per-share links (lib/share-links.ts).
 //
 // Check-in photos (workers' faces, "checkin-<uuid>.<ext>") get the shortest
 // window, 1 to 2 hours; other files last a working day, 12 to 24 hours, so a
@@ -60,35 +58,6 @@ export function verifyUploadSignature(filename: string, exp: unknown, sig: unkno
   return expected.length === given.length && timingSafeEqual(expected, given);
 }
 
-// Which of these filenames are shareable (a drawing, project document or
-// permit). Check-in photos never are. Positive answers are cached briefly; a
-// file that has just become a document may be refused bare for up to a minute.
-const shareableCache = new Map<string, number>();
-const SHAREABLE_TTL_MS = 60_000;
-export async function shareableUploads(filenames: string[]): Promise<Set<string>> {
-  const now = Date.now();
-  const out = new Set<string>();
-  const ask: string[] = [];
-  for (const f of new Set(filenames)) {
-    if (isCheckinUpload(f)) continue;
-    if ((shareableCache.get(f) ?? 0) > now) out.add(f);
-    else ask.push(f);
-  }
-  if (ask.length === 0) return out;
-  const urls = ask.flatMap(f => [`/api/uploads/${f}`, `/uploads/${f}`]);
-  const list = sql.join(urls.map(u => sql`${u}`), sql`, `);
-  const rows = await db.execute(sql`
-    SELECT file_url AS url FROM documents WHERE file_url IN (${list})
-    UNION SELECT document_url FROM permits WHERE document_url IN (${list})`);
-  for (const r of rows.rows as { url: string }[]) {
-    const f = uploadFilename(r.url);
-    if (!f) continue;
-    out.add(f);
-    shareableCache.set(f, now + SHAREABLE_TTL_MS);
-  }
-  return out;
-}
-
 function mapUploadStrings(value: unknown, fn: (s: string, name: string) => string, depth = 0): unknown {
   if (depth > 40 || value === null || typeof value !== "object") {
     if (typeof value === "string" && value.length < 2048) {
@@ -104,25 +73,9 @@ function mapUploadStrings(value: unknown, fn: (s: string, name: string) => strin
   return out;
 }
 
-function collectUploadNames(value: unknown, into: Set<string>, depth = 0): void {
-  if (typeof value === "string") {
-    if (value.length < 2048) { const n = uploadFilename(value); if (n) into.add(n); }
-    return;
-  }
-  if (depth > 40 || value === null || typeof value !== "object" || value instanceof Date) return;
-  for (const v of Array.isArray(value) ? value : Object.values(value)) collectUploadNames(v, into, depth + 1);
-}
-
-// Signs every login-only upload link in a JSON response. If the shareable
-// lookup fails, every link is signed: signed links open shareable files too,
-// so nothing breaks and nothing is left bare.
-export async function signUploadsIn<T>(body: T, now: number = Date.now()): Promise<T> {
-  const names = new Set<string>();
-  collectUploadNames(body, names);
-  if (names.size === 0) return body;
-  let shareable = new Set<string>();
-  try { shareable = await shareableUploads([...names]); } catch { /* sign everything */ }
-  return mapUploadStrings(body, (s, name) => shareable.has(name) ? `/api/uploads/${name}` : signUploadUrl(s, now)) as T;
+// Signs every upload link in a JSON response.
+export function signUploadsIn<T>(body: T, now: number = Date.now()): T {
+  return mapUploadStrings(body, s => signUploadUrl(s, now)) as T;
 }
 
 // Signed links come back in request bodies when a screen saves what it was
@@ -134,13 +87,7 @@ export function stripUploadSignatures<T>(body: T): T {
 export function signUploadsInResponses(req: Request, res: Response, next: NextFunction): void {
   if (req.body && typeof req.body === "object" && !Buffer.isBuffer(req.body)) req.body = stripUploadSignatures(req.body);
   const json = res.json.bind(res);
-  res.json = ((body: unknown) => {
-    const names = new Set<string>();
-    collectUploadNames(body, names);
-    if (names.size === 0) return json(body);
-    void signUploadsIn(body).then(signed => json(signed));
-    return res;
-  }) as Response["json"];
+  res.json = ((body: unknown) => json(signUploadsIn(body))) as Response["json"];
   next();
 }
 

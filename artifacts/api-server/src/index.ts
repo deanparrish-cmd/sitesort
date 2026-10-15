@@ -7,6 +7,7 @@ import { ensureSchema } from "./lib/ensure-schema";
 import { removeInvoices } from "./lib/invoice-removal";
 import { scheduleCheckinAutoClose } from "./routes/qr";
 import { checkDbConnection } from "@workspace/db";
+import { scheduleShareLinkReminders } from "./lib/share-links";
 import { IS_DEPLOYED, environmentSummary } from "./lib/environment";
 
 // Process-level safety net. Previously an unhandled rejection or an uncaught
@@ -75,6 +76,7 @@ async function start(): Promise<void> {
       scheduleDailyReports();
       schedulePushFlush();
       scheduleCheckinAutoClose(logger);
+      scheduleShareLinkReminders();
     }
   });
   server.on("error", (err) => {

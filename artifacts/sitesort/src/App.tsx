@@ -57,6 +57,8 @@ const ResetPassword = lazyWithRetry(() => import("@/pages/auth/reset-password"))
 const ForgotPin = lazyWithRetry(() => import("@/pages/auth/forgot-pin"));
 const ResetPin = lazyWithRetry(() => import("@/pages/auth/reset-pin"));
 const Guide = lazyWithRetry(() => import("@/pages/guide"));
+const SharedLinkPage = lazyWithRetry(() => import("@/pages/shared-link"));
+const ShareRequestsPage = lazyWithRetry(() => import("@/pages/share-requests"));
 const PortalForgotPassword = lazyWithRetry(() => import("@/pages/portal/forgot-password"));
 const PortalResetPassword = lazyWithRetry(() => import("@/pages/portal/reset-password"));
 const Dashboard = lazyWithRetry(() => import("@/pages/dashboard"));
@@ -123,6 +125,7 @@ function Router() {
       <Route path="/forgot-pin" component={ForgotPin} />
       <Route path="/reset-pin" component={ResetPin} />
       <Route path="/guide" component={Guide} />
+      <Route path="/s/:token" component={SharedLinkPage} />
 
       {/* Authenticated Routes */}
       <Route path="/dashboard" component={Dashboard} />
@@ -142,6 +145,7 @@ function Router() {
       <Route path="/daily-reports" component={DailyReportsPage} />
       <Route path="/issues" component={IssuesPage} />
       <Route path="/checkins" component={CheckinsPage} />
+      <Route path="/share-requests" component={ShareRequestsPage} />
 
       {/* Admin */}
       <Route path="/admin" component={AdminDashboard} />

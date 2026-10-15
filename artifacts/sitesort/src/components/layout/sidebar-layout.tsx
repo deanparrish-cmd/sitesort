@@ -15,6 +15,7 @@ import {
   ShieldAlert,
   MessageSquare,
   AlertCircle,
+  KeyRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { onMessagesRead } from "@/lib/message-events";
@@ -56,14 +57,17 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
   const { isCancelled, needsCheckout } = useSubscription();
   const [unreadMsgCount, setUnreadMsgCount] = useState(0);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+  const [accessRequestCount, setAccessRequestCount] = useState(0);
   const prevUnreadRef = useRef(0);
 
   const fetchUnread = useCallback(async () => {
     try {
-      const [msgRes, notifRes] = await Promise.all([
+      const [msgRes, notifRes, reqRes] = await Promise.all([
         fetch("/api/messages/unread-count", { headers: authHeaders() }),
         fetch("/api/notifications", { headers: authHeaders() }),
+        fetch("/api/share-requests/count", { headers: authHeaders() }),
       ]);
+      if (reqRes.ok) setAccessRequestCount((await reqRes.json()).pending ?? 0);
       if (msgRes.ok) {
         const { count } = await msgRes.json();
         if (count > prevUnreadRef.current && prevUnreadRef.current !== -1) {
@@ -165,6 +169,10 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     // still exist (deep-linkable) but are no longer surfaced here.
     // The site check-in QR is admin + project manager only.
     ...(user?.role === "admin" || user?.role === "project_manager" ? [{ name: "QR Codes", href: "/qr", icon: QrCode, badge: 0 }] : []),
+    // People whose shared link stopped working, waiting on a decision (#127
+    // Part B). Always listed, with a live count, so a missed notification
+    // never leaves anyone waiting.
+    { name: "Access requests", href: "/share-requests", icon: KeyRound, badge: accessRequestCount },
     // Platform Admin (SiteSort's own staff) — distinct from a customer's
     // company-level "admin" role. A customer who is admin of their own
     // account must never see this; only users.platformAdmin === true.

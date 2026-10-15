@@ -15,6 +15,11 @@ type ShareLog = {
   id: string; entityType: string; entityId: string; entityName: string;
   method: string; recipientInfo: string | null; sentByName: string; createdAt: string;
 };
+type ShareLinkRow = {
+  id: string; method: string | null; recipientInfo: string | null; sentByName: string;
+  sentAt: string | null; expiresAt: string; state: "ok" | "expired" | "superseded" | "revoked" | "removed";
+  openCount: number; lastOpenedAt: string | null; canRevoke: boolean;
+};
 type Project = { id: string; name: string };
 type PortalTrade = { trade: string; memberCount: number };
 type PortalMemberOpt = { personId: string; userId: string | null; accepted?: boolean; name: string; companyName?: string; trades?: string[] };
@@ -43,11 +48,28 @@ function normaliseUrl(url: string) {
 // the set that can be pinned to the Site Board (daily reports have no fileUrl,
 // so the QR/Pin tab naturally has nothing to show them regardless).
 const PORTAL_ENTITY_TYPES = new Set(["document", "photo", "permit", "plant_item", "daily_report"]);
+// Drawings, project documents and permits go outside SiteSort through a
+// per-share link (#127 Part B): /s/<token>, valid for 30 days or until a newer
+// revision replaces it. Everything else is login-only.
+const SHARE_LINK_TYPES = new Set(["document", "permit"]);
+
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+const LINK_STATE: Record<ShareLinkRow["state"], { label: string; cls: string }> = {
+  ok: { label: "Working", cls: "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400" },
+  expired: { label: "Expired", cls: "bg-muted text-muted-foreground" },
+  superseded: { label: "Superseded", cls: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400" },
+  revoked: { label: "Stopped", cls: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400" },
+  removed: { label: "Removed", cls: "bg-muted text-muted-foreground" },
+};
 
 function methodLabel(method: string) {
   const map: Record<string, string> = {
     email: "Email", whatsapp: "WhatsApp", project_team: "Project Team",
     individual: "Individual", team: "Project Team", qr: "QR Code", portal: "Team Portal",
+    copy: "Copied link", request: "Access request",
   };
   return map[method] ?? method;
 }
@@ -61,6 +83,9 @@ function shareRuleLabel(s: PortalShareRule): string {
 export function ShareModal({ open, onClose, entityType, entityId, entityName, fileUrl, projectId, version, additionalInfo, shareText }: ShareModalProps) {
   const [tab, setTab] = useState<"share" | "qr" | "history">("share");
   const [history, setHistory] = useState<ShareLog[]>([]);
+  const [shareLink, setShareLink] = useState<{ id: string; url: string; expiresAt: string } | null>(null);
+  const [shareLinkError, setShareLinkError] = useState<string | null>(null);
+  const [links, setLinks] = useState<ShareLinkRow[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   // Team Portal sharing state
   const [portalMode, setPortalMode] = useState<"all" | "trade" | "person">("all");
@@ -95,19 +120,42 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
   // contact documents) come from the server with a short-lived signature. Never
   // send that link out: share a link to the record instead, which needs a
   // SiteSort login to open.
-  const loginOnly = !!fileUrl && /[?&]sig=/.test(fileUrl);
+  const usesShareLink = SHARE_LINK_TYPES.has(entityType) && !!fileUrl;
+  const loginOnly = !usesShareLink && !!fileUrl && /[?&]sig=/.test(fileUrl);
   const recordPath = loginOnly && effectiveProjectId ? itemDeepLink(effectiveProjectId, entityType, entityId) : null;
-  const linkForSharing = loginOnly ? (recordPath ? `${window.location.origin}${recordPath}` : null) : fullUrl;
+  const linkForSharing = usesShareLink
+    ? (shareLink ? `${window.location.origin}${shareLink.url}` : null)
+    : loginOnly ? (recordPath ? `${window.location.origin}${recordPath}` : null) : fullUrl;
+  const linkUntil = shareLink ? fmtDate(shareLink.expiresAt) : null;
   const hasContent = !!(linkForSharing || shareText);
 
   useEffect(() => {
     if (!open) {
       setTab("share"); setIsPinned(false);
+      setShareLink(null); setShareLinkError(null); setLinks([]);
       setSiteBoardUrl(null); setSelectedProjectId("");
       setPortalMode("all"); setSelTrades([]); setSelPersons([]);
       setPortalTrades([]); setPortalMembers([]); setExistingShares([]); setPortalMsg(null);
     }
   }, [open]);
+
+  // One share link per time the dialog is open, minted up front so Email and
+  // WhatsApp open straight from the click (a window opened after a network
+  // wait gets blocked on phones). It only counts as sent once it goes out.
+  useEffect(() => {
+    if (!open || !usesShareLink || shareLink || shareLinkError) return;
+    let cancelled = false;
+    fetch("/api/share-links", { method: "POST", headers: authH(), body: JSON.stringify({ itemType: entityType, itemId: entityId }) })
+      .then(async r => {
+        const d = await r.json().catch(() => ({}));
+        if (cancelled) return;
+        if (r.ok && d.url) setShareLink({ id: d.id, url: d.url, expiresAt: d.expiresAt });
+        else setShareLinkError(d.message ?? "A share link couldn't be made. Try again.");
+      })
+      .catch(() => { if (!cancelled) setShareLinkError("A share link couldn't be made. Check your connection and try again."); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, usesShareLink, entityType, entityId, shareLink, shareLinkError]);
 
   // Load project list when no projectId prop is given (e.g. Compliance Centre insurance)
   useEffect(() => {
@@ -160,8 +208,22 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
       .catch(() => {});
   }, [tab, open, effectiveProjectId, canPin, entityType, entityId, canSeeSiteQr]);
 
+  const loadLinks = () => {
+    if (!usesShareLink) return;
+    fetch(`/api/share-links?itemType=${entityType}&itemId=${entityId}`, { headers: authH() })
+      .then(r => r.ok ? r.json() : [])
+      .then((rows: ShareLinkRow[]) => setLinks(Array.isArray(rows) ? rows : []))
+      .catch(() => {});
+  };
+  const revokeLink = async (id: string) => {
+    const r = await fetch(`/api/share-links/${id}/revoke`, { method: "POST", headers: authH() }).catch(() => null);
+    if (r?.ok) setLinks(prev => prev.map(l => l.id === id ? { ...l, state: "revoked", canRevoke: false } : l));
+    if (r?.ok && shareLink?.id === id) setShareLink(null);
+  };
+
   useEffect(() => {
     if (tab !== "history" || !open) return;
+    loadLinks();
     setHistoryLoading(true);
     fetch(`/api/share-logs?entityType=${entityType}&entityId=${entityId}`, {
       headers: token() ? { Authorization: `Bearer ${token()}` } : {},
@@ -175,7 +237,10 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
     fetch("/api/share-logs", {
       method: "POST",
       headers: authH(),
-      body: JSON.stringify({ entityType, entityId, entityName, method, recipientInfo, projectId: effectiveProjectId }),
+      body: JSON.stringify({
+        entityType, entityId, entityName, method, recipientInfo, projectId: effectiveProjectId,
+        shareLinkId: usesShareLink && method !== "portal" ? shareLink?.id : undefined,
+      }),
     }).catch(() => {});
   };
 
@@ -187,6 +252,8 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
     const details = additionalInfo ? `\n\n${additionalInfo}` : "";
     const body = shareText && !linkForSharing
       ? encodeURIComponent(`${shareText}${details}`)
+      : usesShareLink
+        ? encodeURIComponent(`Hi,\n\nPlease find "${entityName}"${versionSuffix} here:\n\n${linkForSharing}\n\nThis link works until ${linkUntil}, or until a newer revision replaces it.${details}`)
       : loginOnly
         ? encodeURIComponent(`Hi,\n\n"${entityName}"${versionSuffix} is in SiteSort. Log in to view it:\n\n${linkForSharing}${details}`)
         : encodeURIComponent(`Hi,\n\nPlease find "${entityName}"${versionSuffix} here:\n\n${linkForSharing}${details}`);
@@ -199,7 +266,7 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
     const details = additionalInfo ? `\n\n${additionalInfo}` : "";
     const text = shareText && !linkForSharing
       ? encodeURIComponent(`${shareText}${details}`)
-      : encodeURIComponent(`${entityName}${versionSuffix}${loginOnly ? " (log in to SiteSort to view)" : ""}\n${linkForSharing}${details}`);
+      : encodeURIComponent(`${entityName}${versionSuffix}${loginOnly ? " (log in to SiteSort to view)" : ""}\n${linkForSharing}${usesShareLink ? `\nLink works until ${linkUntil}.` : ""}${details}`);
     window.open(`https://wa.me/?text=${text}`, "_blank");
     logShare("whatsapp");
   };
@@ -312,6 +379,15 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
                   <MessageCircle className="w-4 h-4 text-green-500" /> WhatsApp
                 </button>
               </div>
+              {usesShareLink && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  {shareLinkError
+                    ? shareLinkError
+                    : shareLink
+                      ? `Anyone with this link can open it until ${linkUntil}, or until a newer revision replaces it. After that they can ask you for access.`
+                      : "Making a share link..."}
+                </p>
+              )}
               {loginOnly && (
                 <p className="text-xs text-muted-foreground mt-2">
                   {linkForSharing
@@ -477,7 +553,7 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
                     <Download className="w-4 h-4" /> Download PNG
                   </button>
                   <button
-                    onClick={() => { navigator.clipboard.writeText(linkForSharing).catch(() => {}); }}
+                    onClick={() => { navigator.clipboard.writeText(linkForSharing).catch(() => {}); logShare("copy"); }}
                     className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-background hover:bg-muted transition-colors text-sm font-medium"
                   >
                     Copy Link
@@ -527,7 +603,9 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
                 )}
               </>
             ) : (
-              <p className="text-sm text-muted-foreground py-8 text-center">{loginOnly ? "This file needs a SiteSort login, so it has no QR code." : "No file available for QR code."}</p>
+              <p className="text-sm text-muted-foreground py-8 text-center">
+                {usesShareLink ? (shareLinkError ?? "Making a share link...") : loginOnly ? "This file needs a SiteSort login, so it has no QR code." : "No file available for QR code."}
+              </p>
             )}
           </div>
         )}
@@ -535,6 +613,37 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
         {/* ── History tab ── */}
         {tab === "history" && (
           <div className="min-h-[120px]">
+            {links.length > 0 && (
+              <div className="mb-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Links sent</p>
+                <div className="max-h-48 overflow-y-auto divide-y">
+                  {links.map(l => (
+                    <div key={l.id} className="flex flex-wrap items-start gap-x-3 gap-y-1 py-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm break-words [overflow-wrap:anywhere]">
+                          <span className="font-medium">{l.sentByName}</span>
+                          {l.method ? <> via <span className="font-medium">{methodLabel(l.method)}</span></> : null}
+                          {l.recipientInfo ? <span className="text-muted-foreground"> to {l.recipientInfo}</span> : null}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {[
+                            l.sentAt ? `Sent ${fmtDate(l.sentAt)}` : null,
+                            l.state === "ok" ? `works until ${fmtDate(l.expiresAt)}` : null,
+                            l.openCount > 0 ? `opened ${l.openCount} time${l.openCount !== 1 ? "s" : ""}` : null,
+                          ].filter(Boolean).join(" · ")}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={cn("px-2 py-0.5 rounded-full text-[11px] font-semibold", LINK_STATE[l.state].cls)}>{LINK_STATE[l.state].label}</span>
+                        {l.canRevoke && l.state === "ok" && (
+                          <button onClick={() => revokeLink(l.id)} className="text-xs font-medium text-red-600 hover:underline">Stop link</button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {historyLoading ? (
               <div className="flex justify-center py-8">
                 <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -547,7 +656,7 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
                   <div key={log.id} className="flex items-start gap-3 py-2.5">
                     <Clock className="w-3.5 h-3.5 mt-0.5 text-muted-foreground shrink-0" />
                     <div className="min-w-0">
-                      <p className="text-sm">
+                      <p className="text-sm break-words [overflow-wrap:anywhere]">
                         <span className="font-medium">{log.sentByName}</span>
                         {" via "}
                         <span className="font-medium">{methodLabel(log.method)}</span>

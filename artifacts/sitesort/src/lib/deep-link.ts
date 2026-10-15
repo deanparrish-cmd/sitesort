@@ -27,7 +27,12 @@ function authHeaders(): Record<string, string> {
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
-export type NotificationLike = { type: string; relatedEntityId?: string | null };
+export type NotificationLike = {
+  type: string;
+  relatedEntityId?: string | null;
+  relatedEntityType?: string | null;
+  metadata?: Record<string, unknown> | null;
+};
 
 /**
  * Resolves a notification to its deep-link target and navigates there. Shared
@@ -75,6 +80,19 @@ export async function navigateToNotification(n: NotificationLike, navigate: (to:
   }
   if (n.type === "fire_roll_not_ready") {
     navigate(`/projects/${id}?tab=overview`);
+    return true;
+  }
+  // A share link about to expire (#127 Part B): straight to the document or
+  // permit, where Share sends a fresh one.
+  if (n.type === "share_link_expiring") {
+    const projectId = typeof n.metadata?.projectId === "string" ? n.metadata.projectId : null;
+    const link = projectId ? itemDeepLink(projectId, n.relatedEntityType ?? undefined, id) : null;
+    if (!link) return false;
+    navigate(link);
+    return true;
+  }
+  if (n.type === "share_access_requested") {
+    navigate(`/share-requests?request=${id}`);
     return true;
   }
   if (n.type === "portal_plant_item_logged") {

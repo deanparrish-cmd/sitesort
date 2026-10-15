@@ -9,9 +9,9 @@ import { signUploadUrl } from "../src/lib/signed-uploads";
 /**
  * Part A of the file-link work: uploaded files are login-only. A bare link is
  * refused; the server signs every upload link in the responses it sends, and
- * strips the signature from links that come back in a request body. Drawings,
- * project documents and permits still open from the bare link until per-share
- * links replace them (Part B).
+ * strips the signature from links that come back in a request body. Since
+ * Part B that includes drawings, project documents and permits: they go out
+ * only through per-share links (share-links.test.ts).
  *
  * Writes files to the shared bucket but never deletes any (workspace rule).
  */
@@ -81,17 +81,20 @@ describe("uploaded files are login-only", () => {
     for (const u of urls) expect(u).toMatch(/\?exp=\d+&sig=/);
   });
 
-  it("a project document still opens from its bare link and is listed bare", async () => {
+  it("a project document's bare link is refused too, and it is listed signed (Part B)", async () => {
     docUrl = await upload(admin);
     const created = await api(`/projects/${co.projectId}/documents`, {
       method: "POST", token: admin,
       body: { name: `Drawing ${randomUUID().slice(0, 6)}`, type: "drawing", fileUrl: docUrl },
     });
     expect([200, 201]).toContain(created.status);
-    expect(created.json.fileUrl).toBe(bare(docUrl));
-    expect((await fetchUrl(bare(docUrl))).status).toBe(200);
+    expect(created.json.fileUrl).toMatch(/\?exp=\d+&sig=/);
+    expect((await fetchUrl(bare(docUrl))).status).toBe(403);
+    const [row] = await db.select().from(documentsTable).where(eq(documentsTable.id, created.json.id));
+    expect(row.fileUrl).toBe(bare(docUrl));
     const list = await api(`/projects/${co.projectId}/documents`, { token: admin });
     const listed = (list.json as { fileUrl: string }[]).map(d => d.fileUrl);
-    expect(listed).toContain(bare(docUrl));
+    expect(listed.some(u => u.startsWith(bare(docUrl)) && /sig=/.test(u))).toBe(true);
+    expect((await fetchUrl(listed.find(u => u.startsWith(bare(docUrl)))!)).status).toBe(200);
   });
 });

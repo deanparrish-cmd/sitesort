@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { shareLogsTable, usersTable, projectsTable } from "@workspace/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { shareLogsTable, shareLinksTable, usersTable, projectsTable } from "@workspace/db/schema";
+import { eq, and, desc, isNull } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { allow, INTERNAL_STAFF } from "../lib/authz";
@@ -11,7 +11,7 @@ const router: IRouter = Router();
 // POST /share-logs — record a share action
 router.post("/share-logs", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
-    const { projectId, entityType, entityId, entityName, method, recipientInfo } = req.body;
+    const { projectId, entityType, entityId, entityName, method, recipientInfo, shareLinkId } = req.body;
     if (!entityType || !entityId || !entityName || !method) {
       res.status(400).json({ error: "validation_error", message: "entityType, entityId, entityName, method required" });
       return;
@@ -40,6 +40,19 @@ router.post("/share-logs", authenticate, allow(INTERNAL_STAFF), async (req, res)
       recipientInfo: recipientInfo ?? null,
       sentByUserId: req.user!.id,
     });
+
+    // A share link (#127 Part B) counts as sent the first time it goes out, which
+    // is what puts it on the 3-day expiry reminder. Only the sender's own link.
+    if (typeof shareLinkId === "string") {
+      await db.update(shareLinksTable)
+        .set({ method, recipientInfo: recipientInfo ?? null, sentAt: new Date() })
+        .where(and(
+          eq(shareLinksTable.id, shareLinkId),
+          eq(shareLinksTable.companyId, req.user!.companyId),
+          eq(shareLinksTable.createdByUserId, req.user!.id),
+          isNull(shareLinksTable.sentAt),
+        ));
+    }
 
     res.status(201).json({ id });
   } catch (err) {

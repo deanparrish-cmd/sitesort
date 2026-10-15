@@ -21,6 +21,7 @@ router.get("/notifications", authenticate, allow(ANY_MEMBER), async (req, res) =
       message: n.message,
       relatedEntityId: n.relatedEntityId ?? null,
       relatedEntityType: n.relatedEntityType ?? null,
+      metadata: n.metadata ?? null,
       read: n.read,
       createdAt: n.createdAt.toISOString(),
     })).reverse());

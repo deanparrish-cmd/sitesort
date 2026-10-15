@@ -687,3 +687,93 @@ Read the full guide (no login needed):
 ${guideUrl}`),
   });
 }
+
+// #127 Part B: per-share links. Text here can include names typed by someone
+// outside SiteSort (an access request), so it's escaped before going into HTML.
+function esc(s: string): string {
+  return s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
+}
+
+// An approved access request: the requester gets a fresh link to the item's
+// current revision.
+export async function sendShareLinkGrantedEmail(params: {
+  to: string; name: string; itemName: string; revisionLabel: string | null;
+  projectName: string; companyName: string; url: string; expiresAt: Date; newerThanRequested: boolean;
+}) {
+  const greeting = esc(firstName(params.name));
+  const item = esc(params.itemName);
+  const rev = params.revisionLabel ? esc(params.revisionLabel) : "";
+  const company = esc(params.companyName);
+  const project = esc(params.projectName);
+  const until = params.expiresAt.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+  const newer = params.newerThanRequested ? "The one you asked for has been replaced, so this is the current revision." : "";
+  return send({
+    to: params.to,
+    subject: `Access granted: ${params.itemName}${params.revisionLabel ? ` (${params.revisionLabel})` : ""}`,
+    html: layout(`
+      ${h("Your access request was approved")}
+      ${p(`Hi ${greeting},`)}
+      ${p(`${company} has shared this with you from <strong>${project}</strong>.${newer ? ` ${newer}` : ""}`)}
+      ${box(`
+        <div style="font-size:15px;font-weight:600;color:#111827;margin-bottom:4px;">${item}</div>
+        ${rev ? `<div style="font-size:13px;color:#6b7280;">${rev}</div>` : ""}
+      `)}
+      ${btn(params.url, "Open it")}
+      ${muted(`This link works until ${until}, or until a newer revision replaces it.`)}
+    `),
+    text: textLayout(`Your access request was approved
+
+Hi ${firstName(params.name)},
+
+${params.companyName} has shared this with you from ${params.projectName}.${newer ? ` ${newer}` : ""}
+
+${params.itemName}${params.revisionLabel ? `\n${params.revisionLabel}` : ""}
+
+Open it:
+${params.url}
+
+This link works until ${until}, or until a newer revision replaces it.`),
+  });
+}
+
+// Three days before a link someone sent stops working.
+export async function sendShareLinkExpiringEmail(params: {
+  to: string; name: string; itemName: string; revisionLabel: string | null; projectName: string;
+  recipientInfo: string | null; expiresAt: Date; projectId: string; itemType: string; itemId: string;
+}) {
+  const until = params.expiresAt.toLocaleDateString("en-GB", { day: "numeric", month: "long" });
+  const tab = params.itemType === "permit" ? "permits" : "documents";
+  const link = `${APP_URL}/projects/${params.projectId}?tab=${tab}&${params.itemType}=${params.itemId}`;
+  const who = params.recipientInfo ? ` to ${params.recipientInfo}` : "";
+  return send({
+    to: params.to,
+    subject: `Shared link expires ${until}: ${params.itemName}`,
+    html: layout(`
+      ${h("A link you shared expires soon")}
+      ${p(`Hi ${esc(firstName(params.name))},`)}
+      ${p(`The link you sent${esc(who)} stops working on <strong>${until}</strong>.`)}
+      ${box(`
+        <div style="font-size:15px;font-weight:600;color:#111827;margin-bottom:4px;">${esc(params.itemName)}</div>
+        <div style="font-size:13px;color:#6b7280;">${[params.revisionLabel, params.projectName].filter(Boolean).map(s => esc(s!)).join(" &middot; ")}</div>
+      `)}
+      ${p("If they still need it, share it again from SiteSort.")}
+      ${btn(link, "Open in SiteSort")}
+      ${muted("You can manage email notifications in your SiteSort account settings.")}
+    `),
+    text: textLayout(`A link you shared expires soon
+
+Hi ${firstName(params.name)},
+
+The link you sent${who} stops working on ${until}.
+
+${params.itemName}
+${[params.revisionLabel, params.projectName].filter(Boolean).join(" · ")}
+
+If they still need it, share it again from SiteSort:
+${link}
+
+You can manage email notifications in your SiteSort account settings.`),
+  });
+}
+
+export { APP_URL as EMAIL_APP_URL };

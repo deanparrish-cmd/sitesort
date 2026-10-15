@@ -30,6 +30,7 @@ type Notification = {
   message: string;
   relatedEntityId: string | null;
   relatedEntityType: string | null;
+  metadata?: Record<string, unknown> | null;
   read: boolean;
   createdAt: string;
 };
@@ -129,7 +130,7 @@ function filterMatch(n: Notification, f: Filter) {
   if (f === "all") return true;
   if (f === "unread") return !n.read;
   if (f === "messages") return n.type === "new_message";
-  if (f === "documents") return n.type === "document_uploaded" || n.type === "member_document_uploaded";
+  if (f === "documents") return ["document_uploaded", "member_document_uploaded", "share_link_expiring", "share_access_requested"].includes(n.type);
   if (f === "safety") return n.type === "safety_concern";
   if (f === "billing") return n.type === "trial_ending" || n.type === "payment_failed";
   return true;

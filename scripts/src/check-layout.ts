@@ -74,6 +74,7 @@ type FixtureData = {
   portalToken: string;
   inviteToken: string;
   siteToken: string;
+  shareToken: string;
 };
 
 type AdminFixture = {
@@ -211,6 +212,7 @@ function buildRoutes(fixtures: FixtureData): RouteSpec[] {
     "/reset-pin",
     "/guide",
     "/site/:token",
+    "/s/:token",
     "/portal/login",
     "/portal/accept/:token",
     "/portal/forgot-password",
@@ -231,6 +233,8 @@ function buildRoutes(fixtures: FixtureData): RouteSpec[] {
         ? { token: fixtures.siteToken }
         : template === "/portal/accept/:token"
         ? { token: fixtures.inviteToken }
+        : template === "/s/:token"
+        ? { token: fixtures.shareToken }
         : {};
     const path = resolveDynamicPath(template, dynamicFixtures);
     const auth: AuthMode = template.startsWith("/portal/") && !publicRoutes.has(template)
@@ -506,7 +510,25 @@ async function setupFixtures(appToken: string): Promise<FixtureData> {
   }
   if (!siteToken) throw new Error("Could not resolve a site-board QR token for /site/:token.");
 
-  return { projectId, portalToken, inviteToken, siteToken };
+  // /s/:token (#127 Part B): a share link for a current document. Minted fresh
+  // each run (only the hash is stored); never marked sent, so no reminder.
+  const docs = await apiJson(`/api/projects/${projectId}/documents`, appToken) as Array<{ id: string; status?: string; fileUrl?: string }>;
+  let shareDocId = docs.find((d) => d.status === "current" && d.fileUrl)?.id ?? "";
+  if (!shareDocId) {
+    const created = await apiJson(`/api/projects/${projectId}/documents`, appToken, {
+      method: "POST",
+      body: JSON.stringify({ name: "Layout fixture drawing", type: "drawing", fileUrl: "/api/uploads/layout-fixture.pdf", fileSize: 100 }),
+    }) as { id?: string };
+    shareDocId = created.id ?? "";
+  }
+  const share = await apiJson(`/api/share-links`, appToken, {
+    method: "POST",
+    body: JSON.stringify({ itemType: "document", itemId: shareDocId }),
+  }) as { url?: string };
+  const shareToken = share.url?.replace(/^\/s\//, "") ?? "";
+  if (!shareToken) throw new Error("Could not mint a share link for /s/:token.");
+
+  return { projectId, portalToken, inviteToken, siteToken, shareToken };
 }
 
 function describeElement(el: Element): string {
