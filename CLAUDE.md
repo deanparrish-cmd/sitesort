@@ -155,8 +155,8 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 89. **Fix dead Overview-tab "Recent Activity" card**
 90. **Three portal fixes: nav/GET permission gating, explicit site manager, verified submit→view already worked.**
 91. **Document Allocate removed (folded into Share), project-level PM/approver authority added**
-92. **In-app User Guide (dashboard, portal, invite email) + restyle** — single shared source `lib/user-guide/src/index.ts`, 3 surfaces. **DEPLOYED+prod-verified** (2026-07-27). *(full detail in CLAUDE_ARCHIVE.md)*
-93. **Invoice Allocate + scoped Share (financial-data-safe)** — closed a zero-role-gating gap on `PATCH /invoices/:id`/`POST /share-logs`. **DEPLOYED+prod-verified** (2026-07-27). *(full detail in CLAUDE_ARCHIVE.md)*
+92. **In-app User Guide (dashboard, portal, invite email) + restyle** — single shared source `lib/user-guide/src/index.ts`, 3 surfaces. Deployed; prod verification unrecorded (audit 2026-10-15). *(archive)*
+93. **Invoice Allocate + scoped Share** — REMOVED with the invoices feature (`bebe715`, #126). *(archive)*
 
 94. **Team Portal visual redesign (big/colourful)**
 
@@ -208,7 +208,7 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 
 **Critical:** Replit's router only forwards `/api/*` to the Express server. Files must be served under `/api/uploads/` not `/uploads/` or they 404 in the frontend.
 
-- **Workspace and prod share ONE object storage bucket:** a file deleted from the workspace is gone for prod too (#126 deleted a prod invoice file this way). Since #128 the workspace writes to `.private/workspace-uploads/` and the storage client refuses deletes outside the deployed app; always go through `uploadFile`/`findUpload` in `lib/gcs.ts`.
+- **Workspace and prod share ONE object storage bucket:** a file deleted from the workspace is gone for prod too. `lib/gcs.ts` writes to `.private/workspace-uploads/` and refuses deletes outside the deployed app, but ONLY for code using it: any script with its own storage client can still delete prod files (proved 2026-10-15). Real fix: `docs/dev-repl-scope.md`.
 - Uploads are login-only since #127 (signed links); drawings/project docs/permits go out only via `/s/<token>` share links (#129)
 - Upload endpoint (`POST /api/upload`) returns `/api/uploads/<filename>` URLs
 - All frontend file links rewrite legacy `/uploads/…` to `/api/uploads/…` before use
@@ -238,8 +238,8 @@ Demo credentials: `paul@acme.com` / `password123` (company: Acme Construction)
 ## Session Log
 
 Full session-by-session detail in CLAUDE_ARCHIVE.md. Recent sessions (newest first):
-- **2026-10-15:** #129 Part B built + pushed (198/198 layout, 186 API tests). Prod probe: live = #125 only (#126, Part A, #128, #129 NOT published; prod `/api/health` has no `environment`). Restore TESTED for real: `5e5d1f77...pdf` restored from soft-delete, bytes read back (only 1 of the 4 invoice files was ever deleted). Workspace secrets: live `sk_live_` Stripe + Resend + prod VAPID still present, no `STRIPE_TEST_SECRET_KEY`/`WORKSPACE_VAPID_*`. JWT rotation: user doing it; NOT re-verified today (prod token probe blocked by permissions). Separate dev Repl: never written down, not scoped. Still open from 10-08: ex-site-manager check-in detail, portal photo GPS, daily-report check-in exposure, `req.ip` proxy.
-- **2026-10-09 (2):** prod review (`reports/prod-review-combined.sql`) closed. User runs in prod console: A1 delete (2 ids), Amy merge (3 rows to person:25f8a59f). Dump invoice rows before publishing #126. (full: archive)
+- **2026-10-15:** #129 Part B built + pushed (198/198 layout, 186 API tests). Prod probe: live = #125 only (#126, Part A, #128, #129 NOT published; prod `/api/health` has no `environment`). Restore TESTED for real: `5e5d1f77...pdf` restored from soft-delete, bytes read back (only 1 of the 4 invoice files was ever deleted). Workspace secrets: live `sk_live_` Stripe + Resend + prod VAPID still present, no `STRIPE_TEST_SECRET_KEY`/`WORKSPACE_VAPID_*`. JWT rotation: user doing it; NOT re-verified today (prod token probe blocked by permissions). Dev Repl scope: `docs/dev-repl-scope.md`. Audit of CLAUDE.md claims: `reports/claude-md-audit-2026-10-15.md`. Still open from 10-08: ex-site-manager check-in detail, portal photo GPS, daily-report check-in exposure, `req.ip` proxy.
+- **2026-10-09 (2):** prod review queries in `reports/`; results were never saved. Console fixes (A1, Amy) unconfirmed: `reports/console-fixes-check.sql`.
 - **2026-10-09:** #123 to #125 built+pushed. Binding: mobile match enough (SMS later); no mobile -> hold, never refuse; keep remembered device; no time-limited PM elevation; portal = register + gate approvals only. (full: archive)
 - **2026-10-08 SESSION CLOSE:** binding: PMs company-wide ("assigned PM" parked). (full: archive)
 - **Dev gotchas (from 2026-09-18, full text in CLAUDE_ARCHIVE.md):** rebuild+restart api-server after backend changes (`cd artifacts/api-server && NODE_ENV=development node ./build.mjs && PORT=8080 node dist/index.mjs`), vitest hits live :8080. `db push` hangs: use `psql "$DATABASE_URL"` + `ensure-schema.ts`. Run `pnpm run typecheck` after schema changes. Headless QR check-in needs geolocation permission. Push via `push-delta.ts` (403 = wait ~4 min), verify with `verify-push.ts`. Wait ~500ms before teardown.

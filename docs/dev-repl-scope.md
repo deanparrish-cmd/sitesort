@@ -1,0 +1,169 @@
+# Separate development Repl: scope
+
+Written 2026-10-15. This replaces the "scoped 2026-10-09" line in CLAUDE.md,
+which was never backed by a written scope.
+
+## Why
+
+Today the workspace and production are two halves of one Replit App. They
+share one App Storage bucket, and until tonight one `JWT_SECRET`. The #128
+guard (`lib/environment.ts`, `lib/gcs.ts`) stops the API server from emailing,
+charging, pushing, running jobs or deleting files outside the deployed app,
+but it only governs code that goes through those modules. On 2026-10-15
+`scripts/src/restore-upload.ts` wrote to production's folder with its own
+storage client, and nothing stopped it. Protection of production files is
+therefore a rule people remember, not a lock.
+
+## What Replit allows (checked 2026-10-15)
+
+From Replit's App Storage docs
+(https://docs.replit.com/cloud-services/storage-and-databases/object-storage):
+
+- "Each bucket belongs to one project and cannot be shared across apps."
+  "You cannot attach that bucket to another project, even if both projects
+  belong to the same account."
+- "Your app can upload, download, list, and delete objects in its own
+  buckets. It can't read or change bucket settings."
+- "App Storage doesn't support lifecycle rules, object versioning, or
+  retention policies." "The delete action is irreversible."
+
+Confirmed from this workspace: reading the bucket's settings returns 403
+(`heimdall-production@replit-user-deployments...` has no
+`storage.buckets.get`). The credential comes from Replit's sidecar
+(`127.0.0.1:1106`) and is Replit's managed identity.
+
+So:
+
+1. **Scoped credentials inside this Repl are not available.** There is no
+   setting that lets the workspace read production's folder but not delete
+   from it. Every process in this Repl, the workspace shell included, can
+   delete production files.
+2. **A separate Repl is a physical boundary.** Its bucket is its own; it
+   cannot reach this one.
+3. **Soft delete is undocumented.** The 2026-10-15 restore worked, but Replit
+   does not promise it, its retention or its continued existence. It is luck,
+   not a backup.
+
+## The lock, in three parts
+
+| Part | What it stops | Kind |
+|---|---|---|
+| Dev Repl with its own bucket, DB and secrets | Any dev script, agent or session touching production data | Physical (Replit boundary) |
+| Production Repl used only to pull and Publish | Day-to-day work happening where production files are deletable | Procedure, much smaller surface |
+| Off-Replit append-only backup | Loss of a production file by any route, including inside the production Repl | Physical (object lock on another provider) |
+
+The first and third parts are real locks. The second is still a rule, but it
+reduces "never run a risky script in the workspace" to "only press Pull and
+Publish in the production Repl".
+
+## Phases
+
+### 0. Make GitHub an exact copy of the code (prerequisite)
+
+`scripts/src/push-delta.ts` is additive (`base_tree`): files deleted locally
+stay on GitHub. On 2026-10-15 GitHub `main` held 1,601 files the repo does
+not, including the removed invoices feature (`routes/invoices.ts`,
+`pages/invoices/index.tsx`, `lib/db/src/schema/invoices.ts`) and
+`.pythonlibs/` junk. A Repl created from GitHub today would bring those back.
+
+- Add deletions to `push-delta.ts`: tree entries with `sha: null` for every
+  path on GitHub `main` that is not in `git ls-files`.
+- Verify: tree of GitHub `main` equals `git ls-files` (a new
+  `verify-mirror.ts`, path-for-path and blob-for-blob).
+
+### 1. Create the dev Repl
+
+- Import from GitHub (`deanparrish-cmd/sitesort`) after phase 0.
+- It gets its own PostgreSQL database and its own App Storage bucket
+  automatically. Never copy production rows into it (the current workspace
+  DB holds copies of real people's records; that ends here).
+- Secrets for the dev Repl, all new values, none copied from production:
+
+| Secret | Dev value |
+|---|---|
+| `JWT_SECRET` | new random value |
+| `STRIPE_TEST_SECRET_KEY` | Stripe test key (`sk_test_`) |
+| `STRIPE_SECRET_KEY` | not set |
+| `STRIPE_WEBHOOK_SECRET` | test-mode webhook secret, if webhooks are tested |
+| `STRIPE_PRICE_*` | test-mode price ids |
+| `RESEND_API_KEY` | not set (email stays off) |
+| `WORKSPACE_VAPID_PUBLIC_KEY` / `_PRIVATE_KEY` | new key pair |
+| `VAPID_*` | not set |
+| `APP_URL` | the dev Repl's own URL, never `www.sitesort.co.uk` (the current workspace points it at production) |
+| `OPENAI_API_KEY` / AI integration | own key or the Replit integration |
+
+- Keep the #128 guard. It still matters in the dev Repl: it keeps a dev build
+  from behaving like production even with the wrong secret set.
+
+### 2. Seed data, not production data
+
+- New `scripts/src/seed-dev.ts`: demo company (Acme Construction), Paul as
+  admin, a portal-only site worker, two projects, documents with revisions,
+  a permit, a QR code, a subcontractor with insurance. Idempotent.
+- The layout checker and API tests already create their own fixtures, so
+  they run against seed data unchanged.
+
+### 3. Move the work
+
+- All Claude Code and Replit Agent sessions run in the dev Repl. CLAUDE.md
+  and its archive travel with the repo.
+- Pushes go from the dev Repl to GitHub with `push-delta.ts` (now mirroring
+  deletions).
+- The production Repl's job becomes: pull GitHub `main`, Publish. Nothing
+  else is run there: no scripts, no agents, no shell work.
+- Production Repl workspace secrets: remove live Stripe, Resend and VAPID
+  values, which only the deployment needs (Deployment secrets hold their own
+  copies). If the workspace holds no live keys, a slip there cannot send or
+  charge either.
+
+### 4. Off-Replit append-only backup
+
+- A scheduled job in the deployed app copies each new or changed upload to
+  an external bucket with object lock: Cloudflare R2 with a bucket lock
+  rule, or AWS S3 with Object Lock in compliance mode. Retention 90 days.
+- Its credentials allow writing objects and nothing else: no delete, no
+  overwrite of a locked object, no change to lock settings. A leaked key can
+  add files but cannot remove one.
+- Same job: a nightly `pg_dump` of the production database into the same
+  locked bucket.
+- Production database backups on Replit's side: **unknown, to confirm** in
+  Replit's database tool before relying on them.
+- Prove it by restoring one file and one table from the backup into the dev
+  Repl, end to end, before calling this phase done.
+
+## Verification (each one a test you can run, not a claim)
+
+1. GitHub `main` tree equals `git ls-files` (phase 0 script, exit 0).
+2. From the dev Repl, listing production's bucket id
+   (`replit-objstore-8ff09467-...`) is refused.
+3. From the dev Repl, `/api/health` shows `deployed: false`, `stripe: test`,
+   `email: off`.
+4. A dev-signed token is refused by production `/api/auth/me` (401).
+5. A file deleted from production's folder (a test file uploaded for the
+   purpose) is restored from the locked backup and opens.
+6. An attempt to delete from the backup bucket with the job's credentials is
+   refused.
+
+## Decisions needed from Dean
+
+- Backup provider: Cloudflare R2 or AWS S3 (both support write-only keys
+  and object lock). Either has a monthly cost by storage used.
+- Who has access to the production Repl, and agreement that nothing but
+  Pull and Publish happens there.
+- Whether the current workspace DB (copies of real records) is deleted once
+  the dev Repl is working.
+
+## Rough effort
+
+| Phase | Effort |
+|---|---|
+| 0 GitHub mirror | 1 to 2 hours |
+| 1 Dev Repl + secrets | 1 to 2 hours, mostly in Replit's UI |
+| 2 Seed script | half a day |
+| 3 Move the work | 1 hour, plus habit |
+| 4 Locked backup + restore drill | about a day |
+
+## Not changing
+
+The code, the #128 guard, the deploy path (Publish from the production
+Repl), the production database and bucket.
