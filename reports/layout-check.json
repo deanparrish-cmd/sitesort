@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-09T11:35:35.656Z",
+  "generatedAt": "2026-10-15T16:38:44.485Z",
   "target": "http://localhost:8080",
   "viewports": [
     360,
@@ -18,6 +18,7 @@
       "/forgot-pin",
       "/reset-pin",
       "/guide",
+      "/s/:token",
       "/dashboard",
       "/projects",
       "/projects/:id",
@@ -33,6 +34,7 @@
       "/daily-reports",
       "/issues",
       "/checkins",
+      "/share-requests",
       "/admin",
       "/portal/login",
       "/portal/accept/:token",
@@ -130,6 +132,11 @@
         "auth": "none"
       },
       {
+        "path": "/s/_ZPGmYwLVlRjno7Ok5LKQZGMzy4IJGqJ",
+        "label": "s",
+        "auth": "none"
+      },
+      {
         "path": "/dashboard",
         "label": "dashboard",
         "auth": "app"
@@ -205,6 +212,11 @@
         "auth": "app"
       },
       {
+        "path": "/share-requests",
+        "label": "share-requests",
+        "auth": "app"
+      },
+      {
         "path": "/admin",
         "label": "admin",
         "auth": "app"
@@ -215,7 +227,7 @@
         "auth": "none"
       },
       {
-        "path": "/portal/accept/19c05f70baac235753c403a4d56de1b2f5ed92a3c03d856e89b7f04c41881529",
+        "path": "/portal/accept/27608e9747b7c987c4cfc1cf28ea8a7cec28c15ad21c80ecf66772fefb7e5fc7",
         "label": "portal-accept",
         "auth": "none"
       },
@@ -400,7 +412,7 @@
         "auth": "portal"
       }
     ],
-    "routeCount": 64,
+    "routeCount": 66,
     "legacyCoverageDefects": [
       "The previous checker manually duplicated top-level routes and therefore could miss a newly added <Route>.",
       "The previous checker omitted /verify-email, /reset-password, /forgot-pin, /reset-pin, and /portal/accept/:token.",
@@ -933,6 +945,57 @@
       ]
     },
     {
+      "label": "s",
+      "path": "/s/_ZPGmYwLVlRjno7Ok5LKQZGMzy4IJGqJ",
+      "width": 360,
+      "finalPath": "/s/_ZPGmYwLVlRjno7Ok5LKQZGMzy4IJGqJ",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 360,
+        "clientWidth": 360,
+        "viewportWidth": 360,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 360,
+            "clientWidth": 360,
+            "viewportWidth": 360,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 360,
+            "clientWidth": 360,
+            "viewportWidth": 360,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 360,
+            "clientWidth": 360,
+            "viewportWidth": 360,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
       "label": "dashboard",
       "path": "/dashboard",
       "width": 360,
@@ -1698,6 +1761,57 @@
       ]
     },
     {
+      "label": "share-requests",
+      "path": "/share-requests",
+      "width": 360,
+      "finalPath": "/share-requests",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 360,
+        "clientWidth": 360,
+        "viewportWidth": 360,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 360,
+            "clientWidth": 360,
+            "viewportWidth": 360,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 360,
+            "clientWidth": 360,
+            "viewportWidth": 360,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 360,
+            "clientWidth": 360,
+            "viewportWidth": 360,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
       "label": "admin",
       "path": "/admin",
       "width": 360,
@@ -1801,9 +1915,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/19c05f70baac235753c403a4d56de1b2f5ed92a3c03d856e89b7f04c41881529",
+      "path": "/portal/accept/27608e9747b7c987c4cfc1cf28ea8a7cec28c15ad21c80ecf66772fefb7e5fc7",
       "width": 360,
-      "finalPath": "/portal/accept/19c05f70baac235753c403a4d56de1b2f5ed92a3c03d856e89b7f04c41881529",
+      "finalPath": "/portal/accept/27608e9747b7c987c4cfc1cf28ea8a7cec28c15ad21c80ecf66772fefb7e5fc7",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -4197,6 +4311,57 @@
       ]
     },
     {
+      "label": "s",
+      "path": "/s/_ZPGmYwLVlRjno7Ok5LKQZGMzy4IJGqJ",
+      "width": 390,
+      "finalPath": "/s/_ZPGmYwLVlRjno7Ok5LKQZGMzy4IJGqJ",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "viewportWidth": 390,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 390,
+            "clientWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 390,
+            "clientWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 390,
+            "clientWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
       "label": "dashboard",
       "path": "/dashboard",
       "width": 390,
@@ -4962,6 +5127,57 @@
       ]
     },
     {
+      "label": "share-requests",
+      "path": "/share-requests",
+      "width": 390,
+      "finalPath": "/share-requests",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "viewportWidth": 390,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 390,
+            "clientWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 390,
+            "clientWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 390,
+            "clientWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
       "label": "admin",
       "path": "/admin",
       "width": 390,
@@ -5065,9 +5281,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/19c05f70baac235753c403a4d56de1b2f5ed92a3c03d856e89b7f04c41881529",
+      "path": "/portal/accept/27608e9747b7c987c4cfc1cf28ea8a7cec28c15ad21c80ecf66772fefb7e5fc7",
       "width": 390,
-      "finalPath": "/portal/accept/19c05f70baac235753c403a4d56de1b2f5ed92a3c03d856e89b7f04c41881529",
+      "finalPath": "/portal/accept/27608e9747b7c987c4cfc1cf28ea8a7cec28c15ad21c80ecf66772fefb7e5fc7",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -7461,6 +7677,57 @@
       ]
     },
     {
+      "label": "s",
+      "path": "/s/_ZPGmYwLVlRjno7Ok5LKQZGMzy4IJGqJ",
+      "width": 768,
+      "finalPath": "/s/_ZPGmYwLVlRjno7Ok5LKQZGMzy4IJGqJ",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 768,
+        "clientWidth": 768,
+        "viewportWidth": 768,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 768,
+            "clientWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 768,
+            "clientWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 768,
+            "clientWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
       "label": "dashboard",
       "path": "/dashboard",
       "width": 768,
@@ -8380,6 +8647,68 @@
       ]
     },
     {
+      "label": "share-requests",
+      "path": "/share-requests",
+      "width": 768,
+      "finalPath": "/share-requests",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 768,
+        "clientWidth": 768,
+        "viewportWidth": 768,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 768,
+            "clientWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 768,
+            "clientWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "menu-open-1",
+          "metrics": {
+            "scrollWidth": 768,
+            "clientWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 768,
+            "clientWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
       "label": "admin",
       "path": "/admin",
       "width": 768,
@@ -8483,9 +8812,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/19c05f70baac235753c403a4d56de1b2f5ed92a3c03d856e89b7f04c41881529",
+      "path": "/portal/accept/27608e9747b7c987c4cfc1cf28ea8a7cec28c15ad21c80ecf66772fefb7e5fc7",
       "width": 768,
-      "finalPath": "/portal/accept/19c05f70baac235753c403a4d56de1b2f5ed92a3c03d856e89b7f04c41881529",
+      "finalPath": "/portal/accept/27608e9747b7c987c4cfc1cf28ea8a7cec28c15ad21c80ecf66772fefb7e5fc7",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -10502,8 +10831,8 @@
     }
   ],
   "summary": {
-    "passed": 192,
+    "passed": 198,
     "failed": 0,
-    "total": 192
+    "total": 198
   }
 }

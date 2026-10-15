@@ -116,6 +116,24 @@ not, including the removed invoices feature (`routes/invoices.ts`,
   copies). If the workspace holds no live keys, a slip there cannot send or
   charge either.
 
+- **BLOCKER before removing any secret from the production Repl
+  workspace (Dean, 2026-10-15):** in the Deployment secrets pane,
+  `JWT_SECRET`, `SESSION_SECRET`, `RESEND_API_KEY`, both Stripe keys and the
+  object storage secrets carry a blue chain icon (`DATABASE_URL`/`PG*` a
+  globe). Replit's docs only describe a chain for account secrets linked
+  into a project ("Linked secrets stay in sync with your account secrets"),
+  and say nothing on what Unlink leaves behind. If these are account-level
+  or workspace-linked, deleting one in the workspace may delete it from
+  production too. Resolve with the `LINK_TEST` dummy-secret test first.
+- Proof they are shared today: a token signed with the workspace
+  `JWT_SECRET` (2-minute expiry, demo admin Paul) returned **200** from
+  production `/api/auth/me` on 2026-10-15. Rotation waits until the chain is
+  understood. Rotating `JWT_SECRET` also resets: every login, upload link
+  signatures (`lib/signed-uploads.ts`, 12 to 24h, refresh themselves), QR
+  remembered devices (180 days, workers re-identify by mobile) and held
+  check-in tokens (24h). `/s/<token>` share links are random tokens stored
+  hashed, not affected.
+
 ### 4. Off-Replit append-only backup
 
 - A scheduled job in the deployed app copies each new or changed upload to
