@@ -144,14 +144,17 @@ not, including the removed invoices feature (`routes/invoices.ts`,
 6. An attempt to delete from the backup bucket with the job's credentials is
    refused.
 
-## Decisions needed from Dean
+## Decisions (Dean, 2026-10-15)
 
-- Backup provider: Cloudflare R2 or AWS S3 (both support write-only keys
-  and object lock). Either has a monthly cost by storage used.
-- Who has access to the production Repl, and agreement that nothing but
-  Pull and Publish happens there.
-- Whether the current workspace DB (copies of real records) is deleted once
-  the dev Repl is working.
+- Backup provider: **Cloudflare R2 with bucket lock rules.**
+- Production Repl access: **Dean only.** Testers never need it.
+- Workspace database copies of real records: **delete once the dev Repl
+  works.** Identical ids in both databases are what let a workspace run
+  delete a production file on 2026-10-09.
+- Phases 0 to 3: go ahead in order after the 2026-10-15 publish settles.
+- Interim, this week: one-off manual export of the production database and
+  files to R2 (`scripts/src/export-uploads.ts`, steps in the session of
+  2026-10-15). Phase 4 then builds the automated locked version.
 
 ## Rough effort
 
