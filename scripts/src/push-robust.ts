@@ -13,7 +13,7 @@ const OWNER = "deanparrish-cmd", REPO = "sitesort";
 const IGNORE = new Set([
   "node_modules", ".git", "dist", "build", ".cache", ".local", "snippets",
   ".pnpm-store", "coverage", ".turbo", ".next", ".config", ".npm", ".vscode-server",
-  ".upm", ".replit_cache", "tmp",
+  ".upm", ".replit_cache", "tmp", ".backups",
 ]);
 // The Replit Connectors proxy rejects request bodies over ~1MB (nginx 413). base64 inflates
 // by ~4/3, so cap raw bytes so the encoded blob payload stays safely under the limit.

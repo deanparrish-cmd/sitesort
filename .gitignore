@@ -47,3 +47,6 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Local database dumps for download only. Never commit or push (people's data).
+.backups/
