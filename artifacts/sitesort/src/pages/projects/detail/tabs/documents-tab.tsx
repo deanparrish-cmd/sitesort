@@ -36,6 +36,10 @@ const DOCUMENT_TYPE_LABELS: Record<string, string> = {
 export function DocumentsTab() {
   const {
     documents,
+    refetchDocs,
+    docsLoading,
+    docsError,
+    docsFetching,
     members,
     setIsUploadOpen,
     openRevHistory,
@@ -109,6 +113,20 @@ export function DocumentsTab() {
           </div>
 
           <div className="bg-card border rounded-xl shadow-sm overflow-hidden">
+            {documents === undefined && (docsLoading || (docsFetching && !docsError)) && (
+              <div className="px-6 py-12 flex items-center justify-center gap-2 text-muted-foreground" role="status">
+                <Loader2 className="w-4 h-4 animate-spin" /> Loading documents...
+              </div>
+            )}
+            {documents === undefined && docsError && !docsFetching && (
+              <div className="px-6 py-12 text-center" role="alert">
+                <p className="text-sm font-medium">Couldn't load the documents.</p>
+                <p className="text-xs text-muted-foreground mt-1">Check your connection and try again.</p>
+                <Button variant="secondary" size="sm" className="mt-4" onClick={() => refetchDocs()}>
+                  <RefreshCw className="w-4 h-4 mr-2" /> Try again
+                </Button>
+              </div>
+            )}
             {/* Mobile + tablet card list (below 1280px) */}
             <div className="block xl:hidden divide-y">
               {(documents ?? []).filter(d =>

@@ -61,7 +61,17 @@ export function useProjectDetailState() {
   const defaultTab = new URLSearchParams(window.location.search).get("tab") || "documents";
 
   const { data: project, isLoading: projectLoading } = useGetProject(projectId, { query: { enabled: !!projectId, queryKey: getGetProjectQueryKey(projectId) } });
-  const { data: documents, refetch: refetchDocs } = useListDocuments(projectId, undefined, { query: { enabled: !!projectId, queryKey: getListDocumentsQueryKey(projectId, undefined) } });
+  // A failed load used to leave the list blank with no message until a manual
+  // refresh (retry is off app-wide and nothing refetched). Here: retry network
+  // and server errors twice, reload when the user comes back to the tab (e.g.
+  // after opening a drawing in a new tab), and expose loading/error so the tab
+  // can say what is happening.
+  const { data: documents, refetch: refetchDocs, isLoading: docsLoading, isError: docsError, isFetching: docsFetching } = useListDocuments(projectId, undefined, { query: {
+    enabled: !!projectId,
+    queryKey: getListDocumentsQueryKey(projectId, undefined),
+    retry: (count, err) => count < 2 && !((err as { status?: number })?.status && (err as { status: number }).status < 500),
+    refetchOnWindowFocus: true,
+  } });
   const { data: members } = useListProjectMembers(projectId, { query: { enabled: !!projectId, queryKey: getListProjectMembersQueryKey(projectId) } });
 
 
@@ -1393,6 +1403,9 @@ tr:last-child td{border-bottom:none}
     projectLoading,
     documents,
     refetchDocs,
+    docsLoading,
+    docsError,
+    docsFetching,
     members,
     permits,
     setPermits,

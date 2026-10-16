@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import bcrypt from "bcryptjs";
 import { db } from "@workspace/db";
 import { documentsTable, documentDistributionsTable, usersTable, projectsTable, acknowledgmentAuditTable } from "@workspace/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { allow, COMPANY_MANAGER, INTERNAL_STAFF, projectApprover, projectApproverFor } from "../lib/authz";
@@ -111,15 +111,32 @@ router.get("/projects/:projectId/documents", authenticate, allow(INTERNAL_STAFF)
 
     const docs = await db.select().from(documentsTable).where(and(...conditions)).orderBy(documentsTable.createdAt);
 
-    const result = await Promise.all(docs.map(async (d) => {
-      const dists = await db.select({ userId: documentDistributionsTable.userId, status: documentDistributionsTable.status }).from(documentDistributionsTable).where(eq(documentDistributionsTable.documentId, d.id));
-      const uploaderRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, d.uploadedBy)).limit(1);
+    // Two queries for the whole list (it was two per document, all at once,
+    // against a pool of 10: slow on big projects and a likely cause of the
+    // list failing to load).
+    const docIds = docs.map(d => d.id);
+    const uploaderIds = [...new Set(docs.map(d => d.uploadedBy))];
+    const [allDists, uploaders] = docIds.length === 0 ? [[], []] : await Promise.all([
+      db.select({ documentId: documentDistributionsTable.documentId, userId: documentDistributionsTable.userId, status: documentDistributionsTable.status })
+        .from(documentDistributionsTable).where(inArray(documentDistributionsTable.documentId, docIds)),
+      db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(inArray(usersTable.id, uploaderIds)),
+    ]);
+    const distsByDoc = new Map<string, { userId: string; status: string }[]>();
+    for (const r of allDists) {
+      const list = distsByDoc.get(r.documentId) ?? [];
+      list.push(r);
+      distsByDoc.set(r.documentId, list);
+    }
+    const uploaderName = new Map(uploaders.map(u => [u.id, u.name]));
+
+    const result = docs.map((d) => {
+      const dists = distsByDoc.get(d.id) ?? [];
       const myDist = dists.find(dist => dist.userId === req.user!.id);
       return {
         id: d.id,
         projectId: d.projectId,
         uploadedBy: d.uploadedBy,
-        uploaderName: uploaderRows[0]?.name ?? "Unknown",
+        uploaderName: uploaderName.get(d.uploadedBy) ?? "Unknown",
         name: d.name,
         type: d.type,
         version: d.version,
@@ -136,7 +153,7 @@ router.get("/projects/:projectId/documents", authenticate, allow(INTERNAL_STAFF)
         distributionSummary: getDistSummary(dists),
         myDistributionStatus: myDist?.status ?? null,
       };
-    }));
+    });
 
     res.json(result);
   } catch (err) {
