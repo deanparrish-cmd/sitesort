@@ -36,6 +36,8 @@ app.use(
 app.use(cors());
 // Stripe webhook needs the raw body for signature verification — must come before express.json()
 app.use("/api/billing/webhook", express.raw({ type: "application/json" }));
+// Resend delivery reports are signed over the exact bytes too (routes/email-webhook.ts).
+app.use("/api/email/webhook", express.raw({ type: "*/*" }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 // Upload links leave signed (login-only files) and come back bare.

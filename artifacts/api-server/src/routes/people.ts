@@ -142,7 +142,7 @@ async function deliverInvite(params: {
   inviteId: string; email: string; name: string; role: string;
   inviterName: string; companyName: string; projectName: string; inviteUrl: string;
 }): Promise<"sent" | "failed"> {
-  const result = await sendProjectInviteEmail(params);
+  const result = await sendProjectInviteEmail({ ...params, inviteId: params.inviteId });
   const emailStatus = result.delivered ? "sent" : "failed";
   await db.update(projectInvitesTable)
     .set({ emailStatus, emailLastSentAt: new Date() })

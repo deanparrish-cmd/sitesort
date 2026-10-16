@@ -39,6 +39,7 @@ export * from "./share_logs";
 export * from "./user_notes";
 export * from "./calendar_events";
 export * from "./expiry_reminder_logs";
+export * from "./email_log";
 export * from "./stripe_webhook_events";
 export * from "./plant_items";
 export * from "./plant_item_attachments";

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PortalStatusPill, PortalPermissionToggles, PermissionTogglePill, type PillSource } from "../../portal-people";
@@ -187,6 +187,25 @@ export function TeamTab() {
     openSchedule,
   } = useDetail();
 
+  // ?person=<id> (e.g. from an "invite email bounced" notification): open that
+  // person's trade folder, scroll to their card and ring it for a few seconds.
+  const [highlightPerson, setHighlightPerson] = useState<string | null>(
+    () => (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("person") : null),
+  );
+  useEffect(() => {
+    if (!highlightPerson || !members) return;
+    const m = (members as any[]).find(x => x.personId === highlightPerson);
+    if (!m) return;
+    const trade = m.trades?.length ? m.trades[0] : "Site Staff";
+    if (!isFolderOpen(trade)) toggleFolder(trade);
+    const scroll = setTimeout(() => {
+      document.querySelector(`[data-person-id="${CSS.escape(highlightPerson)}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 150);
+    const clear = setTimeout(() => setHighlightPerson(null), 5000);
+    return () => { clearTimeout(scroll); clearTimeout(clear); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [members, highlightPerson]);
+
   // One card per person; a firm with 2+ people on this project gets a shared
   // strip above its cards (company name, trades, PLI badge, "Remove company
   // from project"). A firm with exactly one person (the common case — most
@@ -202,7 +221,7 @@ export function TeamTab() {
       // no `people` row yet) — falls back to the original lazy-create-by-email path.
       : (isSubcontractor ? { kind: "subcontractor", subcontractorId: member.subcontractorId } : { kind: "in_house" });
     return (
-      <div key={member.id} className="bg-card border rounded-xl p-5 flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow min-w-0 overflow-hidden">
+      <div key={member.id} data-person-id={member.personId ?? undefined} className={cn("bg-card border rounded-xl p-5 flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow min-w-0 overflow-hidden", highlightPerson && member.personId === highlightPerson && "ring-2 ring-primary")}>
         <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 min-w-0">
           <div className="flex items-center gap-3 min-w-0">
             <label className={cn("relative shrink-0", caps.canManageTeam ? "cursor-pointer group" : "cursor-default")} title={caps.canManageTeam ? "Click to upload photo" : undefined}>

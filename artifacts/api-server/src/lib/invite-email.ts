@@ -14,6 +14,9 @@ export async function sendProjectInviteEmail(params: {
   projectName: string;
   role: string;
   inviteUrl: string;
+  // The project_invites row, so a bounce reported later by the Resend webhook
+  // marks THIS invite failed (routes/email-webhook.ts).
+  inviteId?: string;
 }): Promise<{ delivered: boolean; providerId?: string; error?: string }> {
   try {
     const res = await sendPortalInviteEmail({
@@ -24,12 +27,9 @@ export async function sendProjectInviteEmail(params: {
       projectName: params.projectName,
       role: params.role,
       inviteUrl: params.inviteUrl,
+      ref: params.inviteId ? { type: "project_invite", id: params.inviteId } : undefined,
     });
-    // Resend returns { data: { id }, error }. A non-null error means it was rejected.
-    if (res.error) {
-      logger.error({ email: params.email, project: params.projectName, err: res.error }, "Portal invite email rejected by provider");
-      return { delivered: false, error: res.error.message ?? "send_rejected" };
-    }
+    // A refusal by Resend throws (EmailRefusedError) and lands in the catch.
     logger.info({ email: params.email, project: params.projectName, providerId: res.data?.id }, "Portal invite email sent");
     return { delivered: true, providerId: res.data?.id };
   } catch (err: any) {

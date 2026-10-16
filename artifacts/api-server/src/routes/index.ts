@@ -33,6 +33,7 @@ import plantItemsRouter from "./plant-items";
 import personCertificationsRouter from "./person-certifications";
 import portalMessagesRouter from "./portal-messages";
 import { authenticate } from "../middlewares/auth";
+import emailWebhookRouter from "./email-webhook";
 import { enforceDeclaredRoutes } from "../lib/authz";
 import { logger } from "../lib/logger";
 
@@ -58,6 +59,7 @@ router.use(testEmailRouter);
 router.use(messagesRouter);
 router.use(channelsRouter);
 router.use(billingRouter);
+router.use(emailWebhookRouter);
 router.use(onboardingRouter);
 router.use(reportsRouter);
 router.use(shareLogsRouter);

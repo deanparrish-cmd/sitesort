@@ -8,6 +8,7 @@ import { and, eq, gte, lte, isNull } from "drizzle-orm";
 import { sendPermitExpiryEmail, sendInsuranceExpiryEmail, sendPersonCertExpiryEmail } from "./email";
 import { daysUntilExpiry } from "./expiry";
 import { logger } from "./logger";
+import { notify } from "./db-watchdog";
 
 // Pre-expiry reminder thresholds (days before expiry). One email is sent the
 // first time an item's days-remaining drops to or below each threshold.
@@ -50,6 +51,18 @@ async function claimMilestone(entityType: string, entityId: string, milestone: s
   return inserted.length > 0;
 }
 
+// Undo a claim when the email didn't go, so the next run sends it. Before
+// 2026-10-16 the claim stood even when Resend refused the email: the reminder
+// was recorded as sent and never retried. The milestone stays the same the
+// next day (a 7-day reminder is still due at 6 days), so a retry is on time.
+async function releaseMilestone(entityType: string, entityId: string, milestone: string): Promise<void> {
+  await db.delete(expiryReminderLogsTable).where(and(
+    eq(expiryReminderLogsTable.entityType, entityType),
+    eq(expiryReminderLogsTable.entityId, entityId),
+    eq(expiryReminderLogsTable.milestone, milestone),
+  ));
+}
+
 // Date-string bounds for the scan window: from EXPIRED_GRACE_DAYS in the past to
 // 30 days ahead. Anything outside this can't have a milestone due today.
 function scanWindow(now: Date): { fromStr: string; toStr: string } {
@@ -60,11 +73,16 @@ function scanWindow(now: Date): { fromStr: string; toStr: string } {
 
 // Per-run tally of what happened to each scanned item, so a run that sends
 // nothing still explains itself in the logs instead of going dark.
-type ReminderStats = { scanned: number; noMilestone: number; notifyOff: number; deduped: number; sent: number };
+type ReminderStats = { scanned: number; noMilestone: number; notifyOff: number; deduped: number; sent: number; failed: number };
+
+// A reminder Resend refused (or that never reached it). Its milestone is
+// un-recorded so the next run tries again, and the run emails OPS_ALERT_EMAIL.
+type ReminderFailure = { what: string; to: string; error: string };
+const errMsg = (err: unknown) => err instanceof Error ? err.message : String(err);
 
 // Permits expiring soon / expired → email the responsible user (one per milestone).
-async function runPermitReminders(now: Date): Promise<ReminderStats> {
-  const stats: ReminderStats = { scanned: 0, noMilestone: 0, notifyOff: 0, deduped: 0, sent: 0 };
+async function runPermitReminders(now: Date, failures: ReminderFailure[]): Promise<ReminderStats> {
+  const stats: ReminderStats = { scanned: 0, noMilestone: 0, notifyOff: 0, deduped: 0, sent: 0, failed: 0 };
   const { fromStr, toStr } = scanWindow(now);
 
   const permits = await db
@@ -104,24 +122,32 @@ async function runPermitReminders(now: Date): Promise<ReminderStats> {
       .where(eq(projectsTable.id, permit.projectId))
       .limit(1);
 
-    stats.sent++;
     logger.info({ permitId: permit.id, milestone, daysLeft, to: user.email }, "Sending permit expiry email");
-    sendPermitExpiryEmail(
-      user.email,
-      user.name,
-      permit.type,
-      permit.description,
-      project?.name ?? "Unknown project",
-      daysLeft,
-    ).catch(err => logger.warn({ err, permitId: permit.id }, "Failed to send permit expiry email"));
+    try {
+      await sendPermitExpiryEmail(
+        user.email,
+        user.name,
+        permit.type,
+        permit.description,
+        project?.name ?? "Unknown project",
+        daysLeft,
+        { type: "reminder", id: `permit:${permit.id}:${milestone}` },
+      );
+      stats.sent++;
+    } catch (err) {
+      await releaseMilestone("permit", permit.id, milestone);
+      stats.failed++;
+      failures.push({ what: `Permit ${permit.type} on ${project?.name ?? "a project"} (${milestone})`, to: user.email, error: errMsg(err) });
+      logger.error({ err, permitId: permit.id, milestone }, "Permit expiry email not sent; will retry next run");
+    }
   }
   return stats;
 }
 
 // Subcontractor insurance expiring soon / expired. Insurance has no single
 // responsible user, so alerts go to the company's admins (who manage compliance).
-async function runInsuranceReminders(now: Date): Promise<ReminderStats> {
-  const stats: ReminderStats = { scanned: 0, noMilestone: 0, notifyOff: 0, deduped: 0, sent: 0 };
+async function runInsuranceReminders(now: Date, failures: ReminderFailure[]): Promise<ReminderStats> {
+  const stats: ReminderStats = { scanned: 0, noMilestone: 0, notifyOff: 0, deduped: 0, sent: 0, failed: 0 };
   const { fromStr, toStr } = scanWindow(now);
 
   // Cache company admins to avoid re-querying per record.
@@ -165,17 +191,21 @@ async function runInsuranceReminders(now: Date): Promise<ReminderStats> {
     // One claim per record+milestone — admins are notified together as a batch.
     if (!(await claimMilestone("insurance", record.id, milestone))) { stats.deduped++; continue; }
 
-    stats.sent++;
-    logger.info({ recordId: record.id, milestone, daysLeft, recipients: admins.length }, "Sending insurance expiry email");
+    logger.info({ recordId: record.id, milestone, daysLeft, recipients: admins.length }, "Sending Insurance expiry email");
+    // Recorded as sent if at least one admin's email was accepted; if none
+    // was, un-recorded so the next run tries again.
+    let accepted = 0;
     for (const admin of admins) {
-      sendInsuranceExpiryEmail(
-        admin.email,
-        admin.name,
-        record.type,
-        record.subcontractorName,
-        daysLeft,
-      ).catch(err => logger.warn({ err, recordId: record.id }, "Failed to send insurance expiry email"));
+      try {
+        await sendInsuranceExpiryEmail(admin.email, admin.name, record.type, record.subcontractorName, daysLeft, { type: "reminder", id: `insurance:${record.id}:${milestone}` });
+        accepted++;
+      } catch (err) {
+        failures.push({ what: `${record.subcontractorName} ${record.type} insurance (${milestone})`, to: admin.email, error: errMsg(err) });
+        logger.error({ err, recordId: record.id, milestone }, "Insurance expiry email not sent");
+      }
     }
+    if (accepted > 0) stats.sent++;
+    else { await releaseMilestone("insurance", record.id, milestone); stats.failed++; }
   }
   return stats;
 }
@@ -183,8 +213,8 @@ async function runInsuranceReminders(now: Date): Promise<ReminderStats> {
 // Person certifications (CSCS, SSSTS, gas safe, plant tickets, etc.) expiring
 // soon / expired. Same shape as runInsuranceReminders — notifies company admins
 // (compliance is a PM/admin concern, not the individual's).
-async function runPersonCertReminders(now: Date): Promise<ReminderStats> {
-  const stats: ReminderStats = { scanned: 0, noMilestone: 0, notifyOff: 0, deduped: 0, sent: 0 };
+async function runPersonCertReminders(now: Date, failures: ReminderFailure[]): Promise<ReminderStats> {
+  const stats: ReminderStats = { scanned: 0, noMilestone: 0, notifyOff: 0, deduped: 0, sent: 0, failed: 0 };
   const { fromStr, toStr } = scanWindow(now);
 
   const adminsByCompany = new Map<string, Array<{ name: string; email: string }>>();
@@ -226,33 +256,50 @@ async function runPersonCertReminders(now: Date): Promise<ReminderStats> {
 
     if (!(await claimMilestone("person_cert", cert.id, milestone))) { stats.deduped++; continue; }
 
-    stats.sent++;
-    logger.info({ certId: cert.id, milestone, daysLeft, recipients: admins.length }, "Sending person certification expiry email");
+    logger.info({ certId: cert.id, milestone, daysLeft, recipients: admins.length }, "Sending Person certification expiry email");
+    // Recorded as sent if at least one admin's email was accepted; if none
+    // was, un-recorded so the next run tries again.
+    let accepted = 0;
     for (const admin of admins) {
-      sendPersonCertExpiryEmail(
-        admin.email,
-        admin.name,
-        cert.name,
-        cert.personName,
-        daysLeft,
-      ).catch(err => logger.warn({ err, certId: cert.id }, "Failed to send person cert expiry email"));
+      try {
+        await sendPersonCertExpiryEmail(admin.email, admin.name, cert.name, cert.personName, daysLeft, { type: "reminder", id: `person_cert:${cert.id}:${milestone}` });
+        accepted++;
+      } catch (err) {
+        failures.push({ what: `${cert.personName} ${cert.name} (${milestone})`, to: admin.email, error: errMsg(err) });
+        logger.error({ err, certId: cert.id, milestone }, "Person certification expiry email not sent");
+      }
     }
+    if (accepted > 0) stats.sent++;
+    else { await releaseMilestone("person_cert", cert.id, milestone); stats.failed++; }
   }
   return stats;
 }
 
+// One email per run to OPS_ALERT_EMAIL listing every reminder that didn't go.
+async function alertReminderFailures(failures: ReminderFailure[]): Promise<void> {
+  const shown = failures.slice(0, 30);
+  await notify(`SiteSort: ${failures.length} expiry reminder${failures.length === 1 ? "" : "s"} could not be sent`, [
+    "These expiry reminder emails were refused or could not reach the email service. Nobody was warned about these yet.",
+    ...shown.map(f => `${f.what}. To ${f.to}. ${f.error}`),
+    ...(failures.length > shown.length ? [`And ${failures.length - shown.length} more.`] : []),
+    "Each one will be tried again the next time reminders run. Check Resend if this keeps happening.",
+  ]).catch(err => logger.error({ err }, "reminder failure alert not sent"));
+}
+
 // Called once at startup and then every 24 h.
-async function runComplianceReminders() {
+export async function runComplianceReminders() {
   try {
     if (!process.env.RESEND_API_KEY) {
       logger.warn("Compliance reminders skipped: RESEND_API_KEY is not set");
       return;
     }
     const now = new Date();
-    const permits = await runPermitReminders(now);
-    const insurance = await runInsuranceReminders(now);
-    const personCerts = await runPersonCertReminders(now);
+    const failures: ReminderFailure[] = [];
+    const permits = await runPermitReminders(now, failures);
+    const insurance = await runInsuranceReminders(now, failures);
+    const personCerts = await runPersonCertReminders(now, failures);
     logger.info({ permits, insurance, personCerts }, "Compliance reminders run complete");
+    if (failures.length) await alertReminderFailures(failures);
   } catch (err) {
     logger.error({ err }, "Compliance reminders error");
   }

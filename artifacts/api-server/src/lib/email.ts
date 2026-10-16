@@ -1,6 +1,9 @@
 import { Resend } from "resend";
 import { IS_DEPLOYED } from "./environment";
 import { logger } from "./logger";
+import { db } from "@workspace/db";
+import { emailLogTable } from "@workspace/db/schema";
+import { generateId } from "./id";
 import { WORKER_GUIDE } from "@workspace/user-guide";
 
 const FROM = "SiteSort <noreply@mail.sitesort.co.uk>";
@@ -22,30 +25,77 @@ function resend() {
 // Never send to reserved, undeliverable test domains (RFC 2606: .test,
 // .invalid, .example, example.com/.net/.org). Automated tests create users on
 // those addresses; this keeps them from reaching the live mail provider.
-const RESERVED_TEST_DOMAIN = /@(?:[^@\s]+\.)?(?:[^@.\s]+\.(?:test|invalid|example|localhost|local)|example\.(?:com|net|org))$/i;
+// Matches the bare name too (x@test, x@localhost), not only x@a.test.
+const RESERVED_TEST_DOMAIN = /@(?:[^@\s]*\.)?(?:test|invalid|example|localhost|local|example\.(?:com|net|org))$/i;
 export function isReservedTestAddress(to: string): boolean {
   return RESERVED_TEST_DOMAIN.test(to.trim());
 }
 
-function send(opts: { to: string; subject: string; html: string; text: string; from?: string }) {
+// What an email was for, so a bounce reported later by the Resend webhook can
+// be traced back to it (e.g. { type: "project_invite", id: inviteId }).
+export type EmailRef = { type: string; id: string };
+
+// Resend refused the email (bad address, unverified domain, rate limit, paused
+// account). Resend's SDK reports these in its return value and does NOT throw,
+// so before 2026-10-16 every `.catch()` around a send missed them: a refused
+// expiry reminder was recorded as sent. send() now throws this instead.
+export class EmailRefusedError extends Error {
+  constructor(message: string) { super(`Resend refused the email: ${message}`); this.name = "EmailRefusedError"; }
+}
+
+type SendOpts = { to: string; subject: string; html: string; text: string; from?: string; ref?: EmailRef; noLog?: boolean };
+type Transport = (payload: { from: string; replyTo: string; to: string; subject: string; html: string; text: string }) =>
+  Promise<{ data: { id: string } | null; error: { message?: string; name?: string } | null }>;
+
+// Test seam ONLY: lets tests stand in for Resend (to make it refuse) without
+// a live key. Never set outside tests.
+let testTransport: Transport | null = null;
+export function __setEmailTransportForTests(t: Transport | null): void { testTransport = t; }
+
+// Best-effort: the log must never stop an email or crash a caller. Ops alerts
+// pass noLog (they're sent when the database may be the thing that's down).
+async function logEmail(opts: SendOpts, status: "sent" | "refused", providerId: string | null, error: string | null) {
+  if (opts.noLog) return;
+  try {
+    await db.insert(emailLogTable).values({
+      id: generateId(), providerId, toAddress: opts.to, subject: opts.subject,
+      refType: opts.ref?.type ?? null, refId: opts.ref?.id ?? null, status, error,
+    });
+  } catch (err) {
+    logger.warn({ err, subject: opts.subject }, "email log write failed");
+  }
+}
+
+// Returns Resend's { data, error } shape for the callers that read it, but a
+// refusal THROWS (EmailRefusedError) so no caller can miss it.
+async function send(opts: SendOpts): Promise<{ data: { id: string } | null; error: null }> {
   if (isReservedTestAddress(opts.to)) {
-    return Promise.resolve({ data: { id: "skipped-reserved-test-domain" }, error: null });
+    return { data: { id: "skipped-reserved-test-domain" }, error: null };
   }
   // Outside the deployed app no email ever leaves: the workspace database holds
   // real people's addresses (copied rows), and it once sent them certificate
   // reminders. Logged so a dev can see what would have gone.
-  if (!IS_DEPLOYED) {
+  if (!IS_DEPLOYED && !testTransport) {
     logger.info({ subject: opts.subject }, "email suppressed outside the deployed app");
-    return Promise.resolve({ data: { id: "suppressed-not-deployed" }, error: null });
+    return { data: { id: "suppressed-not-deployed" }, error: null };
   }
-  return resend().emails.send({
-    from: opts.from ?? FROM,
-    replyTo: REPLY_TO,
-    to: opts.to,
-    subject: opts.subject,
-    html: opts.html,
-    text: opts.text,
-  });
+  const payload = { from: opts.from ?? FROM, replyTo: REPLY_TO, to: opts.to, subject: opts.subject, html: opts.html, text: opts.text };
+  let result: Awaited<ReturnType<Transport>>;
+  try {
+    result = testTransport ? await testTransport(payload) : await resend().emails.send(payload) as Awaited<ReturnType<Transport>>;
+  } catch (err) {
+    // Network failure or missing key: never reached Resend.
+    await logEmail(opts, "refused", null, err instanceof Error ? err.message : String(err));
+    throw err;
+  }
+  if (result.error) {
+    const message = result.error.message ?? result.error.name ?? "unknown error";
+    logger.error({ subject: opts.subject, ref: opts.ref, error: message }, "email refused by Resend");
+    await logEmail(opts, "refused", null, message);
+    throw new EmailRefusedError(message);
+  }
+  await logEmail(opts, "sent", result.data?.id ?? null, null);
+  return { data: result.data, error: null };
 }
 
 // Strip a name down to a usable greeting, with a sensible fallback.
@@ -425,6 +475,7 @@ export async function sendPermitExpiryEmail(
   description: string,
   projectName: string,
   daysLeft: number,
+  ref?: EmailRef,
 ) {
   const link = `${APP_URL}/compliance`;
   const greeting = firstName(name);
@@ -448,6 +499,7 @@ export async function sendPermitExpiryEmail(
         : `A permit you are responsible for on ${project} expired ${dayLabel} ago.`)
     : `A permit you are responsible for on ${project} expires in ${dayLabel}.`;
   return send({
+    ref,
     to,
     subject,
     html: layout(`
@@ -484,6 +536,7 @@ export async function sendInsuranceExpiryEmail(
   insuranceType: string,
   subcontractorName: string,
   daysLeft: number,
+  ref?: EmailRef,
 ) {
   const link = `${APP_URL}/compliance`;
   const greeting = firstName(name);
@@ -502,6 +555,7 @@ export async function sendInsuranceExpiryEmail(
     : `An insurance certificate for ${sub} expires in ${dayLabel}.`;
   const urgent = expired || daysLeft <= 7;
   return send({
+    ref,
     to,
     subject,
     html: layout(`
@@ -537,6 +591,7 @@ export async function sendPersonCertExpiryEmail(
   certName: string,
   personName: string,
   daysLeft: number,
+  ref?: EmailRef,
 ) {
   const link = `${APP_URL}/compliance`;
   const greeting = firstName(name);
@@ -555,6 +610,7 @@ export async function sendPersonCertExpiryEmail(
     : `A certification for ${person} expires in ${dayLabel}.`;
   const urgent = expired || daysLeft <= 7;
   return send({
+    ref,
     to,
     subject,
     html: layout(`
@@ -636,6 +692,7 @@ export async function sendPortalInviteEmail(params: {
   projectName: string;
   role: string;
   inviteUrl: string;
+  ref?: EmailRef;
 }) {
   const greeting = firstName(params.name);
   const inviter = params.inviterName?.trim() || "Your project manager";
@@ -645,6 +702,7 @@ export async function sendPortalInviteEmail(params: {
   const portalUrl = `${APP_URL}/portal/login`;
   const guideUrl = `${APP_URL}/guide`;
   return send({
+    ref: params.ref,
     from: INVITE_FROM,
     to: params.to,
     subject: `${inviter} invited you to ${project} on SiteSort`,
@@ -781,12 +839,12 @@ You can manage email notifications in your SiteSort account settings.`),
 export async function sendOpsAlertEmail(to: string, subject: string, lines: string[]): Promise<string | undefined> {
   const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const result = await send({
+    noLog: true,
     to,
     subject,
     text: lines.join("\n\n"),
     html: layout(lines.map(l => `<p style="margin:0 0 12px;font-size:14px;color:#111827;">${esc(l)}</p>`).join("")),
   });
-  if (result.error) throw new Error(`Resend: ${result.error.message}`);
   return result.data?.id;
 }
 

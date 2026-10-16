@@ -95,6 +95,14 @@ export async function navigateToNotification(n: NotificationLike, navigate: (to:
     navigate(`/share-requests?request=${id}`);
     return true;
   }
+  // A portal invite email bounced (Resend webhook): relatedEntityId is the
+  // PERSON; their card on the project's Team tab, where Resend invite lives.
+  if (n.type === "invite_email_bounced") {
+    const projectId = typeof n.metadata?.projectId === "string" ? n.metadata.projectId : null;
+    if (!projectId) return false;
+    navigate(`/projects/${projectId}?tab=team&person=${encodeURIComponent(id)}`);
+    return true;
+  }
   if (n.type === "portal_plant_item_logged") {
     navigate(`/projects/${id}?tab=plant`);
     return true;

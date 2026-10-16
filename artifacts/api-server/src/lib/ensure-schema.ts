@@ -38,6 +38,24 @@ export async function ensureSchema(): Promise<void> {
         CONSTRAINT expiry_reminder_logs_entity_milestone_uq UNIQUE (entity_type, entity_id, milestone)
       )
     `);
+    // Every email handed to Resend, updated by the Resend webhook (bounces,
+    // complaints, deliveries). See lib/db/src/schema/email_log.ts.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS email_log (
+        id text PRIMARY KEY,
+        provider_id text,
+        to_address text NOT NULL,
+        subject text NOT NULL,
+        ref_type text,
+        ref_id text,
+        status text NOT NULL,
+        error text,
+        created_at timestamp NOT NULL DEFAULT now(),
+        updated_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS email_log_provider_idx ON email_log (provider_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS email_log_ref_idx ON email_log (ref_type, ref_id)`);
     // Dedup ledger for Stripe webhook deliveries — the webhook claims each event
     // id here (ON CONFLICT DO NOTHING) and skips duplicates/retries so a redelivered
     // event can't create duplicate subscriptions/charges. New table → must exist in
