@@ -1,7 +1,8 @@
 import webpush from "web-push";
 import { db } from "@workspace/db";
-import { pushSubscriptionsTable } from "@workspace/db/schema";
-import { and, eq } from "drizzle-orm";
+import { pushSubscriptionsTable, projectMembersTable } from "@workspace/db/schema";
+import { and, eq, ne, notInArray, isNotNull } from "drizzle-orm";
+import { generateId } from "./id";
 import { logger } from "./logger";
 import { vapidKeys } from "./environment";
 
@@ -29,6 +30,38 @@ export function isPushConfigured(): boolean {
 }
 export function getVapidPublicKey(): string | null {
   return configured ? PUBLIC_KEY : null;
+}
+
+// Register this phone for push on EVERY project its member is on the portal
+// for, plus the one it's on now. Before, a phone held one row and opening
+// another project moved it there, silently ending the first project's alerts
+// (a held-at-the-gate alert reached nobody) while the toggle still showed On.
+// A phone now signed in as someone else drops the previous person's rows, so
+// their alerts don't land on a phone they no longer use. Returns project ids.
+export async function registerPushDevice(
+  userId: string, currentProjectId: string,
+  sub: { endpoint: string; p256dh: string; auth: string; userAgent: string | null },
+): Promise<string[]> {
+  const memberships = await db.select({ projectId: projectMembersTable.projectId }).from(projectMembersTable)
+    .where(and(eq(projectMembersTable.userId, userId), isNotNull(projectMembersTable.personId)));
+  const projectIds = [...new Set([currentProjectId, ...memberships.map(m => m.projectId)])];
+  await db.transaction(async (tx) => {
+    await tx.delete(pushSubscriptionsTable)
+      .where(and(eq(pushSubscriptionsTable.endpoint, sub.endpoint), ne(pushSubscriptionsTable.userId, userId)));
+    // Projects this member has left: no alerts from them on this phone.
+    await tx.delete(pushSubscriptionsTable)
+      .where(and(eq(pushSubscriptionsTable.endpoint, sub.endpoint), notInArray(pushSubscriptionsTable.projectId, projectIds)));
+    const now = new Date();
+    for (const projectId of projectIds) {
+      await tx.insert(pushSubscriptionsTable)
+        .values({ id: generateId(), userId, projectId, endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth, userAgent: sub.userAgent })
+        .onConflictDoUpdate({
+          target: [pushSubscriptionsTable.endpoint, pushSubscriptionsTable.projectId],
+          set: { userId, p256dh: sub.p256dh, auth: sub.auth, userAgent: sub.userAgent, lastSeenAt: now },
+        });
+    }
+  });
+  return projectIds;
 }
 
 export type PushPayload = {
@@ -60,7 +93,7 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
     } catch (err: any) {
       const status = err?.statusCode;
       if (status === 404 || status === 410) {
-        await db.delete(pushSubscriptionsTable).where(eq(pushSubscriptionsTable.id, s.id)).catch(() => {});
+        await db.delete(pushSubscriptionsTable).where(eq(pushSubscriptionsTable.endpoint, s.endpoint)).catch(() => {});
       } else {
         logger.warn({ err, endpoint: s.endpoint.slice(0, 40) }, "web-push: send failed");
       }
@@ -92,7 +125,7 @@ export async function sendPushToMember(userId: string, projectId: string, payloa
       const status = err?.statusCode;
       if (status === 404 || status === 410) {
         // Subscription is gone/expired — remove it.
-        await db.delete(pushSubscriptionsTable).where(eq(pushSubscriptionsTable.id, s.id)).catch(() => {});
+        await db.delete(pushSubscriptionsTable).where(eq(pushSubscriptionsTable.endpoint, s.endpoint)).catch(() => {});
       } else {
         logger.warn({ err, endpoint: s.endpoint.slice(0, 40) }, "web-push: send failed");
       }

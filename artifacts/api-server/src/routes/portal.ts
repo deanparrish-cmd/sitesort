@@ -21,7 +21,7 @@ import { authenticate, generatePortalToken } from "../middlewares/auth";
 import { allow, PLATFORM_ADMIN } from "../lib/authz";
 import { requirePortalMember, requirePortalSession, autoLogPortalActivity, requirePortalPermission } from "../middlewares/portal";
 import { createPortalSession, revokePortalSession, claimPortalSession } from "../lib/portal-sessions";
-import { getVapidPublicKey } from "../lib/web-push";
+import { getVapidPublicKey, registerPushDevice } from "../lib/web-push";
 import { pushSubscriptionsTable, activityLogTable, portalSessionsTable } from "@workspace/db/schema";
 import { PortalPushSubscribeBody, PortalPushUnsubscribeBody } from "@workspace/api-zod";
 import { isLockedOut, recordFailedAttempt, clearAttempts } from "../lib/login-attempts";
@@ -1083,19 +1083,10 @@ router.post("/portal/push/subscribe", authenticate, requirePortalSession, requir
   if (!parsed.success) { res.status(400).json({ error: "validation_error", message: "Invalid subscription." }); return; }
   const { endpoint, keys, userAgent } = parsed.data;
   try {
-    const existing = (await db.select({ id: pushSubscriptionsTable.id }).from(pushSubscriptionsTable)
-      .where(eq(pushSubscriptionsTable.endpoint, endpoint)).limit(1))[0];
-    if (existing) {
-      await db.update(pushSubscriptionsTable)
-        .set({ userId: req.user!.id, projectId: req.portalProjectId!, p256dh: keys.p256dh, auth: keys.auth, userAgent: userAgent ?? null, lastSeenAt: new Date() })
-        .where(eq(pushSubscriptionsTable.id, existing.id));
-    } else {
-      await db.insert(pushSubscriptionsTable).values({
-        id: generateId(), userId: req.user!.id, projectId: req.portalProjectId!,
-        endpoint, p256dh: keys.p256dh, auth: keys.auth, userAgent: userAgent ?? null,
-      });
-    }
-    res.json({ success: true });
+    const projects = await registerPushDevice(req.user!.id, req.portalProjectId!, {
+      endpoint, p256dh: keys.p256dh, auth: keys.auth, userAgent: userAgent ?? null,
+    });
+    res.json({ success: true, projects: projects.length });
   } catch (err) {
     req.log.error({ err }, "Portal push subscribe error");
     res.status(500).json({ error: "server_error", message: "Failed to subscribe" });

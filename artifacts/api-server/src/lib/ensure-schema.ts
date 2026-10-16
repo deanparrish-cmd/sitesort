@@ -263,7 +263,13 @@ export async function ensureSchema(): Promise<void> {
         last_seen_at timestamp NOT NULL DEFAULT now()
       )
     `);
-    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS push_subscriptions_endpoint_uq ON push_subscriptions (endpoint)`);
+    // One row per (phone, project), not per phone (2026-10-16): the old
+    // endpoint-only unique index let a phone hold ONE project, the last one
+    // opened, so a site manager on two projects silently lost the first
+    // project's alerts. Dropping it is safe: every old row is still unique on
+    // the pair.
+    await pool.query(`DROP INDEX IF EXISTS push_subscriptions_endpoint_uq`);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS push_subscriptions_endpoint_project_uq ON push_subscriptions (endpoint, project_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS push_subscriptions_user_idx ON push_subscriptions (user_id, project_id)`);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS pending_pushes (

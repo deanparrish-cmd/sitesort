@@ -2395,7 +2395,8 @@ function SettingsView() {
     if (r === "enabled") { toast({ title: "Notifications on" }); refresh(); }
     else if (r === "denied") toast({ title: "Notifications blocked", description: "Allow notifications for this site in your browser settings, then try again.", variant: "destructive" });
     else if (r === "needs_install") toast({ title: "Add to Home Screen first", description: "On iPhone, install the portal to your Home Screen, then enable notifications.", variant: "destructive" });
-    else if (r !== "unsupported") toast({ title: "Couldn't enable notifications", variant: "destructive" });
+    else if (r === "unreachable") toast({ title: "Couldn't turn on notifications", description: "SiteSort couldn't be reached. Check your signal and try again.", variant: "destructive" });
+    else if (r !== "unsupported") toast({ title: "Couldn't turn on notifications", description: "SiteSort couldn't save it. Try again in a minute.", variant: "destructive" });
   };
   const disable = async () => { setBusy(true); await disablePush(); setBusy(false); setSubscribed(false); toast({ title: "Notifications off" }); };
 

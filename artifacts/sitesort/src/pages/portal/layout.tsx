@@ -5,7 +5,7 @@ import { useGetPortalContext, getGetPortalContextQueryKey, useGetPortalUnseen, g
 import { Spinner } from "@/components/ui/spinner";
 import { PortalInstallPrompt } from "@/components/portal-install-prompt";
 import { PortalNotifyPrompt } from "@/components/portal-notify-prompt";
-import { markPortalSession, disablePush, resyncPush } from "@/lib/portal-push";
+import { markPortalSession, removeDeviceOnLogout, resyncPush } from "@/lib/portal-push";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import {
@@ -47,14 +47,18 @@ export const SECTION_NAV: { key: string; label: string; Icon: typeof Home; permi
 ];
 
 export function portalLogout(setLocation: (to: string) => void, opts: { byUser?: boolean } = {}) {
-  // Clean up this device's push subscription (a logged-out device must stop
-  // receiving), end the session SERVER-SIDE (revoked, not just cleared locally),
-  // then drop the local token and return to login. All best-effort.
+  // End the session SERVER-SIDE (revoked, not just cleared locally), then drop
+  // the local token and return to login. All best-effort. Alerts: only a
+  // deliberate logout takes them off this phone. An automatic one (a refused
+  // request, a session ended by a project switch) leaves them on: it used to
+  // switch them off for good, and a site manager stopped hearing about people
+  // held at the gate.
   const token = typeof window !== "undefined" ? localStorage.getItem("sitesort_portal_token") : null;
-  void disablePush();
-  if (token) {
-    void fetch("/api/portal/logout", { method: "POST", headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
-  }
+  // The alerts removal goes first: it needs the session the logout ends.
+  const endSession = () => token
+    ? fetch("/api/portal/logout", { method: "POST", headers: { Authorization: `Bearer ${token}` } }).catch(() => {})
+    : Promise.resolve();
+  void (opts.byUser ? removeDeviceOnLogout(token).finally(endSession) : endSession());
   localStorage.removeItem("sitesort_portal_token");
   // A deliberate logout takes the saved site register off this phone. An
   // expired session keeps it, so the fire roll can still be read from the

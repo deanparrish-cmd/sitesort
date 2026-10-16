@@ -39,7 +39,7 @@ async function portalSession(req: Request, res: Response, next: NextFunction): P
     const check = await checkAndTouchSession(u.sid, u.id, u.projectId);
     if (!check.ok) {
       const message = check.reason === "inactive"
-        ? "You've been signed out after 12 hours of inactivity. Please sign in again."
+        ? "You've been signed out because the portal wasn't used for 30 days. Please sign in again."
         : check.reason === "revoked"
         ? "This session has been ended. Please sign in again."
         : "Your session has expired. Please sign in again.";

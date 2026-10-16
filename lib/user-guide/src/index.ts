@@ -505,6 +505,7 @@ export const WORKER_GUIDE: GuideSection[] = [
         body: [
           "New shares, messages and updates show up here. Tap one to jump straight to it.",
           "To get alerts on your phone even when SiteSort is closed, tap Enable notifications when the portal offers it (or switch them on in Settings). On iPhone and iPad, install SiteSort on your Home Screen first.",
+          "Your phone gets alerts for every project you're on, not just the one you have open. If you log out, alerts stop on that phone and come back when you sign in again. They only stay off if you tap Turn off in Settings.",
         ],
       },
     ],

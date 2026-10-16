@@ -125,14 +125,20 @@ export async function isDeviceSubscribed(): Promise<boolean> {
   }
 }
 
-// Remembers an intentional toggle-off on this device so the auto-heal resync
-// doesn't silently re-enable alerts the member chose to turn off.
-const PUSH_DISABLED_KEY = "sitesort_portal_push_disabled";
+// Remembers that the member tapped "Turn off" in Settings, so the auto-heal
+// resync doesn't re-enable alerts they chose to turn off. ONLY that tap sets it.
+// The old key was also set by every automatic logout (a refused request, a
+// session ended by a project switch), which switched alerts off for good while
+// recording it as the member's choice: a site manager stopped hearing about
+// people held at the gate (2026-10-16). It can't tell a real choice from an
+// automatic logout, so it is dropped: those phones heal on next open.
+const PUSH_OFF_BY_CHOICE_KEY = "sitesort_portal_alerts_off_by_choice";
+const LEGACY_PUSH_DISABLED_KEY = "sitesort_portal_push_disabled";
 function userDisabledPush(): boolean {
-  try { return localStorage.getItem(PUSH_DISABLED_KEY) === "1"; } catch { return false; }
+  try { return localStorage.getItem(PUSH_OFF_BY_CHOICE_KEY) === "1"; } catch { return false; }
 }
 function setUserDisabledPush(v: boolean): void {
-  try { v ? localStorage.setItem(PUSH_DISABLED_KEY, "1") : localStorage.removeItem(PUSH_DISABLED_KEY); } catch { /* ignore */ }
+  try { v ? localStorage.setItem(PUSH_OFF_BY_CHOICE_KEY, "1") : localStorage.removeItem(PUSH_OFF_BY_CHOICE_KEY); } catch { /* ignore */ }
 }
 
 // Self-heal on app open: iOS sometimes silently drops a web-push subscription
@@ -143,6 +149,7 @@ function setUserDisabledPush(v: boolean): void {
 // Never triggers a permission prompt — it only acts when permission is already
 // granted, so it's safe to run on load.
 export async function resyncPush(): Promise<void> {
+  try { localStorage.removeItem(LEGACY_PUSH_DISABLED_KEY); } catch { /* ignore */ }
   if (!pushSupported() || Notification.permission !== "granted" || userDisabledPush()) return;
   try {
     const key = await fetchVapidKey();
@@ -166,7 +173,9 @@ export async function resyncPush(): Promise<void> {
   } catch { /* best-effort — never disrupt app load */ }
 }
 
-export type EnableResult = "enabled" | "denied" | "unsupported" | "needs_install" | "error";
+// "unreachable" = no answer from SiteSort (no signal, or the server is down);
+// "error" = SiteSort answered but couldn't save it. The toast says which.
+export type EnableResult = "enabled" | "denied" | "unsupported" | "needs_install" | "unreachable" | "error";
 
 // Request permission (fires the browser prompt — MUST be from a user gesture),
 // subscribe this device, and register the subscription server-side.
@@ -177,7 +186,12 @@ export async function enablePush(): Promise<EnableResult> {
     const permission = await Notification.requestPermission();
     if (permission !== "granted") return "denied";
     setUserDisabledPush(false);
-    const key = await fetchVapidKey();
+    let key: string | null = null;
+    try {
+      const res = await fetch("/api/portal/push/public-key", { headers: authHeaders() });
+      if (!res.ok) return "error";
+      key = (await res.json()).publicKey ?? null;
+    } catch { return "unreachable"; }
     if (!key) return "error"; // push not configured on the server
     const reg = await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
@@ -193,23 +207,41 @@ export async function enablePush(): Promise<EnableResult> {
         keys: { p256dh: json.keys?.p256dh ?? bufToB64Url(sub.getKey("p256dh")), auth: json.keys?.auth ?? bufToB64Url(sub.getKey("auth")) },
         userAgent: navigator.userAgent,
       }),
-    });
+    }).catch(() => null);
+    if (!res) return "unreachable";
     return res.ok ? "enabled" : "error";
   } catch {
     return "error";
   }
 }
 
-// Unsubscribe this device (settings toggle-off / logout). Best-effort both sides.
+// Settings "Turn off": this phone stops alerts for every project, and stays off
+// until the member turns it back on. The ONLY caller that records a choice.
 export async function disablePush(): Promise<void> {
   if (!pushSupported()) return;
   setUserDisabledPush(true);
+  await removeThisDevice(portalToken());
+}
+
+// A deliberate "Log out" tap: a logged-out phone stops receiving, but this is
+// not a choice about alerts, so signing back in turns them on again by itself.
+// An AUTOMATIC logout (refused request, ended session) never calls this: the
+// phone keeps its alerts. Revoked access removes them server-side instead.
+// Takes the token up front: logout clears it from storage straight after.
+export async function removeDeviceOnLogout(token: string | null): Promise<void> {
+  if (!pushSupported()) return;
+  await removeThisDevice(token);
+}
+
+async function removeThisDevice(token: string | null): Promise<void> {
   try {
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.getSubscription();
     if (sub) {
       await fetch("/api/portal/push/unsubscribe", {
-        method: "POST", headers: authHeaders(), body: JSON.stringify({ endpoint: sub.endpoint }),
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ endpoint: sub.endpoint }),
       }).catch(() => {});
       await sub.unsubscribe().catch(() => {});
     }

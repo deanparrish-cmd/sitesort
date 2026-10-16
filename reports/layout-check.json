@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-16T15:29:09.202Z",
+  "generatedAt": "2026-10-16T15:51:24.764Z",
   "target": "http://localhost:8080",
   "viewports": [
     360,
@@ -132,7 +132,7 @@
         "auth": "none"
       },
       {
-        "path": "/s/DBs-55tjNHdDhhJgLxp828XiwqMRY7P7",
+        "path": "/s/W1M9OCZ426nO-tbyf7JC9f7mIsJjAai6",
         "label": "s",
         "auth": "none"
       },
@@ -227,7 +227,7 @@
         "auth": "none"
       },
       {
-        "path": "/portal/accept/c5d9d715ce3d23d2d27587715e4270dd12878f52ce3e9f50d6ae8e5f066cc915",
+        "path": "/portal/accept/03eafb51d7996f874e4889d72c68c901855db3715420a442179d9fcbc8a57403",
         "label": "portal-accept",
         "auth": "none"
       },
@@ -946,9 +946,9 @@
     },
     {
       "label": "s",
-      "path": "/s/DBs-55tjNHdDhhJgLxp828XiwqMRY7P7",
+      "path": "/s/W1M9OCZ426nO-tbyf7JC9f7mIsJjAai6",
       "width": 360,
-      "finalPath": "/s/DBs-55tjNHdDhhJgLxp828XiwqMRY7P7",
+      "finalPath": "/s/W1M9OCZ426nO-tbyf7JC9f7mIsJjAai6",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -1915,9 +1915,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/c5d9d715ce3d23d2d27587715e4270dd12878f52ce3e9f50d6ae8e5f066cc915",
+      "path": "/portal/accept/03eafb51d7996f874e4889d72c68c901855db3715420a442179d9fcbc8a57403",
       "width": 360,
-      "finalPath": "/portal/accept/c5d9d715ce3d23d2d27587715e4270dd12878f52ce3e9f50d6ae8e5f066cc915",
+      "finalPath": "/portal/accept/03eafb51d7996f874e4889d72c68c901855db3715420a442179d9fcbc8a57403",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -4312,9 +4312,9 @@
     },
     {
       "label": "s",
-      "path": "/s/DBs-55tjNHdDhhJgLxp828XiwqMRY7P7",
+      "path": "/s/W1M9OCZ426nO-tbyf7JC9f7mIsJjAai6",
       "width": 390,
-      "finalPath": "/s/DBs-55tjNHdDhhJgLxp828XiwqMRY7P7",
+      "finalPath": "/s/W1M9OCZ426nO-tbyf7JC9f7mIsJjAai6",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -5281,9 +5281,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/c5d9d715ce3d23d2d27587715e4270dd12878f52ce3e9f50d6ae8e5f066cc915",
+      "path": "/portal/accept/03eafb51d7996f874e4889d72c68c901855db3715420a442179d9fcbc8a57403",
       "width": 390,
-      "finalPath": "/portal/accept/c5d9d715ce3d23d2d27587715e4270dd12878f52ce3e9f50d6ae8e5f066cc915",
+      "finalPath": "/portal/accept/03eafb51d7996f874e4889d72c68c901855db3715420a442179d9fcbc8a57403",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -7678,9 +7678,9 @@
     },
     {
       "label": "s",
-      "path": "/s/DBs-55tjNHdDhhJgLxp828XiwqMRY7P7",
+      "path": "/s/W1M9OCZ426nO-tbyf7JC9f7mIsJjAai6",
       "width": 768,
-      "finalPath": "/s/DBs-55tjNHdDhhJgLxp828XiwqMRY7P7",
+      "finalPath": "/s/W1M9OCZ426nO-tbyf7JC9f7mIsJjAai6",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -8812,9 +8812,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/c5d9d715ce3d23d2d27587715e4270dd12878f52ce3e9f50d6ae8e5f066cc915",
+      "path": "/portal/accept/03eafb51d7996f874e4889d72c68c901855db3715420a442179d9fcbc8a57403",
       "width": 768,
-      "finalPath": "/portal/accept/c5d9d715ce3d23d2d27587715e4270dd12878f52ce3e9f50d6ae8e5f066cc915",
+      "finalPath": "/portal/accept/03eafb51d7996f874e4889d72c68c901855db3715420a442179d9fcbc8a57403",
       "ok": true,
       "reasons": [],
       "metrics": {
