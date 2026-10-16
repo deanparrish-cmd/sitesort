@@ -503,11 +503,19 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
                         })}
                       </div>
                     )}
-                    {portalMode === "person" && (
+                    {portalMode === "person" && (() => {
+                      // A card with no portal access can't be shared to (the share
+                      // reaches nobody), so it isn't offered. Named underneath so a
+                      // missing person doesn't look like a fault. Invite pending
+                      // stays: the share works once they accept.
+                      const pickable = portalMembers.filter(m => memberStatus(m) !== "none");
+                      const hidden = portalMembers.filter(m => memberStatus(m) === "none");
+                      return (
+                      <div className="space-y-1.5">
                       <div className="flex flex-wrap gap-1.5">
-                        {portalMembers.length === 0 ? (
+                        {pickable.length === 0 ? (
                           <p className="text-xs text-muted-foreground">No portal members on this project yet.</p>
-                        ) : portalMembers.map(m => {
+                        ) : pickable.map(m => {
                           const sel = selPersons.includes(m.personId);
                           return (
                             <button
@@ -534,7 +542,14 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
                           );
                         })}
                       </div>
-                    )}
+                      {hidden.length > 0 && (
+                        <p className="text-xs text-muted-foreground break-words" data-testid="portal-share-hidden-cards">
+                          Not listed, not on the portal: {hidden.map(m => [m.name, m.companyName].filter(Boolean).join(" · ")).join(", ")}. Invite them to the portal from the Team tab first.
+                        </p>
+                      )}
+                      </div>
+                      );
+                    })()}
 
                     <button
                       onClick={submitPortalShare}

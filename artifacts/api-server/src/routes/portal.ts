@@ -247,10 +247,9 @@ const isAfter = (d: Date | null | undefined, since: Date | undefined): boolean =
 // whose share/create time is newer than the member's last view of that section.
 async function computeUnseen(userId: string, projectId: string): Promise<{ counts: Record<string, number>; total: number }> {
   const viewer = await resolveViewer(userId, projectId);
-  const [docMap, photoMap, permitMap, lastView, permRow] = await Promise.all([
-    visibleShareMap(projectId, "document", viewer),
+  const [shared, photoMap, lastView, permRow] = await Promise.all([
+    buildPortalShared(userId, projectId),
     visibleShareMap(projectId, "photo", viewer),
-    visibleShareMap(projectId, "permit", viewer),
     lastViewedBySection(userId, projectId),
     db.select({
       canLogIssues: projectMembersTable.canLogIssues,
@@ -266,23 +265,18 @@ async function computeUnseen(userId: string, projectId: string): Promise<{ count
   const counts: Record<string, number> = {};
   const bump = (s: string, n = 1) => { if (n) counts[s] = (counts[s] ?? 0) + n; };
 
-  // Gated documents, by type → their (retired) section keys — harmless now that
-  // no nav item reads them, kept only for the aggregate "shared" bump below.
-  const docIds = [...docMap.keys()];
-  const docs = docIds.length
-    ? await db.select({ id: documentsTable.id, type: documentsTable.type }).from(documentsTable)
-        .where(and(eq(documentsTable.projectId, projectId), inArray(documentsTable.id, docIds), inArray(documentsTable.status, ["current", "superseded"])))
-    : [];
-  let sharedCount = 0;
-  for (const d of docs) {
-    const at = docMap.get(d.id);
-    if (isAfter(at, lv("shared"))) sharedCount++;
-  }
+  // "Shared with me" badge = the unseen items in the very list the member
+  // opens (buildPortalShared), so the two can never disagree. It used to be a
+  // second, hand-kept copy of the list's rules that drifted: it counted
+  // archived permits the list hides, counted a shared safety doc twice, and
+  // skipped daily reports the list shows.
+  const sharedCount = [...shared.documents, ...shared.photos, ...shared.permits, ...shared.dailyReports]
+    .filter(i => i.unseen).length;
   // Site issues only count toward "Shared with me" (and never leak a count at
   // all) when the viewer actually has that section's grant — otherwise the nav
   // badge itself would tip off gated content they can't open.
   if (canLogIssues) {
-    for (const at of photoMap.values()) { if (isAfter(at, lv("shared"))) sharedCount++; if (isAfter(at, lv("site-issues"))) bump("site-issues"); }
+    for (const at of photoMap.values()) { if (isAfter(at, lv("site-issues"))) bump("site-issues"); }
     // Updates on issues THIS member logged: triage/allocation edits stamp
     // photos.updated_at, and PM notes land in portal_submission_notes. Both
     // count as "new since last view" for the Site Issues badge — same
@@ -309,7 +303,6 @@ async function computeUnseen(userId: string, projectId: string): Promise<{ count
       for (const n of issueNotes) if (isAfter(n.createdAt, lv("site-issues"))) bump("site-issues");
     }
   }
-  for (const at of permitMap.values()) { if (isAfter(at, lv("shared"))) sharedCount++; }
   // Plant & Materials is its own gated section, not a shared-document type
   // (see the sharing-bug fix above) — its badge counts every project plant
   // item's latest activity, not a portal_shares timestamp.
@@ -374,11 +367,6 @@ async function computeUnseen(userId: string, projectId: string): Promise<{ count
     }
   }
 
-  // Safety docs are always visible (never gated) → new ones count toward
-  // "Shared with me" too, since that's now the only place they surface.
-  const safetyDocs = await db.select({ createdAt: documentsTable.createdAt }).from(documentsTable)
-    .where(and(eq(documentsTable.projectId, projectId), eq(documentsTable.type, "safety"), eq(documentsTable.status, "current")));
-  for (const s of safetyDocs) if (isAfter(s.createdAt, lv("shared"))) sharedCount++;
   bump("shared", sharedCount);
 
   // Site updates (daily notes) drive Overview + General badges.
@@ -1238,9 +1226,10 @@ export async function buildPortalShared(userId: string, pid: string) {
   const reportsWithContent = reports.filter(r => hasManagerContent(r.managerReport));
   // Annotate each item with when it was shared + whether it's unseen, and order
   // NEWEST-shared first so fresh content is at the top with the unseen highlight.
-  const annotate = <T extends { id: string }>(rows: T[], serialize: (r: T) => any, map: Map<string, Date>) =>
-    rows
-      .map(r => { const at = map.get(r.id); return { ...serialize(r), sharedAt: at?.toISOString(), _at: at?.getTime() ?? 0, unseen: isAfter(at, seenBefore) }; })
+  // Awaits the serializer: serializeIssue is async, and spreading its Promise
+  // unawaited sent every shared site issue as {sharedAt, unseen} with no id.
+  const annotate = async <T extends { id: string }>(rows: T[], serialize: (r: T) => any, map: Map<string, Date>) =>
+    (await Promise.all(rows.map(async r => { const at = map.get(r.id); return { ...(await serialize(r)), sharedAt: at?.toISOString(), _at: at?.getTime() ?? 0, unseen: isAfter(at, seenBefore) }; })))
       .sort((a, b) => b._at - a._at)
       .map(({ _at, ...rest }) => rest);
   // Non-document items get their own per-member open receipts (portal_item_views).
@@ -1249,10 +1238,10 @@ export async function buildPortalShared(userId: string, pid: string) {
     myItemViews(userId, "daily_report", reportsWithContent.map(r => r.id)),
   ]);
   return {
-    documents: withMyStatus(annotate(docs, serializeDoc, docMapWithSafety), myStatuses),
-    photos: annotate(photos, serializeIssue, photoMap),
-    permits: withMyView(annotate(permits, serializePermit, permitMap), permitViews),
-    dailyReports: withMyView(annotate(reportsWithContent, serializeSharedReport, reportMap), reportViews),
+    documents: withMyStatus(await annotate(docs, serializeDoc, docMapWithSafety), myStatuses),
+    photos: await annotate(photos, p => serializeIssue(p), photoMap),
+    permits: withMyView(await annotate(permits, serializePermit, permitMap), permitViews),
+    dailyReports: withMyView(await annotate(reportsWithContent, serializeSharedReport, reportMap), reportViews),
   };
 }
 

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-16T14:13:18.806Z",
+  "generatedAt": "2026-10-16T15:29:09.202Z",
   "target": "http://localhost:8080",
   "viewports": [
     360,
@@ -132,7 +132,7 @@
         "auth": "none"
       },
       {
-        "path": "/s/Zjk3Yx6nlLln5RLah6IAOLmhsfwbpgav",
+        "path": "/s/DBs-55tjNHdDhhJgLxp828XiwqMRY7P7",
         "label": "s",
         "auth": "none"
       },
@@ -227,7 +227,7 @@
         "auth": "none"
       },
       {
-        "path": "/portal/accept/4b65eae2cbb4ac3f89389d96034535453da11d8ed92339a3f36d62f4489e1e8b",
+        "path": "/portal/accept/c5d9d715ce3d23d2d27587715e4270dd12878f52ce3e9f50d6ae8e5f066cc915",
         "label": "portal-accept",
         "auth": "none"
       },
@@ -946,9 +946,9 @@
     },
     {
       "label": "s",
-      "path": "/s/Zjk3Yx6nlLln5RLah6IAOLmhsfwbpgav",
+      "path": "/s/DBs-55tjNHdDhhJgLxp828XiwqMRY7P7",
       "width": 360,
-      "finalPath": "/s/Zjk3Yx6nlLln5RLah6IAOLmhsfwbpgav",
+      "finalPath": "/s/DBs-55tjNHdDhhJgLxp828XiwqMRY7P7",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -1915,9 +1915,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/4b65eae2cbb4ac3f89389d96034535453da11d8ed92339a3f36d62f4489e1e8b",
+      "path": "/portal/accept/c5d9d715ce3d23d2d27587715e4270dd12878f52ce3e9f50d6ae8e5f066cc915",
       "width": 360,
-      "finalPath": "/portal/accept/4b65eae2cbb4ac3f89389d96034535453da11d8ed92339a3f36d62f4489e1e8b",
+      "finalPath": "/portal/accept/c5d9d715ce3d23d2d27587715e4270dd12878f52ce3e9f50d6ae8e5f066cc915",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -4312,9 +4312,9 @@
     },
     {
       "label": "s",
-      "path": "/s/Zjk3Yx6nlLln5RLah6IAOLmhsfwbpgav",
+      "path": "/s/DBs-55tjNHdDhhJgLxp828XiwqMRY7P7",
       "width": 390,
-      "finalPath": "/s/Zjk3Yx6nlLln5RLah6IAOLmhsfwbpgav",
+      "finalPath": "/s/DBs-55tjNHdDhhJgLxp828XiwqMRY7P7",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -5281,9 +5281,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/4b65eae2cbb4ac3f89389d96034535453da11d8ed92339a3f36d62f4489e1e8b",
+      "path": "/portal/accept/c5d9d715ce3d23d2d27587715e4270dd12878f52ce3e9f50d6ae8e5f066cc915",
       "width": 390,
-      "finalPath": "/portal/accept/4b65eae2cbb4ac3f89389d96034535453da11d8ed92339a3f36d62f4489e1e8b",
+      "finalPath": "/portal/accept/c5d9d715ce3d23d2d27587715e4270dd12878f52ce3e9f50d6ae8e5f066cc915",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -7678,9 +7678,9 @@
     },
     {
       "label": "s",
-      "path": "/s/Zjk3Yx6nlLln5RLah6IAOLmhsfwbpgav",
+      "path": "/s/DBs-55tjNHdDhhJgLxp828XiwqMRY7P7",
       "width": 768,
-      "finalPath": "/s/Zjk3Yx6nlLln5RLah6IAOLmhsfwbpgav",
+      "finalPath": "/s/DBs-55tjNHdDhhJgLxp828XiwqMRY7P7",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -8812,9 +8812,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/4b65eae2cbb4ac3f89389d96034535453da11d8ed92339a3f36d62f4489e1e8b",
+      "path": "/portal/accept/c5d9d715ce3d23d2d27587715e4270dd12878f52ce3e9f50d6ae8e5f066cc915",
       "width": 768,
-      "finalPath": "/portal/accept/4b65eae2cbb4ac3f89389d96034535453da11d8ed92339a3f36d62f4489e1e8b",
+      "finalPath": "/portal/accept/c5d9d715ce3d23d2d27587715e4270dd12878f52ce3e9f50d6ae8e5f066cc915",
       "ok": true,
       "reasons": [],
       "metrics": {
