@@ -32,18 +32,64 @@ pool.on("error", (err) => {
 
 export const db = drizzle(pool, { schema });
 
-// Lightweight connectivity probe for the /api/health endpoint and startup check.
-// Resolves true if a trivial query succeeds within `timeoutMs`, false otherwise.
-export async function checkDbConnection(timeoutMs = 5_000): Promise<boolean> {
+// What kind of database failure this is, from the error alone. "paused" is a
+// best guess at the wording of a suspended/disabled managed Postgres (Replit's
+// zero-credit pause): it has not been seen in our logs yet, so anything we
+// don't recognise falls through to "unreachable"/"error" with the raw message
+// logged alongside, and the pattern can be tightened once a real one is seen.
+export type DbFailureKind = "paused" | "timeout" | "auth" | "unreachable" | "error";
+
+export interface DbFailure {
+  kind: DbFailureKind;
+  code: string | null;
+  message: string;
+}
+
+export function classifyDbError(err: unknown): DbFailure {
+  // Drizzle wraps the driver error ("Failed query: ...") and keeps it as
+  // `cause`; classify the innermost one.
+  for (let i = 0; i < 5 && (err as { cause?: unknown } | null)?.cause; i++) err = (err as { cause: unknown }).cause;
+  const e = err as { code?: unknown; message?: unknown } | null;
+  const code = typeof e?.code === "string" ? e.code : null;
+  const message = typeof e?.message === "string" ? e.message : String(err);
+  let kind: DbFailureKind = "error";
+  if (/disabled|suspend|paused|quota|exceeded the|billing/i.test(message)) kind = "paused";
+  else if (code === "28P01" || code === "28000") kind = "auth";
+  else if (/timeout|timed out/i.test(message) || code === "ETIMEDOUT") kind = "timeout";
+  else if (
+    (code && (/^(08|57P)/.test(code) || ["ECONNREFUSED", "ECONNRESET", "ENOTFOUND", "EAI_AGAIN", "EHOSTUNREACH"].includes(code)))
+    || /connection terminated|terminating connection|connect ECONN|getaddrinfo/i.test(message)
+  ) kind = "unreachable";
+  return { kind, code, message };
+}
+
+// True when an error means "the database can't be reached at all" (paused,
+// down, unreachable), as opposed to a bad query. Routes use it to answer 503
+// with a plain message instead of a generic 500.
+export function isDbUnavailableError(err: unknown): boolean {
+  return classifyDbError(err).kind !== "error";
+}
+
+// Connectivity probe for /api/health, the startup check and the DB watchdog.
+// Returns the classified failure (with the real error message) when it fails.
+export async function probeDb(timeoutMs = 5_000): Promise<{ ok: true } | { ok: false; failure: DbFailure }> {
+  let timer: NodeJS.Timeout | undefined;
   try {
     await Promise.race([
       pool.query("SELECT 1"),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("db check timeout")), timeoutMs)),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`db check timeout after ${timeoutMs}ms`)), timeoutMs); }),
     ]);
-    return true;
-  } catch {
-    return false;
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, failure: classifyDbError(err) };
+  } finally {
+    if (timer) clearTimeout(timer);
   }
+}
+
+// Boolean form, kept for existing callers.
+export async function checkDbConnection(timeoutMs = 5_000): Promise<boolean> {
+  return (await probeDb(timeoutMs)).ok;
 }
 
 export * from "./schema";

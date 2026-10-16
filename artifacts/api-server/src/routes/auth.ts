@@ -1,8 +1,9 @@
+import { DB_UNAVAILABLE_MESSAGE } from "../lib/db-watchdog";
 import { Router, type IRouter } from "express";
 import { randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { db } from "@workspace/db";
+import { db, isDbUnavailableError } from "@workspace/db";
 import { companiesTable, usersTable, subcontractorsTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { generateId } from "../lib/id";
@@ -185,6 +186,10 @@ router.post("/auth/login", async (req, res) => {
     });
   } catch (err) {
     req.log.error({ err }, "Login error");
+    if (isDbUnavailableError(err)) {
+      res.status(503).json({ error: "database_unavailable", message: DB_UNAVAILABLE_MESSAGE });
+      return;
+    }
     res.status(500).json({ error: "server_error", message: "Login failed" });
   }
 });

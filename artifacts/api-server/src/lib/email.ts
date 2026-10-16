@@ -776,4 +776,17 @@ You can manage email notifications in your SiteSort account settings.`),
   });
 }
 
+// Operational alert to the owner (database down/back). Plain and short; it
+// must not touch the database, which may be the thing that is down.
+export async function sendOpsAlertEmail(to: string, subject: string, lines: string[]) {
+  const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const result = await send({
+    to,
+    subject,
+    text: lines.join("\n\n"),
+    html: layout(lines.map(l => `<p style="margin:0 0 12px;font-size:14px;color:#111827;">${esc(l)}</p>`).join("")),
+  });
+  if (result.error) throw new Error(`Resend: ${result.error.message}`);
+}
+
 export { APP_URL as EMAIL_APP_URL };

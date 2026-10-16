@@ -39,6 +39,8 @@ export default function Login() {
     } catch (err: any) {
       if (err?.data?.error === "email_not_verified") {
         setUnverifiedEmail(data.email);
+      } else if (err?.data?.error === "database_unavailable") {
+        setError(err.data.message);
       } else {
         setError(
           (err?.data?.message || err.message || "Invalid email or password.") +

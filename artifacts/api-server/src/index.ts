@@ -6,7 +6,8 @@ import { schedulePushFlush } from "./lib/push-triggers";
 import { ensureSchema } from "./lib/ensure-schema";
 import { removeInvoices } from "./lib/invoice-removal";
 import { scheduleCheckinAutoClose } from "./routes/qr";
-import { checkDbConnection } from "@workspace/db";
+import { probeDb } from "@workspace/db";
+import { scheduleDbWatchdog } from "./lib/db-watchdog";
 import { scheduleShareLinkReminders } from "./lib/share-links";
 import { IS_DEPLOYED, environmentSummary } from "./lib/environment";
 
@@ -40,9 +41,9 @@ if (Number.isNaN(port) || port <= 0) {
 // block listening on it (a transient DB outage shouldn't stop the server from
 // coming up and serving /api/health, which reports the DB state).
 async function logDbStatus(): Promise<void> {
-  const ok = await checkDbConnection();
-  if (ok) logger.info("Database connection OK");
-  else logger.error("DATABASE UNREACHABLE at startup — server will still listen; /api/health will report db:down");
+  const probe = await probeDb();
+  if (probe.ok) logger.info("Database connection OK");
+  else logger.error({ dbFailure: probe.failure }, "DATABASE UNREACHABLE at startup — server will still listen; /api/health will report db:down");
 }
 
 // Race a promise against a timeout so a hung DB can't block app.listen forever
@@ -77,6 +78,7 @@ async function start(): Promise<void> {
       schedulePushFlush();
       scheduleCheckinAutoClose(logger);
       scheduleShareLinkReminders();
+      scheduleDbWatchdog();
     }
   });
   server.on("error", (err) => {

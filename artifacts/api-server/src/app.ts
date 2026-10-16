@@ -6,6 +6,8 @@ import { fileURLToPath } from "url";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { signUploadsInResponses } from "./lib/signed-uploads";
+import { isDbUnavailableError } from "@workspace/db";
+import { DB_UNAVAILABLE_MESSAGE } from "./lib/db-watchdog";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendDist = path.resolve(__dirname, "../../sitesort/dist/public");
@@ -62,6 +64,10 @@ app.get("/{*path}", (_req, res) => {
 app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
   req.log?.error({ err }, "Unhandled error in request");
   if (res.headersSent) return;
+  if (isDbUnavailableError(err)) {
+    res.status(503).json({ error: "database_unavailable", message: DB_UNAVAILABLE_MESSAGE });
+    return;
+  }
   res.status(500).json({ error: "server_error", message: "Something went wrong" });
 });
 
