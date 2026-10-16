@@ -62,6 +62,27 @@ always "sent", stops email enumeration), `components/company-switcher.tsx:29`.
 `routes/people.ts:635,695` portal invite push, `lib/messaging.ts:76,127` message emails.
 The request succeeds; if the push/email fails nobody, including the logs, knows.
 
+## E. Email that fails or bounces with nobody told (added 2026-10-16)
+
+Resend's SDK (v6.12) does NOT throw when it refuses an email: it returns
+`{ data, error }`. A `.catch()` alone never sees a refusal.
+
+| Where | What happens on failure |
+|---|---|
+| `lib/permit-reminders.ts` (permit, insurance, person-cert expiry) | `claimMilestone` records the reminder as sent BEFORE sending, and the result's `error` is ignored. A refused reminder is never retried and nothing shows it. |
+| `lib/messaging.ts:76,127` message emails, `routes/auth.ts` verification/welcome, `routes/users.ts` invitation, `routes/photos.ts` safety alert, `lib/document-distribution.ts` | `.catch()` only: a Resend refusal is silent, not even logged. |
+| Portal invite (`lib/invite-email.ts`) | Checks `error`: the card shows "failed" with Resend. OK for refusals. |
+| Ops alert (`lib/email.ts:789`) | Checks `error`, throws. OK. |
+| ALL email | A bounce happens AFTER Resend accepts it. The app has no Resend webhook (`email.bounced` / `email.complained`), so a bounced portal invite still shows "sent" on the card. Only the Resend dashboard knows. |
+
+Test-domain block (checked): two layers. (1) Outside the deployed app nothing is
+sent at all (`IS_DEPLOYED`, #128), whatever the domain. (2) In the deployed app,
+`isReservedTestAddress` blocks by PATTERN (any `*.test`, `*.invalid`, `*.example`,
+`*.local`, `*.localhost`, `example.com/.net/.org`), so a new test domain of that kind
+is caught. Gaps: `paul@acme.com` (demo login, a REAL domain: anything the prod app
+sends Acme's admin goes to acme.com and likely bounces); bare `x@test` / `x@localhost`
+(no dot) pass the pattern. Tests and scripts send only through `lib/email.ts`.
+
 ## Suggested fix shape (not started)
 
 One shared pattern rather than 80 one-offs: a small fetch helper that throws on
