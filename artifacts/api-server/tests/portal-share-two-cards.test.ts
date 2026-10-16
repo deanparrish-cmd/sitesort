@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { db } from "@workspace/db";
-import { eq, inArray } from "drizzle-orm";
-import { portalSharesTable, portalSessionsTable, notificationsTable, documentDistributionsTable } from "@workspace/db/schema";
+import { and, desc, eq, inArray } from "drizzle-orm";
+import { portalSharesTable, portalSessionsTable, notificationsTable, documentDistributionsTable, usersTable, activityLogTable } from "@workspace/db/schema";
 import {
   seedCompany, cleanupFixtures, api, login, portalLogin, seedCrossTenantPortalMember, cleanupPortalMember,
   createTestDocument, cleanupTestDocuments, type Fixture, type PortalMemberFixture,
@@ -80,5 +80,36 @@ describe("same name, two cards: share dialog tells them apart", () => {
     expect(share.json.recipientCount).toBeGreaterThanOrEqual(1);
     const shared = await api("/portal/shared", { token: portal });
     expect(shared.json.documents.map((d: any) => d.id)).toContain(docId);
+  });
+
+  it("admin trace runs the real code: drawing is in the member's response", async () => {
+    await db.update(usersTable).set({ platformAdmin: true }).where(eq(usersTable.id, co.userId));
+    try {
+      const q = `email=${encodeURIComponent(member.email)}&projectId=${co.projectId}&itemId=${docId}`;
+      const { status, json } = await api(`/admin/portal-trace?${q}`, { token: admin });
+      expect(status).toBe(200);
+      expect(json.step1_memberships.passesPortalGuard).toBe(true);
+      expect(json.step2_resolveViewer.personId).toBe(onPortalCard);
+      expect(json.step3_rules.some((r: any) => r.audienceType === "all" && r.matches)).toBe(true);
+      expect(json.step4_visibleShareMap.includesItem).toBe(true);
+      expect(json.step5_fullResponse.inResponse).toBe(true);
+      expect(json.error).toBeNull();
+    } finally {
+      await db.update(usersTable).set({ platformAdmin: false }).where(eq(usersTable.id, co.userId));
+    }
+  });
+
+  it("admin trace is platform admins only", async () => {
+    const { status } = await api(`/admin/portal-trace?email=x@y.z&projectId=${co.projectId}&itemId=${docId}`, { token: admin });
+    expect(status).toBe(403);
+  });
+
+  it("the portal activity log records the status each view got", async () => {
+    await api("/portal/shared", { token: portal });
+    await new Promise(r => setTimeout(r, 300));
+    const row = (await db.select().from(activityLogTable)
+      .where(and(eq(activityLogTable.userId, member.userId), eq(activityLogTable.section, "shared")))
+      .orderBy(desc(activityLogTable.createdAt)).limit(1))[0];
+    expect(JSON.parse(row.metadata ?? "{}").status).toBe(200);
   });
 });

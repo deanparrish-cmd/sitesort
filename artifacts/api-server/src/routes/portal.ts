@@ -18,6 +18,7 @@ import { buildSiteBoardPayload } from "../lib/site-board";
 import { generateId } from "../lib/id";
 import { logActivity } from "../lib/activity";
 import { authenticate, generatePortalToken } from "../middlewares/auth";
+import { allow, PLATFORM_ADMIN } from "../lib/authz";
 import { requirePortalMember, requirePortalSession, autoLogPortalActivity, requirePortalPermission } from "../middlewares/portal";
 import { createPortalSession, revokePortalSession, claimPortalSession } from "../lib/portal-sessions";
 import { getVapidPublicKey } from "../lib/web-push";
@@ -1202,17 +1203,19 @@ function serializeSharedReport(r: { id: string; reportDate: string; managerRepor
   return { id: r.id, reportDate: r.reportDate, managerReport: r.managerReport };
 }
 
-router.get("/portal/shared", ...portalGuards, async (req, res) => {
-  const pid = req.portalProjectId!;
-  const viewer = await resolveViewer(req.user!.id, pid);
+// The "Shared with me" payload for one member on one project. Shared by the
+// portal route and the platform-admin trace (/admin/portal-trace), so the trace
+// runs exactly the code a member's phone gets.
+export async function buildPortalShared(userId: string, pid: string) {
+  const viewer = await resolveViewer(userId, pid);
   const [docMap, photoMap, permitMap, reportMap, lastView, permRow] = await Promise.all([
     visibleShareMap(pid, "document", viewer),
     visibleShareMap(pid, "photo", viewer),
     visibleShareMap(pid, "permit", viewer),
     visibleShareMap(pid, "daily_report", viewer),
-    lastViewedBySection(req.user!.id, pid),
+    lastViewedBySection(userId, pid),
     db.select({ canLogIssues: projectMembersTable.canLogIssues }).from(projectMembersTable)
-      .where(and(eq(projectMembersTable.projectId, pid), eq(projectMembersTable.userId, req.user!.id))).limit(1),
+      .where(and(eq(projectMembersTable.projectId, pid), eq(projectMembersTable.userId, userId))).limit(1),
   ]);
   const canLogIssues = permRow[0]?.canLogIssues ?? false;
   const seenBefore = lastView.get("shared");
@@ -1229,7 +1232,7 @@ router.get("/portal/shared", ...portalGuards, async (req, res) => {
   const docMapWithSafety = new Map(docMap);
   for (const d of safetyDocs) if (!docMapWithSafety.has(d.id)) docMapWithSafety.set(d.id, d.createdAt);
   const docs = [...gatedDocs, ...safetyDocs.filter(d => !docMap.has(d.id))];
-  const myStatuses = await myDocStatuses(req.user!.id, docs.map(d => d.id));
+  const myStatuses = await myDocStatuses(userId, docs.map(d => d.id));
   // A share rule can outlive its content (e.g. shared before the diary was ever
   // written) — only surface reports that actually have something to read.
   const reportsWithContent = reports.filter(r => hasManagerContent(r.managerReport));
@@ -1242,14 +1245,73 @@ router.get("/portal/shared", ...portalGuards, async (req, res) => {
       .map(({ _at, ...rest }) => rest);
   // Non-document items get their own per-member open receipts (portal_item_views).
   const [permitViews, reportViews] = await Promise.all([
-    myItemViews(req.user!.id, "permit", permits.map(p => p.id)),
-    myItemViews(req.user!.id, "daily_report", reportsWithContent.map(r => r.id)),
+    myItemViews(userId, "permit", permits.map(p => p.id)),
+    myItemViews(userId, "daily_report", reportsWithContent.map(r => r.id)),
   ]);
-  res.json({
+  return {
     documents: withMyStatus(annotate(docs, serializeDoc, docMapWithSafety), myStatuses),
     photos: annotate(photos, serializeIssue, photoMap),
     permits: withMyView(annotate(permits, serializePermit, permitMap), permitViews),
     dailyReports: withMyView(annotate(reportsWithContent, serializeSharedReport, reportMap), reportViews),
+  };
+}
+
+router.get("/portal/shared", ...portalGuards, async (req, res) => {
+  res.json(await buildPortalShared(req.user!.id, req.portalProjectId!));
+});
+
+// GET /api/admin/portal-trace?email=&projectId=&itemType=&itemId= — platform
+// admins only, read-only. Runs the real "Shared with me" code for one member
+// on one project and reports each step, so "why can't X see Y" is answered
+// from prod data instead of guessed. Changes nothing (no activity log row).
+router.get("/admin/portal-trace", authenticate, allow(PLATFORM_ADMIN), async (req, res) => {
+  const { email, projectId, itemId } = req.query as Record<string, string | undefined>;
+  const itemType = (req.query.itemType as string | undefined) ?? "document";
+  if (!email || !projectId || !itemId) {
+    res.status(400).json({ error: "validation_error", message: "email, projectId and itemId are required (itemType defaults to document)." });
+    return;
+  }
+  const user = (await db.select({ id: usersTable.id, email: usersTable.email, portalOnly: usersTable.portalOnly })
+    .from(usersTable).where(eq(usersTable.email, email.trim().toLowerCase())).limit(1))[0];
+  if (!user) { res.status(404).json({ error: "not_found", message: "No login with that email." }); return; }
+
+  // Every membership row the portal guard and resolveViewer could see.
+  const memberships = await db.select({ id: projectMembersTable.id, personId: projectMembersTable.personId, role: projectMembersTable.role })
+    .from(projectMembersTable)
+    .where(and(eq(projectMembersTable.projectId, projectId), eq(projectMembersTable.userId, user.id)));
+  const viewer = await resolveViewer(user.id, projectId);
+  const rules = await db.select().from(portalSharesTable)
+    .where(and(eq(portalSharesTable.itemType, itemType), eq(portalSharesTable.itemId, itemId)));
+  const ruleTrace = rules.map(s => ({
+    id: s.id, audienceType: s.audienceType, trade: s.trade, personId: s.personId,
+    onThisProject: s.projectId === projectId, createdAt: s.createdAt.toISOString(),
+    matches: s.projectId === projectId && (s.audienceType === "all"
+      || (s.audienceType === "person" && !!viewer.personId && s.personId === viewer.personId)
+      || (s.audienceType === "trade" && !!s.trade && (viewer.trades.includes(s.trade) || (viewer.isSiteStaff && s.trade === SITE_STAFF)))),
+  }));
+  const shareMap = await visibleShareMap(projectId, itemType, viewer);
+
+  let response: { inResponse: boolean; counts: Record<string, number> } | null = null;
+  let error: { message: string; stack?: string } | null = null;
+  try {
+    const payload = await buildPortalShared(user.id, projectId);
+    const list = itemType === "document" ? payload.documents : itemType === "photo" ? payload.photos : itemType === "permit" ? payload.permits : payload.dailyReports;
+    response = {
+      inResponse: (list as { id?: string }[]).some(x => x.id === itemId),
+      counts: { documents: payload.documents.length, photos: payload.photos.length, permits: payload.permits.length, dailyReports: payload.dailyReports.length },
+    };
+  } catch (err) {
+    error = { message: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined };
+  }
+
+  res.json({
+    login: user.email, userId: user.id, portalOnly: user.portalOnly, projectId, itemType, itemId,
+    step1_memberships: { rows: memberships, passesPortalGuard: memberships.some(m => m.personId !== null) },
+    step2_resolveViewer: viewer,
+    step3_rules: ruleTrace,
+    step4_visibleShareMap: { includesItem: shareMap.has(itemId), sharedAt: shareMap.get(itemId)?.toISOString() ?? null },
+    step5_fullResponse: response,
+    error,
   });
 });
 

@@ -351,6 +351,68 @@ function DbAlertsCard() {
   );
 }
 
+// "Why can't this member see this item?" (#132). Runs the real Shared with me
+// code in the live app for one portal login and shows each step.
+function PortalTraceCard() {
+  const [email, setEmail] = useState("");
+  const [projectId, setProjectId] = useState("");
+  const [itemId, setItemId] = useState("");
+  const [itemType, setItemType] = useState("document");
+  const [busy, setBusy] = useState(false);
+  const [out, setOut] = useState<{ ok: boolean; body: any } | null>(null);
+
+  const run = async () => {
+    setBusy(true); setOut(null);
+    try {
+      const token = localStorage.getItem("sitesort_token");
+      const q = new URLSearchParams({ email: email.trim(), projectId: projectId.trim(), itemId: itemId.trim(), itemType });
+      const res = await fetch(`/api/admin/portal-trace?${q}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      const body = await res.json().catch(() => ({ message: `Error ${res.status}` }));
+      setOut({ ok: res.ok, body });
+    } catch {
+      setOut({ ok: false, body: { message: "Could not reach the server." } });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const b = out?.ok ? out.body : null;
+  const verdict = !b ? null
+    : b.error ? { tone: "text-red-300", text: `The list failed to build: ${b.error.message}` }
+    : b.step5_fullResponse?.inResponse ? { tone: "text-emerald-300", text: "Visible: the item is in this member's Shared with me list." }
+    : !b.step1_memberships.passesPortalGuard ? { tone: "text-yellow-300", text: "Not visible: this login has no portal membership on the project." }
+    : !b.step4_visibleShareMap.includesItem ? { tone: "text-yellow-300", text: "Not visible: no share rule on this project matches this member." }
+    : { tone: "text-yellow-300", text: "Not visible: a rule matches but the item was dropped while building the list." };
+  const field = "w-full min-w-0 bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white";
+
+  return (
+    <section>
+      <SectionTitle icon={Search} title="Portal Visibility Trace" sub="Runs the real Shared with me code for one portal login and shows each step. Read-only." />
+      <Card>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 [&>*]:min-w-0">
+          <label className="text-xs text-gray-400 space-y-1"><span>Portal login email</span><input id="trace-email" className={field} value={email} onChange={e => setEmail(e.target.value)} placeholder="name@company.com" /></label>
+          <label className="text-xs text-gray-400 space-y-1"><span>Project id</span><input id="trace-project" className={field} value={projectId} onChange={e => setProjectId(e.target.value)} /></label>
+          <label className="text-xs text-gray-400 space-y-1"><span>Item id</span><input id="trace-item" className={field} value={itemId} onChange={e => setItemId(e.target.value)} /></label>
+          <label className="text-xs text-gray-400 space-y-1"><span>Item type</span>
+            <select id="trace-type" className={field} value={itemType} onChange={e => setItemType(e.target.value)}>
+              <option value="document">Document</option><option value="permit">Permit</option><option value="photo">Photo</option><option value="daily_report">Daily report</option>
+            </select>
+          </label>
+        </div>
+        <button onClick={run} disabled={busy || !email.trim() || !projectId.trim() || !itemId.trim()}
+          className="mt-4 flex items-center justify-center gap-1.5 px-3 py-2 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white rounded-lg text-sm font-medium w-full sm:w-auto">
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />} Run trace
+        </button>
+        {out && !out.ok && <p role="alert" className="text-sm mt-3 text-red-300 break-words">{out.body?.message ?? "Trace failed."}</p>}
+        {verdict && <p role="status" className={`text-sm font-semibold mt-3 break-words ${verdict.tone}`}>{verdict.text}</p>}
+        {b && (
+          <pre className="mt-3 text-xs text-gray-300 bg-gray-950 border border-gray-800 rounded-lg p-3 overflow-x-auto max-h-96">{JSON.stringify(b, null, 2)}</pre>
+        )}
+      </Card>
+    </section>
+  );
+}
+
 export default function AdminDashboard() {
   const [, setLocation] = useLocation();
   const { data: me, isLoading: authLoading } = useMe();
@@ -630,6 +692,8 @@ export default function AdminDashboard() {
         </div>
 
         <DbAlertsCard />
+
+        <PortalTraceCard />
 
         {/* ── User Metrics ── */}
         <section>

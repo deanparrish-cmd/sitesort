@@ -180,6 +180,9 @@ export function autoLogPortalActivity(req: Request, res: Response, next: NextFun
         action: "view",
         itemType: itemId ? (docSections.has(section) ? "document" : section) : null,
         itemId: itemId ?? null,
+        // The status this view got, so the log can tell a successful load from
+        // a failed one (both write a row; before this they looked identical).
+        metadata: { status: res.statusCode },
         req,
       });
     });
