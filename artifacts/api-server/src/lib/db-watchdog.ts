@@ -9,6 +9,7 @@
 import { probeDb, type DbFailure } from "@workspace/db";
 import { sendOpsAlertEmail } from "./email";
 import { logger } from "./logger";
+import { opsAlertAddresses, maskEmail } from "./environment";
 
 // Shown to people (login screen etc.) when the database can't be reached.
 export const DB_UNAVAILABLE_MESSAGE =
@@ -22,22 +23,26 @@ let consecutiveFailures = 0;
 let alerted = false;
 let downSince: Date | null = null;
 
-function alertAddress(): string | null {
-  const to = process.env.OPS_ALERT_EMAIL?.trim();
-  return to || null;
-}
-
-async function notify(subject: string, lines: string[]): Promise<void> {
-  const to = alertAddress();
-  if (!to) {
+// Sends to every configured address, one email each, so one bad address
+// can't stop the others. Returns what happened per address.
+export async function notify(subject: string, lines: string[]): Promise<{ to: string; ok: boolean; id?: string; error?: string }[]> {
+  const addresses = opsAlertAddresses();
+  if (addresses.length === 0) {
     logger.warn({ subject }, "db watchdog: OPS_ALERT_EMAIL not set, alert not emailed");
-    return;
+    return [];
   }
-  try {
-    await sendOpsAlertEmail(to, subject, lines);
-  } catch (err) {
-    logger.error({ err, subject }, "db watchdog: alert email failed");
+  const results = [];
+  for (const to of addresses) {
+    try {
+      const id = await sendOpsAlertEmail(to, subject, lines);
+      results.push({ to: maskEmail(to), ok: true, id });
+    } catch (err) {
+      logger.error({ err, subject, to: maskEmail(to) }, "db watchdog: alert email failed");
+      results.push({ to: maskEmail(to), ok: false, error: err instanceof Error ? err.message : String(err) });
+    }
   }
+  logger.info({ subject, results }, "db watchdog: alert sent");
+  return results;
 }
 
 function describe(f: DbFailure): string[] {
@@ -79,6 +84,9 @@ export async function runDbWatchdogCheck(): Promise<void> {
 }
 
 export function scheduleDbWatchdog(): void {
+  const addresses = opsAlertAddresses();
+  if (addresses.length > 0) logger.info({ recipients: addresses.map(maskEmail) }, "db watchdog: on, alerts go to OPS_ALERT_EMAIL");
+  else logger.warn("db watchdog: on, but OPS_ALERT_EMAIL is not set, so alerts are only logged");
   const tick = () => { runDbWatchdogCheck().catch(err => logger.error({ err }, "db watchdog: check crashed")); };
   tick();
   setInterval(tick, INTERVAL_MS).unref();

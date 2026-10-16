@@ -13,6 +13,8 @@ import {
   sendInsuranceExpiryEmail,
   sendSafetyAlertEmail,
 } from "../lib/email";
+import { notify } from "../lib/db-watchdog";
+import { IS_DEPLOYED } from "../lib/environment";
 
 const router: IRouter = Router();
 
@@ -69,6 +71,28 @@ router.post("/test-email", authenticate, allow(PLATFORM_ADMIN), async (req, res)
 
   const allOk = results.every(r => r.ok);
   res.status(allOk ? 200 : 500).json({ success: allOk, to, results });
+});
+
+// Sends one clearly-labelled test of the database-down alert to every
+// OPS_ALERT_EMAIL address, through the same code path a real alert uses.
+// Changes nothing else. Platform admins only. Outside the deployed app email
+// is suppressed, so this says so instead of pretending it sent.
+router.post("/admin/ops-alert-test", authenticate, allow(PLATFORM_ADMIN), async (req, res) => {
+  if (!IS_DEPLOYED) {
+    res.status(409).json({ error: "not_deployed", message: "Test alerts only send from the live app. Email is switched off here." });
+    return;
+  }
+  const results = await notify("SiteSort TEST alert: nothing is wrong", [
+    "This is a test of the database-down alert. The database is fine.",
+    `Sent at ${new Date().toISOString()} by ${req.user!.email} from the Admin page.`,
+    "If this landed in spam, mark it as not spam so a real alert reaches your inbox.",
+  ]);
+  if (results.length === 0) {
+    res.status(409).json({ error: "no_recipients", message: "OPS_ALERT_EMAIL is not set in the Deployment secrets." });
+    return;
+  }
+  const ok = results.every(r => r.ok);
+  res.status(ok ? 200 : 502).json({ success: ok, results });
 });
 
 export default router;

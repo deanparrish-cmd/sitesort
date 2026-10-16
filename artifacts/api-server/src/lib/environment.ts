@@ -28,6 +28,21 @@ export function vapidKeys(): { publicKey: string; privateKey: string } {
     : { publicKey: process.env.WORKSPACE_VAPID_PUBLIC_KEY ?? "", privateKey: process.env.WORKSPACE_VAPID_PRIVATE_KEY ?? "" };
 }
 
+// Who gets database-down alerts (lib/db-watchdog.ts). OPS_ALERT_EMAIL takes
+// one address or several separated by commas, semicolons or spaces.
+export function opsAlertAddresses(): string[] {
+  return (process.env.OPS_ALERT_EMAIL ?? "")
+    .split(/[\s,;]+/)
+    .map(a => a.trim())
+    .filter(a => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(a));
+}
+
+// "d***@me.com": enough to recognise an address in logs and on the admin page.
+export function maskEmail(addr: string): string {
+  const [local, domain] = addr.split("@");
+  return `${local.slice(0, 1)}***@${domain}`;
+}
+
 export function environmentSummary() {
   const stripe = stripeSecretKey();
   const vapid = vapidKeys();
@@ -38,5 +53,9 @@ export function environmentSummary() {
     push: vapid.publicKey && vapid.privateKey ? "on" : "off",
     scheduledJobs: IS_DEPLOYED ? "on" : "off",
     fileDeletion: IS_DEPLOYED ? "on" : "off",
+    // Database-down alert emails: on only when they can actually be sent.
+    // A count, never the addresses (this is a public endpoint).
+    dbAlerts: IS_DEPLOYED && !!process.env.RESEND_API_KEY && opsAlertAddresses().length > 0 ? "on" : "off",
+    dbAlertRecipients: opsAlertAddresses().length,
   };
 }

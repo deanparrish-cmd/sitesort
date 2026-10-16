@@ -9,7 +9,7 @@ import {
   Building2, Bell, TrendingUp, TrendingDown, Minus, AlertTriangle,
   CheckCircle2, AlertCircle, Download, RefreshCw, HardHat, Clock,
   Activity, Layers, Zap, UserCheck, UserX, Trophy, BarChart2, Search,
-  FlaskConical, Trash2, Loader2,
+  FlaskConical, Trash2, Loader2, Database,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -282,6 +282,74 @@ function downloadCsv(path: string, filename: string) {
 }
 
 // ─── Main dashboard ───────────────────────────────────────────────────────────
+
+// Database-down alerts (#130): shows whether the live app can send them and
+// sends one labelled test through the real alert path.
+function DbAlertsCard() {
+  const { data: health } = useQuery({
+    queryKey: ["admin-health"],
+    queryFn: async () => (await fetch("/api/health")).json() as Promise<{ db?: string; environment?: { dbAlerts?: string; dbAlertRecipients?: number } }>,
+  });
+  const [state, setState] = useState<"idle" | "sending" | "done">("idle");
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const on = health?.environment?.dbAlerts === "on";
+  const count = health?.environment?.dbAlertRecipients ?? 0;
+
+  const sendTest = async () => {
+    setState("sending");
+    setResult(null);
+    try {
+      const token = localStorage.getItem("sitesort_token");
+      const res = await fetch("/api/admin/ops-alert-test", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const sent = (body.results ?? []).map((r: { to: string }) => r.to).join(", ");
+        setResult({ ok: true, text: `Test alert sent to ${sent}. Check your inbox and spam folder.` });
+      } else if (body.results) {
+        const failed = body.results.filter((r: { ok: boolean }) => !r.ok).map((r: { to: string; error?: string }) => `${r.to}: ${r.error ?? "failed"}`).join("; ");
+        setResult({ ok: false, text: `Some alerts failed. ${failed}` });
+      } else {
+        setResult({ ok: false, text: body.message ?? `Test alert failed (${res.status}).` });
+      }
+    } catch {
+      setResult({ ok: false, text: "Test alert failed: could not reach the server." });
+    } finally {
+      setState("done");
+    }
+  };
+
+  return (
+    <section>
+      <SectionTitle icon={Database} title="Database Alerts" sub="Emails OPS_ALERT_EMAIL if the live database stops answering, and again when it is back" />
+      <Card>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4 min-w-0">
+          <div className="flex-1 min-w-0">
+            <p className={`text-sm font-semibold break-words ${on ? "text-emerald-300" : "text-yellow-300"}`}>
+              {health === undefined ? "Checking..." : on ? `On: ${count} address${count === 1 ? "" : "es"}` : "Off: alerts are only logged"}
+            </p>
+            {health !== undefined && !on && (
+              <p className="text-gray-500 text-xs mt-1 break-words">Set OPS_ALERT_EMAIL in the Deployment secrets, then publish.</p>
+            )}
+          </div>
+          <button
+            onClick={sendTest}
+            disabled={state === "sending" || !on}
+            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors w-full sm:w-auto shrink-0"
+          >
+            {state === "sending" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
+            Send test alert
+          </button>
+        </div>
+        {result && (
+          <p role="status" className={`text-sm mt-3 break-words ${result.ok ? "text-emerald-300" : "text-red-300"}`}>{result.text}</p>
+        )}
+      </Card>
+    </section>
+  );
+}
 
 export default function AdminDashboard() {
   const [, setLocation] = useLocation();
@@ -560,6 +628,8 @@ export default function AdminDashboard() {
             </div>
           ))}
         </div>
+
+        <DbAlertsCard />
 
         {/* ── User Metrics ── */}
         <section>
