@@ -9,19 +9,28 @@ import { QueryClient } from "@tanstack/react-query";
 // Time-sensitive sections additionally poll (see PORTAL_LIVE_REFETCH) while the
 // tab is visible. A visibilitychange fallback in PortalLayout covers standalone
 // PWAs where the browser's own focus event may not fire.
-export const portalQueryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: false,
-      staleTime: 0,
-      refetchOnMount: true,
-      refetchOnWindowFocus: true,
-      refetchOnReconnect: true,
-    },
-  },
-});
-
 // Poll interval (ms) for sections whose content is time-sensitive: Drawings,
 // Site Issues, site updates (Overview/General), and "Shared with me". Only fires
 // while the document is visible (refetchIntervalInBackground defaults to false).
 export const PORTAL_LIVE_REFETCH = 60_000;
+
+export const portalQueryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // One quick retry for a dropped connection or server error, none for a
+      // refusal (4xx): a single blip on site shouldn't flash "couldn't update".
+      retry: (count, err) => {
+        const status = (err as unknown as { status?: number })?.status;
+        return count < 1 && !(status && status < 500);
+      },
+      staleTime: 0,
+      refetchOnMount: true,
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
+      // Every list on screen re-checks every minute while visible (#133), so
+      // "Updated X ago" stays true and 15+ minutes old really means updates
+      // have stopped.
+      refetchInterval: PORTAL_LIVE_REFETCH,
+    },
+  },
+});

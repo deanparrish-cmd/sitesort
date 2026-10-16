@@ -1260,6 +1260,36 @@ router.get("/portal/shared", ...portalGuards, async (req, res) => {
   res.json(await buildPortalShared(req.user!.id, req.portalProjectId!));
 });
 
+// POST /api/portal/documents/revision-check { ids } — for the documents a
+// member's phone is showing, is any of them now superseded, and by what? Tiny
+// answer, so a phone whose list is out of date (failed reloads, old app code)
+// can still be told "a newer revision exists" (#133). Only answers for
+// documents this member can see; never reveals anything else.
+router.post("/portal/documents/revision-check", ...portalGuards, async (req, res) => {
+  const pid = req.portalProjectId!;
+  const raw = (req.body as { ids?: unknown })?.ids;
+  const ids = Array.isArray(raw) ? [...new Set(raw.filter((x): x is string => typeof x === "string"))].slice(0, 200) : [];
+  if (ids.length === 0) { res.json({ documents: [] }); return; }
+  const viewer = await resolveViewer(req.user!.id, pid);
+  const visible = await visibleIds(pid, "document", viewer);
+  const rows = await db.select().from(documentsTable)
+    .where(and(eq(documentsTable.projectId, pid), inArray(documentsTable.id, ids)));
+  const out = [];
+  for (const d of rows) {
+    if (d.type !== "safety" && !visible.has(d.id)) continue;
+    if (d.status !== "superseded") { out.push({ id: d.id, status: d.status, latest: null }); continue; }
+    const next = await resolveReplacement(pid, d.id);
+    out.push({
+      id: d.id, status: d.status,
+      latest: next ? {
+        id: next.id, name: next.name, revision: next.revision ?? null, version: next.version,
+        sharedWithYou: next.type === "safety" || visible.has(next.id),
+      } : null,
+    });
+  }
+  res.json({ documents: out });
+});
+
 // GET /api/admin/portal-trace?email=&projectId=&itemType=&itemId= — platform
 // admins only, read-only. Runs the real "Shared with me" code for one member
 // on one project and reports each step, so "why can't X see Y" is answered

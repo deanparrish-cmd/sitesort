@@ -20,6 +20,24 @@ if (Number.isNaN(port) || port <= 0) {
 
 const basePath = process.env.BASE_PATH;
 
+// Build number (#133): baked into the code AND published as /version.json, so
+// an installed portal app that was resumed from the background (and is still
+// running old code) can see that a newer build is live and offer a reload.
+const BUILD_ID = new Date().toISOString();
+const buildIdPlugin = {
+  name: "sitesort-build-id",
+  generateBundle(this: { emitFile: (f: { type: "asset"; fileName: string; source: string }) => void }) {
+    this.emitFile({ type: "asset", fileName: "version.json", source: JSON.stringify({ build: BUILD_ID }) });
+  },
+  configureServer(server: { middlewares: { use: (path: string, fn: (req: unknown, res: { setHeader: (k: string, v: string) => void; end: (b: string) => void }) => void) => void } }) {
+    server.middlewares.use("/version.json", (_req, res) => {
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Cache-Control", "no-store");
+      res.end(JSON.stringify({ build: BUILD_ID }));
+    });
+  },
+};
+
 if (!basePath) {
   throw new Error(
     "BASE_PATH environment variable is required but was not provided.",
@@ -28,7 +46,9 @@ if (!basePath) {
 
 export default defineConfig({
   base: basePath,
+  define: { __SITESORT_BUILD__: JSON.stringify(BUILD_ID) },
   plugins: [
+    buildIdPlugin,
     react(),
     tailwindcss(),
     runtimeErrorOverlay(),

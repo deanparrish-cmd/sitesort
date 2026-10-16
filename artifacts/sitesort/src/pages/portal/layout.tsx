@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useGetPortalContext, getGetPortalContextQueryKey, useGetPortalUnseen, getGetPortalUnseenQueryKey } from "@workspace/api-client-react";
@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { ApiError } from "@workspace/api-client-react";
 import { clearSiteRegisterCaches } from "@/components/portal-site-register";
+import { usePortalFreshnessState, PortalFreshnessProvider, PortalWarningProvider, FreshnessLine, FreshnessBanner, RefreshButton } from "./freshness";
 
 // The canonical list of every portal destination — order + labels + icons.
 // `key` matches the URL segment (/portal/:key) AND the server section
@@ -69,6 +70,8 @@ export function portalLogout(setLocation: (to: string) => void, opts: { byUser?:
 export function PortalLayout({ active, children }: { active: string; children: React.ReactNode }) {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
+  const freshness = usePortalFreshnessState();
+  const [screenWarning, setScreenWarning] = useState<ReactNode | null>(null);
   const token = typeof window !== "undefined" ? localStorage.getItem("sitesort_portal_token") : null;
   const { data, isLoading, isError, error } = useGetPortalContext({ query: { enabled: !!token, retry: false, queryKey: getGetPortalContextQueryKey() } });
   // Only a real refusal from the server (session ended, access removed) logs
@@ -190,7 +193,11 @@ export function PortalLayout({ active, children }: { active: string; children: R
           there, so it doubles as the one consistent "back to everything"
           affordance. Safe-area top so it clears the status bar/notch in
           standalone PWA mode. */}
-      <header className="flex items-center gap-3 min-w-0 px-4 py-3 border-b bg-card pt-[calc(0.75rem+env(safe-area-inset-top))]">
+      {/* Header + freshness bar stay pinned to the top (#133): how fresh the
+          list is must be visible at a glance, without scrolling back up. The
+          site register has its own saved-copy age display, so it skips both. */}
+      <header className="sticky top-0 z-30">
+      <div className="flex items-center gap-3 min-w-0 px-4 py-3 border-b bg-card pt-[calc(0.75rem+env(safe-area-inset-top))]">
         <Link href="/portal/overview" className="shrink-0" aria-label="Portal home">
           <img src={logoSrc} alt="SiteSort" className="w-auto shrink-0 object-contain" style={{ height: "48px" }} />
         </Link>
@@ -199,8 +206,11 @@ export function PortalLayout({ active, children }: { active: string; children: R
             <HardHat className="w-4 h-4 shrink-0" />
             <span className="font-display font-bold truncate">{projectName}</span>
           </div>
-          <p className="text-xs text-muted-foreground">{offline ? "Team Portal · no signal" : "Team Portal"}</p>
+          {active === "site-register"
+            ? <p className="text-xs text-muted-foreground">{offline ? "Team Portal · no signal" : "Team Portal"}</p>
+            : <FreshnessLine f={freshness} offline={offline} />}
         </div>
+        {active !== "site-register" && <RefreshButton f={freshness} />}
         {active !== "overview" && (
           <Link
             href="/portal/overview"
@@ -209,15 +219,22 @@ export function PortalLayout({ active, children }: { active: string; children: R
             className="shrink-0 inline-flex items-center gap-1.5 rounded-md border bg-background px-3 min-h-11 text-sm font-medium text-foreground hover:bg-accent hover:text-accent-foreground active:bg-accent"
           >
             <Home className="w-4 h-4 shrink-0" />
-            <span>Home</span>
+            {/* Icon-only on phones so "Updated X ago" is never cut off (#133). */}
+            <span className="hidden sm:inline">Home</span>
           </Link>
         )}
+      </div>
+      {/* A screen's own warning (the drawings one) already says the list is
+          out of date and has its own Refresh, so it replaces the general bar
+          rather than stacking under it on a phone. A new build still shows. */}
+      {active !== "site-register" && (!screenWarning || freshness.newBuild) && <FreshnessBanner f={freshness} offline={offline} />}
+      {active !== "site-register" && screenWarning}
       </header>
 
       {/* Main content — same container + overflow safety net as the main app shell */}
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         <main className="flex-1 p-4 md:p-8 min-w-0 [overflow-wrap:anywhere] overflow-x-clip">
-          <div className="max-w-4xl mx-auto slide-up min-w-0 [&>*]:min-w-0">{children}</div>
+          <div className="max-w-4xl mx-auto slide-up min-w-0 [&>*]:min-w-0"><PortalFreshnessProvider value={freshness}><PortalWarningProvider value={setScreenWarning}>{children}</PortalWarningProvider></PortalFreshnessProvider></div>
         </main>
       </div>
 

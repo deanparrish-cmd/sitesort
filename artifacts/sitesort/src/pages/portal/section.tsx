@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
+import { usePortalFreshness, LoadFailed, useSetPortalWarning, RevisionWarning, type RevisionHit } from "./freshness";
 import { useRoute, useSearch, useLocation, Link } from "wouter";
-import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import { QueryClientProvider, useQueryClient, useQuery } from "@tanstack/react-query";
 import {
   useGetPortalOverview, useGetPortalTeam,
   useGetPortalSiteIssues, useGetPortalSiteBoard, useGetPortalPermits,
@@ -139,7 +140,11 @@ function fmtDateTime(d?: string | null): string {
 function Loading() {
   return <div className="flex justify-center py-16"><Spinner className="size-7 text-primary" /></div>;
 }
+// Never says "nothing here" when the load actually failed (#133): an empty
+// list and a failed one used to look identical.
 function Empty({ children }: { children: React.ReactNode }) {
+  const f = usePortalFreshness();
+  if (f?.failedNoData) return <LoadFailed onRetry={f.refresh} />;
   return <div className="text-center py-12 text-muted-foreground text-base">{children}</div>;
 }
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
@@ -1433,6 +1438,44 @@ function SharedView() {
   const { data, isLoading } = useGetPortalShared({ query: { refetchInterval: PORTAL_LIVE_REFETCH, queryKey: getGetPortalSharedQueryKey() } });
   const { data: ctx } = useGetPortalContext();
   const hasPin = !!ctx?.member.hasPin;
+
+  // Drawings safety net (#133): when this list isn't fresh (a reload failed,
+  // it's 15+ minutes old, or the app code is out of date), ask the server
+  // directly whether any drawing on screen has a newer revision, and say so
+  // in the pinned bar. Working from an old list = building to the wrong drawing.
+  const freshness = usePortalFreshness();
+  const setWarning = useSetPortalWarning();
+  const listNotFresh = !!freshness && (freshness.failedWithData || freshness.stale || freshness.newBuild);
+  const drawingsOnScreen = (data?.documents ?? []).filter(d => d.type === "drawing" && d.status !== "superseded");
+  const drawingIds = drawingsOnScreen.map(d => d.id);
+  const revCheck = useQuery({
+    queryKey: ["portal-revision-check", drawingIds.join(",")],
+    enabled: listNotFresh && drawingIds.length > 0,
+    meta: { freshnessIgnore: true },
+    retry: false,
+    queryFn: async () => {
+      const res = await fetch("/api/portal/documents/revision-check", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: drawingIds }),
+      });
+      if (!res.ok) throw new Error(`revision check ${res.status}`);
+      return (await res.json()) as { documents: { id: string; status: string; latest: RevisionHit["latest"] | null }[] };
+    },
+  });
+  const revHits: RevisionHit[] = listNotFresh
+    ? (revCheck.data?.documents ?? []).flatMap(r => {
+        const doc = drawingsOnScreen.find(d => d.id === r.id);
+        return r.status === "superseded" && r.latest && doc ? [{ name: doc.name, latest: r.latest }] : [];
+      })
+    : [];
+  const revCheckFailed = listNotFresh && drawingIds.length > 0 && revCheck.isError && !revCheck.isFetching;
+  const revKey = revHits.map(h => h.name + h.latest.version).join("|") + (revCheckFailed ? "|failed" : "");
+  useEffect(() => {
+    setWarning(revHits.length > 0 || revCheckFailed
+      ? <RevisionWarning hits={revHits} checkFailed={revCheckFailed} onRefresh={() => { freshness?.refresh(); void revCheck.refetch(); }} />
+      : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revKey]);
+  useEffect(() => () => setWarning(null), [setWarning]);
   const signOff = useSignOffFlow({
     hasPin,
     acknowledgeUrl: id => `/api/portal/documents/${id}/acknowledge`,

@@ -480,6 +480,14 @@ export const WORKER_GUIDE: GuideSection[] = [
           "If a new version of a document is shared with you, you'll be notified and asked to acknowledge it, even if you'd acknowledged the earlier version.",
         ],
       },
+      {
+        heading: "Check your list is up to date",
+        body: [
+          "The top of every screen shows when it was last updated, for example \"Updated 2 min ago\". It updates by itself every minute. Tap the refresh button next to it to update now.",
+          "If an update fails, a bar says so and shows when your list was last loaded. If a drawing on your list has a newer revision, a red bar names it: don't work from that drawing until the list updates.",
+          "If you see \"SiteSort has been updated\", tap Reload to get the latest version of the app.",
+        ],
+      },
     ],
   },
   {
