@@ -8,7 +8,7 @@ import { itemDeepLink } from "@/lib/deep-link";
 import { useCapabilities } from "@/hooks/use-capabilities";
 import {
   Share2, Mail, MessageCircle, Users, ExternalLink, X,
-  Download, Clock, Loader2, CheckCircle2, Pin, PinOff, QrCode, ChevronDown,
+  Download, Clock, Loader2, CheckCircle2, Pin, PinOff, QrCode, ChevronDown, AlertTriangle,
 } from "lucide-react";
 
 type ShareLog = {
@@ -22,8 +22,11 @@ type ShareLinkRow = {
 };
 type Project = { id: string; name: string };
 type PortalTrade = { trade: string; memberCount: number };
-type PortalMemberOpt = { personId: string; userId: string | null; accepted?: boolean; name: string; companyName?: string; trades?: string[] };
-type PortalShareRule = { id: string; audienceType: string; trade?: string; personId?: string; personName?: string };
+// portalStatus: "member" = can see the portal now, "invited" = live pending
+// invite, "none" = no portal access at all (a share to them reaches nobody).
+type PortalStatus = "member" | "invited" | "none";
+type PortalMemberOpt = { personId: string; userId: string | null; accepted?: boolean; portalStatus?: PortalStatus; name: string; companyName?: string; trades?: string[] };
+type PortalShareRule = { id: string; audienceType: string; trade?: string; personId?: string; personName?: string; personCompany?: string; portalStatus?: PortalStatus };
 
 export interface ShareModalProps {
   open: boolean;
@@ -77,7 +80,18 @@ function methodLabel(method: string) {
 function shareRuleLabel(s: PortalShareRule): string {
   if (s.audienceType === "all") return "Everyone on this project";
   if (s.audienceType === "trade") return `Trade: ${s.trade}`;
-  return s.personName ?? "A team member";
+  // Company too: one person can have two cards (two firms), only one of which
+  // may be on the portal.
+  const who = [s.personName ?? "A team member", s.personCompany].filter(Boolean).join(" · ");
+  return s.portalStatus && s.portalStatus !== "member" ? `${who} (${portalStatusText(s.portalStatus)})` : who;
+}
+
+function portalStatusText(st: PortalStatus | undefined): string {
+  return st === "invited" ? "invite pending" : st === "none" ? "not on portal, sees nothing" : "on portal";
+}
+
+function memberStatus(m: PortalMemberOpt): PortalStatus {
+  return m.portalStatus ?? (m.accepted === false ? "invited" : "member");
 }
 
 export function ShareModal({ open, onClose, entityType, entityId, entityName, fileUrl, projectId, version, additionalInfo, shareText }: ShareModalProps) {
@@ -96,6 +110,7 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
   const [existingShares, setExistingShares] = useState<PortalShareRule[]>([]);
   const [portalSharing, setPortalSharing] = useState(false);
   const [portalMsg, setPortalMsg] = useState<string | null>(null);
+  const [portalMsgTone, setPortalMsgTone] = useState<"ok" | "warn" | "error">("ok");
   const [isPinned, setIsPinned] = useState(false);
   const [pinLoading, setPinLoading] = useState(false);
   const [siteBoardUrl, setSiteBoardUrl] = useState<string | null>(null);
@@ -290,14 +305,29 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
         body: JSON.stringify({ itemType: entityType, itemId: entityId, audiences }),
       });
       const data = await res.json().catch(() => ({}));
+      // Never report success for a share that didn't save.
+      if (!res.ok) {
+        setPortalMsgTone("error");
+        setPortalMsg(data.message ? `Not shared: ${data.message}` : `Not shared (error ${res.status}). Please try again.`);
+        return;
+      }
       const n = typeof data.recipientCount === "number" ? data.recipientCount : null;
       const summary = portalMode === "all" ? "everyone on this project"
         : portalMode === "trade" ? `${selTrades.length} trade${selTrades.length !== 1 ? "s" : ""}`
         : `${selPersons.length} ${selPersons.length !== 1 ? "people" : "person"}`;
-      setPortalMsg(`Shared to ${summary}${n !== null ? ` · ${n} member${n !== 1 ? "s" : ""} now have access` : ""}`);
+      if (n === 0) {
+        setPortalMsgTone("warn");
+        setPortalMsg(`Saved, but nobody on the portal can see it yet. ${portalMode === "person" ? "The person you picked is not on the portal." : "No one in this audience is on the portal."} They will see it once they accept a portal invite.`);
+      } else {
+        setPortalMsgTone("ok");
+        setPortalMsg(`Shared to ${summary}${n !== null ? ` · ${n} member${n !== 1 ? "s" : ""} now have access` : ""}`);
+      }
       logShare("portal", summary);
       setSelTrades([]); setSelPersons([]);
       loadPortalShares();
+    } catch {
+      setPortalMsgTone("error");
+      setPortalMsg("Not shared: could not reach SiteSort. Check your connection and try again.");
     } finally {
       setPortalSharing(false);
     }
@@ -484,16 +514,21 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
                               key={m.personId}
                               onClick={() => togglePerson(m.personId)}
                               className={cn(
-                                "inline-flex items-center max-w-full px-2.5 py-1 rounded-full text-xs border transition-colors",
+                                // Wraps rather than truncates: the portal status at the end is the part
+                                // that tells two same-name cards apart.
+                                "inline-flex items-center max-w-full px-2.5 py-1 rounded-2xl text-left text-xs border transition-colors",
                                 sel ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border hover:border-primary/40",
                               )}
                             >
-                              <span className="truncate">
+                              {memberStatus(m) === "member" && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0 mr-1.5" title="On the portal" aria-label="On the portal" />
+                              )}
+                              <span className="min-w-0 break-words">
                                 {m.name}
-                                {(m.companyName || m.trades?.length) && (
+                                {!!(m.companyName || m.trades?.length) && (
                                   <span className="opacity-70"> · {[m.companyName, m.trades?.[0]].filter(Boolean).join(" · ")}</span>
                                 )}
-                                {m.accepted === false && <span className="opacity-70 italic"> · invite pending</span>}
+                                {memberStatus(m) !== "member" && <span className="opacity-70 italic"> · {portalStatusText(memberStatus(m))}</span>}
                               </span>
                             </button>
                           );
@@ -511,8 +546,11 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
                     </button>
 
                     {portalMsg && (
-                      <p className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
-                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> {portalMsg}
+                      <p role="status" className={cn("flex items-start gap-1.5 text-xs",
+                        portalMsgTone === "ok" ? "text-green-600 dark:text-green-400"
+                        : portalMsgTone === "warn" ? "text-amber-700 dark:text-amber-400"
+                        : "text-red-600 dark:text-red-400")}>
+                        {portalMsgTone === "ok" ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-px" /> : <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />} {portalMsg}
                       </p>
                     )}
 
@@ -521,7 +559,7 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
                         <p className="text-xs font-medium text-muted-foreground">Currently shared with</p>
                         {existingShares.map(s => (
                           <div key={s.id} className="flex items-center gap-2 text-xs bg-muted/50 rounded-md px-2 py-1.5">
-                            <span className="flex-1 min-w-0 truncate">{shareRuleLabel(s)}</span>
+                            <span className={cn("flex-1 min-w-0 break-words", s.portalStatus && s.portalStatus !== "member" && "text-amber-700 dark:text-amber-400")}>{shareRuleLabel(s)}</span>
                             <button onClick={() => removePortalShare(s.id)} title="Remove" className="shrink-0 rounded-full p-0.5 hover:bg-muted">
                               <X className="w-3.5 h-3.5" />
                             </button>

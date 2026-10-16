@@ -4,9 +4,9 @@ import {
   portalSharesTable, projectsTable, projectMembersTable, peopleTable,
   subcontractorsTable, documentsTable, usersTable, permitsTable,
   photosTable, plantItemsTable, dailyReportsTable,
-  portalMemberDocumentsTable, personCertificationsTable,
+  portalMemberDocumentsTable, personCertificationsTable, projectInvitesTable,
 } from "@workspace/db/schema";
-import { and, eq, isNull, isNotNull, inArray, desc } from "drizzle-orm";
+import { and, eq, isNull, isNotNull, inArray, desc, gt } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { allow, INTERNAL_STAFF, projectApprover } from "../lib/authz";
@@ -71,6 +71,27 @@ async function portalAudienceMembers(projectId: string) {
   }));
 }
 
+// Can this card see the portal on this project? "member" = accepted (has a
+// login on the project), "invited" = a live pending invite, "none" = neither,
+// so a share to it reaches nobody until someone invites them. One person can
+// have two cards (e.g. two firms); only the card with the login sees shares.
+type PortalStatus = "member" | "invited" | "none";
+async function portalStatusByPerson(projectId: string, personIds: string[]): Promise<Map<string, PortalStatus>> {
+  const out = new Map<string, PortalStatus>();
+  if (personIds.length === 0) return out;
+  const [members, invites] = await Promise.all([
+    db.select({ personId: projectMembersTable.personId, userId: projectMembersTable.userId }).from(projectMembersTable)
+      .where(and(eq(projectMembersTable.projectId, projectId), inArray(projectMembersTable.personId, personIds))),
+    db.select({ personId: projectInvitesTable.personId }).from(projectInvitesTable)
+      .where(and(eq(projectInvitesTable.projectId, projectId), inArray(projectInvitesTable.personId, personIds),
+        eq(projectInvitesTable.status, "pending"), gt(projectInvitesTable.expiresAt, new Date()))),
+  ]);
+  for (const id of personIds) out.set(id, "none");
+  for (const i of invites) if (i.personId) out.set(i.personId, "invited");
+  for (const m of members) if (m.personId && m.userId) out.set(m.personId, "member");
+  return out;
+}
+
 // GET /api/projects/:projectId/portal-audience — trade groups (with portal-member
 // counts, so the dialog can grey empty ones) + individuals, for the share dialog.
 router.get("/projects/:projectId/portal-audience", authenticate, allow(projectApprover()), async (req, res) => {
@@ -105,10 +126,11 @@ router.get("/projects/:projectId/portal-audience", authenticate, allow(projectAp
     const tradeSet = new Set<string>([...(proj[0]?.trades ?? []), ...counts.keys()]);
     if (members.some(m => m.trades.length === 0)) tradeSet.add(SITE_STAFF);
 
+    const statusByPerson = await portalStatusByPerson(req.params.projectId, members.map(m => m.personId));
     res.json({
       trades: [...tradeSet].sort().map(trade => ({ trade, memberCount: counts.get(trade) ?? 0 })),
       members: members
-        .map(m => ({ personId: m.personId, userId: m.userId, accepted: m.userId !== null, name: nameByPerson.get(m.personId) ?? "Unknown", companyName: companyByPerson.get(m.personId) ?? undefined, trades: m.trades }))
+        .map(m => ({ personId: m.personId, userId: m.userId, accepted: m.userId !== null, portalStatus: statusByPerson.get(m.personId) ?? "none", name: nameByPerson.get(m.personId) ?? "Unknown", companyName: companyByPerson.get(m.personId) ?? undefined, trades: m.trades }))
         .sort((a, b) => (surnameByPerson.get(a.personId) ?? "").localeCompare(surnameByPerson.get(b.personId) ?? "")),
     });
   } catch (err) {
@@ -131,13 +153,23 @@ router.get("/projects/:projectId/portal-shares", authenticate, allow(INTERNAL_ST
     // Attach person names for 'person' rules (PM side only — never exposed in portal).
     const personIds = rows.filter(r => r.personId).map(r => r.personId as string);
     const names = personIds.length
-      ? await db.select({ id: peopleTable.id, name: peopleTable.name }).from(peopleTable).where(inArray(peopleTable.id, personIds))
+      ? await db.select({ id: peopleTable.id, name: peopleTable.name, companyName: subcontractorsTable.companyName, contactType: subcontractorsTable.contactType })
+        .from(peopleTable).leftJoin(subcontractorsTable, eq(peopleTable.subcontractorId, subcontractorsTable.id))
+        .where(inArray(peopleTable.id, personIds))
       : [];
-    const nameById = new Map(names.map(n => [n.id, n.name]));
-    res.json(rows.map(r => ({
-      id: r.id, audienceType: r.audienceType, trade: r.trade ?? undefined,
-      personId: r.personId ?? undefined, personName: r.personId ? nameById.get(r.personId) : undefined,
-    })));
+    const byId = new Map(names.map(n => [n.id, n]));
+    const statusByPerson = await portalStatusByPerson(req.params.projectId, personIds);
+    res.json(rows.map(r => {
+      const p = r.personId ? byId.get(r.personId) : undefined;
+      return {
+        id: r.id, audienceType: r.audienceType, trade: r.trade ?? undefined,
+        personId: r.personId ?? undefined, personName: p?.name,
+        // Which card: two cards can share a name (one person, two firms).
+        personCompany: p ? (p.contactType === "self_employed" ? "Self-employed / Labour Only" : p.companyName ?? undefined) : undefined,
+        portalStatus: r.personId ? statusByPerson.get(r.personId) ?? "none" : undefined,
+        createdAt: r.createdAt.toISOString(),
+      };
+    }));
   } catch (err) {
     req.log.error({ err }, "List portal shares error");
     res.status(500).json({ error: "server_error", message: "Failed to load portal shares" });
