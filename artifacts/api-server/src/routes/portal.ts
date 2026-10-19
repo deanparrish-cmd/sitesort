@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request } from "express";
 import { canSeeSiteRegister } from "./qr";
 import multer from "multer";
 import { createHash } from "crypto";
@@ -173,17 +173,27 @@ async function loadProject(projectId: string) {
 // them personally), EXCEPT `safety`-type documents which are always open. The
 // portal NEVER exposes who else an item was shared with.
 const SITE_STAFF = "Site Staff";
-type Viewer = { personId: string | null; trades: string[]; isSiteStaff: boolean };
+type Viewer = {
+  personId: string | null; trades: string[]; isSiteStaff: boolean;
+  // Which row .limit(1) picked; read only by the TEMP shared-list trace.
+  memberId?: string | null; companyId?: string | null; subcontractorId?: string | null;
+};
 
 async function resolveViewer(userId: string, projectId: string): Promise<Viewer> {
-  const rows = await db.select({ personId: projectMembersTable.personId, trades: subcontractorsTable.trades })
+  const rows = await db.select({
+    personId: projectMembersTable.personId, trades: subcontractorsTable.trades,
+    memberId: projectMembersTable.id, companyId: peopleTable.companyId, subcontractorId: peopleTable.subcontractorId,
+  })
     .from(projectMembersTable)
     .leftJoin(peopleTable, eq(projectMembersTable.personId, peopleTable.id))
     .leftJoin(subcontractorsTable, eq(peopleTable.subcontractorId, subcontractorsTable.id))
     .where(and(eq(projectMembersTable.projectId, projectId), eq(projectMembersTable.userId, userId), isNotNull(projectMembersTable.personId)))
     .limit(1);
   const trades = (rows[0]?.trades ?? []) as string[];
-  return { personId: (rows[0]?.personId ?? null) as string | null, trades, isSiteStaff: trades.length === 0 };
+  return {
+    personId: (rows[0]?.personId ?? null) as string | null, trades, isSiteStaff: trades.length === 0,
+    memberId: rows[0]?.memberId ?? null, companyId: rows[0]?.companyId ?? null, subcontractorId: rows[0]?.subcontractorId ?? null,
+  };
 }
 
 // Ids of a given item type visible to this viewer, resolved from share rules at
@@ -213,7 +223,7 @@ async function isDocVisibleToViewer(pid: string, userId: string, doc: { id: stri
 // Like visibleIds, but maps each visible item to the MOST RECENT matching share
 // time — the "shared with me at" timestamp used for unseen-since detection and
 // newest-first ordering.
-async function visibleShareMap(projectId: string, itemType: string, viewer: Viewer): Promise<Map<string, Date>> {
+async function visibleShareMap(projectId: string, itemType: string, viewer: Viewer, trace?: SharedTraceRule[]): Promise<Map<string, Date>> {
   const shares = await db.select().from(portalSharesTable)
     .where(and(eq(portalSharesTable.projectId, projectId), eq(portalSharesTable.itemType, itemType)));
   const map = new Map<string, Date>();
@@ -221,11 +231,42 @@ async function visibleShareMap(projectId: string, itemType: string, viewer: View
     const matches = s.audienceType === "all"
       || (s.audienceType === "person" && viewer.personId && s.personId === viewer.personId)
       || (s.audienceType === "trade" && !!s.trade && (viewer.trades.includes(s.trade) || (viewer.isSiteStaff && s.trade === SITE_STAFF)));
+    if (trace) trace.push({
+      shareId: s.id, itemType, itemId: s.itemId, audience: s.audienceType,
+      ...(s.audienceType === "person" ? { sharePersonId: s.personId } : {}),
+      ...(s.audienceType === "trade" ? { shareTrade: s.trade } : {}),
+      matched: !!matches, why: shareRuleReason(s, viewer),
+    });
     if (!matches) continue;
     const prev = map.get(s.itemId);
     if (!prev || s.createdAt > prev) map.set(s.itemId, s.createdAt);
   }
   return map;
+}
+
+// ---- TEMP (2026-10-19): ground-truth trace of GET /portal/shared ----
+// Dean doesn't see shares Annabelle does. Every read-only trace says he should,
+// so this logs what the LIVE request actually computed: which membership row
+// resolveViewer's .limit(1) picked out of how many, each share rule and why it
+// did or didn't match, and what went out. Ids only. Remove once settled.
+type SharedTraceRule = {
+  shareId: string; itemType: string; itemId: string; audience: string;
+  sharePersonId?: string | null; shareTrade?: string | null; matched: boolean; why: string;
+};
+type SharedTrace = { viewer?: Viewer; rules: SharedTraceRule[]; matchedDocIds?: string[]; droppedDocIds?: string[] };
+function shareRuleReason(s: { audienceType: string; personId: string | null; trade: string | null }, viewer: Viewer): string {
+  if (s.audienceType === "all") return "all: matches everyone";
+  if (s.audienceType === "person") {
+    if (!viewer.personId) return "person: viewer has no personId";
+    return s.personId === viewer.personId ? "person: share.personId = viewer.personId" : "person: share.personId != viewer.personId";
+  }
+  if (s.audienceType === "trade") {
+    if (!s.trade) return "trade: share has no trade";
+    if (viewer.trades.includes(s.trade)) return "trade: in viewer trades";
+    if (viewer.isSiteStaff && s.trade === SITE_STAFF) return "trade: Site Staff and viewer has no trades";
+    return `trade: not in viewer trades [${viewer.trades.join(",")}]`;
+  }
+  return `unknown audience ${s.audienceType}`;
 }
 
 // When did this member last VIEW each section? Reuses the existing portal
@@ -1185,13 +1226,14 @@ function serializeSharedReport(r: { id: string; reportDate: string; managerRepor
 // The "Shared with me" payload for one member on one project. Shared by the
 // portal route and the platform-admin trace (/admin/portal-trace), so the trace
 // runs exactly the code a member's phone gets.
-export async function buildPortalShared(userId: string, pid: string) {
+export async function buildPortalShared(userId: string, pid: string, trace?: SharedTrace) {
   const viewer = await resolveViewer(userId, pid);
+  if (trace) trace.viewer = viewer;
   const [docMap, photoMap, permitMap, reportMap, lastView, permRow] = await Promise.all([
-    visibleShareMap(pid, "document", viewer),
-    visibleShareMap(pid, "photo", viewer),
-    visibleShareMap(pid, "permit", viewer),
-    visibleShareMap(pid, "daily_report", viewer),
+    visibleShareMap(pid, "document", viewer, trace?.rules),
+    visibleShareMap(pid, "photo", viewer, trace?.rules),
+    visibleShareMap(pid, "permit", viewer, trace?.rules),
+    visibleShareMap(pid, "daily_report", viewer, trace?.rules),
     lastViewedBySection(userId, pid),
     db.select({ canLogIssues: projectMembersTable.canLogIssues }).from(projectMembersTable)
       .where(and(eq(projectMembersTable.projectId, pid), eq(projectMembersTable.userId, userId))).limit(1),
@@ -1211,6 +1253,12 @@ export async function buildPortalShared(userId: string, pid: string) {
   const docMapWithSafety = new Map(docMap);
   for (const d of safetyDocs) if (!docMapWithSafety.has(d.id)) docMapWithSafety.set(d.id, d.createdAt);
   const docs = [...gatedDocs, ...safetyDocs.filter(d => !docMap.has(d.id))];
+  if (trace) {
+    // Matched by a rule but not returned: deleted, archived or another project.
+    const kept = new Set(gatedDocs.map(d => d.id));
+    trace.matchedDocIds = docIds;
+    trace.droppedDocIds = docIds.filter(id => !kept.has(id));
+  }
   const myStatuses = await myDocStatuses(userId, docs.map(d => d.id));
   // A share rule can outlive its content (e.g. shared before the diary was ever
   // written) — only surface reports that actually have something to read.
@@ -1237,8 +1285,65 @@ export async function buildPortalShared(userId: string, pid: string) {
 }
 
 router.get("/portal/shared", ...portalGuards, async (req, res) => {
-  res.json(await buildPortalShared(req.user!.id, req.portalProjectId!));
+  const userId = req.user!.id, pid = req.portalProjectId!;
+  const trace: SharedTrace = { rules: [] };
+  const started = Date.now();
+  try {
+    const body = await buildPortalShared(userId, pid, trace);
+    res.json(body);
+    void logSharedTrace(req, userId, pid, trace, { started, body });
+  } catch (err) {
+    void logSharedTrace(req, userId, pid, trace, { started, err });
+    throw err;
+  }
 });
+
+// TEMP (2026-10-19): one structured line per Shared with me load. Filter the
+// Deployment logs for "PORTAL_SHARED_TRACE". Never throws, never delays the reply.
+async function logSharedTrace(
+  req: Request, userId: string, pid: string, trace: SharedTrace,
+  out: { started: number; body?: Awaited<ReturnType<typeof buildPortalShared>>; err?: unknown },
+) {
+  try {
+    const [hereRows, allRows] = await Promise.all([
+      db.select({ id: projectMembersTable.id, personId: projectMembersTable.personId, companyId: peopleTable.companyId, subcontractorId: peopleTable.subcontractorId, addedAt: projectMembersTable.addedAt })
+        .from(projectMembersTable).leftJoin(peopleTable, eq(projectMembersTable.personId, peopleTable.id))
+        .where(and(eq(projectMembersTable.projectId, pid), eq(projectMembersTable.userId, userId))),
+      db.select({ projectId: projectMembersTable.projectId }).from(projectMembersTable)
+        .where(and(eq(projectMembersTable.userId, userId), isNotNull(projectMembersTable.personId))),
+    ]);
+    const candidates = hereRows.filter(r => r.personId);
+    const b = out.body;
+    req.log.info({
+      PORTAL_SHARED_TRACE: {
+        userId, projectId: pid, ms: Date.now() - out.started,
+        sessionCompanyId: (req.user as { companyId?: string } | undefined)?.companyId ?? null,
+        viewer: trace.viewer ? {
+          memberId: trace.viewer.memberId, personId: trace.viewer.personId, companyId: trace.viewer.companyId,
+          subcontractorId: trace.viewer.subcontractorId, trades: trace.viewer.trades, isSiteStaff: trace.viewer.isSiteStaff,
+        } : null,
+        membershipRowsThisProject: hereRows.length,
+        membershipCandidates: candidates.length,
+        limit1Discarded: Math.max(0, candidates.length - 1),
+        candidateRows: candidates.map(r => ({ id: r.id, personId: r.personId, companyId: r.companyId, subcontractorId: r.subcontractorId, addedAt: r.addedAt })),
+        memberProjectIds: [...new Set(allRows.map(r => r.projectId))],
+        rulesTotal: trace.rules.length,
+        rulesMatched: trace.rules.filter(r => r.matched).length,
+        rules: trace.rules,
+        matchedDocIds: trace.matchedDocIds ?? [],
+        droppedDocIds: trace.droppedDocIds ?? [],
+        response: b ? {
+          documents: b.documents.length, photos: b.photos.length, permits: b.permits.length, dailyReports: b.dailyReports.length,
+          total: b.documents.length + b.photos.length + b.permits.length + b.dailyReports.length,
+          documentIds: b.documents.map((d: { id: string }) => d.id),
+        } : null,
+        error: out.err ? String((out.err as Error)?.message ?? out.err) : null,
+      },
+    }, "PORTAL_SHARED_TRACE");
+  } catch (e) {
+    req.log.warn({ e }, "PORTAL_SHARED_TRACE failed");
+  }
+}
 
 // POST /api/portal/documents/revision-check { ids } — for the documents a
 // member's phone is showing, is any of them now superseded, and by what? Tiny

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-19T09:37:17.778Z",
+  "generatedAt": "2026-10-19T11:26:26.336Z",
   "target": "http://localhost:8080",
   "viewports": [
     360,
@@ -132,7 +132,7 @@
         "auth": "none"
       },
       {
-        "path": "/s/Gn7RA4XdKgHqFYNWXsNaQllcdWmKtSkz",
+        "path": "/s/3s8EFnSDbwrxqj9tEleFwUnyljHEI2kX",
         "label": "s",
         "auth": "none"
       },
@@ -227,7 +227,7 @@
         "auth": "none"
       },
       {
-        "path": "/portal/accept/9ac3b560be9a2053187e7c5b9ffe07055c8eccc9053ded9672ca02e7e342996d",
+        "path": "/portal/accept/d242605f58eef20909c1af8856979a51a2f181c4c38a6b029b5afa08326112d0",
         "label": "portal-accept",
         "auth": "none"
       },
@@ -946,9 +946,9 @@
     },
     {
       "label": "s",
-      "path": "/s/Gn7RA4XdKgHqFYNWXsNaQllcdWmKtSkz",
+      "path": "/s/3s8EFnSDbwrxqj9tEleFwUnyljHEI2kX",
       "width": 360,
-      "finalPath": "/s/Gn7RA4XdKgHqFYNWXsNaQllcdWmKtSkz",
+      "finalPath": "/s/3s8EFnSDbwrxqj9tEleFwUnyljHEI2kX",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -1915,9 +1915,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/9ac3b560be9a2053187e7c5b9ffe07055c8eccc9053ded9672ca02e7e342996d",
+      "path": "/portal/accept/d242605f58eef20909c1af8856979a51a2f181c4c38a6b029b5afa08326112d0",
       "width": 360,
-      "finalPath": "/portal/accept/9ac3b560be9a2053187e7c5b9ffe07055c8eccc9053ded9672ca02e7e342996d",
+      "finalPath": "/portal/accept/d242605f58eef20909c1af8856979a51a2f181c4c38a6b029b5afa08326112d0",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -3549,7 +3549,7 @@
       "label": "portal:hs",
       "path": "/portal/hs",
       "width": 360,
-      "finalPath": "/portal/hs",
+      "finalPath": "/portal/shared",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -3600,7 +3600,7 @@
       "label": "portal:drawings",
       "path": "/portal/drawings",
       "width": 360,
-      "finalPath": "/portal/drawings",
+      "finalPath": "/portal/shared",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -3651,7 +3651,7 @@
       "label": "portal:method-statements",
       "path": "/portal/method-statements",
       "width": 360,
-      "finalPath": "/portal/method-statements",
+      "finalPath": "/portal/shared",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -3702,7 +3702,7 @@
       "label": "portal:safety",
       "path": "/portal/safety",
       "width": 360,
-      "finalPath": "/portal/safety",
+      "finalPath": "/portal/shared",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -3753,7 +3753,7 @@
       "label": "portal:general",
       "path": "/portal/general",
       "width": 360,
-      "finalPath": "/portal/general",
+      "finalPath": "/portal/shared",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -4312,9 +4312,9 @@
     },
     {
       "label": "s",
-      "path": "/s/Gn7RA4XdKgHqFYNWXsNaQllcdWmKtSkz",
+      "path": "/s/3s8EFnSDbwrxqj9tEleFwUnyljHEI2kX",
       "width": 390,
-      "finalPath": "/s/Gn7RA4XdKgHqFYNWXsNaQllcdWmKtSkz",
+      "finalPath": "/s/3s8EFnSDbwrxqj9tEleFwUnyljHEI2kX",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -5281,9 +5281,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/9ac3b560be9a2053187e7c5b9ffe07055c8eccc9053ded9672ca02e7e342996d",
+      "path": "/portal/accept/d242605f58eef20909c1af8856979a51a2f181c4c38a6b029b5afa08326112d0",
       "width": 390,
-      "finalPath": "/portal/accept/9ac3b560be9a2053187e7c5b9ffe07055c8eccc9053ded9672ca02e7e342996d",
+      "finalPath": "/portal/accept/d242605f58eef20909c1af8856979a51a2f181c4c38a6b029b5afa08326112d0",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -6915,7 +6915,7 @@
       "label": "portal:hs",
       "path": "/portal/hs",
       "width": 390,
-      "finalPath": "/portal/hs",
+      "finalPath": "/portal/shared",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -6966,7 +6966,7 @@
       "label": "portal:drawings",
       "path": "/portal/drawings",
       "width": 390,
-      "finalPath": "/portal/drawings",
+      "finalPath": "/portal/shared",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -7017,7 +7017,7 @@
       "label": "portal:method-statements",
       "path": "/portal/method-statements",
       "width": 390,
-      "finalPath": "/portal/method-statements",
+      "finalPath": "/portal/shared",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -7068,7 +7068,7 @@
       "label": "portal:safety",
       "path": "/portal/safety",
       "width": 390,
-      "finalPath": "/portal/safety",
+      "finalPath": "/portal/shared",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -7119,7 +7119,7 @@
       "label": "portal:general",
       "path": "/portal/general",
       "width": 390,
-      "finalPath": "/portal/general",
+      "finalPath": "/portal/shared",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -7678,9 +7678,9 @@
     },
     {
       "label": "s",
-      "path": "/s/Gn7RA4XdKgHqFYNWXsNaQllcdWmKtSkz",
+      "path": "/s/3s8EFnSDbwrxqj9tEleFwUnyljHEI2kX",
       "width": 768,
-      "finalPath": "/s/Gn7RA4XdKgHqFYNWXsNaQllcdWmKtSkz",
+      "finalPath": "/s/3s8EFnSDbwrxqj9tEleFwUnyljHEI2kX",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -8812,9 +8812,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/9ac3b560be9a2053187e7c5b9ffe07055c8eccc9053ded9672ca02e7e342996d",
+      "path": "/portal/accept/d242605f58eef20909c1af8856979a51a2f181c4c38a6b029b5afa08326112d0",
       "width": 768,
-      "finalPath": "/portal/accept/9ac3b560be9a2053187e7c5b9ffe07055c8eccc9053ded9672ca02e7e342996d",
+      "finalPath": "/portal/accept/d242605f58eef20909c1af8856979a51a2f181c4c38a6b029b5afa08326112d0",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -10578,7 +10578,7 @@
       "label": "portal:hs",
       "path": "/portal/hs",
       "width": 768,
-      "finalPath": "/portal/hs",
+      "finalPath": "/portal/shared",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -10629,7 +10629,7 @@
       "label": "portal:drawings",
       "path": "/portal/drawings",
       "width": 768,
-      "finalPath": "/portal/drawings",
+      "finalPath": "/portal/shared",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -10680,7 +10680,7 @@
       "label": "portal:method-statements",
       "path": "/portal/method-statements",
       "width": 768,
-      "finalPath": "/portal/method-statements",
+      "finalPath": "/portal/shared",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -10731,7 +10731,7 @@
       "label": "portal:safety",
       "path": "/portal/safety",
       "width": 768,
-      "finalPath": "/portal/safety",
+      "finalPath": "/portal/shared",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -10782,7 +10782,7 @@
       "label": "portal:general",
       "path": "/portal/general",
       "width": 768,
-      "finalPath": "/portal/general",
+      "finalPath": "/portal/shared",
       "ok": true,
       "reasons": [],
       "metrics": {
