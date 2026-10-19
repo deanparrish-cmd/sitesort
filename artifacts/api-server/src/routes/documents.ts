@@ -244,7 +244,7 @@ router.post("/projects/:projectId/documents", authenticate, allow(projectApprove
           kind: "site_update", itemType: "safety", itemId: docId,
           title: `New safety notice: ${name}`,
           projectName,
-          deepLink: `/portal/safety?doc=${docId}`,
+          deepLink: `/portal/shared?doc=${docId}`,
         });
       } catch (e) { req.log.warn({ e }, "safety-notice push enqueue failed"); }
     }

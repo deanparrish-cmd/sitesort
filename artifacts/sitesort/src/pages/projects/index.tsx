@@ -250,13 +250,13 @@ export default function ProjectsList() {
     }
   }, [isCancelled, setLocation, caps.isLoading, caps.canLogPhoto]);
 
-  // View photo log (?viewphoto=1) — go to first active project's photos tab
+  // View photo log (?viewphoto=1): go to the first active project's Site Issues tab (the Photos tab became Site Issues, #53)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("viewphoto") === "1" && projects) {
       window.history.replaceState({}, "", "/projects");
       const active = projects.filter((p: any) => p.status === "active");
-      if (active.length === 1) setLocation(`/projects/${active[0].id}?tab=photos`);
+      if (active.length === 1) setLocation(`/projects/${active[0].id}?tab=issues`);
     }
   }, [projects, setLocation]);
 

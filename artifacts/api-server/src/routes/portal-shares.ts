@@ -254,12 +254,14 @@ router.post("/projects/:projectId/portal-shares", authenticate, allow(projectApp
           // trade/everyone/individual all funnel here — the audience is
           // already flattened to the exact members it reaches.
           const label = doc.type === "drawing" ? "drawing" : doc.type === "method_statement" ? "method statement" : doc.type === "safety" ? "safety document" : "document";
-          const section = doc.type === "drawing" ? "drawings" : doc.type === "method_statement" ? "method-statements" : doc.type === "safety" ? "safety" : doc.type === "general" ? "general" : "shared";
           await enqueuePushForMembers([...targetUserIds], req.params.projectId, {
             kind: "document", itemType: doc.type, itemId,
             title: `New ${label}: ${doc.name}`,
             projectName: proj.name,
-            deepLink: section === "shared" ? "/portal/shared" : `/portal/${section}?doc=${itemId}`,
+            // Shared with me is the only documents page the portal has (the
+            // per-type pages went in July; their links landed on "Section not
+            // found"). ?doc= scrolls to and rings the row.
+            deepLink: `/portal/shared?doc=${itemId}`,
           });
         }
       }

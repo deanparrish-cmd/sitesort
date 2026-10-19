@@ -281,7 +281,7 @@ function ReceivedPill({ at }: { at: string }) {
 type SupersededBy = { id: string; name: string; version: number; revision?: string };
 type FreshDocFull = { status?: string; supersededBy?: SupersededBy } | null;
 
-function DocRow({ doc, section, unseen, signOff }: { doc: any; section: string; unseen?: boolean; signOff: ReturnType<typeof useSignOffFlow> }) {
+function DocRow({ doc, section, unseen, focused, signOff }: { doc: any; section: string; unseen?: boolean; focused?: boolean; signOff: ReturnType<typeof useSignOffFlow> }) {
   const { toast } = useToast();
   const clickable = section === "drawings" || section === "method-statements";
   const cad = cadBadgeLabel(doc.fileUrl, doc.name);
@@ -369,7 +369,11 @@ function DocRow({ doc, section, unseen, signOff }: { doc: any; section: string; 
   const isNewDoc = tracksViews ? !receivedAt : !!unseen;
 
   return (
-    <div className={cn("border-b border-border/60 last:border-0 py-3", isNewDoc && "-mx-4 px-4 bg-accent/5")}>
+    <div
+      id={`portal-doc-${doc.id}`}
+      data-focused={focused ? "true" : undefined}
+      className={cn("border-b border-border/60 last:border-0 py-3 scroll-mt-40", isNewDoc && "-mx-4 px-4 bg-accent/5", focused && "-mx-4 px-4 rounded-lg ring-2 ring-primary")}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="font-bold text-base truncate flex items-center gap-1.5">
@@ -1429,9 +1433,25 @@ function docMatchesCategory(doc: any, cat: SharedCategory): boolean {
 }
 const CATEGORY_SHOWS_PERMITS = new Set<SharedCategory>(["all", "permits", "hs"]);
 
+// Scrolls the alert's document into view once, when its row first renders.
+function FocusScroller({ id }: { id: string | null }) {
+  const done = useRef<string | null>(null);
+  useEffect(() => {
+    if (!id || done.current === id) return;
+    const el = document.getElementById(`portal-doc-${id}`);
+    if (!el) return;
+    done.current = id;
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+  });
+  return null;
+}
+
 function SharedView() {
   const queryClient = useQueryClient();
-  const initial = new URLSearchParams(useSearch()).get("category") as SharedCategory | null;
+  const search = new URLSearchParams(useSearch());
+  const initial = search.get("category") as SharedCategory | null;
+  // ?doc=<id> (from an alert): scroll to that document and ring it.
+  const focusDocId = search.get("doc");
   const [category, setCategory] = useState<SharedCategory>(
     initial && SHARED_CATEGORIES.some(c => c.key === initial) ? initial : "all",
   );
@@ -1516,6 +1536,8 @@ function SharedView() {
   if (empty) return <Empty>Nothing has been shared with you yet. Your project manager will share drawings, documents and updates here.</Empty>;
 
   const filteredDocs = data!.documents.filter(d => docMatchesCategory(d, category));
+  const focusInList = !!focusDocId && filteredDocs.some(d => d.id === focusDocId);
+  const focusMissing = !!focusDocId && !data!.documents.some(d => d.id === focusDocId);
   const showPermits = CATEGORY_SHOWS_PERMITS.has(category) && data!.permits.length > 0;
   const showPhotos = category === "all" && data!.photos.length > 0;
   const showNotes = (category === "all" || category === "general") && notes.length > 0;
@@ -1524,6 +1546,12 @@ function SharedView() {
 
   return (
     <div className="space-y-5">
+      <FocusScroller id={focusInList ? focusDocId : null} />
+      {focusMissing && (
+        <Card className="border-warning/50 bg-warning/5">
+          <p className="text-base">The document from your alert isn't in your list any more. It may have been replaced by a newer revision or no longer shared with you. Ask your project manager if you still need it.</p>
+        </Card>
+      )}
       <div className="flex flex-wrap gap-1.5">
         {SHARED_CATEGORIES.map(c => (
           <button
@@ -1539,7 +1567,7 @@ function SharedView() {
         ))}
       </div>
       {filteredDocs.length > 0 && (
-        <div><SectionTitle>Documents</SectionTitle><Card>{filteredDocs.map(d => <DocRow key={d.id} doc={d} section={docTypeSection(d.type)} unseen={isNew(d.id)} signOff={signOff} />)}</Card></div>
+        <div><SectionTitle>Documents</SectionTitle><Card>{filteredDocs.map(d => <DocRow key={d.id} doc={d} section={docTypeSection(d.type)} unseen={isNew(d.id)} focused={d.id === focusDocId} signOff={signOff} />)}</Card></div>
       )}
       {showPermits && (
         <div><SectionTitle>Permits</SectionTitle><Card>{data!.permits.map(p => <PermitRow key={p.id} p={p} unseen={isNew(p.id)} />)}</Card></div>
@@ -2607,21 +2635,32 @@ function SiteRegisterSection() {
 // short-lived alias for Site Board — canonicalize so nav highlighting, unseen
 // counts, and the server's per-section tracking all agree on one key.
 const LEGACY_HOME_SECTIONS = new Set(["team", "progress"]);
+// The per-type document pages retired into Shared with me (#77, July 2026).
+// Alerts already on phones still carry /portal/drawings?doc=<id> etc., so these
+// land on Shared with me with ?doc= kept (or, without one, that category picked).
+const RETIRED_DOC_SECTIONS = new Set(["drawings", "method-statements", "safety", "general", "hs"]);
 
 export default function PortalSectionPage() {
   const [, params] = useRoute("/portal/:section");
   const rawSection = params?.section ?? "overview";
-  const section = LEGACY_HOME_SECTIONS.has(rawSection) ? "overview" : rawSection === "more" ? "site-board" : rawSection;
+  const search = useSearch();
+  const retiredDoc = RETIRED_DOC_SECTIONS.has(rawSection);
+  const section = LEGACY_HOME_SECTIONS.has(rawSection) ? "overview" : rawSection === "more" ? "site-board" : retiredDoc ? "shared" : rawSection;
   const [, navigate] = useLocation();
   useEffect(() => {
     if (LEGACY_HOME_SECTIONS.has(rawSection)) navigate("/portal/overview", { replace: true });
     else if (rawSection === "more") navigate("/portal/site-board", { replace: true });
-  }, [rawSection, navigate]);
+    else if (retiredDoc) {
+      const q = new URLSearchParams(search);
+      if (!q.has("category") && !q.has("doc")) q.set("category", rawSection);
+      navigate(`/portal/shared?${q.toString()}`, { replace: true });
+    }
+  }, [rawSection, retiredDoc, search, navigate]);
   // Portal pages run on their own QueryClient (fresh-on-focus/mount + polling)
   // so a long-lived member session never shows stale content.
   return (
     <QueryClientProvider client={portalQueryClient}>
-      <PortalLayout active={section}>{renderSection(section)}</PortalLayout>
+      <PortalLayout active={section}>{retiredDoc ? null : renderSection(section)}</PortalLayout>
     </QueryClientProvider>
   );
 }
