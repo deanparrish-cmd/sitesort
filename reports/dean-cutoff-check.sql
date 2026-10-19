@@ -1,3 +1,4 @@
+-- RESOLVED 2026-10-19 14:52: test contamination, not a code fault (see CLAUDE.md 2026-10-19 CLOSE). Kept for reference.
 -- Read-only (2026-10-19). Dean (login 174f0396, card ab458bd2) sees portal shares
 -- made up to 30 Jul 2026 and none after, on project 09b3eb48 "test 1 site sort".
 -- No code change on the share/list path in that window; these find the data cause.
