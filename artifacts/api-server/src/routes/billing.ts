@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { insertNotifications } from "../lib/notify";
 import Stripe from "stripe";
 import { eq, and } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
@@ -234,8 +235,9 @@ async function handleTrialWillEnd(subscription: Stripe.Subscription): Promise<vo
     ? new Date(subscription.trial_end * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long" })
     : "soon";
 
-  await db.insert(notificationsTable).values(
+  await insertNotifications(
     admins.map(admin => ({
+      companyId,
       id: generateId(),
       userId: admin.id,
       type: "trial_ending",
@@ -267,8 +269,9 @@ async function handlePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
 
   if (admins.length === 0) return;
 
-  await db.insert(notificationsTable).values(
+  await insertNotifications(
     admins.map(admin => ({
+      companyId,
       id: generateId(),
       userId: admin.id,
       type: "payment_failed",

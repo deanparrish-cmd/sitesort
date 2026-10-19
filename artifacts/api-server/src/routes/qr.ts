@@ -1,4 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
+import { insertNotifications } from "../lib/notify";
 import { db } from "@workspace/db";
 import { qrCodesTable, qrBoardPinsTable, documentsTable, projectsTable, projectMembersTable, usersTable, permitsTable, photosTable, siteCheckinsTable, subcontractorsTable, calendarEventsTable, companyMembersTable, notificationsTable, peopleTable, companiesTable, pushSubscriptionsTable, projectInvitesTable } from "@workspace/db/schema";
 import { eq, and, or, desc, asc, inArray, isNull, sql } from "drizzle-orm";
@@ -72,7 +73,7 @@ async function notifySuccessfulCheckin(
     const clock = await siteClock(projectId);
     const timeStr = `${siteTime(checkedInAt, clock.tz)} ${siteTzLabel(clock.tz, checkedInAt)}`;
     for (const userId of rec.userIds) {
-      await db.insert(notificationsTable).values({
+      await insertNotifications({ projectId,
         id: generateId(),
         userId,
         type: "check_in",
@@ -104,7 +105,7 @@ async function notifySignedOut(
     const timeStr = `${siteTime(at, clock.tz)} ${siteTzLabel(clock.tz, at)}`;
     const who = `${row.workerName}${row.companyName ? ` (${row.companyName})` : ""}`;
     for (const userId of rec.userIds) {
-      await db.insert(notificationsTable).values({
+      await insertNotifications({ projectId,
         id: generateId(),
         userId,
         type: "check_out",
@@ -147,7 +148,7 @@ async function notifyHeldCheckin(projectId: string, row: { id: string; workerNam
       }).catch(() => {});
     }
     for (const userId of rec.userIds) {
-      await db.insert(notificationsTable).values({
+      await insertNotifications({ projectId,
         id: generateId(),
         userId,
         type: "check_in_held",
@@ -934,7 +935,7 @@ router.post("/projects/:projectId/checkins/:id/sign-out", authenticate, allow(pr
 // Scoped to the notification's own recipient inside the handler.
 router.get("/notifications/:notificationId/checkin", authenticate, allow(ANY_MEMBER), async (req: Request, res: Response) => {
   try {
-    const n = (await db.select().from(notificationsTable).where(and(eq(notificationsTable.id, req.params.notificationId), eq(notificationsTable.userId, req.user!.id))).limit(1))[0];
+    const n = (await db.select().from(notificationsTable).where(and(eq(notificationsTable.id, req.params.notificationId), eq(notificationsTable.userId, req.user!.id), eq(notificationsTable.companyId, req.user!.companyId))).limit(1))[0];
     if (!n || !["check_in", "check_in_blocked", "check_out", "check_in_held", "check_in_auto_closed"].includes(n.type)) { res.status(404).json({ error: "not_found", message: "Not found" }); return; }
     const meta = (n.metadata ?? {}) as { projectId?: string; workerName?: string; companyName?: string; reason?: string; checkinIds?: string[] };
     const projectId = meta.projectId ?? (n.relatedEntityType === "project" ? n.relatedEntityId : null);
@@ -1430,7 +1431,7 @@ export async function runFireRollAlerts(now: Date = new Date(), onlyProjectId?: 
       .innerJoin(usersTable, eq(usersTable.id, companyMembersTable.userId))
       .where(and(eq(companyMembersTable.companyId, proj.companyId), inArray(companyMembersTable.role, ["admin", "project_manager"]), eq(usersTable.portalOnly, false)));
     for (const m of managers) {
-      await db.insert(notificationsTable).values({
+      await insertNotifications({ companyId: proj.companyId,
         id: generateId(), userId: m.userId, type: "fire_roll_not_ready",
         title: `Fire roll not ready: ${r.projectName}`,
         message: `${body} ${reasons.map(c => c.fix).filter(Boolean).join(" ")}`.trim(),
@@ -1614,7 +1615,7 @@ export async function runCheckinAutoClose(now: Date = new Date()): Promise<{ clo
       const names = list.map(x => `${x.row.workerName}${x.row.companyName ? ` (${x.row.companyName})` : ""}`);
       const shown = names.slice(0, 8).join(", ") + (names.length > 8 ? ` and ${names.length - 8} more` : "");
       for (const userId of rec.userIds) {
-        await db.insert(notificationsTable).values({
+        await insertNotifications({ projectId,
           id: generateId(),
           userId,
           type: "check_in_auto_closed",

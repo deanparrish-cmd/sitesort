@@ -190,7 +190,8 @@ describe("site check-in identity", () => {
     const row = (await db.select().from(siteCheckinsTable).where(eq(siteCheckinsTable.projectId, co.projectId)).orderBy(desc(siteCheckinsTable.checkedInAt)))[0];
     const legacyId = randomUUID();
     await db.insert(notificationsTable).values({
-      id: legacyId, userId: co.userId, type: "check_in", title: "Check-in at X",
+      // companyId: what the boot backfill gives an old row from its project.
+      id: legacyId, userId: co.userId, companyId: co.companyId, type: "check_in", title: "Check-in at X",
       message: `${row.workerName} (${row.companyName}) checked in on site at 10:00.`,
       relatedEntityId: co.projectId, relatedEntityType: "project", read: false, createdAt: row.checkedInAt,
     } as any);

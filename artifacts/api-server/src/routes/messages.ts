@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { insertNotifications } from "../lib/notify";
 import { db } from "@workspace/db";
 import { messagesTable, usersTable, notificationsTable, documentsTable, photosTable, permitsTable, messageReactionsTable, companyMembersTable, projectsTable } from "@workspace/db/schema";
 import { eq, and, or, desc, lt, gt, sql, inArray, isNull } from "drizzle-orm";
@@ -414,7 +415,7 @@ router.post("/messages/broadcast", authenticate, allow(INTERNAL_STAFF), async (r
         content: msgContent,
         ...(attachmentType && attachmentId ? { attachmentType, attachmentId } : {}),
       });
-      await db.insert(notificationsTable).values({
+      await insertNotifications({ companyId: req.user!.companyId,
         id: generateId(),
         userId: recipient.id,
         type: "new_message",

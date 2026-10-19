@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "crypto";
+import { insertNotifications } from "./notify";
 import { db } from "@workspace/db";
 import {
   shareLinksTable, documentsTable, permitsTable, projectsTable, companiesTable,
@@ -176,7 +177,7 @@ export async function runShareLinkReminders(now: Date = new Date()): Promise<num
       const names = await projectAndCompanyNames(link.projectId);
       const expires = link.expiresAt.toLocaleDateString("en-GB", { day: "numeric", month: "long" });
       const who = link.recipientInfo ? ` to ${link.recipientInfo}` : "";
-      await db.insert(notificationsTable).values({
+      await insertNotifications({ projectId: link.projectId,
         id: generateId(), userId: link.createdByUserId!, type: "share_link_expiring",
         title: `Shared link expires ${expires}: ${item.name}`,
         message: `The link you sent${who} stops working on ${expires}. Share it again if they still need it.`,

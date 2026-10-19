@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { insertNotifications } from "../lib/notify";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { db } from "@workspace/db";
 import { emailLogTable, projectInvitesTable, notificationsTable } from "@workspace/db/schema";
@@ -90,7 +91,7 @@ router.post("/email/webhook", async (req, res) => {
         const invite = (await db.select().from(projectInvitesTable).where(eq(projectInvitesTable.id, row.refId)).limit(1))[0];
         if (invite) {
           await db.update(projectInvitesTable).set({ emailStatus: "failed" }).where(eq(projectInvitesTable.id, invite.id));
-          await db.insert(notificationsTable).values({
+          await insertNotifications({ projectId: invite.projectId,
             id: generateId(), userId: invite.invitedByUserId, type: "invite_email_bounced",
             title: `Invite email to ${invite.email} didn't arrive`,
             message: status === "complained"

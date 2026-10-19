@@ -1,4 +1,5 @@
 import { db } from "@workspace/db";
+import { insertNotifications } from "./notify";
 import {
   messagesTable, channelMessagesTable, messageReactionsTable, channelMessageReactionsTable,
   usersTable, projectsTable, projectMembersTable, notificationsTable,
@@ -67,7 +68,7 @@ export async function sendDirectMessage(params: {
   } else {
     const recipient = await db.select({ email: usersTable.email, name: usersTable.name, emailNotifications: usersTable.emailNotifications })
       .from(usersTable).where(eq(usersTable.id, recipientId)).limit(1);
-    await db.insert(notificationsTable).values({
+    await insertNotifications({ companyId,
       id: generateId(), userId: recipientId, type: "new_message",
       title: `New message from ${senderName}`, message: preview,
       relatedEntityId: senderId, relatedEntityType: "user",
@@ -117,7 +118,7 @@ export async function sendChannelMessage(params: {
   const memberMap = new Map(memberUsers.map(u => [u.id, u]));
 
   for (const uid of memberIds) {
-    await db.insert(notificationsTable).values({
+    await insertNotifications({ projectId,
       id: generateId(), userId: uid, type: "new_message",
       title: `${senderName} in #${projectName}`, message: preview,
       relatedEntityId: projectId, relatedEntityType: "project",

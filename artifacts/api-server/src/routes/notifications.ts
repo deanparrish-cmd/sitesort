@@ -7,10 +7,15 @@ import { allow, ANY_MEMBER } from "../lib/authz";
 
 const router: IRouter = Router();
 
+// The bell shows only the company the user is signed into, whatever their
+// role in any other company (2026-10-19). Rows with no company never match.
+const mine = (req: { user?: { id: string; companyId: string } }) =>
+  and(eq(notificationsTable.userId, req.user!.id), eq(notificationsTable.companyId, req.user!.companyId));
+
 router.get("/notifications", authenticate, allow(ANY_MEMBER), async (req, res) => {
   try {
     const notifications = await db.select().from(notificationsTable)
-      .where(eq(notificationsTable.userId, req.user!.id))
+      .where(mine(req))
       .orderBy(notificationsTable.createdAt);
 
     res.json(notifications.map(n => ({
@@ -35,7 +40,7 @@ router.patch("/notifications/:notificationId/read", authenticate, allow(ANY_MEMB
   try {
     await db.update(notificationsTable)
       .set({ read: true })
-      .where(and(eq(notificationsTable.id, req.params.notificationId), eq(notificationsTable.userId, req.user!.id)));
+      .where(and(eq(notificationsTable.id, req.params.notificationId), mine(req)));
     res.json({ success: true });
   } catch (err) {
     req.log.error({ err }, "Mark notification read error");
@@ -47,7 +52,7 @@ router.patch("/notifications/read-all", authenticate, allow(ANY_MEMBER), async (
   try {
     await db.update(notificationsTable)
       .set({ read: true })
-      .where(eq(notificationsTable.userId, req.user!.id));
+      .where(mine(req));
     res.json({ success: true });
   } catch (err) {
     req.log.error({ err }, "Mark all read error");

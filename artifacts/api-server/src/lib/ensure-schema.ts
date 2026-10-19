@@ -56,6 +56,26 @@ export async function ensureSchema(): Promise<void> {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS email_log_provider_idx ON email_log (provider_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS email_log_ref_idx ON email_log (ref_type, ref_id)`);
+    // Notifications belong to one company; the bell shows only the company the
+    // user is signed into (Amy saw Acme fire-roll alerts in Test SiteSort,
+    // 2026-10-19). Backfill old rows from what they point at; a user in only
+    // one company gets that one. Rows still NULL are never shown. Each UPDATE
+    // only touches NULL rows, so after the first boot this is a no-op.
+    await pool.query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS company_id text`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS notifications_user_company_idx ON notifications (user_id, company_id)`);
+    const backfill = [
+      `UPDATE notifications n SET company_id = p.company_id FROM projects p WHERE n.company_id IS NULL AND n.metadata->>'projectId' = p.id`,
+      `UPDATE notifications n SET company_id = p.company_id FROM projects p WHERE n.company_id IS NULL AND n.related_entity_type = 'project' AND n.related_entity_id = p.id`,
+      ...[["document", "documents"], ["photo", "photos"], ["permit", "permits"], ["site_checkin", "site_checkins"], ["daily_report", "daily_reports"], ["plant_item", "plant_items"]].map(([type, table]) =>
+        `UPDATE notifications n SET company_id = p.company_id FROM ${table} x JOIN projects p ON p.id = x.project_id WHERE n.company_id IS NULL AND n.related_entity_type = '${type}' AND n.related_entity_id = x.id`),
+      `UPDATE notifications n SET company_id = n.related_entity_id FROM companies c WHERE n.company_id IS NULL AND n.related_entity_type = 'company' AND c.id = n.related_entity_id`,
+      // A direct message notification points at the sender; its message row has the company.
+      `UPDATE notifications n SET company_id = m.company_id FROM messages m WHERE n.company_id IS NULL AND n.type = 'new_message' AND n.related_entity_type = 'user' AND m.sender_id = n.related_entity_id AND m.recipient_id = n.user_id AND abs(extract(epoch FROM (m.created_at - n.created_at))) < 10`,
+      // "Added to <company>": the company named, if they're a member of it.
+      `UPDATE notifications n SET company_id = c.id FROM companies c JOIN company_members cm ON cm.company_id = c.id WHERE n.company_id IS NULL AND n.type = 'team' AND n.title = 'Added to ' || c.name AND cm.user_id = n.user_id`,
+      `UPDATE notifications n SET company_id = one.company_id FROM (SELECT user_id, min(company_id) AS company_id FROM company_members GROUP BY user_id HAVING count(*) = 1) one WHERE n.company_id IS NULL AND n.user_id = one.user_id`,
+    ];
+    for (const q of backfill) await pool.query(q);
     // Dedup ledger for Stripe webhook deliveries — the webhook claims each event
     // id here (ON CONFLICT DO NOTHING) and skips duplicates/retries so a redelivered
     // event can't create duplicate subscriptions/charges. New table → must exist in

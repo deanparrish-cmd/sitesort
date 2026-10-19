@@ -6,6 +6,10 @@ import { usersTable } from "./users";
 export const notificationsTable = pgTable("notifications", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => usersTable.id),
+  // The company this is about. The bell shows only the company the user is
+  // signed into. Required on every new row (lib/notify.ts); NULL only on old
+  // rows the boot backfill couldn't place, and those are never shown.
+  companyId: text("company_id").notNull(),
   type: text("type").notNull(),
   title: text("title").notNull(),
   message: text("message").notNull(),

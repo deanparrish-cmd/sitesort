@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { insertNotifications } from "../lib/notify";
 import { db } from "@workspace/db";
 import { photosTable, usersTable, notificationsTable, projectMembersTable, projectsTable } from "@workspace/db/schema";
 import { eq, and, or, count, inArray, isNotNull, isNull } from "drizzle-orm";
@@ -410,7 +411,7 @@ router.post("/projects/:projectId/photos", authenticate, allow(INTERNAL_STAFF), 
 
       for (const m of managers) {
         if (m.userId) {
-          await db.insert(notificationsTable).values({
+          await insertNotifications({ projectId: req.params.projectId,
             id: generateId(),
             userId: m.userId,
             type: "safety_concern",

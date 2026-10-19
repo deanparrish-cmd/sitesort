@@ -1,4 +1,5 @@
 import { db } from "@workspace/db";
+import { insertNotifications } from "./notify";
 import {
   projectsTable,
   projectMembersTable,
@@ -368,7 +369,7 @@ export async function generateDailyReportForProject(
 
     for (const m of managers) {
       if (!m.userId) continue;
-      await tx.insert(notificationsTable).values({
+      await insertNotifications({ projectId,
         id: generateId(),
         userId: m.userId,
         type: "daily_report",
@@ -377,7 +378,7 @@ export async function generateDailyReportForProject(
         relatedEntityId: reportId,
         relatedEntityType: "daily_report",
         read: false,
-      });
+      }, tx);
     }
 
     return { reportId, created: true };

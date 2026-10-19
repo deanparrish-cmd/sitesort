@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { insertNotifications } from "../lib/notify";
 import { db } from "@workspace/db";
 import {
   plantItemsTable, plantItemAttachmentsTable, plantItemDistributionsTable,
@@ -454,7 +455,7 @@ router.post("/projects/:projectId/plant-items/:itemId/distribute", authenticate,
         .limit(1);
       if (existing.length === 0) {
         await db.insert(plantItemDistributionsTable).values({ id: generateId(), plantItemId: req.params.itemId, userId, status: "pending" });
-        await db.insert(notificationsTable).values({
+        await insertNotifications({ projectId: project.id,
           id: generateId(), userId, type: "document_uploaded",
           title: `Plant & Materials item allocated: ${item[0].name}`,
           message: `${item[0].name} has been shared with you.`,

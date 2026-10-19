@@ -1,5 +1,6 @@
 import { db } from "@workspace/db";
-import { documentDistributionsTable, notificationsTable, usersTable } from "@workspace/db/schema";
+import { insertNotifications } from "./notify";
+import { documentDistributionsTable, documentsTable, usersTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { generateId } from "./id";
 import { sendDocumentNotificationEmail } from "./email";
@@ -32,9 +33,11 @@ export async function distributeDocumentToUser(
     .limit(1);
   if (existing.length > 0) return;
 
+  const docProject = (await db.select({ projectId: documentsTable.projectId }).from(documentsTable).where(eq(documentsTable.id, doc.id)).limit(1))[0]?.projectId;
+  if (!docProject) return;
   const distId = generateId();
   await db.insert(documentDistributionsTable).values({ id: distId, documentId: doc.id, userId, status: "pending" });
-  await db.insert(notificationsTable).values({
+  await insertNotifications({ projectId: docProject,
     id: generateId(), userId, type: "document_uploaded",
     title, message: `${doc.name} (v${doc.version}) has been shared with you.`,
     relatedEntityId: doc.id, relatedEntityType: "document", read: false,

@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { insertNotifications } from "../lib/notify";
 import { db } from "@workspace/db";
 import { companiesTable, usersTable, userNotesTable, companyMembersTable, notificationsTable, projectMembersTable, projectsTable } from "@workspace/db/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
@@ -93,7 +94,7 @@ router.post("/users", authenticate, allow(COMPANY_MANAGER), async (req, res) => 
         return;
       }
       // Let them know in-app that they've been added to a new company.
-      await db.insert(notificationsTable).values({
+      await insertNotifications({ companyId: req.user!.companyId,
         id: generateId(),
         userId: linkedUser.id,
         type: "team",

@@ -1,4 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
+import { insertNotifications } from "../lib/notify";
 import { db } from "@workspace/db";
 import {
   shareLinksTable, shareAccessRequestsTable, projectsTable, usersTable,
@@ -400,7 +401,7 @@ router.post("/share/:token/request-access", async (req: Request, res: Response) 
     if (link.createdByUserId) recipients.add(link.createdByUserId);
     const who = organisation ? `${name} (${organisation})` : name;
     for (const userId of recipients) {
-      await db.insert(notificationsTable).values({
+      await insertNotifications({ projectId: link.projectId,
         id: generateId(), userId, type: "share_access_requested",
         title: `Access requested: ${item?.name ?? "a shared file"}`,
         message: `${who} opened a link that no longer works and is asking for access.`,

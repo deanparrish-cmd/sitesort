@@ -1,4 +1,5 @@
 import { Router, type IRouter, type Request } from "express";
+import { insertNotifications } from "../lib/notify";
 import { canSeeSiteRegister } from "./qr";
 import multer from "multer";
 import { createHash } from "crypto";
@@ -1773,7 +1774,7 @@ router.post("/portal/site-issues/:issueId/submit", authenticate, requirePortalSe
       .where(and(eq(projectMembersTable.projectId, pid), eq(projectMembersTable.role, "manager")));
     for (const m of managers) {
       if (!m.userId) continue;
-      await db.insert(notificationsTable).values({
+      await insertNotifications({ projectId: pid,
         id: generateId(), userId: m.userId, type: "portal_issue_logged",
         title: `New, awaiting triage: ${issue.referenceNumber}`,
         message: `${reporter?.name ?? "A member"} logged a ${issue.category.replace("_", " ")} at ${proj?.name ?? "your project"}.`,
@@ -2317,7 +2318,7 @@ router.post("/portal/plant-materials", authenticate, requirePortalSession, requi
           .innerJoin(usersTable, eq(usersTable.id, companyMembersTable.userId))
           .where(and(eq(companyMembersTable.companyId, proj.companyId), inArray(companyMembersTable.role, ["admin", "project_manager"]), eq(usersTable.portalOnly, false)));
         for (const userId of [...new Set(managers.map(m => m.userId))]) {
-          await db.insert(notificationsTable).values({
+          await insertNotifications({ companyId: proj.companyId,
             id: generateId(), userId, type: "portal_plant_item_logged",
             title: `New plant/material at ${proj.name}`,
             message: `${creator?.name ?? "A member"} logged "${cleanName}" from the portal.`,
@@ -2716,7 +2717,7 @@ router.post("/portal/my-documents", authenticate, requirePortalSession, requireP
           .where(and(eq(companyMembersTable.companyId, proj.companyId), inArray(companyMembersTable.role, ["admin", "project_manager"]), eq(usersTable.portalOnly, false)));
         const managerIds = [...new Set(managers.map(m => m.userId))];
         for (const userId of managerIds) {
-          await db.insert(notificationsTable).values({
+          await insertNotifications({ companyId: proj.companyId,
             id: generateId(), userId, type: "member_document_uploaded",
             title: `Document for review at ${proj.name}`,
             message: `${uploader?.name ?? "A member"} uploaded a document for review.`,
