@@ -1,12 +1,13 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import {
-  projectsTable, projectInvitesTable, projectMembersTable, usersTable, activityLogTable,
+  projectsTable, projectInvitesTable, projectMembersTable, usersTable, activityLogTable, portalSessionsTable,
 } from "@workspace/db/schema";
-import { and, eq, desc, gte, lte, count, max } from "drizzle-orm";
+import { and, eq, desc, gte, lte, count, max, inArray, isNull, isNotNull } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
 import { allow, COMPANY_MANAGER } from "../lib/authz";
 import { revokePortalSessionsForMember } from "../lib/portal-sessions";
+import { revokeAcceptedInvitesOfLogin } from "../lib/card-removal";
 import { removedFromProjectUserIds } from "../lib/project-membership";
 import { SECTION_LABELS } from "../lib/activity";
 import { GetProjectActivityQueryParams } from "@workspace/api-zod";
@@ -76,37 +77,66 @@ router.post("/projects/:projectId/invites/:inviteId/revoke", authenticate, allow
     if (!inv) { res.status(404).json({ error: "not_found", message: "Invite not found" }); return; }
 
     await db.update(projectInvitesTable).set({ status: "revoked", revokedAt: new Date() }).where(eq(projectInvitesTable.id, inv.id));
-    // Cut portal access immediately by removing the membership row. Prefer the
-    // person link (the portal membership this invite created); fall back to the
-    // accepted user for legacy invites that predate person_id.
+    // Revoke is a safety action, so it acts on EVERY membership row of this
+    // card, never one picked by .limit(1): a card can carry a stale duplicate
+    // row (Amy, 2026-10-20), and picking it used to reset that row, leave the
+    // real row and the live session alone, and still answer "Access revoked."
+    const logins = new Set<string>();
     if (inv.personId) {
-      const mem = (await db.select({ id: projectMembersTable.id, userId: projectMembersTable.userId })
+      // The card's other live invites go too: the boot repair recreates a row
+      // for any accepted invite whose login has no row.
+      await db.update(projectInvitesTable).set({ status: "revoked", revokedAt: new Date() })
+        .where(and(
+          eq(projectInvitesTable.projectId, req.params.projectId),
+          eq(projectInvitesTable.personId, inv.personId),
+          inArray(projectInvitesTable.status, ["pending", "accepted"]),
+        ));
+      const mems = await db.select({ id: projectMembersTable.id, userId: projectMembersTable.userId })
         .from(projectMembersTable)
-        .where(and(eq(projectMembersTable.projectId, req.params.projectId), eq(projectMembersTable.personId, inv.personId))).limit(1))[0];
-      if (mem) {
+        .where(and(eq(projectMembersTable.projectId, req.params.projectId), eq(projectMembersTable.personId, inv.personId)));
+      for (const mem of mems) {
         if (!mem.userId) {
-          // Still pending — never accepted, so there's no session to kill and no
-          // account to detach. This row is their project team membership (the
-          // person-first add flow creates it independently of any invite), so
-          // keep it; just reset any section permissions a PM pre-set for this
-          // invite, since they no longer apply once it's cancelled.
+          // No login on this row (never accepted, or a stale duplicate). It is
+          // their project team membership, so keep it; just reset the section
+          // permissions, which no longer apply once the invite is cancelled.
           await db.update(projectMembersTable).set({ canLogIssues: false, canUpdatePlantMaterials: false, canEditDailyReport: false }).where(eq(projectMembersTable.id, mem.id));
         } else {
-          // Accepted. For a portalOnly account there's no team role to keep, so
-          // remove the row entirely; for a dashboard (in-house) account, keep
-          // the row + team role and just drop the portal grant.
+          // Accepted. A portalOnly account has no team role to keep, so the row
+          // goes; a dashboard (in-house) account keeps the row and team role and
+          // just loses the portal grant.
           const portalOnly = (await db.select({ p: usersTable.portalOnly }).from(usersTable).where(eq(usersTable.id, mem.userId)).limit(1))[0]?.p === true;
           if (portalOnly) await db.delete(projectMembersTable).where(eq(projectMembersTable.id, mem.id));
-          else await db.update(projectMembersTable).set({ personId: null }).where(eq(projectMembersTable.id, mem.id));
-          // Kill any live portal session immediately (the membership re-check would
-          // also 403 them, but this ends the session cleanly + server-side at once).
-          await revokePortalSessionsForMember(mem.userId, req.params.projectId);
+          else await db.update(projectMembersTable).set({ personId: null, canLogIssues: false, canUpdatePlantMaterials: false, canEditDailyReport: false }).where(eq(projectMembersTable.id, mem.id));
+          logins.add(mem.userId);
         }
       }
     } else if (inv.acceptedUserId) {
       await db.delete(projectMembersTable)
         .where(and(eq(projectMembersTable.projectId, req.params.projectId), eq(projectMembersTable.userId, inv.acceptedUserId)));
-      await revokePortalSessionsForMember(inv.acceptedUserId, req.params.projectId);
+      logins.add(inv.acceptedUserId);
+    }
+    if (inv.acceptedUserId) logins.add(inv.acceptedUserId);
+    for (const login of logins) {
+      // Whole-login revoke: no invite this login accepted here may survive, or
+      // the boot repair would re-attach it to another of its cards' rows.
+      await revokeAcceptedInvitesOfLogin(login, req.params.projectId);
+      await revokePortalSessionsForMember(login, req.params.projectId);
+    }
+
+    // Never confirm a safety action that didn't happen: every login this
+    // revoke touched must have no portal row and no live session left here.
+    const remaining: string[] = [];
+    for (const login of logins) {
+      const row = (await db.select({ id: projectMembersTable.id }).from(projectMembersTable)
+        .where(and(eq(projectMembersTable.projectId, req.params.projectId), eq(projectMembersTable.userId, login), isNotNull(projectMembersTable.personId))).limit(1))[0];
+      const live = (await db.select({ id: portalSessionsTable.id }).from(portalSessionsTable)
+        .where(and(eq(portalSessionsTable.projectId, req.params.projectId), eq(portalSessionsTable.userId, login), isNull(portalSessionsTable.revokedAt))).limit(1))[0];
+      if (row || live) remaining.push(login);
+    }
+    if (remaining.length) {
+      req.log.error({ inviteId: inv.id, remaining }, "Revoke left portal access in place");
+      res.status(500).json({ error: "revoke_incomplete", message: "Portal access could not be fully removed. Try again, or remove them from the project." });
+      return;
     }
     res.json({ success: true, message: "Access revoked." });
   } catch (err) {

@@ -1,14 +1,14 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { projectMembersTable, usersTable, subcontractorsTable, insuranceRecordsTable, projectsTable, peopleTable, projectInvitesTable, companyMembersTable } from "@workspace/db/schema";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, asc, sql } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { allow, COMPANY_MANAGER, INTERNAL_STAFF, projectApprover } from "../lib/authz";
 import { expiryStatus } from "../lib/expiry";
-import { revokePortalSessionsForMember } from "../lib/portal-sessions";
 import { canonicalPersonName } from "../lib/person-name";
-import { passLoginToLinkedCard, otherCardsByRow, borrowedLoginsByRow } from "../lib/linked-cards";
+import { otherCardsByRow, borrowedLoginsByRow } from "../lib/linked-cards";
+import { removeCardFromProject, endSessionsIfNoAccess } from "../lib/card-removal";
 
 const router: IRouter = Router();
 
@@ -26,44 +26,6 @@ async function loadOwnedProject(projectId: string, companyId: string) {
   const rows = await db.select().from(projectsTable)
     .where(and(eq(projectsTable.id, projectId), eq(projectsTable.companyId, companyId))).limit(1);
   return rows[0] ?? null;
-}
-
-// Revokes portal access + cancels any pending invite for a person being
-// removed from a project. Safe to call for a legacy row with no personId
-// (no-op). Reused by both single-member and whole-company removal below.
-// Removing a card: cancels its pending invites. Portal sessions are ended by
-// endAccessAfterRemoval once the row is gone, because the person may keep
-// access through another card of theirs on the project (option B).
-async function revokePersonFromProject(personId: string, projectId: string) {
-  await db.update(projectInvitesTable)
-    .set({ status: "revoked", revokedAt: new Date() })
-    .where(and(
-      eq(projectInvitesTable.personId, personId),
-      eq(projectInvitesTable.projectId, projectId),
-      eq(projectInvitesTable.status, "pending"),
-    ));
-}
-
-// After a membership row is deleted: if it carried a login and that person has
-// another linked card on the project, the login passes to it (Dean, binding,
-// 2026-10-20; the PM was told in the confirmation). Otherwise their portal
-// sessions on this project end now. Returns the card that took over, if any.
-async function endAccessAfterRemoval(row: { userId: string | null; personId: string | null }, projectId: string): Promise<string | null> {
-  const logins = new Set<string>();
-  if (row.userId) logins.add(row.userId);
-  if (row.personId) {
-    const p = await db.select({ userId: peopleTable.userId }).from(peopleTable).where(eq(peopleTable.id, row.personId)).limit(1);
-    if (p[0]?.userId) logins.add(p[0].userId);
-  }
-  let passedTo: string | null = null;
-  for (const login of logins) {
-    const next = login === row.userId ? await passLoginToLinkedCard(login, projectId) : null;
-    if (next) { passedTo = next; continue; }
-    const still = await db.select({ id: projectMembersTable.id }).from(projectMembersTable)
-      .where(and(eq(projectMembersTable.projectId, projectId), eq(projectMembersTable.userId, login))).limit(1);
-    if (!still[0]) await revokePortalSessionsForMember(login, projectId);
-  }
-  return passedTo;
 }
 
 // Reuse the canonical expiry helper (F1) — insurance says "valid" where the
@@ -329,7 +291,10 @@ router.post("/projects/:projectId/members", authenticate, allow(projectApprover(
           .where(and(
             eq(projectMembersTable.projectId, req.params.projectId),
             eq(projectMembersTable.personId, person.id),
-          )).limit(1))[0];
+          ))
+          // Deterministic if a card has a duplicate row: login row, then oldest.
+          .orderBy(sql`${projectMembersTable.userId} IS NULL`, asc(projectMembersTable.addedAt))
+          .limit(1))[0];
         if (personRow) {
           await db.update(projectMembersTable).set({ userId, role }).where(eq(projectMembersTable.id, personRow.id));
           const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
@@ -695,14 +660,19 @@ router.delete("/projects/:projectId/members/:memberId", authenticate, allow(COMP
     if (member.personId) {
       const person = await db.select({ name: peopleTable.name }).from(peopleTable).where(eq(peopleTable.id, member.personId)).limit(1);
       if (person[0]) removedName = person[0].name;
-      await revokePersonFromProject(member.personId, req.params.projectId);
     } else if (member.userId) {
       const user = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, member.userId)).limit(1);
       if (user[0]) removedName = user[0].name;
     }
 
-    await db.delete(projectMembersTable).where(eq(projectMembersTable.id, member.id));
-    const accessPassedToPersonId = await endAccessAfterRemoval(member, req.params.projectId);
+    let accessPassedToPersonId: string | null = null;
+    if (member.personId) {
+      // Every row of this card, its invites, and the login hand-over.
+      accessPassedToPersonId = (await removeCardFromProject(req.params.projectId, member.personId)).passedToPersonId;
+    } else {
+      await db.delete(projectMembersTable).where(eq(projectMembersTable.id, member.id));
+      if (member.userId) await endSessionsIfNoAccess(member.userId, req.params.projectId);
+    }
     res.json({ success: true, removedName, accessPassedToPersonId });
   } catch (err) {
     req.log.error({ err }, "Remove member error");
@@ -743,13 +713,10 @@ router.delete("/projects/:projectId/members/company/:subcontractorId", authentic
       .where(eq(peopleTable.subcontractorId, sub[0].id));
     const accessPassedToPersonIds: string[] = [];
     for (const person of people) {
-      const memberRow = await db.select({ id: projectMembersTable.id, userId: projectMembersTable.userId, personId: projectMembersTable.personId }).from(projectMembersTable)
-        .where(and(eq(projectMembersTable.projectId, req.params.projectId), eq(projectMembersTable.personId, person.id))).limit(1);
-      if (!memberRow[0]) continue;
-      await revokePersonFromProject(person.id, req.params.projectId);
-      await db.delete(projectMembersTable).where(eq(projectMembersTable.id, memberRow[0].id));
-      const passed = await endAccessAfterRemoval(memberRow[0], req.params.projectId);
-      if (passed) accessPassedToPersonIds.push(passed);
+      // Every row of each person's card (a card can carry a stale duplicate).
+      const { passedToPersonId, rowsRemoved } = await removeCardFromProject(req.params.projectId, person.id);
+      if (rowsRemoved === 0) continue;
+      if (passedToPersonId) accessPassedToPersonIds.push(passedToPersonId);
       removedNames.push(person.name);
     }
 

@@ -725,6 +725,9 @@ export async function ensureSchema(): Promise<void> {
       WHERE pi.status = 'accepted' AND pi.person_id IS NOT NULL AND pi.accepted_user_id IS NOT NULL
         AND pi.accepted_user_id = pm.user_id AND pi.project_id = pm.project_id
         AND pm.person_id IS NULL
+        -- Never give a card a second row on the project (duplicate memberships,
+        -- 2026-10-20): skip when the card already has one.
+        AND NOT EXISTS (SELECT 1 FROM project_members pm2 WHERE pm2.project_id = pm.project_id AND pm2.person_id = pi.person_id)
       RETURNING pm.id, pm.project_id, pm.user_id
     `);
     if (memberPersonIdBackfill.rows.length > 0) {
@@ -734,6 +737,31 @@ export async function ensureSchema(): Promise<void> {
     // Step 3: an accepted invite whose project_members row is missing entirely
     // (e.g. deleted by a revoke that ran before a later re-accept, or never
     // created) — recreate it so login has something to find.
+    // Step 3a: the card is still on the project, only the login is missing from
+    // its row: put the login back on that row (its oldest no-login row) instead
+    // of inserting a second row for the same card. Inserting here is how Amy's
+    // card got a duplicate on 2026-07-30.
+    const memberReattach = await pool.query(`
+      UPDATE project_members pm
+      SET user_id = pi.accepted_user_id
+      FROM project_invites pi
+      WHERE pi.status = 'accepted' AND pi.person_id IS NOT NULL AND pi.accepted_user_id IS NOT NULL
+        AND pm.id = (
+          SELECT x.id FROM project_members x
+          JOIN people px ON px.id = x.person_id AND px.archived_at IS NULL
+          WHERE x.project_id = pi.project_id AND x.person_id = pi.person_id AND x.user_id IS NULL
+          ORDER BY x.added_at, x.id LIMIT 1
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM project_members pm2
+          WHERE pm2.project_id = pi.project_id AND pm2.user_id = pi.accepted_user_id
+        )
+      RETURNING pm.id, pm.project_id, pm.user_id
+    `).catch((err: unknown) => { logger.error({ err }, "ensureSchema: login re-attach skipped"); return { rows: [] as unknown[] }; });
+    if (memberReattach.rows.length > 0) {
+      logger.info({ fixed: memberReattach.rows }, `ensureSchema: put the login back on ${memberReattach.rows.length} existing project_members row(s) for an accepted portal invite`);
+    }
+
     const memberRecreate = await pool.query(`
       INSERT INTO project_members (id, project_id, user_id, person_id, role, added_at)
       SELECT gen_random_uuid()::text, pi.project_id, pi.accepted_user_id, pi.person_id, pi.role, now()
@@ -742,6 +770,11 @@ export async function ensureSchema(): Promise<void> {
         AND NOT EXISTS (
           SELECT 1 FROM project_members pm2
           WHERE pm2.project_id = pi.project_id AND pm2.user_id = pi.accepted_user_id
+        )
+        -- ...and never a second row for a card that is already on the project.
+        AND NOT EXISTS (
+          SELECT 1 FROM project_members pm3
+          WHERE pm3.project_id = pi.project_id AND pm3.person_id = pi.person_id
         )
       ON CONFLICT (project_id, user_id) WHERE user_id IS NOT NULL DO NOTHING
       RETURNING id, project_id, user_id

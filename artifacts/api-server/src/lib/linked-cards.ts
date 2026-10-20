@@ -1,6 +1,6 @@
 import { db } from "@workspace/db";
 import { projectMembersTable, peopleTable, subcontractorsTable } from "@workspace/db/schema";
-import { and, eq, isNull, isNotNull, or, inArray } from "drizzle-orm";
+import { and, eq, isNull, isNotNull, or, inArray, ne } from "drizzle-orm";
 
 // One person can hold more than one contact card (people row) on a project, e.g.
 // working there for two firms. Portal ACCESS always rides on exactly one
@@ -78,8 +78,9 @@ export async function borrowedLoginsByRow(projectId: string): Promise<Map<string
 // linked card still on the project, access passes to that card (Dean, binding,
 // 2026-10-20): its row takes the login and keeps its own permissions. Returns
 // the person id of the card that took over, or null when access ends. Call
-// AFTER the removed row is deleted.
-export async function passLoginToLinkedCard(userId: string, projectId: string): Promise<string | null> {
+// AFTER the removed rows are deleted. Never passes to the removed card itself
+// (a stale duplicate row of the same card is not "another card").
+export async function passLoginToLinkedCard(userId: string, projectId: string, removedPersonId?: string): Promise<string | null> {
   const stillHolds = await db.select({ id: projectMembersTable.id }).from(projectMembersTable)
     .where(and(eq(projectMembersTable.projectId, projectId), eq(projectMembersTable.userId, userId))).limit(1);
   if (stillHolds[0]) return null;
@@ -91,6 +92,7 @@ export async function passLoginToLinkedCard(userId: string, projectId: string): 
       isNull(projectMembersTable.userId),
       eq(peopleTable.userId, userId),
       isNull(peopleTable.archivedAt),
+      ...(removedPersonId ? [ne(projectMembersTable.personId, removedPersonId)] : []),
     ));
   const next = candidates.sort((a, b) => a.addedAt.getTime() - b.addedAt.getTime())[0];
   if (!next) return null;

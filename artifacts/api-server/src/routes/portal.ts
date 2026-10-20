@@ -793,6 +793,8 @@ router.post("/portal/invites/:id/accept", ...portalGuards, async (req, res) => {
             inv.personId ? eq(projectMembersTable.personId, inv.personId) : undefined,
           ),
         ));
+      // Deterministic if a card has a duplicate row: login row, then oldest.
+      existing.sort((a, b) => Number(a.userId === null) - Number(b.userId === null) || a.addedAt.getTime() - b.addedAt.getTime());
       const personRow = inv.personId ? existing.find(r => r.personId === inv.personId) : undefined;
       const userRow = existing.find(r => r.userId === userId);
       if (userRow?.personId && inv.personId && userRow.personId !== inv.personId) {
@@ -1002,7 +1004,7 @@ router.post("/portal/invite/:token/accept", async (req, res) => {
       ))
       // The login's own row first, so a stray person-only row is never the one
       // overwritten while the login's row survives (unique index clash).
-      .orderBy(sql`${projectMembersTable.userId} IS NULL`)
+      .orderBy(sql`${projectMembersTable.userId} IS NULL`, asc(projectMembersTable.addedAt))
       .limit(1))[0];
     if (keepsOtherCard) {
       const cardRow = (await db.select({ id: projectMembersTable.id }).from(projectMembersTable)

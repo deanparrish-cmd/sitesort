@@ -82,7 +82,9 @@ GROUP BY u.email, pr.name, k.x_name, k.x_email, k.card_x, py.name, py.email, k.c
          k.archived_at, k.x_has_row, k.project_id
 ORDER BY u.email, pr.name;
 
--- 3. (Added 2026-10-20 after Dean's removal decision.) People who hold, or may
+-- 3. (Added 2026-10-20 after Dean's removal decision. FIXED same day: it
+--    counted project_members ROWS, so one card with two rows looked like two
+--    cards (Amy). Now counts DISTINCT cards; rows shows the raw row count.) People who hold, or may
 --    hold, more than one card on the same project. This sizes the Team-tab
 --    "also on this project as ..." marker and the removal warning.
 --    linked = cards tied to the same login (B can detect these).
@@ -97,13 +99,15 @@ WITH c AS (
   WHERE p.archived_at IS NULL
 )
 SELECT 'linked (same login)' AS kind, pr.name AS project, u.email AS who,
-       count(*) AS cards, string_agg(c.name || ' <' || coalesce(c.email, '') || '>', ', ') AS card_names
+       count(DISTINCT c.card) AS cards, count(*) AS rows,
+       string_agg(DISTINCT c.name || ' <' || coalesce(c.email, '') || '>', ', ') AS card_names
 FROM c JOIN users u ON u.id = c.user_id JOIN projects pr ON pr.id = c.project_id
-GROUP BY pr.name, u.email HAVING count(*) > 1
+GROUP BY pr.name, u.email HAVING count(DISTINCT c.card) > 1
 UNION ALL
-SELECT 'same_email_only', pr.name, c.email, count(*), string_agg(c.name, ', ')
+SELECT 'same_email_only', pr.name, c.email, count(DISTINCT c.card), count(*), string_agg(DISTINCT c.name, ', ')
 FROM c JOIN projects pr ON pr.id = c.project_id
 WHERE c.email IS NOT NULL
 GROUP BY pr.name, c.email
-HAVING count(*) > 1 AND count(DISTINCT c.user_id) <= 1 AND count(c.user_id) < count(*)
+HAVING count(DISTINCT c.card) > 1 AND count(DISTINCT c.user_id) <= 1
+   AND count(DISTINCT c.card) > count(DISTINCT c.card) FILTER (WHERE c.user_id IS NOT NULL)
 ORDER BY 1, 2, 3;
