@@ -190,7 +190,10 @@ router.post("/projects/:projectId/portal-shares", authenticate, allow(projectApp
   try {
     if (!(await ownedProject(req))) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
     if (!(await requireProjectApprover(req, res))) return;
-    const { itemType, itemId, audiences } = req.body as { itemType?: string; itemId?: string; audiences?: Audience[] };
+    const { itemType, itemId, audiences, alsoEmail } = req.body as { itemType?: string; itemId?: string; audiences?: Audience[]; alsoEmail?: boolean };
+    // Email only when the sender ticked "Also email them" (Dean, 2026-10-20).
+    const sendEmail = alsoEmail === true;
+    let emailedCount = 0;
     if (!itemType || !ITEM_TYPES.has(itemType) || !itemId || !Array.isArray(audiences) || audiences.length === 0) {
       res.status(400).json({ error: "validation_error", message: "itemType (document|photo|permit), itemId and a non-empty audiences array are required." });
       return;
@@ -254,7 +257,8 @@ router.post("/projects/:projectId/portal-shares", authenticate, allow(projectApp
         const proj = (await db.select({ name: projectsTable.name }).from(projectsTable).where(eq(projectsTable.id, req.params.projectId)).limit(1))[0];
         if (doc && proj) {
           for (const userId of targetUserIds) {
-            await distributeDocumentToUser(doc, proj.name, userId, `New document: ${doc.name}`, err => req.log.error({ err }, "Failed to send portal share email"));
+            const { emailed } = await distributeDocumentToUser(doc, proj.name, userId, `New document: ${doc.name}`, err => req.log.error({ err }, "Failed to send portal share email"), { sendEmail });
+            if (emailed) emailedCount++;
           }
 
           // Push notification (batched/debounced). A drawing shared to a
@@ -292,7 +296,7 @@ router.post("/projects/:projectId/portal-shares", authenticate, allow(projectApp
       });
     }
 
-    res.status(201).json({ success: true, recipientCount });
+    res.status(201).json({ success: true, recipientCount, emailedCount });
   } catch (err) {
     req.log.error({ err }, "Create portal share error");
     res.status(500).json({ error: "server_error", message: "Failed to share to portal" });

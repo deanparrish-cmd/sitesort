@@ -111,7 +111,7 @@ export const PM_GUIDE: GuideSection[] = [
       {
         heading: "Share a document, photo or permit",
         body: [
-          "Click Share on any document, photo or permit. Choose Everyone, one or more trades, or specific people. This both notifies the recipients and makes the item visible to them in their portal: one action does both.",
+          "Click Share on any document, photo or permit. Choose Everyone, one or more trades, or specific people. This both notifies the recipients in their portal and makes the item visible to them there: one action does both. No email goes out unless you tick Also email them. The email's link opens the document without a login, so only tick it when email is really needed.",
           "Under People, a green dot means that person is on the portal and will see the item. \"Invite pending\" means they have an invite they haven't accepted yet. A card that isn't on the portal isn't offered at all: it's named underneath the list, and you invite that person from the Team tab first. If one person has cards under two firms, they show as one entry with both firm names, and a share to that entry reaches them whichever card it's on.",
           "Site photos, insurance certificates, qualifications, plant paperwork and contact documents need a SiteSort login to open. Email and WhatsApp send a link to the item in SiteSort, not the file itself, so share these through the Team Portal when the person doesn't use the dashboard.",
         ],

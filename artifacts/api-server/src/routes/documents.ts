@@ -252,6 +252,8 @@ router.post("/projects/:projectId/documents", authenticate, allow(projectApprove
     if (distributeToUserIds && Array.isArray(distributeToUserIds)) {
       const doc = { id: docId, name, version: newVersion, requiresAcknowledgment: requiresAcknowledgment ?? false };
       for (const userId of distributeToUserIds) {
+        // Tracking + in-app notification only; email goes only on an explicit
+        // "Also email them" from the share dialog (Dean, 2026-10-20).
         await distributeDocumentToUser(doc, projectName, userId, `New document: ${name}`, err =>
           req.log.error({ err }, "Failed to send document notification email"),
         );

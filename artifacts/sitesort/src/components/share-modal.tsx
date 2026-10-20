@@ -105,6 +105,9 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
   const [portalMode, setPortalMode] = useState<"all" | "trade" | "person">("all");
   const [selTrades, setSelTrades] = useState<string[]>([]);
   const [selPersons, setSelPersons] = useState<string[]>([]);
+  // Sharing to the portal sends no email unless the sender asks (Dean,
+  // 2026-10-20). Off every time the dialog opens.
+  const [alsoEmail, setAlsoEmail] = useState(false);
   const [portalTrades, setPortalTrades] = useState<PortalTrade[]>([]);
   const [portalMembers, setPortalMembers] = useState<PortalMemberOpt[]>([]);
   const [existingShares, setExistingShares] = useState<PortalShareRule[]>([]);
@@ -149,7 +152,7 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
       setTab("share"); setIsPinned(false);
       setShareLink(null); setShareLinkError(null); setLinks([]);
       setSiteBoardUrl(null); setSelectedProjectId("");
-      setPortalMode("all"); setSelTrades([]); setSelPersons([]);
+      setPortalMode("all"); setSelTrades([]); setSelPersons([]); setAlsoEmail(false);
       setPortalTrades([]); setPortalMembers([]); setExistingShares([]); setPortalMsg(null);
     }
   }, [open]);
@@ -302,7 +305,7 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
       const res = await fetch(`/api/projects/${effectiveProjectId}/portal-shares`, {
         method: "POST",
         headers: authH(),
-        body: JSON.stringify({ itemType: entityType, itemId: entityId, audiences }),
+        body: JSON.stringify({ itemType: entityType, itemId: entityId, audiences, alsoEmail: entityType === "document" && alsoEmail }),
       });
       const data = await res.json().catch(() => ({}));
       // Never report success for a share that didn't save.
@@ -320,10 +323,11 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
         setPortalMsg(`Saved, but nobody on the portal can see it yet. ${portalMode === "person" ? "The person you picked is not on the portal." : "No one in this audience is on the portal."} They will see it once they accept a portal invite.`);
       } else {
         setPortalMsgTone("ok");
-        setPortalMsg(`Shared to ${summary}${n !== null ? ` · ${n} member${n !== 1 ? "s" : ""} now have access` : ""}`);
+        const emailed = typeof data.emailedCount === "number" ? data.emailedCount : 0;
+        setPortalMsg(`Shared to ${summary}${n !== null ? ` · ${n} member${n !== 1 ? "s" : ""} now have access` : ""}${entityType === "document" ? (alsoEmail ? ` · emailed ${emailed}` : " · no email sent") : ""}`);
       }
       logShare("portal", summary);
-      setSelTrades([]); setSelPersons([]);
+      setSelTrades([]); setSelPersons([]); setAlsoEmail(false);
       loadPortalShares();
     } catch {
       setPortalMsgTone("error");
@@ -565,6 +569,23 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
                       </div>
                       );
                     })()}
+
+                    {entityType === "document" && (
+                      <label className="flex items-start gap-2 text-sm cursor-pointer select-none" htmlFor="portal-share-also-email">
+                        <input
+                          id="portal-share-also-email"
+                          type="checkbox"
+                          className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                          checked={alsoEmail}
+                          onChange={e => setAlsoEmail(e.target.checked)}
+                          data-testid="portal-share-also-email"
+                        />
+                        <span className="min-w-0 break-words">
+                          Also email them
+                          <span className="block text-xs text-muted-foreground">They're notified in the portal either way. The email link opens the document without a login, so anyone it's forwarded to can open it.</span>
+                        </span>
+                      </label>
+                    )}
 
                     <button
                       onClick={submitPortalShare}
