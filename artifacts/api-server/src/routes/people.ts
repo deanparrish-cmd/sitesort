@@ -6,7 +6,7 @@ import {
   projectInvitesTable, usersTable, companyMembersTable, companiesTable,
   documentDistributionsTable, notificationsTable,
 } from "@workspace/db/schema";
-import { and, eq, desc, inArray, isNull, isNotNull, sql } from "drizzle-orm";
+import { and, eq, desc, asc, inArray, isNull, isNotNull, sql } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { allow, COMPANY_MANAGER, INTERNAL_STAFF } from "../lib/authz";
@@ -548,12 +548,34 @@ router.post("/projects/:projectId/portal-invites", authenticate, allow(COMPANY_M
       if (person.userId !== dashUser.id) {
         await db.update(peopleTable).set({ userId: dashUser.id }).where(eq(peopleTable.id, person.id));
       }
-      const existingMember = await db.select().from(projectMembersTable)
-        .where(and(eq(projectMembersTable.projectId, pid), eq(projectMembersTable.userId, dashUser.id))).limit(1);
-      if (existingMember[0]) {
-        await db.update(projectMembersTable).set({ personId: person.id }).where(eq(projectMembersTable.id, existingMember[0].id));
-      } else {
+      // One row per card per project (unique index, 2026-10-20): use the card's
+      // own row when it has one instead of adding a second.
+      const loginRow = (await db.select().from(projectMembersTable)
+        .where(and(eq(projectMembersTable.projectId, pid), eq(projectMembersTable.userId, dashUser.id))).limit(1))[0];
+      const cardRowAny = (await db.select().from(projectMembersTable)
+        .where(and(eq(projectMembersTable.projectId, pid), eq(projectMembersTable.personId, person.id)))
+        .orderBy(sql`${projectMembersTable.userId} IS NULL`, asc(projectMembersTable.addedAt)).limit(1))[0];
+      // A card row carrying SOMEONE ELSE's login is never re-pointed.
+      const cardRow = cardRowAny && (cardRowAny.userId === null || cardRowAny.userId === dashUser.id) ? cardRowAny : undefined;
+      if (loginRow && (loginRow.personId === person.id || (loginRow.personId && loginRow.personId !== person.id))) {
+        // Already this card, or the login holds another card here (two firms):
+        // leave it; this card counts as a linked card (people.user_id above).
+        if (!cardRowAny) {
+          await db.insert(projectMembersTable).values({ id: generateId(), projectId: pid, userId: null, personId: person.id, role }).onConflictDoNothing();
+        }
+      } else if (loginRow && cardRow) {
+        // Team-role row with no card, and the card has its own row: keep the
+        // card's row (its permissions), drop the duplicate, never clash.
+        await db.delete(projectMembersTable).where(eq(projectMembersTable.id, loginRow.id));
+        await db.update(projectMembersTable).set({ userId: dashUser.id }).where(eq(projectMembersTable.id, cardRow.id));
+      } else if (loginRow && !cardRowAny) {
+        await db.update(projectMembersTable).set({ personId: person.id }).where(eq(projectMembersTable.id, loginRow.id));
+      } else if (!loginRow && cardRow) {
+        await db.update(projectMembersTable).set({ userId: dashUser.id }).where(eq(projectMembersTable.id, cardRow.id));
+      } else if (!cardRowAny) {
         await db.insert(projectMembersTable).values({ id: generateId(), projectId: pid, userId: dashUser.id, personId: person.id, role });
+      } else {
+        req.log.warn({ personId: person.id, projectId: pid }, "portal grant: card's row belongs to another login; left as is");
       }
       // Record an accepted invite row (once) so the Team Portal list/revoke/audit is
       // uniform. Dedup: don't stack duplicate accepted rows on repeat grants.

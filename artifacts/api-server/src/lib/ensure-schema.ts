@@ -629,13 +629,13 @@ export async function ensureSchema(): Promise<void> {
 
     // Platform Admin restriction — SiteSort's OWN internal-staff flag, separate
     // from `role` (a customer's admin/pm/worker role WITHIN their own
-    // company). Seed the two known founders once; going forward the flag is
-    // managed via the Admin section's own user-management UI, not code.
+    // company). Bootstrap ONLY: when nobody holds the flag (an empty system),
+    // grant it to the two founders so someone can reach the Admin page. Once
+    // anyone holds it, this does nothing and the Admin page is authoritative
+    // (Dean, 2026-10-20: it used to re-grant the founders on every boot, so a
+    // revoke from the Admin page never survived a restart).
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS platform_admin boolean NOT NULL DEFAULT false`);
-    await pool.query(`
-      UPDATE users SET platform_admin = true
-      WHERE email IN ('dean.parrish@me.com', 'amy-parrish@hotmail.co.uk') AND platform_admin = false
-    `);
+    await bootstrapPlatformAdmin(pool);
 
     // PIN sign-off audit — logs every PIN set/reset event (never the PIN itself),
     // so a forgotten-PIN reset is attributable. Used by both /auth/pin (dashboard)
@@ -783,6 +783,28 @@ export async function ensureSchema(): Promise<void> {
       logger.info({ fixed: memberRecreate.rows }, `ensureSchema: recreated ${memberRecreate.rows.length} missing project_members row(s) for an accepted portal invite`);
     }
 
+    // One membership row per card per project (duplicate memberships, step 4,
+    // 2026-10-20). Postgres refuses the index while any card still has two rows,
+    // so check first: with duplicates present, skip and say so (never fail the
+    // boot); the index is created at the first boot after they're cleaned up
+    // (reports/duplicate-memberships.sql).
+    try {
+      const dup = await pool.query(`
+        SELECT count(*)::int AS n FROM (
+          SELECT 1 FROM project_members WHERE person_id IS NOT NULL
+          GROUP BY project_id, person_id HAVING count(*) > 1
+        ) d
+      `);
+      const pairs = (dup.rows[0] as { n: number }).n;
+      if (pairs > 0) {
+        logger.warn({ duplicatePairs: pairs }, `ensureSchema: project_members_project_person_uq NOT created: ${pairs} card(s) have more than one membership row on a project`);
+      } else {
+        await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS project_members_project_person_uq ON project_members (project_id, person_id) WHERE person_id IS NOT NULL`);
+      }
+    } catch (err) {
+      logger.error({ err }, "ensureSchema: project_members_project_person_uq step failed (continuing)");
+    }
+
     // Persistent, admin-reviewable record of a Stripe subscription cancellation
     // that failed during company deletion or a beta-access grant — deliberately
     // no FK to companies (the row it refers to is usually deleted in the same
@@ -911,9 +933,29 @@ export async function ensureSchema(): Promise<void> {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS share_access_requests_company_idx ON share_access_requests (company_id, status)`);
     logger.info("ensureSchema: share_links + share_access_requests ready");
-    logger.info("ensureSchema: user_notes.company_id + site_checkins hold/auto-close + projects site clock + site_checkins.person_key + notifications.metadata ready + site_checkins sign-out cols + photos.daily_report_date ready + company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols + portal_shares + portal_sessions + push_subscriptions + pending_pushes + subcontractor_documents + subcontractors/people.archived_at + people.first_name/last_name + subcontractors.contact_first_name/contact_last_name + project_members write-permission cols + activity_log.metadata + photos closure/updated_at cols + plant_items/plant_item_attachments/plant_item_distributions + people.is_primary_contact + person_certifications + primary-contact/project_members backfill + project_members.can_edit_daily_report + messages.project_id + photos archive/photo-removal cols + primary-contact name self-heal ready + photos/daily_reports submitted_at+submitted_by + plant_items portal_draft cols + portal_submission_notes table + submitted-backfill ready + users.platform_admin + Dean/Amy seeded ready + pin_audit_log table ready + documents.require_pin_signoff ready + projects.site_manager_id ready + project_members.is_project_manager ready + accepted-invite/project_members.person_id self-heal ready + failed_stripe_cancellations table ready + users.role_title ready");
+    logger.info("ensureSchema: user_notes.company_id + site_checkins hold/auto-close + projects site clock + site_checkins.person_key + notifications.metadata ready + site_checkins sign-out cols + photos.daily_report_date ready + company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols + portal_shares + portal_sessions + push_subscriptions + pending_pushes + subcontractor_documents + subcontractors/people.archived_at + people.first_name/last_name + subcontractors.contact_first_name/contact_last_name + project_members write-permission cols + activity_log.metadata + photos closure/updated_at cols + plant_items/plant_item_attachments/plant_item_distributions + people.is_primary_contact + person_certifications + primary-contact/project_members backfill + project_members.can_edit_daily_report + messages.project_id + photos archive/photo-removal cols + primary-contact name self-heal ready + photos/daily_reports submitted_at+submitted_by + plant_items portal_draft cols + portal_submission_notes table + submitted-backfill ready + users.platform_admin + platform-admin bootstrap (grants founders only if no platform admin exists) ready + pin_audit_log table ready + documents.require_pin_signoff ready + projects.site_manager_id ready + project_members.is_project_manager ready + accepted-invite/project_members.person_id self-heal ready + project_members one-row-per-card index (created only when no duplicates) checked + failed_stripe_cancellations table ready + users.role_title ready");
   } catch (err) {
     // Don't crash the server — membership lookups fall back to the home company.
     logger.error({ err }, "ensureSchema failed (continuing with home-company fallback)");
   }
+}
+
+type Queryable = { query: (text: string) => Promise<{ rows: unknown[] }> };
+
+// Grants platform admin to the two founder accounts ONLY when nobody holds it
+// (a fresh, empty system). Once anyone holds the flag it does nothing, so the
+// Admin page stays authoritative. Takes any pg client so a test can run it
+// inside a transaction.
+export async function bootstrapPlatformAdmin(client: Queryable): Promise<string[]> {
+  const res = await client.query(`
+    UPDATE users SET platform_admin = true
+    WHERE email IN ('dean.parrish@me.com', 'amy-parrish@hotmail.co.uk')
+      AND NOT EXISTS (SELECT 1 FROM users u2 WHERE u2.platform_admin = true)
+    RETURNING email
+  `);
+  const granted = (res.rows as { email: string }[]).map(r => r.email);
+  if (granted.length > 0) {
+    logger.info({ granted }, `ensureSchema: no platform admin existed; granted platform admin to ${granted.length} founder account(s)`);
+  }
+  return granted;
 }

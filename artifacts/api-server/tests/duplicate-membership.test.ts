@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { db } from "@workspace/db";
-import { and, eq, inArray, isNull, isNotNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, isNotNull, sql } from "drizzle-orm";
 import {
   portalSessionsTable, projectMembersTable, projectInvitesTable, peopleTable, subcontractorsTable, usersTable,
 } from "@workspace/db/schema";
@@ -38,6 +38,9 @@ describe("one card with a stale duplicate membership row", () => {
   // Amy's layout on this card: stale no-login row first, then the real row's
   // permissions switched on (a later write, as on prod).
   async function addStaleRow(personId: string) {
+    // Recreates the legacy state prod still has (Amy). The one-row-per-card
+    // index forbids it, so drop it for the fixture; afterAll puts it back.
+    await db.execute(sql`DROP INDEX IF EXISTS project_members_project_person_uq`);
     await db.insert(projectMembersTable).values({
       id: randomUUID(), projectId: co.projectId, userId: null, personId, role: "subcontractor",
       addedAt: new Date("2026-07-25T09:00:00Z"),
@@ -69,6 +72,7 @@ describe("one card with a stale duplicate membership row", () => {
       await db.delete(subcontractorsTable).where(inArray(subcontractorsTable.id, subIds));
     }
     await cleanupFixtures([co]);
+    await ensureSchema(); // recreates the one-row-per-card index (no duplicates left)
   });
 
   it("revoke ends the session and the real row, and only then says Access revoked", async () => {
@@ -167,6 +171,7 @@ describe("one card with a stale duplicate membership row", () => {
     // linked the login row to the same card, making a second row.
     await db.update(projectMembersTable).set({ userId: null })
       .where(and(eq(projectMembersTable.projectId, co.projectId), eq(projectMembersTable.personId, card)));
+    await db.execute(sql`DROP INDEX IF EXISTS project_members_project_person_uq`);
     await db.insert(projectMembersTable).values({ id: randomUUID(), projectId: co.projectId, userId: m.userId, personId: null, role: "subcontractor" });
     await ensureSchema();
     expect(await rowsOf(card)).toHaveLength(1);
