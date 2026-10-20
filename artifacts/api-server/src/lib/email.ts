@@ -2,7 +2,8 @@ import { Resend } from "resend";
 import { IS_DEPLOYED } from "./environment";
 import { logger } from "./logger";
 import { db } from "@workspace/db";
-import { emailLogTable } from "@workspace/db/schema";
+import { emailLogTable, usersTable } from "@workspace/db/schema";
+import { sql } from "drizzle-orm";
 import { generateId } from "./id";
 import { WORKER_GUIDE } from "@workspace/user-guide";
 
@@ -68,7 +69,32 @@ async function logEmail(opts: SendOpts, status: "sent" | "refused", providerId: 
 
 // Returns Resend's { data, error } shape for the callers that read it, but a
 // refusal THROWS (EmailRefusedError) so no caller can miss it.
+// The "manage email notifications" footer names a control only dashboard
+// accounts have (Settings, Notifications tab). Portal-only members and people
+// with no SiteSort account have no such setting, so they never see the line
+// (Dean, 2026-10-20: don't tell people about a control that doesn't exist).
+// Templates put these markers where the line goes; send() resolves them.
+const SETTINGS_LINE = "You can manage email notifications in your SiteSort account settings.";
+const SETTINGS_LINE_HTML = "<!--sitesort-settings-line-->";
+const SETTINGS_LINE_TEXT = "[[sitesort-settings-line]]";
+
+async function resolveSettingsLine(opts: SendOpts): Promise<SendOpts> {
+  if (!opts.html.includes(SETTINGS_LINE_HTML) && !(opts.text ?? "").includes(SETTINGS_LINE_TEXT)) return opts;
+  let show = false;
+  try {
+    const u = (await db.select({ portalOnly: usersTable.portalOnly }).from(usersTable)
+      .where(sql`lower(${usersTable.email}) = ${opts.to.trim().toLowerCase()}`).limit(1))[0];
+    show = !!u && !u.portalOnly;
+  } catch { show = false; }
+  return {
+    ...opts,
+    html: opts.html.replace(SETTINGS_LINE_HTML, show ? muted(SETTINGS_LINE) : ""),
+    text: opts.text?.replace(SETTINGS_LINE_TEXT, show ? `\n\n${SETTINGS_LINE}` : ""),
+  };
+}
+
 async function send(opts: SendOpts): Promise<{ data: { id: string } | null; error: null }> {
+  opts = await resolveSettingsLine(opts);
   if (isReservedTestAddress(opts.to)) {
     return { data: { id: "skipped-reserved-test-domain" }, error: null };
   }
@@ -332,8 +358,10 @@ export async function sendDocumentNotificationEmail(
   version: number,
   projectName: string,
   requiresAck: boolean,
-  // Per-recipient tracked open link — clicking it records the view and redirects
-  // to the file. Falls back to the dashboard when not provided.
+  // Where the button goes. For a Team Portal share this is the portal's
+  // Shared with me page, which needs a portal sign-in: an emailed portal share
+  // stays a portal share, so forwarding the email gives nobody the file
+  // (Dean, 2026-10-20). Falls back to the dashboard when not provided.
   openUrl?: string,
 ) {
   // Acknowledgment-required documents use a dedicated, stronger template.
@@ -355,8 +383,9 @@ export async function sendDocumentNotificationEmail(
         <div style="font-size:15px;font-weight:600;color:#111827;margin-bottom:4px;">${docName}</div>
         <div style="font-size:13px;color:#6b7280;">Version ${version} &middot; ${project}</div>
       `)}
-      ${btn(link, "View on SiteSort")}
-      ${muted("You can manage email notifications in your SiteSort account settings.")}
+      ${btn(link, "Open in the Team Portal")}
+      ${muted("You'll need to sign in to the Team Portal to open it. You're getting this email because the person who shared it chose to email it as well.")}
+      ${SETTINGS_LINE_HTML}
     `),
     text: textLayout(`New document shared with you
 
@@ -367,10 +396,10 @@ A new document has been added to ${project} and shared with you.
 ${docName}
 Version ${version} · ${project}
 
-View it on SiteSort:
+Open it in the Team Portal (you'll need to sign in):
 ${link}
 
-You can manage email notifications in your SiteSort account settings.`),
+You're getting this email because the person who shared it chose to email it as well.${SETTINGS_LINE_TEXT}`),
   });
 }
 
@@ -404,7 +433,8 @@ export async function sendAcknowledgmentRequestEmail(
         "#fed7aa",
       )}
       ${btn(link, "Review &amp; acknowledge")}
-      ${muted("Acknowledging confirms you have read and understood the document. You can manage email notifications in your SiteSort account settings.")}
+      ${muted("You'll need to sign in to the Team Portal to open it. Acknowledging confirms you have read and understood the document. You're getting this email because the person who shared it chose to email it as well.")}
+      ${SETTINGS_LINE_HTML}
     `),
     text: textLayout(`Your acknowledgment is required
 
@@ -417,10 +447,10 @@ Version ${version} · ${project}
 
 ⚠️ Please review and acknowledge this document as soon as possible.
 
-Review and acknowledge:
+Review and acknowledge in the Team Portal (you'll need to sign in):
 ${link}
 
-Acknowledging confirms you have read and understood the document.`),
+Acknowledging confirms you have read and understood the document. You're getting this email because the person who shared it chose to email it as well.${SETTINGS_LINE_TEXT}`),
   });
 }
 
@@ -453,7 +483,7 @@ export async function sendNewMessageEmail(
       ${p(`You have a new message ${context}.`)}
       ${preview ? box(`<div style="font-size:15px;color:#374151;font-style:italic;">"${preview}"</div>`) : ""}
       ${btn(link, "View Message")}
-      ${muted("You can manage email notifications in your SiteSort account settings.")}
+      ${SETTINGS_LINE_HTML}
     `),
     text: textLayout(`New message from ${sender}
 
@@ -462,9 +492,7 @@ Hi ${greeting},
 You have a new message ${contextText}.
 ${preview ? `\n"${preview}"\n` : ""}
 View the message:
-${link}
-
-You can manage email notifications in your SiteSort account settings.`),
+${link}${SETTINGS_LINE_TEXT}`),
   });
 }
 
@@ -511,7 +539,7 @@ export async function sendPermitExpiryEmail(
         <div style="font-size:13px;color:#6b7280;">${desc}</div>
       `, urgent ? "#fef2f2" : "#fff7ed", urgent ? "#fecaca" : "#fed7aa")}
       ${btn(link, "View Compliance")}
-      ${muted("You can manage email notifications in your SiteSort account settings.")}
+      ${SETTINGS_LINE_HTML}
     `),
     text: textLayout(`Permit ${expired ? "expired" : "expiring soon"} · ${project}
 
@@ -523,9 +551,7 @@ ${type}
 ${desc}
 
 View compliance:
-${link}
-
-You can manage email notifications in your SiteSort account settings.`),
+${link}${SETTINGS_LINE_TEXT}`),
   });
 }
 
@@ -567,7 +593,7 @@ export async function sendInsuranceExpiryEmail(
         <div style="font-size:13px;color:#6b7280;">${sub}</div>
       `, urgent ? "#fef2f2" : "#fff7ed", urgent ? "#fecaca" : "#fed7aa")}
       ${btn(link, "View Compliance")}
-      ${muted("You can manage email notifications in your SiteSort account settings.")}
+      ${SETTINGS_LINE_HTML}
     `),
     text: textLayout(`Insurance ${expired ? "expired" : "expiring soon"}
 
@@ -579,9 +605,7 @@ ${type}
 ${sub}
 
 View compliance:
-${link}
-
-You can manage email notifications in your SiteSort account settings.`),
+${link}${SETTINGS_LINE_TEXT}`),
   });
 }
 
@@ -622,7 +646,7 @@ export async function sendPersonCertExpiryEmail(
         <div style="font-size:13px;color:#6b7280;">${person}</div>
       `, urgent ? "#fef2f2" : "#fff7ed", urgent ? "#fecaca" : "#fed7aa")}
       ${btn(link, "View Compliance")}
-      ${muted("You can manage email notifications in your SiteSort account settings.")}
+      ${SETTINGS_LINE_HTML}
     `),
     text: textLayout(`Certification ${expired ? "expired" : "expiring soon"}
 
@@ -634,9 +658,7 @@ ${cert}
 ${person}
 
 View compliance:
-${link}
-
-You can manage email notifications in your SiteSort account settings.`),
+${link}${SETTINGS_LINE_TEXT}`),
   });
 }
 
@@ -664,6 +686,7 @@ export async function sendSafetyAlertEmail(
         <div style="font-size:13px;color:#6b7280;">${label} &middot; ${project}</div>
       `, "#fef2f2", "#fecaca")}
       ${btn(link, "Review on SiteSort")}
+      ${muted("Safety alerts are always sent, even if you've turned email notifications off, so a site issue always reaches the project's managers.")}
     `),
     text: textLayout(`${label} logged · ${project}
 
@@ -675,7 +698,9 @@ Ref: ${ref}
 ${label} · ${project}
 
 Review on SiteSort:
-${link}`),
+${link}
+
+Safety alerts are always sent, even if you've turned email notifications off, so a site issue always reaches the project's managers.`),
   });
 }
 
@@ -816,7 +841,7 @@ export async function sendShareLinkExpiringEmail(params: {
       `)}
       ${p("If they still need it, share it again from SiteSort.")}
       ${btn(link, "Open in SiteSort")}
-      ${muted("You can manage email notifications in your SiteSort account settings.")}
+      ${SETTINGS_LINE_HTML}
     `),
     text: textLayout(`A link you shared expires soon
 
@@ -828,9 +853,7 @@ ${params.itemName}
 ${[params.revisionLabel, params.projectName].filter(Boolean).join(" · ")}
 
 If they still need it, share it again from SiteSort:
-${link}
-
-You can manage email notifications in your SiteSort account settings.`),
+${link}${SETTINGS_LINE_TEXT}`),
   });
 }
 

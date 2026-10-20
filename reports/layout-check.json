@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-20T16:04:57.895Z",
+  "generatedAt": "2026-10-20T16:34:10.853Z",
   "target": "http://localhost:8080",
   "viewports": [
     360,
@@ -132,7 +132,7 @@
         "auth": "none"
       },
       {
-        "path": "/s/P_RL7091zzJtYS-Zd1h17JoZwu3V17OL",
+        "path": "/s/QMCrnHIfmGaTiyIGWwNSgCfBcrB5QoSs",
         "label": "s",
         "auth": "none"
       },
@@ -227,7 +227,7 @@
         "auth": "none"
       },
       {
-        "path": "/portal/accept/73e899f0a3dde41a621024c27f3bfad2678e78156915a4134356d150700b0871",
+        "path": "/portal/accept/33f699f1daba572d3b9e4c8dfb64a99c0d2a831e278e850c4365b34f06da8645",
         "label": "portal-accept",
         "auth": "none"
       },
@@ -946,9 +946,9 @@
     },
     {
       "label": "s",
-      "path": "/s/P_RL7091zzJtYS-Zd1h17JoZwu3V17OL",
+      "path": "/s/QMCrnHIfmGaTiyIGWwNSgCfBcrB5QoSs",
       "width": 360,
-      "finalPath": "/s/P_RL7091zzJtYS-Zd1h17JoZwu3V17OL",
+      "finalPath": "/s/QMCrnHIfmGaTiyIGWwNSgCfBcrB5QoSs",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -1915,9 +1915,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/73e899f0a3dde41a621024c27f3bfad2678e78156915a4134356d150700b0871",
+      "path": "/portal/accept/33f699f1daba572d3b9e4c8dfb64a99c0d2a831e278e850c4365b34f06da8645",
       "width": 360,
-      "finalPath": "/portal/accept/73e899f0a3dde41a621024c27f3bfad2678e78156915a4134356d150700b0871",
+      "finalPath": "/portal/accept/33f699f1daba572d3b9e4c8dfb64a99c0d2a831e278e850c4365b34f06da8645",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -4312,9 +4312,9 @@
     },
     {
       "label": "s",
-      "path": "/s/P_RL7091zzJtYS-Zd1h17JoZwu3V17OL",
+      "path": "/s/QMCrnHIfmGaTiyIGWwNSgCfBcrB5QoSs",
       "width": 390,
-      "finalPath": "/s/P_RL7091zzJtYS-Zd1h17JoZwu3V17OL",
+      "finalPath": "/s/QMCrnHIfmGaTiyIGWwNSgCfBcrB5QoSs",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -5281,9 +5281,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/73e899f0a3dde41a621024c27f3bfad2678e78156915a4134356d150700b0871",
+      "path": "/portal/accept/33f699f1daba572d3b9e4c8dfb64a99c0d2a831e278e850c4365b34f06da8645",
       "width": 390,
-      "finalPath": "/portal/accept/73e899f0a3dde41a621024c27f3bfad2678e78156915a4134356d150700b0871",
+      "finalPath": "/portal/accept/33f699f1daba572d3b9e4c8dfb64a99c0d2a831e278e850c4365b34f06da8645",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -7678,9 +7678,9 @@
     },
     {
       "label": "s",
-      "path": "/s/P_RL7091zzJtYS-Zd1h17JoZwu3V17OL",
+      "path": "/s/QMCrnHIfmGaTiyIGWwNSgCfBcrB5QoSs",
       "width": 768,
-      "finalPath": "/s/P_RL7091zzJtYS-Zd1h17JoZwu3V17OL",
+      "finalPath": "/s/QMCrnHIfmGaTiyIGWwNSgCfBcrB5QoSs",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -8812,9 +8812,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/73e899f0a3dde41a621024c27f3bfad2678e78156915a4134356d150700b0871",
+      "path": "/portal/accept/33f699f1daba572d3b9e4c8dfb64a99c0d2a831e278e850c4365b34f06da8645",
       "width": 768,
-      "finalPath": "/portal/accept/73e899f0a3dde41a621024c27f3bfad2678e78156915a4134356d150700b0871",
+      "finalPath": "/portal/accept/33f699f1daba572d3b9e4c8dfb64a99c0d2a831e278e850c4365b34f06da8645",
       "ok": true,
       "reasons": [],
       "metrics": {

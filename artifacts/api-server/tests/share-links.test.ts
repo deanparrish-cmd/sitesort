@@ -245,7 +245,9 @@ describe("per-share links for drawings, documents and permits", () => {
     expect((await landing(minted.json.url)).json.state).toBe("superseded");
   });
 
-  it("the emailed distribution link needs its recipient id, and lands in SiteSort without it", async () => {
+  it("an emailed distribution link opens the portal (sign-in), never the file", async () => {
+    // Dean, 2026-10-20: these links used to serve the file with no login for
+    // 30 days, so a forwarded email gave the document away.
     const noD = await fetch(`${API_BASE}/documents/${newDocId}/open`, { redirect: "manual" });
     expect(noD.status).toBe(302);
     expect(noD.headers.get("location")).toBe(`/projects/${co.projectId}?tab=documents&document=${newDocId}`);
@@ -253,15 +255,14 @@ describe("per-share links for drawings, documents and permits", () => {
     await db.insert(documentDistributionsTable).values({ id: distId, documentId: newDocId, userId: co.userId });
     const withD = await fetch(`${API_BASE}/documents/${newDocId}/open?d=${distId}`, { redirect: "manual" });
     expect(withD.status).toBe(302);
-    const loc = withD.headers.get("location")!;
-    expect(loc).toMatch(/^\/api\/uploads\/[^?]+\?exp=\d+&sig=/);
-    expect((await fetch(`${API_BASE.replace(/\/api$/, "")}${loc}`)).status).toBe(200);
+    expect(withD.headers.get("location")).toBe(`/portal/shared?doc=${newDocId}`);
+    // Clicking proves nothing about who opened it: the recipient isn't marked viewed.
     const [dist] = await db.select().from(documentDistributionsTable).where(eq(documentDistributionsTable.id, distId));
-    expect(dist.status).toBe("viewed");
-    // The old (superseded) revision's distribution link no longer serves the file.
+    expect(dist.status).toBe("pending");
+    // An old revision's link also goes to the portal, which says a newer one exists.
     const oldDist = randomUUID();
     await db.insert(documentDistributionsTable).values({ id: oldDist, documentId: docId, userId: co.userId });
     const old = await fetch(`${API_BASE}/documents/${docId}/open?d=${oldDist}`, { redirect: "manual" });
-    expect(old.headers.get("location")).toBe(`/projects/${co.projectId}?tab=documents&document=${docId}`);
+    expect(old.headers.get("location")).toBe(`/portal/shared?doc=${docId}`);
   });
 });

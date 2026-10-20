@@ -582,7 +582,7 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
                         />
                         <span className="min-w-0 break-words">
                           Also email them
-                          <span className="block text-xs text-muted-foreground">They're notified in the portal either way. The email link opens the document without a login, so anyone it's forwarded to can open it.</span>
+                          <span className="block text-xs text-muted-foreground">They're notified in the portal either way. The email links to the Team Portal, so they sign in to open it.</span>
                         </span>
                       </label>
                     )}

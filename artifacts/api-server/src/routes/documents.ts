@@ -12,7 +12,6 @@ import { isPinLockedOut, recordFailedPinAttempt, clearPinAttempts } from "../lib
 import { pinRequiredForDoc } from "../lib/signoff";
 import { distributeDocumentToUser } from "../lib/document-distribution";
 import { isProjectApprover } from "../lib/project-authority";
-import { signUploadUrl } from "../lib/signed-uploads";
 
 const router: IRouter = Router();
 
@@ -47,47 +46,29 @@ function versionToRevision(version: number): string {
   return s || "A";
 }
 
-// Public tracked-open endpoint for emailed distribution links. Records the open
-// against the recipient's distribution (pending→viewed), then redirects to a
-// short-lived signed file link. Unauthenticated by design: the distribution id
-// in `?d=` is the unguessable capability token tying the open to that
-// recipient. Like a share link (#127 Part B) it works for 30 days and only
-// while the document is the current revision; without a valid `?d=`, or after
-// that, it lands on the document in SiteSort, which needs a login.
-const DISTRIBUTION_LINK_MS = 30 * 24 * 60 * 60 * 1000;
+// Emailed distribution links (`?d=<distribution id>`) from before 2026-10-20.
+// They used to redirect anyone holding the email straight to the file for 30
+// days, with no login, and mark the recipient "viewed" whoever clicked (Dean,
+// 2026-10-20: a forwarded email gave the document away). Now a valid link
+// opens the document in the Team Portal, which needs a sign-in; the portal
+// records the real recipient's view itself. No file is served here any more.
+// Without a valid `?d=` it lands on the document in SiteSort, as before.
 router.get("/documents/:documentId/open", async (req, res) => {
   try {
-    const docs = await db.select().from(documentsTable).where(eq(documentsTable.id, req.params.documentId)).limit(1);
+    const docs = await db.select({ id: documentsTable.id, projectId: documentsTable.projectId }).from(documentsTable)
+      .where(eq(documentsTable.id, req.params.documentId)).limit(1);
     if (docs.length === 0) {
       res.status(404).send("Document not found");
       return;
     }
     const d = docs[0];
-    const inApp = `/projects/${d.projectId}?tab=documents&document=${d.id}`;
-
     const distId = typeof req.query.d === "string" ? req.query.d : null;
     const dist = distId
-      ? (await db.select().from(documentDistributionsTable)
+      ? (await db.select({ id: documentDistributionsTable.id }).from(documentDistributionsTable)
           .where(and(eq(documentDistributionsTable.id, distId), eq(documentDistributionsTable.documentId, d.id)))
           .limit(1))[0]
       : undefined;
-    if (!dist) {
-      res.redirect(302, inApp);
-      return;
-    }
-    // Only the first open flips pending→viewed; an already-viewed/acknowledged
-    // record is left as-is so re-opens don't churn the timestamp.
-    if (dist.status === "pending") {
-      await db.update(documentDistributionsTable)
-        .set({ status: "viewed", viewedAt: new Date() })
-        .where(eq(documentDistributionsTable.id, dist.id));
-    }
-    const fresh = Date.now() - dist.distributedAt.getTime() < DISTRIBUTION_LINK_MS;
-    if (d.status !== "current" || !fresh) {
-      res.redirect(302, inApp);
-      return;
-    }
-    res.redirect(302, signUploadUrl(d.fileUrl));
+    res.redirect(302, dist ? `/portal/shared?doc=${d.id}` : `/projects/${d.projectId}?tab=documents&document=${d.id}`);
   } catch (err) {
     req.log.error({ err }, "Tracked document open error");
     res.status(500).send("Could not open document");

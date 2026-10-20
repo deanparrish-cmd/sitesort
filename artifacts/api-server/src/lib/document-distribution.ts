@@ -7,11 +7,12 @@ import { sendDocumentNotificationEmail } from "./email";
 
 const APP_URL = process.env.APP_URL ?? `https://${process.env.REPLIT_DEV_DOMAIN ?? "www.sitesort.co.uk"}`;
 
-// A per-distribution tracked open link. When the recipient clicks it from
-// their email it hits GET /documents/:id/open, which records the open
-// (pending→viewed) and 302-redirects to the file.
-function trackedOpenUrl(documentId: string, distributionId: string): string {
-  return `${APP_URL}/api/documents/${documentId}/open?d=${distributionId}`;
+// The emailed link for a portal share: Shared with me in the Team Portal, which
+// needs a portal sign-in and rings the document (#138). It used to be a 30-day
+// no-login file link, so a forwarded email gave the document away (Dean,
+// 2026-10-20). The portal records the view itself (recordDocView).
+function portalDocUrl(documentId: string): string {
+  return `${APP_URL}/portal/shared?doc=${documentId}`;
 }
 
 // Creates a document_distributions row + in-app notification for one recipient
@@ -19,8 +20,7 @@ function trackedOpenUrl(documentId: string, distributionId: string): string {
 // acknowledgment-aware email ONLY when the sender asked for it (sendEmail,
 // "Also email them" in the share dialog; Dean, 2026-10-20: sharing to the
 // portal used to email every recipient) and the recipient's email setting is
-// on. The email's open link works without a login for 30 days, so it must
-// never go out by default. Shared by every path that gives
+// on. The email links to the portal (sign-in required), never to the file. Shared by every path that gives
 // someone a tracked copy of a document (Share → Team Portal's People/Trade/
 // Everyone resolution, and any future direct-distribute path), so a
 // recipient's pending/viewed/acknowledged tracking and notifications are
@@ -57,14 +57,14 @@ export async function distributeDocumentToUser(
 
 async function emailRecipient(
   doc: { id: string; name: string; version: number; requiresAcknowledgment: boolean },
-  projectName: string, userId: string, distId: string, onEmailError: (err: unknown) => void,
+  projectName: string, userId: string, _distId: string, onEmailError: (err: unknown) => void,
 ): Promise<boolean> {
   const r = (await db.select({ email: usersTable.email, name: usersTable.name, emailNotifications: usersTable.emailNotifications })
     .from(usersTable).where(eq(usersTable.id, userId)).limit(1))[0];
   if (!r || !r.emailNotifications) return false;
   sendDocumentNotificationEmail(
     r.email, r.name, doc.name, doc.version,
-    projectName, doc.requiresAcknowledgment, trackedOpenUrl(doc.id, distId),
+    projectName, doc.requiresAcknowledgment, portalDocUrl(doc.id),
   ).catch(onEmailError);
   return true;
 }
