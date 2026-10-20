@@ -9,6 +9,8 @@ import {
 import { seedCompany, cleanupFixtures, login, api, seedCrossTenantPortalMember, cleanupPortalMember, createTestDocument, cleanupTestDocuments, type Fixture, type PortalMemberFixture } from "./helpers";
 import { portalSharesTable, documentDistributionsTable, notificationsTable } from "@workspace/db/schema";
 import { distributeDocumentToUser } from "../src/lib/document-distribution";
+import { sendChannelMessage, sendDirectMessage } from "../src/lib/messaging";
+import { messagesTable, channelMessagesTable } from "@workspace/db/schema";
 
 /**
  * Dean, 2026-10-20:
@@ -52,6 +54,8 @@ describe("email links and the email-settings footer", () => {
     await db.delete(documentDistributionsTable).where(eq(documentDistributionsTable.documentId, docId));
     await db.delete(notificationsTable).where(inArray(notificationsTable.userId, [co.userId, member.userId]));
     await cleanupTestDocuments([docId]);
+    await db.delete(channelMessagesTable).where(eq(channelMessagesTable.projectId, co.projectId));
+    await db.delete(messagesTable).where(inArray(messagesTable.senderId, [co.userId, member.userId]));
     await db.delete(emailLogTable).where(inArray(emailLogTable.toAddress, [dashEmail, portalEmail, noAccountEmail]));
     await db.update(usersTable).set({ email: originalDash }).where(eq(usersTable.id, co.userId));
     await db.update(usersTable).set({ email: originalPortal }).where(eq(usersTable.id, member.userId));
@@ -89,6 +93,32 @@ describe("email links and the email-settings footer", () => {
     expect(mail!.html).toContain(`/portal/shared?doc=${docId}`);
     expect(mail!.html + mail!.text).not.toMatch(/\/open\?d=|\/api\/uploads\//);
     expect(mail!.html + mail!.text).not.toContain(LINE);
+  });
+
+  it("a channel message email sends a portal member to the portal, a dashboard user to the dashboard", async () => {
+    const before = sent.length;
+    await sendChannelMessage({ projectId: co.projectId, companyId: co.companyId, senderId: co.userId, content: "Skip on Friday" });
+    await new Promise(res => setTimeout(res, 300));
+    const toPortal = sent.slice(before).find(m => m.to === portalEmail);
+    expect(toPortal).toBeTruthy();
+    expect(toPortal!.html).toContain("/portal/messages?c=channel");
+    expect(toPortal!.html).not.toMatch(/sitesort\.co\.uk\/messages"/);
+  });
+
+  it("a direct message email follows the same rule", async () => {
+    let before = sent.length;
+    await sendDirectMessage({ senderId: co.userId, recipientId: member.userId, companyId: co.companyId, projectId: null, content: "Can you call me?" });
+    await new Promise(res => setTimeout(res, 300));
+    const toPortal = sent.slice(before).find(m => m.to === portalEmail);
+    expect(toPortal).toBeTruthy();
+    expect(toPortal!.html).toContain(`/portal/messages?c=dm-${co.userId}`);
+    before = sent.length;
+    await sendDirectMessage({ senderId: member.userId, recipientId: co.userId, companyId: co.companyId, projectId: null, content: "Will do" });
+    await new Promise(res => setTimeout(res, 300));
+    const toDash = sent.slice(before).find(m => m.to === dashEmail);
+    expect(toDash).toBeTruthy();
+    expect(toDash!.html).toMatch(/\/messages"/);
+    expect(toDash!.html).not.toContain("/portal/messages");
   });
 
   it("a portal-only member never sees the email-settings line", async () => {

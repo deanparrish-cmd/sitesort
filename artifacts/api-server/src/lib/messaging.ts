@@ -66,7 +66,7 @@ export async function sendDirectMessage(params: {
       deepLink: `/portal/messages?c=dm-${senderId}`,
     });
   } else {
-    const recipient = await db.select({ email: usersTable.email, name: usersTable.name, emailNotifications: usersTable.emailNotifications })
+    const recipient = await db.select({ email: usersTable.email, name: usersTable.name, emailNotifications: usersTable.emailNotifications, portalOnly: usersTable.portalOnly })
       .from(usersTable).where(eq(usersTable.id, recipientId)).limit(1);
     await insertNotifications({ companyId,
       id: generateId(), userId: recipientId, type: "new_message",
@@ -74,7 +74,10 @@ export async function sendDirectMessage(params: {
       relatedEntityId: senderId, relatedEntityType: "user",
     });
     if (recipient[0]?.emailNotifications) {
-      sendNewMessageEmail(recipient[0].email, recipient[0].name, senderName, preview, false, "").catch(() => {});
+      // The link goes where this recipient can sign in: the portal for a
+      // portal-only member, the dashboard for everyone else.
+      const path = recipient[0].portalOnly ? `/portal/messages?c=dm-${senderId}` : "/messages";
+      sendNewMessageEmail(recipient[0].email, recipient[0].name, senderName, preview, false, "", path).catch(() => {});
     }
   }
 
@@ -112,7 +115,7 @@ export async function sendChannelMessage(params: {
   const memberIds = members.map(m => m.userId).filter((x): x is string => !!x);
 
   const memberUsers = memberIds.length
-    ? await db.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, emailNotifications: usersTable.emailNotifications })
+    ? await db.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, emailNotifications: usersTable.emailNotifications, portalOnly: usersTable.portalOnly })
         .from(usersTable).where(inArray(usersTable.id, memberIds))
     : [];
   const memberMap = new Map(memberUsers.map(u => [u.id, u]));
@@ -125,7 +128,9 @@ export async function sendChannelMessage(params: {
     });
     const mu = memberMap.get(uid);
     if (mu?.emailNotifications) {
-      sendNewMessageEmail(mu.email, mu.name, senderName, preview, true, projectName).catch(() => {});
+      // Portal-only members (subcontractors) open the project channel in the
+      // portal; dashboard accounts keep the dashboard Messages page.
+      sendNewMessageEmail(mu.email, mu.name, senderName, preview, true, projectName, mu.portalOnly ? "/portal/messages?c=channel" : "/messages").catch(() => {});
     }
   }
 

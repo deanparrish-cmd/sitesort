@@ -461,8 +461,13 @@ export async function sendNewMessageEmail(
   preview: string,
   isChannel: boolean,
   contextName: string,
+  // App path the button opens, e.g. "/portal/messages?c=channel". The caller
+  // picks the place THIS recipient can sign in to: a portal-only member has
+  // no dashboard account, so the dashboard /messages page is a dead end for
+  // them (Dean, 2026-10-20). Defaults to the dashboard Messages page.
+  path = "/messages",
 ) {
-  const link = `${APP_URL}/messages`;
+  const link = `${APP_URL}${path}`;
   const greeting = firstName(recipientName);
   const sender = senderName?.trim() || "A teammate";
   const subject = isChannel
