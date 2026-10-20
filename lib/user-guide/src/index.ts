@@ -112,7 +112,7 @@ export const PM_GUIDE: GuideSection[] = [
         heading: "Share a document, photo or permit",
         body: [
           "Click Share on any document, photo or permit. Choose Everyone, one or more trades, or specific people. This both notifies the recipients and makes the item visible to them in their portal: one action does both.",
-          "Under People, a green dot means that person is on the portal and will see the item. \"Invite pending\" means they have an invite they haven't accepted yet. A card that isn't on the portal isn't offered at all: it's named underneath the list, and you invite that person from the Team tab first. If the same person appears twice (for example under two firms), pick the one with the green dot.",
+          "Under People, a green dot means that person is on the portal and will see the item. \"Invite pending\" means they have an invite they haven't accepted yet. A card that isn't on the portal isn't offered at all: it's named underneath the list, and you invite that person from the Team tab first. If one person has cards under two firms, they show as one entry with both firm names, and a share to that entry reaches them whichever card it's on.",
           "Site photos, insurance certificates, qualifications, plant paperwork and contact documents need a SiteSort login to open. Email and WhatsApp send a link to the item in SiteSort, not the file itself, so share these through the Team Portal when the person doesn't use the dashboard.",
         ],
         callout: {
@@ -601,6 +601,12 @@ export const FAQ: FaqItem[] = [
     id: "remove-access",
     question: "How do I remove someone's portal access?",
     answer: "On the project's Team tab, turn off the Portal member pill on their card. This ends their session immediately and cancels any pending invite.",
+    audience: "pm",
+  },
+  {
+    id: "two-cards-one-person",
+    question: "What happens when I remove someone who has two cards on a project?",
+    answer: "One person can be on a project under two firms. Their Team tab card then says \"Also on this project as\" with the other card's firm, trade and the date it was added. When you remove one of their cards, SiteSort names the other card and asks whether to remove it as well. Choose Remove only this card and they keep portal access through the other card. Choose Remove both and their access to the project ends.",
     audience: "pm",
   },
   {

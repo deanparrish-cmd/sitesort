@@ -24,6 +24,7 @@ import { requirePortalMember, requirePortalSession, autoLogPortalActivity, requi
 import { createPortalSession, revokePortalSession, claimPortalSession } from "../lib/portal-sessions";
 import { getVapidPublicKey, registerPushDevice } from "../lib/web-push";
 import { pushSubscriptionsTable, activityLogTable, portalSessionsTable } from "@workspace/db/schema";
+import { linkedCardsForLogin } from "../lib/linked-cards";
 import { PortalPushSubscribeBody, PortalPushUnsubscribeBody } from "@workspace/api-zod";
 import { isLockedOut, recordFailedAttempt, clearAttempts } from "../lib/login-attempts";
 import { pinRequiredForDoc } from "../lib/signoff";
@@ -175,25 +176,24 @@ async function loadProject(projectId: string) {
 // portal NEVER exposes who else an item was shared with.
 const SITE_STAFF = "Site Staff";
 type Viewer = {
-  personId: string | null; trades: string[]; isSiteStaff: boolean;
-  // Which row .limit(1) picked; read only by the TEMP shared-list trace.
+  // personId = the card carrying the login; personIds = every card that counts
+  // for this login on the project (lib/linked-cards.ts: the login's own card
+  // plus linked cards still on the project and not archived). Person shares
+  // match any of them; trades are the union.
+  personId: string | null; personIds: string[]; trades: string[]; isSiteStaff: boolean;
+  // The login-holding row; read only by the TEMP shared-list trace.
   memberId?: string | null; companyId?: string | null; subcontractorId?: string | null;
 };
 
 async function resolveViewer(userId: string, projectId: string): Promise<Viewer> {
-  const rows = await db.select({
-    personId: projectMembersTable.personId, trades: subcontractorsTable.trades,
-    memberId: projectMembersTable.id, companyId: peopleTable.companyId, subcontractorId: peopleTable.subcontractorId,
-  })
-    .from(projectMembersTable)
-    .leftJoin(peopleTable, eq(projectMembersTable.personId, peopleTable.id))
-    .leftJoin(subcontractorsTable, eq(peopleTable.subcontractorId, subcontractorsTable.id))
-    .where(and(eq(projectMembersTable.projectId, projectId), eq(projectMembersTable.userId, userId), isNotNull(projectMembersTable.personId)))
-    .limit(1);
-  const trades = (rows[0]?.trades ?? []) as string[];
+  const cards = await linkedCardsForLogin(userId, projectId);
+  const primary = cards[0];
+  const trades = Array.from(new Set(cards.flatMap(c => c.trades)));
   return {
-    personId: (rows[0]?.personId ?? null) as string | null, trades, isSiteStaff: trades.length === 0,
-    memberId: rows[0]?.memberId ?? null, companyId: rows[0]?.companyId ?? null, subcontractorId: rows[0]?.subcontractorId ?? null,
+    personId: primary?.personId ?? null, personIds: cards.map(c => c.personId), trades,
+    // Site Staff = any of their cards is in-house (or a firm with no trades).
+    isSiteStaff: cards.length === 0 || cards.some(c => c.trades.length === 0),
+    memberId: primary?.memberId ?? null, companyId: primary?.companyId ?? null, subcontractorId: primary?.subcontractorId ?? null,
   };
 }
 
@@ -205,7 +205,7 @@ async function visibleIds(projectId: string, itemType: string, viewer: Viewer): 
   const set = new Set<string>();
   for (const s of shares) {
     if (s.audienceType === "all") set.add(s.itemId);
-    else if (s.audienceType === "person" && viewer.personId && s.personId === viewer.personId) set.add(s.itemId);
+    else if (s.audienceType === "person" && s.personId && viewer.personIds.includes(s.personId)) set.add(s.itemId);
     else if (s.audienceType === "trade" && s.trade && (viewer.trades.includes(s.trade) || (viewer.isSiteStaff && s.trade === SITE_STAFF))) set.add(s.itemId);
   }
   return set;
@@ -230,7 +230,7 @@ async function visibleShareMap(projectId: string, itemType: string, viewer: View
   const map = new Map<string, Date>();
   for (const s of shares) {
     const matches = s.audienceType === "all"
-      || (s.audienceType === "person" && viewer.personId && s.personId === viewer.personId)
+      || (s.audienceType === "person" && !!s.personId && viewer.personIds.includes(s.personId))
       || (s.audienceType === "trade" && !!s.trade && (viewer.trades.includes(s.trade) || (viewer.isSiteStaff && s.trade === SITE_STAFF)));
     if (trace) trace.push({
       shareId: s.id, itemType, itemId: s.itemId, audience: s.audienceType,
@@ -258,8 +258,9 @@ type SharedTrace = { viewer?: Viewer; rules: SharedTraceRule[]; matchedDocIds?: 
 function shareRuleReason(s: { audienceType: string; personId: string | null; trade: string | null }, viewer: Viewer): string {
   if (s.audienceType === "all") return "all: matches everyone";
   if (s.audienceType === "person") {
-    if (!viewer.personId) return "person: viewer has no personId";
-    return s.personId === viewer.personId ? "person: share.personId = viewer.personId" : "person: share.personId != viewer.personId";
+    if (viewer.personIds.length === 0) return "person: viewer has no card";
+    if (s.personId === viewer.personId) return "person: share.personId = viewer.personId";
+    return s.personId && viewer.personIds.includes(s.personId) ? "person: share.personId = a linked card of the viewer" : "person: share.personId not one of the viewer's cards";
   }
   if (s.audienceType === "trade") {
     if (!s.trade) return "trade: share has no trade";
@@ -794,7 +795,19 @@ router.post("/portal/invites/:id/accept", ...portalGuards, async (req, res) => {
         ));
       const personRow = inv.personId ? existing.find(r => r.personId === inv.personId) : undefined;
       const userRow = existing.find(r => r.userId === userId);
-      if (personRow && userRow && personRow.id !== userRow.id) {
+      if (userRow?.personId && inv.personId && userRow.personId !== inv.personId) {
+        // They already hold ANOTHER card on this project (two firms). Never
+        // move the login off it: that deleted the old card's row and its
+        // permissions, so shares on it stopped reaching them (option B,
+        // 2026-10-20). The invited card stays on the project as a linked card
+        // (people.user_id, set above) and counts for this login.
+        if (!personRow) {
+          await tx.insert(projectMembersTable).values({
+            id: generateId(), projectId: inv.projectId, userId: null,
+            personId: inv.personId, role: inv.role,
+          });
+        }
+      } else if (personRow && userRow && personRow.id !== userRow.id) {
         await tx.delete(projectMembersTable).where(eq(projectMembersTable.id, userRow.id));
         await tx.update(projectMembersTable).set({ userId }).where(eq(projectMembersTable.id, personRow.id));
       } else if (personRow) {
@@ -962,7 +975,10 @@ router.post("/portal/invite/:token/accept", async (req, res) => {
 
     // Link the individual person to their account so per-person portal status resolves.
     if (inv.personId) {
-      await db.update(peopleTable).set({ userId }).where(eq(peopleTable.id, inv.personId));
+      // Link the card to this login unless it already belongs to someone
+      // else's login (never re-point another person's card, option B).
+      await db.update(peopleTable).set({ userId })
+        .where(and(eq(peopleTable.id, inv.personId), or(isNull(peopleTable.userId), eq(peopleTable.userId, userId))));
     }
 
     // Membership (user ↔ project) carrying the person link. The person is
@@ -973,12 +989,30 @@ router.post("/portal/invite/:token/accept", async (req, res) => {
     // which can never match an existing row) so accepting UPDATES that row in
     // place — preserving any section permissions a PM already granted while
     // the invite was pending — instead of inserting a second, duplicate row.
-    const existingMember = (await db.select({ id: projectMembersTable.id, personId: projectMembersTable.personId }).from(projectMembersTable)
+    // They may already hold ANOTHER card on this project (two firms). Never
+    // move the login off it: that orphaned the old card and its shares
+    // (option B, 2026-10-20). The invited card stays on as a linked card.
+    const loginRow = (await db.select({ id: projectMembersTable.id, personId: projectMembersTable.personId }).from(projectMembersTable)
+      .where(and(eq(projectMembersTable.projectId, inv.projectId), eq(projectMembersTable.userId, userId))).limit(1))[0];
+    const keepsOtherCard = !!(inv.personId && loginRow?.personId && loginRow.personId !== inv.personId);
+    const existingMember = keepsOtherCard ? undefined : (await db.select({ id: projectMembersTable.id, personId: projectMembersTable.personId }).from(projectMembersTable)
       .where(and(
         eq(projectMembersTable.projectId, inv.projectId),
         inv.personId ? or(eq(projectMembersTable.userId, userId), eq(projectMembersTable.personId, inv.personId)) : eq(projectMembersTable.userId, userId),
-      )).limit(1))[0];
-    if (existingMember) {
+      ))
+      // The login's own row first, so a stray person-only row is never the one
+      // overwritten while the login's row survives (unique index clash).
+      .orderBy(sql`${projectMembersTable.userId} IS NULL`)
+      .limit(1))[0];
+    if (keepsOtherCard) {
+      const cardRow = (await db.select({ id: projectMembersTable.id }).from(projectMembersTable)
+        .where(and(eq(projectMembersTable.projectId, inv.projectId), eq(projectMembersTable.personId, inv.personId!))).limit(1))[0];
+      if (!cardRow) {
+        await db.insert(projectMembersTable)
+          .values({ id: generateId(), projectId: inv.projectId, userId: null, personId: inv.personId, role: inv.role })
+          .onConflictDoNothing();
+      }
+    } else if (existingMember) {
       // Never overwrite an already-linked person with null — this is the exact
       // shape of the "invite list says Accepted, login says not added" bug: an
       // invite lacking person_id (e.g. a legacy/dormant accept path) must not
@@ -1320,7 +1354,7 @@ async function logSharedTrace(
         userId, projectId: pid, ms: Date.now() - out.started,
         sessionCompanyId: (req.user as { companyId?: string } | undefined)?.companyId ?? null,
         viewer: trace.viewer ? {
-          memberId: trace.viewer.memberId, personId: trace.viewer.personId, companyId: trace.viewer.companyId,
+          memberId: trace.viewer.memberId, personId: trace.viewer.personId, personIds: trace.viewer.personIds, companyId: trace.viewer.companyId,
           subcontractorId: trace.viewer.subcontractorId, trades: trace.viewer.trades, isSiteStaff: trace.viewer.isSiteStaff,
         } : null,
         membershipRowsThisProject: hereRows.length,
@@ -1402,7 +1436,7 @@ router.get("/admin/portal-trace", authenticate, allow(PLATFORM_ADMIN), async (re
     id: s.id, audienceType: s.audienceType, trade: s.trade, personId: s.personId,
     onThisProject: s.projectId === projectId, createdAt: s.createdAt.toISOString(),
     matches: s.projectId === projectId && (s.audienceType === "all"
-      || (s.audienceType === "person" && !!viewer.personId && s.personId === viewer.personId)
+      || (s.audienceType === "person" && !!s.personId && viewer.personIds.includes(s.personId))
       || (s.audienceType === "trade" && !!s.trade && (viewer.trades.includes(s.trade) || (viewer.isSiteStaff && s.trade === SITE_STAFF)))),
   }));
   const shareMap = await visibleShareMap(projectId, itemType, viewer);

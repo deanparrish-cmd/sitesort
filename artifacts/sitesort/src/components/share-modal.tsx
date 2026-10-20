@@ -25,7 +25,7 @@ type PortalTrade = { trade: string; memberCount: number };
 // portalStatus: "member" = can see the portal now, "invited" = live pending
 // invite, "none" = no portal access at all (a share to them reaches nobody).
 type PortalStatus = "member" | "invited" | "none";
-type PortalMemberOpt = { personId: string; userId: string | null; accepted?: boolean; portalStatus?: PortalStatus; name: string; companyName?: string; trades?: string[] };
+type PortalMemberOpt = { personId: string; userId: string | null; holdsLogin?: boolean; accepted?: boolean; portalStatus?: PortalStatus; name: string; companyName?: string; trades?: string[] };
 type PortalShareRule = { id: string; audienceType: string; trade?: string; personId?: string; personName?: string; personCompany?: string; portalStatus?: PortalStatus };
 
 export interface ShareModalProps {
@@ -508,19 +508,34 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
                       // reaches nobody), so it isn't offered. Named underneath so a
                       // missing person doesn't look like a fault. Invite pending
                       // stays: the share works once they accept.
-                      const pickable = portalMembers.filter(m => memberStatus(m) !== "none");
+                      const pickableCards = portalMembers.filter(m => memberStatus(m) !== "none");
                       const hidden = portalMembers.filter(m => memberStatus(m) === "none");
+                      // Cards of one login (same person, e.g. two firms) are one
+                      // chip: a share to any of them reaches that person. The chip
+                      // shares to the card carrying their login.
+                      const groups = new Map<string, PortalMemberOpt[]>();
+                      for (const m of pickableCards) {
+                        const key = m.userId ? `u:${m.userId}` : `p:${m.personId}`;
+                        groups.set(key, [...(groups.get(key) ?? []), m]);
+                      }
+                      const pickable = [...groups.values()].map(cards => {
+                        const lead = cards.find(c => c.holdsLogin) ?? cards[0];
+                        const firms = Array.from(new Set(cards.map(c => c.companyName).filter(Boolean)));
+                        return { ...lead, companyName: firms.join(" / ") || lead.companyName, cardIds: cards.map(c => c.personId) };
+                      });
                       return (
                       <div className="space-y-1.5">
                       <div className="flex flex-wrap gap-1.5">
                         {pickable.length === 0 ? (
                           <p className="text-xs text-muted-foreground">No portal members on this project yet.</p>
                         ) : pickable.map(m => {
-                          const sel = selPersons.includes(m.personId);
+                          const sel = m.cardIds.some(id => selPersons.includes(id));
                           return (
                             <button
                               key={m.personId}
-                              onClick={() => togglePerson(m.personId)}
+                              onClick={() => sel
+                                ? setSelPersons(prev => prev.filter(x => !m.cardIds.includes(x)))
+                                : togglePerson(m.personId)}
                               className={cn(
                                 // Wraps rather than truncates: the portal status at the end is the part
                                 // that tells two same-name cards apart.

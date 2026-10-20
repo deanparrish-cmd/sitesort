@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { cardLabel } from "@/lib/card-label";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -299,10 +300,22 @@ export function TeamDialogs() {
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-1">
-          <p className="text-sm">
+          <p className="text-sm break-words">
             Remove <span className="font-semibold">{removeTarget?.name}</span>
+            {removeTarget?.kind !== "company" && removeTarget?.label && removeTarget.otherCards?.length ? <> ({removeTarget.label})</> : null}
             {removeTarget?.kind === "company" ? " and everyone who works for them" : ""} from this project?
           </p>
+          {!!removeTarget?.otherCards?.length && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-3 space-y-1.5" data-testid="remove-other-cards">
+              {Array.from(new Map(removeTarget.otherCards.map(o => [o.memberId, o])).values()).map(o => (
+                <p key={o.memberId} className="text-sm break-words">
+                  <span className="font-semibold">{o.name}</span> is also on this project as <span className="font-semibold">{cardLabel(o)}</span>.
+                </p>
+              ))}
+              <p className="text-sm font-semibold">Remove {removeTarget.otherCards.length === 1 ? "that card" : "those cards"} as well?</p>
+              <p className="text-xs text-muted-foreground">If you remove only this card, their portal access continues through the other card. Remove both to end their access to this project.</p>
+            </div>
+          )}
           {removeTarget?.kind === "company" && removeTarget.peopleNames && removeTarget.peopleNames.length > 0 && (
             <div className="rounded-lg border bg-muted/30 p-3">
               <p className="text-xs font-semibold text-muted-foreground mb-1.5">This removes {removeTarget.peopleNames.length} {removeTarget.peopleNames.length === 1 ? "person" : "people"}:</p>
@@ -312,7 +325,7 @@ export function TeamDialogs() {
             </div>
           )}
           <ul className="text-sm text-muted-foreground list-disc pl-5 space-y-1">
-            {removeTarget?.isPortal && <li>Portal access is revoked immediately. Any active session ends on their next request.</li>}
+            {removeTarget?.isPortal && !removeTarget?.otherCards?.length && <li>Portal access is revoked immediately. Any active session ends on their next request.</li>}
             {removeTarget?.isPortal && <li>Any pending portal invite is cancelled.</li>}
             <li>They'll disappear from team lists and share-target pickers for this project.</li>
             <li>Their past activity, document views, sign-offs and distribution records for this project are kept, shown with a "(removed from project)" note.</li>
@@ -321,7 +334,14 @@ export function TeamDialogs() {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setRemoveTarget(null)} disabled={removing}>Cancel</Button>
-          <Button variant="destructive" onClick={confirmRemove} isLoading={removing}>Remove</Button>
+          {removeTarget?.otherCards?.length ? (
+            <>
+              <Button variant="outline" className="text-destructive" onClick={() => confirmRemove(false)} disabled={removing} data-testid="remove-only-this-card">Remove only this card</Button>
+              <Button variant="destructive" onClick={() => confirmRemove(true)} isLoading={removing} data-testid="remove-all-cards">{removeTarget.otherCards.length === 1 ? "Remove both" : "Remove all"}</Button>
+            </>
+          ) : (
+            <Button variant="destructive" onClick={() => confirmRemove()} isLoading={removing}>Remove</Button>
+          )}
         </DialogFooter>
       </Dialog>
     </>

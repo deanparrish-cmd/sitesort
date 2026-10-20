@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { cardLabel } from "@/lib/card-label";
 import { useRoute, useLocation, Link } from "wouter";
 import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronUp, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, PinOff, StickyNote, Send, Loader2, History, Archive, Paperclip } from "lucide-react";
 import { ShareModal } from "@/components/share-modal";
@@ -1116,20 +1117,48 @@ export function useProjectDetailState() {
   // For a company removal, peopleNames is computed client-side from the
   // already-loaded `members` list (Feature: person-first cards) so the
   // confirmation can name everyone it will remove BEFORE the action runs.
-  type RemoveTarget = { kind: "member" | "company"; id: string; name: string; isPortal: boolean; peopleNames?: string[] };
+  // otherCards: the same person's other cards on this project (same login,
+  // e.g. a second firm). Removing one card passes their access to another, so
+  // the confirmation names them and offers to remove them too (Dean, binding,
+  // 2026-10-20). label = this card's firm, trade and date added.
+  type OtherCard = { memberId: string; personId: string | null; name: string; companyName?: string | null; contactType?: string | null; trades?: string[]; addedAt?: string; holdsLogin?: boolean };
+  type RemoveTarget = { kind: "member" | "company"; id: string; name: string; isPortal: boolean; peopleNames?: string[]; label?: string; otherCards?: OtherCard[] };
   const [removeTarget, setRemoveTarget] = useState<RemoveTarget | null>(null);
   const [removing, setRemoving] = useState(false);
 
-  async function confirmRemove() {
+  async function confirmRemove(alsoOtherCards = false) {
     if (!removeTarget) return;
     setRemoving(true);
     const token = localStorage.getItem("sitesort_token");
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+    const others = Array.from(new Map((removeTarget.otherCards ?? []).map(o => [o.memberId, o])).values());
+    if (alsoOtherCards) {
+      for (const o of others) {
+        const r = await fetch(`/api/projects/${projectId}/members/${o.memberId}`, { method: "DELETE", headers });
+        if (!r.ok && r.status !== 404) {
+          const err = await r.json().catch(() => ({}));
+          toast({ title: "Couldn't remove", description: err.message ?? "Please try again.", variant: "destructive" });
+          setRemoving(false);
+          await queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/members`] });
+          return;
+        }
+      }
+    }
     const url = removeTarget.kind === "company"
       ? `/api/projects/${projectId}/members/company/${removeTarget.id}`
       : `/api/projects/${projectId}/members/${removeTarget.id}`;
-    const res = await fetch(url, { method: "DELETE", headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    const res = await fetch(url, { method: "DELETE", headers });
     if (res.ok) {
-      toast({ title: "Removed from project", description: `${removeTarget.name} ${removeTarget.kind === "company" ? "and their people were" : "was"} removed from this project.` });
+      const body = await res.json().catch(() => ({}));
+      const passedIds: string[] = [body.accessPassedToPersonId, ...(body.accessPassedToPersonIds ?? [])].filter(Boolean);
+      const passedTo = others.filter(o => o.personId && passedIds.includes(o.personId));
+      const removedText = `${removeTarget.name} ${removeTarget.kind === "company" ? "and their people were" : "was"} removed from this project${alsoOtherCards && others.length ? ", including their other cards" : ""}.`;
+      toast({
+        title: "Removed from project",
+        description: passedTo.length
+          ? `${removedText} Portal access continues through their other card: ${passedTo.map(o => `${o.name} (${cardLabel(o)})`).join("; ")}.`
+          : removedText,
+      });
       setRemoveTarget(null);
       await queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/members`] });
     } else {

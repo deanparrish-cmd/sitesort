@@ -1,50 +1,73 @@
--- Move the remaining seeded addresses off domains we don't own (2026-10-16).
--- Run on PROD. Acme Construction's addresses (acme.com, sparks.co.uk,
--- plumbright.co.uk) are NOT here: deleting Acme on Monday removes them
--- (see reports/acme-delete-precheck.sql).
---
--- Left after Acme goes, all on domains we don't own:
---   bob@betabuilds.com      (Beta Builds)    betabuilds.com has no mail server: bounces
---   tom@testsitesort.co.uk  (Test SiteSort)  domain does not exist: hard bounce
---   test@sitesort.com       (Test SiteSort)  sitesort.com is NOT ours (ours is .co.uk)
---
--- New addresses use demo.sitesort.test: ".test" is reserved, nobody can own it,
--- and SiteSort never sends to it. Logins keep working with the new address.
---
--- HOW TO RUN: PART A first and read it. Then PART B (ends in ROLLBACK, so the
--- first run changes nothing). If C1 is empty and C2 looks right, change
--- ROLLBACK to COMMIT and run PART B again. Re-running is harmless.
+-- Move seeded addresses off domains we don't own. Run on PROD.
+-- Revised 2026-10-20 after Dean ran Part A on prod:
+--   * bob@betabuilds.com and tom@testsitesort.co.uk are NOT on prod (workspace
+--     only): dropped.
+--   * sitesort.com is on prod in people (1) AND subcontractors (1); the old
+--     Part B only updated people. Part B now covers every email column.
+--   * abcelectrical.com and lsls.com (people 1 + subcontractors 1 each): NOT in
+--     any seed code and NOT in the workspace copy (newest person there is
+--     30 Jul), so unconfirmed. Run PART A2 to see who they are; they are only
+--     added to Part B once confirmed as test data.
+-- sitesort.com is NOT ours (ours is sitesort.co.uk). New addresses use
+-- demo.sitesort.test: ".test" is reserved, nobody can own it, SiteSort never
+-- sends to it. email_log.to_address is history and is left alone.
+-- Email columns (checked 2026-10-20): users.email, people.email,
+-- subcontractors.contact_email, project_invites.email, share_access_requests.email.
 
--- ===================== PART A: read only =====================
--- A1. Every non-test email domain on prod. Anything that isn't a real person's
---     own address and isn't Acme's or listed above: tell me before PART B.
-WITH e AS (
-  SELECT 'users' AS tbl, lower(email) AS addr FROM users
-  UNION ALL SELECT 'people', lower(email) FROM people WHERE email IS NOT NULL
-  UNION ALL SELECT 'project_invites', lower(email) FROM project_invites WHERE email IS NOT NULL
-  UNION ALL SELECT 'subcontractors', lower(contact_email) FROM subcontractors WHERE contact_email IS NOT NULL
-  UNION ALL SELECT 'share_access_requests', lower(email) FROM share_access_requests WHERE email IS NOT NULL
-)
-SELECT split_part(addr, '@', 2) AS domain, tbl, count(*) AS n
-FROM e
-WHERE split_part(addr, '@', 2) !~ '(\.test|\.invalid|\.example|\.local|\.localhost)$'
-  AND split_part(addr, '@', 2) !~ '^(.+\.)?example\.(com|net|org)$'
+-- ===================== PART A2: read only, who are they =====================
+SELECT 'people' AS tbl, p.id, p.name AS name, p.email, p.phone, c.name AS owner_company,
+       s.company_name AS their_firm, (p.user_id IS NOT NULL) AS has_login,
+       p.created_at, p.archived_at
+FROM people p
+LEFT JOIN companies c ON c.id = p.company_id
+LEFT JOIN subcontractors s ON s.id = p.subcontractor_id
+WHERE lower(p.email) ~ '@(abcelectrical\.com|lsls\.com|sitesort\.com)$'
+UNION ALL
+SELECT 'subcontractors', s.id, s.contact_name, s.contact_email, s.contact_phone, c.name,
+       s.company_name, NULL, s.created_at, s.archived_at
+FROM subcontractors s
+LEFT JOIN companies c ON c.id = s.company_id
+WHERE lower(s.contact_email) ~ '@(abcelectrical\.com|lsls\.com|sitesort\.com)$'
+ORDER BY 4, 1;
+
+-- Has SiteSort ever emailed them, and are they on any project?
+SELECT lower(to_address) AS to_address, status, count(*) AS sends, max(created_at) AS last_sent
+FROM email_log
+WHERE lower(to_address) ~ '@(abcelectrical\.com|lsls\.com|sitesort\.com)$'
 GROUP BY 1, 2 ORDER BY 1, 2;
 
--- A2. Must return 0 rows: the new addresses don't exist yet.
-SELECT email FROM users WHERE lower(email) IN ('bob@demo.sitesort.test', 'tom@demo.sitesort.test');
+SELECT lower(p.email) AS email, pr.name AS project, pc.name AS project_company
+FROM people p
+JOIN project_members pm ON pm.person_id = p.id
+JOIN projects pr ON pr.id = pm.project_id
+JOIN companies pc ON pc.id = pr.company_id
+WHERE lower(p.email) ~ '@(abcelectrical\.com|lsls\.com|sitesort\.com)$'
+ORDER BY 1, 2;
 
--- ===================== PART B: the change =====================
+-- ===================== PART B: sitesort.com, every table =====================
+-- First run ends in ROLLBACK (changes nothing). If C1 is empty and C2 shows the
+-- 2 expected rows, run it again ending in COMMIT. Re-running is harmless.
 BEGIN;
-UPDATE users  SET email = 'bob@demo.sitesort.test'  WHERE lower(email) = 'bob@betabuilds.com';
-UPDATE users  SET email = 'tom@demo.sitesort.test'  WHERE lower(email) = 'tom@testsitesort.co.uk';
-UPDATE people SET email = 'test@demo.sitesort.test' WHERE lower(email) = 'test@sitesort.com';
+-- C0. Must return 0 rows: no login already uses a target address.
+SELECT u.email FROM users u
+WHERE lower(u.email) IN (SELECT split_part(lower(email), '@', 1) || '@demo.sitesort.test'
+                         FROM users WHERE lower(email) LIKE '%@sitesort.com');
 
--- C1. Must return 0 rows.
-SELECT email FROM users  WHERE lower(email) IN ('bob@betabuilds.com', 'tom@testsitesort.co.uk')
-UNION ALL SELECT email FROM people WHERE lower(email) = 'test@sitesort.com';
--- C2. The new addresses.
-SELECT 'users' AS tbl, email, name FROM users WHERE email LIKE '%@demo.sitesort.test'
-UNION ALL SELECT 'people', email, name FROM people WHERE email LIKE '%@demo.sitesort.test';
+UPDATE users                 SET email         = split_part(email, '@', 1)         || '@demo.sitesort.test' WHERE lower(email)         LIKE '%@sitesort.com';
+UPDATE people                SET email         = split_part(email, '@', 1)         || '@demo.sitesort.test' WHERE lower(email)         LIKE '%@sitesort.com';
+UPDATE subcontractors        SET contact_email = split_part(contact_email, '@', 1) || '@demo.sitesort.test' WHERE lower(contact_email) LIKE '%@sitesort.com';
+UPDATE project_invites       SET email         = split_part(email, '@', 1)         || '@demo.sitesort.test' WHERE lower(email)         LIKE '%@sitesort.com';
+UPDATE share_access_requests SET email         = split_part(email, '@', 1)         || '@demo.sitesort.test' WHERE lower(email)         LIKE '%@sitesort.com';
 
-ROLLBACK;  -- change to COMMIT once C1 is empty and C2 looks right
+-- C1. Must return 0 rows: nothing left on sitesort.com.
+SELECT 'users' AS tbl, email FROM users WHERE lower(email) LIKE '%@sitesort.com'
+UNION ALL SELECT 'people', email FROM people WHERE lower(email) LIKE '%@sitesort.com'
+UNION ALL SELECT 'subcontractors', contact_email FROM subcontractors WHERE lower(contact_email) LIKE '%@sitesort.com'
+UNION ALL SELECT 'project_invites', email FROM project_invites WHERE lower(email) LIKE '%@sitesort.com'
+UNION ALL SELECT 'share_access_requests', email FROM share_access_requests WHERE lower(email) LIKE '%@sitesort.com';
+-- C2. The moved rows. Expected: 2 (people 1, subcontractors 1).
+SELECT 'people' AS tbl, id, name, email FROM people WHERE email LIKE '%@demo.sitesort.test'
+UNION ALL SELECT 'subcontractors', id, company_name, contact_email FROM subcontractors WHERE contact_email LIKE '%@demo.sitesort.test'
+UNION ALL SELECT 'users', id, name, email FROM users WHERE email LIKE '%@demo.sitesort.test';
+
+ROLLBACK;  -- change to COMMIT once C0 and C1 are empty and C2 shows the 2 rows

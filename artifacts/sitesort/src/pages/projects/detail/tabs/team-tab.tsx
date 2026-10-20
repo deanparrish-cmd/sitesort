@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronUp, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, PinOff, StickyNote, Send, Loader2, History, Archive, Paperclip, Building2 } from "lucide-react";
 import { InsuranceCertZone } from "@/components/ui/insurance-cert-zone";
 import { formatDate, formatBytes, cn } from "@/lib/utils";
+import { cardLabel } from "@/lib/card-label";
 import { useDetail } from "../context";
 
 // Wherever a company name would render, self-employed contacts show
@@ -260,6 +261,15 @@ export function TeamTab() {
               {isSubcontractor && !opts.showCompanyInline && member.roleTitle && (
                 <p className="text-xs text-muted-foreground break-words">{member.roleTitle}</p>
               )}
+              {/* Same person, another card on this project (same login). */}
+              {member.otherCards?.length > 0 && (
+                <p className="mt-1 text-xs text-amber-700 dark:text-amber-400 break-words flex items-start gap-1" data-testid="team-other-cards">
+                  <Users className="w-3.5 h-3.5 shrink-0 mt-px" />
+                  <span>
+                    This card: {cardLabel(member)}. Also on this project as: {member.otherCards.map((o: any) => cardLabel(o)).join("; ")}
+                  </span>
+                </p>
+              )}
             </div>
           </div>
           <div className="flex flex-col items-end gap-1 min-w-0">
@@ -270,7 +280,11 @@ export function TeamTab() {
                 kinds of control, not one long wrapped strip. */}
             <div className="flex flex-wrap items-center justify-end gap-1.5 min-w-0">
               <Badge variant="secondary" className="text-[10px] capitalize">{member.role.replace('_', ' ')}</Badge>
-              {caps.canManageTeam && (
+              {caps.canManageTeam && (member.portalViaOtherCard ? (
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800 text-xs font-medium" data-testid="portal-via-other-card">
+                  On the portal through their other card
+                </span>
+              ) : (
                 <PortalStatusPill
                   projectId={projectId}
                   personName={member.name}
@@ -278,14 +292,14 @@ export function TeamTab() {
                   source={portalSource}
                   canManage={caps.canManageTeam}
                 />
-              )}
+              ))}
             </div>
             {caps.canManageTeam && member.userId && (
               <div className="flex flex-wrap items-center justify-end gap-1.5 min-w-0">
                 <ProjectManagerTogglePill projectId={projectId} memberId={member.id} checked={!!member.isProjectManager} />
               </div>
             )}
-            {caps.canManageTeam && (
+            {caps.canManageTeam && !member.portalViaOtherCard && (
               <div className="flex flex-wrap items-center justify-end gap-1.5 min-w-0">
                 <PortalPermissionToggles
                   projectId={projectId}
@@ -332,7 +346,7 @@ export function TeamTab() {
               {caps.canManageTeam && (
                 <button
                   type="button"
-                  onClick={() => setRemoveTarget({ kind: "member", id: member.id, name: member.name, isPortal: !!member.personId })}
+                  onClick={() => setRemoveTarget({ kind: "member", id: member.id, name: member.name, isPortal: !!member.personId, label: cardLabel(member), otherCards: member.otherCards ?? [] })}
                   className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-xs font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                   title="Remove from project"
                 >
@@ -577,6 +591,9 @@ export function TeamTab() {
                                           name: label,
                                           isPortal: groupMembers.some((m: any) => !!m.personId),
                                           peopleNames: groupMembers.map((m: any) => m.name),
+                                          // Their cards OUTSIDE this firm keep them on the project.
+                                          otherCards: groupMembers.flatMap((m: any) => (m.otherCards ?? [])
+                                            .filter((o: any) => !groupMembers.some((g: any) => g.id === o.memberId))),
                                         })}
                                         className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-xs font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                                         title="Remove company from project"

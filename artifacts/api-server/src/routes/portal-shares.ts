@@ -13,6 +13,7 @@ import { allow, INTERNAL_STAFF, projectApprover } from "../lib/authz";
 import { enqueuePushForMembers } from "../lib/push-triggers";
 import { isProjectApprover } from "../lib/project-authority";
 import { distributeDocumentToUser } from "../lib/document-distribution";
+import { borrowedLoginsByRow } from "../lib/linked-cards";
 
 const router: IRouter = Router();
 
@@ -52,7 +53,11 @@ async function acceptedMembers(projectId: string) {
 // moment they accept. The share dialog therefore lists pending people too
 // (flagged), instead of claiming "no portal members" while people are invited.
 async function portalAudienceMembers(projectId: string) {
+  // A linked card (another card of a login already on this project) counts
+  // under that login: shares to it reach them (lib/linked-cards.ts).
+  const borrowed = await borrowedLoginsByRow(projectId);
   const rows = await db.select({
+    memberId: projectMembersTable.id,
     personId: projectMembersTable.personId,
     userId: projectMembersTable.userId,
     subId: peopleTable.subcontractorId,
@@ -66,7 +71,8 @@ async function portalAudienceMembers(projectId: string) {
     ));
   return rows.map(r => ({
     personId: r.personId as string,
-    userId: (r.userId ?? null) as string | null,
+    userId: (r.userId ?? borrowed.get(r.memberId) ?? null) as string | null,
+    holdsLogin: r.userId !== null,
     trades: (r.trades ?? []) as string[],
   }));
 }
@@ -79,16 +85,17 @@ type PortalStatus = "member" | "invited" | "none";
 async function portalStatusByPerson(projectId: string, personIds: string[]): Promise<Map<string, PortalStatus>> {
   const out = new Map<string, PortalStatus>();
   if (personIds.length === 0) return out;
-  const [members, invites] = await Promise.all([
-    db.select({ personId: projectMembersTable.personId, userId: projectMembersTable.userId }).from(projectMembersTable)
+  const [members, invites, borrowed] = await Promise.all([
+    db.select({ id: projectMembersTable.id, personId: projectMembersTable.personId, userId: projectMembersTable.userId }).from(projectMembersTable)
       .where(and(eq(projectMembersTable.projectId, projectId), inArray(projectMembersTable.personId, personIds))),
     db.select({ personId: projectInvitesTable.personId }).from(projectInvitesTable)
       .where(and(eq(projectInvitesTable.projectId, projectId), inArray(projectInvitesTable.personId, personIds),
         eq(projectInvitesTable.status, "pending"), gt(projectInvitesTable.expiresAt, new Date()))),
+    borrowedLoginsByRow(projectId),
   ]);
   for (const id of personIds) out.set(id, "none");
   for (const i of invites) if (i.personId) out.set(i.personId, "invited");
-  for (const m of members) if (m.personId && m.userId) out.set(m.personId, "member");
+  for (const m of members) if (m.personId && (m.userId || borrowed.has(m.id))) out.set(m.personId, "member");
   return out;
 }
 
@@ -130,7 +137,7 @@ router.get("/projects/:projectId/portal-audience", authenticate, allow(projectAp
     res.json({
       trades: [...tradeSet].sort().map(trade => ({ trade, memberCount: counts.get(trade) ?? 0 })),
       members: members
-        .map(m => ({ personId: m.personId, userId: m.userId, accepted: m.userId !== null, portalStatus: statusByPerson.get(m.personId) ?? "none", name: nameByPerson.get(m.personId) ?? "Unknown", companyName: companyByPerson.get(m.personId) ?? undefined, trades: m.trades }))
+        .map(m => ({ personId: m.personId, userId: m.userId, holdsLogin: m.holdsLogin, accepted: m.userId !== null, portalStatus: statusByPerson.get(m.personId) ?? "none", name: nameByPerson.get(m.personId) ?? "Unknown", companyName: companyByPerson.get(m.personId) ?? undefined, trades: m.trades }))
         .sort((a, b) => (surnameByPerson.get(a.personId) ?? "").localeCompare(surnameByPerson.get(b.personId) ?? "")),
     });
   } catch (err) {
