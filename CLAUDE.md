@@ -185,4 +185,5 @@ Step 0 (trim CLAUDE.md) DONE 2026-10-21.
 - Playwright: block service workers (`serviceWorkers: "block"`) or `page.route` never sees `/version.json`.
 - GitHub push is not deploy; prod = Replit **Publish**. After every publish check prod `/api/health` `environment` (deployed true, email/jobs on, stripe live) and `/version.json`. Stripe is **LIVE**.
 - Prod checks are SQL files in `reports/` that Dean runs; record results here with "(Dean, prod, date)".
+- **Replit SQL console (Dean runs prod SQL there): NO `BEGIN`/`COMMIT`/`ROLLBACK`** (rejected; it wraps each run in its own transaction), so a rollback rehearsal is impossible. Write prod data changes as separate plain statements run one at a time: (1) SELECT preview of exactly the rows, (2) the bare UPDATE/DELETE, (3) a SELECT that always returns a row proving it took. The console says "OK" whether a statement changed 3 rows or 0, so the verify step is mandatory. Hit with the demo email fix (2026-10-20) and again 2026-10-21.
 - Session history: CLAUDE_ARCHIVE.md. Trim this file back below ~30 KB when it passes ~50 KB.
