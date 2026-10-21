@@ -183,7 +183,104 @@ router.get("/projects/:projectId/portal-shares", authenticate, allow(INTERNAL_ST
   }
 });
 
-type Audience = { type: "all" | "trade" | "person"; trade?: string; personId?: string };
+export type Audience = { type: "all" | "trade" | "person"; trade?: string; personId?: string };
+
+// Store share rules for an item and deliver them: tracked distribution rows,
+// in-app notification and push for documents, push for everything else. Used
+// by the share dialog (POST below) and by a new revision inheriting the rules
+// of the one it replaces (routes/documents.ts upload). `notice.title`
+// replaces the "New document: X" wording (a carried-forward revision says so).
+export async function applyPortalShare({ projectId, itemType, itemId, audiences, sharedByUserId, sendEmail, log, notice }: {
+  projectId: string; itemType: string; itemId: string; audiences: Audience[]; sharedByUserId: string;
+  sendEmail: boolean; log: (err: unknown) => void; notice?: { title: string };
+}): Promise<{ recipientCount: number; emailedCount: number }> {
+  for (const a of audiences) {
+    if (a.type === "trade" && !a.trade) continue;
+    if (a.type === "person" && !a.personId) continue;
+    await db.insert(portalSharesTable).values({
+      id: generateId(),
+      projectId: projectId,
+      itemType, itemId,
+      audienceType: a.type,
+      trade: a.type === "trade" ? a.trade! : null,
+      personId: a.type === "person" ? a.personId! : null,
+      sharedByUserId: sharedByUserId,
+    }).onConflictDoNothing();
+  }
+
+  // Registering in distribution tracking (documents only). Resolve currently
+  // accepted members matched by the audiences and create pending rows so the PM
+  // sees them immediately; members invited LATER are reached at portal read time
+  // via the stored rule (and get a distribution row lazily on first view).
+  // This is also the ONLY path for distributing a document to specific people —
+  // the old separate "Allocate" button/endpoint was folded in here, since this
+  // does everything Allocate did (tracked distribution + notification + email)
+  // PLUS creates the portal_shares visibility rule Allocate never did (without
+  // which a portal-only recipient couldn't actually see/sign off the doc
+  // in-portal even though they'd been "allocated" it).
+  // Resolve the exact accepted members this share reaches — same audience
+  // flattening for EVERY item type, so permits/photos notify just like
+  // documents (previously only documents pushed; a shared permit was silent).
+  const members = await acceptedMembers(projectId);
+  const targetUserIds = new Set<string>();
+  for (const a of audiences) {
+    if (a.type === "all") members.forEach(m => targetUserIds.add(m.userId));
+    else if (a.type === "person" && a.personId) members.filter(m => m.personId === a.personId).forEach(m => targetUserIds.add(m.userId));
+    else if (a.type === "trade" && a.trade) {
+      members.filter(m => m.trades.includes(a.trade!) || (m.trades.length === 0 && a.trade === SITE_STAFF))
+        .forEach(m => targetUserIds.add(m.userId));
+    }
+  }
+  const recipientCount = targetUserIds.size;
+  let emailedCount = 0;
+
+  if (itemType === "document") {
+    if (targetUserIds.size > 0) {
+      const doc = (await db.select({ id: documentsTable.id, name: documentsTable.name, type: documentsTable.type, version: documentsTable.version, requiresAcknowledgment: documentsTable.requiresAcknowledgment }).from(documentsTable).where(eq(documentsTable.id, itemId)).limit(1))[0];
+      const proj = (await db.select({ name: projectsTable.name }).from(projectsTable).where(eq(projectsTable.id, projectId)).limit(1))[0];
+      if (doc && proj) {
+        for (const userId of targetUserIds) {
+          const { emailed } = await distributeDocumentToUser(doc, proj.name, userId, notice?.title ?? `New document: ${doc.name}`, log, { sendEmail });
+          if (emailed) emailedCount++;
+        }
+
+        // Push notification (batched/debounced). A drawing shared to a
+        // trade/everyone/individual all funnel here — the audience is
+        // already flattened to the exact members it reaches.
+        const label = doc.type === "drawing" ? "drawing" : doc.type === "method_statement" ? "method statement" : doc.type === "safety" ? "safety document" : "document";
+        await enqueuePushForMembers([...targetUserIds], projectId, {
+          kind: "document", itemType: doc.type, itemId,
+          title: notice?.title ?? `New ${label}: ${doc.name}`,
+          projectName: proj.name,
+          // Shared with me is the only documents page the portal has (the
+          // per-type pages went in July; their links landed on "Section not
+          // found"). ?doc= scrolls to and rings the row.
+          deepLink: `/portal/shared?doc=${itemId}`,
+        });
+      }
+    }
+  } else if (targetUserIds.size > 0) {
+    // Non-document items (permits, photos): push only — there's no
+    // distribution/email tracking for these, but recipients must still get
+    // an alert that something new landed in their portal.
+    const proj = (await db.select({ name: projectsTable.name }).from(projectsTable).where(eq(projectsTable.id, projectId)).limit(1))[0];
+    let title = "New item shared with you";
+    if (itemType === "permit") {
+      const p = (await db.select({ type: permitsTable.type }).from(permitsTable).where(eq(permitsTable.id, itemId)).limit(1))[0];
+      title = p?.type ? `New permit: ${p.type}` : "New permit shared with you";
+    } else if (itemType === "photo") {
+      title = "New site photo shared with you";
+    }
+    await enqueuePushForMembers([...targetUserIds], projectId, {
+      kind: "site_update", itemType, itemId,
+      title,
+      projectName: proj?.name ?? "SiteSort",
+      deepLink: "/portal/shared",
+    });
+  }
+
+  return { recipientCount, emailedCount };
+}
 
 // POST /api/projects/:projectId/portal-shares — share an item to portal audiences.
 router.post("/projects/:projectId/portal-shares", authenticate, allow(projectApprover()), async (req, res) => {
@@ -193,7 +290,6 @@ router.post("/projects/:projectId/portal-shares", authenticate, allow(projectApp
     const { itemType, itemId, audiences, alsoEmail } = req.body as { itemType?: string; itemId?: string; audiences?: Audience[]; alsoEmail?: boolean };
     // Email only when the sender ticked "Also email them" (Dean, 2026-10-20).
     const sendEmail = alsoEmail === true;
-    let emailedCount = 0;
     if (!itemType || !ITEM_TYPES.has(itemType) || !itemId || !Array.isArray(audiences) || audiences.length === 0) {
       res.status(400).json({ error: "validation_error", message: "itemType (document|photo|permit), itemId and a non-empty audiences array are required." });
       return;
@@ -211,90 +307,11 @@ router.post("/projects/:projectId/portal-shares", authenticate, allow(projectApp
       .where(and(eq(table.id, itemId), eq(table.projectId, req.params.projectId))).limit(1))[0];
     if (!owned) { res.status(404).json({ error: "not_found", message: "Item not found in this project" }); return; }
 
-    for (const a of audiences) {
-      if (a.type === "trade" && !a.trade) continue;
-      if (a.type === "person" && !a.personId) continue;
-      await db.insert(portalSharesTable).values({
-        id: generateId(),
-        projectId: req.params.projectId,
-        itemType, itemId,
-        audienceType: a.type,
-        trade: a.type === "trade" ? a.trade! : null,
-        personId: a.type === "person" ? a.personId! : null,
-        sharedByUserId: req.user!.id,
-      }).onConflictDoNothing();
-    }
-
-    // Registering in distribution tracking (documents only). Resolve currently
-    // accepted members matched by the audiences and create pending rows so the PM
-    // sees them immediately; members invited LATER are reached at portal read time
-    // via the stored rule (and get a distribution row lazily on first view).
-    // This is also the ONLY path for distributing a document to specific people —
-    // the old separate "Allocate" button/endpoint was folded in here, since this
-    // does everything Allocate did (tracked distribution + notification + email)
-    // PLUS creates the portal_shares visibility rule Allocate never did (without
-    // which a portal-only recipient couldn't actually see/sign off the doc
-    // in-portal even though they'd been "allocated" it).
-    let recipientCount = 0;
-    // Resolve the exact accepted members this share reaches — same audience
-    // flattening for EVERY item type, so permits/photos notify just like
-    // documents (previously only documents pushed; a shared permit was silent).
-    const members = await acceptedMembers(req.params.projectId);
-    const targetUserIds = new Set<string>();
-    for (const a of audiences) {
-      if (a.type === "all") members.forEach(m => targetUserIds.add(m.userId));
-      else if (a.type === "person" && a.personId) members.filter(m => m.personId === a.personId).forEach(m => targetUserIds.add(m.userId));
-      else if (a.type === "trade" && a.trade) {
-        members.filter(m => m.trades.includes(a.trade!) || (m.trades.length === 0 && a.trade === SITE_STAFF))
-          .forEach(m => targetUserIds.add(m.userId));
-      }
-    }
-    recipientCount = targetUserIds.size;
-
-    if (itemType === "document") {
-      if (targetUserIds.size > 0) {
-        const doc = (await db.select({ id: documentsTable.id, name: documentsTable.name, type: documentsTable.type, version: documentsTable.version, requiresAcknowledgment: documentsTable.requiresAcknowledgment }).from(documentsTable).where(eq(documentsTable.id, itemId)).limit(1))[0];
-        const proj = (await db.select({ name: projectsTable.name }).from(projectsTable).where(eq(projectsTable.id, req.params.projectId)).limit(1))[0];
-        if (doc && proj) {
-          for (const userId of targetUserIds) {
-            const { emailed } = await distributeDocumentToUser(doc, proj.name, userId, `New document: ${doc.name}`, err => req.log.error({ err }, "Failed to send portal share email"), { sendEmail });
-            if (emailed) emailedCount++;
-          }
-
-          // Push notification (batched/debounced). A drawing shared to a
-          // trade/everyone/individual all funnel here — the audience is
-          // already flattened to the exact members it reaches.
-          const label = doc.type === "drawing" ? "drawing" : doc.type === "method_statement" ? "method statement" : doc.type === "safety" ? "safety document" : "document";
-          await enqueuePushForMembers([...targetUserIds], req.params.projectId, {
-            kind: "document", itemType: doc.type, itemId,
-            title: `New ${label}: ${doc.name}`,
-            projectName: proj.name,
-            // Shared with me is the only documents page the portal has (the
-            // per-type pages went in July; their links landed on "Section not
-            // found"). ?doc= scrolls to and rings the row.
-            deepLink: `/portal/shared?doc=${itemId}`,
-          });
-        }
-      }
-    } else if (targetUserIds.size > 0) {
-      // Non-document items (permits, photos): push only — there's no
-      // distribution/email tracking for these, but recipients must still get
-      // an alert that something new landed in their portal.
-      const proj = (await db.select({ name: projectsTable.name }).from(projectsTable).where(eq(projectsTable.id, req.params.projectId)).limit(1))[0];
-      let title = "New item shared with you";
-      if (itemType === "permit") {
-        const p = (await db.select({ type: permitsTable.type }).from(permitsTable).where(eq(permitsTable.id, itemId)).limit(1))[0];
-        title = p?.type ? `New permit: ${p.type}` : "New permit shared with you";
-      } else if (itemType === "photo") {
-        title = "New site photo shared with you";
-      }
-      await enqueuePushForMembers([...targetUserIds], req.params.projectId, {
-        kind: "site_update", itemType, itemId,
-        title,
-        projectName: proj?.name ?? "SiteSort",
-        deepLink: "/portal/shared",
-      });
-    }
+    const { recipientCount, emailedCount } = await applyPortalShare({
+      projectId: req.params.projectId, itemType, itemId, audiences,
+      sharedByUserId: req.user!.id, sendEmail,
+      log: err => req.log.error({ err }, "Failed to send portal share email"),
+    });
 
     res.status(201).json({ success: true, recipientCount, emailedCount });
   } catch (err) {

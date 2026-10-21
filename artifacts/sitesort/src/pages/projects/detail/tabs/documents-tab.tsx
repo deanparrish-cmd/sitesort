@@ -153,6 +153,13 @@ export function DocumentsTab() {
                         ? <Badge variant="destructive" className="text-[10px]"><AlertTriangle className="w-3 h-3 mr-1"/>SUPERSEDED</Badge>
                         : <Badge variant="success" className="text-[10px]">CURRENT</Badge>
                       }
+                      {doc.newRevisionNotShared && (
+                        <button type="button" onClick={() => setSharingDoc({ type: "document", id: doc.id, name: doc.name, version: doc.version, fileUrl: doc.fileUrl })}
+                          title="The revision this replaced was shared on the Team Portal. This one has reached nobody yet."
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-amber-300 bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800 text-[10px] font-semibold hover:bg-amber-200 transition-colors">
+                          <AlertTriangle className="w-3 h-3" />Not shared yet: share
+                        </button>
+                      )}
                       {cadBadge && <span className="font-mono bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 px-2 py-0.5 rounded text-[10px] font-bold">{cadBadge}</span>}
                       <span className="text-xs text-muted-foreground">{DOCUMENT_TYPE_LABELS[doc.type] ?? doc.type.replaceAll("_", " ")}</span>
                       <span className="text-xs text-muted-foreground">· {formatDate(doc.createdAt)}</span>
@@ -250,12 +257,19 @@ export function DocumentsTab() {
                       </td>
                       <td className="px-6 py-4">{DOCUMENT_TYPE_LABELS[doc.type] ?? doc.type.replaceAll("_", " ")}</td>
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="font-mono bg-muted px-2 py-0.5 rounded text-xs font-bold">{docRev(doc)}</span>
                           {isSuperseded ? (
                             <Badge variant="destructive" className="text-[10px]"><AlertTriangle className="w-3 h-3 mr-1"/> SUPERSEDED</Badge>
                           ) : (
                             <Badge variant="success" className="text-[10px]">CURRENT</Badge>
+                          )}
+                          {doc.newRevisionNotShared && (
+                            <button type="button" onClick={() => setSharingDoc({ type: "document", id: doc.id, name: doc.name, version: doc.version, fileUrl: doc.fileUrl })}
+                              title="The revision this replaced was shared on the Team Portal. This one has reached nobody yet."
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-amber-300 bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800 text-[10px] font-semibold hover:bg-amber-200 transition-colors">
+                              <AlertTriangle className="w-3 h-3" />Not shared yet: share
+                            </button>
                           )}
                           {cadBadgeLabel(doc.fileUrl, doc.name) && <span className="font-mono bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 px-2 py-0.5 rounded text-[10px] font-bold">{cadBadgeLabel(doc.fileUrl, doc.name)}</span>}
                         </div>

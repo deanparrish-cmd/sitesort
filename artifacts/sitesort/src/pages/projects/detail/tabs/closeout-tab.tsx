@@ -84,7 +84,7 @@ export function CloseoutTab() {
                           {
                             label: "Document sign-offs",
                             ok: closeout.checks.signOffs.ok,
-                            detail: closeout.checks.signOffs.ok ? "All complete" : `${closeout.checks.signOffs.pendingCount} pending`,
+                            detail: closeout.checks.signOffs.ok ? "All complete" : signOffDetail(closeout.checks.signOffs),
                             onClick: () => openTab("finances", { signoff: "pending" }, "section-docstatus"),
                           },
                         ].map(row => (
@@ -123,4 +123,13 @@ export function CloseoutTab() {
         </TabsContent>
     </>
   );
+}
+
+// "3 pending", "Latest revision not sent to 4", or both.
+function signOffDetail(s: { pendingCount: number; notSentCount?: number }): string {
+  const parts: string[] = [];
+  if (s.pendingCount > 0) parts.push(`${s.pendingCount} pending`);
+  if (s.notSentCount) parts.push(`latest revision not sent to ${s.notSentCount}`);
+  const text = parts.join(", ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }

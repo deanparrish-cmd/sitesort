@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import bcrypt from "bcryptjs";
 import { db } from "@workspace/db";
-import { documentsTable, documentDistributionsTable, usersTable, projectsTable, acknowledgmentAuditTable } from "@workspace/db/schema";
+import { documentsTable, documentDistributionsTable, usersTable, projectsTable, acknowledgmentAuditTable, portalSharesTable } from "@workspace/db/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
@@ -9,9 +9,10 @@ import { allow, COMPANY_MANAGER, INTERNAL_STAFF, projectApprover, projectApprove
 import { enqueuePushForMembers, acceptedPortalMemberUserIds } from "../lib/push-triggers";
 import { removedFromProjectUserIds } from "../lib/project-membership";
 import { isPinLockedOut, recordFailedPinAttempt, clearPinAttempts } from "../lib/pin-attempts";
-import { pinRequiredForDoc } from "../lib/signoff";
+import { pinRequiredForDoc, SUPERSEDED_SIGNOFF_MESSAGE } from "../lib/signoff";
 import { distributeDocumentToUser } from "../lib/document-distribution";
 import { isProjectApprover } from "../lib/project-authority";
+import { applyPortalShare, type Audience } from "./portal-shares";
 
 const router: IRouter = Router();
 
@@ -97,11 +98,17 @@ router.get("/projects/:projectId/documents", authenticate, allow(INTERNAL_STAFF)
     // list failing to load).
     const docIds = docs.map(d => d.id);
     const uploaderIds = [...new Set(docs.map(d => d.uploadedBy))];
-    const [allDists, uploaders] = docIds.length === 0 ? [[], []] : await Promise.all([
+    const ruleItemIds = [...new Set([...docIds, ...docs.map(d => d.previousVersionId).filter((x): x is string => !!x)])];
+    const [allDists, uploaders, ruleRows] = docIds.length === 0 ? [[], [], []] : await Promise.all([
       db.select({ documentId: documentDistributionsTable.documentId, userId: documentDistributionsTable.userId, status: documentDistributionsTable.status })
         .from(documentDistributionsTable).where(inArray(documentDistributionsTable.documentId, docIds)),
       db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(inArray(usersTable.id, uploaderIds)),
+      db.select({ itemId: portalSharesTable.itemId }).from(portalSharesTable)
+        .where(and(eq(portalSharesTable.itemType, "document"), inArray(portalSharesTable.itemId, ruleItemIds))),
     ]);
+    // A current revision with no portal shares while the one it replaced had
+    // some has reached nobody on the portal: the documents tab flags it.
+    const sharedOnPortal = new Set(ruleRows.map(r => r.itemId));
     const distsByDoc = new Map<string, { userId: string; status: string }[]>();
     for (const r of allDists) {
       const list = distsByDoc.get(r.documentId) ?? [];
@@ -133,6 +140,8 @@ router.get("/projects/:projectId/documents", authenticate, allow(INTERNAL_STAFF)
         createdAt: d.createdAt.toISOString(),
         distributionSummary: getDistSummary(dists),
         myDistributionStatus: myDist?.status ?? null,
+        newRevisionNotShared: d.status === "current" && d.type !== "safety" && !sharedOnPortal.has(d.id)
+          && !!d.previousVersionId && sharedOnPortal.has(d.previousVersionId),
       };
     });
 
@@ -153,7 +162,7 @@ router.post("/projects/:projectId/documents", authenticate, allow(projectApprove
       return;
     }
 
-    const { name, type, fileUrl, fileSize, requiresAcknowledgment, requirePinSignoff, publicAccess, distributeToUserIds, supersededDocumentId, revision } = req.body;
+    const { name, type, fileUrl, fileSize, requiresAcknowledgment, requirePinSignoff, publicAccess, distributeToUserIds, supersededDocumentId, revision, carryShareIds } = req.body;
     if (!name || !type || !fileUrl) {
       res.status(400).json({ error: "validation_error", message: "name, type, fileUrl required" });
       return;
@@ -161,6 +170,11 @@ router.post("/projects/:projectId/documents", authenticate, allow(projectApprove
 
     let previousVersionId: string | null = null;
     let newVersion = 1;
+    // The revision this upload replaces, and how it was picked: "choice" = the
+    // uploader chose it in the Supersedes list, "name" = same name as a current
+    // document (automatic). Decides whether its portal shares carry forward.
+    let previous: typeof documentsTable.$inferSelect | null = null;
+    let supersededBy: "choice" | "name" | null = null;
 
     if (supersededDocumentId) {
       const toSupersede = await db.select().from(documentsTable)
@@ -173,6 +187,8 @@ router.post("/projects/:projectId/documents", authenticate, allow(projectApprove
       if (toSupersede.length > 0) {
         previousVersionId = toSupersede[0].id;
         newVersion = toSupersede[0].version + 1;
+        previous = toSupersede[0];
+        supersededBy = "choice";
         await db.update(documentsTable).set({ status: "superseded" }).where(eq(documentsTable.id, toSupersede[0].id));
       }
     } else {
@@ -183,6 +199,8 @@ router.post("/projects/:projectId/documents", authenticate, allow(projectApprove
         const prev = existing[0];
         previousVersionId = prev.id;
         newVersion = prev.version + 1;
+        previous = prev;
+        supersededBy = "name";
         await db.update(documentsTable).set({ status: "superseded" }).where(eq(documentsTable.id, prev.id));
       }
     }
@@ -192,6 +210,11 @@ router.post("/projects/:projectId/documents", authenticate, allow(projectApprove
     // version. Non-drawings only carry a revision if one was explicitly supplied.
     const trimmedRevision = typeof revision === "string" && revision.trim() ? revision.trim() : null;
     const docRevision = trimmedRevision ?? (type === "drawing" ? versionToRevision(newVersion) : null);
+
+    // A new revision keeps the sign-off requirement of the one it replaces
+    // (Dean, 2026-10-21): it can add a requirement, never drop one.
+    const needsAck = Boolean(requiresAcknowledgment) || (previous?.requiresAcknowledgment ?? false);
+    const needsPin = Boolean(requirePinSignoff) || (previous?.requirePinSignoff ?? false);
 
     const docId = generateId();
     await db.insert(documentsTable).values({
@@ -206,8 +229,8 @@ router.post("/projects/:projectId/documents", authenticate, allow(projectApprove
       fileSize: fileSize ?? 0,
       previousVersionId,
       status: "current",
-      requiresAcknowledgment: requiresAcknowledgment ?? false,
-      requirePinSignoff: requirePinSignoff ?? false,
+      requiresAcknowledgment: needsAck,
+      requirePinSignoff: needsPin,
       publicAccess: publicAccess ?? false,
     });
 
@@ -230,8 +253,43 @@ router.post("/projects/:projectId/documents", authenticate, allow(projectApprove
       } catch (e) { req.log.warn({ e }, "safety-notice push enqueue failed"); }
     }
 
+    // Revision carry-forward (Dean, 2026-10-21): the new revision reaches the
+    // people the old one was shared with. Chosen in the Supersedes list: every
+    // rule of the old revision carries unless `carryShareIds` narrows it (the
+    // upload dialog sends the rules left ticked). Replaced only because the
+    // name matched: NOTHING carries unless the uploader confirmed the list
+    // (`carryShareIds` sent), because a wrong file auto-replacing an unrelated
+    // document must never inherit its audience silently. Safety documents are
+    // visible to every member anyway.
+    let portalCarryForward: { previousRules: number; carried: number; recipientCount: number; notCarriedReason?: "name_match" | "declined" } | null = null;
+    if (previous && type !== "safety") {
+      const rules = await db.select().from(portalSharesTable).where(and(
+        eq(portalSharesTable.projectId, req.params.projectId),
+        eq(portalSharesTable.itemType, "document"),
+        eq(portalSharesTable.itemId, previous.id),
+      ));
+      if (rules.length > 0) {
+        const confirmed = Array.isArray(carryShareIds) ? new Set((carryShareIds as unknown[]).filter((x): x is string => typeof x === "string")) : null;
+        const chosen = confirmed ? rules.filter(r => confirmed.has(r.id)) : supersededBy === "choice" ? rules : [];
+        let recipientCount = 0;
+        if (chosen.length > 0) {
+          ({ recipientCount } = await applyPortalShare({
+            projectId: req.params.projectId, itemType: "document", itemId: docId,
+            audiences: chosen.map(r => ({ type: r.audienceType as Audience["type"], trade: r.trade ?? undefined, personId: r.personId ?? undefined })),
+            sharedByUserId: req.user!.id, sendEmail: false,
+            log: err => req.log.error({ err }, "Carry-forward notification failed"),
+            notice: { title: `New revision: ${name}${docRevision ? ` Rev ${docRevision}` : ` v${newVersion}`}` },
+          }));
+        }
+        portalCarryForward = {
+          previousRules: rules.length, carried: chosen.length, recipientCount,
+          ...(chosen.length === 0 ? { notCarriedReason: supersededBy === "name" && !confirmed ? "name_match" as const : "declined" as const } : {}),
+        };
+      }
+    }
+
     if (distributeToUserIds && Array.isArray(distributeToUserIds)) {
-      const doc = { id: docId, name, version: newVersion, requiresAcknowledgment: requiresAcknowledgment ?? false };
+      const doc = { id: docId, name, version: newVersion, requiresAcknowledgment: needsAck };
       for (const userId of distributeToUserIds) {
         // Tracking + in-app notification only; email goes only on an explicit
         // "Also email them" from the share dialog (Dean, 2026-10-20).
@@ -257,12 +315,13 @@ router.post("/projects/:projectId/documents", authenticate, allow(projectApprove
       fileSize: fileSize ?? 0,
       previousVersionId,
       status: "current",
-      requiresAcknowledgment: requiresAcknowledgment ?? false,
-      requirePinSignoff: requirePinSignoff ?? false,
-      pinRequired: pinRequiredForDoc({ type, requirePinSignoff: requirePinSignoff ?? false }),
+      requiresAcknowledgment: needsAck,
+      requirePinSignoff: needsPin,
+      pinRequired: pinRequiredForDoc({ type, requirePinSignoff: needsPin }),
       publicAccess: publicAccess ?? false,
       createdAt: new Date().toISOString(),
       distributionSummary: getDistSummary(dists),
+      portalCarryForward,
     });
   } catch (err) {
     req.log.error({ err }, "Upload document error");
@@ -356,7 +415,7 @@ router.post("/documents/:documentId/acknowledge", authenticate, allow(INTERNAL_S
     const { pin } = req.body ?? {};
 
     // Load the document and verify tenant access.
-    const docs = await db.select({ id: documentsTable.id, type: documentsTable.type, projectId: documentsTable.projectId, version: documentsTable.version, requirePinSignoff: documentsTable.requirePinSignoff })
+    const docs = await db.select({ id: documentsTable.id, type: documentsTable.type, projectId: documentsTable.projectId, version: documentsTable.version, requirePinSignoff: documentsTable.requirePinSignoff, status: documentsTable.status })
       .from(documentsTable).where(eq(documentsTable.id, req.params.documentId)).limit(1);
     if (!docs[0]) {
       res.status(404).json({ error: "not_found", message: "Document not found" });
@@ -367,6 +426,13 @@ router.post("/documents/:documentId/acknowledge", authenticate, allow(INTERNAL_S
       .limit(1);
     if (!project[0]) {
       res.status(404).json({ error: "not_found", message: "Document not found" });
+      return;
+    }
+
+    // Only the latest revision can be signed off: a sign-off of a replaced
+    // method statement is a sign-off of the wrong document.
+    if (docs[0].status !== "current") {
+      res.status(409).json({ error: "superseded", message: SUPERSEDED_SIGNOFF_MESSAGE });
       return;
     }
 

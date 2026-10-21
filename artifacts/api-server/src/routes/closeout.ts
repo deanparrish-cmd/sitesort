@@ -14,6 +14,7 @@ import { expiryStatus } from "../lib/expiry";
 import { issueCategoryFilter } from "../lib/accountability";
 import { isPinLockedOut, recordFailedPinAttempt, clearPinAttempts } from "../lib/pin-attempts";
 import { isProjectApprover } from "../lib/project-authority";
+import { outstandingSignOffs } from "../lib/outstanding-signoffs";
 
 const router: IRouter = Router();
 
@@ -55,21 +56,17 @@ async function computeReadiness(projectId: string) {
     .where(and(eq(permitsTable.projectId, projectId), isNull(permitsTable.archivedAt)));
   const expiredPermits = permits.filter(p => expiryStatus(p.expiryDate) === "expired").length;
 
-  // 4. Document sign-offs — current docs in this project with pending distributions.
-  const currentDocs = await db.select({ id: documentsTable.id }).from(documentsTable)
-    .where(and(eq(documentsTable.projectId, projectId), eq(documentsTable.status, "current")));
-  let pendingSignOffs = 0;
-  for (const doc of currentDocs) {
-    const pending = await db.select({ total: count() }).from(documentDistributionsTable)
-      .where(and(eq(documentDistributionsTable.documentId, doc.id), eq(documentDistributionsTable.status, "pending")));
-    pendingSignOffs += Number(pending[0]?.total ?? 0);
-  }
+  // 4. Document sign-offs on the LATEST revision of each document, including a
+  // new revision that reached nobody (lib/outstanding-signoffs.ts).
+  const outstanding = await outstandingSignOffs([projectId]);
+  const pendingSignOffs = outstanding.reduce((a, d) => a + d.pendingCount, 0);
+  const notSentSignOffs = outstanding.reduce((a, d) => a + d.notSentCount, 0);
 
   const checks = {
     openIssues: { count: openIssues, ok: openIssues === 0 },
     insurance: { subsWithIssues: subsWithInsuranceIssues, subsTotal: subIds.length, ok: subsWithInsuranceIssues === 0 },
     permits: { expiredCount: expiredPermits, ok: expiredPermits === 0 },
-    signOffs: { pendingCount: pendingSignOffs, ok: pendingSignOffs === 0 },
+    signOffs: { pendingCount: pendingSignOffs, notSentCount: notSentSignOffs, ok: pendingSignOffs + notSentSignOffs === 0 },
   };
   const ready = checks.openIssues.ok && checks.insurance.ok && checks.permits.ok && checks.signOffs.ok;
   return { checks, ready };

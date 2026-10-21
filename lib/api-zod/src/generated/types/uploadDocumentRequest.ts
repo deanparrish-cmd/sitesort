@@ -18,4 +18,6 @@ export interface UploadDocumentRequest {
   distributeToUserIds?: string[];
   supersededDocumentId?: string | null;
   revision?: string | null;
+  /** Portal share rules of the replaced revision to carry to this one. Omitted = all of them when the uploader chose the revision in Supersedes, none when it was replaced only because the name matched. */
+  carryShareIds?: string[];
 }

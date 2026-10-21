@@ -7,7 +7,7 @@ import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { openDocument, cadBadgeLabel } from "@/lib/documents";
 import { formatDate, formatBytes, cn } from "@/lib/utils";
 import { useDetail } from "../context";
-import { docRev } from "../use-project-detail";
+import { docRev, type CarryRule } from "../use-project-detail";
 
 // Safety-critical document types always require a PIN to sign off (mirrors the server's list).
 const PIN_ALWAYS_TYPES = new Set(["method_statement", "permit", "safety"]);
@@ -58,6 +58,17 @@ export function DocumentDialogs() {
     editDocRequirePin,
     setEditDocRequirePin,
     supersedableDocs,
+    carryFrom,
+    carryRules,
+    carryRulesLoading,
+    carryRulesFailed,
+    carryUnticked,
+    toggleCarryRule,
+    carryNameChoice,
+    setCarryNameChoice,
+    carryError,
+    inheritsAck,
+    inheritsPin,
     onUpload,
     saveDocEdit,
   } = useDetail();
@@ -350,6 +361,51 @@ export function DocumentDialogs() {
               <p className="text-xs text-muted-foreground mt-1">Leave blank to auto-assign the next letter; set it to match the drawing's title block.</p>
             </div>
           )}
+          {carryFrom && watchedType !== "safety" && (carryFrom.mode === "name" || carryRules.length > 0 || carryRulesLoading || carryRulesFailed) && (
+            <div className={cn("rounded-lg border p-3 space-y-2 min-w-0", carryFrom.mode === "name" ? "border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800" : "bg-muted/30")}>
+              {carryFrom.mode === "name" && (
+                <p className="text-sm font-medium flex items-start gap-1.5 break-words min-w-0">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
+                  <span className="min-w-0">A current document is already called "{carryFrom.doc.name}" ({docRev(carryFrom.doc)}). Uploading this replaces it.</span>
+                </p>
+              )}
+              {carryRulesLoading ? (
+                <p className="text-xs text-muted-foreground">Checking who {docRev(carryFrom.doc)} was shared with...</p>
+              ) : carryRulesFailed ? (
+                <p className="text-xs text-destructive">
+                  Couldn't load who the previous revision was shared with. {carryFrom.mode === "choice" ? "This revision will go to all of them." : "This revision won't be shared. Share it after uploading."}
+                </p>
+              ) : carryRules.length > 0 && (
+                <>
+                  <p className="text-sm font-semibold">{docRev(carryFrom.doc)} is shared on the Team Portal with:</p>
+                  <ul className="space-y-1.5">
+                    {carryRules.map(r => (
+                      <li key={r.id} className="flex items-start gap-2 min-w-0">
+                        <input type="checkbox" id={`carry-${r.id}`} checked={!carryUnticked.has(r.id)} onChange={() => toggleCarryRule(r.id)}
+                          className="w-4 h-4 mt-0.5 shrink-0 text-accent rounded border-input focus:ring-accent" />
+                        <label htmlFor={`carry-${r.id}`} className="text-sm break-words min-w-0">{carryRuleLabel(r)}</label>
+                      </li>
+                    ))}
+                  </ul>
+                  {carryFrom.mode === "choice" ? (
+                    <p className="text-xs text-muted-foreground">This revision goes to everyone ticked, with an alert. Untick anyone who shouldn't get it.</p>
+                  ) : (
+                    <fieldset className="space-y-1.5 pt-1">
+                      <legend className="text-sm font-semibold mb-1">Share this revision with them?</legend>
+                      <label htmlFor="carry-choice-share" className="flex items-start gap-2 text-sm">
+                        <input type="radio" id="carry-choice-share" name="carry-choice" checked={carryNameChoice === "share"} onChange={() => setCarryNameChoice("share")} className="mt-0.5 shrink-0" />
+                        <span>Yes, share it with the people ticked</span>
+                      </label>
+                      <label htmlFor="carry-choice-hold" className="flex items-start gap-2 text-sm">
+                        <input type="radio" id="carry-choice-hold" name="carry-choice" checked={carryNameChoice === "hold"} onChange={() => setCarryNameChoice("hold")} className="mt-0.5 shrink-0" />
+                        <span>No, don't share it yet</span>
+                      </label>
+                    </fieldset>
+                  )}
+                </>
+              )}
+            </div>
+          )}
           <div>
             <label className="text-sm font-semibold mb-2 block">File</label>
             <FileDropZone
@@ -358,8 +414,11 @@ export function DocumentDialogs() {
             />
           </div>
           <div className="flex items-center gap-2 p-4 bg-muted/30 border rounded-lg mt-4">
-            <input type="checkbox" id="reqAck" {...register("requiresAcknowledgment")} className="w-4 h-4 text-accent rounded border-input focus:ring-accent" />
-            <label htmlFor="reqAck" className="text-sm font-medium">Require team members to digitally sign-off</label>
+            <input type="checkbox" id="reqAck" {...register("requiresAcknowledgment")} disabled={inheritsAck} className="w-4 h-4 shrink-0 text-accent rounded border-input focus:ring-accent" />
+            <label htmlFor="reqAck" className="text-sm font-medium">
+              Require team members to digitally sign-off
+              {inheritsAck && <span className="block text-xs text-muted-foreground font-normal">Required: the revision this replaces needed sign-off.</span>}
+            </label>
           </div>
           {!!watch("requiresAcknowledgment") && (
             PIN_ALWAYS_TYPES.has(watchedType) ? (
@@ -369,14 +428,15 @@ export function DocumentDialogs() {
               </p>
             ) : (
               <div className="flex items-start gap-2 p-4 bg-muted/30 border rounded-lg mt-2">
-                <input type="checkbox" id="reqPin" {...register("requirePinSignoff")} className="w-4 h-4 mt-0.5 text-accent rounded border-input focus:ring-accent" />
+                <input type="checkbox" id="reqPin" {...register("requirePinSignoff")} disabled={inheritsPin} className="w-4 h-4 mt-0.5 text-accent rounded border-input focus:ring-accent" />
                 <label htmlFor="reqPin" className="text-sm">
                   <span className="font-medium">Require a PIN to sign off</span>
-                  <span className="block text-xs text-muted-foreground">Off by default; signers just tap a single confirmation. Turn on for extra assurance.</span>
+                  <span className="block text-xs text-muted-foreground">{inheritsPin ? "Required: the revision this replaces needed a PIN." : "Off by default; signers just tap a single confirmation. Turn on for extra assurance."}</span>
                 </label>
               </div>
             )
           )}
+          {carryError && <p role="alert" className="text-sm text-destructive">{carryError}</p>}
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => setIsUploadOpen(false)}>Cancel</Button>
             <Button type="submit" variant="accent" isLoading={uploadMutation.isPending}>Upload</Button>
@@ -385,4 +445,11 @@ export function DocumentDialogs() {
       </Dialog>
     </>
   );
+}
+
+function carryRuleLabel(r: CarryRule): string {
+  if (r.audienceType === "all") return "Everyone on the portal";
+  if (r.audienceType === "trade") return `Trade: ${r.trade ?? "Unknown"}`;
+  const who = `${r.personName ?? "Unknown"}${r.personCompany ? ` · ${r.personCompany}` : ""}`;
+  return r.portalStatus === "invited" ? `${who} (invite pending)` : r.portalStatus === "none" ? `${who} (not on the portal)` : who;
 }

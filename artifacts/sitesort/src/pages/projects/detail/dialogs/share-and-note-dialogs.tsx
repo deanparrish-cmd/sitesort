@@ -14,6 +14,7 @@ export function ShareAndNoteDialogs() {
     setSharingNote,
     sharingDoc,
     setSharingDoc,
+    refetchDocs,
     sharingContact,
     setSharingContact,
   } = useDetail();
@@ -22,7 +23,8 @@ export function ShareAndNoteDialogs() {
     <>
       <ShareModal
         open={!!sharingDoc}
-        onClose={() => setSharingDoc(null)}
+        // Refetch documents on close so a "Not shared yet" marker clears once shared.
+        onClose={() => { if (sharingDoc?.type === "document") void refetchDocs(); setSharingDoc(null); }}
         entityType={sharingDoc?.type ?? "document"}
         entityId={sharingDoc?.id ?? ""}
         entityName={sharingDoc?.name ?? ""}

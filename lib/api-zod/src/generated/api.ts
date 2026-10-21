@@ -382,6 +382,12 @@ export const ListDocumentsResponseItem = zod.object({
   myDistributionStatus: zod
     .enum(["pending", "viewed", "acknowledged"])
     .nullish(),
+  newRevisionNotShared: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Current revision with no portal shares while the revision it replaced had some, so it has reached nobody on the portal.",
+    ),
 });
 export const ListDocumentsResponse = zod.array(ListDocumentsResponseItem);
 
@@ -410,6 +416,12 @@ export const UploadDocumentBody = zod.object({
   distributeToUserIds: zod.array(zod.string()).optional(),
   supersededDocumentId: zod.string().nullish(),
   revision: zod.string().nullish(),
+  carryShareIds: zod
+    .array(zod.string())
+    .optional()
+    .describe(
+      "Portal share rules of the replaced revision to carry to this one. Omitted = all of them when the uploader chose the revision in Supersedes, none when it was replaced only because the name matched.",
+    ),
 });
 
 /**
@@ -464,6 +476,12 @@ export const GetDocumentResponse = zod
     myDistributionStatus: zod
       .enum(["pending", "viewed", "acknowledged"])
       .nullish(),
+    newRevisionNotShared: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Current revision with no portal shares while the revision it replaced had some, so it has reached nobody on the portal.",
+      ),
   })
   .and(
     zod.object({
@@ -3092,6 +3110,12 @@ export const GetQrContentResponse = zod.object({
       myDistributionStatus: zod
         .enum(["pending", "viewed", "acknowledged"])
         .nullish(),
+      newRevisionNotShared: zod
+        .boolean()
+        .optional()
+        .describe(
+          "Current revision with no portal shares while the revision it replaced had some, so it has reached nobody on the portal.",
+        ),
     }),
   ),
 });

@@ -8,6 +8,7 @@ import { isValidTimeZone, isValidCloseTime, safeTz, siteTzLabel } from "../lib/s
 import { isProjectApprover, COMPANY_MANAGER_ROLES } from "../lib/project-authority";
 import { allow, COMPANY_MANAGER, INTERNAL_STAFF, projectApprover } from "../lib/authz";
 import { logActivity } from "../lib/activity";
+import { outstandingSignOffs } from "../lib/outstanding-signoffs";
 
 const router: IRouter = Router();
 
@@ -27,12 +28,10 @@ async function computeProgress(projectId: string): Promise<number> {
 // it — see CLAUDE.md's deep-link rule). Ambiguous (multiple documents) →
 // null, and the tab-level link is the correct fallback.
 async function docAlertsFor(projectId: string): Promise<{ alertCount: number; alertDocumentId: string | null }> {
-  const rows = await db.select({ documentId: documentDistributionsTable.documentId })
-    .from(documentDistributionsTable)
-    .innerJoin(documentsTable, eq(documentsTable.id, documentDistributionsTable.documentId))
-    .where(and(eq(documentsTable.projectId, projectId), eq(documentDistributionsTable.status, "pending")));
-  const uniqueDocIds = [...new Set(rows.map(r => r.documentId))];
-  return { alertCount: rows.length, alertDocumentId: uniqueDocIds.length === 1 ? uniqueDocIds[0] : null };
+  // Latest revisions only, plus a new revision that reached nobody (same rule as close-out).
+  const docs = await outstandingSignOffs([projectId]);
+  const alertCount = docs.reduce((a, d) => a + d.pendingCount + d.notSentCount, 0);
+  return { alertCount, alertDocumentId: docs.length === 1 ? docs[0].documentId : null };
 }
 
 type ActivityItem = { id: string; type: string; description: string; userId: string | null; userName: string | null; createdAt: string };

@@ -54,7 +54,9 @@ describe("portal revision check", () => {
   it("after a new revision, the old one points at it, and says whether it's shared", async () => {
     const up = await api(`/projects/${co.projectId}/documents`, {
       method: "POST", token: admin,
-      body: { name: "GF Plan", type: "drawing", fileUrl: `/api/uploads/test-${randomUUID()}.pdf`, fileSize: 100, supersededDocumentId: revA, revision: "C" },
+      // carryShareIds: [] = shared with nobody, so "not shared with you" can be
+      // checked (a chosen supersede otherwise carries the shares forward).
+      body: { name: "GF Plan", type: "drawing", fileUrl: `/api/uploads/test-${randomUUID()}.pdf`, fileSize: 100, supersededDocumentId: revA, revision: "C", carryShareIds: [] },
     });
     expect(up.status).toBe(201);
     revB = up.json.id;

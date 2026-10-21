@@ -357,7 +357,8 @@ function DocRow({ doc, section, unseen, focused, signOff }: { doc: any; section:
     }
   };
 
-  const needsSignOff = doc.requiresAcknowledgment && doc.myStatus !== "acknowledged";
+  // A replaced revision can never be signed off (the server refuses it too).
+  const needsSignOff = doc.requiresAcknowledgment && doc.myStatus !== "acknowledged" && !supersededNow;
   const signedOff = doc.requiresAcknowledgment && doc.myStatus === "acknowledged";
   // "New" is PER-DOCUMENT, not per-visit: a document stays New until this member
   // actually opens it (server-recorded viewed_at), then flips to a "Received

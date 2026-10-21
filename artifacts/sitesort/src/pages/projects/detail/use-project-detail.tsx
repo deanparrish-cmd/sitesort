@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from "react";
+import { ToastAction } from "@/components/ui/toast";
 import { cardLabel } from "@/lib/card-label";
 import { useRoute, useLocation, Link } from "wouter";
 import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronUp, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, PinOff, StickyNote, Send, Loader2, History, Archive, Paperclip } from "lucide-react";
 import { ShareModal } from "@/components/share-modal";
 import { openDocument } from "@/lib/documents";
 import { DailyReportDetail, type ManagerReport } from "@/components/daily-report-detail";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import {
   useGetProject,
   getGetProjectQueryKey,
@@ -665,7 +666,7 @@ export function useProjectDetailState() {
     openIssues: { count: number; ok: boolean };
     insurance: { subsWithIssues: number; subsTotal: number; ok: boolean };
     permits: { expiredCount: number; ok: boolean };
-    signOffs: { pendingCount: number; ok: boolean };
+    signOffs: { pendingCount: number; notSentCount?: number; ok: boolean };
   };
   type CloseoutRecord = { id: string; signedOffByName: string; signedOffByRole: string; note: string | null; createdAt: string };
   type CloseoutData = { status: string; isComplete: boolean; ready: boolean; checks: CloseoutChecks; closeout: CloseoutRecord | null };
@@ -1206,10 +1207,68 @@ export function useProjectDetailState() {
   const watchedType = watch("type") ?? "drawing";
   const supersedableDocs = (documents ?? []).filter(d => d.status === "current" && d.type === watchedType);
 
+  // Revision carry-forward (2026-10-21). The revision this upload replaces:
+  // chosen in Supersedes ("choice"), or a current document with exactly the
+  // same name, which the server replaces automatically ("name"). Its portal
+  // share rules are listed pre-ticked; on the name path the uploader must
+  // say whether to share, because a wrong file must never inherit an
+  // unrelated document's audience silently (Dean).
+  const watchedName = (watch("name") ?? "") as string;
+  const watchedSupersede = (watch("supersededDocumentId") ?? "") as string;
+  const carryFrom: { doc: NonNullable<typeof documents>[number]; mode: "choice" | "name" } | null = (() => {
+    const current = (documents ?? []).filter(d => d.status === "current");
+    if (watchedSupersede) {
+      const d = current.find(x => x.id === watchedSupersede);
+      return d ? { doc: d, mode: "choice" } : null;
+    }
+    const d = watchedName ? current.find(x => x.name === watchedName) : undefined;
+    return d ? { doc: d, mode: "name" } : null;
+  })();
+  const carryFromId = carryFrom?.doc.id ?? null;
+  const carryRulesQuery = useQuery({
+    queryKey: ["carry-forward-rules", projectId, carryFromId],
+    enabled: isUploadOpen && !!carryFromId && watchedType !== "safety",
+    queryFn: async () => {
+      const res = await fetch(`/api/projects/${projectId}/portal-shares?itemType=document&itemId=${carryFromId}`, { headers: authHeaders() });
+      if (!res.ok) throw new Error(`portal-shares ${res.status}`);
+      return (await res.json()) as CarryRule[];
+    },
+  });
+  const carryRules = watchedType === "safety" ? [] : (carryRulesQuery.data ?? []);
+  const [carryUnticked, setCarryUnticked] = useState<Set<string>>(new Set());
+  const [carryNameChoice, setCarryNameChoice] = useState<"share" | "hold" | null>(null);
+  const [carryError, setCarryError] = useState<string | null>(null);
+  useEffect(() => { setCarryUnticked(new Set()); setCarryNameChoice(null); setCarryError(null); }, [carryFromId, isUploadOpen]);
+  const toggleCarryRule = (id: string) => setCarryUnticked(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  // A new revision keeps the old one's sign-off requirement (the server
+  // enforces it too); show the boxes ticked.
+  const inheritsAck = !!carryFrom?.doc.requiresAcknowledgment;
+  const inheritsPin = !!carryFrom?.doc.requirePinSignoff;
+  useEffect(() => {
+    if (inheritsAck) setValue("requiresAcknowledgment", true);
+    if (inheritsPin) setValue("requirePinSignoff", true);
+  }, [inheritsAck, inheritsPin, setValue]);
+
   const onUpload = async (data: any) => {
     if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
+    const sharing = carryFrom && watchedType !== "safety";
+    if (sharing && carryRulesQuery.isLoading) { setCarryError("Still loading who the previous revision was shared with. Try again in a moment."); return; }
+    if (sharing && carryFrom.mode === "name" && carryRules.length > 0 && !carryNameChoice) {
+      setCarryError("Choose whether to share this revision with the same people.");
+      return;
+    }
+    setCarryError(null);
+    const ticked = carryRules.filter(r => !carryUnticked.has(r.id)).map(r => r.id);
+    // Omitted = the server default (all rules on "choice", none on "name").
+    const carryShareIds = !sharing || carryRules.length === 0 ? undefined
+      : carryFrom.mode === "choice" ? ticked
+      : carryNameChoice === "share" ? ticked : undefined;
     try {
-      await uploadMutation.mutateAsync({
+      const created = await uploadMutation.mutateAsync({
         projectId,
         data: {
           name: data.name,
@@ -1220,14 +1279,43 @@ export function useProjectDetailState() {
           requirePinSignoff: !!data.requirePinSignoff,
           ...(data.supersededDocumentId ? { supersededDocumentId: data.supersededDocumentId } : {}),
           ...(data.type === "drawing" && data.revision?.trim() ? { revision: data.revision.trim() } : {}),
+          ...(carryShareIds ? { carryShareIds } : {}),
         } as any
       });
       setIsUploadOpen(false);
       reset();
       refetchDocs();
+      reportCarryForward(created as any);
     } catch (e) {
       console.error(e);
     }
+  };
+
+  // Tell the uploader where the new revision went, and say plainly when it
+  // reached nobody although the revision it replaced was shared.
+  const reportCarryForward = (doc: { id: string; name: string; version: number; revision?: string | null; fileUrl: string; portalCarryForward?: { previousRules: number; carried: number; recipientCount: number } | null }) => {
+    const c = doc.portalCarryForward;
+    if (!c || c.previousRules === 0) return;
+    const label = `${doc.name} ${doc.revision ? `Rev ${doc.revision}` : `v${doc.version}`}`;
+    if (c.carried > 0) {
+      toast({
+        title: "Shared with the same people",
+        description: c.recipientCount > 0
+          ? `${label} went to ${c.recipientCount} portal member${c.recipientCount === 1 ? "" : "s"}, like the revision it replaced.`
+          : `${label} has the same portal shares as the revision it replaced. Nobody on them has joined the portal yet.`,
+      });
+      return;
+    }
+    toast({
+      title: "This revision has reached no one",
+      description: `The revision it replaced was shared on the Team Portal. ${label} isn't shared with anyone yet.`,
+      variant: "destructive",
+      action: (
+        <ToastAction altText="Share this revision" onClick={() => setSharingDoc({ type: "document", id: doc.id, name: doc.name, version: doc.version, fileUrl: doc.fileUrl })}>
+          Share
+        </ToastAction>
+      ),
+    });
   };
 
   const openDocEdit = (doc: { id: string; name: string; status: string; version: number; type: string; revision?: string | null; requirePinSignoff?: boolean }) => {
@@ -1768,6 +1856,17 @@ tr:last-child td{border-bottom:none}
     onScheduleSubmit,
     watchedType,
     supersedableDocs,
+    carryFrom,
+    carryRules,
+    carryRulesLoading: carryRulesQuery.isLoading,
+    carryRulesFailed: carryRulesQuery.isError,
+    carryUnticked,
+    toggleCarryRule,
+    carryNameChoice,
+    setCarryNameChoice,
+    carryError,
+    inheritsAck,
+    inheritsPin,
     onUpload,
     openDocEdit,
     saveDocEdit,
@@ -1776,3 +1875,6 @@ tr:last-child td{border-bottom:none}
     generateReport,
   };
 }
+
+// A portal share rule of the revision being replaced (GET portal-shares).
+export type CarryRule = { id: string; audienceType: "all" | "trade" | "person"; trade?: string; personName?: string; personCompany?: string; portalStatus?: "member" | "invited" | "none" };

@@ -6,6 +6,7 @@ import { authenticate } from "../middlewares/auth";
 import { allow, INTERNAL_STAFF } from "../lib/authz";
 import { expiryStatus } from "../lib/expiry";
 import { pinRequiredForDoc } from "../lib/signoff";
+import { revisionsNotSent } from "../lib/outstanding-signoffs";
 
 const router: IRouter = Router();
 
@@ -159,6 +160,9 @@ router.get("/compliance", authenticate, allow(INTERNAL_STAFF), async (req, res) 
       projectId: string;
       projectName: string;
       pendingCount: number;
+      // true = the latest revision reached nobody; pendingCount = people the
+      // revision it replaced went to.
+      notSent?: boolean;
       fileUrl: string | null;
       version: number;
       revision: string | null;
@@ -228,7 +232,10 @@ router.get("/compliance", authenticate, allow(INTERNAL_STAFF), async (req, res) 
         arr.push(dist);
         distsByDoc.set(dist.documentId, arr);
       }
-      const distUserIds = [...new Set(allDists.map(d => d.userId))];
+      // A new revision that reached nobody while the one it replaced had
+      // recipients is outstanding too (lib/outstanding-signoffs.ts).
+      const notSent = await revisionsNotSent(allDocs, new Set(distsByDoc.keys()));
+      const distUserIds = [...new Set([...allDists.map(d => d.userId), ...[...notSent.values()].flatMap(n => n.userIds)])];
       const distUsers = distUserIds.length
         ? await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(inArray(usersTable.id, distUserIds))
         : [];
@@ -237,8 +244,28 @@ router.get("/compliance", authenticate, allow(INTERNAL_STAFF), async (req, res) 
       for (const doc of allDocs) {
         const dists = distsByDoc.get(doc.id) ?? [];
         const pending = dists.filter(d => d.status === "pending");
-        if (pending.length === 0) continue;
+        const notSentTo = notSent.get(doc.id)?.userIds ?? [];
+        if (pending.length === 0 && notSentTo.length === 0) continue;
         const proj = myProjects.find(p => p.id === doc.projectId);
+        if (notSentTo.length > 0) {
+          pendingAcknowledgments.push({
+            documentId: doc.id,
+            documentName: doc.name,
+            projectId: doc.projectId,
+            projectName: proj?.name ?? "Unknown",
+            pendingCount: notSentTo.length,
+            notSent: true,
+            fileUrl: doc.fileUrl ?? null,
+            version: doc.version,
+            revision: doc.revision ?? null,
+            myStatus: null,
+            pinRequired: pinRequiredForDoc(doc),
+            recipients: notSentTo.map(userId => ({
+              userId, name: nameByUserId.get(userId) ?? "Unknown", status: "not sent", viewedAt: null, acknowledgedAt: null,
+            })),
+          });
+          continue;
+        }
         const mine = dists.find(d => d.userId === req.user!.id);
         pendingAcknowledgments.push({
           documentId: doc.id,

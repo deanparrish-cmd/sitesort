@@ -93,7 +93,10 @@ export const PM_GUIDE: GuideSection[] = [
       {
         heading: "New versions and re-acknowledgement",
         body: [
-          "When you share a new version, the people you share it with are notified and asked to acknowledge it, even if they had already acknowledged the old one. Anyone opening a superseded document sees a prompt offering the latest version instead.",
+          "When you pick the old version in the \"supersedes\" list, the upload window lists who the old version is shared with on the Team Portal, all ticked. The new version goes to everyone left ticked, and they get an alert. Untick anyone who shouldn't get it.",
+          "If you give the upload the same name as a current document, it replaces that document automatically. The window warns you and asks whether to share the new version with the same people. Nothing is shared until you say yes.",
+          "If a new version ends up shared with no one while the old one was, you'll see a warning after uploading and a \"Not shared yet\" marker on the Documents tab. Tap it to share.",
+          "A new version keeps the sign-off requirement of the one it replaces. Everyone has to sign off the new version, even if they signed off the old one. A superseded version can no longer be signed off. Anyone opening a superseded document sees a prompt offering the latest version instead.",
         ],
       },
       {
@@ -477,7 +480,7 @@ export const WORKER_GUIDE: GuideSection[] = [
         heading: "Know you're looking at the latest version",
         body: [
           "A document marked Superseded has been replaced. If you open one anyway, you'll see a prompt offering to open the latest version instead.",
-          "If a new version of a document is shared with you, you'll be notified and asked to acknowledge it, even if you'd acknowledged the earlier version.",
+          "If a new version of a document is shared with you, you'll be notified and asked to acknowledge it, even if you'd acknowledged the earlier version. A superseded version can't be signed off: sign off the latest one.",
         ],
       },
       {

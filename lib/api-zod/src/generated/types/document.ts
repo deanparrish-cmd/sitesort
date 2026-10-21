@@ -32,4 +32,6 @@ export interface Document {
   createdAt: Date;
   distributionSummary: DistributionSummary;
   myDistributionStatus?: DocumentMyDistributionStatus;
+  /** Current revision with no portal shares while the revision it replaced had some, so it has reached nobody on the portal. */
+  newRevisionNotShared?: boolean;
 }

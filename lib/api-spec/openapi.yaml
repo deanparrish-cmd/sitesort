@@ -3924,6 +3924,9 @@ components:
           type: string
           enum: [pending, viewed, acknowledged]
           nullable: true
+        newRevisionNotShared:
+          type: boolean
+          description: Current revision with no portal shares while the revision it replaced had some, so it has reached nobody on the portal.
       required: [id, projectId, uploadedBy, uploaderName, name, type, version, fileUrl, fileSize, status, requiresAcknowledgment, publicAccess, createdAt, distributionSummary]
 
     DocumentDetail:
@@ -3978,6 +3981,11 @@ components:
         revision:
           type: string
           nullable: true
+        carryShareIds:
+          type: array
+          description: Portal share rules of the replaced revision to carry to this one. Omitted = all of them when the uploader chose the revision in Supersedes, none when it was replaced only because the name matched.
+          items:
+            type: string
       required: [name, type, fileUrl, fileSize]
 
     AcknowledgeRequest:

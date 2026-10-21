@@ -27,7 +27,7 @@ import { pushSubscriptionsTable, activityLogTable, portalSessionsTable } from "@
 import { linkedCardsForLogin } from "../lib/linked-cards";
 import { PortalPushSubscribeBody, PortalPushUnsubscribeBody } from "@workspace/api-zod";
 import { isLockedOut, recordFailedAttempt, clearAttempts } from "../lib/login-attempts";
-import { pinRequiredForDoc } from "../lib/signoff";
+import { pinRequiredForDoc, SUPERSEDED_SIGNOFF_MESSAGE } from "../lib/signoff";
 import { expiryStatus } from "../lib/expiry";
 import { issueCategoryFilter } from "../lib/accountability";
 import { canonicalPersonName } from "../lib/person-name";
@@ -2082,6 +2082,10 @@ router.post("/portal/documents/:documentId/acknowledge", ...portalGuards, async 
       return;
     }
     const doc = rows[0];
+    if (doc.status !== "current") {
+      res.status(409).json({ error: "superseded", message: SUPERSEDED_SIGNOFF_MESSAGE });
+      return;
+    }
     if (!doc.requiresAcknowledgment) {
       res.status(400).json({ error: "validation_error", message: "This document does not require sign-off." });
       return;

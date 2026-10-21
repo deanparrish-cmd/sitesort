@@ -266,6 +266,8 @@ export interface Document {
   createdAt: string;
   distributionSummary: DistributionSummary;
   myDistributionStatus?: DocumentMyDistributionStatus;
+  /** Current revision with no portal shares while the revision it replaced had some, so it has reached nobody on the portal. */
+  newRevisionNotShared?: boolean;
 }
 
 export type DistributionStatus =
@@ -317,6 +319,8 @@ export interface UploadDocumentRequest {
   distributeToUserIds?: string[];
   supersededDocumentId?: string | null;
   revision?: string | null;
+  /** Portal share rules of the replaced revision to carry to this one. Omitted = all of them when the uploader chose the revision in Supersedes, none when it was replaced only because the name matched. */
+  carryShareIds?: string[];
 }
 
 export interface AcknowledgeRequest {

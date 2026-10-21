@@ -27,7 +27,7 @@ type ArchivedDocItem = { id: string; name: string; type: string; version: number
 type AckRecipient = { userId: string; name: string; status: string; viewedAt?: string | null; acknowledgedAt?: string | null };
 type AckItem = {
   documentId: string; documentName: string; projectId: string; projectName: string;
-  pendingCount: number; fileUrl?: string | null; version: number; revision?: string | null;
+  pendingCount: number; notSent?: boolean; fileUrl?: string | null; version: number; revision?: string | null;
   myStatus?: string | null; pinRequired?: boolean; recipients: AckRecipient[];
 };
 type Sub = { id: string; companyName: string; contactName: string };
@@ -758,7 +758,7 @@ export default function CompliancePage() {
                             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-medium hover:bg-blue-200 transition-colors"
                             title="Show who's signed off"
                           >
-                            {a.pendingCount} pending
+                            {a.notSent ? `Latest revision not sent to ${a.pendingCount}` : `${a.pendingCount} pending`}
                             {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                           </button>
                           <button

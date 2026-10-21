@@ -10,3 +10,6 @@ export const PIN_REQUIRED_DOC_TYPES = new Set(["method_statement", "permit", "sa
 export function pinRequiredForDoc(doc: { type: string; requirePinSignoff: boolean }): boolean {
   return PIN_REQUIRED_DOC_TYPES.has(doc.type) || doc.requirePinSignoff;
 }
+
+// Shown when someone tries to sign off a revision that has been replaced.
+export const SUPERSEDED_SIGNOFF_MESSAGE = "This revision has been replaced by a newer one, so it can't be signed off. Open the latest revision and sign off that.";
