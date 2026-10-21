@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
-import { fmtSiteTimeLabelled } from "@/lib/site-time";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { fmtSiteTimeLabelled, fmtSiteTime, siteTzLabel } from "@/lib/site-time";
+import { expiryStatus } from "@/lib/expiry";
 import { useRoute } from "wouter";
 import { MapPin, Calendar, FileText, HardHat, ShieldCheck, AlertTriangle, Users, Mail, Phone, Clock, Camera, CheckCircle2, Loader2, Pin, XCircle, Building2 } from "lucide-react";
 import { openDocument } from "@/lib/documents";
@@ -661,17 +662,61 @@ export default function SiteBoard() {
     return () => clearInterval(t);
   }, [token, checkedIn]);
 
-  useEffect(() => {
+  // Live board (Dean, 2026-10-21): it used to load once, so a phone left on it
+  // showed the permits and drawings from whenever it was opened. Refresh every
+  // 60 s while visible, and at once on wake or when signal returns. A failed
+  // refresh keeps the last good board on screen and says exactly what it can't
+  // know (expiry dates are worked out on the phone, so they stay right).
+  const [lastOkMs, setLastOkMs] = useState<number | null>(null);
+  const [failing, setFailing] = useState<"network" | "server" | null>(null);
+  const [switchedOff, setSwitchedOff] = useState(false);
+  const [, setTick] = useState(0);
+  const hasData = useRef(false);
+  const lastTry = useRef(0);
+  const load = useCallback(async () => {
     if (!token) return;
-    fetch(`/api/site/${token}`)
-      .then(r => r.json())
-      .then(d => {
-        if (d.error) throw new Error(d.message ?? "Failed to load site board");
-        setData(d);
-      })
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false));
+    lastTry.current = Date.now();
+    let res: Response;
+    try {
+      res = await fetch(`/api/site/${token}`, { cache: "no-store" });
+    } catch {
+      if (hasData.current) setFailing("network"); else setError("offline");
+      setLoading(false);
+      return;
+    }
+    if (res.status === 404) {
+      if (hasData.current) setSwitchedOff(true); else setError("not_found");
+      setLoading(false);
+      return;
+    }
+    const d = res.ok ? await res.json().catch(() => null) : null;
+    if (!d || d.error) {
+      if (hasData.current) setFailing("server"); else setError("server");
+      setLoading(false);
+      return;
+    }
+    hasData.current = true;
+    setData(d);
+    setLastOkMs(Date.now());
+    setFailing(null);
+    setSwitchedOff(false);
+    setError(null);
+    setLoading(false);
   }, [token]);
+  useEffect(() => {
+    void load();
+    const t = setInterval(() => {
+      setTick(n => n + 1); // redraw: expiry badges and the stale bar move on their own
+      if (document.visibilityState !== "visible") return;
+      const every = hasData.current ? 60_000 : 30_000;
+      if (Date.now() - lastTry.current >= every) void load();
+    }, 5_000); // checked every 5 s, so a refresh lands 60 to 65 s after the last try
+    const onVisible = () => { if (document.visibilityState === "visible") void load(); };
+    const onOnline = () => void load();
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", onOnline);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", onVisible); window.removeEventListener("online", onOnline); };
+  }, [load]);
 
   if (loading) {
     return (
@@ -684,13 +729,21 @@ export default function SiteBoard() {
     );
   }
 
-  if (error || !data) {
+  if (switchedOff || error || !data) {
+    // Only a real "not found" says not found; no signal says no signal.
+    const [title, body] = switchedOff
+      ? ["This site board has been switched off", "Ask the site manager for the current permits and drawings."]
+      : error === "offline"
+        ? ["No signal", "The site board couldn't load. It will try again by itself."]
+        : error === "server"
+          ? ["The site board couldn't load", "It will try again by itself."]
+          : ["Site Board Not Found", "This QR code may be invalid or the project has been archived."];
     return (
       <div className="min-h-screen bg-orange-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
+        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center" data-testid="site-board-message">
           <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Site Board Not Found</h2>
-          <p className="text-gray-500">This QR code may be invalid or the project has been archived.</p>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">{title}</h2>
+          <p className="text-gray-500">{body}</p>
         </div>
       </div>
     );
@@ -731,6 +784,17 @@ export default function SiteBoard() {
     );
   }
 
+  // How fresh this board is. 15 minutes without a good refresh turns the bar
+  // red and stamps the sections a refresh could have changed.
+  const updatedAt = generatedAt ? `${fmtSiteTime(generatedAt, data.siteTimeZone)} (${siteTzLabel(data.siteTimeZone, new Date(generatedAt))})` : null;
+  const staleRed = !!failing && lastOkMs !== null && Date.now() - lastOkMs >= 15 * 60_000;
+  const updatedHm = generatedAt ? fmtSiteTime(generatedAt, data.siteTimeZone) : "the last update";
+  const outOfDate = (what: string) => staleRed ? (
+    <p className="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs font-semibold text-red-800" data-testid="stamp-out-of-date">
+      Out of date: not updated since {updatedHm}. {what}
+    </p>
+  ) : null;
+
   const activePermits = permits.filter((p: any) => {
     const expiry = new Date(p.expiryDate);
     return !isNaN(expiry.getTime()) && expiry >= new Date();
@@ -747,6 +811,15 @@ export default function SiteBoard() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-orange-50 to-white print:bg-white">
       <UpdateBar className="print:hidden" />
+      {failing && (
+        <div role="status" data-testid="site-board-stale"
+          className={`flex items-start gap-2 px-4 py-2 text-sm font-semibold border-b print:hidden ${staleRed ? "bg-red-600 text-white border-red-700" : "bg-amber-50 text-amber-900 border-amber-200"}`}>
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <span className="min-w-0 break-words">
+            {failing === "network" ? "No signal" : "Couldn't update"} since {updatedHm}. Permit expiry dates are still correct, but a permit may have been withdrawn or a drawing replaced since then. Check with the site manager.
+          </span>
+        </div>
+      )}
       {/* Header */}
       <div className="bg-gradient-to-r from-orange-700 to-orange-500 text-white px-4 py-8 print:py-6">
         <div className="max-w-2xl mx-auto">
@@ -758,6 +831,12 @@ export default function SiteBoard() {
                 <MapPin className="w-4 h-4 shrink-0" />
                 <span className="text-sm">{project.address}</span>
               </div>
+              {updatedAt && !failing && (
+                <div className="flex items-center gap-2 mt-2 text-orange-100" data-testid="site-board-updated">
+                  <Clock className="w-4 h-4 shrink-0" />
+                  <span className="text-sm font-semibold">Updated {updatedAt}</span>
+                </div>
+              )}
             </div>
             <StatusBadge status={project.status} />
           </div>
@@ -850,6 +929,7 @@ export default function SiteBoard() {
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
               <ShieldCheck className="w-4 h-4" /> Active Permits
             </h2>
+            {outOfDate("A permit may have been withdrawn since then.")}
             <div className="space-y-3">
               {activePermits.map((p: any) => (
                 <div key={p.id} className="flex items-start justify-between gap-2">
@@ -875,6 +955,7 @@ export default function SiteBoard() {
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
               <FileText className="w-4 h-4" /> Documents on Display
             </h2>
+            {outOfDate("A drawing or document may have been replaced since then.")}
             <div className="space-y-2">
               {documents.map((d: any) => (
                 <div key={d.id} className="flex items-center justify-between gap-2 py-2 border-b last:border-0">
@@ -916,6 +997,7 @@ export default function SiteBoard() {
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
                 <Pin className="w-4 h-4" /> Pinned to this Board
               </h2>
+              {outOfDate("A permit may have been withdrawn or a document replaced since then.")}
 
               {pinnedDocs.length > 0 && (
                 <div className="mb-4">
@@ -982,9 +1064,15 @@ export default function SiteBoard() {
                           {permit.description && <p className="text-gray-500 text-xs mt-0.5 truncate">{permit.description}</p>}
                         </div>
                         <div className="text-right shrink-0">
-                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[permit.status] ?? "bg-gray-100 text-gray-700"}`}>
-                            {statusLabels[permit.status] ?? permit.status}
-                          </span>
+                          {(() => {
+                            // Worked out on the phone, so it stays right with no signal.
+                            const st = permit.expiryDate ? expiryStatus(String(permit.expiryDate)) : permit.status;
+                            return (
+                              <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[st] ?? "bg-gray-100 text-gray-700"}`}>
+                                {statusLabels[st] ?? st}
+                              </span>
+                            );
+                          })()}
                           <p className="text-xs text-gray-400 mt-0.5">
                             {new Date(permit.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
                           </p>
@@ -1001,7 +1089,6 @@ export default function SiteBoard() {
         {/* Footer */}
         <div className="text-center text-xs text-gray-400 pb-4 pt-2">
           <p>Powered by <span className="font-semibold text-orange-500">SiteSort</span></p>
-          <p className="mt-0.5">Last updated {generatedAt ? new Date(generatedAt).toLocaleString("en-GB") : "N/A"}</p>
         </div>
       </div>
     </div>

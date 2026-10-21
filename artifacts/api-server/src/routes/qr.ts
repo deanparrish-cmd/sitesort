@@ -384,6 +384,9 @@ router.get("/site/:token", async (req, res) => {
       return;
     }
     const clock = await siteClock(qr.projectId);
+    // The board refreshes itself every minute (2026-10-21): never let a
+    // browser or proxy hand it an old copy.
+    res.set("Cache-Control", "no-store");
     res.json({ ...payload, onSiteCount: await countOnSite(qr.projectId), siteTimeZone: clock.tz, siteTzLabel: siteTzLabel(clock.tz), generatedAt: new Date().toISOString() });
   } catch (err) {
     res.status(500).json({ error: "server_error", message: "Failed to load site board" });
