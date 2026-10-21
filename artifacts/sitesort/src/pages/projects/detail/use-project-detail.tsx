@@ -1262,16 +1262,20 @@ export function useProjectDetailState() {
     if (isCancelled) { toast({ title: "Subscription cancelled", description: "Renew your plan to continue.", variant: "destructive" }); return; }
     const sharing = carryFrom && watchedType !== "safety";
     if (sharing && carryRulesQuery.isLoading) { setCarryError("Still loading who the previous revision was shared with. Try again in a moment."); return; }
+    if (sharing && carryRulesQuery.isError) { setCarryError("Couldn't load who the previous revision was shared with. Check your connection and try again."); void carryRulesQuery.refetch(); return; }
     if (sharing && carryFrom.mode === "name" && carryRules.length > 0 && !carryNameChoice) {
       setCarryError("Choose whether to share this revision with the same people.");
       return;
     }
     setCarryError(null);
     const ticked = carryRules.filter(r => !carryUnticked.has(r.id)).map(r => r.id);
-    // Omitted = the server default (all rules on "choice", none on "name").
-    const carryShareIds = !sharing || carryRules.length === 0 ? undefined
-      : carryFrom.mode === "choice" ? ticked
-      : carryNameChoice === "share" ? ticked : undefined;
+    // The server refuses a replacement of a shared revision unless the upload
+    // says who gets it and which list the uploader saw (2026-10-21), so both
+    // always go with a replacement. Empty = share with nobody.
+    const carry = sharing ? {
+      carryShareIds: carryRules.length === 0 ? [] : carryFrom.mode === "choice" ? ticked : carryNameChoice === "share" ? ticked : [],
+      carryShownShareIds: carryRules.map(r => r.id),
+    } : {};
     try {
       const created = await uploadMutation.mutateAsync({
         projectId,
@@ -1284,7 +1288,7 @@ export function useProjectDetailState() {
           requirePinSignoff: !!data.requirePinSignoff,
           ...(data.supersededDocumentId ? { supersededDocumentId: data.supersededDocumentId } : {}),
           ...(data.type === "drawing" && data.revision?.trim() ? { revision: data.revision.trim() } : {}),
-          ...(carryShareIds ? { carryShareIds } : {}),
+          ...carry,
         } as any
       });
       setIsUploadOpen(false);
@@ -1292,7 +1296,20 @@ export function useProjectDetailState() {
       refetchDocs();
       reportCarryForward(created as any);
     } catch (e) {
-      console.error(e);
+      // Say why it was refused (it used to be swallowed, so a refused upload
+      // looked like Upload doing nothing). If who the revision is shared with
+      // changed, show the current list so the uploader answers about it.
+      const err = e as { status?: number; data?: { error?: string; message?: string } };
+      if (err?.data?.error === "share_list_changed" || err?.data?.error === "share_answer_required") {
+        setCarryNameChoice(null);
+        setCarryUnticked(new Set());
+        await carryRulesQuery.refetch();
+        setCarryError(err.data.error === "share_list_changed"
+          ? "Who this document is shared with has changed. Check the list below and upload again."
+          : err.data.message ?? "Reload the page and upload again.");
+        return;
+      }
+      setCarryError(err?.data?.message ?? (err?.status ? "The upload was refused. Check the details and try again." : "No connection. Check your connection and try again."));
     }
   };
 

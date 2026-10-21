@@ -420,7 +420,13 @@ export const UploadDocumentBody = zod.object({
     .array(zod.string())
     .optional()
     .describe(
-      "Portal share rules of the replaced revision to carry to this one. Omitted = all of them when the uploader chose the revision in Supersedes, none when it was replaced only because the name matched.",
+      "Portal share rules of the replaced revision to carry to this one (empty = share with nobody). Required, with carryShownShareIds, whenever the replaced revision is shared on the portal; otherwise the upload is refused with 409 share_answer_required.",
+    ),
+  carryShownShareIds: zod
+    .array(zod.string())
+    .optional()
+    .describe(
+      "Every portal share rule of the replaced revision that the uploader was shown. Must match the revision's current rules, or the upload is refused with 409 share_list_changed.",
     ),
 });
 
@@ -3859,6 +3865,12 @@ export const GetPortalHsResponse = zod.object({
           name: zod.string(),
           version: zod.number(),
           revision: zod.string().optional(),
+          sharedWithYou: zod
+            .boolean()
+            .optional()
+            .describe(
+              "False when the replacement exists but hasn't been shared with this member yet.",
+            ),
         })
         .optional()
         .describe(
@@ -3921,6 +3933,12 @@ export const GetPortalHsResponse = zod.object({
           name: zod.string(),
           version: zod.number(),
           revision: zod.string().optional(),
+          sharedWithYou: zod
+            .boolean()
+            .optional()
+            .describe(
+              "False when the replacement exists but hasn't been shared with this member yet.",
+            ),
         })
         .optional()
         .describe(
@@ -4003,6 +4021,12 @@ export const GetPortalSharedResponse = zod.object({
           name: zod.string(),
           version: zod.number(),
           revision: zod.string().optional(),
+          sharedWithYou: zod
+            .boolean()
+            .optional()
+            .describe(
+              "False when the replacement exists but hasn't been shared with this member yet.",
+            ),
         })
         .optional()
         .describe(
@@ -4166,6 +4190,12 @@ export const GetPortalDrawingsResponseItem = zod.object({
       name: zod.string(),
       version: zod.number(),
       revision: zod.string().optional(),
+      sharedWithYou: zod
+        .boolean()
+        .optional()
+        .describe(
+          "False when the replacement exists but hasn't been shared with this member yet.",
+        ),
     })
     .optional()
     .describe(
@@ -4237,6 +4267,12 @@ export const GetPortalDrawingResponse = zod.object({
       name: zod.string(),
       version: zod.number(),
       revision: zod.string().optional(),
+      sharedWithYou: zod
+        .boolean()
+        .optional()
+        .describe(
+          "False when the replacement exists but hasn't been shared with this member yet.",
+        ),
     })
     .optional()
     .describe(
@@ -4412,6 +4448,12 @@ export const GetPortalMethodStatementsResponseItem = zod.object({
       name: zod.string(),
       version: zod.number(),
       revision: zod.string().optional(),
+      sharedWithYou: zod
+        .boolean()
+        .optional()
+        .describe(
+          "False when the replacement exists but hasn't been shared with this member yet.",
+        ),
     })
     .optional()
     .describe(
@@ -4483,6 +4525,12 @@ export const GetPortalMethodStatementResponse = zod.object({
       name: zod.string(),
       version: zod.number(),
       revision: zod.string().optional(),
+      sharedWithYou: zod
+        .boolean()
+        .optional()
+        .describe(
+          "False when the replacement exists but hasn't been shared with this member yet.",
+        ),
     })
     .optional()
     .describe(
@@ -4583,6 +4631,12 @@ export const GetPortalSafetyResponseItem = zod.object({
       name: zod.string(),
       version: zod.number(),
       revision: zod.string().optional(),
+      sharedWithYou: zod
+        .boolean()
+        .optional()
+        .describe(
+          "False when the replacement exists but hasn't been shared with this member yet.",
+        ),
     })
     .optional()
     .describe(
@@ -4650,6 +4704,12 @@ export const GetPortalGeneralResponse = zod.object({
           name: zod.string(),
           version: zod.number(),
           revision: zod.string().optional(),
+          sharedWithYou: zod
+            .boolean()
+            .optional()
+            .describe(
+              "False when the replacement exists but hasn't been shared with this member yet.",
+            ),
         })
         .optional()
         .describe(

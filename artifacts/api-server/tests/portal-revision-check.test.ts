@@ -52,11 +52,12 @@ describe("portal revision check", () => {
   });
 
   it("after a new revision, the old one points at it, and says whether it's shared", async () => {
+    const shown = ((await api(`/projects/${co.projectId}/portal-shares?itemType=document&itemId=${revA}`, { token: admin })).json as { id: string }[]).map(r => r.id);
     const up = await api(`/projects/${co.projectId}/documents`, {
       method: "POST", token: admin,
       // carryShareIds: [] = shared with nobody, so "not shared with you" can be
-      // checked (a chosen supersede otherwise carries the shares forward).
-      body: { name: "GF Plan", type: "drawing", fileUrl: `/api/uploads/test-${randomUUID()}.pdf`, fileSize: 100, supersededDocumentId: revA, revision: "C", carryShareIds: [] },
+      // checked. The list the uploader saw must go too (2026-10-21).
+      body: { name: "GF Plan", type: "drawing", fileUrl: `/api/uploads/test-${randomUUID()}.pdf`, fileSize: 100, supersededDocumentId: revA, revision: "C", carryShareIds: [], carryShownShareIds: shown },
     });
     expect(up.status).toBe(201);
     revB = up.json.id;

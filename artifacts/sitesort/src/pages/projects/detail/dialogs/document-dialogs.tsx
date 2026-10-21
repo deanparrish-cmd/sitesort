@@ -373,7 +373,7 @@ export function DocumentDialogs() {
                 <p className="text-xs text-muted-foreground">Checking who {docRev(carryFrom.doc)} was shared with...</p>
               ) : carryRulesFailed ? (
                 <p className="text-xs text-destructive">
-                  Couldn't load who the previous revision was shared with. {carryFrom.mode === "choice" ? "This revision will go to all of them." : "This revision won't be shared. Share it after uploading."}
+                  Couldn't load who the previous revision was shared with, so this can't be uploaded yet. Check your connection and try again.
                 </p>
               ) : carryRules.length > 0 && (
                 <>

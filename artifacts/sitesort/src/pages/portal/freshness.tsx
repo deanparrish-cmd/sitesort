@@ -8,14 +8,14 @@
 // touching each screen: the header shows "Updated X ago" + Refresh, a bar
 // under it says when something is wrong, and <Empty> (section.tsx) refuses to
 // say "nothing here" when the load actually failed.
-import { createContext, useCallback, useContext, useEffect, useReducer, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useReducer, type ReactNode } from "react";
 import { useQueryClient, type Query } from "@tanstack/react-query";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useNewBuild } from "@/lib/use-new-build";
 
 /** Older than this with no successful update = "may be out of date". */
 export const STALE_AFTER_MS = 15 * 60_000;
-const VERSION_CHECK_MS = 5 * 60_000;
 
 function errorStatus(q: Query): number | undefined {
   return (q.state.error as { status?: number } | null)?.status;
@@ -41,7 +41,6 @@ export type PortalFreshness = {
 export function usePortalFreshnessState(): PortalFreshness {
   const qc = useQueryClient();
   const [, rerender] = useReducer((x: number) => x + 1, 0);
-  const [newBuild, setNewBuild] = useState(false);
 
   useEffect(() => {
     const unsub = qc.getQueryCache().subscribe(() => rerender());
@@ -49,23 +48,8 @@ export function usePortalFreshnessState(): PortalFreshness {
     return () => { unsub(); clearInterval(tick); };
   }, [qc]);
 
-  // New-build check: on open, on return to the app, and every few minutes.
-  useEffect(() => {
-    let cancelled = false;
-    const check = async () => {
-      try {
-        const res = await fetch(`${import.meta.env.BASE_URL}version.json`, { cache: "no-store" });
-        if (!res.ok) return;
-        const body = (await res.json()) as { build?: string };
-        if (!cancelled && body.build && body.build !== __SITESORT_BUILD__) setNewBuild(true);
-      } catch { /* no signal: the data checks already say so */ }
-    };
-    void check();
-    const onVisible = () => { if (document.visibilityState === "visible") void check(); };
-    document.addEventListener("visibilitychange", onVisible);
-    const t = setInterval(check, VERSION_CHECK_MS);
-    return () => { cancelled = true; document.removeEventListener("visibilitychange", onVisible); clearInterval(t); };
-  }, []);
+  // New-build check: shared with the dashboard, site board and share links.
+  const newBuild = useNewBuild();
 
   // Lists currently on screen. A 401 is handled by the login bounce, not here;
   // helper checks (meta.freshnessIgnore) aren't lists the reader is looking at.

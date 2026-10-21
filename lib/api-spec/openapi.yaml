@@ -402,6 +402,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Document"
+        "409":
+          description: The replaced revision is shared on the Team Portal and the upload carries no answer about who gets the new one (share_answer_required), or that list changed since the uploader saw it (share_list_changed). Nothing is written.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /documents/{documentId}:
     get:
@@ -3983,7 +3989,12 @@ components:
           nullable: true
         carryShareIds:
           type: array
-          description: Portal share rules of the replaced revision to carry to this one. Omitted = all of them when the uploader chose the revision in Supersedes, none when it was replaced only because the name matched.
+          description: Portal share rules of the replaced revision to carry to this one (empty = share with nobody). Required, with carryShownShareIds, whenever the replaced revision is shared on the portal; otherwise the upload is refused with 409 share_answer_required.
+          items:
+            type: string
+        carryShownShareIds:
+          type: array
+          description: Every portal share rule of the replaced revision that the uploader was shown. Must match the revision's current rules, or the upload is refused with 409 share_list_changed.
           items:
             type: string
       required: [name, type, fileUrl, fileSize]
@@ -5884,6 +5895,9 @@ components:
               type: integer
             revision:
               type: string
+            sharedWithYou:
+              type: boolean
+              description: False when the replacement exists but hasn't been shared with this member yet.
           required: [id, name, version]
         requiresAcknowledgment:
           type: boolean

@@ -96,7 +96,9 @@ export const PM_GUIDE: GuideSection[] = [
           "When you pick the old version in the \"supersedes\" list, the upload window lists who the old version is shared with on the Team Portal, all ticked. The new version goes to everyone left ticked, and they get an alert. Untick anyone who shouldn't get it.",
           "If you give the upload the same name as a current document, it replaces that document automatically. The window warns you and asks whether to share the new version with the same people. Nothing is shared until you say yes.",
           "If a new version ends up shared with no one while the old one was, you'll see a warning after uploading and a \"Not shared yet\" marker on the Documents tab. Tap it to share.",
-          "A new version keeps the sign-off requirement of the one it replaces. Everyone has to sign off the new version, even if they signed off the old one. A superseded version can no longer be signed off. Anyone opening a superseded document sees a prompt offering the latest version instead.",
+          "If who the old version is shared with changes while the upload window is open, SiteSort stops the upload and shows the new list. Check it and upload again.",
+          "If you see \"SiteSort has been updated\" at the top of the screen, tap Reload before uploading, so you have the latest version of the app.",
+          "A new version keeps the sign-off requirement of the one it replaces. Everyone has to sign off the new version, even if they signed off the old one. A superseded version can no longer be signed off. Anyone opening a superseded document sees a prompt offering the latest version instead, or, if the latest version hasn't been shared with them, a message telling them to ask you to share it.",
         ],
       },
       {

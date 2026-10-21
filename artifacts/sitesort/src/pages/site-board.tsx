@@ -3,6 +3,8 @@ import { fmtSiteTimeLabelled } from "@/lib/site-time";
 import { useRoute } from "wouter";
 import { MapPin, Calendar, FileText, HardHat, ShieldCheck, AlertTriangle, Users, Mail, Phone, Clock, Camera, CheckCircle2, Loader2, Pin, XCircle, Building2 } from "lucide-react";
 import { openDocument } from "@/lib/documents";
+import { useNewBuild } from "@/lib/use-new-build";
+import { UpdateBar } from "@/components/update-bar";
 
 // See the onSiteCount comment in SiteBoard: off until stale check-ins stop counting.
 const SHOW_PUBLIC_ON_SITE_COUNT = false;
@@ -627,6 +629,21 @@ export default function SiteBoard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [checkedIn, setCheckedIn] = useState(false);
+  // A board left open on a tablet at the gate can run months-old code (Dean,
+  // 2026-10-21). Show the update bar; on the sign-in screen, where nobody may
+  // be there to tap Reload, reload by itself once nobody has touched it for
+  // two minutes (nothing typed is lost). After sign-in, only the bar: a reload
+  // there would drop the worker back to the sign-in screen.
+  const newBuild = useNewBuild();
+  useEffect(() => {
+    if (!newBuild || checkedIn) return;
+    let last = Date.now();
+    const touch = () => { last = Date.now(); };
+    const events = ["pointerdown", "keydown", "input", "touchstart"] as const;
+    events.forEach(e => document.addEventListener(e, touch, { passive: true }));
+    const t = setInterval(() => { if (Date.now() - last >= 2 * 60_000) window.location.reload(); }, 15_000);
+    return () => { events.forEach(e => document.removeEventListener(e, touch)); clearInterval(t); };
+  }, [newBuild, checkedIn]);
   // Live count only (never names) of people signed in and not signed out.
   // HIDDEN (2026-10-07): it said 5 "on site" on an empty test site because
   // nobody was ever signed out automatically. #114 fixed the count itself
@@ -685,6 +702,7 @@ export default function SiteBoard() {
   if (!checkedIn) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-orange-50 to-white">
+        <UpdateBar />
         <div className="bg-gradient-to-r from-orange-700 to-orange-500 text-white px-4 py-8">
           <div className="max-w-2xl mx-auto">
             <p className="text-orange-200 text-sm font-medium uppercase tracking-wider mb-1">SiteSort · Site Board</p>
@@ -728,6 +746,7 @@ export default function SiteBoard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-orange-50 to-white print:bg-white">
+      <UpdateBar className="print:hidden" />
       {/* Header */}
       <div className="bg-gradient-to-r from-orange-700 to-orange-500 text-white px-4 py-8 print:py-6">
         <div className="max-w-2xl mx-auto">

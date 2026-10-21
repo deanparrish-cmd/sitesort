@@ -1454,7 +1454,7 @@ export const uploadDocument = async (
 };
 
 export const getUploadDocumentMutationOptions = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<ErrorResponse>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -1495,13 +1495,13 @@ export type UploadDocumentMutationResult = NonNullable<
   Awaited<ReturnType<typeof uploadDocument>>
 >;
 export type UploadDocumentMutationBody = BodyType<UploadDocumentRequest>;
-export type UploadDocumentMutationError = ErrorType<unknown>;
+export type UploadDocumentMutationError = ErrorType<ErrorResponse>;
 
 /**
  * @summary Upload a new document to a project
  */
 export const useUploadDocument = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<ErrorResponse>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<

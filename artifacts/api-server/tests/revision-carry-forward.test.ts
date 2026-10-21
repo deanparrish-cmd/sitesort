@@ -10,9 +10,11 @@ import {
 
 /**
  * 2026-10-21 (Dean): a new revision reaches the people the old one was
- * shared with. Chosen in Supersedes = carried by default (narrowable).
- * Replaced only because the name matched = NEVER carried silently: only the
- * rules the uploader confirmed. Sign-off requirement is inherited.
+ * shared with, and is never decided silently: replacing a shared revision
+ * (chosen in Supersedes OR same name) needs an explicit answer about the list
+ * the uploader saw, or the upload is refused with nothing written. A stale
+ * dashboard tab once uploaded a same-name revision without asking and it
+ * reached nobody. Sign-off requirement is inherited.
  */
 describe("revision carry-forward", () => {
   let co: Fixture;
@@ -21,15 +23,21 @@ describe("revision carry-forward", () => {
   let portal = "";
   const docIds: string[] = [];
 
-  const upload = async (body: Record<string, unknown>) => {
+  const uploadRaw = async (body: Record<string, unknown>) => {
     const res = await api(`/projects/${co.projectId}/documents`, {
       method: "POST", token: admin,
       body: { type: "drawing", fileUrl: `/api/uploads/test-${randomUUID()}.pdf`, fileSize: 100, ...body },
     });
+    if (res.status === 201) docIds.push(res.json.id);
+    return res;
+  };
+  const upload = async (body: Record<string, unknown>) => {
+    const res = await uploadRaw(body);
     expect(res.status).toBe(201);
-    docIds.push(res.json.id);
     return res.json;
   };
+  const statusOf = async (id: string) => (await db.select().from(documentsTable).where(eq(documentsTable.id, id)))[0].status;
+  const countNamed = async (name: string) => (await db.select().from(documentsTable).where(and(eq(documentsTable.projectId, co.projectId), eq(documentsTable.name, name)))).length;
   const share = (itemId: string, audiences: unknown[]) => api(`/projects/${co.projectId}/portal-shares`, {
     method: "POST", token: admin, body: { itemType: "document", itemId, audiences },
   });
@@ -64,7 +72,8 @@ describe("revision carry-forward", () => {
   it("chosen in Supersedes: every rule carries, the member is alerted and sees Rev C", async () => {
     const name = `GA Plan ${randomUUID().slice(0, 6)}`;
     const b = await sharedRevB(name);
-    const c = await upload({ name, supersededDocumentId: b.id, revision: "C" });
+    const ids = (await rulesOf(b.id)).map(r => r.id);
+    const c = await upload({ name, supersededDocumentId: b.id, revision: "C", carryShareIds: ids, carryShownShareIds: ids });
     expect(c.portalCarryForward).toEqual({ previousRules: 2, carried: 2, recipientCount: 1 });
     expect((await rulesOf(c.id)).map(r => r.audienceType).sort()).toEqual(["all", "person"]);
     const dist = await db.select().from(documentDistributionsTable)
@@ -79,23 +88,94 @@ describe("revision carry-forward", () => {
   it("chosen in Supersedes with a narrowed list: only the ticked rules carry", async () => {
     const name = `Section ${randomUUID().slice(0, 6)}`;
     const b = await sharedRevB(name);
-    const personRule = (await rulesOf(b.id)).find(r => r.audienceType === "person")!;
-    const c = await upload({ name, supersededDocumentId: b.id, revision: "C", carryShareIds: [personRule.id] });
+    const rules = await rulesOf(b.id);
+    const personRule = rules.find(r => r.audienceType === "person")!;
+    const c = await upload({ name, supersededDocumentId: b.id, revision: "C", carryShareIds: [personRule.id], carryShownShareIds: rules.map(r => r.id) });
     expect(c.portalCarryForward).toMatchObject({ previousRules: 2, carried: 1 });
     expect((await rulesOf(c.id)).map(r => r.audienceType)).toEqual(["person"]);
   });
 
-  it("replaced only because the name matched: nothing carries, and the list flags it", async () => {
+  it("same name, uploader answered No: nothing carries, and the list flags it", async () => {
     const name = `Roof Plan ${randomUUID().slice(0, 6)}`;
     const b = await sharedRevB(name);
-    const c = await upload({ name, revision: "C" });
+    const ids = (await rulesOf(b.id)).map(r => r.id);
+    const c = await upload({ name, revision: "C", carryShareIds: [], carryShownShareIds: ids });
     expect(c.previousVersionId).toBe(b.id);
-    expect(c.portalCarryForward).toEqual({ previousRules: 2, carried: 0, recipientCount: 0, notCarriedReason: "name_match" });
+    expect(c.portalCarryForward).toEqual({ previousRules: 2, carried: 0, recipientCount: 0, notCarriedReason: "declined" });
     expect(await rulesOf(c.id)).toEqual([]);
     expect(await sharedIds()).not.toContain(c.id);
     const list = (await api(`/projects/${co.projectId}/documents`, { token: admin })).json as { id: string; newRevisionNotShared?: boolean }[];
     expect(list.find(d => d.id === c.id)?.newRevisionNotShared).toBe(true);
     expect(list.find(d => d.id === b.id)?.newRevisionNotShared).toBe(false);
+  });
+
+  it("same name, shared revision, no answer: refused, nothing written, v1 still current", async () => {
+    const name = `Stale tab ${randomUUID().slice(0, 6)}`;
+    const b = await sharedRevB(name);
+    const res = await uploadRaw({ name, revision: "C" });
+    expect(res.status).toBe(409);
+    expect(res.json.error).toBe("share_answer_required");
+    expect(res.json.message).toMatch(/Reload the page and upload again/);
+    expect(await statusOf(b.id)).toBe("current");
+    expect(await countNamed(name)).toBe(1);
+  });
+
+  it("chosen in Supersedes, shared revision, no answer: refused too, v1 still current", async () => {
+    const name = `Chosen stale ${randomUUID().slice(0, 6)}`;
+    const b = await sharedRevB(name);
+    const res = await uploadRaw({ name: `${name} new`, supersededDocumentId: b.id });
+    expect(res.status).toBe(409);
+    expect(res.json.error).toBe("share_answer_required");
+    expect(await statusOf(b.id)).toBe("current");
+    expect(await countNamed(`${name} new`)).toBe(0);
+  });
+
+  it("an answer without the list the uploader saw is refused", async () => {
+    const name = `No shown ${randomUUID().slice(0, 6)}`;
+    const b = await sharedRevB(name);
+    const ids = (await rulesOf(b.id)).map(r => r.id);
+    const res = await uploadRaw({ name, carryShareIds: ids });
+    expect(res.status).toBe(409);
+    expect(res.json.error).toBe("share_answer_required");
+    expect(await statusOf(b.id)).toBe("current");
+  });
+
+  it("shares changed since the dialog loaded: refused, v1 still current", async () => {
+    const name = `Changed ${randomUUID().slice(0, 6)}`;
+    const b = await upload({ name, revision: "B" });
+    expect((await share(b.id, [{ type: "all" }])).status).toBe(201);
+    const seen = (await rulesOf(b.id)).map(r => r.id);
+    // Someone shares it with the member by name while the dialog is open.
+    expect((await share(b.id, [{ type: "person", personId: member.personIds[0] }])).status).toBe(201);
+    const res = await uploadRaw({ name, carryShareIds: seen, carryShownShareIds: seen });
+    expect(res.status).toBe(409);
+    expect(res.json.error).toBe("share_list_changed");
+    expect(await statusOf(b.id)).toBe("current");
+    // The dialog showed no shares, someone shared it meanwhile: also refused.
+    const name2 = `Changed empty ${randomUUID().slice(0, 6)}`;
+    const b2 = await upload({ name: name2, revision: "B" });
+    expect((await share(b2.id, [{ type: "all" }])).status).toBe(201);
+    const res2 = await uploadRaw({ name: name2, carryShareIds: [], carryShownShareIds: [] });
+    expect(res2.status).toBe(409);
+    expect(res2.json.error).toBe("share_list_changed");
+    expect(await statusOf(b2.id)).toBe("current");
+  });
+
+  it("same name, revision shared with nobody: replaced as before, no answer needed", async () => {
+    const name = `Unshared ${randomUUID().slice(0, 6)}`;
+    const b = await upload({ name, revision: "B" });
+    const c = await upload({ name, revision: "C" });
+    expect(c.previousVersionId).toBe(b.id);
+    expect(c.portalCarryForward).toBeNull();
+    expect(await statusOf(b.id)).toBe("superseded");
+  });
+
+  it("safety documents need no answer (every member sees them)", async () => {
+    const name = `Safety ${randomUUID().slice(0, 6)}`;
+    const b = await upload({ name, type: "safety" });
+    expect((await share(b.id, [{ type: "all" }])).status).toBe(201);
+    const c = await upload({ name, type: "safety" });
+    expect(c.previousVersionId).toBe(b.id);
   });
 
   it("name match with the list confirmed: the confirmed rules carry; a rule from another document is ignored", async () => {
@@ -104,7 +184,7 @@ describe("revision carry-forward", () => {
     const other = await sharedRevB(`Other ${randomUUID().slice(0, 6)}`);
     const foreign = (await rulesOf(other.id))[0].id;
     const ids = (await rulesOf(b.id)).map(r => r.id);
-    const c = await upload({ name, revision: "C", carryShareIds: [...ids, foreign] });
+    const c = await upload({ name, revision: "C", carryShareIds: [...ids, foreign], carryShownShareIds: ids });
     expect(c.portalCarryForward).toEqual({ previousRules: 2, carried: 2, recipientCount: 1 });
     expect(await rulesOf(c.id)).toHaveLength(2);
     const list = (await api(`/projects/${co.projectId}/documents`, { token: admin })).json as { id: string; newRevisionNotShared?: boolean }[];
@@ -116,11 +196,32 @@ describe("revision carry-forward", () => {
     // so only another type shows the inheritance.
     const name = `Signed drawing ${randomUUID().slice(0, 6)}`;
     const b = await sharedRevB(name, { requiresAcknowledgment: true, requirePinSignoff: true });
-    const c = await upload({ name, supersededDocumentId: b.id, requiresAcknowledgment: false, requirePinSignoff: false });
+    const ids = (await rulesOf(b.id)).map(r => r.id);
+    const c = await upload({ name, supersededDocumentId: b.id, requiresAcknowledgment: false, requirePinSignoff: false, carryShareIds: ids, carryShownShareIds: ids });
     expect(c.requiresAcknowledgment).toBe(true);
     expect(c.requirePinSignoff).toBe(true);
     const row = (await db.select().from(documentsTable).where(eq(documentsTable.id, c.id)))[0];
     expect(row.requiresAcknowledgment).toBe(true);
+  });
+
+  it("portal: a replaced revision says whether the newer one is shared with you, and sign-off says so too", async () => {
+    const name = `Truth ${randomUUID().slice(0, 6)}`;
+    const b = await upload({ name, revision: "B", requiresAcknowledgment: true });
+    expect((await share(b.id, [{ type: "person", personId: member.personIds[0] }])).status).toBe(201);
+    const ids = (await rulesOf(b.id)).map(r => r.id);
+    const c = await upload({ name, revision: "C", carryShareIds: [], carryShownShareIds: ids });
+    const detail = await api(`/portal/drawings/${b.id}`, { token: portal });
+    expect(detail.status).toBe(200);
+    expect(detail.json.supersededBy).toMatchObject({ id: c.id, sharedWithYou: false });
+    const ack = await api(`/portal/documents/${b.id}/acknowledge`, { method: "POST", token: portal, body: { pin: member.pin } });
+    expect(ack.status).toBe(409);
+    expect(ack.json.message).toMatch(/hasn't been shared with you yet/);
+    expect(ack.json.message).not.toMatch(/Open the latest revision/);
+    expect((await share(c.id, [{ type: "person", personId: member.personIds[0] }])).status).toBe(201);
+    expect((await api(`/portal/drawings/${b.id}`, { token: portal })).json.supersededBy).toMatchObject({ id: c.id, sharedWithYou: true });
+    const ack2 = await api(`/portal/documents/${b.id}/acknowledge`, { method: "POST", token: portal, body: { pin: member.pin } });
+    expect(ack2.status).toBe(409);
+    expect(ack2.json.message).toMatch(/Open the latest revision/);
   });
 
   it("a first upload with no earlier revision carries nothing and says nothing", async () => {

@@ -22,6 +22,7 @@ import { onMessagesRead } from "@/lib/message-events";
 import { useGetMe, useLogout } from "@workspace/api-client-react";
 import { useSubscription } from "@/contexts/subscription";
 import { CheckoutGate } from "@/components/checkout-gate";
+import { UpdateBar } from "@/components/update-bar";
 import { CompanySwitcher } from "@/components/company-switcher";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -351,6 +352,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
             </DropdownMenuContent>
           </DropdownMenu>
         </header>
+        <UpdateBar className="shrink-0" />
         {isCancelled && (
           <div className="bg-red-600 text-white px-4 py-3 flex items-center justify-between gap-4 shrink-0">
             <div className="flex items-center gap-2 min-w-0">

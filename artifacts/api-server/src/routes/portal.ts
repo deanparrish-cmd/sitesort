@@ -27,7 +27,7 @@ import { pushSubscriptionsTable, activityLogTable, portalSessionsTable } from "@
 import { linkedCardsForLogin } from "../lib/linked-cards";
 import { PortalPushSubscribeBody, PortalPushUnsubscribeBody } from "@workspace/api-zod";
 import { isLockedOut, recordFailedAttempt, clearAttempts } from "../lib/login-attempts";
-import { pinRequiredForDoc, SUPERSEDED_SIGNOFF_MESSAGE } from "../lib/signoff";
+import { pinRequiredForDoc, SUPERSEDED_SIGNOFF_MESSAGE, SUPERSEDED_NOT_SHARED_SIGNOFF_MESSAGE } from "../lib/signoff";
 import { expiryStatus } from "../lib/expiry";
 import { issueCategoryFilter } from "../lib/accountability";
 import { canonicalPersonName } from "../lib/person-name";
@@ -1963,6 +1963,9 @@ function docDetailHandler(type: string) {
         payload.supersededBy = {
           id: replacement.id, name: replacement.name,
           version: replacement.version, revision: replacement.revision ?? undefined,
+          // False = the newer revision exists but this member can't open it
+          // yet; the portal says so instead of offering "Open latest".
+          sharedWithYou: await isDocVisibleToViewer(pid, req.user!.id, replacement),
         };
       }
     }
@@ -2083,7 +2086,10 @@ router.post("/portal/documents/:documentId/acknowledge", ...portalGuards, async 
     }
     const doc = rows[0];
     if (doc.status !== "current") {
-      res.status(409).json({ error: "superseded", message: SUPERSEDED_SIGNOFF_MESSAGE });
+      // Only point them at the newer revision if they can open it.
+      const next = await resolveReplacement(pid, doc.id);
+      const nextShared = !!next && await isDocVisibleToViewer(pid, req.user!.id, next);
+      res.status(409).json({ error: "superseded", message: nextShared ? SUPERSEDED_SIGNOFF_MESSAGE : SUPERSEDED_NOT_SHARED_SIGNOFF_MESSAGE });
       return;
     }
     if (!doc.requiresAcknowledgment) {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "wouter";
 import { Button } from "@/components/ui/button";
+import { UpdateBar } from "@/components/update-bar";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -55,6 +56,7 @@ export default function SharedLinkPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <UpdateBar />
       <div className="border-b bg-card">
         <div className="max-w-xl mx-auto px-4 py-4 flex items-center gap-3">
           <img src={`${import.meta.env.BASE_URL}images/logo.webp?v=5`} alt="SiteSort" className="h-10 w-auto" />

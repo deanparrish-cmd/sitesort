@@ -9,7 +9,7 @@ import { allow, COMPANY_MANAGER, INTERNAL_STAFF, projectApprover, projectApprove
 import { enqueuePushForMembers, acceptedPortalMemberUserIds } from "../lib/push-triggers";
 import { removedFromProjectUserIds } from "../lib/project-membership";
 import { isPinLockedOut, recordFailedPinAttempt, clearPinAttempts } from "../lib/pin-attempts";
-import { pinRequiredForDoc, signOffRequiredOnUpload, SUPERSEDED_SIGNOFF_MESSAGE } from "../lib/signoff";
+import { pinRequiredForDoc, signOffRequiredOnUpload, SUPERSEDED_SIGNOFF_MESSAGE, SHARE_ANSWER_REQUIRED_MESSAGE, SHARE_LIST_CHANGED_MESSAGE } from "../lib/signoff";
 import { distributeDocumentToUser } from "../lib/document-distribution";
 import { isProjectApprover } from "../lib/project-authority";
 import { applyPortalShare, type Audience } from "./portal-shares";
@@ -162,7 +162,7 @@ router.post("/projects/:projectId/documents", authenticate, allow(projectApprove
       return;
     }
 
-    const { name, type, fileUrl, fileSize, requiresAcknowledgment, requirePinSignoff, publicAccess, distributeToUserIds, supersededDocumentId, revision, carryShareIds } = req.body;
+    const { name, type, fileUrl, fileSize, requiresAcknowledgment, requirePinSignoff, publicAccess, distributeToUserIds, supersededDocumentId, revision, carryShareIds, carryShownShareIds } = req.body;
     if (!name || !type || !fileUrl) {
       res.status(400).json({ error: "validation_error", message: "name, type, fileUrl required" });
       return;
@@ -184,25 +184,48 @@ router.post("/projects/:projectId/documents", authenticate, allow(projectApprove
           eq(documentsTable.status, "current")
         ))
         .limit(1);
-      if (toSupersede.length > 0) {
-        previousVersionId = toSupersede[0].id;
-        newVersion = toSupersede[0].version + 1;
-        previous = toSupersede[0];
-        supersededBy = "choice";
-        await db.update(documentsTable).set({ status: "superseded" }).where(eq(documentsTable.id, toSupersede[0].id));
-      }
+      if (toSupersede.length > 0) { previous = toSupersede[0]; supersededBy = "choice"; }
     } else {
       const existing = await db.select().from(documentsTable)
         .where(and(eq(documentsTable.projectId, req.params.projectId), eq(documentsTable.name, name), eq(documentsTable.status, "current")))
         .limit(1);
-      if (existing.length > 0) {
-        const prev = existing[0];
-        previousVersionId = prev.id;
-        newVersion = prev.version + 1;
-        previous = prev;
-        supersededBy = "name";
-        await db.update(documentsTable).set({ status: "superseded" }).where(eq(documentsTable.id, prev.id));
+      if (existing.length > 0) { previous = existing[0]; supersededBy = "name"; }
+    }
+
+    // Revision carry-forward must never be decided silently (Dean,
+    // 2026-10-21): a dashboard tab opened before #148 was published uploaded
+    // a same-name revision without asking, and it reached nobody. When the
+    // replaced revision is shared on the portal, the upload must carry an
+    // explicit answer (`carryShareIds`, empty = share with nobody) AND the
+    // list the uploader was shown (`carryShownShareIds`) must still be the
+    // list. Otherwise refuse BEFORE anything is written: v1 stays current.
+    // Safety documents are visible to every member anyway.
+    const previousRules = previous && type !== "safety"
+      ? await db.select().from(portalSharesTable).where(and(
+          eq(portalSharesTable.projectId, req.params.projectId),
+          eq(portalSharesTable.itemType, "document"),
+          eq(portalSharesTable.itemId, previous.id),
+        ))
+      : [];
+    const idList = (v: unknown): string[] | null => Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : null;
+    const answered = idList(carryShareIds);
+    const shown = idList(carryShownShareIds);
+    if (previous && type !== "safety") {
+      const ruleIds = new Set(previousRules.map(r => r.id));
+      if (previousRules.length > 0 && (!answered || !shown)) {
+        res.status(409).json({ error: "share_answer_required", message: SHARE_ANSWER_REQUIRED_MESSAGE });
+        return;
       }
+      if (shown && (shown.length !== ruleIds.size || shown.some(id => !ruleIds.has(id)))) {
+        res.status(409).json({ error: "share_list_changed", message: SHARE_LIST_CHANGED_MESSAGE });
+        return;
+      }
+    }
+
+    if (previous) {
+      previousVersionId = previous.id;
+      newVersion = previous.version + 1;
+      await db.update(documentsTable).set({ status: "superseded" }).where(eq(documentsTable.id, previous.id));
     }
 
     // Revision (F3): drawings get an alphabetical label — an explicit value (the
@@ -254,39 +277,28 @@ router.post("/projects/:projectId/documents", authenticate, allow(projectApprove
       } catch (e) { req.log.warn({ e }, "safety-notice push enqueue failed"); }
     }
 
-    // Revision carry-forward (Dean, 2026-10-21): the new revision reaches the
-    // people the old one was shared with. Chosen in the Supersedes list: every
-    // rule of the old revision carries unless `carryShareIds` narrows it (the
-    // upload dialog sends the rules left ticked). Replaced only because the
-    // name matched: NOTHING carries unless the uploader confirmed the list
-    // (`carryShareIds` sent), because a wrong file auto-replacing an unrelated
-    // document must never inherit its audience silently. Safety documents are
-    // visible to every member anyway.
-    let portalCarryForward: { previousRules: number; carried: number; recipientCount: number; notCarriedReason?: "name_match" | "declined" } | null = null;
-    if (previous && type !== "safety") {
-      const rules = await db.select().from(portalSharesTable).where(and(
-        eq(portalSharesTable.projectId, req.params.projectId),
-        eq(portalSharesTable.itemType, "document"),
-        eq(portalSharesTable.itemId, previous.id),
-      ));
-      if (rules.length > 0) {
-        const confirmed = Array.isArray(carryShareIds) ? new Set((carryShareIds as unknown[]).filter((x): x is string => typeof x === "string")) : null;
-        const chosen = confirmed ? rules.filter(r => confirmed.has(r.id)) : supersededBy === "choice" ? rules : [];
-        let recipientCount = 0;
-        if (chosen.length > 0) {
-          ({ recipientCount } = await applyPortalShare({
-            projectId: req.params.projectId, itemType: "document", itemId: docId,
-            audiences: chosen.map(r => ({ type: r.audienceType as Audience["type"], trade: r.trade ?? undefined, personId: r.personId ?? undefined })),
-            sharedByUserId: req.user!.id, sendEmail: false,
-            log: err => req.log.error({ err }, "Carry-forward notification failed"),
-            notice: { title: `New revision: ${name}${docRevision ? ` Rev ${docRevision}` : ` v${newVersion}`}` },
-          }));
-        }
-        portalCarryForward = {
-          previousRules: rules.length, carried: chosen.length, recipientCount,
-          ...(chosen.length === 0 ? { notCarriedReason: supersededBy === "name" && !confirmed ? "name_match" as const : "declined" as const } : {}),
-        };
+    // Revision carry-forward (Dean, 2026-10-21): the new revision goes to the
+    // rules the uploader ticked (`carryShareIds`; checked above to be an
+    // answer about the list they saw). Rule ids of any other document are
+    // ignored.
+    let portalCarryForward: { previousRules: number; carried: number; recipientCount: number; notCarriedReason?: "declined" } | null = null;
+    if (previousRules.length > 0) {
+      const confirmed = new Set(answered ?? []);
+      const chosen = previousRules.filter(r => confirmed.has(r.id));
+      let recipientCount = 0;
+      if (chosen.length > 0) {
+        ({ recipientCount } = await applyPortalShare({
+          projectId: req.params.projectId, itemType: "document", itemId: docId,
+          audiences: chosen.map(r => ({ type: r.audienceType as Audience["type"], trade: r.trade ?? undefined, personId: r.personId ?? undefined })),
+          sharedByUserId: req.user!.id, sendEmail: false,
+          log: err => req.log.error({ err }, "Carry-forward notification failed"),
+          notice: { title: `New revision: ${name}${docRevision ? ` Rev ${docRevision}` : ` v${newVersion}`}` },
+        }));
       }
+      portalCarryForward = {
+        previousRules: previousRules.length, carried: chosen.length, recipientCount,
+        ...(chosen.length === 0 ? { notCarriedReason: "declined" as const } : {}),
+      };
     }
 
     if (distributeToUserIds && Array.isArray(distributeToUserIds)) {

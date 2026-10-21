@@ -14,4 +14,6 @@ export type PortalDocumentSupersededBy = {
   name: string;
   version: number;
   revision?: string;
+  /** False when the replacement exists but hasn't been shared with this member yet. */
+  sharedWithYou?: boolean;
 };

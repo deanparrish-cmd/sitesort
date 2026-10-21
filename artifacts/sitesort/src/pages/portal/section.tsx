@@ -278,7 +278,7 @@ function ReceivedPill({ at }: { at: string }) {
 // superseded badge reflects the last list fetch; opening re-checks live status.
 // FreshDoc extended to carry the superseded replacement (T003): the per-item
 // endpoint returns supersededBy pointing at the live version so we can offer it.
-type SupersededBy = { id: string; name: string; version: number; revision?: string };
+type SupersededBy = { id: string; name: string; version: number; revision?: string; sharedWithYou?: boolean };
 type FreshDocFull = { status?: string; supersededBy?: SupersededBy } | null;
 
 function DocRow({ doc, section, unseen, focused, signOff }: { doc: any; section: string; unseen?: boolean; focused?: boolean; signOff: ReturnType<typeof useSignOffFlow> }) {
@@ -295,14 +295,25 @@ function DocRow({ doc, section, unseen, focused, signOff }: { doc: any; section:
 
   // Open the live replacement of a superseded document: fetch its detail for the
   // freshest fileUrl, then open/download it.
+  // Say what's true when it fails: "try again" only where trying again can
+  // work (no signal, a server error), never for a revision that hasn't been
+  // shared with them (Dean, 2026-10-21).
   const openReplacement = async (replacement: SupersededBy) => {
+    const label = `"${replacement.name}" ${replacement.revision ? `Rev ${replacement.revision}` : `v${replacement.version}`}`;
+    let res: Response;
     try {
-      const res = await fetch(`/api/portal/${section}/${replacement.id}`);
-      if (!res.ok) throw new Error();
-      const fresh = await res.json();
-      if (!openDocFile(fresh)) throw new Error();
+      res = await fetch(`/api/portal/${section}/${replacement.id}`);
     } catch {
-      toast({ title: "Couldn't open replacement", description: "Please try again from the list.", variant: "destructive" });
+      toast({ title: "Couldn't open the latest revision", description: "No connection. Check your signal and try again.", variant: "destructive" });
+      return;
+    }
+    if (res.status === 404) {
+      toast({ title: "Not shared with you yet", description: `${label} hasn't been shared with you yet. Ask your project manager to share it.`, variant: "destructive" });
+      return;
+    }
+    const fresh = res.ok ? await res.json().catch(() => null) : null;
+    if (!fresh || !openDocFile(fresh)) {
+      toast({ title: "Couldn't open the latest revision", description: "SiteSort couldn't load it. Try again in a minute.", variant: "destructive" });
     }
   };
 
@@ -326,13 +337,14 @@ function DocRow({ doc, section, unseen, focused, signOff }: { doc: any; section:
       if (fresh?.status === "superseded") {
         setSupersededNow(true);
         const repl = fresh.supersededBy;
+        const replShared = repl?.sharedWithYou !== false;
         toast({
           title: "Superseded document",
           description: repl
-            ? `"${doc.name}" has been replaced by "${repl.name}"${repl.revision ? ` (Rev ${repl.revision})` : ` (v${repl.version})`}.`
+            ? `"${doc.name}" has been replaced by "${repl.name}"${repl.revision ? ` (Rev ${repl.revision})` : ` (v${repl.version})`}.${replShared ? "" : " It hasn't been shared with you yet. Ask your project manager to share it."}`
             : `"${doc.name}" has been superseded by a newer version.`,
           variant: "destructive",
-          action: repl ? (
+          action: repl && replShared ? (
             <ToastAction altText="Open the latest version" onClick={() => void openReplacement(repl)}>
               Open latest
             </ToastAction>

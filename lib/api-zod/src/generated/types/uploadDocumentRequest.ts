@@ -18,6 +18,8 @@ export interface UploadDocumentRequest {
   distributeToUserIds?: string[];
   supersededDocumentId?: string | null;
   revision?: string | null;
-  /** Portal share rules of the replaced revision to carry to this one. Omitted = all of them when the uploader chose the revision in Supersedes, none when it was replaced only because the name matched. */
+  /** Portal share rules of the replaced revision to carry to this one (empty = share with nobody). Required, with carryShownShareIds, whenever the replaced revision is shared on the portal; otherwise the upload is refused with 409 share_answer_required. */
   carryShareIds?: string[];
+  /** Every portal share rule of the replaced revision that the uploader was shown. Must match the revision's current rules, or the upload is refused with 409 share_list_changed. */
+  carryShownShareIds?: string[];
 }

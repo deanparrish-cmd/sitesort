@@ -69,8 +69,10 @@ describe("sign-off reads the latest revision", () => {
 
   it("a new revision shared with nobody is outstanding, not 'all complete'", async () => {
     const name = (await api(`/documents/${revB}`, { token: admin })).json.name;
-    // carryShareIds: [] = this upload deliberately shares Rev C with nobody.
-    const c = await upload({ name, supersededDocumentId: revB, revision: "C", carryShareIds: [] });
+    // carryShareIds: [] = this upload deliberately shares Rev C with nobody
+    // (with the list the uploader saw, required since 2026-10-21).
+    const shown = ((await api(`/projects/${co.projectId}/portal-shares?itemType=document&itemId=${revB}`, { token: admin })).json as { id: string }[]).map(r => r.id);
+    const c = await upload({ name, supersededDocumentId: revB, revision: "C", carryShareIds: [], carryShownShareIds: shown });
     expect(c.status).toBe(201);
     revC = c.json.id;
     // Rev B's pending row no longer counts; Rev C owes a sign-off from the one person Rev B went to.
