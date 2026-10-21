@@ -2,13 +2,13 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { insertNotifications } from "../lib/notify";
 import { db } from "@workspace/db";
 import { qrCodesTable, qrBoardPinsTable, documentsTable, projectsTable, projectMembersTable, usersTable, permitsTable, photosTable, siteCheckinsTable, subcontractorsTable, calendarEventsTable, companyMembersTable, notificationsTable, peopleTable, companiesTable, pushSubscriptionsTable, projectInvitesTable } from "@workspace/db/schema";
-import { eq, and, or, desc, asc, inArray, isNull, sql } from "drizzle-orm";
+import { eq, and, or, desc, asc, inArray, isNull, isNotNull, sql } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { expiryStatus } from "../lib/expiry";
 import { buildSiteBoardPayload } from "../lib/site-board";
 import { subcontractorInsuranceStatus } from "../lib/insurance";
-import { randomBytes } from "crypto";
+import { randomBytes, createHash } from "crypto";
 import jwt from "jsonwebtoken";
 import multer from "multer";
 import path from "path";
@@ -689,7 +689,12 @@ function readMatchToken(raw: unknown, projectId: string): string | null {
 
 // Remembered-device token: a signed, project-scoped record of who last signed
 // in from this device. Nothing new is stored server-side.
-const DEVICE_TOKEN_TTL = "180d";
+// 7 days (Dean, 2026-10-21; was 180): each check-in renews it, so a regular
+// worker never notices, and a bank holiday weekend or a week's leave still
+// gets one tap. The expiry isn't the security control: the shared-device
+// rule below is, and sign-out needs the last 4 digits of the mobile.
+const DEVICE_TOKEN_TTL = "7d";
+const DEVICE_TOKEN_MAX_AGE_S = 7 * 24 * 3600;
 // #124: it also carries the registered identity key, so a remembered phone
 // signs in as that person without typing anything. Older tokens (names only)
 // still resolve by an exact name + company match.
@@ -701,8 +706,56 @@ function readDeviceToken(raw: unknown, projectId: string): { workerName: string;
   try {
     const p = jwt.verify(raw, process.env.JWT_SECRET as string) as any;
     if (p?.kind !== "site-device" || p.projectId !== projectId) return null;
+    // Tokens issued under the old 180-day limit stop working at 7 days too.
+    if (typeof p.iat !== "number" || Date.now() / 1000 - p.iat > DEVICE_TOKEN_MAX_AGE_S) return null;
     return { workerName: String(p.workerName), companyName: String(p.companyName), key: typeof p.key === "string" ? p.key : null };
   } catch { return null; }
+}
+// Who a phone remembered, at any age (expired included): only used to tell
+// whether a new check-in on that phone is a different person. Never signs
+// anyone in.
+function readHeldDeviceToken(raw: unknown, projectId: string): { workerName: string; companyName: string; key: string | null } | null {
+  if (typeof raw !== "string" || !raw) return null;
+  try {
+    const p = jwt.verify(raw, process.env.JWT_SECRET as string, { ignoreExpiration: true }) as any;
+    if (p?.kind !== "site-device" || p.projectId !== projectId) return null;
+    return { workerName: String(p.workerName), companyName: String(p.companyName), key: typeof p.key === "string" ? p.key : null };
+  } catch { return null; }
+}
+type DeviceIdentity = { workerName: string; companyName: string; key: string | null };
+// Every mobile number known for someone on this project: on their card, or
+// typed at the gate on their own check-ins.
+async function phonesForIdentity(projectId: string, who: DeviceIdentity, extra: string[] = []): Promise<string[]> {
+  const out = [...extra];
+  if (who.key) out.push(...await phonesForKey(who.key));
+  const rows = await db.select({ typedPhone: siteCheckinsTable.typedPhone, workerName: siteCheckinsTable.workerName, companyName: siteCheckinsTable.companyName, personKey: siteCheckinsTable.personKey })
+    .from(siteCheckinsTable).where(and(eq(siteCheckinsTable.projectId, projectId), isNotNull(siteCheckinsTable.typedPhone)))
+    .orderBy(desc(siteCheckinsTable.checkedInAt)).limit(500);
+  const n = normText(who.workerName), c = normText(who.companyName);
+  for (const r of rows) {
+    if (!r.typedPhone) continue;
+    if ((who.key && r.personKey === who.key) || (normText(r.workerName) === n && normText(r.companyName ?? "") === c)) out.push(r.typedPhone);
+  }
+  return out.filter(p => normPhone(p).length >= 9);
+}
+// Shared-device rule (Dean, 2026-10-21): a phone that has seen two different
+// people stops offering one-tap sign-in, for good. Same person = same card,
+// the same name and company, or a mobile number in common (one person on two
+// cards for two firms keeps one tap on his own phone).
+async function isDifferentPerson(projectId: string, held: DeviceIdentity, now: DeviceIdentity, nowPhones: string[]): Promise<boolean> {
+  if (held.key && now.key && held.key === now.key) return false;
+  if (normText(held.workerName) === normText(now.workerName) && normText(held.companyName) === normText(now.companyName)) return false;
+  const a = await phonesForIdentity(projectId, held);
+  const b = await phonesForIdentity(projectId, now, nowPhones);
+  if (a.some(x => b.some(y => samePhone(x, y)))) return false;
+  return true;
+}
+// The device token for a completed check-in, or "shared" when this phone last
+// remembered somebody else.
+async function deviceTokenFor(projectId: string, heldRaw: unknown, now: DeviceIdentity, nowPhones: string[]): Promise<{ deviceToken: string } | { sharedDevice: true }> {
+  const held = readHeldDeviceToken(heldRaw, projectId);
+  if (held && await isDifferentPerson(projectId, held, now, nowPhones)) return { sharedDevice: true };
+  return { deviceToken: signDeviceToken(projectId, now.workerName, now.companyName, now.key) };
 }
 // The registered record a remembered device stands for, if still on the project.
 function deviceRecord(records: Registered[], who: { workerName: string; companyName: string; key: string | null }): Registered | null {
@@ -747,6 +800,23 @@ function notePhoneMiss(req: Request, token: string): void {
   phoneMisses.set(`${req.ip}|${token}`, [...recentMisses(req, token), now]);
   if (phoneMisses.size > 5000) for (const [key, ts] of phoneMisses) if (!ts.some(t => now - t < PHONE_WINDOW_MS)) phoneMisses.delete(key);
 }
+// A remembered phone gets 5 wrong tries at the last 4 digits, then device
+// sign-out stops for an hour (sign out with the full number, or the site
+// manager). Per token, on top of the per-board limit above.
+const DEVICE_SIGNOUT_TRIES = 5, DEVICE_SIGNOUT_LOCK_MS = 60 * 60_000;
+const deviceSignOutMisses = new Map<string, number[]>();
+function deviceMissKey(token: string): string { return createHash("sha256").update(token).digest("hex"); }
+function deviceSignOutLocked(token: string): boolean {
+  const now = Date.now();
+  return (deviceSignOutMisses.get(deviceMissKey(token)) ?? []).filter(t => now - t < DEVICE_SIGNOUT_LOCK_MS).length >= DEVICE_SIGNOUT_TRIES;
+}
+function noteDeviceSignOutMiss(token: string): void {
+  const now = Date.now(), k = deviceMissKey(token);
+  deviceSignOutMisses.set(k, [...(deviceSignOutMisses.get(k) ?? []).filter(t => now - t < DEVICE_SIGNOUT_LOCK_MS), now]);
+  if (deviceSignOutMisses.size > 5000) for (const [key, ts] of deviceSignOutMisses) if (!ts.some(t => now - t < DEVICE_SIGNOUT_LOCK_MS)) deviceSignOutMisses.delete(key);
+}
+const DEVICE_SIGNOUT_LOCKED = { error: "too_many_tries", message: "Too many tries. Enter your full mobile number to sign out, or ask the site manager." };
+
 // Sign-out only: at the gate itself the limit never turns anyone away (see
 // /identify and /checkin: a limited board stops LOOKING UP numbers and holds
 // everyone for the site manager instead).
@@ -841,14 +911,31 @@ async function openRowsToClose(projectId: string, target: OpenRow): Promise<Open
 const IDENTITY_NOT_CONFIRMED = { error: "identity_not_confirmed", message: "We couldn't confirm it's you. Ask your site manager to sign you out." };
 router.post("/site/:token/checkout", async (req: Request, res: Response) => {
   try {
-    const { deviceToken, phone } = req.body ?? {};
+    const { deviceToken, phone, last4 } = req.body ?? {};
     const qr = await db.select().from(qrCodesTable).where(eq(qrCodesTable.token, req.params.token)).then(r => r[0]);
     if (!qr) { res.status(404).json({ error: "not_found", message: "Invalid site token" }); return; }
     let open: OpenRow[];
     if (typeof deviceToken === "string" && deviceToken) {
       const who = readDeviceToken(deviceToken, qr.projectId);
       if (!who) { res.status(403).json(IDENTITY_NOT_CONFIRMED); return; }
+      // Signing someone else out removes a real person from the fire roll, so a
+      // remembered phone must also give the last 4 digits of that person's
+      // mobile (Dean, 2026-10-21). Checked before anything about who is on site
+      // is revealed.
+      if (deviceSignOutLocked(deviceToken) || phoneRateLimited(req, req.params.token)) { res.status(429).json(DEVICE_SIGNOUT_LOCKED); return; }
+      if (typeof last4 !== "string" || !/^\d{4}$/.test(last4)) {
+        res.status(400).json({ error: "last4_required", message: "Enter the last 4 digits of your mobile number." });
+        return;
+      }
       const rec = deviceRecord(await loadRegistered(qr.projectId), who);
+      const known = await phonesForIdentity(qr.projectId, rec ? { ...who, key: rec.key } : who);
+      if (known.length === 0) { res.status(403).json({ error: "no_number_on_file", message: "Enter your full mobile number to sign out, or ask the site manager." }); return; }
+      if (!known.some(p => normPhone(p).slice(-4) === last4)) {
+        noteDeviceSignOutMiss(deviceToken);
+        notePhoneMiss(req, req.params.token);
+        res.status(403).json({ error: "wrong_digits", message: "Those digits don't match the mobile number on file. Try again, or enter your full mobile number." });
+        return;
+      }
       open = rec ? await openRowsForRecords(qr.projectId, [rec]) : await openCheckinsFor(qr.projectId, who.workerName, who.companyName);
     } else {
       if (typeof phone !== "string" || normPhone(phone).length < 9) {
@@ -1028,7 +1115,7 @@ async function saveCheckinPhoto(file: Express.Multer.File): Promise<string> {
 // nobody is turned away, but nobody reaches the fire roll unverified either.
 router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: Request, res: Response) => {
   try {
-    const { lat, lng, matchToken, deviceToken } = req.body;
+    const { lat, lng, matchToken, deviceToken, heldDeviceToken } = req.body;
     const workerName = typeof req.body.workerName === "string" ? req.body.workerName : "";
     const companyName = typeof req.body.companyName === "string" ? req.body.companyName : "";
     const phone = typeof req.body.phone === "string" ? req.body.phone : "";
@@ -1173,7 +1260,9 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
     // First arrival and nobody has opened today's register: alert now, not in 5 minutes.
     void runFireRollAlerts(new Date(), qr.projectId).catch(() => {});
 
-    res.status(201).json({ ...publicCheckin(checkin, clock), deviceToken: signDeviceToken(qr.projectId, storedName, storedCompany, match.key) });
+    const device = await deviceTokenFor(qr.projectId, heldDeviceToken ?? deviceToken,
+      { workerName: storedName, companyName: storedCompany, key: match.key }, normPhone(phone).length >= 9 ? [phone] : []);
+    res.status(201).json({ ...publicCheckin(checkin, clock), ...device });
   } catch (err) {
     res.status(500).json({ error: "server_error", message: "Check-in failed" });
   }
@@ -1192,7 +1281,10 @@ router.get("/site/:token/hold", async (req: Request, res: Response) => {
     res.json({
       status: row.holdStatus ?? "approved",
       decidedAt: row.holdDecidedAt ? row.holdDecidedAt.toISOString() : null,
-      ...(row.holdStatus === "approved" ? { deviceToken: signDeviceToken(qr.projectId, row.workerName, row.companyName ?? "", row.personKey) } : {}),
+      ...(row.holdStatus === "approved"
+        ? await deviceTokenFor(qr.projectId, req.query.heldDeviceToken,
+            { workerName: row.workerName, companyName: row.companyName ?? "", key: row.personKey }, row.typedPhone ? [row.typedPhone] : [])
+        : {}),
     });
   } catch {
     res.status(500).json({ error: "server_error", message: "Failed to check" });

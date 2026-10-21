@@ -87,7 +87,7 @@ describe("site sign-out matching", () => {
     expect((await checkout({ deviceToken: other })).status).toBe(403);
     expect((await checkout({ deviceToken: "garbage" })).status).toBe(403);
     const good = jwt.sign({ kind: "site-device", projectId: co.projectId, workerName: "Paul Smith", companyName: "Acme Construction" }, process.env.JWT_SECRET as string);
-    expect((await checkout({ deviceToken: good })).status).toBe(200);
+    expect((await checkout({ deviceToken: good, last4: "0123" })).status).toBe(200);
   });
 
   it("remembered-device token: valid for its own project only, garbage rejected", async () => {

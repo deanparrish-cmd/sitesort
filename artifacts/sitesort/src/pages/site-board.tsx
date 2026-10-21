@@ -7,6 +7,9 @@ import { openDocument } from "@/lib/documents";
 import { useNewBuild } from "@/lib/use-new-build";
 import { UpdateBar } from "@/components/update-bar";
 
+// Set once a check-in shows this phone has been used by two different people.
+const SHARED_DEVICE_KEY = "sitesort_site_shared_device";
+
 // See the onSiteCount comment in SiteBoard: off until stale check-ins stop counting.
 const SHOW_PUBLIC_ON_SITE_COUNT = false;
 
@@ -129,17 +132,37 @@ function CheckInCard({
   const deviceKey = `sitesort_site_device_${token}`;
 
   // Storage can be unavailable (private mode, blocked site data): never throw.
-  const readDeviceToken = (): string | null => { try { return localStorage.getItem(deviceKey); } catch { return null; } };
-  const writeDeviceToken = (v: string | null) => { try { if (v) localStorage.setItem(deviceKey, v); else localStorage.removeItem(deviceKey); } catch { /* fall back to the number */ } };
+  // Shared-device rule (Dean, 2026-10-21): once a check-in on this phone turns
+  // out to be a different person from the one it remembered, the server says
+  // "shared device" and this phone never remembers anyone again, on any board.
+  // A forgotten token ("Not me", expired) is kept aside so the next check-in
+  // can still be compared with who used the phone before.
+  const prevKey = `sitesort_site_device_prev_${token}`;
+  const isSharedDevice = (): boolean => { try { return localStorage.getItem(SHARED_DEVICE_KEY) === "1"; } catch { return false; } };
+  const readDeviceToken = (): string | null => { try { return isSharedDevice() ? null : localStorage.getItem(deviceKey); } catch { return null; } };
+  const heldDeviceToken = (): string | null => { try { return isSharedDevice() ? null : localStorage.getItem(deviceKey) ?? localStorage.getItem(prevKey); } catch { return null; } };
+  const writeDeviceToken = (v: string | null) => {
+    try {
+      if (v) { if (isSharedDevice()) return; localStorage.setItem(deviceKey, v); localStorage.removeItem(prevKey); return; }
+      const old = localStorage.getItem(deviceKey);
+      if (old) localStorage.setItem(prevKey, old);
+      localStorage.removeItem(deviceKey);
+    } catch { /* fall back to the number */ }
+  };
+  const markSharedDevice = () => { try { localStorage.setItem(SHARED_DEVICE_KEY, "1"); localStorage.removeItem(deviceKey); localStorage.removeItem(prevKey); } catch { /* nothing stored either way */ } };
+  const [last4, setLast4] = useState("");
+  const [fullNumberOut, setFullNumberOut] = useState(false);
 
   useEffect(() => {
     if (!hold || hold.status !== "pending") return;
     const t = setInterval(() => {
-      fetch(`/api/site/${token}/hold?holdToken=${encodeURIComponent(hold.token)}`)
+      const held = heldDeviceToken();
+      fetch(`/api/site/${token}/hold?holdToken=${encodeURIComponent(hold.token)}${held ? `&heldDeviceToken=${encodeURIComponent(held)}` : ""}`)
         .then(r => r.ok ? r.json() : null)
         .then(d => {
           if (!d || d.status === "pending") return;
-          if (d.status === "approved" && d.deviceToken) writeDeviceToken(d.deviceToken);
+          if (d.status === "approved" && d.sharedDevice) markSharedDevice();
+          else if (d.status === "approved" && d.deviceToken) writeDeviceToken(d.deviceToken);
           setHold(h => h ? { ...h, status: d.status } : h);
         })
         .catch(() => {});
@@ -181,9 +204,12 @@ function CheckInCard({
     } finally { setLooking(false); }
   };
 
-  const doSignOut = async () => {
-    // A remembered device proves who this is; otherwise the mobile number does.
-    const deviceToken = readDeviceToken();
+  const doSignOut = async (viaDevice: boolean) => {
+    // A remembered device plus the last 4 digits of the mobile proves who this
+    // is (signing out the wrong person empties the fire roll); otherwise the
+    // whole mobile number does.
+    const deviceToken = viaDevice ? readDeviceToken() : null;
+    if (deviceToken && !/^\d{4}$/.test(last4)) { setErrorMsg("Enter the last 4 digits of your mobile number."); return; }
     if (!deviceToken && digits(phone).length < 9) { setErrorMsg("Enter your mobile number to sign out."); return; }
     setSigningOut(true);
     setErrorMsg("");
@@ -191,7 +217,7 @@ function CheckInCard({
       const r = await fetch(`/api/site/${token}/checkout`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(deviceToken ? { deviceToken } : { phone: phone.trim() }),
+        body: JSON.stringify(deviceToken ? { deviceToken, last4 } : { phone: phone.trim() }),
       });
       if (r.status === 409) {
         setSignedIn(null);
@@ -208,6 +234,8 @@ function CheckInCard({
       setSignedIn(null);
       setSignOutMode(false);
       setPhone("");
+      setLast4("");
+      setFullNumberOut(false);
       setSignedOutLabel(d.workerName ?? device?.workerName ?? "You");
       setSignedOutAt(d.checkedOutAt);
     } catch {
@@ -268,6 +296,8 @@ function CheckInCard({
       const fd = new FormData();
       fd.append("photo", stamped, "checkin.jpg");
       const deviceToken = useDevice ? readDeviceToken() : null;
+      const held = heldDeviceToken();
+      if (held) fd.append("heldDeviceToken", held);
       if (deviceToken) fd.append("deviceToken", deviceToken);
       else if (confirmed) fd.append("matchToken", confirmed.matchToken);
       else {
@@ -311,7 +341,8 @@ function CheckInCard({
       if (!res.ok) throw new Error("Upload failed");
 
       const created = await res.json().catch(() => null);
-      if (created?.deviceToken) writeDeviceToken(created.deviceToken);
+      if (created?.sharedDevice) markSharedDevice();
+      else if (created?.deviceToken) writeDeviceToken(created.deviceToken);
       if (created?.checkedInAt) setDoneAt(fmtSiteTimeLabelled(created.checkedInAt, created.siteTimeZone));
       setStatus("done");
       setTimeout(() => onCheckedIn(), 2000);
@@ -353,7 +384,17 @@ function CheckInCard({
             <strong>{who}</strong> signed in at {hhmm(signedIn.checkedInAt)}
             {new Date(signedIn.checkedInAt).toDateString() !== new Date().toDateString() && " on " + new Date(signedIn.checkedInAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}.
           </p>
-          {!readDeviceToken() && (
+          {readDeviceToken() && !fullNumberOut ? (
+            <div>
+              <label htmlFor="signout-last4" className={labelCls}>Last 4 digits of your mobile</label>
+              <input id="signout-last4" type="tel" inputMode="numeric" autoComplete="off" maxLength={4} value={last4}
+                onChange={e => setLast4(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                placeholder="e.g. 0123" className={inputCls} data-testid="input-signout-last4" />
+              <button type="button" onClick={() => { setFullNumberOut(true); setErrorMsg(""); }} className="mt-1 text-xs text-gray-600 underline min-h-11" data-testid="button-signout-full-number">
+                Use my full mobile number instead
+              </button>
+            </div>
+          ) : (
             <div>
               <label htmlFor="signout-phone" className={labelCls}>Your mobile number</label>
               <input id="signout-phone" type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={e => setPhone(e.target.value)}
@@ -362,7 +403,7 @@ function CheckInCard({
           )}
           {errorMsg && <p className="text-red-500 text-sm">{errorMsg}</p>}
           <button
-            onClick={() => void doSignOut()}
+            onClick={() => void doSignOut(!!readDeviceToken() && !fullNumberOut)}
             disabled={signingOut}
             className="w-full bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 min-h-11"
             data-testid="button-sign-out"
@@ -518,7 +559,7 @@ function CheckInCard({
             </div>
             {errorMsg && <p className="text-red-500 text-sm">{errorMsg}</p>}
             <button
-              onClick={() => void doSignOut()}
+              onClick={() => void doSignOut(false)}
               disabled={signingOut}
               className="w-full bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 min-h-11"
               data-testid="button-sign-out-by-phone"

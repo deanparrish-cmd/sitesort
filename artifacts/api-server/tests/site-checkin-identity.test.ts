@@ -100,7 +100,8 @@ describe("site check-in identity", () => {
     const tok = (await identify(AMY)).json.matches[0].matchToken;
     const first = await checkIn({ matchToken: tok });
     const device = first.json.deviceToken as string;
-    expect((await api(`/site/${qrToken}/checkout`, { method: "POST", body: { deviceToken: device } })).status).toBe(200);
+    // Device sign-out also needs the last 4 digits of the mobile (2026-10-21).
+    expect((await api(`/site/${qrToken}/checkout`, { method: "POST", body: { deviceToken: device, last4: "0456" } })).status).toBe(200);
     const again = await checkIn({ deviceToken: device });
     expect(again.status).toBe(201);
     expect((await db.select().from(siteCheckinsTable).where(eq(siteCheckinsTable.id, again.json.id)))[0].personKey).toBe(`person:${personId}`);

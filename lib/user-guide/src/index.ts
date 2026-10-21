@@ -423,7 +423,8 @@ export const WORKER_GUIDE: GuideSection[] = [
       {
         heading: "Sign out when you leave",
         body: [
-          "Scan the same QR code again. On the phone you signed in with, you will see Sign out of site straight away; choose it and your time is recorded. When you are signed out, the same phone offers Sign in as your name and company, so you only need to take the photo. Choose Not me if it is someone else's phone.",
+          "Scan the same QR code again. On the phone you signed in with, you will see Sign out of site straight away; enter the last 4 digits of your mobile, choose it, and your time is recorded. When you are signed out, the same phone offers Sign in as your name and company, so you only need to take the photo. Choose Not me if it is someone else's phone.",
+          "Your phone remembers you for 7 days after you last signed in. If someone else signs in on your phone, it stops remembering anyone, and from then on you sign in with your mobile number.",
           "On a different phone, choose Already on site and leaving? Sign out and enter the mobile number you signed in with. If it isn't recognised, ask your site manager to sign you out. Nobody can see who else is signed in, and nobody can sign you out by typing your name.",
           "You can sign in and out as many times as you need in a day, for example for lunch. Each visit is recorded separately. If you forget to sign out, tell your site manager so they can do it for you.",
         ],
