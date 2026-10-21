@@ -1206,6 +1206,11 @@ export function useProjectDetailState() {
 
   const watchedType = watch("type") ?? "drawing";
   const supersedableDocs = (documents ?? []).filter(d => d.status === "current" && d.type === watchedType);
+  // RAMS, permits and safety documents always require sign-off (the server
+  // enforces it too): show the box ticked.
+  useEffect(() => {
+    if (["method_statement", "permit", "safety"].includes(watchedType)) setValue("requiresAcknowledgment", true);
+  }, [watchedType, setValue]);
 
   // Revision carry-forward (2026-10-21). The revision this upload replaces:
   // chosen in Supersedes ("choice"), or a current document with exactly the

@@ -102,7 +102,7 @@ export const PM_GUIDE: GuideSection[] = [
       {
         heading: "Require a PIN on any document",
         body: [
-          "Safety-critical types (method statements, permits and safety documents) always need a PIN to sign off. For any other document, tick \"Require a PIN to sign off\" when uploading, or switch it on later from the document's edit screen.",
+          "Safety-critical types (method statements, permits and safety documents) always require sign-off, and always need a PIN to sign off. For any other document, tick \"Require a PIN to sign off\" when uploading, or switch it on later from the document's edit screen.",
         ],
       },
     ],

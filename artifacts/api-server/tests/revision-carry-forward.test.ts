@@ -112,9 +112,11 @@ describe("revision carry-forward", () => {
   });
 
   it("the new revision keeps the sign-off requirement of the one it replaces", async () => {
-    const name = `RAMS ${randomUUID().slice(0, 6)}`;
-    const b = await sharedRevB(name, { type: "method_statement", requiresAcknowledgment: true, requirePinSignoff: true });
-    const c = await upload({ name, type: "method_statement", supersededDocumentId: b.id, requiresAcknowledgment: false, requirePinSignoff: false });
+    // A drawing: RAMS/permits/safety always require sign-off anyway (#149),
+    // so only another type shows the inheritance.
+    const name = `Signed drawing ${randomUUID().slice(0, 6)}`;
+    const b = await sharedRevB(name, { requiresAcknowledgment: true, requirePinSignoff: true });
+    const c = await upload({ name, supersededDocumentId: b.id, requiresAcknowledgment: false, requirePinSignoff: false });
     expect(c.requiresAcknowledgment).toBe(true);
     expect(c.requirePinSignoff).toBe(true);
     const row = (await db.select().from(documentsTable).where(eq(documentsTable.id, c.id)))[0];

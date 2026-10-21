@@ -9,7 +9,7 @@ import { allow, COMPANY_MANAGER, INTERNAL_STAFF, projectApprover, projectApprove
 import { enqueuePushForMembers, acceptedPortalMemberUserIds } from "../lib/push-triggers";
 import { removedFromProjectUserIds } from "../lib/project-membership";
 import { isPinLockedOut, recordFailedPinAttempt, clearPinAttempts } from "../lib/pin-attempts";
-import { pinRequiredForDoc, SUPERSEDED_SIGNOFF_MESSAGE } from "../lib/signoff";
+import { pinRequiredForDoc, signOffRequiredOnUpload, SUPERSEDED_SIGNOFF_MESSAGE } from "../lib/signoff";
 import { distributeDocumentToUser } from "../lib/document-distribution";
 import { isProjectApprover } from "../lib/project-authority";
 import { applyPortalShare, type Audience } from "./portal-shares";
@@ -211,9 +211,10 @@ router.post("/projects/:projectId/documents", authenticate, allow(projectApprove
     const trimmedRevision = typeof revision === "string" && revision.trim() ? revision.trim() : null;
     const docRevision = trimmedRevision ?? (type === "drawing" ? versionToRevision(newVersion) : null);
 
-    // A new revision keeps the sign-off requirement of the one it replaces
-    // (Dean, 2026-10-21): it can add a requirement, never drop one.
-    const needsAck = Boolean(requiresAcknowledgment) || (previous?.requiresAcknowledgment ?? false);
+    // RAMS, permits and safety documents always require sign-off (#149), and a
+    // new revision keeps the requirement of the one it replaces (#148): it can
+    // add a requirement, never drop one.
+    const needsAck = signOffRequiredOnUpload(type, requiresAcknowledgment) || (previous?.requiresAcknowledgment ?? false);
     const needsPin = Boolean(requirePinSignoff) || (previous?.requirePinSignoff ?? false);
 
     const docId = generateId();

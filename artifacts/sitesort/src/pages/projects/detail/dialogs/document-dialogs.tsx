@@ -414,10 +414,12 @@ export function DocumentDialogs() {
             />
           </div>
           <div className="flex items-center gap-2 p-4 bg-muted/30 border rounded-lg mt-4">
-            <input type="checkbox" id="reqAck" {...register("requiresAcknowledgment")} disabled={inheritsAck} className="w-4 h-4 shrink-0 text-accent rounded border-input focus:ring-accent" />
+            <input type="checkbox" id="reqAck" {...register("requiresAcknowledgment")} disabled={PIN_ALWAYS_TYPES.has(watchedType) || inheritsAck} className="w-4 h-4 shrink-0 text-accent rounded border-input focus:ring-accent" />
             <label htmlFor="reqAck" className="text-sm font-medium">
               Require team members to digitally sign-off
-              {inheritsAck && <span className="block text-xs text-muted-foreground font-normal">Required: the revision this replaces needed sign-off.</span>}
+              {PIN_ALWAYS_TYPES.has(watchedType)
+                ? <span className="block text-xs text-muted-foreground font-normal">Always required for RAMS, permits and safety documents.</span>
+                : inheritsAck && <span className="block text-xs text-muted-foreground font-normal">Required: the revision this replaces needed sign-off.</span>}
             </label>
           </div>
           {!!watch("requiresAcknowledgment") && (
