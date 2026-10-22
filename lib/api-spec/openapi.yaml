@@ -6063,6 +6063,17 @@ components:
           type: string
         uploaderName:
           type: string
+        replacedBy:
+          type: object
+          description: For a rejected document, the later submission from the same person, same kind, that was approved. Present = it belongs in the Rejected folder.
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+            approvedAt:
+              type: string
+          required: [id, name]
       required: [id, name, kind, fileUrl, fileSize, status, createdAt, uploaderName]
 
     ReviewMemberDocumentRequest:

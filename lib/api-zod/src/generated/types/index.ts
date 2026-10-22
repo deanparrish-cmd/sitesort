@@ -97,6 +97,7 @@ export * from "./logPhotoRequestCategory";
 export * from "./managerReportFields";
 export * from "./memberActivitySummary";
 export * from "./memberDocument";
+export * from "./memberDocumentReplacedBy";
 export * from "./notification";
 export * from "./notificationType";
 export * from "./pendingAcknowledgmentItem";

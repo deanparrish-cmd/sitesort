@@ -4394,6 +4394,16 @@ export const ListMemberDocumentsResponseItem = zod.object({
   reviewedAt: zod.string().optional(),
   createdAt: zod.string(),
   uploaderName: zod.string(),
+  replacedBy: zod
+    .object({
+      id: zod.string(),
+      name: zod.string(),
+      approvedAt: zod.string().optional(),
+    })
+    .optional()
+    .describe(
+      "For a rejected document, the later submission from the same person, same kind, that was approved. Present = it belongs in the Rejected folder.",
+    ),
 });
 export const ListMemberDocumentsResponse = zod.array(
   ListMemberDocumentsResponseItem,

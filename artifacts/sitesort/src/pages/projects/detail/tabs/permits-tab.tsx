@@ -90,9 +90,12 @@ export function PermitsTab() {
             const livePermits = [...permits].filter(p => !p.archivedAt);
             const supersededPermits = [...permits].filter(p => !!p.archivedAt).sort((a, b) => (b.archivedAt ?? "").localeCompare(a.archivedAt ?? ""));
             const showing = overdueOnly ? livePermits.filter(p => p.overdue) : livePermits;
-            const active = showing.filter(p => { const d = daysLeft(p.expiryDate); return d > 30; }).sort((a, b) => a.expiryDate.localeCompare(b.expiryDate));
-            const expiring = showing.filter(p => { const d = daysLeft(p.expiryDate); return d >= 0 && d <= 30; }).sort((a, b) => a.expiryDate.localeCompare(b.expiryDate));
-            const expired = showing.filter(p => daysLeft(p.expiryDate) < 0).sort((a, b) => b.expiryDate.localeCompare(a.expiryDate));
+            // Newest first within each group (Dean, 2026-10-22). The groups
+            // themselves (Expired, Expiring soon, Active) keep urgent ones on top.
+            const newest = (a: PermitItem, b: PermitItem) => (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
+            const active = showing.filter(p => { const d = daysLeft(p.expiryDate); return d > 30; }).sort(newest);
+            const expiring = showing.filter(p => { const d = daysLeft(p.expiryDate); return d >= 0 && d <= 30; }).sort(newest);
+            const expired = showing.filter(p => daysLeft(p.expiryDate) < 0).sort(newest);
             const overdueList = livePermits.filter(p => p.overdue);
             const overdueCount = overdueList.length;
             const openOverdue = () => {

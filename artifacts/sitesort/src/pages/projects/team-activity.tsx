@@ -10,6 +10,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { LinkRow } from "@/components/ui/link-row";
+import { ListRow, Pill, PillGroup } from "@/components/ui/list-row";
 import { useToast } from "@/hooks/use-toast";
 import { openDocument } from "@/lib/documents";
 import { itemDeepLink } from "@/lib/deep-link";
@@ -81,7 +82,12 @@ function MemberDocumentsReview({ projectId }: { projectId: string }) {
   const review = useReviewMemberDocument();
   const [busyId, setBusyId] = useState("");
 
-  const docs = docsQ.data ?? [];
+  const allDocs = docsQ.data ?? [];
+  // Rejected folder (Dean, 2026-10-22): a rejection leaves the review list once
+  // a replacement from the same person (same kind) has been approved.
+  const docs = allDocs.filter(d => !(d.status === "rejected" && d.replacedBy));
+  const rejectedDocs = allDocs.filter(d => d.status === "rejected" && d.replacedBy);
+  const [showRejected, setShowRejected] = useState(false);
   const pendingCount = docs.filter(d => d.status === "pending").length;
   // Reject flow opens a proper dialog with a notes box (the note is stored on
   // the doc and shown to the uploader in their portal "My documents" section).
@@ -146,7 +152,7 @@ function MemberDocumentsReview({ projectId }: { projectId: string }) {
         )}
       </h3>
       {docsQ.isLoading ? <div className="flex justify-center py-6"><Spinner className="size-5 text-primary" /></div> : (
-        docs.length === 0 ? <p className="text-sm text-muted-foreground">No documents submitted for review yet.</p> : (
+        docs.length === 0 ? <p className="text-sm text-muted-foreground">{rejectedDocs.length ? "Nothing waiting for review." : "No documents submitted for review yet."}</p> : (
           <div className="space-y-2">
             {docs.map(d => (
               <div key={d.id} className="flex items-center justify-between gap-3 p-3 bg-card border border-border rounded-lg">
@@ -205,12 +211,48 @@ function MemberDocumentsReview({ projectId }: { projectId: string }) {
         )
       )}
 
+      {rejectedDocs.length > 0 && (
+        <div className="mt-3" data-testid="rejected-folder">
+          <button type="button" onClick={() => setShowRejected(v => !v)} aria-expanded={showRejected}
+            className="inline-flex items-center gap-2 min-h-11 text-sm font-semibold text-muted-foreground hover:text-foreground">
+            {showRejected ? <ChevronDown className="w-4 h-4" /> : <ChevronRightIcon className="w-4 h-4" />}
+            <FolderX className="w-4 h-4" /> Rejected ({rejectedDocs.length})
+          </button>
+          {showRejected && (
+            <div className="space-y-2 mt-1">
+              {rejectedDocs.map(d => (
+                <ListRow key={d.id} className="bg-card"
+                  content={
+                    <div className="min-w-0 space-y-0.5">
+                      <PillGroup>
+                        <span className="font-medium break-words min-w-0">{d.name}</span>
+                        <Pill className="capitalize bg-muted text-muted-foreground">{d.kind}</Pill>
+                        <Pill className={MEMBER_DOC_BADGE.rejected}>Rejected{d.reviewedAt ? ` ${fmtRelative(d.reviewedAt)}` : ""}</Pill>
+                      </PillGroup>
+                      <p className="text-xs text-muted-foreground break-words">{d.uploaderName} · sent {fmtRelative(d.createdAt)}</p>
+                      <p className="text-sm text-rose-700 dark:text-rose-400 break-words">Reason: {d.reviewNote ?? "No reason was recorded."}</p>
+                      <p className="text-xs text-muted-foreground break-words">Replaced by {d.replacedBy!.name}{d.replacedBy!.approvedAt ? `, approved ${fmtRelative(d.replacedBy!.approvedAt)}` : ""}</p>
+                    </div>
+                  }
+                  actions={
+                    <button onClick={() => openDocument(d.fileUrl, d.name)}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-primary/25 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/15 transition-colors">
+                      <ExternalLink className="w-3 h-3" />Open
+                    </button>
+                  }
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Reject-with-notes dialog — the note is saved on the document and shown
           to the sender in their portal "My documents" list, plus a notification. */}
       <Dialog open={!!rejectTarget} onOpenChange={v => { if (!v) setRejectTarget(null); }}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-destructive"><X className="w-4 h-4" /> Reject "{rejectTarget?.name}"?</DialogTitle>
-          <p className="text-sm text-muted-foreground">Add a note explaining why, so {rejectTarget?.uploaderName ?? "the sender"} knows what to fix. They'll see the decision and your note in their portal.</p>
+          <p className="text-sm text-muted-foreground">Say why, so {rejectTarget?.uploaderName ?? "the sender"} knows what to fix. They'll see the decision and your reason in their portal. A reason is required.</p>
         </DialogHeader>
         <textarea
           value={rejectNote}
@@ -225,8 +267,9 @@ function MemberDocumentsReview({ projectId }: { projectId: string }) {
           <Button
             variant="destructive"
             isLoading={busyId === rejectTarget?.id}
+            disabled={!rejectNote.trim()}
             onClick={async () => {
-              if (!rejectTarget) return;
+              if (!rejectTarget || !rejectNote.trim()) return;
               await doReview(rejectTarget.id, "reject", rejectNote);
               setRejectTarget(null);
             }}

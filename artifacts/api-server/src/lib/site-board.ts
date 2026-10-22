@@ -3,7 +3,7 @@ import {
   projectsTable, projectMembersTable, usersTable, permitsTable,
   documentsTable, qrBoardPinsTable, photosTable,
 } from "@workspace/db/schema";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, desc } from "drizzle-orm";
 import { expiryStatus } from "./expiry";
 
 const normaliseUrl = (url: string) =>
@@ -24,12 +24,12 @@ export async function buildSiteBoardPayload(projectId: string) {
     }).from(projectMembersTable)
       .innerJoin(usersTable, eq(usersTable.id, projectMembersTable.userId))
       .where(eq(projectMembersTable.projectId, projectId)),
-    db.select().from(permitsTable).where(eq(permitsTable.projectId, projectId)),
+    db.select().from(permitsTable).where(eq(permitsTable.projectId, projectId)).orderBy(desc(permitsTable.createdAt)),
     db.select({
       id: documentsTable.id, name: documentsTable.name, type: documentsTable.type,
       version: documentsTable.version, fileUrl: documentsTable.fileUrl,
       createdAt: documentsTable.createdAt, publicAccess: documentsTable.publicAccess,
-    }).from(documentsTable).where(and(eq(documentsTable.projectId, projectId), eq(documentsTable.status, "current"))),
+    }).from(documentsTable).where(and(eq(documentsTable.projectId, projectId), eq(documentsTable.status, "current"))).orderBy(desc(documentsTable.createdAt)),
     db.select().from(qrBoardPinsTable).where(eq(qrBoardPinsTable.projectId, projectId)),
     project.siteManagerId
       ? db.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, phone: usersTable.phone })

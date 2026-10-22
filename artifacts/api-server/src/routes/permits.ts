@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { permitsTable, usersTable, projectsTable } from "@workspace/db/schema";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, desc } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { allow, INTERNAL_STAFF, projectApprover, projectApproverFor } from "../lib/authz";
@@ -42,7 +42,7 @@ router.get("/projects/:projectId/permits", authenticate, allow(INTERNAL_STAFF), 
       return;
     }
 
-    const permits = await db.select().from(permitsTable).where(eq(permitsTable.projectId, req.params.projectId));
+    const permits = await db.select().from(permitsTable).where(eq(permitsTable.projectId, req.params.projectId)).orderBy(desc(permitsTable.createdAt));
     const result = await Promise.all(permits.map(formatPermit));
     res.json(result);
   } catch (err) {

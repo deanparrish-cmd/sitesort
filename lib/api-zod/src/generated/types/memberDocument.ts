@@ -5,6 +5,7 @@
  * SiteSort API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { MemberDocumentReplacedBy } from "./memberDocumentReplacedBy";
 
 export interface MemberDocument {
   id: string;
@@ -20,4 +21,6 @@ export interface MemberDocument {
   reviewedAt?: string;
   createdAt: string;
   uploaderName: string;
+  /** For a rejected document, the later submission from the same person, same kind, that was approved. Present = it belongs in the Rejected folder. */
+  replacedBy?: MemberDocumentReplacedBy;
 }

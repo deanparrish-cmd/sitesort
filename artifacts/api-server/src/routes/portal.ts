@@ -1995,9 +1995,9 @@ router.get("/portal/hs", ...portalGuards, async (req, res) => {
   const viewer = await resolveViewer(req.user!.id, pid);
   const [docIds, permitIds] = await Promise.all([visibleIds(pid, "document", viewer), visibleIds(pid, "permit", viewer)]);
   const [methodStatements, safety, permits] = await Promise.all([
-    docIds.size ? db.select().from(documentsTable).where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, "method_statement"), inArray(documentsTable.id, [...docIds]), inArray(documentsTable.status, ["current", "superseded"]))).orderBy(asc(documentsTable.name)) : Promise.resolve([]),
-    db.select().from(documentsTable).where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, "safety"), eq(documentsTable.status, "current"))).orderBy(asc(documentsTable.name)),
-    permitIds.size ? db.select().from(permitsTable).where(and(eq(permitsTable.projectId, pid), isNull(permitsTable.archivedAt), inArray(permitsTable.id, [...permitIds]))).orderBy(asc(permitsTable.expiryDate)) : Promise.resolve([]),
+    docIds.size ? db.select().from(documentsTable).where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, "method_statement"), inArray(documentsTable.id, [...docIds]), inArray(documentsTable.status, ["current", "superseded"]))).orderBy(desc(documentsTable.createdAt)) : Promise.resolve([]),
+    db.select().from(documentsTable).where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, "safety"), eq(documentsTable.status, "current"))).orderBy(desc(documentsTable.createdAt)),
+    permitIds.size ? db.select().from(permitsTable).where(and(eq(permitsTable.projectId, pid), isNull(permitsTable.archivedAt), inArray(permitsTable.id, [...permitIds]))).orderBy(desc(permitsTable.createdAt)) : Promise.resolve([]),
   ]);
   res.json({ methodStatements: methodStatements.map(serializeDoc), safety: safety.map(serializeDoc), permits: permits.map(serializePermit) });
 });
@@ -2012,7 +2012,7 @@ function docListHandler(type: string) {
     if (type === "safety") {
       const rows = await db.select().from(documentsTable)
         .where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, type), eq(documentsTable.status, "current")))
-        .orderBy(asc(documentsTable.name));
+        .orderBy(desc(documentsTable.createdAt));
       const myStatuses = await myDocStatuses(req.user!.id, rows.map(r => r.id));
       res.json(withMyStatus(rows.map(serializeDoc), myStatuses));
       return;
@@ -2022,7 +2022,7 @@ function docListHandler(type: string) {
     if (ids.size === 0) { res.json([]); return; }
     const rows = await db.select().from(documentsTable)
       .where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, type), inArray(documentsTable.id, [...ids]), inArray(documentsTable.status, ["current", "superseded"])))
-      .orderBy(asc(documentsTable.name));
+      .orderBy(desc(documentsTable.createdAt));
     const myStatuses = await myDocStatuses(req.user!.id, rows.map(r => r.id));
     res.json(withMyStatus(rows.map(serializeDoc), myStatuses));
   };
@@ -2075,7 +2075,7 @@ router.get("/portal/drawings/download-all", ...portalGuards, async (req, res) =>
           eq(documentsTable.projectId, pid), eq(documentsTable.type, "drawing"),
           eq(documentsTable.status, "current"), inArray(documentsTable.id, [...ids]),
         ))
-        .orderBy(asc(documentsTable.name))
+        .orderBy(desc(documentsTable.createdAt))
     : [];
   if (rows.length === 0) { res.status(404).json({ error: "not_found", message: "No drawings available to download" }); return; }
 
@@ -2266,7 +2266,7 @@ router.get("/portal/permits", ...portalGuards, async (req, res) => {
   if (ids.size === 0) { res.json([]); return; }
   const rows = await db.select().from(permitsTable)
     .where(and(eq(permitsTable.projectId, pid), isNull(permitsTable.archivedAt), inArray(permitsTable.id, [...ids])))
-    .orderBy(asc(permitsTable.expiryDate));
+    .orderBy(desc(permitsTable.createdAt));
   const views = await myItemViews(req.user!.id, "permit", rows.map(r => r.id));
   res.json(withMyView(rows.map(serializePermit), views));
 });
@@ -2783,7 +2783,7 @@ router.get("/portal/general", ...portalGuards, async (req, res) => {
   const viewer = await resolveViewer(req.user!.id, pid);
   const gIds = await visibleIds(pid, "document", viewer);
   const [docs, notes] = await Promise.all([
-    gIds.size ? db.select().from(documentsTable).where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, "general"), inArray(documentsTable.id, [...gIds]), inArray(documentsTable.status, ["current", "superseded"]))).orderBy(asc(documentsTable.name)) : Promise.resolve([]),
+    gIds.size ? db.select().from(documentsTable).where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, "general"), inArray(documentsTable.id, [...gIds]), inArray(documentsTable.status, ["current", "superseded"]))).orderBy(desc(documentsTable.createdAt)) : Promise.resolve([]),
     db.select({
       id: dailyNotesTable.id, body: dailyNotesTable.body, noteDate: dailyNotesTable.noteDate,
       photoUrl: dailyNotesTable.photoUrl, authorName: usersTable.name,

@@ -91,7 +91,8 @@ router.get("/projects/:projectId/documents", authenticate, allow(INTERNAL_STAFF)
     if (type) conditions.push(eq(documentsTable.type, type));
     if (status) conditions.push(eq(documentsTable.status, status));
 
-    const docs = await db.select().from(documentsTable).where(and(...conditions)).orderBy(documentsTable.createdAt);
+    // Newest first (Dean, 2026-10-22: every register reads newest first).
+    const docs = await db.select().from(documentsTable).where(and(...conditions)).orderBy(desc(documentsTable.createdAt));
 
     // Two queries for the whole list (it was two per document, all at once,
     // against a pool of 10: slow on big projects and a likely cause of the
@@ -188,6 +189,9 @@ router.post("/projects/:projectId/documents", authenticate, allow(projectApprove
     } else {
       const existing = await db.select().from(documentsTable)
         .where(and(eq(documentsTable.projectId, req.params.projectId), eq(documentsTable.name, name), eq(documentsTable.status, "current")))
+        // Newest if an old pair ever shares a name: the upload dialog's
+        // carry-forward list reads the same one (first match, newest first).
+        .orderBy(desc(documentsTable.createdAt))
         .limit(1);
       if (existing.length > 0) { previous = existing[0]; supersededBy = "name"; }
     }

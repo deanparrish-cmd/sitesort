@@ -61,7 +61,8 @@ router.get("/subcontractors", authenticate, allow(INTERNAL_STAFF), async (req, r
     const roleTitleBySub = new Map(primaryContacts.map(p => [p.subcontractorId, p.roleTitle]));
     const result = await Promise.all(subs.map(async (s) => {
       const insurance = await db.select().from(insuranceRecordsTable)
-        .where(and(eq(insuranceRecordsTable.subcontractorId, s.id), isNull(insuranceRecordsTable.archivedAt)));
+        .where(and(eq(insuranceRecordsTable.subcontractorId, s.id), isNull(insuranceRecordsTable.archivedAt)))
+        .orderBy(desc(insuranceRecordsTable.createdAt));
       const certifications = await certificationsForSubcontractor(s.id, req.user!.companyId);
       return {
         id: s.id,
@@ -170,7 +171,8 @@ router.get("/subcontractors/:subcontractorId", authenticate, allow(INTERNAL_STAF
 
     const s = subs[0];
     const insurance = await db.select().from(insuranceRecordsTable)
-      .where(and(eq(insuranceRecordsTable.subcontractorId, s.id), isNull(insuranceRecordsTable.archivedAt)));
+      .where(and(eq(insuranceRecordsTable.subcontractorId, s.id), isNull(insuranceRecordsTable.archivedAt)))
+        .orderBy(desc(insuranceRecordsTable.createdAt));
     const certifications = await certificationsForSubcontractor(s.id, req.user!.companyId);
     const memberRows = await db.select({ projectId: projectMembersTable.projectId }).from(projectMembersTable).where(eq(projectMembersTable.subcontractorId, s.id));
     const assignedProjects = await Promise.all(memberRows.map(async (m) => {
@@ -296,7 +298,8 @@ router.patch("/subcontractors/:subcontractorId", authenticate, allow(COMPANY_MAN
     }
     const s = subs[0];
     const insurance = await db.select().from(insuranceRecordsTable)
-      .where(and(eq(insuranceRecordsTable.subcontractorId, s.id), isNull(insuranceRecordsTable.archivedAt)));
+      .where(and(eq(insuranceRecordsTable.subcontractorId, s.id), isNull(insuranceRecordsTable.archivedAt)))
+        .orderBy(desc(insuranceRecordsTable.createdAt));
     const patchCerts = await certificationsForSubcontractor(s.id, req.user!.companyId);
     const patchPrimaryContact = await db.select({ roleTitle: peopleTable.roleTitle }).from(peopleTable)
       .where(and(eq(peopleTable.subcontractorId, s.id), eq(peopleTable.isPrimaryContact, true))).limit(1);

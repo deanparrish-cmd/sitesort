@@ -170,6 +170,7 @@ export const PM_GUIDE: GuideSection[] = [
         heading: "Site Issues, Plant & Materials, Daily Report",
         body: [
           "By default a new portal member sees only Overview, Messages, Shared with me, My documents, Permits and Site Board. To let someone log site issues, update plant & materials, or edit the daily report, turn on the matching pill (Site Issues / Plant & Materials / Daily Report) on their Team tab card. Each is independent and can be switched off again at any time.",
+          "Documents a portal member sends you (insurance, certificates and so on) wait under Documents for review on the project's Team Portal tab, newest first. Approve, or Reject with a reason: a reason is required, and the sender sees it in My documents. Once the same person sends a replacement of the same kind and you approve it, the rejected one moves to the Rejected folder below the list, with its reason and the name of the replacement.",
         ],
       },
     ],
@@ -366,6 +367,7 @@ export const WORKER_GUIDE: GuideSection[] = [
         heading: "Everything starts from Home",
         body: [
           "Your Home screen shows a big tile for each section: Messages, Shared with me, My documents, Site Board, Permits and Settings (plus Site Tasks if your project manager has given you those permissions). Tap a tile to open a section.",
+          "Send insurance, certificates and other paperwork from My documents. If your project manager rejects one, it's marked Rejected there with their reason: fix what it says and upload the new one.",
         ],
       },
       {

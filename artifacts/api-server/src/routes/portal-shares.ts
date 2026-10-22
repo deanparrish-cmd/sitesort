@@ -6,7 +6,7 @@ import {
   photosTable, plantItemsTable, dailyReportsTable,
   portalMemberDocumentsTable, personCertificationsTable, projectInvitesTable,
 } from "@workspace/db/schema";
-import { and, eq, isNull, isNotNull, inArray, desc, gt } from "drizzle-orm";
+import { and, eq, isNull, isNotNull, inArray, desc, asc, gt } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { allow, INTERNAL_STAFF, projectApprover } from "../lib/authz";
@@ -358,6 +358,7 @@ router.get("/projects/:projectId/member-documents", authenticate, allow(projectA
       reviewedAt: portalMemberDocumentsTable.reviewedAt,
       createdAt: portalMemberDocumentsTable.createdAt,
       uploaderName: usersTable.name,
+      userId: portalMemberDocumentsTable.userId,
     }).from(portalMemberDocumentsTable)
       .leftJoin(usersTable, eq(portalMemberDocumentsTable.userId, usersTable.id))
       // Once a submission has been "Added to contact" (a person certification
@@ -373,6 +374,20 @@ router.get("/projects/:projectId/member-documents", authenticate, allow(projectA
         isNull(personCertificationsTable.id),
       ))
       .orderBy(desc(portalMemberDocumentsTable.createdAt));
+    // Rejected folder (Dean, 2026-10-22): a rejected submission moves out of
+    // the review list once the same person's later submission of the same
+    // kind is approved (filed onto their contact or not). Its note goes with it.
+    const approved = await db.select({
+      id: portalMemberDocumentsTable.id, name: portalMemberDocumentsTable.name, kind: portalMemberDocumentsTable.kind,
+      userId: portalMemberDocumentsTable.userId, createdAt: portalMemberDocumentsTable.createdAt, reviewedAt: portalMemberDocumentsTable.reviewedAt,
+    }).from(portalMemberDocumentsTable)
+      .where(and(eq(portalMemberDocumentsTable.projectId, req.params.projectId), eq(portalMemberDocumentsTable.status, "approved")))
+      .orderBy(asc(portalMemberDocumentsTable.createdAt));
+    const replacementFor = (r: typeof rows[number]) => {
+      if (r.status !== "rejected") return undefined;
+      const a = approved.find(x => x.userId === r.userId && x.kind === r.kind && x.createdAt > r.createdAt);
+      return a ? { id: a.id, name: a.name, approvedAt: a.reviewedAt ? a.reviewedAt.toISOString() : undefined } : undefined;
+    };
     res.json(rows.map(r => ({
       id: r.id, name: r.name, kind: r.kind, personId: r.personId ?? undefined,
       fileUrl: r.fileUrl, fileSize: r.fileSize,
@@ -380,6 +395,7 @@ router.get("/projects/:projectId/member-documents", authenticate, allow(projectA
       reviewedAt: r.reviewedAt ? r.reviewedAt.toISOString() : undefined,
       createdAt: r.createdAt.toISOString(),
       uploaderName: r.uploaderName ?? "Unknown",
+      replacedBy: replacementFor(r),
     })));
   } catch (err) {
     req.log.error({ err }, "List member documents error");
@@ -396,6 +412,12 @@ router.post("/projects/:projectId/member-documents/:id/review", authenticate, al
     const { action, note } = req.body as { action?: string; note?: string };
     if (action !== "approve" && action !== "reject") {
       res.status(400).json({ error: "validation_error", message: "action must be 'approve' or 'reject'." });
+      return;
+    }
+    // A refusal always carries its reason (Dean, 2026-10-22): the sender sees
+    // it in their portal and needs to know what to fix.
+    if (action === "reject" && !(typeof note === "string" && note.trim())) {
+      res.status(400).json({ error: "reason_required", message: "Say why it's rejected, so they know what to fix." });
       return;
     }
     const existing = (await db.select({ id: portalMemberDocumentsTable.id, userId: portalMemberDocumentsTable.userId, name: portalMemberDocumentsTable.name })

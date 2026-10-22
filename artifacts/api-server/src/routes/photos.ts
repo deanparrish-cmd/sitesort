@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { insertNotifications } from "../lib/notify";
 import { db } from "@workspace/db";
 import { photosTable, usersTable, notificationsTable, projectMembersTable, projectsTable } from "@workspace/db/schema";
-import { eq, and, or, count, inArray, isNotNull, isNull } from "drizzle-orm";
+import { eq, and, or, count, inArray, isNotNull, isNull, desc } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { allow, INTERNAL_STAFF, projectApproverFor } from "../lib/authz";
@@ -102,7 +102,7 @@ router.get("/projects/:projectId/photos", authenticate, allow(INTERNAL_STAFF), a
     // creation, so this only ever hides portal drafts.
     conditions.push(or(isNotNull(photosTable.submittedAt), eq(photosTable.uploadedBy, req.user!.id))!);
 
-    const photos = await db.select().from(photosTable).where(and(...conditions)).orderBy(photosTable.takenAt);
+    const photos = await db.select().from(photosTable).where(and(...conditions)).orderBy(desc(photosTable.takenAt));
     const result = await Promise.all(photos.map(async (p) => {
       const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, p.uploadedBy)).limit(1);
       return await formatPhoto(p, userRows[0]?.name ?? "Unknown", project[0].name, await nameForUser(p.assignedToUserId), await nameForUser(p.archivedBy));

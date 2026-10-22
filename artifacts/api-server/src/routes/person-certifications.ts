@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { personCertificationsTable, peopleTable } from "@workspace/db/schema";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, desc } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { allow, COMPANY_MANAGER, INTERNAL_STAFF } from "../lib/authz";
@@ -50,7 +50,8 @@ router.get("/people/:personId/certifications", authenticate, allow(INTERNAL_STAF
     const person = await loadOwnedPerson(req.params.personId, req.user!.companyId);
     if (!person) { res.status(404).json({ error: "not_found", message: "Person not found" }); return; }
     const certs = await db.select().from(personCertificationsTable)
-      .where(and(eq(personCertificationsTable.personId, person.id), isNull(personCertificationsTable.archivedAt)));
+      .where(and(eq(personCertificationsTable.personId, person.id), isNull(personCertificationsTable.archivedAt)))
+      .orderBy(desc(personCertificationsTable.createdAt));
     res.json(certs.map(serialize));
   } catch (err) {
     req.log.error({ err }, "List person certifications error");

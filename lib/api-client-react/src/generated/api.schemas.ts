@@ -1821,6 +1821,15 @@ export interface PortalMemberDocument {
   createdAt: string;
 }
 
+/**
+ * For a rejected document, the later submission from the same person, same kind, that was approved. Present = it belongs in the Rejected folder.
+ */
+export type MemberDocumentReplacedBy = {
+  id: string;
+  name: string;
+  approvedAt?: string;
+};
+
 export interface MemberDocument {
   id: string;
   name: string;
@@ -1835,6 +1844,8 @@ export interface MemberDocument {
   reviewedAt?: string;
   createdAt: string;
   uploaderName: string;
+  /** For a rejected document, the later submission from the same person, same kind, that was approved. Present = it belongs in the Rejected folder. */
+  replacedBy?: MemberDocumentReplacedBy;
 }
 
 export type ReviewMemberDocumentRequestAction =
