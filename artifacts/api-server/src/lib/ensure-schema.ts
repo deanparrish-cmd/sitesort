@@ -333,7 +333,7 @@ export async function ensureSchema(): Promise<void> {
     await pool.query(`CREATE INDEX IF NOT EXISTS push_alerts_endpoint_idx ON push_alerts (endpoint, sent_at)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS push_alerts_user_idx ON push_alerts (user_id, sent_at)`);
     // Receipt detail (2026-10-22): did the service worker run, did showing throw.
-    for (const col of ["device_sw text", "arrived_at timestamp", "show_error text", "posted boolean", "foreground boolean", "sw_version text"]) {
+    for (const col of ["device_sw text", "arrived_at timestamp", "show_error text", "posted boolean", "foreground boolean", "sw_version text", "badge_result text"]) {
       await pool.query(`ALTER TABLE push_alerts ADD COLUMN IF NOT EXISTS ${col}`);
     }
     await pool.query(`ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS sw_version text`);

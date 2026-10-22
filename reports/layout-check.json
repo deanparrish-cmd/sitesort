@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-22T08:07:18.179Z",
+  "generatedAt": "2026-10-22T09:12:46.729Z",
   "target": "http://localhost:8080",
   "viewports": [
     360,
@@ -132,7 +132,7 @@
         "auth": "none"
       },
       {
-        "path": "/s/Rmlgf-P7tyVqpsdwnToIsa2zaY_eSnD1",
+        "path": "/s/vFxRyyAAfIRTI9_pJWQTmBr2yekmE5iY",
         "label": "s",
         "auth": "none"
       },
@@ -147,7 +147,7 @@
         "auth": "app"
       },
       {
-        "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+        "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
         "label": "projects",
         "auth": "app"
       },
@@ -167,7 +167,7 @@
         "auth": "app"
       },
       {
-        "path": "/site/ad8ee58285ecea0c8f2b200e3fa9016b",
+        "path": "/site/49514a2c1abfacbc827ed6e0d401f4e3",
         "label": "site",
         "auth": "none"
       },
@@ -227,7 +227,7 @@
         "auth": "none"
       },
       {
-        "path": "/portal/accept/874bc5690b8c308b54f14b9cc70bd049f360be25725bc4a568f5f97e58d0e538",
+        "path": "/portal/accept/007063aebe5a8949845941c21c3c0c9bb0fbc39219f9d385a0d35c71ef9a8cb8",
         "label": "portal-accept",
         "auth": "none"
       },
@@ -252,62 +252,62 @@
         "auth": "none"
       },
       {
-        "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=overview",
+        "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=overview",
         "label": "project-detail:overview",
         "auth": "app"
       },
       {
-        "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=progress",
+        "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=progress",
         "label": "project-detail:progress",
         "auth": "app"
       },
       {
-        "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=team",
+        "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=team",
         "label": "project-detail:team",
         "auth": "app"
       },
       {
-        "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=issues",
+        "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=issues",
         "label": "project-detail:issues",
         "auth": "app"
       },
       {
-        "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=qr",
+        "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=qr",
         "label": "project-detail:qr",
         "auth": "app"
       },
       {
-        "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=documents",
+        "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=documents",
         "label": "project-detail:documents",
         "auth": "app"
       },
       {
-        "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=plant",
+        "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=plant",
         "label": "project-detail:plant",
         "auth": "app"
       },
       {
-        "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=permits",
+        "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=permits",
         "label": "project-detail:permits",
         "auth": "app"
       },
       {
-        "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=closeout",
+        "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=closeout",
         "label": "project-detail:closeout",
         "auth": "app"
       },
       {
-        "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=checkins",
+        "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=checkins",
         "label": "project-detail:checkins",
         "auth": "app"
       },
       {
-        "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=reports",
+        "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=reports",
         "label": "project-detail:reports",
         "auth": "app"
       },
       {
-        "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=teamportal",
+        "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=teamportal",
         "label": "project-detail:teamportal",
         "auth": "app"
       },
@@ -946,9 +946,9 @@
     },
     {
       "label": "s",
-      "path": "/s/Rmlgf-P7tyVqpsdwnToIsa2zaY_eSnD1",
+      "path": "/s/vFxRyyAAfIRTI9_pJWQTmBr2yekmE5iY",
       "width": 360,
-      "finalPath": "/s/Rmlgf-P7tyVqpsdwnToIsa2zaY_eSnD1",
+      "finalPath": "/s/vFxRyyAAfIRTI9_pJWQTmBr2yekmE5iY",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -1099,9 +1099,9 @@
     },
     {
       "label": "projects",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "width": 360,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -1303,9 +1303,9 @@
     },
     {
       "label": "site",
-      "path": "/site/ad8ee58285ecea0c8f2b200e3fa9016b",
+      "path": "/site/49514a2c1abfacbc827ed6e0d401f4e3",
       "width": 360,
-      "finalPath": "/site/ad8ee58285ecea0c8f2b200e3fa9016b",
+      "finalPath": "/site/49514a2c1abfacbc827ed6e0d401f4e3",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -1915,9 +1915,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/874bc5690b8c308b54f14b9cc70bd049f360be25725bc4a568f5f97e58d0e538",
+      "path": "/portal/accept/007063aebe5a8949845941c21c3c0c9bb0fbc39219f9d385a0d35c71ef9a8cb8",
       "width": 360,
-      "finalPath": "/portal/accept/874bc5690b8c308b54f14b9cc70bd049f360be25725bc4a568f5f97e58d0e538",
+      "finalPath": "/portal/accept/007063aebe5a8949845941c21c3c0c9bb0fbc39219f9d385a0d35c71ef9a8cb8",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -2170,9 +2170,9 @@
     },
     {
       "label": "project-detail:overview",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=overview",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=overview",
       "width": 360,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -2221,9 +2221,9 @@
     },
     {
       "label": "project-detail:progress",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=progress",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=progress",
       "width": 360,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -2272,9 +2272,9 @@
     },
     {
       "label": "project-detail:team",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=team",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=team",
       "width": 360,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -2323,9 +2323,9 @@
     },
     {
       "label": "project-detail:issues",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=issues",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=issues",
       "width": 360,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -2374,9 +2374,9 @@
     },
     {
       "label": "project-detail:qr",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=qr",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=qr",
       "width": 360,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -2425,9 +2425,9 @@
     },
     {
       "label": "project-detail:documents",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=documents",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=documents",
       "width": 360,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -2476,9 +2476,9 @@
     },
     {
       "label": "project-detail:plant",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=plant",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=plant",
       "width": 360,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -2527,9 +2527,9 @@
     },
     {
       "label": "project-detail:permits",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=permits",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=permits",
       "width": 360,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -2578,9 +2578,9 @@
     },
     {
       "label": "project-detail:closeout",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=closeout",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=closeout",
       "width": 360,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -2629,9 +2629,9 @@
     },
     {
       "label": "project-detail:checkins",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=checkins",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=checkins",
       "width": 360,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -2680,9 +2680,9 @@
     },
     {
       "label": "project-detail:reports",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=reports",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=reports",
       "width": 360,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -2731,9 +2731,9 @@
     },
     {
       "label": "project-detail:teamportal",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=teamportal",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=teamportal",
       "width": 360,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -4312,9 +4312,9 @@
     },
     {
       "label": "s",
-      "path": "/s/Rmlgf-P7tyVqpsdwnToIsa2zaY_eSnD1",
+      "path": "/s/vFxRyyAAfIRTI9_pJWQTmBr2yekmE5iY",
       "width": 390,
-      "finalPath": "/s/Rmlgf-P7tyVqpsdwnToIsa2zaY_eSnD1",
+      "finalPath": "/s/vFxRyyAAfIRTI9_pJWQTmBr2yekmE5iY",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -4465,9 +4465,9 @@
     },
     {
       "label": "projects",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "width": 390,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -4669,9 +4669,9 @@
     },
     {
       "label": "site",
-      "path": "/site/ad8ee58285ecea0c8f2b200e3fa9016b",
+      "path": "/site/49514a2c1abfacbc827ed6e0d401f4e3",
       "width": 390,
-      "finalPath": "/site/ad8ee58285ecea0c8f2b200e3fa9016b",
+      "finalPath": "/site/49514a2c1abfacbc827ed6e0d401f4e3",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -5281,9 +5281,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/874bc5690b8c308b54f14b9cc70bd049f360be25725bc4a568f5f97e58d0e538",
+      "path": "/portal/accept/007063aebe5a8949845941c21c3c0c9bb0fbc39219f9d385a0d35c71ef9a8cb8",
       "width": 390,
-      "finalPath": "/portal/accept/874bc5690b8c308b54f14b9cc70bd049f360be25725bc4a568f5f97e58d0e538",
+      "finalPath": "/portal/accept/007063aebe5a8949845941c21c3c0c9bb0fbc39219f9d385a0d35c71ef9a8cb8",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -5536,9 +5536,9 @@
     },
     {
       "label": "project-detail:overview",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=overview",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=overview",
       "width": 390,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -5587,9 +5587,9 @@
     },
     {
       "label": "project-detail:progress",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=progress",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=progress",
       "width": 390,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -5638,9 +5638,9 @@
     },
     {
       "label": "project-detail:team",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=team",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=team",
       "width": 390,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -5689,9 +5689,9 @@
     },
     {
       "label": "project-detail:issues",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=issues",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=issues",
       "width": 390,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -5740,9 +5740,9 @@
     },
     {
       "label": "project-detail:qr",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=qr",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=qr",
       "width": 390,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -5791,9 +5791,9 @@
     },
     {
       "label": "project-detail:documents",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=documents",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=documents",
       "width": 390,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -5842,9 +5842,9 @@
     },
     {
       "label": "project-detail:plant",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=plant",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=plant",
       "width": 390,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -5893,9 +5893,9 @@
     },
     {
       "label": "project-detail:permits",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=permits",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=permits",
       "width": 390,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -5944,9 +5944,9 @@
     },
     {
       "label": "project-detail:closeout",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=closeout",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=closeout",
       "width": 390,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -5995,9 +5995,9 @@
     },
     {
       "label": "project-detail:checkins",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=checkins",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=checkins",
       "width": 390,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -6046,9 +6046,9 @@
     },
     {
       "label": "project-detail:reports",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=reports",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=reports",
       "width": 390,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -6097,9 +6097,9 @@
     },
     {
       "label": "project-detail:teamportal",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=teamportal",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=teamportal",
       "width": 390,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -7678,9 +7678,9 @@
     },
     {
       "label": "s",
-      "path": "/s/Rmlgf-P7tyVqpsdwnToIsa2zaY_eSnD1",
+      "path": "/s/vFxRyyAAfIRTI9_pJWQTmBr2yekmE5iY",
       "width": 768,
-      "finalPath": "/s/Rmlgf-P7tyVqpsdwnToIsa2zaY_eSnD1",
+      "finalPath": "/s/vFxRyyAAfIRTI9_pJWQTmBr2yekmE5iY",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -7853,9 +7853,9 @@
     },
     {
       "label": "projects",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "width": 768,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -8101,9 +8101,9 @@
     },
     {
       "label": "site",
-      "path": "/site/ad8ee58285ecea0c8f2b200e3fa9016b",
+      "path": "/site/49514a2c1abfacbc827ed6e0d401f4e3",
       "width": 768,
-      "finalPath": "/site/ad8ee58285ecea0c8f2b200e3fa9016b",
+      "finalPath": "/site/49514a2c1abfacbc827ed6e0d401f4e3",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -8812,9 +8812,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/874bc5690b8c308b54f14b9cc70bd049f360be25725bc4a568f5f97e58d0e538",
+      "path": "/portal/accept/007063aebe5a8949845941c21c3c0c9bb0fbc39219f9d385a0d35c71ef9a8cb8",
       "width": 768,
-      "finalPath": "/portal/accept/874bc5690b8c308b54f14b9cc70bd049f360be25725bc4a568f5f97e58d0e538",
+      "finalPath": "/portal/accept/007063aebe5a8949845941c21c3c0c9bb0fbc39219f9d385a0d35c71ef9a8cb8",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -9067,9 +9067,9 @@
     },
     {
       "label": "project-detail:overview",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=overview",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=overview",
       "width": 768,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -9129,9 +9129,9 @@
     },
     {
       "label": "project-detail:progress",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=progress",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=progress",
       "width": 768,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -9191,9 +9191,9 @@
     },
     {
       "label": "project-detail:team",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=team",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=team",
       "width": 768,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -9253,9 +9253,9 @@
     },
     {
       "label": "project-detail:issues",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=issues",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=issues",
       "width": 768,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -9315,9 +9315,9 @@
     },
     {
       "label": "project-detail:qr",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=qr",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=qr",
       "width": 768,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -9377,9 +9377,9 @@
     },
     {
       "label": "project-detail:documents",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=documents",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=documents",
       "width": 768,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -9439,9 +9439,9 @@
     },
     {
       "label": "project-detail:plant",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=plant",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=plant",
       "width": 768,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -9501,9 +9501,9 @@
     },
     {
       "label": "project-detail:permits",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=permits",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=permits",
       "width": 768,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -9563,9 +9563,9 @@
     },
     {
       "label": "project-detail:closeout",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=closeout",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=closeout",
       "width": 768,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -9625,9 +9625,9 @@
     },
     {
       "label": "project-detail:checkins",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=checkins",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=checkins",
       "width": 768,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -9687,9 +9687,9 @@
     },
     {
       "label": "project-detail:reports",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=reports",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=reports",
       "width": 768,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -9749,9 +9749,9 @@
     },
     {
       "label": "project-detail:teamportal",
-      "path": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5?tab=teamportal",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a?tab=teamportal",
       "width": 768,
-      "finalPath": "/projects/e97a0679-e400-47ad-a0f1-2a66616297d5",
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a",
       "ok": true,
       "reasons": [],
       "metrics": {

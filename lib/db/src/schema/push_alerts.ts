@@ -34,6 +34,8 @@ export const pushAlertsTable = pgTable("push_alerts", {
   posted: boolean("posted"),
   foreground: boolean("foreground"),
   swVersion: text("sw_version"),
+  // What setAppBadge did with the payload's count: set:N, cleared, unsupported, or the error.
+  badgeResult: text("badge_result"),
   permission: text("permission"),
   tappedAt: timestamp("tapped_at"),
   bannerAnswer: text("banner_answer"),

@@ -1968,10 +1968,26 @@ export interface PortalGeneral {
  */
 export type PortalUnseenCounts = { [key: string]: number };
 
+export type GateWaitingProjectsItem = {
+  projectId: string;
+  name: string;
+  count: number;
+};
+
+/**
+ * People waiting at the gate (pending holds) on every project where this login runs the gate.
+ */
+export interface GateWaiting {
+  holder: boolean;
+  total: number;
+  projects: GateWaitingProjectsItem[];
+}
+
 export interface PortalUnseen {
   /** Unseen item count keyed by portal section key (e.g. drawings, site-issues, shared). */
   counts: PortalUnseenCounts;
   total: number;
+  gate?: GateWaiting;
 }
 
 export interface PortalPushKey {
@@ -2054,6 +2070,11 @@ export interface PushReceiptRequest {
   foreground?: boolean | null;
   /** @maxLength 32 */
   sw?: string;
+  /**
+   * What setAppBadge did with the payload's badge count (set:N, cleared, unsupported, or the error).
+   * @maxLength 120
+   */
+  badge?: string | null;
 }
 
 export type PortalPushAlertRowBannerAnswer =

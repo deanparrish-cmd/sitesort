@@ -63,8 +63,10 @@ const TILE_THEME_CLASSES: Record<TileTheme, { bg: string; icon: string; ring: st
 // unseen count badge when there's something new. min-h-[88px] plus generous
 // padding keeps this well clear of the 56px tap-target minimum even with a
 // two-line label.
-export function PortalTile({ href, label, Icon, theme, unseen }: { href: string; label: string; Icon: React.ComponentType<{ className?: string }>; theme: TileTheme; unseen?: number }) {
+export function PortalTile({ href, label, Icon, theme, unseen, alert }: { href: string; label: string; Icon: React.ComponentType<{ className?: string }>; theme: TileTheme; unseen?: number; alert?: number }) {
   const t = TILE_THEME_CLASSES[theme];
+  // `alert`: something someone is waiting on (people held at the gate). Red,
+  // and it wins over the unseen count.
   return (
     <Link
       href={href}
@@ -73,13 +75,23 @@ export function PortalTile({ href, label, Icon, theme, unseen }: { href: string;
         "hover:border-primary/40 active:scale-[0.98] transition-all duration-150",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
         t.ring,
+        !!alert && "border-2 border-destructive",
       )}
     >
       <span className={cn("w-11 h-11 rounded-xl flex items-center justify-center shrink-0", t.bg)}>
         <Icon className={cn("w-6 h-6", t.icon)} />
       </span>
       <span className="text-base font-display font-bold leading-tight">{label}</span>
-      {!!unseen && (
+      {!!alert && (
+        <span
+          aria-label={`${alert} waiting`}
+          data-testid="tile-alert-count"
+          className="absolute top-3 right-3 min-w-[1.75rem] h-7 px-2 rounded-full bg-destructive text-destructive-foreground text-sm font-extrabold flex items-center justify-center shadow-sm"
+        >
+          {alert > 99 ? "99+" : alert}
+        </span>
+      )}
+      {!alert && !!unseen && (
         <span
           aria-label={`${unseen} unseen`}
           className="absolute top-3 right-3 min-w-[1.5rem] h-6 px-1.5 rounded-full bg-accent text-white text-xs font-bold flex items-center justify-center shadow-sm"

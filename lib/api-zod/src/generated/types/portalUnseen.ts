@@ -5,10 +5,12 @@
  * SiteSort API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { GateWaiting } from "./gateWaiting";
 import type { PortalUnseenCounts } from "./portalUnseenCounts";
 
 export interface PortalUnseen {
   /** Unseen item count keyed by portal section key (e.g. drawings, site-issues, shared). */
   counts: PortalUnseenCounts;
   total: number;
+  gate?: GateWaiting;
 }

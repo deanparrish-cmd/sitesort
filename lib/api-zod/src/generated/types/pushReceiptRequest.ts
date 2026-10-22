@@ -20,4 +20,9 @@ export interface PushReceiptRequest {
   foreground?: boolean | null;
   /** @maxLength 32 */
   sw?: string;
+  /**
+   * What setAppBadge did with the payload's badge count (set:N, cleared, unsupported, or the error).
+   * @maxLength 120
+   */
+  badge?: string | null;
 }

@@ -19,7 +19,8 @@ import { siteDateStr, siteTime, siteTzLabel, closeDueAfter, safeTz, DEFAULT_SITE
 import { isProjectApprover } from "../lib/project-authority";
 import { logActivity } from "../lib/activity";
 import { allow, COMPANY_MANAGER, ANY_MEMBER, INTERNAL_STAFF, projectApprover, projectSiteManager, declarePolicy } from "../lib/authz";
-import { sendPushToMember } from "../lib/web-push";
+import { sendPushToMember, type PushPayload } from "../lib/web-push";
+import { gateWaitingFor } from "../lib/gate-waiting";
 import { requirePortalSession, requirePortalMember } from "../middlewares/portal";
 
 const checkinUpload = multer({
@@ -122,6 +123,43 @@ async function notifySignedOut(
   }
 }
 
+// Tell everyone who runs the gate on this project, each with their own
+// app-icon badge: the number now waiting across all their projects. A
+// decision or a lapse sends one too, because a waiting count left on the icon
+// after the gate is clear (or a cleared one while someone still waits) is
+// worse than none. iOS requires every push to show a notification, so these
+// are visible; a decision reuses the hold's tag and replaces its alert.
+async function pushGateUpdate(projectId: string, payload: Omit<PushPayload, "badge">): Promise<void> {
+  for (const userId of await registerHolderIds(projectId)) {
+    try {
+      const w = await gateWaitingFor(userId);
+      await sendPushToMember(userId, projectId, { ...payload, badge: w.total });
+    } catch { /* best-effort per person */ }
+  }
+}
+
+function pendingHere(projectId: string) {
+  return db.select({ n: sql<number>`count(*)::int` }).from(siteCheckinsTable)
+    .where(and(eq(siteCheckinsTable.projectId, projectId), eq(siteCheckinsTable.holdStatus, "pending"),
+      sql`(${siteCheckinsTable.checkedInAt} > now() - interval '48 hours' OR ${siteCheckinsTable.checkedOutAt} IS NULL)`))
+    .then(r => r[0]?.n ?? 0);
+}
+
+// A hold has ended (approved, refused): replace its alert and update badges.
+async function notifyHoldEnded(projectId: string, row: { id: string; workerName: string; companyName: string | null }, decision: "approve" | "refuse", actorId: string): Promise<void> {
+  try {
+    const [p] = await db.select({ name: projectsTable.name }).from(projectsTable).where(eq(projectsTable.id, projectId)).limit(1);
+    const [actor] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, actorId)).limit(1);
+    const n = await pendingHere(projectId);
+    await pushGateUpdate(projectId, {
+      title: `${decision === "approve" ? "Let on site" : "Refused"}: ${row.workerName}${row.companyName ? ` (${row.companyName})` : ""}`,
+      body: `${p?.name ?? "Site"}: decided by ${actor?.name ?? "a manager"}. ${n === 0 ? "Nobody else is waiting at the gate." : `${n} still waiting at the gate.`}`,
+      url: "/portal/site-register",
+      tag: `hold-${row.id}`,
+    });
+  } catch { /* best-effort */ }
+}
+
 const CATEGORY_LABELS: Record<string, string> = {
   site_board: "Site Board",
   safety: "Safety Information",
@@ -139,14 +177,12 @@ async function notifyHeldCheckin(projectId: string, row: { id: string; workerNam
     const why = holdReasonText(holdReason);
     // The people deciding on site (#124): the site manager and anyone with PM
     // cover get a push on their phone, straight to the portal register.
-    for (const userId of await registerHolderIds(projectId)) {
-      void sendPushToMember(userId, projectId, {
-        title: `Waiting at the gate: ${rec.projectName}`,
-        body: `${row.workerName}${row.companyName ? ` (${row.companyName})` : ""}: ${why}. Approve or refuse.`,
-        url: "/portal/site-register",
-        tag: `hold-${row.id}`,
-      }).catch(() => {});
-    }
+    void pushGateUpdate(projectId, {
+      title: `Waiting at the gate: ${rec.projectName}`,
+      body: `${row.workerName}${row.companyName ? ` (${row.companyName})` : ""}: ${why}. Approve or refuse.`,
+      url: "/portal/site-register",
+      tag: `hold-${row.id}`,
+    });
     for (const userId of rec.userIds) {
       await insertNotifications({ projectId,
         id: generateId(),
@@ -714,48 +750,93 @@ function readDeviceToken(raw: unknown, projectId: string): { workerName: string;
 // Who a phone remembered, at any age (expired included): only used to tell
 // whether a new check-in on that phone is a different person. Never signs
 // anyone in.
-function readHeldDeviceToken(raw: unknown, projectId: string): { workerName: string; companyName: string; key: string | null } | null {
+function readHeldDeviceToken(raw: unknown, projectId: string): { workerName: string; companyName: string; key: string | null; at: number } | null {
   if (typeof raw !== "string" || !raw) return null;
   try {
     const p = jwt.verify(raw, process.env.JWT_SECRET as string, { ignoreExpiration: true }) as any;
     if (p?.kind !== "site-device" || p.projectId !== projectId) return null;
-    return { workerName: String(p.workerName), companyName: String(p.companyName), key: typeof p.key === "string" ? p.key : null };
+    return { workerName: String(p.workerName), companyName: String(p.companyName), key: typeof p.key === "string" ? p.key : null, at: typeof p.iat === "number" ? p.iat * 1000 : Date.now() };
+  } catch { return null; }
+}
+// Shared-device rule, ROLLING (Dean, 2026-10-22; was permanent from
+// 2026-10-21): a phone offers one-tap only if a single person has checked in
+// on it in the last 7 days. A second person in that window: no one-tap. Once a
+// week passes with only one person, it comes back. A real shared gate phone
+// never recovers because it keeps seeing new people; a worker who lent his
+// phone once gets it back after a week. Same person = same card, the same
+// name and company, or a mobile number in common (one person on two cards for
+// two firms keeps one tap on his own phone).
+const SHARED_WINDOW_MS = 7 * 24 * 3600 * 1000;
+const HISTORY_MAX = 30;
+// Who checked in on this phone, kept ON the phone as a signed list (nothing
+// stored server-side). Names are not in it: `nh` is an HMAC of the normalised
+// name and company, so a shared phone doesn't carry a readable list of
+// everyone who used it. `other` = "someone else, identity unknown" (a phone
+// marked shared under the old permanent rule starts a fresh 7-day window).
+type HistoryEntry = { at: number; key: string | null; nh: string | null; other?: true };
+function nameHash(workerName: string, companyName: string): string {
+  return createHash("sha256").update(`${process.env.JWT_SECRET}|site-device|${normText(workerName)}|${normText(companyName)}`).digest("hex").slice(0, 24);
+}
+function signDeviceHistory(projectId: string, entries: HistoryEntry[]): string {
+  return jwt.sign({ kind: "site-device-history", projectId, e: entries }, process.env.JWT_SECRET as string);
+}
+function readDeviceHistory(raw: unknown, projectId: string): HistoryEntry[] | null {
+  if (typeof raw !== "string" || !raw) return null;
+  try {
+    const p = jwt.verify(raw, process.env.JWT_SECRET as string) as any;
+    if (p?.kind !== "site-device-history" || p.projectId !== projectId || !Array.isArray(p.e)) return null;
+    return (p.e as HistoryEntry[]).filter(x => typeof x?.at === "number");
   } catch { return null; }
 }
 type DeviceIdentity = { workerName: string; companyName: string; key: string | null };
 // Every mobile number known for someone on this project: on their card, or
-// typed at the gate on their own check-ins.
-async function phonesForIdentity(projectId: string, who: DeviceIdentity, extra: string[] = []): Promise<string[]> {
+// typed at the gate on their own check-ins (matched by card, or by name hash).
+async function phonesFor(projectId: string, who: { key: string | null; nh: string | null }, extra: string[] = []): Promise<string[]> {
   const out = [...extra];
   if (who.key) out.push(...await phonesForKey(who.key));
   const rows = await db.select({ typedPhone: siteCheckinsTable.typedPhone, workerName: siteCheckinsTable.workerName, companyName: siteCheckinsTable.companyName, personKey: siteCheckinsTable.personKey })
     .from(siteCheckinsTable).where(and(eq(siteCheckinsTable.projectId, projectId), isNotNull(siteCheckinsTable.typedPhone)))
     .orderBy(desc(siteCheckinsTable.checkedInAt)).limit(500);
-  const n = normText(who.workerName), c = normText(who.companyName);
   for (const r of rows) {
     if (!r.typedPhone) continue;
-    if ((who.key && r.personKey === who.key) || (normText(r.workerName) === n && normText(r.companyName ?? "") === c)) out.push(r.typedPhone);
+    if ((who.key && r.personKey === who.key) || (who.nh && nameHash(r.workerName, r.companyName ?? "") === who.nh)) out.push(r.typedPhone);
   }
   return out.filter(p => normPhone(p).length >= 9);
 }
-// Shared-device rule (Dean, 2026-10-21): a phone that has seen two different
-// people stops offering one-tap sign-in, for good. Same person = same card,
-// the same name and company, or a mobile number in common (one person on two
-// cards for two firms keeps one tap on his own phone).
-async function isDifferentPerson(projectId: string, held: DeviceIdentity, now: DeviceIdentity, nowPhones: string[]): Promise<boolean> {
-  if (held.key && now.key && held.key === now.key) return false;
-  if (normText(held.workerName) === normText(now.workerName) && normText(held.companyName) === normText(now.companyName)) return false;
-  const a = await phonesForIdentity(projectId, held);
+async function phonesForIdentity(projectId: string, who: DeviceIdentity, extra: string[] = []): Promise<string[]> {
+  return phonesFor(projectId, { key: who.key, nh: nameHash(who.workerName, who.companyName) }, extra);
+}
+async function isDifferentPerson(projectId: string, before: HistoryEntry, now: DeviceIdentity, nowPhones: string[]): Promise<boolean> {
+  if (before.other) return true;
+  if (before.key && now.key && before.key === now.key) return false;
+  if (before.nh && before.nh === nameHash(now.workerName, now.companyName)) return false;
+  const a = await phonesFor(projectId, before);
   const b = await phonesForIdentity(projectId, now, nowPhones);
   if (a.some(x => b.some(y => samePhone(x, y)))) return false;
   return true;
 }
-// The device token for a completed check-in, or "shared" when this phone last
-// remembered somebody else.
-async function deviceTokenFor(projectId: string, heldRaw: unknown, now: DeviceIdentity, nowPhones: string[]): Promise<{ deviceToken: string } | { sharedDevice: true }> {
-  const held = readHeldDeviceToken(heldRaw, projectId);
-  if (held && await isDifferentPerson(projectId, held, now, nowPhones)) return { sharedDevice: true };
-  return { deviceToken: signDeviceToken(projectId, now.workerName, now.companyName, now.key) };
+// After a completed check-in: the phone's updated history, plus the one-tap
+// token only when nobody else has checked in on it within the window.
+// `heldRaw` (the remembered token, any age) and `legacyShared` (the old
+// permanent mark) seed the history for phones that don't have one yet.
+async function deviceTokenFor(
+  projectId: string, src: { history?: unknown; held?: unknown; legacyShared?: unknown },
+  now: DeviceIdentity, nowPhones: string[],
+): Promise<{ deviceHistory: string } & ({ deviceToken: string } | { sharedDevice: true })> {
+  const t = Date.now();
+  let entries = readDeviceHistory(src.history, projectId);
+  if (!entries) {
+    entries = [];
+    const held = readHeldDeviceToken(src.held, projectId);
+    if (held) entries.push({ at: held.at, key: held.key, nh: nameHash(held.workerName, held.companyName) });
+    if (src.legacyShared === "1" || src.legacyShared === true) entries.push({ at: t, key: null, nh: null, other: true });
+  }
+  entries = entries.filter(e => t - e.at < SHARED_WINDOW_MS);
+  let shared = false;
+  for (const e of entries) if (await isDifferentPerson(projectId, e, now, nowPhones)) { shared = true; break; }
+  const next = [...entries, { at: t, key: now.key, nh: nameHash(now.workerName, now.companyName) }].slice(-HISTORY_MAX);
+  const deviceHistory = signDeviceHistory(projectId, next);
+  return shared ? { deviceHistory, sharedDevice: true } : { deviceHistory, deviceToken: signDeviceToken(projectId, now.workerName, now.companyName, now.key) };
 }
 // The registered record a remembered device stands for, if still on the project.
 function deviceRecord(records: Registered[], who: { workerName: string; companyName: string; key: string | null }): Registered | null {
@@ -800,22 +881,6 @@ function notePhoneMiss(req: Request, token: string): void {
   phoneMisses.set(`${req.ip}|${token}`, [...recentMisses(req, token), now]);
   if (phoneMisses.size > 5000) for (const [key, ts] of phoneMisses) if (!ts.some(t => now - t < PHONE_WINDOW_MS)) phoneMisses.delete(key);
 }
-// A remembered phone gets 5 wrong tries at the last 4 digits, then device
-// sign-out stops for an hour (sign out with the full number, or the site
-// manager). Per token, on top of the per-board limit above.
-const DEVICE_SIGNOUT_TRIES = 5, DEVICE_SIGNOUT_LOCK_MS = 60 * 60_000;
-const deviceSignOutMisses = new Map<string, number[]>();
-function deviceMissKey(token: string): string { return createHash("sha256").update(token).digest("hex"); }
-function deviceSignOutLocked(token: string): boolean {
-  const now = Date.now();
-  return (deviceSignOutMisses.get(deviceMissKey(token)) ?? []).filter(t => now - t < DEVICE_SIGNOUT_LOCK_MS).length >= DEVICE_SIGNOUT_TRIES;
-}
-function noteDeviceSignOutMiss(token: string): void {
-  const now = Date.now(), k = deviceMissKey(token);
-  deviceSignOutMisses.set(k, [...(deviceSignOutMisses.get(k) ?? []).filter(t => now - t < DEVICE_SIGNOUT_LOCK_MS), now]);
-  if (deviceSignOutMisses.size > 5000) for (const [key, ts] of deviceSignOutMisses) if (!ts.some(t => now - t < DEVICE_SIGNOUT_LOCK_MS)) deviceSignOutMisses.delete(key);
-}
-const DEVICE_SIGNOUT_LOCKED = { error: "too_many_tries", message: "Too many tries. Enter your full mobile number to sign out, or ask the site manager." };
 
 // Sign-out only: at the gate itself the limit never turns anyone away (see
 // /identify and /checkin: a limited board stops LOOKING UP numbers and holds
@@ -911,31 +976,19 @@ async function openRowsToClose(projectId: string, target: OpenRow): Promise<Open
 const IDENTITY_NOT_CONFIRMED = { error: "identity_not_confirmed", message: "We couldn't confirm it's you. Ask your site manager to sign you out." };
 router.post("/site/:token/checkout", async (req: Request, res: Response) => {
   try {
-    const { deviceToken, phone, last4 } = req.body ?? {};
+    const { deviceToken, phone } = req.body ?? {};
     const qr = await db.select().from(qrCodesTable).where(eq(qrCodesTable.token, req.params.token)).then(r => r[0]);
     if (!qr) { res.status(404).json({ error: "not_found", message: "Invalid site token" }); return; }
     let open: OpenRow[];
     if (typeof deviceToken === "string" && deviceToken) {
       const who = readDeviceToken(deviceToken, qr.projectId);
       if (!who) { res.status(403).json(IDENTITY_NOT_CONFIRMED); return; }
-      // Signing someone else out removes a real person from the fire roll, so a
-      // remembered phone must also give the last 4 digits of that person's
-      // mobile (Dean, 2026-10-21). Checked before anything about who is on site
-      // is revealed.
-      if (deviceSignOutLocked(deviceToken) || phoneRateLimited(req, req.params.token)) { res.status(429).json(DEVICE_SIGNOUT_LOCKED); return; }
-      if (typeof last4 !== "string" || !/^\d{4}$/.test(last4)) {
-        res.status(400).json({ error: "last4_required", message: "Enter the last 4 digits of your mobile number." });
-        return;
-      }
+      // No digits (Dean, 2026-10-22; the last 4 were asked for from 2026-10-21):
+      // a phone that still offers one-tap has had one person on it for 7 days
+      // (the rolling shared-device rule), so it is that person's phone. The
+      // board names them and asks them to confirm, which catches the realistic
+      // mistake; friction here stops people signing out and inflates the fire roll.
       const rec = deviceRecord(await loadRegistered(qr.projectId), who);
-      const known = await phonesForIdentity(qr.projectId, rec ? { ...who, key: rec.key } : who);
-      if (known.length === 0) { res.status(403).json({ error: "no_number_on_file", message: "Enter your full mobile number to sign out, or ask the site manager." }); return; }
-      if (!known.some(p => normPhone(p).slice(-4) === last4)) {
-        noteDeviceSignOutMiss(deviceToken);
-        notePhoneMiss(req, req.params.token);
-        res.status(403).json({ error: "wrong_digits", message: "Those digits don't match the mobile number on file. Try again, or enter your full mobile number." });
-        return;
-      }
       open = rec ? await openRowsForRecords(qr.projectId, [rec]) : await openCheckinsFor(qr.projectId, who.workerName, who.companyName);
     } else {
       if (typeof phone !== "string" || normPhone(phone).length < 9) {
@@ -1115,7 +1168,7 @@ async function saveCheckinPhoto(file: Express.Multer.File): Promise<string> {
 // nobody is turned away, but nobody reaches the fire roll unverified either.
 router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: Request, res: Response) => {
   try {
-    const { lat, lng, matchToken, deviceToken, heldDeviceToken } = req.body;
+    const { lat, lng, matchToken, deviceToken, heldDeviceToken, deviceHistory, legacyShared } = req.body;
     const workerName = typeof req.body.workerName === "string" ? req.body.workerName : "";
     const companyName = typeof req.body.companyName === "string" ? req.body.companyName : "";
     const phone = typeof req.body.phone === "string" ? req.body.phone : "";
@@ -1260,7 +1313,7 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
     // First arrival and nobody has opened today's register: alert now, not in 5 minutes.
     void runFireRollAlerts(new Date(), qr.projectId).catch(() => {});
 
-    const device = await deviceTokenFor(qr.projectId, heldDeviceToken ?? deviceToken,
+    const device = await deviceTokenFor(qr.projectId, { history: deviceHistory, held: heldDeviceToken ?? deviceToken, legacyShared },
       { workerName: storedName, companyName: storedCompany, key: match.key }, normPhone(phone).length >= 9 ? [phone] : []);
     res.status(201).json({ ...publicCheckin(checkin, clock), ...device });
   } catch (err) {
@@ -1282,7 +1335,7 @@ router.get("/site/:token/hold", async (req: Request, res: Response) => {
       status: row.holdStatus ?? "approved",
       decidedAt: row.holdDecidedAt ? row.holdDecidedAt.toISOString() : null,
       ...(row.holdStatus === "approved"
-        ? await deviceTokenFor(qr.projectId, req.query.heldDeviceToken,
+        ? await deviceTokenFor(qr.projectId, { history: req.query.deviceHistory, held: req.query.heldDeviceToken, legacyShared: req.query.legacyShared },
             { workerName: row.workerName, companyName: row.companyName ?? "", key: row.personKey }, row.typedPhone ? [row.typedPhone] : [])
         : {}),
     });
@@ -1313,6 +1366,7 @@ async function decideHold(projectId: string, checkinId: string, actorId: string,
   if (decision === "approve" && row.holdReason === "unverified" && row.personKey && row.typedPhone) {
     phoneFiled = await fillPhoneForKey(row.personKey, row.typedPhone).catch(() => false);
   }
+  void notifyHoldEnded(project.id, row, decision, actorId);
   void logActivity({ userId: actorId, projectId: project.id, companyId: project.companyId, section: "check-ins", action: "update", itemType: "site_checkin", itemId: row.id, metadata: { insuranceHold: decision === "approve" ? "approved" : "refused", reason: row.holdReason, note: note || null, worker: row.workerName, ...(phoneFiled ? { mobileFiled: true } : {}) }, req });
   return { status: 200, body: { ...serializeCheckin(row, await siteClock(project.id)), phoneFiled } };
 }
@@ -1680,6 +1734,7 @@ export async function runCheckinAutoClose(now: Date = new Date()): Promise<{ clo
   const clocks = await siteClocks(rows.map(r => r.projectId));
   const closedByProject = new Map<string, { row: typeof rows[number]; due: Date }[]>();
   let closed = 0, lapsed = 0;
+  const lapsedByProject = new Map<string, number>();
   for (const r of rows) {
     const clock = clocks.get(r.projectId) ?? { tz: safeTz(null), close: DEFAULT_SITE_CLOSE };
     const due = closeDueAfter(r.checkedInAt, clock.tz, clock.close);
@@ -1688,6 +1743,7 @@ export async function runCheckinAutoClose(now: Date = new Date()): Promise<{ clo
       const done = await db.update(siteCheckinsTable).set({ holdStatus: "lapsed" })
         .where(and(eq(siteCheckinsTable.id, r.id), eq(siteCheckinsTable.holdStatus, "pending"))).returning({ id: siteCheckinsTable.id });
       lapsed += done.length;
+      if (done.length) lapsedByProject.set(r.projectId, (lapsedByProject.get(r.projectId) ?? 0) + 1);
       continue;
     }
     const done = await db.update(siteCheckinsTable).set({ autoClosedAt: due })
@@ -1700,6 +1756,17 @@ export async function runCheckinAutoClose(now: Date = new Date()): Promise<{ clo
       if (!closedByProject.has(r.projectId)) closedByProject.set(r.projectId, []);
       closedByProject.get(r.projectId)!.push({ row: r, due });
     }
+  }
+  // Holds nobody decided before the site closed: tell the gate's people they
+  // are no longer waiting, and bring their app-icon badges down.
+  for (const [projectId, n] of lapsedByProject) {
+    const [p] = await db.select({ name: projectsTable.name }).from(projectsTable).where(eq(projectsTable.id, projectId)).limit(1);
+    await pushGateUpdate(projectId, {
+      title: `No longer waiting at the gate: ${p?.name ?? "Site"}`,
+      body: `${n} ${n === 1 ? "person" : "people"} not decided before the site closed. They were not let on site.`,
+      url: "/portal/site-register",
+      tag: `hold-lapsed-${projectId}`,
+    }).catch(() => {});
   }
   for (const [projectId, list] of closedByProject) {
     try {

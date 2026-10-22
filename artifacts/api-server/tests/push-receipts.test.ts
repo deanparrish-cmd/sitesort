@@ -352,7 +352,62 @@ describe("phone alert receipts", () => {
       }
       expect(alert).toMatchObject({ sendResult: "accepted", deviceSw: "receipts-2", kind: "alert" });
       const got = received.filter(x => x.path === E.id).at(-1)!;
-      expect(got.payload).toMatchObject({ tag: `hold-${row.id}`, receipt: alert.id, url: "/portal/site-register" });
+      expect(got.payload).toMatchObject({ tag: `hold-${row.id}`, receipt: alert.id, url: "/portal/site-register", badge: 1 });
+      holdQr = qr.json[0].token;
+      firstHold = row.id;
+    });
+
+    // Dean, 2026-10-22: the alert sinks into the notification list and nothing
+    // on the icon says anyone is still waiting. Every gate push now carries the
+    // number waiting for that person; a decision sends one too.
+    let holdQr = "", firstHold = "";
+    const lastPayloadTo = async (tag: string, titleStart?: string) => {
+      for (let i = 0; i < 20; i++) {
+        const hit = received.filter(x => x.path === E.id && x.payload?.tag === tag && (!titleStart || String(x.payload.title).startsWith(titleStart))).at(-1);
+        if (hit) return hit.payload;
+        await new Promise(r => setTimeout(r, 250));
+      }
+      return null;
+    };
+    const holdAt = async (phoneNo: string, name: string) => {
+      const fd = new FormData();
+      fd.append("photo", new Blob([Buffer.from("/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=", "base64")], { type: "image/jpeg" }), "c.jpg");
+      for (const [k, v] of Object.entries({ phone: phoneNo, workerName: name, companyName: "Nobody Ltd" })) fd.append(k, v);
+      expect((await fetch(`${API_BASE}/site/${holdQr}/checkin`, { method: "POST", body: fd })).status).toBe(403);
+      return (await db.select().from(siteCheckinsTable).where(and(eq(siteCheckinsTable.projectId, co.projectId), eq(siteCheckinsTable.workerName, name))))[0].id;
+    };
+
+    it("app-icon badge: a second person waiting makes it 2; the portal's own count agrees", async (ctx) => {
+      if (!pushReachable) ctx.skip();
+      const second = await holdAt("07700 900998", "Second Waiter");
+      expect(await lastPayloadTo(`hold-${second}`)).toMatchObject({ badge: 2 });
+      const u = await api("/portal/unseen", { token: otherTok });
+      expect(u.json.gate).toMatchObject({ holder: true, total: 2, projects: [{ projectId: co.projectId, count: 2 }] });
+      // A member who doesn't run the gate: not a holder, no gate count.
+      expect((await api("/portal/unseen", { token: tok })).json.gate).toMatchObject({ holder: false, total: 0 });
+    });
+
+    it("each decision replaces that alert and brings the badge down, to 0 when the gate is clear", async (ctx) => {
+      if (!pushReachable) ctx.skip();
+      expect((await api(`/projects/${co.projectId}/checkins/${firstHold}/hold-decision`, { method: "POST", token: admin, body: { decision: "approve", note: "Known to me" } })).status).toBe(200);
+      const p1 = await lastPayloadTo(`hold-${firstHold}`, "Let on site");
+      expect(p1).toMatchObject({ badge: 1, url: "/portal/site-register" });
+      expect(p1.title).toMatch(/^Let on site: Gate Tester/);
+      expect(p1.body).toMatch(/1 still waiting at the gate\.$/);
+      const second = (await db.select().from(siteCheckinsTable).where(eq(siteCheckinsTable.workerName, "Second Waiter")))[0].id;
+      expect((await api(`/portal/site-register/${second}/hold-decision`, { method: "POST", token: otherTok, body: { decision: "refuse" } })).status).toBe(200);
+      const p2 = await lastPayloadTo(`hold-${second}`, "Refused");
+      expect(p2).toMatchObject({ badge: 0 });
+      expect(p2.title).toMatch(/^Refused: Second Waiter/);
+      expect(p2.body).toMatch(/Nobody else is waiting at the gate\.$/);
+      expect((await api("/portal/unseen", { token: otherTok })).json.gate).toMatchObject({ total: 0, projects: [] });
+    });
+
+    it("the receipt records what setAppBadge did on the phone", async (ctx) => {
+      if (!pushReachable) ctx.skip();
+      const id = await freshTest();
+      expect((await receipt({ id, event: "received", shown: true, posted: true, foreground: false, badge: "set:2" })).status).toBe(200);
+      expect((await db.select().from(pushAlertsTable).where(eq(pushAlertsTable.id, id)))[0].badgeResult).toBe("set:2");
     });
   });
 });

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
+import { getGetPortalUnseenQueryKey } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
 import { StatusPill, PortalButton } from "@/components/portal-ui";
 import { Pill, PillGroup } from "@/components/ui/list-row";
@@ -301,7 +303,10 @@ export function SiteRegisterView({ projectId }: { projectId?: string | null }) {
     return () => { clearInterval(t); window.removeEventListener("online", onOnline); document.removeEventListener("visibilitychange", onVisible); };
   }, [load]);
 
-  const done = (msg: string) => { setFlash(msg); setSigningOut(null); void load(); };
+  const queryClient = useQueryClient();
+  // A decision changes how many are waiting: refresh the counts behind the
+  // Home tile and the app-icon badge now, not at the next minute's poll.
+  const done = (msg: string) => { setFlash(msg); setSigningOut(null); void load(); void queryClient.invalidateQueries({ queryKey: getGetPortalUnseenQueryKey() }); };
 
   if (denied) {
     return <p className="text-base">Only the site manager, or someone covering for the project manager, can see the site register.</p>;

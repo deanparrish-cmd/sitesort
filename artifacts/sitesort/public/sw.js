@@ -8,7 +8,7 @@
 // everything else same-origin is network-first with a cache fallback.
 const CACHE = "sitesort-portal-v6";
 // Reported with every receipt and at registration. Bump when receipt behaviour changes.
-const SW_VERSION = "receipts-2";
+const SW_VERSION = "receipts-3";
 const SHELL = ["/index.html", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {
@@ -82,6 +82,21 @@ self.addEventListener("push", (event) => {
         w.postMessage({ kind: "push", title: title, body: options.body, url: options.data.url });
       }
     } catch (e) { /* best-effort */ }
+    // App-icon badge (gate holds): the number waiting at the gate for this
+    // person. Set here, not by the notification, so it stays when the alert is
+    // dismissed. iOS/iPadOS 16.4+ Home Screen apps only, and only shown while
+    // notifications are allowed and Badges is on in Settings (which the app
+    // can't see). Record what happened so silence is never mistaken for working.
+    let badge = null;
+    if (typeof data.badge === "number") {
+      const nav = self.navigator;
+      try {
+        if (nav && typeof nav.setAppBadge === "function") {
+          if (data.badge > 0) { await nav.setAppBadge(data.badge); badge = "set:" + data.badge; }
+          else { await (nav.clearAppBadge ? nav.clearAppBadge() : nav.setAppBadge(0)); badge = "cleared"; }
+        } else badge = "unsupported";
+      } catch (e) { badge = String((e && e.name) || "Error") + ": " + String((e && e.message) || e); }
+    }
     // 2. Show it, keeping what it threw if it fails.
     let shown = true;
     let error = null;
@@ -94,7 +109,7 @@ self.addEventListener("push", (event) => {
       posted = list.length > 0;
     } catch (e) { posted = null; }
     await arrived;
-    await sendReceipt(data.receipt, "received", { shown: shown, error: error, posted: posted, foreground: foreground });
+    await sendReceipt(data.receipt, "received", { shown: shown, error: error, posted: posted, foreground: foreground, badge: badge });
   })());
 });
 

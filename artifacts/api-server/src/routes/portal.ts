@@ -24,6 +24,7 @@ import { requirePortalMember, requirePortalSession, autoLogPortalActivity, requi
 import { createPortalSession, revokePortalSession, claimPortalSession } from "../lib/portal-sessions";
 import { getVapidPublicKey, registerPushDevice, isPushConfigured, sendToDevices, PRUNE_AFTER_UNANSWERED } from "../lib/web-push";
 import { listUserDevices, deviceKey } from "../lib/push-receipts";
+import { gateWaitingFor } from "../lib/gate-waiting";
 import { pushSubscriptionsTable, activityLogTable, portalSessionsTable, pushAlertsTable } from "@workspace/db/schema";
 import { linkedCardsForLogin } from "../lib/linked-cards";
 import { PortalPushSubscribeBody, PortalPushUnsubscribeBody, RemovePortalPushDeviceBody, SendPortalPushTestBody, AnswerPortalPushTestBody } from "@workspace/api-zod";
@@ -1141,8 +1142,8 @@ router.post("/portal/logout", authenticate, requirePortalSession, async (req, re
 // GET /api/portal/unseen — per-section badge counts (unseen since last view).
 router.get("/portal/unseen", ...portalGuards, async (req, res) => {
   try {
-    const result = await computeUnseen(req.user!.id, req.portalProjectId!);
-    res.json(result);
+    const [result, gate] = await Promise.all([computeUnseen(req.user!.id, req.portalProjectId!), gateWaitingFor(req.user!.id)]);
+    res.json({ ...result, gate });
   } catch (err) {
     req.log.error({ err }, "Portal unseen error");
     res.json({ counts: {}, total: 0 });

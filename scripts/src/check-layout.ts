@@ -513,7 +513,9 @@ async function setupFixtures(appToken: string): Promise<FixtureData> {
   // /s/:token (#127 Part B): a share link for a current document. Minted fresh
   // each run (only the hash is stored); never marked sent, so no reminder.
   const docs = await apiJson(`/api/projects/${projectId}/documents`, appToken) as Array<{ id: string; status?: string; fileUrl?: string }>;
-  let shareDocId = docs.find((d) => d.status === "current" && d.fileUrl)?.id ?? "";
+  // Only an uploaded file can be shared (seed rows point at example.com and
+  // are refused with no_file), so pick one, or create the fixture drawing.
+  let shareDocId = docs.find((d) => d.status === "current" && d.fileUrl?.includes("/api/uploads/"))?.id ?? "";
   if (!shareDocId) {
     const created = await apiJson(`/api/projects/${projectId}/documents`, appToken, {
       method: "POST",

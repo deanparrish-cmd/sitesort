@@ -622,19 +622,36 @@ function HomeQuickAccess({ member }: { member: Record<string, unknown> | undefin
   const tiles = SECTION_NAV.filter(s => HOME_TILE_KEYS.has(s.key));
   const grantedTasks = SITE_TASK_KEYS.filter(k => !!member?.[SECTION_NAV.find(s => s.key === k)!.permission as string]);
   const siteTasksUnseen = grantedTasks.reduce((sum, k) => sum + (counts[k] ?? 0), 0);
-  return (
-    <div className="grid grid-cols-2 gap-3">
-      {!!member?.canSeeSiteRegister && !registerSavedToday() && (
-        <Link href="/portal/site-register" className="col-span-2 flex flex-wrap items-center gap-2 rounded-2xl border-2 border-warning bg-warning/15 px-4 py-3 min-h-14 font-bold" data-testid="banner-open-register">
-          <AlertTriangle className="w-5 h-5 shrink-0" />
-          <span className="min-w-0">Open the Site Register so your phone has today's fire roll.</span>
-        </Link>
-      )}
+  // People waiting at the gate (same count as the app-icon badge): here on the
+  // Site Register tile, and a row per other project where this login runs the gate.
+  const { data: myProjects } = useGetPortalMyProjects({ query: { queryKey: getGetPortalMyProjectsQueryKey() } });
+  const hereId = myProjects?.currentProjectId;
+  const gateProjects = unseen?.gate?.projects ?? [];
+  const waitingHere = gateProjects.find(p => p.projectId === hereId)?.count ?? 0;
+  const waitingElsewhere = hereId ? gateProjects.filter(p => p.projectId !== hereId) : [];
+  const openRegisterBanner = !!member?.canSeeSiteRegister && !registerSavedToday() && (
+    <Link href="/portal/site-register" className="col-span-2 flex flex-wrap items-center gap-2 rounded-2xl border-2 border-warning bg-warning/15 px-4 py-3 min-h-14 font-bold" data-testid="banner-open-register">
+      <AlertTriangle className="w-5 h-5 shrink-0" />
+      <span className="min-w-0">Open the Site Register so your phone has today's fire roll.</span>
+    </Link>
+  );
+  const gateTiles = (
+    <>
       {!!member?.canSeeSiteRegister && (
         <div className="col-span-2">
-          <PortalTile href="/portal/site-register" label="Site Register: who's on site" Icon={SECTION_NAV.find(s => s.key === "site-register")!.Icon} theme={TILE_THEME["site-register"]} />
+          <PortalTile href="/portal/site-register"
+            label={waitingHere > 0 ? `Site Register: ${waitingHere} waiting at the gate` : "Site Register: who's on site"}
+            Icon={SECTION_NAV.find(s => s.key === "site-register")!.Icon} theme={TILE_THEME["site-register"]} alert={waitingHere} />
         </div>
       )}
+      {waitingElsewhere.map(p => <GateElsewhereRow key={p.projectId} projectId={p.projectId} name={p.name} count={p.count} />)}
+    </>
+  );
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      {/* Someone waiting at the gate goes first: the app-icon badge brought
+          them here, and this says where to go. */}
+      {waitingHere + waitingElsewhere.length > 0 ? <>{gateTiles}{openRegisterBanner}</> : <>{openRegisterBanner}{gateTiles}</>}
       {tiles.map(t => (
         <PortalTile key={t.key} href={`/portal/${t.key}`} label={t.label} Icon={t.Icon} theme={TILE_THEME[t.key] ?? "slate"} unseen={counts[t.key] ?? 0} />
       ))}
@@ -643,6 +660,31 @@ function HomeQuickAccess({ member }: { member: Record<string, unknown> | undefin
       )}
       <PortalTile href="/portal/settings" label="Settings" Icon={SECTION_NAV.find(s => s.key === "settings")!.Icon} theme={TILE_THEME.settings} />
     </div>
+  );
+}
+
+// Someone is waiting at the gate on a project other than the open one: one
+// tap switches to it and opens its Site Register.
+function GateElsewhereRow({ projectId, name, count }: { projectId: string; name: string; count: number }) {
+  const switchProject = usePortalSwitchProject();
+  const { toast } = useToast();
+  const go = async () => {
+    try {
+      const res = await switchProject.mutateAsync({ data: { projectId } });
+      if (res.token) {
+        localStorage.setItem("sitesort_portal_token", res.token);
+        window.location.assign("/portal/site-register");
+      }
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Couldn't open that project", description: e?.data?.message ?? "Check your signal and try again." });
+    }
+  };
+  return (
+    <button type="button" onClick={go} disabled={switchProject.isPending} data-testid="gate-elsewhere"
+      className="col-span-2 flex flex-wrap items-center gap-2 rounded-2xl border-2 border-destructive bg-destructive/10 px-4 py-3 min-h-14 font-bold text-left disabled:opacity-60">
+      <span className="min-w-[1.75rem] h-7 px-2 rounded-full bg-destructive text-destructive-foreground text-sm font-extrabold flex items-center justify-center shrink-0">{count > 99 ? "99+" : count}</span>
+      <span className="min-w-0 flex-1">Waiting at the gate on {name}. Tap to open its Site Register.</span>
+    </button>
   );
 }
 

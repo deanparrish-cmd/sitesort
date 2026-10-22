@@ -6270,7 +6270,31 @@ components:
           description: Unseen item count keyed by portal section key (e.g. drawings, site-issues, shared).
         total:
           type: integer
+        gate:
+          $ref: "#/components/schemas/GateWaiting"
       required: [counts, total]
+
+    GateWaiting:
+      type: object
+      description: People waiting at the gate (pending holds) on every project where this login runs the gate.
+      properties:
+        holder:
+          type: boolean
+        total:
+          type: integer
+        projects:
+          type: array
+          items:
+            type: object
+            properties:
+              projectId:
+                type: string
+              name:
+                type: string
+              count:
+                type: integer
+            required: [projectId, name, count]
+      required: [holder, total, projects]
 
     PortalPushKey:
       type: object
@@ -6386,6 +6410,11 @@ components:
         sw:
           type: string
           maxLength: 32
+        badge:
+          type: string
+          maxLength: 120
+          nullable: true
+          description: What setAppBadge did with the payload's badge count (set:N, cleared, unsupported, or the error).
       required: [id, event]
 
     PortalPushAlertRow:

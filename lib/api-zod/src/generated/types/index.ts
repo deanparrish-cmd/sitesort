@@ -67,6 +67,8 @@ export * from "./expiringPermitItemStatus";
 export * from "./forgotCredentialRequest";
 export * from "./forgotPinRequest";
 export * from "./forgotPinRequestContext";
+export * from "./gateWaiting";
+export * from "./gateWaitingProjectsItem";
 export * from "./generateQrRequest";
 export * from "./generateQrRequestCategoriesItem";
 export * from "./getPortalChannelThreadParams";

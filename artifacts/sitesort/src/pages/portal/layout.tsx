@@ -134,14 +134,17 @@ export function PortalLayout({ active, children }: { active: string; children: R
     return () => timers.forEach(clearTimeout);
   }, [active, token, queryClient]);
 
-  // App-icon badge (installed PWA): mirror the SAME aggregate the nav uses via
-  // the Badging API where supported (Chrome/Edge desktop+Android, iOS 16.4+
-  // standalone). Best-effort — unsupported platforms just skip it.
+  // App-icon badge (installed PWA) via the Badging API where supported
+  // (Chrome/Edge desktop+Android, iOS and iPadOS 16.4+ Home Screen apps).
+  // For anyone who runs the gate on any project, the badge means ONE thing:
+  // people waiting at the gate (2026-10-22, Dean), so it reaches zero when the
+  // gate is clear. The service worker sets the same number on every gate push,
+  // so it holds after the alert is dismissed. Everyone else: unseen items.
   useEffect(() => {
     if (!data?.member) return; // don't clear/paint until permissions are known
     const visible = SECTION_NAV.filter(s => !s.permission || !!data.member[s.permission]);
     const c = (unseen?.counts ?? {}) as Record<string, number>;
-    const total = visible.reduce((sum, s) => sum + (c[s.key] ?? 0), 0);
+    const total = unseen?.gate?.holder ? unseen.gate.total : visible.reduce((sum, s) => sum + (c[s.key] ?? 0), 0);
     const nav = navigator as Navigator & { setAppBadge?: (n?: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
     try {
       if (total > 0) void nav.setAppBadge?.(total)?.catch(() => {});

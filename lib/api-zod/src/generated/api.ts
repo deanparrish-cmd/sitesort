@@ -4764,6 +4764,22 @@ export const GetPortalUnseenResponse = zod.object({
       "Unseen item count keyed by portal section key (e.g. drawings, site-issues, shared).",
     ),
   total: zod.number(),
+  gate: zod
+    .object({
+      holder: zod.boolean(),
+      total: zod.number(),
+      projects: zod.array(
+        zod.object({
+          projectId: zod.string(),
+          name: zod.string(),
+          count: zod.number(),
+        }),
+      ),
+    })
+    .optional()
+    .describe(
+      "People waiting at the gate (pending holds) on every project where this login runs the gate.",
+    ),
 });
 
 /**
@@ -4822,6 +4838,8 @@ export const pushReceiptBodyErrorMax = 300;
 
 export const pushReceiptBodySwMax = 32;
 
+export const pushReceiptBodyBadgeMax = 120;
+
 export const PushReceiptBody = zod.object({
   id: zod.string().max(pushReceiptBodyIdMax),
   event: zod.enum(["arrived", "received", "tapped"]),
@@ -4831,6 +4849,13 @@ export const PushReceiptBody = zod.object({
   posted: zod.boolean().nullish(),
   foreground: zod.boolean().nullish(),
   sw: zod.string().max(pushReceiptBodySwMax).optional(),
+  badge: zod
+    .string()
+    .max(pushReceiptBodyBadgeMax)
+    .nullish()
+    .describe(
+      "What setAppBadge did with the payload's badge count (set:N, cleared, unsupported, or the error).",
+    ),
 });
 
 export const PushReceiptResponse = zod.object({

@@ -69,6 +69,9 @@ export type PushPayload = {
   body: string;
   url: string;   // portal deep-link path (e.g. /portal/drawings?doc=123)
   tag?: string;  // collapses same-tag notifications on the device
+  // App-icon badge to set on arrival (0 clears it). Gate holds only: the
+  // number of people waiting at the gate for this login (lib/gate-waiting.ts).
+  badge?: number;
 };
 
 // A phone is removed after this many alerts in a row with no receipt (Dean,

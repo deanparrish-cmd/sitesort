@@ -9,12 +9,14 @@ import {
 import { seedCompany, cleanupFixtures, api, login, API_BASE, type Fixture } from "./helpers";
 
 /**
- * Borrowed phone on the QR site board (Dean, 2026-10-21; workers use their
- * own phones). A remembered phone lasts 7 days; a phone that has seen two
- * different people stops being remembered for good (same mobile on file =
- * same person, so one man on two cards for two firms keeps one tap); signing
- * out with a remembered phone needs the last 4 digits of the mobile, because
- * signing out the wrong person empties the fire roll.
+ * Borrowed phone on the QR site board. 2026-10-21 (#152): a phone that saw
+ * two people lost one-tap for good, and device sign-out needed the last 4
+ * digits. 2026-10-22 (Dean, from testing at the gate): ROLLING instead. A
+ * phone offers one-tap only if a single person has checked in on it in the
+ * last 7 days; once a week passes with only one person, it comes back. And
+ * because a one-tap phone is now a personal phone, sign-out is the name on
+ * screen plus a tap, no digits. Same person = same card, same name and
+ * company, or a mobile in common (one man on two cards for two firms).
  */
 const JPG = Buffer.from("/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=", "base64");
 
@@ -39,7 +41,14 @@ describe("borrowed phone guard", () => {
     return (company ? m.find(x => x.label.endsWith(company)) : m[0])!.matchToken;
   };
   const checkOut = (body: object) => api(`/site/${qrToken}/checkout`, { method: "POST", body });
-  const signInAs = async (phone: string, held?: string, company?: string) => checkIn({ matchToken: await matchFor(phone, company), ...(held ? { heldDeviceToken: held } : {}) });
+  const signInAs = async (phone: string, held?: string, company?: string, extra: Record<string, string> = {}) =>
+    checkIn({ matchToken: await matchFor(phone, company), ...(held ? { heldDeviceToken: held } : {}), ...extra });
+  // The phone's signed 7-day list, as the server would have written it.
+  const history = (entries: { person?: string; ageDays: number; other?: boolean }[]) =>
+    jwt.sign({ kind: "site-device-history", projectId: co.projectId, e: entries.map(x => ({
+      at: Date.now() - x.ageDays * 86400_000, key: x.person ? `person:${x.person}` : null, nh: null, ...(x.other ? { other: true } : {}),
+    })) }, process.env.JWT_SECRET as string);
+  const entriesOf = (tok: string) => (jwt.decode(tok) as any).e as { at: number; key: string | null }[];
   const devToken = (person: string, name: string, company: string, ageDays = 0) =>
     jwt.sign({ kind: "site-device", projectId: co.projectId, workerName: name, companyName: company, key: `person:${person}`, iat: Math.floor(Date.now() / 1000) - ageDays * 86400 }, process.env.JWT_SECRET as string);
 
@@ -80,34 +89,74 @@ describe("borrowed phone guard", () => {
     expect((await api(`/site/${qrToken}/device?deviceToken=${encodeURIComponent(old)}`)).json.valid).toBe(false);
     expect((await checkIn({ deviceToken: old })).status).toBe(403);
     const fresh = devToken(amy, "Amy Parrish", `Firm X ${sfx}`, 6);
-    const ok = await checkIn({ deviceToken: fresh });
-    expect(ok.status).toBe(201);
-    // ...and sign-out with the 8-day-old one is refused even with the right digits.
-    expect((await checkOut({ deviceToken: old, last4: "0456" })).status).toBe(403);
-    expect((await checkOut({ deviceToken: fresh, last4: "0456" })).status).toBe(200);
+    expect((await checkIn({ deviceToken: fresh })).status).toBe(201);
+    expect((await checkOut({ deviceToken: old })).status).toBe(403);
+    expect((await checkOut({ deviceToken: fresh })).status).toBe(200);
   });
 
-  it("a different person on a remembered phone: 'shared device', no token", async () => {
-    const amyPhone = devToken(amy, "Amy Parrish", `Firm X ${sfx}`);
-    const b = await signInAs(BOB, amyPhone);
+  it("a fresh phone: one-tap token plus a 7-day list naming nobody", async () => {
+    const a = await signInAs(AMY);
+    expect(a.json.deviceToken).toBeTruthy();
+    expect(a.json.sharedDevice).toBeUndefined();
+    const e = entriesOf(a.json.deviceHistory);
+    expect(e).toHaveLength(1);
+    expect(e[0].key).toBe(`person:${amy}`);
+    expect(JSON.stringify(jwt.decode(a.json.deviceHistory))).not.toContain("Amy"); // names are hashed
+    expect((await checkOut({ phone: AMY })).status).toBe(200);
+  });
+
+  it("a second person within 7 days: no one-tap, and the list carries both", async () => {
+    const b = await signInAs(BOB, undefined, undefined, { deviceHistory: history([{ person: amy, ageDays: 2 }]) });
     expect(b.status).toBe(201);
     expect(b.json.sharedDevice).toBe(true);
     expect(b.json.deviceToken).toBeUndefined();
+    expect(entriesOf(b.json.deviceHistory).map(x => x.key)).toEqual([`person:${amy}`, `person:${bob}`]);
+    expect((await checkOut({ phone: BOB })).status).toBe(200);
+    // Amy back on it the next day: Bob is still inside the window, still no one-tap.
+    const a = await signInAs(AMY, undefined, undefined, { deviceHistory: b.json.deviceHistory });
+    expect(a.json.sharedDevice).toBe(true);
+    expect((await checkOut({ phone: AMY })).status).toBe(200);
+  });
+
+  it("once 7 days pass with only one person, one-tap comes back (the lender gets his phone back)", async () => {
+    const back = await signInAs(AMY, undefined, undefined, { deviceHistory: history([{ person: bob, ageDays: 8 }, { person: amy, ageDays: 3 }]) });
+    expect(back.json.deviceToken).toBeTruthy();
+    expect(back.json.sharedDevice).toBeUndefined();
+    expect(entriesOf(back.json.deviceHistory).map(x => x.key)).toEqual([`person:${amy}`, `person:${amy}`]); // Bob has dropped off
+    expect((await checkOut({ phone: AMY })).status).toBe(200);
+    const notYet = await signInAs(AMY, undefined, undefined, { deviceHistory: history([{ person: bob, ageDays: 6 }]) });
+    expect(notYet.json.sharedDevice).toBe(true);
+    expect((await checkOut({ phone: AMY })).status).toBe(200);
+  });
+
+  it("a phone with no list yet: the remembered token counts only if it is within 7 days", async () => {
+    expect((await signInAs(BOB, devToken(amy, "Amy Parrish", `Firm X ${sfx}`, 3))).json.sharedDevice).toBe(true);
+    expect((await checkOut({ phone: BOB })).status).toBe(200);
+    expect((await signInAs(BOB, devToken(amy, "Amy Parrish", `Firm X ${sfx}`, 30))).json.deviceToken).toBeTruthy();
     expect((await checkOut({ phone: BOB })).status).toBe(200);
   });
 
-  it("an expired token still counts as who used the phone before", async () => {
-    const b = await signInAs(BOB, devToken(amy, "Amy Parrish", `Firm X ${sfx}`, 30));
-    expect(b.json.sharedDevice).toBe(true);
+  it("a phone marked shared under the old permanent rule starts a fresh 7-day window", async () => {
+    const now = await signInAs(AMY, undefined, undefined, { legacyShared: "1" });
+    expect(now.json.sharedDevice).toBe(true);
+    expect((await checkOut({ phone: AMY })).status).toBe(200);
+    const later = await signInAs(AMY, undefined, undefined, { deviceHistory: history([{ other: true, ageDays: 8 }, { person: amy, ageDays: 1 }]) });
+    expect(later.json.deviceToken).toBeTruthy();
+    expect((await checkOut({ phone: AMY })).status).toBe(200);
+  });
+
+  it("a forged or tampered list is ignored (the phone is judged on what it can prove)", async () => {
+    const forged = jwt.sign({ kind: "site-device-history", projectId: co.projectId, e: [] }, "not-the-secret");
+    const r = await signInAs(BOB, devToken(amy, "Amy Parrish", `Firm X ${sfx}`, 1), undefined, { deviceHistory: forged });
+    expect(r.json.sharedDevice).toBe(true);
     expect((await checkOut({ phone: BOB })).status).toBe(200);
   });
 
   it("the same person keeps one tap, including one man on two cards for two firms with the same mobile", async () => {
-    const amyAgain = await signInAs(AMY, devToken(amy, "Amy Parrish", `Firm X ${sfx}`));
+    const amyAgain = await signInAs(AMY, undefined, undefined, { deviceHistory: history([{ person: amy, ageDays: 1 }]) });
     expect(amyAgain.json.deviceToken).toBeTruthy();
-    expect(amyAgain.json.sharedDevice).toBeUndefined();
     expect((await checkOut({ phone: AMY })).status).toBe(200);
-    const danAtY = await signInAs(DAN, devToken(danX, "Dan Two", `Firm X ${sfx}`), `Firm Y ${sfx}`);
+    const danAtY = await signInAs(DAN, undefined, `Firm Y ${sfx}`, { deviceHistory: history([{ person: danX, ageDays: 1 }]) });
     expect(danAtY.status).toBe(201);
     expect(danAtY.json.companyName).toBe(`Firm Y ${sfx}`);
     expect(danAtY.json.deviceToken).toBeTruthy();
@@ -115,50 +164,36 @@ describe("borrowed phone guard", () => {
     expect((await checkOut({ phone: DAN })).status).toBe(200);
   });
 
-  it("a held check-in approved later: compared with who used the phone before", async () => {
-    const amyPhone = devToken(amy, "Amy Parrish", `Firm X ${sfx}`);
-    const held = await checkIn({ phone: "07700 900111", workerName: "Vic Visitor", companyName: "Visit Ltd", heldDeviceToken: amyPhone });
+  it("a held check-in approved later: judged against the phone's 7-day list", async () => {
+    const hist = history([{ person: amy, ageDays: 1 }]);
+    const held = await checkIn({ phone: "07700 900111", workerName: "Vic Visitor", companyName: "Visit Ltd", deviceHistory: hist });
     expect(held.status).toBe(403);
     const row = (await db.select().from(siteCheckinsTable).where(eq(siteCheckinsTable.workerName, "Vic Visitor")))[0];
     expect((await api(`/projects/${co.projectId}/checkins/${row.id}/hold-decision`, { method: "POST", token: admin, body: { decision: "approve", note: "Known" } })).status).toBe(200);
-    const poll = await api(`/site/${qrToken}/hold?holdToken=${encodeURIComponent(held.json.holdToken)}&heldDeviceToken=${encodeURIComponent(amyPhone)}`);
+    const poll = await api(`/site/${qrToken}/hold?holdToken=${encodeURIComponent(held.json.holdToken)}&deviceHistory=${encodeURIComponent(hist)}`);
     expect(poll.json.status).toBe("approved");
     expect(poll.json.sharedDevice).toBe(true);
-    expect(poll.json.deviceToken).toBeUndefined();
-    // Without a previous person on the phone, the approval hands back a token as before.
+    expect(poll.json.deviceHistory).toBeTruthy();
     const plain = await api(`/site/${qrToken}/hold?holdToken=${encodeURIComponent(held.json.holdToken)}`);
     expect(plain.json.deviceToken).toBeTruthy();
     await checkOut({ phone: "07700 900111" });
   });
 
-  it("remembered-phone sign-out needs the last 4 digits; wrong ones are refused; the right ones sign out", async () => {
+  it("sign-out on a one-tap phone needs no digits: the tap after the name signs that person out", async () => {
     const t = (await signInAs(AMY)).json.deviceToken as string;
-    const noDigits = await checkOut({ deviceToken: t });
-    expect(noDigits.status).toBe(400);
-    expect(noDigits.json.error).toBe("last4_required");
-    const wrong = await checkOut({ deviceToken: t, last4: "1111" });
-    expect(wrong.status).toBe(403);
-    expect(wrong.json.error).toBe("wrong_digits");
-    const open = await db.select().from(siteCheckinsTable).where(eq(siteCheckinsTable.workerName, "Amy Parrish"));
-    expect(open.some(r => !r.checkedOutAt)).toBe(true);
-    const ok = await checkOut({ deviceToken: t, last4: "0456" });
+    const ok = await checkOut({ deviceToken: t });
     expect(ok.status).toBe(200);
+    expect(ok.json.workerName).toBe("Amy Parrish");
+    const open = await db.select().from(siteCheckinsTable).where(eq(siteCheckinsTable.workerName, "Amy Parrish"));
+    expect(open.every(r => !!r.checkedOutAt)).toBe(true);
   });
 
-  it("5 wrong tries lock that phone's sign-out, even with the right digits", async () => {
-    const t = (await signInAs(BOB)).json.deviceToken as string;
-    for (let i = 0; i < 5; i++) expect((await checkOut({ deviceToken: t, last4: "0000" })).status).toBe(403);
-    const locked = await checkOut({ deviceToken: t, last4: "0789" });
-    expect(locked.status).toBe(429);
-    expect(locked.json.message).toMatch(/full mobile number/);
-    expect((await checkOut({ phone: BOB })).status).toBe(200);
-  });
-
-  it("no mobile on file: remembered-phone sign-out is refused with the way out", async () => {
+  it("someone with no mobile on file can sign out from their own one-tap phone", async () => {
     await db.insert(siteCheckinsTable).values({ id: randomUUID(), projectId: co.projectId, workerName: "Nora Nophone", companyName: `Firm X ${sfx}`, personKey: `person:${nophone}`, photoUrl: "/api/uploads/x.jpg" });
-    const res = await checkOut({ deviceToken: devToken(nophone, "Nora Nophone", `Firm X ${sfx}`), last4: "1234" });
-    expect(res.status).toBe(403);
-    expect(res.json.error).toBe("no_number_on_file");
-    expect(res.json.message).toBe("Enter your full mobile number to sign out, or ask the site manager.");
+    expect((await checkOut({ deviceToken: devToken(nophone, "Nora Nophone", `Firm X ${sfx}`) })).status).toBe(200);
+  });
+
+  it("an invalid or expired device token still can't sign anyone out", async () => {
+    expect((await checkOut({ deviceToken: "junk" })).status).toBe(403);
   });
 });

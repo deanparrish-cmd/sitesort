@@ -26,7 +26,7 @@ export function deviceLabel(userAgent: string | null): string {
 export type ReceiptEvent = "arrived" | "received" | "tapped";
 export type ReceiptDetail = {
   shown?: boolean | null; permission?: string | null; error?: string | null;
-  posted?: boolean | null; foreground?: boolean | null; sw?: string | null;
+  posted?: boolean | null; foreground?: boolean | null; sw?: string | null; badge?: string | null;
 };
 
 // Called by sw.js (no login: a service worker holds no portal token). The id is
@@ -44,9 +44,10 @@ export async function recordReceipt(id: string, event: ReceiptEvent, d: ReceiptD
     : event === "received"
     ? [`UPDATE push_alerts SET received_at = COALESCE(received_at, now()), arrived_at = COALESCE(arrived_at, now()),
               shown = COALESCE($2, shown), permission = COALESCE($3, permission), show_error = COALESCE($4, show_error),
-              posted = COALESCE($5, posted), foreground = COALESCE($6, foreground), sw_version = COALESCE($7, sw_version)
+              posted = COALESCE($5, posted), foreground = COALESCE($6, foreground), sw_version = COALESCE($7, sw_version),
+              badge_result = COALESCE($8, badge_result)
          WHERE id = $1 AND send_result = 'accepted'`,
-       [id, d.shown ?? null, perm, d.error ? d.error.slice(0, 300) : null, d.posted ?? null, d.foreground ?? null, sw]]
+       [id, d.shown ?? null, perm, d.error ? d.error.slice(0, 300) : null, d.posted ?? null, d.foreground ?? null, sw, d.badge ? d.badge.slice(0, 120) : null]]
     // A tap proves the phone got it even if the other reports were lost.
     : [`UPDATE push_alerts SET tapped_at = COALESCE(tapped_at, now()), arrived_at = COALESCE(arrived_at, now())
          WHERE id = $1 AND send_result = 'accepted'`, [id]];

@@ -54,6 +54,7 @@ SELECT a.sent_at, a.tag, u.email, left(a.endpoint, 40) AS phone, s.user_agent,
          ELSE 'displayed'
        END AS outcome,
        a.show_error, a.permission, a.posted, a.foreground,
+       a.badge_result,  -- set:N = setAppBadge accepted N (visible only if notifications allowed and Badges on); unsupported; or the error
        a.arrived_at - a.sent_at AS to_arrive, a.received_at - a.sent_at AS to_show, a.tapped_at
   FROM push_alerts a
   JOIN users u ON u.id = a.user_id
