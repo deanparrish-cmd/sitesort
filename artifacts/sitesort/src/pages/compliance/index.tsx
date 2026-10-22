@@ -206,6 +206,17 @@ export default function CompliancePage() {
     else if (filter === "expiring") target = kind === "permit" ? "permits" : "insurance";
     if (!target) return;
     window.history.replaceState({}, "", "/compliance");
+    // ?doc=<id> (the dashboard's "waiting for sign-off" with one document):
+    // yours and already opened -> the sign-off starts; yours, not opened ->
+    // its row says Open to sign off; someone else's -> who hasn't signed.
+    const docId = target === "signoffs" ? params.get("doc") : null;
+    const a = docId ? acks.find(x => x.documentId === docId) : undefined;
+    if (a) {
+      setExpandedAckId(a.documentId);
+      setTimeout(() => document.getElementById(`ack-${a.documentId}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 100);
+      if (a.myStatus === "viewed") signOff.open({ id: a.documentId, name: a.documentName, pinRequired: a.pinRequired ?? true });
+      return;
+    }
     setHighlightSection(target);
     setTimeout(() => document.getElementById(`section-${target}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
     setTimeout(() => setHighlightSection(null), 2600);
@@ -741,7 +752,7 @@ export default function CompliancePage() {
                   const expanded = expandedAckId === a.documentId;
                   const iNeedToSign = !!a.myStatus && a.myStatus !== "acknowledged";
                   return (
-                    <div key={a.documentId} className="rounded-xl border bg-blue-50 border-blue-200 overflow-hidden">
+                    <div key={a.documentId} id={`ack-${a.documentId}`} data-testid="ack-row" className="scroll-mt-24 rounded-xl border bg-blue-50 border-blue-200 overflow-hidden">
                       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 px-4 py-3">
                         <div className="min-w-0 flex-1">
                           <p className="font-semibold text-sm truncate">{a.documentName}</p>
@@ -758,7 +769,7 @@ export default function CompliancePage() {
                             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-medium hover:bg-blue-200 transition-colors"
                             title="Show who's signed off"
                           >
-                            {a.notSent ? `Latest revision not sent to ${a.pendingCount}` : `${a.pendingCount} pending`}
+                            {a.notSent ? `Latest revision not sent to ${a.pendingCount}` : `${a.pendingCount} not signed`}
                             {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                           </button>
                           <button
@@ -769,13 +780,15 @@ export default function CompliancePage() {
                             <ExternalLink className="w-3 h-3" />
                             Open
                           </button>
+                          {/* Open before sign-off (Dean, 2026-10-22): Open records it. */}
                           {iNeedToSign && (
                             <button
-                              onClick={() => signOff.open({ id: a.documentId, name: a.documentName, pinRequired: a.pinRequired ?? true })}
+                              onClick={() => a.myStatus === "pending" ? void openAck(a) : signOff.open({ id: a.documentId, name: a.documentName, pinRequired: a.pinRequired ?? true })}
                               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent text-accent-foreground text-xs font-medium hover:opacity-90 transition-opacity"
-                              title="Sign off this document"
+                              title={a.myStatus === "pending" ? "Open it first: you can sign off once you've opened it" : "Sign off this document"}
+                              data-testid="button-ack-sign"
                             >
-                              <FileSignature className="w-3 h-3" /> Sign off
+                              <FileSignature className="w-3 h-3" /> {a.myStatus === "pending" ? "Open to sign off" : "Sign off"}
                             </button>
                           )}
                           <button
@@ -799,6 +812,10 @@ export default function CompliancePage() {
                                 <span className="flex items-center gap-1 text-emerald-600 font-medium shrink-0">
                                   <CheckCircle2 className="w-3 h-3" /> Signed off {r.acknowledgedAt ? new Date(r.acknowledgedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : ""}
                                 </span>
+                              ) : r.status === "viewed" ? (
+                                <span className="text-amber-700 dark:text-amber-400 shrink-0">Opened{r.viewedAt ? ` ${new Date(r.viewedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}, not signed</span>
+                              ) : r.status === "pending" ? (
+                                <span className="text-muted-foreground shrink-0">Not opened</span>
                               ) : (
                                 <span className="text-muted-foreground shrink-0 capitalize">{r.status}</span>
                               )}

@@ -25,27 +25,59 @@ export type SiteRegister = {
 };
 type Cached = { data: SiteRegister; savedAt: string };
 
-const CACHE_PREFIX = "sitesort_site_register:";
+// Where the register comes from. The portal (site manager / cover, portal
+// session) by default; the dashboard (company admins and PMs on their normal
+// login, 2026-10-22) passes its own URLs, auth header and a separate saved
+// copy, so one person's dashboard and portal copies never mix.
+export type RegisterSource = {
+  kind: "portal" | "dashboard";
+  listUrl: string;
+  holdUrl: (id: string) => string;
+  signOutUrl: (id: string) => string;
+  headers: () => Record<string, string>;
+  cachePrefix: string;
+  deniedText: string;
+};
+export const PORTAL_REGISTER_SOURCE: RegisterSource = {
+  kind: "portal",
+  listUrl: "/api/portal/site-register",
+  holdUrl: id => `/api/portal/site-register/${id}/hold-decision`,
+  signOutUrl: id => `/api/portal/site-register/${id}/sign-out`,
+  headers: () => ({}),
+  cachePrefix: "sitesort_site_register:",
+  deniedText: "Only the site manager, or someone covering for the project manager, can see the site register.",
+};
+
+const CACHE_PREFIX = PORTAL_REGISTER_SOURCE.cachePrefix;
 const CACHE_LAST = "sitesort_site_register_last";
 const REFRESH_MS = 30_000;
 const FRESH_MS = 2 * 60_000;      // under 2 minutes old: current
 const OLD_MS = 15 * 60_000;       // over 15 minutes old: treat as out of date
 
-function readCache(projectId?: string | null): Cached | null {
+function readCache(projectId?: string | null, prefix = CACHE_PREFIX): Cached | null {
   try {
-    const id = projectId || localStorage.getItem(CACHE_LAST);
+    const id = projectId || (prefix === CACHE_PREFIX ? localStorage.getItem(CACHE_LAST) : null);
     if (!id) return null;
-    const raw = localStorage.getItem(CACHE_PREFIX + id);
+    const raw = localStorage.getItem(prefix + id);
     return raw ? (JSON.parse(raw) as Cached) : null;
   } catch { return null; }
 }
-function writeCache(data: SiteRegister): Cached {
+function writeCache(data: SiteRegister, prefix = CACHE_PREFIX): Cached {
   const c = { data, savedAt: data.generatedAt };
   try {
-    localStorage.setItem(CACHE_PREFIX + data.projectId, JSON.stringify(c));
-    localStorage.setItem(CACHE_LAST, data.projectId);
+    localStorage.setItem(prefix + data.projectId, JSON.stringify(c));
+    if (prefix === CACHE_PREFIX) localStorage.setItem(CACHE_LAST, data.projectId);
   } catch { /* storage full or blocked: still shown on screen */ }
   return c;
+}
+/** Dashboard logout removes this device's dashboard copies of the register. */
+export function clearRegisterCachesWithPrefix(prefix: string): void {
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(prefix)) localStorage.removeItem(k);
+    }
+  } catch { /* nothing saved */ }
 }
 /** Explicit portal logout removes the saved registers from this device. */
 export function clearSiteRegisterCaches(): void {
@@ -151,7 +183,7 @@ function Roll({ data, onSignOut }: { data: SiteRegister; onSignOut?: (r: Row) =>
   );
 }
 
-function HeldCard({ h, online, onDone }: { h: HeldRow; online: boolean; onDone: (msg: string) => void }) {
+function HeldCard({ h, online, onDone, source }: { h: HeldRow; online: boolean; onDone: (msg: string) => void; source: RegisterSource }) {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -159,8 +191,8 @@ function HeldCard({ h, online, onDone }: { h: HeldRow; online: boolean; onDone: 
     if (decision === "approve" && !note.trim()) { setErr("Give a reason for letting them on site."); return; }
     setBusy(true); setErr("");
     try {
-      const r = await fetch(`/api/portal/site-register/${h.id}/hold-decision`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ decision, note: note.trim() }),
+      const r = await fetch(source.holdUrl(h.id), {
+        method: "POST", headers: { "Content-Type": "application/json", ...source.headers() }, body: JSON.stringify({ decision, note: note.trim() }),
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) { setErr(d.message ?? "That didn't save. Try again."); return; }
@@ -207,7 +239,7 @@ function HeldCard({ h, online, onDone }: { h: HeldRow; online: boolean; onDone: 
   );
 }
 
-function SignOutPanel({ r, online, onCancel, onDone }: { r: Row; online: boolean; onCancel: () => void; onDone: (msg: string) => void }) {
+function SignOutPanel({ r, online, onCancel, onDone, source }: { r: Row; online: boolean; onCancel: () => void; onDone: (msg: string) => void; source: RegisterSource }) {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -215,8 +247,8 @@ function SignOutPanel({ r, online, onCancel, onDone }: { r: Row; online: boolean
     if (!note.trim()) { setErr("Add a note, e.g. Left at 4pm, forgot to sign out."); return; }
     setBusy(true); setErr("");
     try {
-      const res = await fetch(`/api/portal/site-register/${r.id}/sign-out`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ note: note.trim() }),
+      const res = await fetch(source.signOutUrl(r.id), {
+        method: "POST", headers: { "Content-Type": "application/json", ...source.headers() }, body: JSON.stringify({ note: note.trim() }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) { setErr(d.message ?? "That didn't save. Try again."); return; }
@@ -242,7 +274,7 @@ function SignOutPanel({ r, online, onCancel, onDone }: { r: Row; online: boolean
 
 // Fire-roll readiness (#125), as of this copy: anything not right yet, so the
 // site manager knows what to sort (or who to ask) before he relies on it.
-function ReadinessStrip({ r }: { r: SiteRegister["readiness"] }) {
+function ReadinessStrip({ r, kind }: { r: SiteRegister["readiness"]; kind: RegisterSource["kind"] }) {
   if (!r || r.status === "not_in_use") return null;
   const problems = r.checks.filter(c => c.status !== "green" && c.key !== "today");
   if (problems.length === 0) return null;
@@ -257,7 +289,7 @@ function ReadinessStrip({ r }: { r: SiteRegister["readiness"] }) {
           </li>
         ))}
       </ul>
-      {bad && <p className="text-sm">Your project manager has been told.</p>}
+      {bad && kind === "portal" && <p className="text-sm">Your project manager has been told.</p>}
     </section>
   );
 }
@@ -269,8 +301,8 @@ function useNow(ms = 10_000) {
 }
 
 /** The live register inside the portal. `projectId` comes from the portal context when it loaded. */
-export function SiteRegisterView({ projectId }: { projectId?: string | null }) {
-  const [cached, setCached] = useState<Cached | null>(() => readCache(projectId));
+export function SiteRegisterView({ projectId, source = PORTAL_REGISTER_SOURCE }: { projectId?: string | null; source?: RegisterSource }) {
+  const [cached, setCached] = useState<Cached | null>(() => readCache(projectId, source.cachePrefix));
   const [live, setLive] = useState<boolean | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [denied, setDenied] = useState(false);
@@ -281,17 +313,17 @@ export function SiteRegisterView({ projectId }: { projectId?: string | null }) {
   const load = useCallback(async () => {
     setRefreshing(true);
     try {
-      const r = await fetch("/api/portal/site-register", { cache: "no-store" });
+      const r = await fetch(source.listUrl, { cache: "no-store", headers: source.headers() });
       if (r.status === 403) { setDenied(true); setLive(true); return; }
       if (!r.ok) throw new Error(String(r.status));
       const data = (await r.json()) as SiteRegister;
-      setCached(writeCache(data));
+      setCached(writeCache(data, source.cachePrefix));
       setLive(true);
       setDenied(false);
     } catch {
       setLive(false);
     } finally { setRefreshing(false); }
-  }, []);
+  }, [source]);
 
   useEffect(() => {
     void load();
@@ -306,10 +338,10 @@ export function SiteRegisterView({ projectId }: { projectId?: string | null }) {
   const queryClient = useQueryClient();
   // A decision changes how many are waiting: refresh the counts behind the
   // Home tile and the app-icon badge now, not at the next minute's poll.
-  const done = (msg: string) => { setFlash(msg); setSigningOut(null); void load(); void queryClient.invalidateQueries({ queryKey: getGetPortalUnseenQueryKey() }); };
+  const done = (msg: string) => { setFlash(msg); setSigningOut(null); void load(); if (source.kind === "portal") void queryClient.invalidateQueries({ queryKey: getGetPortalUnseenQueryKey() }); };
 
   if (denied) {
-    return <p className="text-base">Only the site manager, or someone covering for the project manager, can see the site register.</p>;
+    return <p className="text-base">{source.deniedText}</p>;
   }
   if (!cached) {
     return (
@@ -328,7 +360,7 @@ export function SiteRegisterView({ projectId }: { projectId?: string | null }) {
         <p className="text-sm text-muted-foreground break-words">{data.projectName} · times in {data.siteTzLabel}</p>
       </div>
       <LastUpdated savedAt={cached.savedAt} live={live} refreshing={refreshing} onRefresh={() => void load()} now={now} />
-      <ReadinessStrip r={data.readiness} />
+      <ReadinessStrip r={data.readiness} kind={source.kind} />
       {flash && (
         <div className="rounded-xl border-2 border-success bg-success/10 p-3 flex flex-wrap items-center gap-2" role="status">
           <CheckCircle2 className="w-5 h-5 shrink-0" /><span className="text-base font-semibold min-w-0 break-words">{flash}</span>
@@ -340,7 +372,7 @@ export function SiteRegisterView({ projectId }: { projectId?: string | null }) {
           <span className="min-w-0">{data.held.length} waiting at the gate: see below</span>
         </a>
       )}
-      {signingOut && <SignOutPanel r={signingOut} online={live === true} onCancel={() => setSigningOut(null)} onDone={done} />}
+      {signingOut && <SignOutPanel r={signingOut} online={live === true} onCancel={() => setSigningOut(null)} onDone={done} source={source} />}
       {/* The fire roll comes first; the gate queue follows (they're not on site yet). */}
       <Roll data={data} onSignOut={r => { setFlash(""); setSigningOut(r); }} />
       {data.held.length > 0 && (
@@ -350,7 +382,7 @@ export function SiteRegisterView({ projectId }: { projectId?: string | null }) {
             <h2 className="text-xl font-display font-bold">Waiting at the gate ({data.held.length})</h2>
           </div>
           <p className="text-sm">Not on site yet, and not on the fire roll until you let them on.</p>
-          <ul className="space-y-3">{data.held.map(h => <HeldCard key={h.id} h={h} online={live === true} onDone={done} />)}</ul>
+          <ul className="space-y-3">{data.held.map(h => <HeldCard key={h.id} h={h} online={live === true} onDone={done} source={source} />)}</ul>
         </section>
       )}
     </div>

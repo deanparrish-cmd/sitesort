@@ -3206,6 +3206,30 @@ paths:
               schema:
                 $ref: "#/components/schemas/PortalPushTestResult"
 
+  /projects/{projectId}/member-documents/{id}/mark-replaced:
+    post:
+      operationId: markMemberDocumentReplaced
+      tags: [portal]
+      summary: Move a rejected submission to the Rejected folder by hand (its replacement was filed under another kind)
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Marked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
   /portal/push/test-answer:
     post:
       operationId: answerPortalPushTest
@@ -6074,6 +6098,15 @@ components:
             approvedAt:
               type: string
           required: [id, name]
+        markedReplaced:
+          type: object
+          description: A manager marked this rejected document as replaced (for a replacement filed under another kind). Present = it belongs in the Rejected folder.
+          properties:
+            at:
+              type: string
+            byName:
+              type: string
+          required: [at, byName]
       required: [id, name, kind, fileUrl, fileSize, status, createdAt, uploaderName]
 
     ReviewMemberDocumentRequest:

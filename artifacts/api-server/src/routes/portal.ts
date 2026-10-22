@@ -29,7 +29,7 @@ import { pushSubscriptionsTable, activityLogTable, portalSessionsTable, pushAler
 import { linkedCardsForLogin } from "../lib/linked-cards";
 import { PortalPushSubscribeBody, PortalPushUnsubscribeBody, RemovePortalPushDeviceBody, SendPortalPushTestBody, AnswerPortalPushTestBody } from "@workspace/api-zod";
 import { isLockedOut, recordFailedAttempt, clearAttempts } from "../lib/login-attempts";
-import { pinRequiredForDoc, SUPERSEDED_SIGNOFF_MESSAGE, SUPERSEDED_NOT_SHARED_SIGNOFF_MESSAGE } from "../lib/signoff";
+import { pinRequiredForDoc, SUPERSEDED_SIGNOFF_MESSAGE, SUPERSEDED_NOT_SHARED_SIGNOFF_MESSAGE, OPEN_FIRST_MESSAGE } from "../lib/signoff";
 import { expiryStatus } from "../lib/expiry";
 import { issueCategoryFilter } from "../lib/accountability";
 import { canonicalPersonName } from "../lib/person-name";
@@ -2124,6 +2124,8 @@ router.get("/portal/documents/:documentId/download", ...portalGuards, async (req
   }
   const filename = fileUrlToFilename(doc.fileUrl);
   if (!filename) { res.status(404).json({ error: "not_found", message: "Document file unavailable" }); return; }
+  // Downloading the file counts as opening it (open before sign-off).
+  await recordDocView(doc.id, req.user!.id);
 
   let downloadName = doc.name.replace(/[/\\"]/g, "-");
   if (!/\.[a-z0-9]+$/i.test(downloadName)) {
@@ -2184,6 +2186,16 @@ router.post("/portal/documents/:documentId/acknowledge", ...portalGuards, async 
       res.status(400).json({ error: "validation_error", message: "This document does not require sign-off." });
       return;
     }
+    // Open before sign-off: opening (or downloading) records the row with a
+    // view time; no row or no view time = never opened. Checked before the
+    // PIN, and a view time is never written here.
+    const existing = await db.select().from(documentDistributionsTable)
+      .where(and(eq(documentDistributionsTable.documentId, doc.id), eq(documentDistributionsTable.userId, req.user!.id)))
+      .limit(1);
+    if (!existing[0]?.viewedAt) {
+      res.status(409).json({ error: "open_first", message: OPEN_FIRST_MESSAGE });
+      return;
+    }
 
     // Safety-critical documents (method statements/RAMS, permits, safety docs)
     // and any document flagged "require PIN sign-off" are PIN-confirmed. All
@@ -2215,21 +2227,10 @@ router.post("/portal/documents/:documentId/acknowledge", ...portalGuards, async 
       await clearPinAttempts(req.user!.id);
     }
 
-    const existing = await db.select().from(documentDistributionsTable)
-      .where(and(eq(documentDistributionsTable.documentId, doc.id), eq(documentDistributionsTable.userId, req.user!.id)))
-      .limit(1);
-
     await db.transaction(async (tx) => {
-      if (existing[0]) {
-        await tx.update(documentDistributionsTable)
-          .set({ status: "acknowledged", acknowledgedAt: new Date(), viewedAt: existing[0].viewedAt ?? new Date(), signedOffWithPin: pinRequired })
-          .where(eq(documentDistributionsTable.id, existing[0].id));
-      } else {
-        await tx.insert(documentDistributionsTable).values({
-          id: generateId(), documentId: doc.id, userId: req.user!.id,
-          status: "acknowledged", viewedAt: new Date(), acknowledgedAt: new Date(), signedOffWithPin: pinRequired,
-        });
-      }
+      await tx.update(documentDistributionsTable)
+        .set({ status: "acknowledged", acknowledgedAt: new Date(), signedOffWithPin: pinRequired })
+        .where(eq(documentDistributionsTable.id, existing[0].id));
       await tx.insert(acknowledgmentAuditTable).values({
         id: generateId(),
         documentId: doc.id,

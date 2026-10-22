@@ -2,7 +2,8 @@ import { useState } from "react";
 import { TabsContent } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
-import { QrCode, FolderOpen, ChevronDown, ChevronRight } from "lucide-react";
+import { QrCode, FolderOpen, ChevronDown, ChevronRight, Users } from "lucide-react";
+import { Link } from "wouter";
 import { MonthFolder, splitByMonth, monthLabel } from "@/components/ui/month-folder";
 import { useDetail } from "../context";
 import { OnSiteRegister, checkinStatusLine as statusLine, type Presence } from "@/components/on-site-register";
@@ -92,6 +93,12 @@ export function CheckinsTab() {
             title="Site Check-Ins"
             description="Workers who checked in on site via the QR code board."
             actions={<>
+              {isProjectApprover && (
+                <Link href={`/projects/${projectId}/site-register`} data-testid="link-site-register"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-sm font-semibold">
+                  <Users className="w-3.5 h-3.5" /> Site Register on this phone
+                </Link>
+              )}
               {siteBoardUrl && (
                 <a
                   href={siteBoardUrl}

@@ -17,6 +17,14 @@ export const SUPERSEDED_SIGNOFF_MESSAGE = "This revision has been replaced by a 
 // telling them to open it would send them to something they can't open.
 export const SUPERSEDED_NOT_SHARED_SIGNOFF_MESSAGE = "This revision has been replaced by a newer one, so it can't be signed off. The newer revision hasn't been shared with you yet. Ask your project manager to share it.";
 
+// Open before sign-off (Dean, 2026-10-22): a signature means "I have read
+// this and I accept it", and that record is what gets produced after an
+// incident. Signing needs a recorded open of this revision by this person
+// (opening it, or downloading the file in the portal). Before this, signing
+// an unopened document wrote an open time anyway: the record claimed a read
+// that never happened.
+export const OPEN_FIRST_MESSAGE = "Open the document first. You can sign it off once you've opened it.";
+
 // Upload refusals (2026-10-21): replacing a document shared on the Team
 // Portal needs an explicit answer about who gets the new revision.
 export const SHARE_ANSWER_REQUIRED_MESSAGE = "This document is shared on the Team Portal, so the new revision needs a decision about who gets it. Reload the page and upload again.";

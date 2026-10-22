@@ -227,7 +227,7 @@ function buildRoutes(fixtures: FixtureData): RouteSpec[] {
     // below is the meaningful concrete route.
     if (template === "/portal/:section") continue;
     const dynamicFixtures: Record<string, string> =
-      template === "/projects/:id"
+      template === "/projects/:id" || template === "/projects/:id/site-register"
         ? { id: fixtures.projectId }
         : template === "/site/:token"
         ? { token: fixtures.siteToken }

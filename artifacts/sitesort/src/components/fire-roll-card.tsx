@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { Pill } from "@/components/ui/list-row";
 import { cn } from "@/lib/utils";
-import { Flame, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
+import { Flame, CheckCircle2, AlertTriangle, XCircle, Users } from "lucide-react";
 
 // Fire-roll readiness (#125) for one project, on its Overview: everything the
 // Team Portal Site Register needs to be right on the day, checked by the
@@ -12,6 +12,7 @@ import { Flame, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
 export type FireRollCheck = { key: string; status: "green" | "amber" | "red"; label: string; fix?: string };
 export type FireRollReadiness = {
   projectId: string; projectName: string; status: "green" | "amber" | "red" | "not_in_use"; checks: FireRollCheck[]; siteDate: string;
+  onSiteNow?: number;
 };
 
 const STATUS_TEXT = { green: "Ready", amber: "Check", red: "Not ready", not_in_use: "Not in use" } as const;
@@ -58,6 +59,18 @@ export function FireRollCard({ projectId }: { projectId: string }) {
           description="Can the site manager or PM cover see who's on site from their phone today?"
           badge={<Pill className={STATUS_PILL[data.status]}>{STATUS_TEXT[data.status]}</Pill>}
         />
+        {/* Who is actually on site (Dean, 2026-10-22: the card said what to
+            fix but gave no way to see the roll). The register opens on a
+            phone with this login and keeps a copy for no signal. */}
+        {data.status !== "not_in_use" && (
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2" data-testid="fire-roll-on-site">
+            <Users className="w-4 h-4 shrink-0" />
+            <span className="text-sm font-semibold min-w-0">{data.onSiteNow ?? 0} on site now</span>
+            <Link href={`/projects/${projectId}/site-register`} className="ml-auto inline-flex items-center min-h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90">
+              Open the Site Register
+            </Link>
+          </div>
+        )}
         <ul className="space-y-2">
           {data.checks.map(c => {
             const href = c.status !== "green" ? fixHref(projectId, c.key) : null;

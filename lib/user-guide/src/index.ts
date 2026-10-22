@@ -170,7 +170,7 @@ export const PM_GUIDE: GuideSection[] = [
         heading: "Site Issues, Plant & Materials, Daily Report",
         body: [
           "By default a new portal member sees only Overview, Messages, Shared with me, My documents, Permits and Site Board. To let someone log site issues, update plant & materials, or edit the daily report, turn on the matching pill (Site Issues / Plant & Materials / Daily Report) on their Team tab card. Each is independent and can be switched off again at any time.",
-          "Documents a portal member sends you (insurance, certificates and so on) wait under Documents for review on the project's Team Portal tab, newest first. Approve, or Reject with a reason: a reason is required, and the sender sees it in My documents. Once the same person sends a replacement of the same kind and you approve it, the rejected one moves to the Rejected folder below the list, with its reason and the name of the replacement.",
+          "Documents a portal member sends you (insurance, certificates and so on) wait under Documents for review on the project's Team Portal tab, newest first. Approve, or Reject with a reason: a reason is required, and the sender sees it in My documents. Once the same person sends a replacement of the same kind and you approve it, the rejected one moves to the Rejected folder below the list, with its reason and the name of the replacement. If they sent the replacement under a different type, choose Mark as replaced on the rejected one to move it there yourself.",
         ],
       },
     ],
@@ -220,6 +220,7 @@ export const PM_GUIDE: GuideSection[] = [
         body: [
           "The project's site manager, and anyone you give PM cover on the project's Team tab, can run the gate from the Team Portal: the Site Register shows who is on site now, who is waiting at the gate (let on or refuse), and lets them sign someone out with a note. They get a phone notification when someone is waiting, if they've turned notifications on. The SiteSort icon on their Home Screen also shows a red count of how many people are waiting, which stays after the notification is cleared and goes down as each one is let on, refused, or lapses at site close. On iPhone and iPad this needs SiteSort installed on the Home Screen, notifications allowed, and Badges switched on in Settings, Notifications, SiteSort.",
           "Set this up before you need it: name the site manager in Edit Details, or tick PM cover, and make sure they have accepted their Team Portal invite.",
+          "Company admins and project managers can open the Site Register themselves, on their own phone with their normal login, no Team Portal invite needed: Open the Site Register on the project's Fire roll card, or Site Register on this phone on the Check-ins tab. It refreshes every 30 seconds with signal and keeps a copy on the phone for when there's none, showing plainly when it was last updated. Open it once with signal each day so the copy is current. You can let people on or refuse them at the gate and sign someone out from it.",
           "Under Portal member on each Team tab card you can see whether their phone alerts work: Phone alerts confirmed (their phone has told SiteSort an alert arrived), Never confirmed (a phone is set up but has never reported one), or No phone set up. If they've sent a test alert from Settings you also see their answers: banner appeared, no banner (phone hid it: Focus, Do Not Disturb or banners are off on the phone), or no banner (never arrived: the install isn't working); and icon number appeared, or no icon number (Badges is off for SiteSort on the phone, so the waiting count on the icon won't show).",
           "The project's Overview shows Fire roll: Ready, Check or Not ready, with what's missing and where to fix it: nobody named, Team Portal invite not accepted, only one person able to open the Site Register (no backup if they're off site), notifications off, nobody signing in at the QR code this week, or today's register not opened. It's Not ready once people have signed in today and nobody has opened the Site Register, because the copy on the phone would be out of date. While it's Not ready, you and the site manager get one alert a day, and it shows under Needs Attention on your dashboard.",
         ],
@@ -271,7 +272,8 @@ export const PM_GUIDE: GuideSection[] = [
       {
         heading: "Sign-offs",
         body: [
-          "Pending Sign-offs (on the dashboard and in Compliance) shows documents waiting for someone's confirmation. For safety-critical documents (method statements, permits and safety documents), or any document where you've switched on \"Require a PIN to sign off\", the signer enters their 4-digit PIN. Everything else uses a simple read-and-confirm step, no PIN needed.",
+          "Pending Sign-offs (on the dashboard and in Compliance) counts everyone who hasn't signed a document that needs a sign-off, whether they've opened it or not, on its latest revision. Tap the dashboard item: if the document is waiting for your signature it starts your sign-off; if it's someone else's, Compliance shows who hasn't signed (Not opened, or Opened, not signed). For safety-critical documents (method statements, permits and safety documents), or any document where you've switched on \"Require a PIN to sign off\", the signer enters their 4-digit PIN. Everything else uses a simple read-and-confirm step, no PIN needed.",
+          "A document has to be opened before it can be signed off, by you and by everyone on the Team Portal: a signature means \"I have read this and I accept it\". Until it's opened the button says Open to sign off; opening it (or downloading it in the portal) is recorded, and then Sign off appears.",
         ],
       },
     ],
@@ -488,6 +490,7 @@ export const WORKER_GUIDE: GuideSection[] = [
         body: [
           "A document marked Superseded has been replaced. If you open one anyway, you'll see a prompt offering to open the latest version instead.",
           "If a new version of a document is shared with you, you'll be notified and asked to acknowledge it, even if you'd acknowledged the earlier version. A superseded version can't be signed off: sign off the latest one.",
+          "Open a document before you sign it off. Until you've opened it the button says Open to sign off: tap it, read the document, then Sign off appears.",
         ],
       },
       {

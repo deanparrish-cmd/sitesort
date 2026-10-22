@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "@workspace/db";
 import { and, eq, inArray } from "drizzle-orm";
 import {
-  siteCheckinsTable, qrCodesTable, projectMembersTable, notificationsTable, projectsTable, portalSessionsTable, pushSubscriptionsTable,
+  siteCheckinsTable, siteRegisterOpensTable, qrCodesTable, projectMembersTable, notificationsTable, projectsTable, portalSessionsTable, pushSubscriptionsTable,
 } from "@workspace/db/schema";
 import {
   seedCompany, cleanupFixtures, api, login, dashboardToken, portalLogin, seedCrossTenantPortalMember, cleanupPortalMember,
@@ -87,7 +87,10 @@ describe("fire-roll readiness and the daily alert", () => {
     const r = await readiness();
     expect(r.status).toBe("amber");
     expect(check(r, "access").status).toBe("green");
-    expect(check(r, "cover").status).toBe("amber"); // nobody to take over
+    // The company admin can open the register from the dashboard on their own
+    // phone (Dean, 2026-10-22, once that shipped), so the site manager isn't alone.
+    expect(check(r, "cover").status).toBe("green");
+    expect(check(r, "cover").label).toMatch(/1 on the Team Portal, 1 admin or project manager on the dashboard/);
     expect(check(r, "notify").status).toBe("amber");
     expect(check(r, "board").status).toBe("amber");
     expect(check(r, "today").status).toBe("amber");
@@ -120,15 +123,31 @@ describe("fire-roll readiness and the daily alert", () => {
     expect(check(reg.json.readiness, "today").status).toBe("green");
     expect(check(reg.json.readiness, "board").status).toBe("green");
     await db.insert(pushSubscriptionsTable).values({ id: randomUUID(), userId: manager.userId, projectId: co.projectId, endpoint: `https://push.example.test/${sfx}`, p256dh: "x", auth: "y" });
-    // Still amber: the site manager is the only one who can open the register.
-    expect((await readiness()).status).toBe("amber");
-    // A second person on the Team Portal with PM cover is the backup.
+    // A second person on the Team Portal with PM cover adds to the count.
     cover = await seedCrossTenantPortalMember([co], [admin]);
     await db.update(projectMembersTable).set({ isProjectManager: true })
       .where(and(eq(projectMembersTable.projectId, co.projectId), eq(projectMembersTable.userId, cover.userId)));
     const r = await readiness();
     expect(check(r, "cover").status).toBe("green");
+    expect(check(r, "cover").label).toMatch(/^3 people can open the Site Register/);
     expect(r.status).toBe("green");
     expect(r.checks.every((c: any) => c.status === "green")).toBe(true);
+  });
+
+  // Dean, 2026-10-22: the PM and admins open the register from the dashboard,
+  // on their own phone, without a Team Portal invite.
+  it("a company admin opens the Site Register from the dashboard; that counts as today's copy on a phone", async () => {
+    await db.update(projectMembersTable).set({ registerOpenedAt: null }).where(eq(projectMembersTable.projectId, co.projectId));
+    await db.delete(siteRegisterOpensTable).where(eq(siteRegisterOpensTable.projectId, co.projectId));
+    expect(check(await readiness(), "today").status).not.toBe("green");
+    const reg = await api(`/projects/${co.projectId}/site-register`, { token: admin });
+    expect(reg.status).toBe(200);
+    expect(reg.json).toMatchObject({ projectId: co.projectId });
+    expect(Array.isArray(reg.json.onSite)).toBe(true);
+    expect(reg.json.onSite.map((x: any) => x.workerName)).toContain("Early Bird");
+    expect(check(reg.json.readiness, "today").status).toBe("green");
+    expect(reg.json.readiness.onSiteNow).toBe(reg.json.onSite.length);
+    // A portal-only worker can't use the dashboard route.
+    expect((await api(`/projects/${co.projectId}/site-register`, { token: managerToken })).status).toBeGreaterThanOrEqual(401);
   });
 });

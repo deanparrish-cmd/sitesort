@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import {
   useListProjectInvites, useRevokeProjectInvite, useResendPortalInvite,
   useGetProjectActivity, useGetProjectActivitySummary,
-  useListMemberDocuments, useReviewMemberDocument, useCreatePersonCertification,
+  useListMemberDocuments, useReviewMemberDocument, useCreatePersonCertification, useMarkMemberDocumentReplaced,
   getListProjectInvitesQueryKey, getGetProjectActivityQueryKey, getGetProjectActivitySummaryQueryKey,
   getListMemberDocumentsQueryKey,
 } from "@workspace/api-client-react";
@@ -85,8 +85,24 @@ function MemberDocumentsReview({ projectId }: { projectId: string }) {
   const allDocs = docsQ.data ?? [];
   // Rejected folder (Dean, 2026-10-22): a rejection leaves the review list once
   // a replacement from the same person (same kind) has been approved.
-  const docs = allDocs.filter(d => !(d.status === "rejected" && d.replacedBy));
-  const rejectedDocs = allDocs.filter(d => d.status === "rejected" && d.replacedBy);
+  // Or when a manager marks it as replaced by hand (a replacement filed under
+  // another kind, which the automatic match can't see).
+  const inFolder = (d: (typeof allDocs)[number]) => d.status === "rejected" && (!!d.replacedBy || !!d.markedReplaced);
+  const docs = allDocs.filter(d => !inFolder(d));
+  const rejectedDocs = allDocs.filter(inFolder);
+  const markReplaced = useMarkMemberDocumentReplaced();
+  const doMarkReplaced = async (id: string) => {
+    setBusyId(id);
+    try {
+      await markReplaced.mutateAsync({ projectId, id });
+      toast({ title: "Moved to Rejected", description: "It's kept there with its reason." });
+      await docsQ.refetch();
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Could not move it", description: e?.data?.message ?? "Please try again." });
+    } finally {
+      setBusyId("");
+    }
+  };
   const [showRejected, setShowRejected] = useState(false);
   const pendingCount = docs.filter(d => d.status === "pending").length;
   // Reject flow opens a proper dialog with a notes box (the note is stored on
@@ -192,6 +208,13 @@ function MemberDocumentsReview({ projectId }: { projectId: string }) {
                       </button>
                     )
                   )}
+                  {d.status === "rejected" && (
+                    <button disabled={busyId === d.id} onClick={() => doMarkReplaced(d.id)} data-testid="button-mark-replaced"
+                      title="They sent a replacement filed under another type: move this to the Rejected folder"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground text-xs font-medium hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50">
+                      {busyId === d.id ? <Spinner className="size-3" /> : <FolderX className="w-3 h-3" />}Mark as replaced
+                    </button>
+                  )}
                   {d.status === "pending" && (
                     <>
                       <button disabled={busyId === d.id} onClick={() => doReview(d.id, "approve")}
@@ -231,7 +254,11 @@ function MemberDocumentsReview({ projectId }: { projectId: string }) {
                       </PillGroup>
                       <p className="text-xs text-muted-foreground break-words">{d.uploaderName} · sent {fmtRelative(d.createdAt)}</p>
                       <p className="text-sm text-rose-700 dark:text-rose-400 break-words">Reason: {d.reviewNote ?? "No reason was recorded."}</p>
-                      <p className="text-xs text-muted-foreground break-words">Replaced by {d.replacedBy!.name}{d.replacedBy!.approvedAt ? `, approved ${fmtRelative(d.replacedBy!.approvedAt)}` : ""}</p>
+                      <p className="text-xs text-muted-foreground break-words">
+                        {d.replacedBy
+                          ? `Replaced by ${d.replacedBy.name}${d.replacedBy.approvedAt ? `, approved ${fmtRelative(d.replacedBy.approvedAt)}` : ""}`
+                          : `Marked as replaced by ${d.markedReplaced!.byName}, ${fmtRelative(d.markedReplaced!.at)}`}
+                      </p>
                     </div>
                   }
                   actions={

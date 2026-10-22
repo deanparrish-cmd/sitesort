@@ -9,7 +9,7 @@ import { allow, COMPANY_MANAGER, INTERNAL_STAFF, projectApprover, projectApprove
 import { enqueuePushForMembers, acceptedPortalMemberUserIds } from "../lib/push-triggers";
 import { removedFromProjectUserIds } from "../lib/project-membership";
 import { isPinLockedOut, recordFailedPinAttempt, clearPinAttempts } from "../lib/pin-attempts";
-import { pinRequiredForDoc, signOffRequiredOnUpload, SUPERSEDED_SIGNOFF_MESSAGE, SHARE_ANSWER_REQUIRED_MESSAGE, SHARE_LIST_CHANGED_MESSAGE } from "../lib/signoff";
+import { pinRequiredForDoc, signOffRequiredOnUpload, SUPERSEDED_SIGNOFF_MESSAGE, SHARE_ANSWER_REQUIRED_MESSAGE, SHARE_LIST_CHANGED_MESSAGE, OPEN_FIRST_MESSAGE } from "../lib/signoff";
 import { distributeDocumentToUser } from "../lib/document-distribution";
 import { isProjectApprover } from "../lib/project-authority";
 import { applyPortalShare, type Audience } from "./portal-shares";
@@ -427,6 +427,28 @@ router.get("/documents/:documentId", authenticate, allow(INTERNAL_STAFF), async 
   }
 });
 
+// POST /api/documents/:documentId/view: this dashboard user opened the file
+// (the Open button). Records the open on their own copy only; sign-off needs
+// it (OPEN_FIRST_MESSAGE). No copy for them = nothing to record.
+router.post("/documents/:documentId/view", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
+  try {
+    const docs = await db.select({ id: documentsTable.id, projectId: documentsTable.projectId }).from(documentsTable)
+      .where(eq(documentsTable.id, req.params.documentId)).limit(1);
+    const project = docs[0] ? await db.select({ id: projectsTable.id }).from(projectsTable)
+      .where(and(eq(projectsTable.id, docs[0].projectId), eq(projectsTable.companyId, req.user!.companyId))).limit(1) : [];
+    if (!docs[0] || !project[0]) { res.status(404).json({ error: "not_found", message: "Document not found" }); return; }
+    const updated = await db.update(documentDistributionsTable)
+      .set({ status: "viewed", viewedAt: new Date() })
+      .where(and(eq(documentDistributionsTable.documentId, docs[0].id), eq(documentDistributionsTable.userId, req.user!.id),
+        eq(documentDistributionsTable.status, "pending")))
+      .returning({ id: documentDistributionsTable.id });
+    res.json({ success: true, recorded: updated.length > 0 });
+  } catch (err) {
+    req.log.error({ err }, "Record document view error");
+    res.status(500).json({ error: "server_error", message: "Failed to record the open" });
+  }
+});
+
 router.post("/documents/:documentId/acknowledge", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const { pin } = req.body ?? {};
@@ -459,6 +481,10 @@ router.post("/documents/:documentId/acknowledge", authenticate, allow(INTERNAL_S
       .limit(1);
     if (!distRecord[0]) {
       res.status(403).json({ error: "not_distributed", message: "This document has not been shared with you to sign off." });
+      return;
+    }
+    if (!distRecord[0].viewedAt) {
+      res.status(409).json({ error: "open_first", message: OPEN_FIRST_MESSAGE });
       return;
     }
 
@@ -508,7 +534,7 @@ router.post("/documents/:documentId/acknowledge", authenticate, allow(INTERNAL_S
     // either both the sign-off and its append-only audit record persist, or neither does.
     await db.transaction(async (tx) => {
       await tx.update(documentDistributionsTable)
-        .set({ status: "acknowledged", acknowledgedAt: new Date(), viewedAt: distRecord[0].viewedAt ?? new Date(), signedOffWithPin: pinRequired })
+        .set({ status: "acknowledged", acknowledgedAt: new Date(), signedOffWithPin: pinRequired })
         .where(eq(documentDistributionsTable.id, distRecord[0].id));
 
       await tx.insert(acknowledgmentAuditTable).values({

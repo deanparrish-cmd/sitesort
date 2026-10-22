@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { clearRegisterCachesWithPrefix } from "@/components/portal-site-register";
+import { DASHBOARD_REGISTER_CACHE_PREFIX } from "@/pages/site-register";
 import { Link, useLocation } from "wouter";
 import {
   Building2,
@@ -141,11 +143,13 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     try {
       await logoutMutation.mutateAsync();
       localStorage.removeItem("sitesort_token");
+      clearRegisterCachesWithPrefix(DASHBOARD_REGISTER_CACHE_PREFIX);
       setLocation("/login");
     } catch (e) {
       console.error(e);
       // Fallback
       localStorage.removeItem("sitesort_token");
+      clearRegisterCachesWithPrefix(DASHBOARD_REGISTER_CACHE_PREFIX);
       setLocation("/login");
     }
   };

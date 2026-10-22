@@ -96,6 +96,8 @@ describe("sign-off reads the latest revision", () => {
   it("sharing and signing off the latest revision clears it", async () => {
     expect((await shareAll(revC)).status).toBe(201);
     expect(await closeout()).toMatchObject({ pendingCount: 1, notSentCount: 0, ok: false });
+    // Open before sign-off (2026-10-22): the member opens it, then signs.
+    expect((await api(`/portal/documents/${revC}/view`, { method: "POST", token: portal })).status).toBe(200);
     const ack = await api(`/portal/documents/${revC}/acknowledge`, { method: "POST", token: portal, body: { pin: member.pin } });
     expect(ack.status).toBe(200);
     expect(await closeout()).toMatchObject({ pendingCount: 0, notSentCount: 0, ok: true });

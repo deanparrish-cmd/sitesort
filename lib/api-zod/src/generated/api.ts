@@ -4404,6 +4404,15 @@ export const ListMemberDocumentsResponseItem = zod.object({
     .describe(
       "For a rejected document, the later submission from the same person, same kind, that was approved. Present = it belongs in the Rejected folder.",
     ),
+  markedReplaced: zod
+    .object({
+      at: zod.string(),
+      byName: zod.string(),
+    })
+    .optional()
+    .describe(
+      "A manager marked this rejected document as replaced (for a replacement filed under another kind). Present = it belongs in the Rejected folder.",
+    ),
 });
 export const ListMemberDocumentsResponse = zod.array(
   ListMemberDocumentsResponseItem,
@@ -4946,6 +4955,19 @@ export const SendPortalPushTestResponse = zod.object({
       result: zod.enum(["accepted", "gone", "failed"]),
     }),
   ),
+});
+
+/**
+ * @summary Move a rejected submission to the Rejected folder by hand (its replacement was filed under another kind)
+ */
+export const MarkMemberDocumentReplacedParams = zod.object({
+  projectId: zod.coerce.string(),
+  id: zod.coerce.string(),
+});
+
+export const MarkMemberDocumentReplacedResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
 });
 
 /**

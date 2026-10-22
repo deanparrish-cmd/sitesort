@@ -424,14 +424,25 @@ function DocRow({ doc, section, unseen, focused, signOff }: { doc: any; section:
               <Download className="w-4 h-4" />
             </button>
           )}
-          {needsSignOff && !active && (
+          {/* Open before sign-off (Dean, 2026-10-22): a signature means "I have
+              read this", so Sign off appears once SiteSort has recorded the
+              open; until then the button opens the document. */}
+          {needsSignOff && !active && (tracksViews && !receivedAt ? (
+            <button
+              onClick={open}
+              data-testid="button-open-to-sign"
+              className="inline-flex items-center gap-1.5 rounded-xl px-4 min-h-11 text-base text-accent font-bold hover:bg-accent/10 active:scale-[0.98] transition-all"
+            >
+              <FileSignature className="w-5 h-5" /> Open to sign off
+            </button>
+          ) : (
             <button
               onClick={() => signOff.open({ id: doc.id, name: doc.name, pinRequired: doc.pinRequired ?? true })}
               className="inline-flex items-center gap-1.5 rounded-xl px-4 min-h-11 text-base text-accent font-bold hover:bg-accent/10 active:scale-[0.98] transition-all"
             >
               <FileSignature className="w-5 h-5" /> Sign off
             </button>
-          )}
+          ))}
       </div>
       {active && (
         <div className="pb-3">

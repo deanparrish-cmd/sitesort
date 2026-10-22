@@ -154,6 +154,7 @@ router.get("/compliance", authenticate, allow(INTERNAL_STAFF), async (req, res) 
       archivedAt: string;
     }> = [];
 
+    const signRank = (status: string) => (status === "pending" ? 0 : status === "viewed" ? 1 : 2);
     let pendingAcknowledgments: Array<{
       documentId: string;
       documentName: string;
@@ -241,9 +242,14 @@ router.get("/compliance", authenticate, allow(INTERNAL_STAFF), async (req, res) 
         : [];
       const nameByUserId = new Map(distUsers.map(u => [u.id, u.name]));
 
+      // Waiting for sign-off (Dean, 2026-10-22): only documents that need a
+      // sign-off, and everyone who hasn't signed, opened or not. Before, it
+      // counted unopened copies of ANY document and skipped people who had
+      // opened but never signed.
       for (const doc of allDocs) {
+        if (!doc.requiresAcknowledgment) continue;
         const dists = distsByDoc.get(doc.id) ?? [];
-        const pending = dists.filter(d => d.status === "pending");
+        const pending = dists.filter(d => d.status !== "acknowledged");
         const notSentTo = notSent.get(doc.id)?.userIds ?? [];
         if (pending.length === 0 && notSentTo.length === 0) continue;
         const proj = myProjects.find(p => p.id === doc.projectId);
@@ -278,7 +284,8 @@ router.get("/compliance", authenticate, allow(INTERNAL_STAFF), async (req, res) 
           revision: doc.revision ?? null,
           myStatus: mine?.status ?? null,
           pinRequired: pinRequiredForDoc(doc),
-          recipients: dists.map(d => ({
+          // Not signed first (not opened, then opened), then signed.
+          recipients: [...dists].sort((a, b) => signRank(a.status) - signRank(b.status)).map(d => ({
             userId: d.userId,
             name: nameByUserId.get(d.userId) ?? "Unknown",
             status: d.status,

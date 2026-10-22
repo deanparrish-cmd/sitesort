@@ -12197,6 +12197,97 @@ export const useSendPortalPushTest = <
 };
 
 /**
+ * @summary Move a rejected submission to the Rejected folder by hand (its replacement was filed under another kind)
+ */
+export const getMarkMemberDocumentReplacedUrl = (
+  projectId: string,
+  id: string,
+) => {
+  return `/api/projects/${projectId}/member-documents/${id}/mark-replaced`;
+};
+
+export const markMemberDocumentReplaced = async (
+  projectId: string,
+  id: string,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(
+    getMarkMemberDocumentReplacedUrl(projectId, id),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getMarkMemberDocumentReplacedMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markMemberDocumentReplaced>>,
+    TError,
+    { projectId: string; id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof markMemberDocumentReplaced>>,
+  TError,
+  { projectId: string; id: string },
+  TContext
+> => {
+  const mutationKey = ["markMemberDocumentReplaced"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof markMemberDocumentReplaced>>,
+    { projectId: string; id: string }
+  > = (props) => {
+    const { projectId, id } = props ?? {};
+
+    return markMemberDocumentReplaced(projectId, id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type MarkMemberDocumentReplacedMutationResult = NonNullable<
+  Awaited<ReturnType<typeof markMemberDocumentReplaced>>
+>;
+
+export type MarkMemberDocumentReplacedMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Move a rejected submission to the Rejected folder by hand (its replacement was filed under another kind)
+ */
+export const useMarkMemberDocumentReplaced = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markMemberDocumentReplaced>>,
+    TError,
+    { projectId: string; id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof markMemberDocumentReplaced>>,
+  TError,
+  { projectId: string; id: string },
+  TContext
+> => {
+  return useMutation(getMarkMemberDocumentReplacedMutationOptions(options));
+};
+
+/**
  * @summary Record the member's answer to "Did a banner appear?"
  */
 export const getAnswerPortalPushTestUrl = () => {

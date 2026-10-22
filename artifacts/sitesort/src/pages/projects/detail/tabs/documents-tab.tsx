@@ -57,6 +57,16 @@ export function DocumentsTab() {
     openDocEdit,
   } = useDetail();
 
+  // Opening records the open on your own copy: sign-off needs it (Dean,
+  // 2026-10-22), so Sign off appears once the list has refreshed.
+  const openAndRecord = (doc: { id: string; fileUrl: string; name: string; myDistributionStatus?: string | null }) => {
+    openDocument(doc.fileUrl, doc.name);
+    if (doc.myDistributionStatus !== "pending") return;
+    const t = localStorage.getItem("sitesort_token");
+    void fetch(`/api/documents/${doc.id}/view`, { method: "POST", headers: t ? { Authorization: `Bearer ${t}` } : {} })
+      .then(() => refetchDocs()).catch(() => {});
+  };
+
   return (
     <>
         <TabsContent value="documents">
@@ -172,17 +182,17 @@ export function DocumentsTab() {
                     <div className="flex flex-wrap gap-2">
                       {!isSuperseded && (doc.myDistributionStatus === "pending" || doc.myDistributionStatus === "viewed") && (
                         <button
-                          onClick={() => openSignOff({ id: doc.id, name: doc.name, type: doc.type, pinRequired: doc.pinRequired ?? true })}
+                          onClick={() => doc.myDistributionStatus === "pending" ? openAndRecord(doc) : openSignOff({ id: doc.id, name: doc.name, type: doc.type, pinRequired: doc.pinRequired ?? true })}
                           className="flex items-center gap-1 px-2 py-1 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-xs font-semibold"
                         >
-                          <ClipboardCheck className="w-3 h-3" />Sign off
+                          <ClipboardCheck className="w-3 h-3" />{doc.myDistributionStatus === "pending" ? "Open to sign off" : "Sign off"}
                         </button>
                       )}
                       {doc.myDistributionStatus === "acknowledged" && (
                         <span className="flex items-center gap-1 text-xs text-success font-semibold"><CheckCircle2 className="w-3 h-3" />Signed off</span>
                       )}
                       <button
-                        onClick={() => openDocument(doc.fileUrl, doc.name)}
+                        onClick={() => openAndRecord(doc)}
                         className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-primary/25 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/15 transition-colors"
                       >
                         {cadBadge ? <><Download className="w-3 h-3" />Download</> : <><ExternalLink className="w-3 h-3" />Open</>}
@@ -288,12 +298,12 @@ export function DocumentsTab() {
                         <div className="flex flex-wrap items-center gap-1.5">
                           {!isSuperseded && (doc.myDistributionStatus === "pending" || doc.myDistributionStatus === "viewed") && (
                             <button
-                              onClick={() => openSignOff({ id: doc.id, name: doc.name, type: doc.type, pinRequired: doc.pinRequired ?? true })}
+                              onClick={() => doc.myDistributionStatus === "pending" ? openAndRecord(doc) : openSignOff({ id: doc.id, name: doc.name, type: doc.type, pinRequired: doc.pinRequired ?? true })}
                               className="flex items-center gap-1 px-2 py-1 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-xs font-semibold"
-                              title="Sign off this document"
+                              title={doc.myDistributionStatus === "pending" ? "Open it first: you can sign off once you've opened it" : "Sign off this document"}
                             >
                               <ClipboardCheck className="w-3.5 h-3.5" />
-                              Sign off
+                              {doc.myDistributionStatus === "pending" ? "Open to sign off" : "Sign off"}
                             </button>
                           )}
                           {doc.myDistributionStatus === "acknowledged" && (
@@ -303,7 +313,7 @@ export function DocumentsTab() {
                           )}
                           <button
                             type="button"
-                            onClick={() => openDocument(doc.fileUrl, doc.name)}
+                            onClick={() => openAndRecord(doc)}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-primary/25 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/15 transition-colors"
                             title={cadBadgeLabel(doc.fileUrl, doc.name) ? "Download document" : "Open document"}
                           >

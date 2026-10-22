@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-22T10:13:43.535Z",
+  "generatedAt": "2026-10-22T11:00:22.630Z",
   "target": "http://localhost:8080",
   "viewports": [
     360,
@@ -21,6 +21,7 @@
       "/s/:token",
       "/dashboard",
       "/projects",
+      "/projects/:id/site-register",
       "/projects/:id",
       "/subcontractors",
       "/compliance",
@@ -132,7 +133,7 @@
         "auth": "none"
       },
       {
-        "path": "/s/i0YKEQOUT0OagKyQvdaJ1GJlaN_Llj1n",
+        "path": "/s/9mGRNCqu871_h5fcB5UpC6ibQkgjMdYt",
         "label": "s",
         "auth": "none"
       },
@@ -144,6 +145,11 @@
       {
         "path": "/projects",
         "label": "projects",
+        "auth": "app"
+      },
+      {
+        "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a/site-register",
+        "label": "projects-site-register",
         "auth": "app"
       },
       {
@@ -227,7 +233,7 @@
         "auth": "none"
       },
       {
-        "path": "/portal/accept/fb9bb3803e2845661f987fa68299251636e8973f696f8897f2e5322c23a4f396",
+        "path": "/portal/accept/9b56491c048839610e77c42f5a2c9eaece7242282908ab757c9b5706a0687a62",
         "label": "portal-accept",
         "auth": "none"
       },
@@ -412,7 +418,7 @@
         "auth": "portal"
       }
     ],
-    "routeCount": 66,
+    "routeCount": 67,
     "legacyCoverageDefects": [
       "The previous checker manually duplicated top-level routes and therefore could miss a newly added <Route>.",
       "The previous checker omitted /verify-email, /reset-password, /forgot-pin, /reset-pin, and /portal/accept/:token.",
@@ -946,9 +952,9 @@
     },
     {
       "label": "s",
-      "path": "/s/i0YKEQOUT0OagKyQvdaJ1GJlaN_Llj1n",
+      "path": "/s/9mGRNCqu871_h5fcB5UpC6ibQkgjMdYt",
       "width": 360,
-      "finalPath": "/s/i0YKEQOUT0OagKyQvdaJ1GJlaN_Llj1n",
+      "finalPath": "/s/9mGRNCqu871_h5fcB5UpC6ibQkgjMdYt",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -1051,6 +1057,57 @@
       "path": "/projects",
       "width": 360,
       "finalPath": "/projects",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 360,
+        "clientWidth": 360,
+        "viewportWidth": 360,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 360,
+            "clientWidth": 360,
+            "viewportWidth": 360,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 360,
+            "clientWidth": 360,
+            "viewportWidth": 360,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 360,
+            "clientWidth": 360,
+            "viewportWidth": 360,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "projects-site-register",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a/site-register",
+      "width": 360,
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a/site-register",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -1915,9 +1972,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/fb9bb3803e2845661f987fa68299251636e8973f696f8897f2e5322c23a4f396",
+      "path": "/portal/accept/9b56491c048839610e77c42f5a2c9eaece7242282908ab757c9b5706a0687a62",
       "width": 360,
-      "finalPath": "/portal/accept/fb9bb3803e2845661f987fa68299251636e8973f696f8897f2e5322c23a4f396",
+      "finalPath": "/portal/accept/9b56491c048839610e77c42f5a2c9eaece7242282908ab757c9b5706a0687a62",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -4312,9 +4369,9 @@
     },
     {
       "label": "s",
-      "path": "/s/i0YKEQOUT0OagKyQvdaJ1GJlaN_Llj1n",
+      "path": "/s/9mGRNCqu871_h5fcB5UpC6ibQkgjMdYt",
       "width": 390,
-      "finalPath": "/s/i0YKEQOUT0OagKyQvdaJ1GJlaN_Llj1n",
+      "finalPath": "/s/9mGRNCqu871_h5fcB5UpC6ibQkgjMdYt",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -4417,6 +4474,57 @@
       "path": "/projects",
       "width": 390,
       "finalPath": "/projects",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "viewportWidth": 390,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 390,
+            "clientWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
+          "metrics": {
+            "scrollWidth": 390,
+            "clientWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 390,
+            "clientWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "projects-site-register",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a/site-register",
+      "width": 390,
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a/site-register",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -5281,9 +5389,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/fb9bb3803e2845661f987fa68299251636e8973f696f8897f2e5322c23a4f396",
+      "path": "/portal/accept/9b56491c048839610e77c42f5a2c9eaece7242282908ab757c9b5706a0687a62",
       "width": 390,
-      "finalPath": "/portal/accept/fb9bb3803e2845661f987fa68299251636e8973f696f8897f2e5322c23a4f396",
+      "finalPath": "/portal/accept/9b56491c048839610e77c42f5a2c9eaece7242282908ab757c9b5706a0687a62",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -7678,9 +7786,9 @@
     },
     {
       "label": "s",
-      "path": "/s/i0YKEQOUT0OagKyQvdaJ1GJlaN_Llj1n",
+      "path": "/s/9mGRNCqu871_h5fcB5UpC6ibQkgjMdYt",
       "width": 768,
-      "finalPath": "/s/i0YKEQOUT0OagKyQvdaJ1GJlaN_Llj1n",
+      "finalPath": "/s/9mGRNCqu871_h5fcB5UpC6ibQkgjMdYt",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -7829,6 +7937,57 @@
         },
         {
           "name": "menu-open-1",
+          "metrics": {
+            "scrollWidth": 768,
+            "clientWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "long-string-stress",
+          "metrics": {
+            "scrollWidth": 768,
+            "clientWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        }
+      ]
+    },
+    {
+      "label": "projects-site-register",
+      "path": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a/site-register",
+      "width": 768,
+      "finalPath": "/projects/f2c678fb-6ef3-49c7-b510-a412fdf6c69a/site-register",
+      "ok": true,
+      "reasons": [],
+      "metrics": {
+        "scrollWidth": 768,
+        "clientWidth": 768,
+        "viewportWidth": 768,
+        "overflowElements": [],
+        "overlaps": [],
+        "stacking": []
+      },
+      "probes": [
+        {
+          "name": "initial",
+          "metrics": {
+            "scrollWidth": 768,
+            "clientWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlaps": [],
+            "stacking": []
+          }
+        },
+        {
+          "name": "scrolled",
           "metrics": {
             "scrollWidth": 768,
             "clientWidth": 768,
@@ -8812,9 +8971,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/fb9bb3803e2845661f987fa68299251636e8973f696f8897f2e5322c23a4f396",
+      "path": "/portal/accept/9b56491c048839610e77c42f5a2c9eaece7242282908ab757c9b5706a0687a62",
       "width": 768,
-      "finalPath": "/portal/accept/fb9bb3803e2845661f987fa68299251636e8973f696f8897f2e5322c23a4f396",
+      "finalPath": "/portal/accept/9b56491c048839610e77c42f5a2c9eaece7242282908ab757c9b5706a0687a62",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -10831,8 +10990,8 @@
     }
   ],
   "summary": {
-    "passed": 198,
+    "passed": 201,
     "failed": 0,
-    "total": 198
+    "total": 201
   }
 }

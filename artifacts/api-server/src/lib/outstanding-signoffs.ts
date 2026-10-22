@@ -48,12 +48,15 @@ export async function outstandingSignOffs(projectIds: string[]): Promise<Outstan
   }).from(documentsTable)
     .where(and(inArray(documentsTable.projectId, projectIds), eq(documentsTable.status, "current")));
   if (docs.length === 0) return [];
-  const rows = await db.select({ documentId: documentDistributionsTable.documentId, status: documentDistributionsTable.status })
+  // Only documents that need a sign-off; everyone who hasn't signed counts,
+  // opened or not (Dean, 2026-10-22). Same rule as compliance.ts.
+  const rows = (await db.select({ documentId: documentDistributionsTable.documentId, status: documentDistributionsTable.status })
     .from(documentDistributionsTable)
-    .where(inArray(documentDistributionsTable.documentId, docs.map(d => d.id)));
+    .where(inArray(documentDistributionsTable.documentId, docs.map(d => d.id))))
+    .filter(r => docs.find(d => d.id === r.documentId)?.requiresAcknowledgment);
   const withRows = new Set(rows.map(r => r.documentId));
   const pendingByDoc = new Map<string, number>();
-  for (const r of rows) if (r.status === "pending") pendingByDoc.set(r.documentId, (pendingByDoc.get(r.documentId) ?? 0) + 1);
+  for (const r of rows) if (r.status !== "acknowledged") pendingByDoc.set(r.documentId, (pendingByDoc.get(r.documentId) ?? 0) + 1);
   const notSent = await revisionsNotSent(docs, withRows);
   return docs
     .map(d => ({ documentId: d.id, projectId: d.projectId, pendingCount: pendingByDoc.get(d.id) ?? 0, notSentCount: notSent.get(d.id)?.userIds.length ?? 0 }))

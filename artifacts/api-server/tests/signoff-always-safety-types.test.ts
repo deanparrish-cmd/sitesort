@@ -70,6 +70,8 @@ describe("sign-off always required for RAMS, permits and safety documents", () =
     expect((await api(`/projects/${co.projectId}/portal-shares`, { method: "POST", token: admin, body: { itemType: "document", itemId: d.id, audiences: [{ type: "all" }] } })).status).toBe(201);
     const row = ((await api("/portal/shared", { token: portal })).json.documents as { id: string; requiresAcknowledgment: boolean }[]).find(x => x.id === d.id);
     expect(row?.requiresAcknowledgment).toBe(true);
+    // Open before sign-off (2026-10-22).
+    expect((await api(`/portal/documents/${d.id}/view`, { method: "POST", token: portal })).status).toBe(200);
     const ack = await api(`/portal/documents/${d.id}/acknowledge`, { method: "POST", token: portal, body: { pin: member.pin } });
     expect(ack.status).toBe(200);
   });

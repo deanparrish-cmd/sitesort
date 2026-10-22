@@ -1,4 +1,5 @@
 import { lazy, type ComponentType, Suspense } from "react";
+import DashboardSiteRegisterPage from "@/pages/site-register";
 import { Switch, Route, Redirect, Router as WouterRouter, useLocation } from "wouter";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -130,6 +131,8 @@ function Router() {
       {/* Authenticated Routes */}
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/projects" component={ProjectsList} />
+      {/* Before /projects/:id. Eager import: must open with no signal. */}
+      <Route path="/projects/:id/site-register" component={DashboardSiteRegisterPage} />
       <Route path="/projects/:id" component={ProjectDetail} />
 
       <Route path="/subcontractors" component={SubcontractorsPage} />

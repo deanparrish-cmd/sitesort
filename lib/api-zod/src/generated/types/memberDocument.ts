@@ -5,6 +5,7 @@
  * SiteSort API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { MemberDocumentMarkedReplaced } from "./memberDocumentMarkedReplaced";
 import type { MemberDocumentReplacedBy } from "./memberDocumentReplacedBy";
 
 export interface MemberDocument {
@@ -23,4 +24,6 @@ export interface MemberDocument {
   uploaderName: string;
   /** For a rejected document, the later submission from the same person, same kind, that was approved. Present = it belongs in the Rejected folder. */
   replacedBy?: MemberDocumentReplacedBy;
+  /** A manager marked this rejected document as replaced (for a replacement filed under another kind). Present = it belongs in the Rejected folder. */
+  markedReplaced?: MemberDocumentMarkedReplaced;
 }

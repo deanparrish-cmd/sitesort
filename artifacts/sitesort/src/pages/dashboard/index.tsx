@@ -458,7 +458,7 @@ export default function Dashboard() {
   const [onboarding, setOnboarding] = useState<OnboardingStatus | null>(null);
   const [plantOnHire, setPlantOnHire] = useState<OnHirePlant[]>([]);
   // Fire-roll readiness per project that uses the gate (#125).
-  const [fireRoll, setFireRoll] = useState<{ projectId: string; projectName: string; status: string; checks: { status: string; label: string }[] }[]>([]);
+  const [fireRoll, setFireRoll] = useState<{ projectId: string; projectName: string; status: string; checks: { status: string; label: string }[]; onSiteNow?: number }[]>([]);
   const [accessRequests, setAccessRequests] = useState<{ pending: number; onlyId: string | null }>({ pending: 0, onlyId: null });
   const [onboardingDismissed, setOnboardingDismissed] = useState(() => localStorage.getItem("sitesort_onboarding_dismissed") === "1");
 
@@ -568,17 +568,19 @@ export default function Dashboard() {
       else if (a.daysLeft <= 3) items.push({ icon: <ShieldAlert className="w-4 h-4" />, label: `${a.label} · expires in ${a.daysLeft}d`, href: expiryHref(a), severity: "critical" });
     }
 
-    // Pending sign-offs — pendingAcknowledgments is one row per DOCUMENT
-    // (pendingCount is how many people are pending on it); when only one
-    // document has anyone pending, go straight to it.
+    // Waiting for sign-off — pendingAcknowledgments is one row per DOCUMENT
+    // that needs a sign-off (pendingCount = people who haven't signed). One
+    // document: open it in Compliance, where it starts YOUR sign-off if it's
+    // yours, or shows who hasn't signed if it's someone else's (Dean,
+    // 2026-10-22: it used to open the file, with no way to sign).
     const pendingDocs = compliance?.pendingAcknowledgments ?? [];
     const pending = pendingDocs.reduce((a, c) => a + c.pendingCount, 0);
     if (pending > 0)
       items.push({
         icon: <FileSignature className="w-4 h-4" />,
-        label: `${pending} pending document sign-off${pending > 1 ? "s" : ""}`,
+        label: `${pending} waiting for sign-off${pendingDocs.length === 1 ? `: ${pendingDocs[0].documentName}` : ""}`,
         href: pendingDocs.length === 1
-          ? (itemDeepLink(pendingDocs[0].projectId, "document", pendingDocs[0].documentId) ?? "/compliance?filter=signoffs")
+          ? `/compliance?filter=signoffs&doc=${encodeURIComponent(pendingDocs[0].documentId)}`
           : "/compliance?filter=signoffs",
         severity: "warning",
       });
@@ -589,8 +591,9 @@ export default function Dashboard() {
       const worstCheck = f.checks.find(c => c.status === f.status);
       items.push({
         icon: <Flame className="w-4 h-4" />,
-        label: `${f.projectName}: ${f.status === "red" ? "fire roll not ready" : "fire roll needs a check"}${worstCheck ? ` · ${worstCheck.label}` : ""}`,
-        href: `/projects/${f.projectId}?tab=overview`,
+        label: `${f.projectName}: ${f.status === "red" ? "fire roll not ready" : "fire roll needs a check"}${worstCheck ? ` · ${worstCheck.label}` : ""} · ${f.onSiteNow ?? 0} on site now`,
+        // Overview's fire-roll card: what to fix, and Open the Site Register.
+        href: `/projects/${f.projectId}?tab=overview#fire-roll`,
         severity: f.status === "red" ? "critical" : "warning",
       });
     }

@@ -1830,6 +1830,14 @@ export type MemberDocumentReplacedBy = {
   approvedAt?: string;
 };
 
+/**
+ * A manager marked this rejected document as replaced (for a replacement filed under another kind). Present = it belongs in the Rejected folder.
+ */
+export type MemberDocumentMarkedReplaced = {
+  at: string;
+  byName: string;
+};
+
 export interface MemberDocument {
   id: string;
   name: string;
@@ -1846,6 +1854,8 @@ export interface MemberDocument {
   uploaderName: string;
   /** For a rejected document, the later submission from the same person, same kind, that was approved. Present = it belongs in the Rejected folder. */
   replacedBy?: MemberDocumentReplacedBy;
+  /** A manager marked this rejected document as replaced (for a replacement filed under another kind). Present = it belongs in the Rejected folder. */
+  markedReplaced?: MemberDocumentMarkedReplaced;
 }
 
 export type ReviewMemberDocumentRequestAction =

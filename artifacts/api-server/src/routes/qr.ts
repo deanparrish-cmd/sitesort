@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { insertNotifications } from "../lib/notify";
 import { db } from "@workspace/db";
-import { qrCodesTable, qrBoardPinsTable, documentsTable, projectsTable, projectMembersTable, usersTable, permitsTable, photosTable, siteCheckinsTable, subcontractorsTable, calendarEventsTable, companyMembersTable, notificationsTable, peopleTable, companiesTable, pushSubscriptionsTable, projectInvitesTable } from "@workspace/db/schema";
+import { siteRegisterOpensTable, qrCodesTable, qrBoardPinsTable, documentsTable, projectsTable, projectMembersTable, usersTable, permitsTable, photosTable, siteCheckinsTable, subcontractorsTable, calendarEventsTable, companyMembersTable, notificationsTable, peopleTable, companiesTable, pushSubscriptionsTable, projectInvitesTable } from "@workspace/db/schema";
 import { eq, and, or, desc, asc, inArray, isNull, isNotNull, sql } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
@@ -1463,7 +1463,28 @@ export type FireRollReadiness = {
   projectId: string; projectName: string; status: Light | "not_in_use"; checks: FireRollCheck[];
   holders: { userId: string; name: string; role: "site_manager" | "cover"; portal: boolean }[];
   siteDate: string;
+  onSiteNow: number; // the register's "On site now" count, same rule
 };
+
+// Signed in and not signed out, one per person: the register's On site now.
+async function onSiteNowCount(projectId: string, clock: Awaited<ReturnType<typeof siteClock>>, now: Date): Promise<number> {
+  const rows = await db.select().from(siteCheckinsTable).where(and(
+    eq(siteCheckinsTable.projectId, projectId),
+    or(sql`${siteCheckinsTable.checkedInAt} > now() - interval '48 hours'`, isNull(siteCheckinsTable.checkedOutAt)),
+  )).orderBy(desc(siteCheckinsTable.checkedInAt));
+  // Same walk as buildSiteRegister: one line per person, newest row wins.
+  const seen = new Set<string>();
+  let n = 0;
+  for (const r of rows) {
+    const presence = checkinState(r, clock, now).presence;
+    if (presence !== "on_site" && presence !== "auto_closed_today") continue;
+    const ident = r.personKey ?? `${normText(r.workerName)}|${normText(r.companyName ?? "")}`;
+    if (seen.has(ident)) continue;
+    seen.add(ident);
+    if (presence === "on_site") n++;
+  }
+  return n;
+}
 const worst = (a: Light[]): Light => a.includes("red") ? "red" : a.includes("amber") ? "amber" : "green";
 
 export async function fireRollReadiness(projectId: string, now: Date = new Date()): Promise<FireRollReadiness | null> {
@@ -1471,7 +1492,7 @@ export async function fireRollReadiness(projectId: string, now: Date = new Date(
   if (!p) return null;
   const clock = await siteClock(projectId);
   const siteDate = siteDateStr(now, clock.tz);
-  const base = { projectId, projectName: p.name, siteDate };
+  const base = { projectId, projectName: p.name, siteDate, onSiteNow: await onSiteNowCount(projectId, clock, now) };
   const qrs = await db.select({ id: qrCodesTable.id }).from(qrCodesTable).where(eq(qrCodesTable.projectId, projectId)).limit(1);
   if (qrs.length === 0) {
     return { ...base, status: "not_in_use", holders: [], checks: [{ key: "qr", status: "amber", label: "No site QR code yet, so the site register isn't in use on this project.", fix: "Create one on the Site Board tab if people sign in here." }] };
@@ -1515,8 +1536,15 @@ export async function fireRollReadiness(projectId: string, now: Date = new Date(
 
   // 2b. Someone else can take over. One person alone is a single point of
   // failure: if they're off site, nobody has the fire roll on their phone.
-  checks.push(ready.length > 1
-    ? { key: "cover", status: "green", label: `${ready.length} people can open the Site Register.` }
+  // Company admins and PMs count (Dean, 2026-10-22, once the dashboard Site
+  // Register shipped): they open it on their own phone with their normal login.
+  const proj = (await db.select({ companyId: projectsTable.companyId }).from(projectsTable).where(eq(projectsTable.id, projectId)).limit(1))[0];
+  const dashboardOpeners = proj ? await db.select({ userId: companyMembersTable.userId, name: usersTable.name })
+    .from(companyMembersTable).innerJoin(usersTable, eq(usersTable.id, companyMembersTable.userId))
+    .where(and(eq(companyMembersTable.companyId, proj.companyId), inArray(companyMembersTable.role, ["admin", "project_manager"]), eq(usersTable.portalOnly, false))) : [];
+  const openerIds = new Set([...ready.map(h => h.userId), ...dashboardOpeners.map(o => o.userId)]);
+  checks.push(openerIds.size > 1
+    ? { key: "cover", status: "green", label: `${openerIds.size} people can open the Site Register: ${ready.length} on the Team Portal, ${dashboardOpeners.filter(o => !ready.some(h => h.userId === o.userId)).length} admin or project manager on the dashboard.` }
     : { key: "cover", status: "amber", label: `Only ${ready[0].name} can open the Site Register. If they're off site, nobody has the fire roll.`, fix: "Tick PM cover for a second person on the Team tab and invite them to the Team Portal." });
 
   // 3. They'll hear about people at the gate.
@@ -1535,7 +1563,10 @@ export async function fireRollReadiness(projectId: string, now: Date = new Date(
 
   // 5. Today's register is on their phone. Red once people have signed in
   // today and nobody has opened it: the saved copy would be a wrong fire roll.
-  const openedToday = ready.some(h => { const o = byUser.get(h.userId)?.openedAt; return !!o && siteDateStr(o, clock.tz) === siteDate; });
+  const dashOpens = await db.select({ openedAt: siteRegisterOpensTable.openedAt }).from(siteRegisterOpensTable)
+    .where(eq(siteRegisterOpensTable.projectId, projectId));
+  const openedToday = ready.some(h => { const o = byUser.get(h.userId)?.openedAt; return !!o && siteDateStr(o, clock.tz) === siteDate; })
+    || dashOpens.some(o => siteDateStr(o.openedAt, clock.tz) === siteDate);
   if (openedToday) {
     checks.push({ key: "today", status: "green", label: "Site Register opened today." });
   } else {
@@ -1544,8 +1575,8 @@ export async function fireRollReadiness(projectId: string, now: Date = new Date(
         sql`(${siteCheckinsTable.holdStatus} IS NULL OR ${siteCheckinsTable.holdStatus} = 'approved')`));
     const arrived = todays.some(r => siteDateStr(r.checkedInAt, clock.tz) === siteDate);
     checks.push(arrived
-      ? { key: "today", status: "red", label: "People have signed in today but the Site Register hasn't been opened, so the copy on the phone is out of date.", fix: "Open the Site Register in the Team Portal with signal." }
-      : { key: "today", status: "amber", label: "Site Register not opened yet today.", fix: "Open it in the Team Portal once people start arriving." });
+      ? { key: "today", status: "red", label: "People have signed in today but the Site Register hasn't been opened, so the copy on the phone is out of date.", fix: "Open the Site Register with signal, in the Team Portal or from the dashboard." }
+      : { key: "today", status: "amber", label: "Site Register not opened yet today.", fix: "Open it in the Team Portal or from the dashboard once people start arriving." });
   }
   return { ...base, status: worst(checks.map(c => c.status)), holders, checks };
 }
@@ -1641,55 +1672,84 @@ const requireSiteRegister = declarePolicy(async function (req: Request, res: Res
 }, "siteManagerOrCover");
 const siteRegisterGuards = [authenticate, requirePortalSession, requirePortalMember, requireSiteRegister];
 
+// The register itself: on site now, not signed out, waiting at the gate, and
+// fire-roll readiness. One builder for the portal (site manager / cover) and
+// the dashboard (admins and PMs, on their own phone, 2026-10-22).
+async function buildSiteRegister(projectId: string) {
+  const project = (await db.select({ name: projectsTable.name, companyId: projectsTable.companyId }).from(projectsTable).where(eq(projectsTable.id, projectId)).limit(1))[0];
+  const clock = await siteClock(projectId);
+  const now = new Date();
+  // Today's site day can't start more than ~36h back; open rows are kept regardless.
+  const rows = await db.select().from(siteCheckinsTable).where(and(
+    eq(siteCheckinsTable.projectId, projectId),
+    or(sql`${siteCheckinsTable.checkedInAt} > now() - interval '48 hours'`, isNull(siteCheckinsTable.checkedOutAt)),
+  )).orderBy(desc(siteCheckinsTable.checkedInAt));
+  const registered = await loadRegistered(projectId);
+  const byKey = new Map(registered.map(r => [r.key, r]));
+  const seen = new Set<string>();
+  const onSite: object[] = [], notSignedOut: object[] = [], held: object[] = [];
+  for (const r of rows) {
+    const st = checkinState(r, clock, now);
+    const base = { id: r.id, workerName: r.workerName, companyName: r.companyName, checkedInAt: r.checkedInAt.toISOString() };
+    if (st.presence === "held") {
+      const claimed = r.personKey ? byKey.get(r.personKey) : undefined;
+      const insurance = claimed?.insuranceSubId && project ? await subcontractorInsuranceStatus(claimed.insuranceSubId, project.companyId) : null;
+      held.push({
+        ...base, holdReason: r.holdReason, why: holdReasonText(r.holdReason),
+        typedPhone: r.holdReason === "unverified" ? r.typedPhone : null,
+        claimed: claimed ? { name: fullName(claimed) || r.workerName, company: claimed.company } : null,
+        insurance, photoUrl: signUploadUrl(r.photoUrl),
+      });
+      continue;
+    }
+    if (st.presence !== "on_site" && st.presence !== "auto_closed_today") continue;
+    // One person, one line (newest row wins).
+    const ident = r.personKey ?? `${normText(r.workerName)}|${normText(r.companyName ?? "")}`;
+    if (seen.has(ident)) continue;
+    seen.add(ident);
+    (st.presence === "on_site" ? onSite : notSignedOut).push({ ...base, autoClosedAt: st.autoClosedAt });
+  }
+  const byName = (a: any, b: any) => String(a.workerName).localeCompare(String(b.workerName));
+  onSite.sort(byName); notSignedOut.sort(byName);
+  return {
+    projectId, projectName: project?.name ?? "", generatedAt: now.toISOString(),
+    siteTimeZone: clock.tz, siteTzLabel: siteTzLabel(clock.tz, now), siteDate: siteDateStr(now, clock.tz),
+    onSite, notSignedOut, held,
+    readiness: await fireRollReadiness(projectId, now),
+  };
+}
+
 router.get("/portal/site-register", ...siteRegisterGuards, async (req: Request, res: Response) => {
   try {
     const projectId = req.portalProjectId!;
     // Readiness check 5: today's copy is now on this phone.
     await db.update(projectMembersTable).set({ registerOpenedAt: new Date() })
       .where(and(eq(projectMembersTable.projectId, projectId), eq(projectMembersTable.userId, req.user!.id)));
-    const project = (await db.select({ name: projectsTable.name, companyId: projectsTable.companyId }).from(projectsTable).where(eq(projectsTable.id, projectId)).limit(1))[0];
-    const clock = await siteClock(projectId);
-    const now = new Date();
-    // Today's site day can't start more than ~36h back; open rows are kept regardless.
-    const rows = await db.select().from(siteCheckinsTable).where(and(
-      eq(siteCheckinsTable.projectId, projectId),
-      or(sql`${siteCheckinsTable.checkedInAt} > now() - interval '48 hours'`, isNull(siteCheckinsTable.checkedOutAt)),
-    )).orderBy(desc(siteCheckinsTable.checkedInAt));
-    const registered = await loadRegistered(projectId);
-    const byKey = new Map(registered.map(r => [r.key, r]));
-    const seen = new Set<string>();
-    const onSite: object[] = [], notSignedOut: object[] = [], held: object[] = [];
-    for (const r of rows) {
-      const st = checkinState(r, clock, now);
-      const base = { id: r.id, workerName: r.workerName, companyName: r.companyName, checkedInAt: r.checkedInAt.toISOString() };
-      if (st.presence === "held") {
-        const claimed = r.personKey ? byKey.get(r.personKey) : undefined;
-        const insurance = claimed?.insuranceSubId && project ? await subcontractorInsuranceStatus(claimed.insuranceSubId, project.companyId) : null;
-        held.push({
-          ...base, holdReason: r.holdReason, why: holdReasonText(r.holdReason),
-          typedPhone: r.holdReason === "unverified" ? r.typedPhone : null,
-          claimed: claimed ? { name: fullName(claimed) || r.workerName, company: claimed.company } : null,
-          insurance, photoUrl: signUploadUrl(r.photoUrl),
-        });
-        continue;
-      }
-      if (st.presence !== "on_site" && st.presence !== "auto_closed_today") continue;
-      // One person, one line (newest row wins).
-      const ident = r.personKey ?? `${normText(r.workerName)}|${normText(r.companyName ?? "")}`;
-      if (seen.has(ident)) continue;
-      seen.add(ident);
-      (st.presence === "on_site" ? onSite : notSignedOut).push({ ...base, autoClosedAt: st.autoClosedAt });
-    }
-    const byName = (a: any, b: any) => String(a.workerName).localeCompare(String(b.workerName));
-    onSite.sort(byName); notSignedOut.sort(byName);
-    res.json({
-      projectId, projectName: project?.name ?? "", generatedAt: now.toISOString(),
-      siteTimeZone: clock.tz, siteTzLabel: siteTzLabel(clock.tz, now), siteDate: siteDateStr(now, clock.tz),
-      onSite, notSignedOut, held,
-      readiness: await fireRollReadiness(projectId, now),
-    });
+    res.json(await buildSiteRegister(projectId));
   } catch (err) {
     req.log.error({ err }, "Portal site register error");
+    res.status(500).json({ error: "server_error", message: "Failed to load the site register" });
+  }
+});
+
+// GET /api/projects/:projectId/site-register: the same register for company
+// admins and project managers on the dashboard, no Team Portal invite needed
+// (Dean, 2026-10-22: in an evacuation the roll is needed by whoever is there).
+// Decisions and sign-outs use the dashboard's existing check-in routes.
+router.get("/projects/:projectId/site-register", authenticate, allow(projectApprover()), async (req: Request, res: Response) => {
+  try {
+    const project = await db.select({ id: projectsTable.id }).from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId))).limit(1);
+    if (!project[0]) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+    if (!(await isProjectApprover(req.user!, project[0].id))) {
+      res.status(403).json({ error: "forbidden", message: "Only an admin or project manager can open the site register here." });
+      return;
+    }
+    await db.insert(siteRegisterOpensTable).values({ projectId: project[0].id, userId: req.user!.id, openedAt: new Date() })
+      .onConflictDoUpdate({ target: [siteRegisterOpensTable.projectId, siteRegisterOpensTable.userId], set: { openedAt: new Date() } });
+    res.json(await buildSiteRegister(project[0].id));
+  } catch (err) {
+    req.log.error({ err }, "Dashboard site register error");
     res.status(500).json({ error: "server_error", message: "Failed to load the site register" });
   }
 });

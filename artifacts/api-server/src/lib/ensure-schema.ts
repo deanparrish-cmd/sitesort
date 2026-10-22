@@ -332,6 +332,18 @@ export async function ensureSchema(): Promise<void> {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS push_alerts_endpoint_idx ON push_alerts (endpoint, sent_at)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS push_alerts_user_idx ON push_alerts (user_id, sent_at)`);
+    // Dashboard Site Register opens (2026-10-22): fire-roll check 5.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS site_register_opens (
+        project_id text NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        opened_at timestamp NOT NULL DEFAULT now(),
+        PRIMARY KEY (project_id, user_id)
+      )
+    `);
+    // Rejected folder: manual "Mark as replaced" (2026-10-22).
+    await pool.query(`ALTER TABLE IF EXISTS portal_member_documents ADD COLUMN IF NOT EXISTS marked_replaced_at timestamp`);
+    await pool.query(`ALTER TABLE IF EXISTS portal_member_documents ADD COLUMN IF NOT EXISTS marked_replaced_by text REFERENCES users(id) ON DELETE SET NULL`);
     // Receipt detail (2026-10-22): did the service worker run, did showing throw.
     for (const col of ["device_sw text", "arrived_at timestamp", "show_error text", "posted boolean", "foreground boolean", "sw_version text", "badge_result text", "icon_answer text", "icon_answered_at timestamp"]) {
       await pool.query(`ALTER TABLE push_alerts ADD COLUMN IF NOT EXISTS ${col}`);

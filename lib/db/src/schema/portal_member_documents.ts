@@ -22,6 +22,11 @@ export const portalMemberDocumentsTable = pgTable("portal_member_documents", {
   reviewNote: text("review_note"),
   reviewedByUserId: text("reviewed_by_user_id").references(() => usersTable.id, { onDelete: "set null" }),
   reviewedAt: timestamp("reviewed_at"),
+  // A PM's manual "Mark as replaced" on a rejected submission (Dean,
+  // 2026-10-22): for a replacement filed under another kind, which the
+  // automatic same-kind match can't see. Moves it to the Rejected folder.
+  markedReplacedAt: timestamp("marked_replaced_at"),
+  markedReplacedBy: text("marked_replaced_by").references(() => usersTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => ({
   projectIdx: index("portal_member_documents_project_idx").on(t.projectId),

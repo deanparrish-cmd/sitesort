@@ -359,6 +359,8 @@ router.get("/projects/:projectId/member-documents", authenticate, allow(projectA
       createdAt: portalMemberDocumentsTable.createdAt,
       uploaderName: usersTable.name,
       userId: portalMemberDocumentsTable.userId,
+      markedReplacedAt: portalMemberDocumentsTable.markedReplacedAt,
+      markedReplacedBy: portalMemberDocumentsTable.markedReplacedBy,
     }).from(portalMemberDocumentsTable)
       .leftJoin(usersTable, eq(portalMemberDocumentsTable.userId, usersTable.id))
       // Once a submission has been "Added to contact" (a person certification
@@ -388,6 +390,8 @@ router.get("/projects/:projectId/member-documents", authenticate, allow(projectA
       const a = approved.find(x => x.userId === r.userId && x.kind === r.kind && x.createdAt > r.createdAt);
       return a ? { id: a.id, name: a.name, approvedAt: a.reviewedAt ? a.reviewedAt.toISOString() : undefined } : undefined;
     };
+    const markerIds = [...new Set(rows.map(r => r.markedReplacedBy).filter((x): x is string => !!x))];
+    const markerName = new Map((markerIds.length ? await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(inArray(usersTable.id, markerIds)) : []).map(u => [u.id, u.name]));
     res.json(rows.map(r => ({
       id: r.id, name: r.name, kind: r.kind, personId: r.personId ?? undefined,
       fileUrl: r.fileUrl, fileSize: r.fileSize,
@@ -396,6 +400,9 @@ router.get("/projects/:projectId/member-documents", authenticate, allow(projectA
       createdAt: r.createdAt.toISOString(),
       uploaderName: r.uploaderName ?? "Unknown",
       replacedBy: replacementFor(r),
+      markedReplaced: r.status === "rejected" && r.markedReplacedAt
+        ? { at: r.markedReplacedAt.toISOString(), byName: (r.markedReplacedBy && markerName.get(r.markedReplacedBy)) || "A manager" }
+        : undefined,
     })));
   } catch (err) {
     req.log.error({ err }, "List member documents error");
@@ -456,6 +463,30 @@ router.post("/projects/:projectId/member-documents/:id/review", authenticate, al
   } catch (err) {
     req.log.error({ err }, "Review member document error");
     res.status(500).json({ error: "server_error", message: "Failed to review document" });
+  }
+});
+
+// POST /api/projects/:projectId/member-documents/:id/mark-replaced — the
+// escape hatch for the Rejected folder (Dean, 2026-10-22): a rejected
+// submission whose replacement was filed under another kind would otherwise
+// sit in the review list for ever. Rejected documents only; idempotent.
+router.post("/projects/:projectId/member-documents/:id/mark-replaced", authenticate, allow(projectApprover()), async (req, res) => {
+  try {
+    if (!(await ownedProject(req))) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+    if (!(await requireProjectApprover(req, res))) return;
+    const [doc] = await db.select({ id: portalMemberDocumentsTable.id, status: portalMemberDocumentsTable.status, markedReplacedAt: portalMemberDocumentsTable.markedReplacedAt })
+      .from(portalMemberDocumentsTable)
+      .where(and(eq(portalMemberDocumentsTable.id, req.params.id), eq(portalMemberDocumentsTable.projectId, req.params.projectId))).limit(1);
+    if (!doc) { res.status(404).json({ error: "not_found", message: "Document not found" }); return; }
+    if (doc.status !== "rejected") { res.status(409).json({ error: "not_rejected", message: "Only a rejected document can be marked as replaced." }); return; }
+    if (!doc.markedReplacedAt) {
+      await db.update(portalMemberDocumentsTable).set({ markedReplacedAt: new Date(), markedReplacedBy: req.user!.id })
+        .where(eq(portalMemberDocumentsTable.id, doc.id));
+    }
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Mark member document replaced error");
+    res.status(500).json({ error: "server_error", message: "Failed to mark the document as replaced" });
   }
 });
 
