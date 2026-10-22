@@ -5,6 +5,7 @@
  * SiteSort API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { CertType } from "./certType";
 import type { PersonCertificationStatus } from "./personCertificationStatus";
 
 /**
@@ -19,4 +20,6 @@ export interface PersonCertification {
   status: PersonCertificationStatus;
   documentUrl?: string | null;
   createdAt: Date;
+  certType?: CertType | null;
+  suggestedType?: CertType | null;
 }

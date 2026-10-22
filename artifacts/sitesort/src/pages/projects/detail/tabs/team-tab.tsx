@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronUp, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, PinOff, StickyNote, Send, Loader2, History, Archive, Paperclip, Building2 } from "lucide-react";
 import { InsuranceCertZone } from "@/components/ui/insurance-cert-zone";
+import { CertTypeSelect, CertTypeConfirm, GateVerdictLine, CERT_TYPE_SHORT, type CertTypeValue } from "@/components/cert-type";
 import { formatDate, formatBytes, cn } from "@/lib/utils";
 import { cardLabel } from "@/lib/card-label";
 import { useDetail } from "../context";
@@ -82,8 +83,9 @@ function AddPersonInline({ subcontractorId, onAdded }: { subcontractorId: string
 function PersonCertifications({ personId, canManage }: { personId: string; canManage: boolean }) {
   const { data: certs, refetch } = useListPersonCertifications(personId, { query: { queryKey: ["/api/people", personId, "certifications"] } });
   const create = useCreatePersonCertification();
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", expiryDate: "" });
+  const [form, setForm] = useState<{ name: string; expiryDate: string; certType: CertTypeValue | "" }>({ name: "", expiryDate: "", certType: "" });
 
   const statusColor = (status?: string) =>
     status === "expired" ? "bg-red-50 text-red-700 border-red-200" :
@@ -93,9 +95,11 @@ function PersonCertifications({ personId, canManage }: { personId: string; canMa
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {(certs ?? []).map(c => (
-        <span key={c.id} className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium border", statusColor(c.status))}>
+        // No confirmed type = not counted at the gate: never drawn green.
+        <span key={c.id} className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium border", c.certType ? statusColor(c.status) : "bg-muted text-muted-foreground border-dashed border-border")}>
           <ShieldCheck className="w-3 h-3" />
           {c.name}
+          {c.certType && <span className="opacity-80">· {CERT_TYPE_SHORT[c.certType as CertTypeValue]}</span>}
           {c.expiryDate && (
             <span className="opacity-80">
               · {c.status === "expired" ? "expired" : "expires"} {new Date(c.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
@@ -108,6 +112,12 @@ function PersonCertifications({ personId, canManage }: { personId: string; canMa
           )}
         </span>
       ))}
+      {(certs ?? []).filter(c => !c.certType).map(c => (
+        <span key={`confirm-${c.id}`} className="w-full">
+          <span className="text-[10px] text-muted-foreground mr-1">{c.name}:</span>
+          <CertTypeConfirm personId={personId} certId={c.id} suggested={c.suggestedType} canManage={canManage} onDone={() => { void refetch(); void queryClient.invalidateQueries(); }} />
+        </span>
+      ))}
       {canManage && !open && (
         <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium text-muted-foreground border border-dashed border-border hover:text-primary hover:border-primary/50 transition-colors">
           <Plus className="w-3 h-3" />Add certification
@@ -117,9 +127,12 @@ function PersonCertifications({ personId, canManage }: { personId: string; canMa
         <div className="flex flex-wrap items-center gap-1.5 w-full mt-1 [&>*]:min-w-0">
           <Input className="h-7 text-xs flex-1" placeholder="Cert name, e.g. CSCS Card" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
           <input type="date" className="h-7 text-xs rounded-md border border-input bg-background px-2" value={form.expiryDate} onChange={e => setForm(f => ({ ...f, expiryDate: e.target.value }))} />
-          <Button size="sm" className="h-7 px-2 text-xs" disabled={!form.name.trim() || !form.expiryDate} onClick={async () => {
-            await create.mutateAsync({ personId, data: { name: form.name.trim(), expiryDate: form.expiryDate } });
-            setForm({ name: "", expiryDate: "" });
+          <CertTypeSelect id={`new-cert-type-${personId}`} value={form.certType} onChange={v => setForm(f => ({ ...f, certType: v }))} />
+          <Button size="sm" className="h-7 px-2 text-xs" disabled={!form.name.trim() || !form.expiryDate || !form.certType} onClick={async () => {
+            if (!form.certType) return;
+            await create.mutateAsync({ personId, data: { name: form.name.trim(), expiryDate: form.expiryDate, certType: form.certType } });
+            setForm({ name: "", expiryDate: "", certType: "" });
+            void queryClient.invalidateQueries();
             setOpen(false);
             void refetch();
           }}>Add</Button>
@@ -454,6 +467,9 @@ export function TeamTab() {
           )}
         </div>
 
+        {/* The site gate's own verdict for this person's firm (Dean, 2026-10-22):
+            the card can no longer look covered while the gate holds them. */}
+        {member.gateVerdict && <GateVerdictLine v={member.gateVerdict} className="pt-1" />}
         {member.personId && (
           <div className="pt-1 border-t border-border/50">
             <PersonCertifications personId={member.personId} canManage={caps.canManageTeam} />

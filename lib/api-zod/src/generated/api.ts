@@ -637,6 +637,18 @@ export const ListProjectMembersResponseItem = zod.object({
   pliExpiryDate: zod.date().nullish(),
   role: zod.enum(["manager", "worker", "subcontractor"]),
   complianceStatus: zod.enum(["ok", "warning", "hold", "none"]),
+  gateVerdict: zod
+    .object({
+      status: zod.enum(["valid", "expiring_soon", "expired", "none"]),
+      holds: zod.boolean(),
+      reason: zod.string(),
+      publicLiabilityExpiry: zod.string().nullable(),
+      unconfirmedCerts: zod.number(),
+    })
+    .optional()
+    .describe(
+      "What the site gate would decide for this firm right now (the one shared rule).",
+    ),
   scheduledDays: zod.array(zod.string()).optional(),
   siteStartTime: zod.string().nullish(),
   siteEndTime: zod.string().nullish(),
@@ -800,6 +812,18 @@ export const ListSubcontractorsResponseItem = zod.object({
   reliabilityRating: zod.number().nullish(),
   paymentHold: zod.boolean(),
   insuranceStatus: zod.enum(["valid", "expiring_soon", "expired", "none"]),
+  gateVerdict: zod
+    .object({
+      status: zod.enum(["valid", "expiring_soon", "expired", "none"]),
+      holds: zod.boolean(),
+      reason: zod.string(),
+      publicLiabilityExpiry: zod.string().nullable(),
+      unconfirmedCerts: zod.number(),
+    })
+    .optional()
+    .describe(
+      "What the site gate would decide for this firm right now (the one shared rule).",
+    ),
   certifications: zod
     .array(
       zod
@@ -812,6 +836,28 @@ export const ListSubcontractorsResponseItem = zod.object({
           status: zod.enum(["valid", "expiring_soon", "expired"]),
           documentUrl: zod.string().nullish(),
           createdAt: zod.date(),
+          certType: zod
+            .enum([
+              "public_liability",
+              "employers_liability",
+              "other_insurance",
+              "qualification",
+            ])
+            .nullish()
+            .describe(
+              "What a certificate is. Null = not confirmed by a manager yet (never counts as insurance).",
+            ),
+          suggestedType: zod
+            .enum([
+              "public_liability",
+              "employers_liability",
+              "other_insurance",
+              "qualification",
+            ])
+            .nullish()
+            .describe(
+              "What a certificate is. Null = not confirmed by a manager yet (never counts as insurance).",
+            ),
         })
         .describe(
           "An individual certification\/ticket held by a person (CSCS, SSSTS\/SMSTS, gas safe, plant tickets, etc.) — distinct from company-level PLI\/insurance.",
@@ -819,7 +865,7 @@ export const ListSubcontractorsResponseItem = zod.object({
     )
     .optional()
     .describe(
-      'Active certifications filed against this contact\'s people (e.g. an approved Insurance document filed via \"Add to contact\"). Insurance-named certs also count towards insuranceStatus.',
+      "Active certifications filed against this contact's people. Only certificates whose type a manager confirmed as public liability count towards insuranceStatus.",
     ),
   archivedAt: zod.date().nullish(),
   createdAt: zod.date(),
@@ -911,6 +957,18 @@ export const GetSubcontractorResponse = zod
     reliabilityRating: zod.number().nullish(),
     paymentHold: zod.boolean(),
     insuranceStatus: zod.enum(["valid", "expiring_soon", "expired", "none"]),
+    gateVerdict: zod
+      .object({
+        status: zod.enum(["valid", "expiring_soon", "expired", "none"]),
+        holds: zod.boolean(),
+        reason: zod.string(),
+        publicLiabilityExpiry: zod.string().nullable(),
+        unconfirmedCerts: zod.number(),
+      })
+      .optional()
+      .describe(
+        "What the site gate would decide for this firm right now (the one shared rule).",
+      ),
     certifications: zod
       .array(
         zod
@@ -923,6 +981,28 @@ export const GetSubcontractorResponse = zod
             status: zod.enum(["valid", "expiring_soon", "expired"]),
             documentUrl: zod.string().nullish(),
             createdAt: zod.date(),
+            certType: zod
+              .enum([
+                "public_liability",
+                "employers_liability",
+                "other_insurance",
+                "qualification",
+              ])
+              .nullish()
+              .describe(
+                "What a certificate is. Null = not confirmed by a manager yet (never counts as insurance).",
+              ),
+            suggestedType: zod
+              .enum([
+                "public_liability",
+                "employers_liability",
+                "other_insurance",
+                "qualification",
+              ])
+              .nullish()
+              .describe(
+                "What a certificate is. Null = not confirmed by a manager yet (never counts as insurance).",
+              ),
           })
           .describe(
             "An individual certification\/ticket held by a person (CSCS, SSSTS\/SMSTS, gas safe, plant tickets, etc.) — distinct from company-level PLI\/insurance.",
@@ -930,7 +1010,7 @@ export const GetSubcontractorResponse = zod
       )
       .optional()
       .describe(
-        'Active certifications filed against this contact\'s people (e.g. an approved Insurance document filed via \"Add to contact\"). Insurance-named certs also count towards insuranceStatus.',
+        "Active certifications filed against this contact's people. Only certificates whose type a manager confirmed as public liability count towards insuranceStatus.",
       ),
     archivedAt: zod.date().nullish(),
     createdAt: zod.date(),
@@ -1046,6 +1126,18 @@ export const UpdateSubcontractorResponse = zod.object({
   reliabilityRating: zod.number().nullish(),
   paymentHold: zod.boolean(),
   insuranceStatus: zod.enum(["valid", "expiring_soon", "expired", "none"]),
+  gateVerdict: zod
+    .object({
+      status: zod.enum(["valid", "expiring_soon", "expired", "none"]),
+      holds: zod.boolean(),
+      reason: zod.string(),
+      publicLiabilityExpiry: zod.string().nullable(),
+      unconfirmedCerts: zod.number(),
+    })
+    .optional()
+    .describe(
+      "What the site gate would decide for this firm right now (the one shared rule).",
+    ),
   certifications: zod
     .array(
       zod
@@ -1058,6 +1150,28 @@ export const UpdateSubcontractorResponse = zod.object({
           status: zod.enum(["valid", "expiring_soon", "expired"]),
           documentUrl: zod.string().nullish(),
           createdAt: zod.date(),
+          certType: zod
+            .enum([
+              "public_liability",
+              "employers_liability",
+              "other_insurance",
+              "qualification",
+            ])
+            .nullish()
+            .describe(
+              "What a certificate is. Null = not confirmed by a manager yet (never counts as insurance).",
+            ),
+          suggestedType: zod
+            .enum([
+              "public_liability",
+              "employers_liability",
+              "other_insurance",
+              "qualification",
+            ])
+            .nullish()
+            .describe(
+              "What a certificate is. Null = not confirmed by a manager yet (never counts as insurance).",
+            ),
         })
         .describe(
           "An individual certification\/ticket held by a person (CSCS, SSSTS\/SMSTS, gas safe, plant tickets, etc.) — distinct from company-level PLI\/insurance.",
@@ -1065,7 +1179,7 @@ export const UpdateSubcontractorResponse = zod.object({
     )
     .optional()
     .describe(
-      'Active certifications filed against this contact\'s people (e.g. an approved Insurance document filed via \"Add to contact\"). Insurance-named certs also count towards insuranceStatus.',
+      "Active certifications filed against this contact's people. Only certificates whose type a manager confirmed as public liability count towards insuranceStatus.",
     ),
   archivedAt: zod.date().nullish(),
   createdAt: zod.date(),
@@ -5380,6 +5494,28 @@ export const ListPersonCertificationsResponseItem = zod
     status: zod.enum(["valid", "expiring_soon", "expired"]),
     documentUrl: zod.string().nullish(),
     createdAt: zod.date(),
+    certType: zod
+      .enum([
+        "public_liability",
+        "employers_liability",
+        "other_insurance",
+        "qualification",
+      ])
+      .nullish()
+      .describe(
+        "What a certificate is. Null = not confirmed by a manager yet (never counts as insurance).",
+      ),
+    suggestedType: zod
+      .enum([
+        "public_liability",
+        "employers_liability",
+        "other_insurance",
+        "qualification",
+      ])
+      .nullish()
+      .describe(
+        "What a certificate is. Null = not confirmed by a manager yet (never counts as insurance).",
+      ),
   })
   .describe(
     "An individual certification\/ticket held by a person (CSCS, SSSTS\/SMSTS, gas safe, plant tickets, etc.) — distinct from company-level PLI\/insurance.",
@@ -5400,7 +5536,89 @@ export const CreatePersonCertificationBody = zod.object({
   certNumber: zod.string().optional(),
   expiryDate: zod.string(),
   documentUrl: zod.string().optional(),
+  certType: zod.enum([
+    "public_liability",
+    "employers_liability",
+    "other_insurance",
+    "qualification",
+  ]),
 });
+
+/**
+ * @summary A manager sets or confirms what a certificate is (only confirmed public liability counts at the gate)
+ */
+export const ConfirmPersonCertificationTypeParams = zod.object({
+  personId: zod.coerce.string(),
+  certId: zod.coerce.string(),
+});
+
+export const ConfirmPersonCertificationTypeBody = zod.object({
+  certType: zod.enum([
+    "public_liability",
+    "employers_liability",
+    "other_insurance",
+    "qualification",
+  ]),
+});
+
+export const ConfirmPersonCertificationTypeResponse = zod
+  .object({
+    id: zod.string(),
+    personId: zod.string(),
+    name: zod.string(),
+    certNumber: zod.string().nullish(),
+    expiryDate: zod.date(),
+    status: zod.enum(["valid", "expiring_soon", "expired"]),
+    documentUrl: zod.string().nullish(),
+    createdAt: zod.date(),
+    certType: zod
+      .enum([
+        "public_liability",
+        "employers_liability",
+        "other_insurance",
+        "qualification",
+      ])
+      .nullish()
+      .describe(
+        "What a certificate is. Null = not confirmed by a manager yet (never counts as insurance).",
+      ),
+    suggestedType: zod
+      .enum([
+        "public_liability",
+        "employers_liability",
+        "other_insurance",
+        "qualification",
+      ])
+      .nullish()
+      .describe(
+        "What a certificate is. Null = not confirmed by a manager yet (never counts as insurance).",
+      ),
+  })
+  .describe(
+    "An individual certification\/ticket held by a person (CSCS, SSSTS\/SMSTS, gas safe, plant tickets, etc.) — distinct from company-level PLI\/insurance.",
+  );
+
+/**
+ * @summary Certificates in this company whose type no manager has confirmed yet, with a suggestion
+ */
+export const ListUnconfirmedCertificationsResponseItem = zod.object({
+  id: zod.string(),
+  personId: zod.string(),
+  personName: zod.string(),
+  firm: zod.string().nullable(),
+  name: zod.string(),
+  expiryDate: zod.string(),
+  documentUrl: zod.string().nullable(),
+  suggestedType: zod.enum([
+    "public_liability",
+    "employers_liability",
+    "other_insurance",
+    "qualification",
+  ]),
+});
+export const ListUnconfirmedCertificationsResponse = zod.array(
+  ListUnconfirmedCertificationsResponseItem,
+);
 
 /**
  * @summary Delete a person's certification

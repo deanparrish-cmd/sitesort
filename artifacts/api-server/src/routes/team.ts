@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { projectMembersTable, usersTable, subcontractorsTable, insuranceRecordsTable, projectsTable, peopleTable, projectInvitesTable, companyMembersTable } from "@workspace/db/schema";
-import { eq, and, isNull, asc, sql } from "drizzle-orm";
+import { eq, and, isNull, asc, desc, sql } from "drizzle-orm";
+import { subcontractorInsuranceVerdict, type GateVerdict } from "../lib/insurance";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { allow, COMPANY_MANAGER, INTERNAL_STAFF, projectApprover } from "../lib/authz";
@@ -28,20 +29,7 @@ async function loadOwnedProject(projectId: string, companyId: string) {
   return rows[0] ?? null;
 }
 
-// Reuse the canonical expiry helper (F1) — insurance says "valid" where the
-// shared helper says "active"; the expiring_soon/expired bands are identical.
-function computeRecordStatus(expiryDate: string): "valid" | "expiring_soon" | "expired" {
-  const s = expiryStatus(expiryDate);
-  return s === "active" ? "valid" : s;
-}
 
-function getInsuranceStatus(records: Array<{ expiryDate: string }>): string {
-  if (records.length === 0) return "none";
-  const statuses = records.map(r => computeRecordStatus(r.expiryDate));
-  if (statuses.some(s => s === "expired")) return "hold";
-  if (statuses.some(s => s === "expiring_soon")) return "warning";
-  return "ok";
-}
 
 router.get("/projects/:projectId/members", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
@@ -60,24 +48,29 @@ router.get("/projects/:projectId/members", authenticate, allow(INTERNAL_STAFF), 
     // company-only branch below.
     async function companyCompliance(subcontractorId: string) {
       const sub = await db.select({ paymentHold: subcontractorsTable.paymentHold }).from(subcontractorsTable).where(eq(subcontractorsTable.id, subcontractorId)).limit(1);
+      // The gate's own verdict (lib/insurance.ts, the one shared rule), so the
+      // card can never read green while the gate holds him (Dean, 2026-10-22).
+      const gateVerdict = await subcontractorInsuranceVerdict(subcontractorId, req.user!.companyId);
       let complianceStatus: string;
       // Payment holds are private to admins/PMs; everyone else sees the plain insurance status.
       if (sub[0]?.paymentHold && (req.user!.role === "admin" || req.user!.role === "project_manager")) {
         complianceStatus = "hold";
       } else {
-        const insuranceRows = await db.select({ expiryDate: insuranceRecordsTable.expiryDate }).from(insuranceRecordsTable).where(and(eq(insuranceRecordsTable.subcontractorId, subcontractorId), isNull(insuranceRecordsTable.archivedAt)));
-        complianceStatus = getInsuranceStatus(insuranceRows);
+        complianceStatus = { valid: "ok", expiring_soon: "warning", expired: "hold", none: "none" }[gateVerdict.status];
       }
+      // The firm's LATEST public liability record (only the latest counts).
       const pliRows = await db.select({ certificateUrl: insuranceRecordsTable.certificateUrl, expiryDate: insuranceRecordsTable.expiryDate })
         .from(insuranceRecordsTable)
         .where(and(eq(insuranceRecordsTable.subcontractorId, subcontractorId), eq(insuranceRecordsTable.type, "public_liability"), isNull(insuranceRecordsTable.archivedAt)))
+        .orderBy(desc(insuranceRecordsTable.expiryDate))
         .limit(1);
-      return { complianceStatus, pliCertUrl: pliRows[0]?.certificateUrl ?? null, pliExpiryDate: pliRows[0]?.expiryDate ?? null };
+      return { complianceStatus, gateVerdict, pliCertUrl: pliRows[0]?.certificateUrl ?? null, pliExpiryDate: pliRows[0]?.expiryDate ?? null };
     }
 
     const result = await Promise.all(members.map(async (m) => {
       let name = "Unknown";
       let complianceStatus: string = "ok";
+      let gateVerdict: GateVerdict | null = null;
       let email: string | null = null;
       let phone: string | null = null;
       let contactName: string | null = null;
@@ -128,6 +121,7 @@ router.get("/projects/:projectId/members", authenticate, allow(INTERNAL_STAFF), 
           effectiveSubId = effectiveSubId ?? p.subcontractorId;
           const c = await companyCompliance(p.subcontractorId);
           complianceStatus = c.complianceStatus;
+          gateVerdict = c.gateVerdict;
           pliCertUrl = c.pliCertUrl;
           pliExpiryDate = c.pliExpiryDate;
         }
@@ -173,6 +167,7 @@ router.get("/projects/:projectId/members", authenticate, allow(INTERNAL_STAFF), 
         avatarUrl = subRows[0]?.avatarUrl ?? null;
         const c = await companyCompliance(m.subcontractorId);
         complianceStatus = c.complianceStatus;
+        gateVerdict = c.gateVerdict;
         pliCertUrl = c.pliCertUrl;
         pliExpiryDate = c.pliExpiryDate;
       }
@@ -197,6 +192,7 @@ router.get("/projects/:projectId/members", authenticate, allow(INTERNAL_STAFF), 
         pliExpiryDate,
         role: m.role,
         complianceStatus,
+        ...(gateVerdict ? { gateVerdict } : {}),
         scheduledDays: m.scheduledDays ?? [],
         siteStartTime: m.siteStartTime ?? null,
         siteEndTime: m.siteEndTime ?? null,

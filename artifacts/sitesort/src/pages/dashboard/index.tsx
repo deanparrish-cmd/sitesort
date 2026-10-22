@@ -458,6 +458,7 @@ export default function Dashboard() {
   const [onboarding, setOnboarding] = useState<OnboardingStatus | null>(null);
   const [plantOnHire, setPlantOnHire] = useState<OnHirePlant[]>([]);
   // Fire-roll readiness per project that uses the gate (#125).
+  const [unconfirmedCerts, setUnconfirmedCerts] = useState(0);
   const [fireRoll, setFireRoll] = useState<{ projectId: string; projectName: string; status: string; checks: { status: string; label: string }[]; onSiteNow?: number }[]>([]);
   const [accessRequests, setAccessRequests] = useState<{ pending: number; onlyId: string | null }>({ pending: 0, onlyId: null });
   const [onboardingDismissed, setOnboardingDismissed] = useState(() => localStorage.getItem("sitesort_onboarding_dismissed") === "1");
@@ -472,6 +473,7 @@ export default function Dashboard() {
     fetch("/api/plant-items/on-hire", { headers: h }).then(r => r.ok ? r.json() : []).then(setPlantOnHire).catch(() => {});
     fetch("/api/fire-roll", { headers: h }).then(r => r.ok ? r.json() : []).then(setFireRoll).catch(() => {});
     fetch("/api/share-requests/count", { headers: h }).then(r => r.ok ? r.json() : null).then(d => { if (d) setAccessRequests(d); }).catch(() => {});
+    fetch("/api/certifications/unconfirmed", { headers: h }).then(r => r.ok ? r.json() : []).then(d => setUnconfirmedCerts(Array.isArray(d) ? d.length : 0)).catch(() => {});
   }, []);
 
   const [search, setSearch] = useState("");
@@ -600,6 +602,18 @@ export default function Dashboard() {
 
     // Access requests from people whose shared link stopped working: one
     // opens that request, several open the list.
+    // Certificates nobody has typed yet don't count at the site gate, so the
+    // people they belong to may be held (Dean, 2026-10-22).
+    if (unconfirmedCerts > 0)
+      items.push({
+        icon: <ShieldAlert className="w-4 h-4" />,
+        label: unconfirmedCerts === 1
+          ? "1 certificate needs its type confirmed before the site gate counts it"
+          : `${unconfirmedCerts} certificates need their type confirmed before the site gate counts them`,
+        href: "/compliance?filter=certtypes",
+        severity: "critical",
+      });
+
     if (accessRequests.pending > 0)
       items.push({
         icon: <KeyRound className="w-4 h-4" />,
@@ -613,7 +627,7 @@ export default function Dashboard() {
       items.push({ icon: <MessageSquare className="w-4 h-4" />, label: `${unreadMessages} unread message${unreadMessages > 1 ? "s" : ""}`, href: "/messages?filter=unread", severity: "warning" });
 
     return items;
-  }, [expiryAlerts, compliance, unreadMessages, fireRoll, accessRequests]);
+  }, [expiryAlerts, compliance, unreadMessages, fireRoll, accessRequests, unconfirmedCerts]);
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";

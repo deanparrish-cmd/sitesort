@@ -3451,6 +3451,51 @@ paths:
               schema:
                 $ref: "#/components/schemas/PersonCertification"
 
+  /people/{personId}/certifications/{certId}/type:
+    patch:
+      operationId: confirmPersonCertificationType
+      tags: [portal]
+      summary: A manager sets or confirms what a certificate is (only confirmed public liability counts at the gate)
+      parameters:
+        - name: personId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: certId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmCertTypeRequest"
+      responses:
+        "200":
+          description: Confirmed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonCertification"
+
+  /certifications/unconfirmed:
+    get:
+      operationId: listUnconfirmedCertifications
+      tags: [portal]
+      summary: Certificates in this company whose type no manager has confirmed yet, with a suggestion
+      responses:
+        "200":
+          description: Certificates to confirm
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UnconfirmedCertification"
+
   /people/{personId}/certifications/{certId}:
     delete:
       operationId: deletePersonCertification
@@ -4308,6 +4353,8 @@ components:
         complianceStatus:
           type: string
           enum: [ok, warning, hold, none]
+        gateVerdict:
+          $ref: "#/components/schemas/GateVerdict"
         scheduledDays:
           type: array
           items:
@@ -4418,9 +4465,11 @@ components:
         insuranceStatus:
           type: string
           enum: [valid, expiring_soon, expired, none]
+        gateVerdict:
+          $ref: "#/components/schemas/GateVerdict"
         certifications:
           type: array
-          description: Active certifications filed against this contact's people (e.g. an approved Insurance document filed via "Add to contact"). Insurance-named certs also count towards insuranceStatus.
+          description: Active certifications filed against this contact's people. Only certificates whose type a manager confirmed as public liability count towards insuranceStatus.
           items:
             $ref: "#/components/schemas/PersonCertification"
         archivedAt:
@@ -6783,7 +6832,35 @@ components:
         createdAt:
           type: string
           format: date-time
+        certType:
+          $ref: "#/components/schemas/CertType"
+        suggestedType:
+          $ref: "#/components/schemas/CertType"
       required: [id, personId, name, expiryDate, status, createdAt]
+
+    CertType:
+      type: string
+      nullable: true
+      enum: [public_liability, employers_liability, other_insurance, qualification]
+      description: What a certificate is. Null = not confirmed by a manager yet (never counts as insurance).
+
+    GateVerdict:
+      type: object
+      description: What the site gate would decide for this firm right now (the one shared rule).
+      properties:
+        status:
+          type: string
+          enum: [valid, expiring_soon, expired, none]
+        holds:
+          type: boolean
+        reason:
+          type: string
+        publicLiabilityExpiry:
+          type: string
+          nullable: true
+        unconfirmedCerts:
+          type: integer
+      required: [status, holds, reason, publicLiabilityExpiry, unconfirmedCerts]
 
     CreatePersonCertificationRequest:
       type: object
@@ -6796,7 +6873,42 @@ components:
           type: string
         documentUrl:
           type: string
-      required: [name, expiryDate]
+        certType:
+          type: string
+          enum: [public_liability, employers_liability, other_insurance, qualification]
+      required: [name, expiryDate, certType]
+
+    ConfirmCertTypeRequest:
+      type: object
+      properties:
+        certType:
+          type: string
+          enum: [public_liability, employers_liability, other_insurance, qualification]
+      required: [certType]
+
+    UnconfirmedCertification:
+      type: object
+      properties:
+        id:
+          type: string
+        personId:
+          type: string
+        personName:
+          type: string
+        firm:
+          type: string
+          nullable: true
+        name:
+          type: string
+        expiryDate:
+          type: string
+        documentUrl:
+          type: string
+          nullable: true
+        suggestedType:
+          type: string
+          enum: [public_liability, employers_liability, other_insurance, qualification]
+      required: [id, personId, personName, firm, name, expiryDate, documentUrl, suggestedType]
 
     PortalInviteRequest:
       type: object

@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
+import { CertTypeSelect, CertTypeConfirm, GateVerdictLine, CERT_TYPE_SHORT, type CertTypeValue } from "@/components/cert-type";
+import type { GateVerdict } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -93,6 +95,7 @@ type Sub = {
   insuranceStatus: InsuranceStatus;
   insuranceRecords: InsuranceRecord[];
   certifications?: PersonCert[];
+  gateVerdict?: GateVerdict;
   archivedAt: string | null;
   createdAt: string;
 };
@@ -108,6 +111,8 @@ type PersonCert = {
   status: "valid" | "expiring_soon" | "expired";
   documentUrl: string | null;
   createdAt: string;
+  certType?: CertTypeValue | null;
+  suggestedType?: CertTypeValue | null;
 };
 
 type SubNote = {
@@ -299,8 +304,8 @@ export default function SubcontractorsPage() {
   // "Add certification" repeater on the Add Contact form — attaches to the
   // primary contact's `people` row right after the contact is created, since
   // the form only knows about that one person at creation time.
-  const [newCerts, setNewCerts] = useState<{ name: string; expiryDate: string; documentUrl: string | null }[]>([]);
-  const [certDraft, setCertDraft] = useState({ name: "", expiryDate: "", documentUrl: null as string | null });
+  const [newCerts, setNewCerts] = useState<{ name: string; expiryDate: string; documentUrl: string | null; certType: CertTypeValue }[]>([]);
+  const [certDraft, setCertDraft] = useState({ name: "", expiryDate: "", documentUrl: null as string | null, certType: "" as CertTypeValue | "" });
   const [certUploading, setCertUploading] = useState(false);
   const [typeFilter, setTypeFilter] = useState<ContactType | "all">("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "insurance_issue" | "payment_hold">("all");
@@ -687,10 +692,10 @@ export default function SubcontractorsPage() {
       if (created.personId && newCerts.length > 0) {
         await Promise.all(newCerts.map(c => apiFetch(`/api/people/${created.personId}/certifications`, {
           method: "POST",
-          body: JSON.stringify({ name: c.name, expiryDate: c.expiryDate, documentUrl: c.documentUrl ?? undefined }),
+          body: JSON.stringify({ name: c.name, expiryDate: c.expiryDate, documentUrl: c.documentUrl ?? undefined, certType: c.certType }),
         }).catch(() => null)));
       }
-      setAddOpen(false); reset(); setSelectedTradesAdd([]); setNewCerts([]); setCertDraft({ name: "", expiryDate: "", documentUrl: null });
+      setAddOpen(false); reset(); setSelectedTradesAdd([]); setNewCerts([]); setCertDraft({ name: "", expiryDate: "", documentUrl: null, certType: "" });
     } else {
       const e = await res.json().catch(() => ({}));
       setAddError(e.message ?? "Failed to add contact.");
@@ -1001,10 +1006,10 @@ export default function SubcontractorsPage() {
                                   const expired = c.status === "expired";
                                   const expiring = c.status === "expiring_soon";
                                   return (
-                                    <div key={c.id} className={cn("flex items-center gap-1.5 text-[10px] font-medium px-2 py-1.5 rounded-md border", expired ? "bg-red-50 border-red-300 text-red-700" : expiring ? "bg-yellow-50 border-yellow-200 text-yellow-700" : "bg-emerald-50 border-emerald-200 text-emerald-700")}>
+                                    <div key={c.id} className={cn("flex items-center gap-1.5 text-[10px] font-medium px-2 py-1.5 rounded-md border", !c.certType ? "bg-muted border-dashed border-border text-muted-foreground" : expired ? "bg-red-50 border-red-300 text-red-700" : expiring ? "bg-yellow-50 border-yellow-200 text-yellow-700" : "bg-emerald-50 border-emerald-200 text-emerald-700")}>
                                       <ShieldCheck className="w-3 h-3 shrink-0" />
                                       <span className="truncate">
-                                        {c.name}{c.certNumber ? ` · ${c.certNumber}` : ""} · {expired ? "expired" : "expires"} {new Date(c.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                                        {c.name}{c.certNumber ? ` · ${c.certNumber}` : ""}{c.certType ? ` · ${CERT_TYPE_SHORT[c.certType as CertTypeValue]}` : " · type not confirmed"} · {expired ? "expired" : "expires"} {new Date(c.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                                       </span>
                                       {c.documentUrl && (
                                         <button onClick={() => window.open(normaliseUrl(c.documentUrl!), "_blank")} className="ml-auto shrink-0 hover:opacity-70" title="Open document">
@@ -1037,6 +1042,14 @@ export default function SubcontractorsPage() {
                                 {insuranceBadge(sub.insuranceStatus, sub.contactType)}
                                 {caps.canManageSubcontractors && <RatingStars rating={sub.reliabilityRating} />}
                               </div>
+                              {/* The site gate's own verdict (Dean, 2026-10-22). */}
+                              <GateVerdictLine v={sub.gateVerdict} />
+                              {(sub.certifications ?? []).filter(c => !c.certType && c.personId).map(c => (
+                                <div key={`confirm-${c.id}`} className="min-w-0">
+                                  <span className="text-[10px] text-muted-foreground mr-1">{c.name}:</span>
+                                  <CertTypeConfirm personId={c.personId!} certId={c.id} suggested={c.suggestedType} canManage={caps.canManageSubcontractors} onDone={() => void load()} />
+                                </div>
+                              ))}
                               <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                                 <ContactActions email={sub.contactEmail} phone={sub.contactPhone} />
                                 <button onClick={() => openNotes(sub)} className={cn(contactPillClass, "hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30")} title="Notes & reminders log">
@@ -1087,7 +1100,7 @@ export default function SubcontractorsPage() {
       )}
 
       {/* Add modal */}
-      <Dialog open={addOpen} onOpenChange={open => { setAddOpen(open); if (!open) { reset(); setSelectedTradesAdd([]); setAddError(null); setNewCerts([]); setCertDraft({ name: "", expiryDate: "", documentUrl: null }); } }}>
+      <Dialog open={addOpen} onOpenChange={open => { setAddOpen(open); if (!open) { reset(); setSelectedTradesAdd([]); setAddError(null); setNewCerts([]); setCertDraft({ name: "", expiryDate: "", documentUrl: null, certType: "" }); } }}>
         <DialogHeader>
           <DialogTitle>Add Contact</DialogTitle>
         </DialogHeader>
@@ -1162,7 +1175,7 @@ export default function SubcontractorsPage() {
               <div className="space-y-1.5 mb-2">
                 {newCerts.map((c, i) => (
                   <div key={i} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border bg-muted/30 text-sm">
-                    <span className="truncate">{c.name} · expires {c.expiryDate}{c.documentUrl ? " · file attached" : ""}</span>
+                    <span className="truncate">{c.name} · {CERT_TYPE_SHORT[c.certType]} · expires {c.expiryDate}{c.documentUrl ? " · file attached" : ""}</span>
                     <button type="button" onClick={() => setNewCerts(prev => prev.filter((_, idx) => idx !== i))} className="shrink-0 text-muted-foreground hover:text-destructive">
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -1173,6 +1186,7 @@ export default function SubcontractorsPage() {
             <div className="grid grid-cols-[1fr_auto] gap-2 [&>*]:min-w-0">
               <Input placeholder="Cert name, e.g. CSCS Card" value={certDraft.name} onChange={e => setCertDraft(d => ({ ...d, name: e.target.value }))} />
               <Input type="date" className="w-40" value={certDraft.expiryDate} onChange={e => setCertDraft(d => ({ ...d, expiryDate: e.target.value }))} />
+              <CertTypeSelect id="add-contact-cert-type" value={certDraft.certType} onChange={v => setCertDraft(d => ({ ...d, certType: v }))} className="col-span-2 h-9 text-sm" />
             </div>
             <div className="flex items-center gap-2 mt-1.5">
               <label className={cn("inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg border cursor-pointer", certDraft.documentUrl ? "border-emerald-300 text-emerald-700 bg-emerald-50" : "border-input text-muted-foreground hover:text-primary")}>
@@ -1188,8 +1202,8 @@ export default function SubcontractorsPage() {
                 {certUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
                 {certDraft.documentUrl ? "File attached" : "Attach file (optional)"}
               </label>
-              <Button type="button" size="sm" variant="outline" disabled={!certDraft.name.trim() || !certDraft.expiryDate}
-                onClick={() => { setNewCerts(prev => [...prev, certDraft]); setCertDraft({ name: "", expiryDate: "", documentUrl: null }); }}>
+              <Button type="button" size="sm" variant="outline" disabled={!certDraft.name.trim() || !certDraft.expiryDate || !certDraft.certType}
+                onClick={() => { if (!certDraft.certType) return; setNewCerts(prev => [...prev, { ...certDraft, certType: certDraft.certType as CertTypeValue }]); setCertDraft({ name: "", expiryDate: "", documentUrl: null, certType: "" }); }}>
                 + Add certification
               </Button>
             </div>

@@ -212,6 +212,8 @@ export const PM_GUIDE: GuideSection[] = [
         heading: "Waiting at the gate",
         body: [
           "Someone waits at the gate when their mobile isn't on file, or when they're from a subcontractor with no insurance on file or insurance that has expired. They are not signed in and not on the roll call. You get a Waiting at the gate notification.",
+          "What the gate counts as insurance: an in-date public liability for the person's firm, either a public liability record on the firm or a certificate on one of its people whose type is Public liability insurance. Only the latest public liability counts, so an old expired one doesn't block a renewal. Employer's liability and other insurance are kept and tracked but don't decide the gate. Every contact and Team card shows the gate's own verdict, for example Gate: lets on. Public liability to 1 Jan 2027, or Gate: will hold. No public liability insurance on file.",
+          "When you add a certificate, choose what it is: Public liability insurance, Employer's liability insurance, Other insurance, or Qualification or card. The name you type doesn't decide anything. Certificates added before this have no confirmed type and don't count at the gate until you confirm it: they're listed under Certificates to confirm in Compliance (and on the dashboard), each with a suggested type to confirm or change.",
           "Open it, or Currently on site, and choose Let on site or Refuse. Letting someone on needs a reason (for example, checked photo ID, or cert seen on his phone, upload promised today). Your name, the time and the reason are recorded. Their phone updates by itself. If nobody decides by the site close time, the request lapses and they are not on site.",
         ],
       },

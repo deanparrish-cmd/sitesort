@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { LinkRow } from "@/components/ui/link-row";
 import { ListRow, Pill, PillGroup } from "@/components/ui/list-row";
+import { CertTypeSelect, type CertTypeValue } from "@/components/cert-type";
 import { useToast } from "@/hooks/use-toast";
 import { openDocument } from "@/lib/documents";
 import { itemDeepLink } from "@/lib/deep-link";
@@ -117,10 +118,13 @@ function MemberDocumentsReview({ projectId }: { projectId: string }) {
   const [certName, setCertName] = useState("");
   const [certNumber, setCertNumber] = useState("");
   const [certExpiry, setCertExpiry] = useState("");
+  // What it is decides whether it counts at the site gate: the manager picks
+  // it, nothing is guessed (Dean, 2026-10-22).
+  const [certType, setCertType] = useState<CertTypeValue | "">("");
   const [filedIds, setFiledIds] = useState<Record<string, boolean>>({});
 
   const doFile = async () => {
-    if (!fileTarget || !certName.trim() || !certExpiry) return;
+    if (!fileTarget || !certName.trim() || !certExpiry || !certType) return;
     const docId = fileTarget.docId;
     try {
       await createCert.mutateAsync({
@@ -129,6 +133,7 @@ function MemberDocumentsReview({ projectId }: { projectId: string }) {
           name: certName.trim(),
           certNumber: certNumber.trim() || undefined,
           expiryDate: certExpiry,
+          certType,
           documentUrl: fileTarget.fileUrl,
         },
       });
@@ -201,6 +206,7 @@ function MemberDocumentsReview({ projectId }: { projectId: string }) {
                           setCertName(d.name);
                           setCertNumber("");
                           setCertExpiry("");
+                          setCertType("");
                           setFileTarget({ docId: d.id, personId: d.personId!, fileUrl: d.fileUrl, docName: d.name, uploaderName: d.uploaderName });
                         }}
                         className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-primary/25 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/15 transition-colors">
@@ -326,6 +332,10 @@ function MemberDocumentsReview({ projectId }: { projectId: string }) {
               className="mt-1 w-full rounded-lg border-2 border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:border-primary" />
           </div>
           <div>
+            <label htmlFor="file-cert-type" className="text-xs font-medium text-muted-foreground">What is it? Only public liability insurance counts at the site gate.</label>
+            <CertTypeSelect id="file-cert-type" value={certType} onChange={setCertType} className="mt-1 w-full h-10 text-sm rounded-lg border-2" />
+          </div>
+          <div>
             <label className="text-xs font-medium text-muted-foreground">Expiry date</label>
             <input type="date" value={certExpiry} onChange={e => setCertExpiry(e.target.value)}
               className="mt-1 w-full rounded-lg border-2 border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:border-primary" />
@@ -334,7 +344,7 @@ function MemberDocumentsReview({ projectId }: { projectId: string }) {
         <DialogFooter>
           <Button variant="outline" onClick={() => setFileTarget(null)}>Cancel</Button>
           <Button
-            disabled={!certName.trim() || !certExpiry}
+            disabled={!certName.trim() || !certExpiry || !certType}
             isLoading={createCert.isPending}
             onClick={() => void doFile()}
           >

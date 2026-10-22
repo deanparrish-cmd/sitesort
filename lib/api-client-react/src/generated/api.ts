@@ -29,6 +29,7 @@ import type {
   AuditLogEntry,
   AuthResponse,
   ComplianceOverview,
+  ConfirmCertTypeRequest,
   CreatePermitRequest,
   CreatePersonCertificationRequest,
   CreatePersonRequest,
@@ -137,6 +138,7 @@ import type {
   SubcontractorDetail,
   SubcontractorDocument,
   SuccessResponse,
+  UnconfirmedCertification,
   UpdateInsuranceRequest,
   UpdateMemberAuthorityRequest,
   UpdateMemberPermissionsRequest,
@@ -13196,6 +13198,194 @@ export const useCreatePersonCertification = <
 > => {
   return useMutation(getCreatePersonCertificationMutationOptions(options));
 };
+
+/**
+ * @summary A manager sets or confirms what a certificate is (only confirmed public liability counts at the gate)
+ */
+export const getConfirmPersonCertificationTypeUrl = (
+  personId: string,
+  certId: string,
+) => {
+  return `/api/people/${personId}/certifications/${certId}/type`;
+};
+
+export const confirmPersonCertificationType = async (
+  personId: string,
+  certId: string,
+  confirmCertTypeRequest: ConfirmCertTypeRequest,
+  options?: RequestInit,
+): Promise<PersonCertification> => {
+  return customFetch<PersonCertification>(
+    getConfirmPersonCertificationTypeUrl(personId, certId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(confirmCertTypeRequest),
+    },
+  );
+};
+
+export const getConfirmPersonCertificationTypeMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof confirmPersonCertificationType>>,
+    TError,
+    {
+      personId: string;
+      certId: string;
+      data: BodyType<ConfirmCertTypeRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof confirmPersonCertificationType>>,
+  TError,
+  { personId: string; certId: string; data: BodyType<ConfirmCertTypeRequest> },
+  TContext
+> => {
+  const mutationKey = ["confirmPersonCertificationType"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof confirmPersonCertificationType>>,
+    { personId: string; certId: string; data: BodyType<ConfirmCertTypeRequest> }
+  > = (props) => {
+    const { personId, certId, data } = props ?? {};
+
+    return confirmPersonCertificationType(
+      personId,
+      certId,
+      data,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ConfirmPersonCertificationTypeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof confirmPersonCertificationType>>
+>;
+export type ConfirmPersonCertificationTypeMutationBody =
+  BodyType<ConfirmCertTypeRequest>;
+export type ConfirmPersonCertificationTypeMutationError = ErrorType<unknown>;
+
+/**
+ * @summary A manager sets or confirms what a certificate is (only confirmed public liability counts at the gate)
+ */
+export const useConfirmPersonCertificationType = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof confirmPersonCertificationType>>,
+    TError,
+    {
+      personId: string;
+      certId: string;
+      data: BodyType<ConfirmCertTypeRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof confirmPersonCertificationType>>,
+  TError,
+  { personId: string; certId: string; data: BodyType<ConfirmCertTypeRequest> },
+  TContext
+> => {
+  return useMutation(getConfirmPersonCertificationTypeMutationOptions(options));
+};
+
+/**
+ * @summary Certificates in this company whose type no manager has confirmed yet, with a suggestion
+ */
+export const getListUnconfirmedCertificationsUrl = () => {
+  return `/api/certifications/unconfirmed`;
+};
+
+export const listUnconfirmedCertifications = async (
+  options?: RequestInit,
+): Promise<UnconfirmedCertification[]> => {
+  return customFetch<UnconfirmedCertification[]>(
+    getListUnconfirmedCertificationsUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListUnconfirmedCertificationsQueryKey = () => {
+  return [`/api/certifications/unconfirmed`] as const;
+};
+
+export const getListUnconfirmedCertificationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listUnconfirmedCertifications>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listUnconfirmedCertifications>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListUnconfirmedCertificationsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listUnconfirmedCertifications>>
+  > = ({ signal }) =>
+    listUnconfirmedCertifications({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listUnconfirmedCertifications>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListUnconfirmedCertificationsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listUnconfirmedCertifications>>
+>;
+export type ListUnconfirmedCertificationsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Certificates in this company whose type no manager has confirmed yet, with a suggestion
+ */
+
+export function useListUnconfirmedCertifications<
+  TData = Awaited<ReturnType<typeof listUnconfirmedCertifications>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listUnconfirmedCertifications>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListUnconfirmedCertificationsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Delete a person's certification

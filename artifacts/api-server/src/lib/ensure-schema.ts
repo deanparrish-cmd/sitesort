@@ -520,6 +520,10 @@ export async function ensureSchema(): Promise<void> {
       )
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS person_certifications_person_idx ON person_certifications (person_id)`);
+    // Typed certificates (2026-10-22): NULL = not confirmed, never insurance.
+    await pool.query(`ALTER TABLE person_certifications ADD COLUMN IF NOT EXISTS cert_type text`);
+    await pool.query(`ALTER TABLE person_certifications ADD COLUMN IF NOT EXISTS type_confirmed_at timestamp`);
+    await pool.query(`ALTER TABLE person_certifications ADD COLUMN IF NOT EXISTS type_confirmed_by text REFERENCES users(id) ON DELETE SET NULL`);
 
     // Backfill 1: for every subcontractor with no primary-contact people row yet,
     // either promote an existing people row with a matching email (dedupes

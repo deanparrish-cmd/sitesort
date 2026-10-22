@@ -14,7 +14,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCapabilities } from "@/hooks/use-capabilities";
-import { useGetMe } from "@workspace/api-client-react";
+import { useGetMe, useListUnconfirmedCertifications, getListUnconfirmedCertificationsQueryKey } from "@workspace/api-client-react";
+import { CertTypeConfirm } from "@/components/cert-type";
+import { ListRow } from "@/components/ui/list-row";
 import { useSignOffFlow } from "@/hooks/use-sign-off-flow";
 
 type InsuranceItem = { subcontractorId: string; subcontractorName: string; insuranceType: string; expiryDate: string; status: string; certificateUrl?: string | null };
@@ -175,7 +177,11 @@ export default function CompliancePage() {
   }, [assignSubId, assignDocType]);
 
   const [highlightUpload, setHighlightUpload] = useState(false);
-  const [highlightSection, setHighlightSection] = useState<"insurance" | "permits" | "signoffs" | null>(null);
+  const [highlightSection, setHighlightSection] = useState<"insurance" | "permits" | "signoffs" | "certtypes" | null>(null);
+  // Certificates with no confirmed type: they don't count at the site gate
+  // until a manager says what they are (Dean, 2026-10-22).
+  const unconfirmedQ = useListUnconfirmedCertifications({ query: { enabled: caps.canManageCompliance, retry: false, queryKey: getListUnconfirmedCertificationsQueryKey() } });
+  const unconfirmed = unconfirmedQ.data ?? [];
 
   // ── URL param handling ──
   useEffect(() => {
@@ -201,8 +207,9 @@ export default function CompliancePage() {
     const params = new URLSearchParams(window.location.search);
     const filter = params.get("filter");
     const kind = params.get("kind");
-    let target: "insurance" | "permits" | "signoffs" | null = null;
+    let target: "insurance" | "permits" | "signoffs" | "certtypes" | null = null;
     if (filter === "signoffs") target = "signoffs";
+    else if (filter === "certtypes") target = "certtypes";
     else if (filter === "expiring") target = kind === "permit" ? "permits" : "insurance";
     if (!target) return;
     window.history.replaceState({}, "", "/compliance");
@@ -424,6 +431,36 @@ export default function CompliancePage() {
         <div className="space-y-8">
 
           {/* ── Expiring Insurance ── */}
+          {unconfirmed.length > 0 && (
+            <section id="section-certtypes" data-testid="section-certtypes" className={cn("scroll-mt-24 rounded-xl transition-shadow space-y-3", highlightSection === "certtypes" && "ring-2 ring-primary ring-offset-4")}>
+              <div className="flex flex-wrap items-center gap-2">
+                <ShieldAlert className="w-5 h-5 text-amber-600" />
+                <h2 className="font-bold text-lg">Certificates to confirm</h2>
+                <span className="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{unconfirmed.length}</span>
+              </div>
+              <p className="text-sm text-muted-foreground">The site gate only counts a certificate as insurance once a manager has said what it is. Until then these don't count, so the people they belong to may be held at the gate. Check each one and confirm or change the type.</p>
+              <div className="space-y-2">
+                {unconfirmed.map(c => (
+                  <ListRow key={c.id} className="bg-amber-50/60 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900"
+                    content={
+                      <div className="min-w-0 space-y-1">
+                        <p className="font-semibold text-sm break-words">{c.name} <span className="font-normal text-muted-foreground">· expires {new Date(c.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span></p>
+                        <p className="text-xs text-muted-foreground break-words">{c.personName}{c.firm ? `, ${c.firm}` : ""}</p>
+                        <CertTypeConfirm personId={c.personId} certId={c.id} suggested={c.suggestedType} canManage onDone={() => { void unconfirmedQ.refetch(); loadCompliance(); }} />
+                      </div>
+                    }
+                    actions={c.documentUrl ? (
+                      <button onClick={() => window.open(c.documentUrl!.replace(/^\/uploads\//, "/api/uploads/"), "_blank", "noopener,noreferrer")}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700">
+                        <ExternalLink className="w-3 h-3" /> Open
+                      </button>
+                    ) : undefined}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
           <section id="section-insurance" className={cn("scroll-mt-24 rounded-xl transition-shadow", highlightSection === "insurance" && "ring-2 ring-primary ring-offset-4")}>
             <div className="flex items-center gap-2 mb-3">
               <ShieldAlert className="w-5 h-5 text-yellow-600" />

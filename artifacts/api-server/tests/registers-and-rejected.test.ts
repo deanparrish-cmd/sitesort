@@ -87,7 +87,7 @@ describe("registers newest first; rejected documents", () => {
     const pid = member.personIds[0];
     const ids: string[] = [];
     for (const name of ["Old CSCS", "New CSCS"]) {
-      const r = await api(`/people/${pid}/certifications`, { method: "POST", token: admin, body: { name, expiryDate: "2028-01-01" } });
+      const r = await api(`/people/${pid}/certifications`, { method: "POST", token: admin, body: { name, expiryDate: "2028-01-01", certType: "qualification" } });
       expect(r.status).toBeLessThan(300);
       ids.push(r.json.id);
     }

@@ -21,6 +21,11 @@ export const personCertificationsTable = pgTable("person_certifications", {
   createdBy: text("created_by").notNull().references(() => usersTable.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   archivedAt: timestamp("archived_at"),
+  // public_liability | employers_liability | other_insurance | qualification.
+  // NULL = not confirmed yet: never counts as insurance (lib/insurance.ts).
+  certType: text("cert_type"),
+  typeConfirmedAt: timestamp("type_confirmed_at"),
+  typeConfirmedBy: text("type_confirmed_by").references(() => usersTable.id, { onDelete: "set null" }),
 }, (t) => ({
   personIdx: index("person_certifications_person_idx").on(t.personId),
 }));

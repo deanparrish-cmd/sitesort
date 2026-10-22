@@ -421,6 +421,27 @@ export const ProjectMemberComplianceStatus = {
   none: "none",
 } as const;
 
+export type GateVerdictStatus =
+  (typeof GateVerdictStatus)[keyof typeof GateVerdictStatus];
+
+export const GateVerdictStatus = {
+  valid: "valid",
+  expiring_soon: "expiring_soon",
+  expired: "expired",
+  none: "none",
+} as const;
+
+/**
+ * What the site gate would decide for this firm right now (the one shared rule).
+ */
+export interface GateVerdict {
+  status: GateVerdictStatus;
+  holds: boolean;
+  reason: string;
+  publicLiabilityExpiry: string | null;
+  unconfirmedCerts: number;
+}
+
 export interface ProjectMember {
   id: string;
   projectId: string;
@@ -443,6 +464,7 @@ export interface ProjectMember {
   pliExpiryDate?: string | null;
   role: ProjectMemberRole;
   complianceStatus: ProjectMemberComplianceStatus;
+  gateVerdict?: GateVerdict;
   scheduledDays?: string[];
   siteStartTime?: string | null;
   siteEndTime?: string | null;
@@ -528,6 +550,18 @@ export const PersonCertificationStatus = {
 } as const;
 
 /**
+ * What a certificate is. Null = not confirmed by a manager yet (never counts as insurance).
+ */
+export type CertType = (typeof CertType)[keyof typeof CertType] | null;
+
+export const CertType = {
+  public_liability: "public_liability",
+  employers_liability: "employers_liability",
+  other_insurance: "other_insurance",
+  qualification: "qualification",
+} as const;
+
+/**
  * An individual certification/ticket held by a person (CSCS, SSSTS/SMSTS, gas safe, plant tickets, etc.) — distinct from company-level PLI/insurance.
  */
 export interface PersonCertification {
@@ -539,6 +573,8 @@ export interface PersonCertification {
   status: PersonCertificationStatus;
   documentUrl?: string | null;
   createdAt: string;
+  certType?: CertType | null;
+  suggestedType?: CertType | null;
 }
 
 export interface Subcontractor {
@@ -558,7 +594,8 @@ export interface Subcontractor {
   reliabilityRating?: number | null;
   paymentHold: boolean;
   insuranceStatus: SubcontractorInsuranceStatus;
-  /** Active certifications filed against this contact's people (e.g. an approved Insurance document filed via "Add to contact"). Insurance-named certs also count towards insuranceStatus. */
+  gateVerdict?: GateVerdict;
+  /** Active certifications filed against this contact's people. Only certificates whose type a manager confirmed as public liability count towards insuranceStatus. */
   certifications?: PersonCertification[];
   archivedAt?: string | null;
   createdAt: string;
@@ -2387,11 +2424,57 @@ export interface UpdatePersonRequest {
   phone?: string | null;
 }
 
+export type CreatePersonCertificationRequestCertType =
+  (typeof CreatePersonCertificationRequestCertType)[keyof typeof CreatePersonCertificationRequestCertType];
+
+export const CreatePersonCertificationRequestCertType = {
+  public_liability: "public_liability",
+  employers_liability: "employers_liability",
+  other_insurance: "other_insurance",
+  qualification: "qualification",
+} as const;
+
 export interface CreatePersonCertificationRequest {
   name: string;
   certNumber?: string;
   expiryDate: string;
   documentUrl?: string;
+  certType: CreatePersonCertificationRequestCertType;
+}
+
+export type ConfirmCertTypeRequestCertType =
+  (typeof ConfirmCertTypeRequestCertType)[keyof typeof ConfirmCertTypeRequestCertType];
+
+export const ConfirmCertTypeRequestCertType = {
+  public_liability: "public_liability",
+  employers_liability: "employers_liability",
+  other_insurance: "other_insurance",
+  qualification: "qualification",
+} as const;
+
+export interface ConfirmCertTypeRequest {
+  certType: ConfirmCertTypeRequestCertType;
+}
+
+export type UnconfirmedCertificationSuggestedType =
+  (typeof UnconfirmedCertificationSuggestedType)[keyof typeof UnconfirmedCertificationSuggestedType];
+
+export const UnconfirmedCertificationSuggestedType = {
+  public_liability: "public_liability",
+  employers_liability: "employers_liability",
+  other_insurance: "other_insurance",
+  qualification: "qualification",
+} as const;
+
+export interface UnconfirmedCertification {
+  id: string;
+  personId: string;
+  personName: string;
+  firm: string | null;
+  name: string;
+  expiryDate: string;
+  documentUrl: string | null;
+  suggestedType: UnconfirmedCertificationSuggestedType;
 }
 
 export type PortalInviteRequestRole =

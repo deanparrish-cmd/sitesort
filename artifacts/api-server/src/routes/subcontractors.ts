@@ -8,7 +8,7 @@ import { allow, COMPANY_MANAGER, INTERNAL_STAFF } from "../lib/authz";
 import { isOverdue } from "../lib/accountability";
 import { activeProjectsForSubcontractor, hasAnyHistoricalFootprint } from "../lib/contact-removal";
 import { CreateSubcontractorBody, UpdateSubcontractorBody } from "@workspace/api-zod";
-import { computeRecordStatus, certificationsForSubcontractor, combinedInsuranceStatus } from "../lib/insurance";
+import { computeRecordStatus, certificationsForSubcontractor, combinedInsuranceStatus, verdictFrom } from "../lib/insurance";
 
 const router: IRouter = Router();
 
@@ -81,6 +81,7 @@ router.get("/subcontractors", authenticate, allow(INTERNAL_STAFF), async (req, r
         notes: s.notes ?? null,
         archivedAt: s.archivedAt ? s.archivedAt.toISOString() : null,
         insuranceStatus: combinedInsuranceStatus(insurance, certifications),
+        gateVerdict: verdictFrom(insurance, certifications),
         certifications,
         insuranceRecords: await serializeInsuranceRecords(insurance),
         createdAt: s.createdAt.toISOString(),
@@ -199,6 +200,7 @@ router.get("/subcontractors/:subcontractorId", authenticate, allow(INTERNAL_STAF
       notes: s.notes ?? null,
       archivedAt: s.archivedAt ? s.archivedAt.toISOString() : null,
       insuranceStatus: combinedInsuranceStatus(insurance, certifications),
+        gateVerdict: verdictFrom(insurance, certifications),
       certifications,
       createdAt: s.createdAt.toISOString(),
       insuranceRecords: await serializeInsuranceRecords(insurance),
@@ -304,7 +306,7 @@ router.patch("/subcontractors/:subcontractorId", authenticate, allow(COMPANY_MAN
     const patchPrimaryContact = await db.select({ roleTitle: peopleTable.roleTitle }).from(peopleTable)
       .where(and(eq(peopleTable.subcontractorId, s.id), eq(peopleTable.isPrimaryContact, true))).limit(1);
 
-    res.json({ id: s.id, companyId: s.companyId, companyName: s.companyName, contactName: s.contactName, contactFirstName: s.contactFirstName ?? null, contactLastName: s.contactLastName ?? null, contactEmail: s.contactEmail, contactPhone: s.contactPhone ?? null, contactType: s.contactType ?? "subcontractor", roleTitle: patchPrimaryContact[0]?.roleTitle ?? null, trades: s.trades ?? [], reliabilityRating: canSeeRatings(req.user!.role) && s.reliabilityRating ? Number(s.reliabilityRating) : null, paymentHold: canSeeRatings(req.user!.role) ? s.paymentHold : false, notes: s.notes ?? null, archivedAt: s.archivedAt ? s.archivedAt.toISOString() : null, insuranceStatus: combinedInsuranceStatus(insurance, patchCerts), certifications: patchCerts, insuranceRecords: await serializeInsuranceRecords(insurance), createdAt: s.createdAt.toISOString() });
+    res.json({ id: s.id, companyId: s.companyId, companyName: s.companyName, contactName: s.contactName, contactFirstName: s.contactFirstName ?? null, contactLastName: s.contactLastName ?? null, contactEmail: s.contactEmail, contactPhone: s.contactPhone ?? null, contactType: s.contactType ?? "subcontractor", roleTitle: patchPrimaryContact[0]?.roleTitle ?? null, trades: s.trades ?? [], reliabilityRating: canSeeRatings(req.user!.role) && s.reliabilityRating ? Number(s.reliabilityRating) : null, paymentHold: canSeeRatings(req.user!.role) ? s.paymentHold : false, notes: s.notes ?? null, archivedAt: s.archivedAt ? s.archivedAt.toISOString() : null, insuranceStatus: combinedInsuranceStatus(insurance, patchCerts), gateVerdict: verdictFrom(insurance, patchCerts), certifications: patchCerts, insuranceRecords: await serializeInsuranceRecords(insurance), createdAt: s.createdAt.toISOString() });
   } catch (err) {
     req.log.error({ err }, "Update subcontractor error");
     res.status(500).json({ error: "server_error", message: "Failed to update subcontractor" });

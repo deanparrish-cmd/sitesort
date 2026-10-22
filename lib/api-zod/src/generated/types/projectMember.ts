@@ -5,6 +5,7 @@
  * SiteSort API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { GateVerdict } from "./gateVerdict";
 import type { ProjectMemberComplianceStatus } from "./projectMemberComplianceStatus";
 import type { ProjectMemberContactType } from "./projectMemberContactType";
 import type { ProjectMemberRole } from "./projectMemberRole";
@@ -31,6 +32,7 @@ export interface ProjectMember {
   pliExpiryDate?: Date | null;
   role: ProjectMemberRole;
   complianceStatus: ProjectMemberComplianceStatus;
+  gateVerdict?: GateVerdict;
   scheduledDays?: string[];
   siteStartTime?: string | null;
   siteEndTime?: string | null;
