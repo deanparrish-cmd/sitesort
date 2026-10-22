@@ -100,8 +100,13 @@ import type {
   PortalPermit,
   PortalPlantItem,
   PortalProgress,
+  PortalPushDeviceRemoveRequest,
+  PortalPushDevices,
   PortalPushKey,
   PortalPushSubscribeRequest,
+  PortalPushTestAnswerRequest,
+  PortalPushTestRequest,
+  PortalPushTestResult,
   PortalPushUnsubscribeRequest,
   PortalShared,
   PortalSiteBoard,
@@ -113,6 +118,7 @@ import type {
   ProjectDetail,
   ProjectInvite,
   ProjectMember,
+  PushReceiptRequest,
   QrCode,
   QrContent,
   ReactPortalMessageRequest,
@@ -11854,6 +11860,427 @@ export const usePortalPushUnsubscribe = <
   TContext
 > => {
   return useMutation(getPortalPushUnsubscribeMutationOptions(options));
+};
+
+/**
+ * @summary A phone's service worker reports that an alert arrived or was tapped (no login)
+ */
+export const getPushReceiptUrl = () => {
+  return `/api/push/receipt`;
+};
+
+export const pushReceipt = async (
+  pushReceiptRequest: PushReceiptRequest,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getPushReceiptUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(pushReceiptRequest),
+  });
+};
+
+export const getPushReceiptMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof pushReceipt>>,
+    TError,
+    { data: BodyType<PushReceiptRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof pushReceipt>>,
+  TError,
+  { data: BodyType<PushReceiptRequest> },
+  TContext
+> => {
+  const mutationKey = ["pushReceipt"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof pushReceipt>>,
+    { data: BodyType<PushReceiptRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return pushReceipt(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PushReceiptMutationResult = NonNullable<
+  Awaited<ReturnType<typeof pushReceipt>>
+>;
+export type PushReceiptMutationBody = BodyType<PushReceiptRequest>;
+export type PushReceiptMutationError = ErrorType<unknown>;
+
+/**
+ * @summary A phone's service worker reports that an alert arrived or was tapped (no login)
+ */
+export const usePushReceipt = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof pushReceipt>>,
+    TError,
+    { data: BodyType<PushReceiptRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof pushReceipt>>,
+  TError,
+  { data: BodyType<PushReceiptRequest> },
+  TContext
+> => {
+  return useMutation(getPushReceiptMutationOptions(options));
+};
+
+/**
+ * @summary This login's registered phones and what each has reported back
+ */
+export const getListPortalPushDevicesUrl = () => {
+  return `/api/portal/push/devices`;
+};
+
+export const listPortalPushDevices = async (
+  options?: RequestInit,
+): Promise<PortalPushDevices> => {
+  return customFetch<PortalPushDevices>(getListPortalPushDevicesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListPortalPushDevicesQueryKey = () => {
+  return [`/api/portal/push/devices`] as const;
+};
+
+export const getListPortalPushDevicesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listPortalPushDevices>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listPortalPushDevices>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListPortalPushDevicesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listPortalPushDevices>>
+  > = ({ signal }) => listPortalPushDevices({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listPortalPushDevices>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListPortalPushDevicesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listPortalPushDevices>>
+>;
+export type ListPortalPushDevicesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary This login's registered phones and what each has reported back
+ */
+
+export function useListPortalPushDevices<
+  TData = Awaited<ReturnType<typeof listPortalPushDevices>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listPortalPushDevices>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListPortalPushDevicesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Stop alerts to one of this login's phones (every project)
+ */
+export const getRemovePortalPushDeviceUrl = () => {
+  return `/api/portal/push/devices/remove`;
+};
+
+export const removePortalPushDevice = async (
+  portalPushDeviceRemoveRequest: PortalPushDeviceRemoveRequest,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getRemovePortalPushDeviceUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(portalPushDeviceRemoveRequest),
+  });
+};
+
+export const getRemovePortalPushDeviceMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removePortalPushDevice>>,
+    TError,
+    { data: BodyType<PortalPushDeviceRemoveRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof removePortalPushDevice>>,
+  TError,
+  { data: BodyType<PortalPushDeviceRemoveRequest> },
+  TContext
+> => {
+  const mutationKey = ["removePortalPushDevice"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof removePortalPushDevice>>,
+    { data: BodyType<PortalPushDeviceRemoveRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return removePortalPushDevice(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RemovePortalPushDeviceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof removePortalPushDevice>>
+>;
+export type RemovePortalPushDeviceMutationBody =
+  BodyType<PortalPushDeviceRemoveRequest>;
+export type RemovePortalPushDeviceMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Stop alerts to one of this login's phones (every project)
+ */
+export const useRemovePortalPushDevice = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removePortalPushDevice>>,
+    TError,
+    { data: BodyType<PortalPushDeviceRemoveRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof removePortalPushDevice>>,
+  TError,
+  { data: BodyType<PortalPushDeviceRemoveRequest> },
+  TContext
+> => {
+  return useMutation(getRemovePortalPushDeviceMutationOptions(options));
+};
+
+/**
+ * @summary Send a test alert to every phone of this login, after a short delay
+ */
+export const getSendPortalPushTestUrl = () => {
+  return `/api/portal/push/test`;
+};
+
+export const sendPortalPushTest = async (
+  portalPushTestRequest?: PortalPushTestRequest,
+  options?: RequestInit,
+): Promise<PortalPushTestResult> => {
+  return customFetch<PortalPushTestResult>(getSendPortalPushTestUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(portalPushTestRequest),
+  });
+};
+
+export const getSendPortalPushTestMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendPortalPushTest>>,
+    TError,
+    { data: BodyType<PortalPushTestRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof sendPortalPushTest>>,
+  TError,
+  { data: BodyType<PortalPushTestRequest> },
+  TContext
+> => {
+  const mutationKey = ["sendPortalPushTest"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof sendPortalPushTest>>,
+    { data: BodyType<PortalPushTestRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return sendPortalPushTest(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SendPortalPushTestMutationResult = NonNullable<
+  Awaited<ReturnType<typeof sendPortalPushTest>>
+>;
+export type SendPortalPushTestMutationBody = BodyType<PortalPushTestRequest>;
+export type SendPortalPushTestMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Send a test alert to every phone of this login, after a short delay
+ */
+export const useSendPortalPushTest = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendPortalPushTest>>,
+    TError,
+    { data: BodyType<PortalPushTestRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof sendPortalPushTest>>,
+  TError,
+  { data: BodyType<PortalPushTestRequest> },
+  TContext
+> => {
+  return useMutation(getSendPortalPushTestMutationOptions(options));
+};
+
+/**
+ * @summary Record the member's answer to "Did a banner appear?"
+ */
+export const getAnswerPortalPushTestUrl = () => {
+  return `/api/portal/push/test-answer`;
+};
+
+export const answerPortalPushTest = async (
+  portalPushTestAnswerRequest: PortalPushTestAnswerRequest,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getAnswerPortalPushTestUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(portalPushTestAnswerRequest),
+  });
+};
+
+export const getAnswerPortalPushTestMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof answerPortalPushTest>>,
+    TError,
+    { data: BodyType<PortalPushTestAnswerRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof answerPortalPushTest>>,
+  TError,
+  { data: BodyType<PortalPushTestAnswerRequest> },
+  TContext
+> => {
+  const mutationKey = ["answerPortalPushTest"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof answerPortalPushTest>>,
+    { data: BodyType<PortalPushTestAnswerRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return answerPortalPushTest(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AnswerPortalPushTestMutationResult = NonNullable<
+  Awaited<ReturnType<typeof answerPortalPushTest>>
+>;
+export type AnswerPortalPushTestMutationBody =
+  BodyType<PortalPushTestAnswerRequest>;
+export type AnswerPortalPushTestMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Record the member's answer to "Did a banner appear?"
+ */
+export const useAnswerPortalPushTest = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof answerPortalPushTest>>,
+    TError,
+    { data: BodyType<PortalPushTestAnswerRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof answerPortalPushTest>>,
+  TError,
+  { data: BodyType<PortalPushTestAnswerRequest> },
+  TContext
+> => {
+  return useMutation(getAnswerPortalPushTestMutationOptions(options));
 };
 
 /**

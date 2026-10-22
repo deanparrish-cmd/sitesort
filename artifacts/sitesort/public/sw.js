@@ -33,6 +33,19 @@ self.addEventListener("message", (event) => {
 // (e.g. /portal/drawings?doc=123); tapping the notification opens/focuses it. If
 // the member isn't logged in, PortalLayout bounces to /portal/login?next=<url>
 // and returns them after sign-in — so this just needs to open the deep link.
+// Receipts (2026-10-22): Apple or Google accepting a push proves nothing about
+// the screen, so the phone itself reports back. `receipt` is the server's id
+// for this alert on this phone; "received" once the notification is posted
+// (shown = whether posting worked), "tapped" when it's tapped. No login needed.
+function sendReceipt(id, event, extra) {
+  if (!id) return Promise.resolve();
+  var perm = null;
+  try { perm = (typeof Notification !== "undefined" && Notification.permission) || null; } catch (e) { perm = null; }
+  var body = Object.assign({ id: String(id), event: event, permission: perm }, extra || {});
+  return fetch("/api/push/receipt", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), keepalive: true })
+    .catch(function () { /* no signal: the alert just counts as unanswered */ });
+}
+
 self.addEventListener("push", (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch (e) { data = {}; }
@@ -42,7 +55,7 @@ self.addEventListener("push", (event) => {
     icon: "/icon-192.png",
     badge: "/icon-192.png",
     tag: data.tag || undefined,
-    data: { url: data.url || "/portal/overview" },
+    data: { url: data.url || "/portal/overview", receipt: data.receipt || null },
   };
   event.waitUntil((async () => {
     // iOS suppresses the notification banner while the PWA is in the
@@ -53,14 +66,18 @@ self.addEventListener("push", (event) => {
       const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
       for (const w of wins) w.postMessage({ kind: "push", title: title, body: options.body, url: options.data.url });
     } catch (e) { /* best-effort */ }
-    await self.registration.showNotification(title, options);
+    let shown = true;
+    try { await self.registration.showNotification(title, options); } catch (e) { shown = false; }
+    await sendReceipt(data.receipt, "received", { shown: shown });
   })());
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const target = (event.notification.data && event.notification.data.url) || "/portal/overview";
+  const receipt = event.notification.data && event.notification.data.receipt;
   event.waitUntil((async () => {
+    await sendReceipt(receipt, "tapped");
     const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
     // Prefer focusing an already-open portal window and navigating it there.
     for (const c of all) {

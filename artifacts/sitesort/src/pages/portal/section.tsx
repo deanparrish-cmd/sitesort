@@ -53,6 +53,7 @@ import { WORKER_GUIDE, workerFaq } from "@workspace/user-guide";
 import { GuideSectionGrid, GuideFaqAccordion } from "@/components/user-guide-view";
 import { PortalTile, PortalLinkRow, PortalButton, type TileTheme } from "@/components/portal-ui";
 import { SiteRegisterView, registerSavedToday } from "@/components/portal-site-register";
+import { PortalAlertTestCard } from "@/components/portal-alert-test";
 
 // Wayfinding colour per Home-screen quick-access tile — a distinct hue per
 // destination, never one of the green/amber/red status colours (those are
@@ -2488,6 +2489,7 @@ function SettingsView() {
           )}
         </Card>
       </div>
+      {pushSupported() && !needsInstall && <PortalAlertTestCard subscribed={subscribed} />}
       <PortalPinSection />
       <AddToHomeScreenCard />
       {/* Help/User Guide — reached FROM here, not its own top-level tile

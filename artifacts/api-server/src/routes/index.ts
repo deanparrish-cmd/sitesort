@@ -34,6 +34,7 @@ import personCertificationsRouter from "./person-certifications";
 import portalMessagesRouter from "./portal-messages";
 import { authenticate } from "../middlewares/auth";
 import emailWebhookRouter from "./email-webhook";
+import pushReceiptsRouter from "./push-receipts";
 import { enforceDeclaredRoutes } from "../lib/authz";
 import { logger } from "../lib/logger";
 
@@ -60,6 +61,7 @@ router.use(messagesRouter);
 router.use(channelsRouter);
 router.use(billingRouter);
 router.use(emailWebhookRouter);
+router.use(pushReceiptsRouter);
 router.use(onboardingRouter);
 router.use(reportsRouter);
 router.use(shareLogsRouter);

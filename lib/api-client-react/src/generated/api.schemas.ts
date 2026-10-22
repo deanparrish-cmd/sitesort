@@ -2027,6 +2027,141 @@ export interface CreateInviteResponse {
   inviteUrl: string;
 }
 
+export type PushReceiptRequestEvent =
+  (typeof PushReceiptRequestEvent)[keyof typeof PushReceiptRequestEvent];
+
+export const PushReceiptRequestEvent = {
+  received: "received",
+  tapped: "tapped",
+} as const;
+
+export interface PushReceiptRequest {
+  /** @maxLength 64 */
+  id: string;
+  event: PushReceiptRequestEvent;
+  shown?: boolean;
+  /** @maxLength 16 */
+  permission?: string;
+}
+
+export type PortalPushAlertRowBannerAnswer =
+  | (typeof PortalPushAlertRowBannerAnswer)[keyof typeof PortalPushAlertRowBannerAnswer]
+  | null;
+
+export const PortalPushAlertRowBannerAnswer = {
+  yes: "yes",
+  no: "no",
+} as const;
+
+export interface PortalPushAlertRow {
+  alertId: string;
+  sentAt: string;
+  /** accepted | gone | failed */
+  sendResult: string;
+  receivedAt: string | null;
+  tappedAt: string | null;
+  shown: boolean | null;
+  permission: string | null;
+  bannerAnswer: PortalPushAlertRowBannerAnswer;
+  answeredAt: string | null;
+}
+
+export interface PortalPushDevice {
+  deviceId: string;
+  label: string;
+  registeredAt: string;
+  lastConfirmedAt: string | null;
+  unansweredInARow: number;
+  lastTest: PortalPushAlertRow | null;
+}
+
+export interface PortalPushDevices {
+  devices: PortalPushDevice[];
+  pruneAfter: number;
+}
+
+export interface PortalPushDeviceRemoveRequest {
+  /** @maxLength 64 */
+  deviceId: string;
+}
+
+export interface PortalPushTestRequest {
+  /**
+   * @minimum 0
+   * @maximum 15
+   */
+  delaySeconds?: number;
+}
+
+export type PortalPushTestResultSentItemResult =
+  (typeof PortalPushTestResultSentItemResult)[keyof typeof PortalPushTestResultSentItemResult];
+
+export const PortalPushTestResultSentItemResult = {
+  accepted: "accepted",
+  gone: "gone",
+  failed: "failed",
+} as const;
+
+export type PortalPushTestResultSentItem = {
+  deviceId: string;
+  alertId: string;
+  result: PortalPushTestResultSentItemResult;
+};
+
+export interface PortalPushTestResult {
+  sent: PortalPushTestResultSentItem[];
+}
+
+export type PortalPushTestAnswerRequestAnswer =
+  (typeof PortalPushTestAnswerRequestAnswer)[keyof typeof PortalPushTestAnswerRequestAnswer];
+
+export const PortalPushTestAnswerRequestAnswer = {
+  yes: "yes",
+  no: "no",
+} as const;
+
+export interface PortalPushTestAnswerRequest {
+  /** @maxLength 64 */
+  alertId: string;
+  answer: PortalPushTestAnswerRequestAnswer;
+}
+
+export type PhoneAlertsState =
+  (typeof PhoneAlertsState)[keyof typeof PhoneAlertsState];
+
+export const PhoneAlertsState = {
+  none: "none",
+  never: "never",
+  confirmed: "confirmed",
+  removed: "removed",
+} as const;
+
+export type PhoneAlertsBannerAnswer =
+  (typeof PhoneAlertsBannerAnswer)[keyof typeof PhoneAlertsBannerAnswer];
+
+export const PhoneAlertsBannerAnswer = {
+  yes: "yes",
+  no: "no",
+} as const;
+
+export type PhoneAlertsBanner = {
+  answer: PhoneAlertsBannerAnswer;
+  at: string;
+  reachedPhone: boolean;
+};
+
+/**
+ * Whether this login's phones registered for the project have ever reported an alert arriving.
+ */
+export interface PhoneAlerts {
+  state: PhoneAlertsState;
+  devices: number;
+  confirmedDevices: number;
+  confirmedAt?: string;
+  removedAt?: string;
+  banner?: PhoneAlertsBanner;
+}
+
 export type PortalStatusStatus =
   (typeof PortalStatusStatus)[keyof typeof PortalStatusStatus];
 
@@ -2063,6 +2198,7 @@ export interface PortalStatus {
   memberId?: string;
   canLogIssues?: boolean;
   canUpdatePlantMaterials?: boolean;
+  phoneAlerts?: PhoneAlerts;
 }
 
 export type PersonKind = (typeof PersonKind)[keyof typeof PersonKind];

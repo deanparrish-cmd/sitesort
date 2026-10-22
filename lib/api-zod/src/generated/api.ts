@@ -4803,6 +4803,107 @@ export const PortalPushUnsubscribeResponse = zod.object({
 });
 
 /**
+ * @summary A phone's service worker reports that an alert arrived or was tapped (no login)
+ */
+export const pushReceiptBodyIdMax = 64;
+
+export const pushReceiptBodyPermissionMax = 16;
+
+export const PushReceiptBody = zod.object({
+  id: zod.string().max(pushReceiptBodyIdMax),
+  event: zod.enum(["received", "tapped"]),
+  shown: zod.boolean().optional(),
+  permission: zod.string().max(pushReceiptBodyPermissionMax).optional(),
+});
+
+export const PushReceiptResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * @summary This login's registered phones and what each has reported back
+ */
+export const ListPortalPushDevicesResponse = zod.object({
+  devices: zod.array(
+    zod.object({
+      deviceId: zod.string(),
+      label: zod.string(),
+      registeredAt: zod.string(),
+      lastConfirmedAt: zod.string().nullable(),
+      unansweredInARow: zod.number(),
+      lastTest: zod
+        .object({
+          alertId: zod.string(),
+          sentAt: zod.string(),
+          sendResult: zod.string().describe("accepted | gone | failed"),
+          receivedAt: zod.string().nullable(),
+          tappedAt: zod.string().nullable(),
+          shown: zod.boolean().nullable(),
+          permission: zod.string().nullable(),
+          bannerAnswer: zod.enum(["yes", "no"]).nullable(),
+          answeredAt: zod.string().nullable(),
+        })
+        .nullable(),
+    }),
+  ),
+  pruneAfter: zod.number(),
+});
+
+/**
+ * @summary Stop alerts to one of this login's phones (every project)
+ */
+export const removePortalPushDeviceBodyDeviceIdMax = 64;
+
+export const RemovePortalPushDeviceBody = zod.object({
+  deviceId: zod.string().max(removePortalPushDeviceBodyDeviceIdMax),
+});
+
+export const RemovePortalPushDeviceResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * @summary Send a test alert to every phone of this login, after a short delay
+ */
+export const sendPortalPushTestBodyDelaySecondsMin = 0;
+export const sendPortalPushTestBodyDelaySecondsMax = 15;
+
+export const SendPortalPushTestBody = zod.object({
+  delaySeconds: zod
+    .number()
+    .min(sendPortalPushTestBodyDelaySecondsMin)
+    .max(sendPortalPushTestBodyDelaySecondsMax)
+    .optional(),
+});
+
+export const SendPortalPushTestResponse = zod.object({
+  sent: zod.array(
+    zod.object({
+      deviceId: zod.string(),
+      alertId: zod.string(),
+      result: zod.enum(["accepted", "gone", "failed"]),
+    }),
+  ),
+});
+
+/**
+ * @summary Record the member's answer to "Did a banner appear?"
+ */
+export const answerPortalPushTestBodyAlertIdMax = 64;
+
+export const AnswerPortalPushTestBody = zod.object({
+  alertId: zod.string().max(answerPortalPushTestBodyAlertIdMax),
+  answer: zod.enum(["yes", "no"]),
+});
+
+export const AnswerPortalPushTestResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
  * @summary End the current portal session server-side
  */
 export const PortalLogoutResponse = zod.object({
@@ -4922,6 +5023,25 @@ export const ListSubcontractorPeopleResponseItem = zod
           ),
         canLogIssues: zod.boolean().optional(),
         canUpdatePlantMaterials: zod.boolean().optional(),
+        phoneAlerts: zod
+          .object({
+            state: zod.enum(["none", "never", "confirmed", "removed"]),
+            devices: zod.number(),
+            confirmedDevices: zod.number(),
+            confirmedAt: zod.string().optional(),
+            removedAt: zod.string().optional(),
+            banner: zod
+              .object({
+                answer: zod.enum(["yes", "no"]),
+                at: zod.string(),
+                reachedPhone: zod.boolean(),
+              })
+              .optional(),
+          })
+          .optional()
+          .describe(
+            "Whether this login's phones registered for the project have ever reported an alert arriving.",
+          ),
       })
       .optional()
       .describe("A person's portal state for one project."),
@@ -5086,6 +5206,25 @@ export const UpdatePersonResponse = zod
           ),
         canLogIssues: zod.boolean().optional(),
         canUpdatePlantMaterials: zod.boolean().optional(),
+        phoneAlerts: zod
+          .object({
+            state: zod.enum(["none", "never", "confirmed", "removed"]),
+            devices: zod.number(),
+            confirmedDevices: zod.number(),
+            confirmedAt: zod.string().optional(),
+            removedAt: zod.string().optional(),
+            banner: zod
+              .object({
+                answer: zod.enum(["yes", "no"]),
+                at: zod.string(),
+                reachedPhone: zod.boolean(),
+              })
+              .optional(),
+          })
+          .optional()
+          .describe(
+            "Whether this login's phones registered for the project have ever reported an alert arriving.",
+          ),
       })
       .optional()
       .describe("A person's portal state for one project."),
@@ -5240,6 +5379,25 @@ export const ListAllPeopleResponseItem = zod
           ),
         canLogIssues: zod.boolean().optional(),
         canUpdatePlantMaterials: zod.boolean().optional(),
+        phoneAlerts: zod
+          .object({
+            state: zod.enum(["none", "never", "confirmed", "removed"]),
+            devices: zod.number(),
+            confirmedDevices: zod.number(),
+            confirmedAt: zod.string().optional(),
+            removedAt: zod.string().optional(),
+            banner: zod
+              .object({
+                answer: zod.enum(["yes", "no"]),
+                at: zod.string(),
+                reachedPhone: zod.boolean(),
+              })
+              .optional(),
+          })
+          .optional()
+          .describe(
+            "Whether this login's phones registered for the project have ever reported an alert arriving.",
+          ),
       })
       .optional()
       .describe("A person's portal state for one project."),
@@ -5338,6 +5496,25 @@ export const ListInHousePeopleResponseItem = zod
           ),
         canLogIssues: zod.boolean().optional(),
         canUpdatePlantMaterials: zod.boolean().optional(),
+        phoneAlerts: zod
+          .object({
+            state: zod.enum(["none", "never", "confirmed", "removed"]),
+            devices: zod.number(),
+            confirmedDevices: zod.number(),
+            confirmedAt: zod.string().optional(),
+            removedAt: zod.string().optional(),
+            banner: zod
+              .object({
+                answer: zod.enum(["yes", "no"]),
+                at: zod.string(),
+                reachedPhone: zod.boolean(),
+              })
+              .optional(),
+          })
+          .optional()
+          .describe(
+            "Whether this login's phones registered for the project have ever reported an alert arriving.",
+          ),
       })
       .optional()
       .describe("A person's portal state for one project."),

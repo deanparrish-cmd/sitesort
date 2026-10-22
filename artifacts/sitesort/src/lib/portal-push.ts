@@ -247,3 +247,34 @@ async function removeThisDevice(token: string | null): Promise<void> {
     }
   } catch { /* best-effort */ }
 }
+
+// This phone's id as the server names it (first 16 hex of sha256(endpoint), see
+// deviceKey in api-server lib/push-receipts.ts). Null when this phone has no
+// push registration (or crypto.subtle is unavailable outside https).
+export async function thisDeviceId(): Promise<string | null> {
+  if (!pushSupported()) return null;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub || !crypto?.subtle) return null;
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(sub.endpoint));
+    return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, "0")).join("").slice(0, 16);
+  } catch {
+    return null;
+  }
+}
+
+// Authenticated portal call for the alert-test card. Returns the parsed body
+// and status; status 0 = SiteSort couldn't be reached.
+export async function portalPushCall<T>(path: string, body?: unknown): Promise<{ status: number; data: T | null }> {
+  try {
+    const res = await fetch(`/api/portal/push/${path}`, {
+      method: body === undefined ? "GET" : "POST",
+      headers: authHeaders(),
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+    return { status: res.status, data: await res.json().catch(() => null) };
+  } catch {
+    return { status: 0, data: null };
+  }
+}

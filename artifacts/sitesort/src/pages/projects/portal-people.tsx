@@ -4,6 +4,7 @@ import {
   useListInHousePeople, useCreateInHousePerson, useCreatePortalInvite, useRevokeProjectInvite,
   useResendPortalInvite, useUpdateMemberPermissions,
   getListSubcontractorPeopleQueryKey, getListInHousePeopleQueryKey,
+  type PhoneAlerts,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +20,7 @@ type PortalStatus = {
   status: "not_invited" | "invited" | "member"; role?: string; inviteId?: string; lastActiveAt?: string;
   emailStatus?: "sent" | "failed" | "portal"; emailLastSentAt?: string;
   memberId?: string; canLogIssues?: boolean; canUpdatePlantMaterials?: boolean; canEditDailyReport?: boolean;
+  phoneAlerts?: PhoneAlerts;
 };
 
 const RESEND_COOLDOWN_MS = 5 * 60 * 1000;
@@ -260,14 +262,17 @@ export function PortalStatusPill({
   if (portal.status === "member") {
     return (
       <>
-        <button
-          type="button"
-          onClick={() => setConfirmRevoke("member")}
-          className={cn(PILL, "border-emerald-200 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800 hover:border-emerald-400")}
-          title={`Last active ${fmtRelative(portal.lastActiveAt)} · click to remove this person's portal login entirely`}
-        >
-          <ShieldCheck className="w-3.5 h-3.5" /> Portal member
-        </button>
+        <span className="inline-flex flex-col items-end gap-0.5 min-w-0 max-w-full">
+          <button
+            type="button"
+            onClick={() => setConfirmRevoke("member")}
+            className={cn(PILL, "border-emerald-200 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800 hover:border-emerald-400")}
+            title={`Last active ${fmtRelative(portal.lastActiveAt)} · click to remove this person's portal login entirely`}
+          >
+            <ShieldCheck className="w-3.5 h-3.5" /> Portal member
+          </button>
+          {portal.phoneAlerts && <PhoneAlertsStatus pa={portal.phoneAlerts} />}
+        </span>
         <Dialog open={confirmRevoke === "member"} onOpenChange={v => { if (!v) setConfirmRevoke(null); }}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
@@ -331,6 +336,39 @@ export function PortalStatusPill({
     <button className={cn(PILL, "border-border bg-background text-muted-foreground hover:text-primary hover:bg-muted")} onClick={onInvite} disabled={busy}>
       <Send className="w-3.5 h-3.5" /> Invite to Portal
     </button>
+  );
+}
+
+// Phone alert receipts (2026-10-22): whether this person's phones for THIS
+// project have ever told SiteSort an alert arrived, and their own answer to
+// "Did a banner appear?" from the portal's test alert. "No banner" on a phone
+// that did report the alert = the phone is hiding it (Focus, banners off).
+function fmtDay(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+}
+export function PhoneAlertsStatus({ pa }: { pa: PhoneAlerts }) {
+  const main = pa.state === "confirmed"
+    ? { text: `Phone alerts confirmed ${fmtDay(pa.confirmedAt!)}${pa.devices > pa.confirmedDevices ? ` (${pa.devices - pa.confirmedDevices} of ${pa.devices} phones never confirmed)` : ""}`, cls: "text-emerald-700 dark:text-emerald-400",
+        title: "Their phone told SiteSort an alert arrived. It can't tell whether a banner showed: that's the test answer." }
+    : pa.state === "never"
+    ? { text: "Phone alerts never confirmed", cls: "text-amber-700 dark:text-amber-400",
+        title: "A phone is set up, but it has never told SiteSort an alert arrived. Ask them to send a test alert from Settings in the Team Portal." }
+    : pa.state === "removed"
+    ? { text: `Phone removed after unanswered alerts, ${fmtDay(pa.removedAt!)}`, cls: "text-amber-700 dark:text-amber-400",
+        title: "Their phone stopped replying to alerts and was removed. It comes back when they next open the Team Portal on it." }
+    : { text: "No phone set up for alerts", cls: "text-muted-foreground",
+        title: "They haven't turned on alerts in the Team Portal for this project, so they get no phone alerts from it." };
+  const b = pa.banner;
+  return (
+    <span className="flex flex-col items-end gap-0.5 text-[11px] leading-tight text-right max-w-full" data-testid="phone-alerts-status">
+      <span className={cn("break-words", main.cls)} title={main.title}>{main.text}</span>
+      {b && (
+        <span className={cn("break-words", b.answer === "yes" ? "text-emerald-700 dark:text-emerald-400" : "text-destructive font-semibold")}
+          title={b.answer === "no" ? (b.reachedPhone ? "The test alert reached their phone but no banner showed: notifications are hidden on the phone (Focus, Do Not Disturb or banners off)." : "The test alert never reached their phone: the install isn't working.") : undefined}>
+          {b.answer === "yes" ? `Test: banner appeared, ${fmtDay(b.at)}` : b.reachedPhone ? `Test: no banner (phone hid it), ${fmtDay(b.at)}` : `Test: no banner (never arrived), ${fmtDay(b.at)}`}
+        </span>
+      )}
+    </span>
   );
 }
 

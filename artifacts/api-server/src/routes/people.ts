@@ -12,6 +12,7 @@ import { authenticate } from "../middlewares/auth";
 import { allow, COMPANY_MANAGER, INTERNAL_STAFF } from "../lib/authz";
 import { sendProjectInviteEmail } from "../lib/invite-email";
 import { sendPushToUser } from "../lib/web-push";
+import { phoneAlertsFor, type PhoneAlerts } from "../lib/push-receipts";
 import { CreateSubcontractorPersonBody, CreatePortalInviteBody, UpdatePersonBody } from "@workspace/api-zod";
 import { activeProjectsForPerson, hasAnyHistoricalFootprint } from "../lib/contact-removal";
 import { canonicalPersonName } from "../lib/person-name";
@@ -53,6 +54,7 @@ type PortalStatus = {
   canLogIssues?: boolean;
   canUpdatePlantMaterials?: boolean;
   canEditDailyReport?: boolean;
+  phoneAlerts?: PhoneAlerts;
 };
 async function portalStatusFor(personIds: string[], projectId: string): Promise<Map<string, PortalStatus>> {
   const out = new Map<string, PortalStatus>();
@@ -96,6 +98,15 @@ async function portalStatusFor(personIds: string[], projectId: string): Promise<
         canEditDailyReport: m.canEditDailyReport,
       });
     }
+  }
+  // Phone alert receipts: whether this person's phones for THIS project have
+  // ever reported an alert arriving, and their "Did a banner appear?" answer.
+  const loginByPerson = new Map(members.filter(m => m.personId && m.userId).map(m => [m.personId as string, m.userId as string]));
+  const phoneAlerts = await phoneAlertsFor([...new Set(loginByPerson.values())], projectId);
+  for (const [personId, userId] of loginByPerson) {
+    const st = out.get(personId);
+    const pa = phoneAlerts.get(userId);
+    if (st && pa) st.phoneAlerts = pa;
   }
   for (const [personId, inv] of latestInvite) {
     if (out.has(personId)) continue; // member wins

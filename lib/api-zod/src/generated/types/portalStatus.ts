@@ -5,6 +5,7 @@
  * SiteSort API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { PhoneAlerts } from "./phoneAlerts";
 import type { PortalStatusEmailStatus } from "./portalStatusEmailStatus";
 import type { PortalStatusStatus } from "./portalStatusStatus";
 
@@ -24,4 +25,5 @@ export interface PortalStatus {
   memberId?: string;
   canLogIssues?: boolean;
   canUpdatePlantMaterials?: boolean;
+  phoneAlerts?: PhoneAlerts;
 }

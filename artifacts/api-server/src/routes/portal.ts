@@ -22,10 +22,11 @@ import { authenticate, generatePortalToken } from "../middlewares/auth";
 import { allow, PLATFORM_ADMIN } from "../lib/authz";
 import { requirePortalMember, requirePortalSession, autoLogPortalActivity, requirePortalPermission } from "../middlewares/portal";
 import { createPortalSession, revokePortalSession, claimPortalSession } from "../lib/portal-sessions";
-import { getVapidPublicKey, registerPushDevice } from "../lib/web-push";
-import { pushSubscriptionsTable, activityLogTable, portalSessionsTable } from "@workspace/db/schema";
+import { getVapidPublicKey, registerPushDevice, isPushConfigured, sendToDevices, PRUNE_AFTER_UNANSWERED } from "../lib/web-push";
+import { listUserDevices, deviceKey } from "../lib/push-receipts";
+import { pushSubscriptionsTable, activityLogTable, portalSessionsTable, pushAlertsTable } from "@workspace/db/schema";
 import { linkedCardsForLogin } from "../lib/linked-cards";
-import { PortalPushSubscribeBody, PortalPushUnsubscribeBody } from "@workspace/api-zod";
+import { PortalPushSubscribeBody, PortalPushUnsubscribeBody, RemovePortalPushDeviceBody, SendPortalPushTestBody, AnswerPortalPushTestBody } from "@workspace/api-zod";
 import { isLockedOut, recordFailedAttempt, clearAttempts } from "../lib/login-attempts";
 import { pinRequiredForDoc, SUPERSEDED_SIGNOFF_MESSAGE, SUPERSEDED_NOT_SHARED_SIGNOFF_MESSAGE } from "../lib/signoff";
 import { expiryStatus } from "../lib/expiry";
@@ -1185,6 +1186,85 @@ router.post("/portal/push/unsubscribe", authenticate, requirePortalSession, requ
   } catch (err) {
     req.log.error({ err }, "Portal push unsubscribe error");
     res.status(500).json({ error: "server_error", message: "Failed to unsubscribe" });
+  }
+});
+
+// ---- Phone alert receipts (2026-10-22) ----
+// GET /api/portal/push/devices: this login's phones (every project) and what
+// each has reported back. Endpoints never leave the server; phones are named
+// by deviceKey (the client hashes its own endpoint the same way).
+router.get("/portal/push/devices", authenticate, requirePortalSession, requirePortalMember, async (req, res) => {
+  try {
+    const devices = await listUserDevices(req.user!.id);
+    res.json({ devices: devices.map(({ endpoint: _e, ...d }) => d), pruneAfter: PRUNE_AFTER_UNANSWERED });
+  } catch (err) {
+    req.log.error({ err }, "Portal push devices error");
+    res.status(500).json({ error: "server_error", message: "Couldn't load your phones." });
+  }
+});
+
+// POST /api/portal/push/devices/remove: stop alerts to one of MY phones (an old
+// install, a phone I no longer use). Every project; only this login's rows.
+router.post("/portal/push/devices/remove", authenticate, requirePortalSession, requirePortalMember, async (req, res) => {
+  const parsed = RemovePortalPushDeviceBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "validation_error", message: "Invalid request." }); return; }
+  try {
+    const dev = (await listUserDevices(req.user!.id)).find(d => d.deviceId === parsed.data.deviceId);
+    if (!dev) { res.status(404).json({ error: "not_found", message: "That phone isn't set up for alerts any more." }); return; }
+    await db.delete(pushSubscriptionsTable).where(and(eq(pushSubscriptionsTable.endpoint, dev.endpoint), eq(pushSubscriptionsTable.userId, req.user!.id)));
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Portal push device remove error");
+    res.status(500).json({ error: "server_error", message: "Couldn't remove that phone." });
+  }
+});
+
+// POST /api/portal/push/test: a test alert to every phone of this login, sent
+// after a short delay (default 10 s) so the member can lock the phone first: an
+// iPhone shows no banner while the app is open. The delay runs inside the
+// request, not after it, so an idle Autoscale instance can't drop the send.
+router.post("/portal/push/test", authenticate, requirePortalSession, requirePortalMember, async (req, res) => {
+  const parsed = SendPortalPushTestBody.safeParse(req.body ?? {});
+  if (!parsed.success) { res.status(400).json({ error: "validation_error", message: "Invalid request." }); return; }
+  if (!isPushConfigured()) { res.status(409).json({ error: "push_not_configured", message: "Phone alerts aren't set up on this SiteSort." }); return; }
+  const userId = req.user!.id;
+  try {
+    const recent = await db.select({ id: pushAlertsTable.id }).from(pushAlertsTable)
+      .where(and(eq(pushAlertsTable.userId, userId), eq(pushAlertsTable.kind, "test"), gte(pushAlertsTable.sentAt, new Date(Date.now() - 20_000)))).limit(1);
+    if (recent.length) { res.status(429).json({ error: "too_soon", message: "A test alert was sent a moment ago. Wait 20 seconds and try again." }); return; }
+    const subs = await db.select().from(pushSubscriptionsTable).where(eq(pushSubscriptionsTable.userId, userId));
+    if (subs.length === 0) { res.status(409).json({ error: "no_devices", message: "No phone is set up for alerts. Tap Turn on first." }); return; }
+    const delay = (parsed.data.delaySeconds ?? 10) * 1000;
+    if (delay > 0) await new Promise(r => setTimeout(r, delay));
+    const sent = await sendToDevices(userId, req.portalProjectId!, subs, {
+      title: "SiteSort test alert",
+      body: "This phone gets SiteSort alerts. Tap here and answer one question.",
+      url: "/portal/settings?alertTest=1",
+      tag: `alert-test-${Date.now()}`,
+    }, "test");
+    req.log.info({ userId, devices: sent.length, accepted: sent.filter(s => s.result === "accepted").length }, "web-push: test alert");
+    res.json({ sent: sent.map(s => ({ deviceId: deviceKey(s.endpoint), alertId: s.alertId, result: s.result })) });
+  } catch (err) {
+    req.log.error({ err }, "Portal push test error");
+    res.status(500).json({ error: "server_error", message: "Couldn't send the test alert." });
+  }
+});
+
+// POST /api/portal/push/test-answer: "Did a banner appear?" Recorded for the PM:
+// "no" on a phone that DID report the alert arriving means the phone hid it
+// (Focus, Do Not Disturb, banners off), not a dead install.
+router.post("/portal/push/test-answer", authenticate, requirePortalSession, requirePortalMember, async (req, res) => {
+  const parsed = AnswerPortalPushTestBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "validation_error", message: "Invalid request." }); return; }
+  try {
+    const done = await db.update(pushAlertsTable).set({ bannerAnswer: parsed.data.answer, answeredAt: new Date() })
+      .where(and(eq(pushAlertsTable.id, parsed.data.alertId), eq(pushAlertsTable.userId, req.user!.id), eq(pushAlertsTable.kind, "test")))
+      .returning({ id: pushAlertsTable.id });
+    if (done.length === 0) { res.status(404).json({ error: "not_found", message: "That test alert wasn't found." }); return; }
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Portal push test answer error");
+    res.status(500).json({ error: "server_error", message: "Couldn't save your answer." });
   }
 });
 

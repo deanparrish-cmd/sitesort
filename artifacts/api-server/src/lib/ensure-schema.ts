@@ -309,6 +309,29 @@ export async function ensureSchema(): Promise<void> {
     await pool.query(`DROP INDEX IF EXISTS push_subscriptions_endpoint_uq`);
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS push_subscriptions_endpoint_project_uq ON push_subscriptions (endpoint, project_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS push_subscriptions_user_idx ON push_subscriptions (user_id, project_id)`);
+    // Phone alert receipts (2026-10-22): one row per alert per phone; the
+    // service worker reports received/tapped, test alerts record the banner answer.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS push_alerts (
+        id text PRIMARY KEY,
+        user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        project_id text REFERENCES projects(id) ON DELETE CASCADE,
+        endpoint text NOT NULL,
+        kind text NOT NULL DEFAULT 'alert',
+        tag text,
+        sent_at timestamp NOT NULL DEFAULT now(),
+        send_result text NOT NULL,
+        send_status integer,
+        received_at timestamp,
+        shown boolean,
+        permission text,
+        tapped_at timestamp,
+        banner_answer text,
+        answered_at timestamp
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS push_alerts_endpoint_idx ON push_alerts (endpoint, sent_at)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS push_alerts_user_idx ON push_alerts (user_id, sent_at)`);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS pending_pushes (
         id text PRIMARY KEY,
@@ -933,7 +956,7 @@ export async function ensureSchema(): Promise<void> {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS share_access_requests_company_idx ON share_access_requests (company_id, status)`);
     logger.info("ensureSchema: share_links + share_access_requests ready");
-    logger.info("ensureSchema: user_notes.company_id + site_checkins hold/auto-close + projects site clock + site_checkins.person_key + notifications.metadata ready + site_checkins sign-out cols + photos.daily_report_date ready + company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols + portal_shares + portal_sessions + push_subscriptions + pending_pushes + subcontractor_documents + subcontractors/people.archived_at + people.first_name/last_name + subcontractors.contact_first_name/contact_last_name + project_members write-permission cols + activity_log.metadata + photos closure/updated_at cols + plant_items/plant_item_attachments/plant_item_distributions + people.is_primary_contact + person_certifications + primary-contact/project_members backfill + project_members.can_edit_daily_report + messages.project_id + photos archive/photo-removal cols + primary-contact name self-heal ready + photos/daily_reports submitted_at+submitted_by + plant_items portal_draft cols + portal_submission_notes table + submitted-backfill ready + users.platform_admin + platform-admin bootstrap (grants founders only if no platform admin exists) ready + pin_audit_log table ready + documents.require_pin_signoff ready + projects.site_manager_id ready + project_members.is_project_manager ready + accepted-invite/project_members.person_id self-heal ready + project_members one-row-per-card index (created only when no duplicates) checked + failed_stripe_cancellations table ready + users.role_title ready");
+    logger.info("ensureSchema: user_notes.company_id + site_checkins hold/auto-close + projects site clock + site_checkins.person_key + notifications.metadata ready + site_checkins sign-out cols + photos.daily_report_date ready + company_members + expiry_reminder_logs + stripe_webhook_events + project_closeouts + documents.revision + daily_notes.photo_url + photos/permits/insurance assignment cols + users email-verification cols + team-portal (users.portal_only, project_members uq, project_invites, activity_log) + people table + project_invites/project_members person_id + daily_notes/daily_reports base tables + daily_reports F5 manager-report cols + portal_shares + portal_sessions + push_subscriptions + push_alerts + pending_pushes + subcontractor_documents + subcontractors/people.archived_at + people.first_name/last_name + subcontractors.contact_first_name/contact_last_name + project_members write-permission cols + activity_log.metadata + photos closure/updated_at cols + plant_items/plant_item_attachments/plant_item_distributions + people.is_primary_contact + person_certifications + primary-contact/project_members backfill + project_members.can_edit_daily_report + messages.project_id + photos archive/photo-removal cols + primary-contact name self-heal ready + photos/daily_reports submitted_at+submitted_by + plant_items portal_draft cols + portal_submission_notes table + submitted-backfill ready + users.platform_admin + platform-admin bootstrap (grants founders only if no platform admin exists) ready + pin_audit_log table ready + documents.require_pin_signoff ready + projects.site_manager_id ready + project_members.is_project_manager ready + accepted-invite/project_members.person_id self-heal ready + project_members one-row-per-card index (created only when no duplicates) checked + failed_stripe_cancellations table ready + users.role_title ready");
   } catch (err) {
     // Don't crash the server — membership lookups fall back to the home company.
     logger.error({ err }, "ensureSchema failed (continuing with home-company fallback)");

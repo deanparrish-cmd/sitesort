@@ -3135,6 +3135,96 @@ paths:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
 
+  /push/receipt:
+    post:
+      operationId: pushReceipt
+      tags: [portal]
+      summary: A phone's service worker reports that an alert arrived or was tapped (no login)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PushReceiptRequest"
+      responses:
+        "200":
+          description: Recorded (or ignored for an unknown id)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /portal/push/devices:
+    get:
+      operationId: listPortalPushDevices
+      tags: [portal]
+      summary: This login's registered phones and what each has reported back
+      responses:
+        "200":
+          description: Devices
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalPushDevices"
+
+  /portal/push/devices/remove:
+    post:
+      operationId: removePortalPushDevice
+      tags: [portal]
+      summary: Stop alerts to one of this login's phones (every project)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PortalPushDeviceRemoveRequest"
+      responses:
+        "200":
+          description: Removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /portal/push/test:
+    post:
+      operationId: sendPortalPushTest
+      tags: [portal]
+      summary: Send a test alert to every phone of this login, after a short delay
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PortalPushTestRequest"
+      responses:
+        "200":
+          description: Sent; per-device result of the send itself
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalPushTestResult"
+
+  /portal/push/test-answer:
+    post:
+      operationId: answerPortalPushTest
+      tags: [portal]
+      summary: Record the member's answer to "Did a banner appear?"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PortalPushTestAnswerRequest"
+      responses:
+        "200":
+          description: Recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
   /portal/logout:
     post:
       operationId: portalLogout
@@ -6263,6 +6353,157 @@ components:
           type: string
       required: [invite, inviteUrl]
 
+    PushReceiptRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          maxLength: 64
+        event:
+          type: string
+          enum: [received, tapped]
+        shown:
+          type: boolean
+        permission:
+          type: string
+          maxLength: 16
+      required: [id, event]
+
+    PortalPushAlertRow:
+      type: object
+      properties:
+        alertId:
+          type: string
+        sentAt:
+          type: string
+        sendResult:
+          type: string
+          description: accepted | gone | failed
+        receivedAt:
+          type: string
+          nullable: true
+        tappedAt:
+          type: string
+          nullable: true
+        shown:
+          type: boolean
+          nullable: true
+        permission:
+          type: string
+          nullable: true
+        bannerAnswer:
+          type: string
+          enum: [yes, no]
+          nullable: true
+        answeredAt:
+          type: string
+          nullable: true
+      required: [alertId, sentAt, sendResult, receivedAt, tappedAt, shown, permission, bannerAnswer, answeredAt]
+
+    PortalPushDevice:
+      type: object
+      properties:
+        deviceId:
+          type: string
+        label:
+          type: string
+        registeredAt:
+          type: string
+        lastConfirmedAt:
+          type: string
+          nullable: true
+        unansweredInARow:
+          type: integer
+        lastTest:
+          allOf:
+            - $ref: "#/components/schemas/PortalPushAlertRow"
+          nullable: true
+      required: [deviceId, label, registeredAt, lastConfirmedAt, unansweredInARow, lastTest]
+
+    PortalPushDevices:
+      type: object
+      properties:
+        devices:
+          type: array
+          items:
+            $ref: "#/components/schemas/PortalPushDevice"
+        pruneAfter:
+          type: integer
+      required: [devices, pruneAfter]
+
+    PortalPushDeviceRemoveRequest:
+      type: object
+      properties:
+        deviceId:
+          type: string
+          maxLength: 64
+      required: [deviceId]
+
+    PortalPushTestRequest:
+      type: object
+      properties:
+        delaySeconds:
+          type: integer
+          minimum: 0
+          maximum: 15
+
+    PortalPushTestResult:
+      type: object
+      properties:
+        sent:
+          type: array
+          items:
+            type: object
+            properties:
+              deviceId:
+                type: string
+              alertId:
+                type: string
+              result:
+                type: string
+                enum: [accepted, gone, failed]
+            required: [deviceId, alertId, result]
+      required: [sent]
+
+    PortalPushTestAnswerRequest:
+      type: object
+      properties:
+        alertId:
+          type: string
+          maxLength: 64
+        answer:
+          type: string
+          enum: [yes, no]
+      required: [alertId, answer]
+
+    PhoneAlerts:
+      type: object
+      description: Whether this login's phones registered for the project have ever reported an alert arriving.
+      properties:
+        state:
+          type: string
+          enum: [none, never, confirmed, removed]
+        devices:
+          type: integer
+        confirmedDevices:
+          type: integer
+        confirmedAt:
+          type: string
+        removedAt:
+          type: string
+        banner:
+          type: object
+          properties:
+            answer:
+              type: string
+              enum: [yes, no]
+            at:
+              type: string
+            reachedPhone:
+              type: boolean
+          required: [answer, at, reachedPhone]
+      required: [state, devices, confirmedDevices]
+
     PortalStatus:
       type: object
       description: A person's portal state for one project.
@@ -6290,6 +6531,8 @@ components:
           type: boolean
         canUpdatePlantMaterials:
           type: boolean
+        phoneAlerts:
+          $ref: "#/components/schemas/PhoneAlerts"
       required: [status]
 
     Person:
