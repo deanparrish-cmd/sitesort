@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PortalPushAlertRowBannerAnswer } from "./portalPushAlertRowBannerAnswer";
+import type { PortalPushAlertRowIconAnswer } from "./portalPushAlertRowIconAnswer";
 
 export interface PortalPushAlertRow {
   alertId: string;
@@ -21,4 +22,6 @@ export interface PortalPushAlertRow {
   permission: string | null;
   bannerAnswer: PortalPushAlertRowBannerAnswer;
   answeredAt: string | null;
+  badgeResult: string | null;
+  iconAnswer: PortalPushAlertRowIconAnswer;
 }

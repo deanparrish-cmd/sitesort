@@ -341,8 +341,9 @@ export function PortalStatusPill({
 
 // Phone alert receipts (2026-10-22): whether this person's phones for THIS
 // project have ever told SiteSort an alert arrived, and their own answer to
-// "Did a banner appear?" from the portal's test alert. "No banner" on a phone
-// that did report the alert = the phone is hiding it (Focus, banners off).
+// "Did a banner appear?" and "Did a number appear on the SiteSort icon?" from
+// the portal's test alert. "No banner" on a phone that did report the alert =
+// the phone is hiding it (Focus, banners off); "no icon number" = Badges off.
 function fmtDay(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
@@ -359,6 +360,7 @@ export function PhoneAlertsStatus({ pa }: { pa: PhoneAlerts }) {
     : { text: "No phone set up for alerts", cls: "text-muted-foreground",
         title: "They haven't turned on alerts in the Team Portal for this project, so they get no phone alerts from it." };
   const b = pa.banner;
+  const ic = pa.icon;
   return (
     <span className="flex flex-col items-end gap-0.5 text-[11px] leading-tight text-right max-w-full" data-testid="phone-alerts-status">
       <span className={cn("break-words", main.cls)} title={main.title}>{main.text}</span>
@@ -366,6 +368,13 @@ export function PhoneAlertsStatus({ pa }: { pa: PhoneAlerts }) {
         <span className={cn("break-words", b.answer === "yes" ? "text-emerald-700 dark:text-emerald-400" : "text-destructive font-semibold")}
           title={b.answer === "no" ? (b.reachedPhone ? "The test alert reached their phone but no banner showed: notifications are hidden on the phone (Focus, Do Not Disturb or banners off)." : "The test alert never reached their phone: the install isn't working.") : undefined}>
           {b.answer === "yes" ? `Test: banner appeared, ${fmtDay(b.at)}` : b.reachedPhone ? `Test: no banner (phone hid it), ${fmtDay(b.at)}` : `Test: no banner (never arrived), ${fmtDay(b.at)}`}
+        </span>
+      )}
+      {ic && (
+        <span className={cn("break-words", ic.answer === "yes" ? "text-emerald-700 dark:text-emerald-400" : "text-destructive font-semibold")}
+          data-testid="phone-alerts-icon"
+          title={ic.answer === "no" ? (ic.badgeResult === "unsupported" ? "Their phone can't show icon numbers (on iPhone or iPad: SiteSort must be opened from its Home Screen icon)." : "Their phone took the number but didn't show it: Badges is off for SiteSort in the phone's Settings, Notifications. They won't see a waiting count on the icon.") : undefined}>
+          {ic.answer === "yes" ? `Test: icon number appeared, ${fmtDay(ic.at)}` : ic.badgeResult === "unsupported" ? `Test: no icon number (phone can't), ${fmtDay(ic.at)}` : `Test: no icon number (Badges off), ${fmtDay(ic.at)}`}
         </span>
       )}
     </span>

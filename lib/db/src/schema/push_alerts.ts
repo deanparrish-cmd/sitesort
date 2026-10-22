@@ -36,6 +36,10 @@ export const pushAlertsTable = pgTable("push_alerts", {
   swVersion: text("sw_version"),
   // What setAppBadge did with the payload's count: set:N, cleared, unsupported, or the error.
   badgeResult: text("badge_result"),
+  // Test alerts: "Did a number appear on the SiteSort icon?" (Badges can be
+  // off in Settings while banners work, and the app is never told).
+  iconAnswer: text("icon_answer"),
+  iconAnsweredAt: timestamp("icon_answered_at"),
   permission: text("permission"),
   tappedAt: timestamp("tapped_at"),
   bannerAnswer: text("banner_answer"),

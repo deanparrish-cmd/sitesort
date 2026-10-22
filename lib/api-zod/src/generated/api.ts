@@ -4891,6 +4891,8 @@ export const ListPortalPushDevicesResponse = zod.object({
           permission: zod.string().nullable(),
           bannerAnswer: zod.enum(["yes", "no"]).nullable(),
           answeredAt: zod.string().nullable(),
+          badgeResult: zod.string().nullable(),
+          iconAnswer: zod.enum(["yes", "no"]).nullable(),
         })
         .nullable(),
     }),
@@ -4944,6 +4946,12 @@ export const answerPortalPushTestBodyAlertIdMax = 64;
 export const AnswerPortalPushTestBody = zod.object({
   alertId: zod.string().max(answerPortalPushTestBodyAlertIdMax),
   answer: zod.enum(["yes", "no"]),
+  question: zod
+    .enum(["banner", "icon"])
+    .optional()
+    .describe(
+      'Which question this answers (default banner). icon = \"Did a number appear on the SiteSort icon?\"',
+    ),
 });
 
 export const AnswerPortalPushTestResponse = zod.object({
@@ -5085,6 +5093,21 @@ export const ListSubcontractorPeopleResponseItem = zod
                 reachedPhone: zod.boolean(),
               })
               .optional(),
+            icon: zod
+              .object({
+                answer: zod.enum(["yes", "no"]),
+                at: zod.string(),
+                badgeResult: zod
+                  .string()
+                  .nullable()
+                  .describe(
+                    "What setAppBadge did on that phone for that test (set:N, cleared, unsupported, or the error).",
+                  ),
+              })
+              .optional()
+              .describe(
+                'Latest answer to \"Did a number appear on the SiteSort icon?\" from a test alert.',
+              ),
           })
           .optional()
           .describe(
@@ -5268,6 +5291,21 @@ export const UpdatePersonResponse = zod
                 reachedPhone: zod.boolean(),
               })
               .optional(),
+            icon: zod
+              .object({
+                answer: zod.enum(["yes", "no"]),
+                at: zod.string(),
+                badgeResult: zod
+                  .string()
+                  .nullable()
+                  .describe(
+                    "What setAppBadge did on that phone for that test (set:N, cleared, unsupported, or the error).",
+                  ),
+              })
+              .optional()
+              .describe(
+                'Latest answer to \"Did a number appear on the SiteSort icon?\" from a test alert.',
+              ),
           })
           .optional()
           .describe(
@@ -5441,6 +5479,21 @@ export const ListAllPeopleResponseItem = zod
                 reachedPhone: zod.boolean(),
               })
               .optional(),
+            icon: zod
+              .object({
+                answer: zod.enum(["yes", "no"]),
+                at: zod.string(),
+                badgeResult: zod
+                  .string()
+                  .nullable()
+                  .describe(
+                    "What setAppBadge did on that phone for that test (set:N, cleared, unsupported, or the error).",
+                  ),
+              })
+              .optional()
+              .describe(
+                'Latest answer to \"Did a number appear on the SiteSort icon?\" from a test alert.',
+              ),
           })
           .optional()
           .describe(
@@ -5558,6 +5611,21 @@ export const ListInHousePeopleResponseItem = zod
                 reachedPhone: zod.boolean(),
               })
               .optional(),
+            icon: zod
+              .object({
+                answer: zod.enum(["yes", "no"]),
+                at: zod.string(),
+                badgeResult: zod
+                  .string()
+                  .nullable()
+                  .describe(
+                    "What setAppBadge did on that phone for that test (set:N, cleared, unsupported, or the error).",
+                  ),
+              })
+              .optional()
+              .describe(
+                'Latest answer to \"Did a number appear on the SiteSort icon?\" from a test alert.',
+              ),
           })
           .optional()
           .describe(

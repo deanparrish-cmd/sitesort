@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PhoneAlertsBanner } from "./phoneAlertsBanner";
+import type { PhoneAlertsIcon } from "./phoneAlertsIcon";
 import type { PhoneAlertsState } from "./phoneAlertsState";
 
 /**
@@ -18,4 +19,6 @@ export interface PhoneAlerts {
   confirmedAt?: string;
   removedAt?: string;
   banner?: PhoneAlertsBanner;
+  /** Latest answer to "Did a number appear on the SiteSort icon?" from a test alert. */
+  icon?: PhoneAlertsIcon;
 }

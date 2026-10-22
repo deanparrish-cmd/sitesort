@@ -2086,6 +2086,15 @@ export const PortalPushAlertRowBannerAnswer = {
   no: "no",
 } as const;
 
+export type PortalPushAlertRowIconAnswer =
+  | (typeof PortalPushAlertRowIconAnswer)[keyof typeof PortalPushAlertRowIconAnswer]
+  | null;
+
+export const PortalPushAlertRowIconAnswer = {
+  yes: "yes",
+  no: "no",
+} as const;
+
 export interface PortalPushAlertRow {
   alertId: string;
   sentAt: string;
@@ -2100,6 +2109,8 @@ export interface PortalPushAlertRow {
   permission: string | null;
   bannerAnswer: PortalPushAlertRowBannerAnswer;
   answeredAt: string | null;
+  badgeResult: string | null;
+  iconAnswer: PortalPushAlertRowIconAnswer;
 }
 
 export interface PortalPushDevice {
@@ -2156,10 +2167,23 @@ export const PortalPushTestAnswerRequestAnswer = {
   no: "no",
 } as const;
 
+/**
+ * Which question this answers (default banner). icon = "Did a number appear on the SiteSort icon?"
+ */
+export type PortalPushTestAnswerRequestQuestion =
+  (typeof PortalPushTestAnswerRequestQuestion)[keyof typeof PortalPushTestAnswerRequestQuestion];
+
+export const PortalPushTestAnswerRequestQuestion = {
+  banner: "banner",
+  icon: "icon",
+} as const;
+
 export interface PortalPushTestAnswerRequest {
   /** @maxLength 64 */
   alertId: string;
   answer: PortalPushTestAnswerRequestAnswer;
+  /** Which question this answers (default banner). icon = "Did a number appear on the SiteSort icon?" */
+  question?: PortalPushTestAnswerRequestQuestion;
 }
 
 export type PhoneAlertsState =
@@ -2186,6 +2210,24 @@ export type PhoneAlertsBanner = {
   reachedPhone: boolean;
 };
 
+export type PhoneAlertsIconAnswer =
+  (typeof PhoneAlertsIconAnswer)[keyof typeof PhoneAlertsIconAnswer];
+
+export const PhoneAlertsIconAnswer = {
+  yes: "yes",
+  no: "no",
+} as const;
+
+/**
+ * Latest answer to "Did a number appear on the SiteSort icon?" from a test alert.
+ */
+export type PhoneAlertsIcon = {
+  answer: PhoneAlertsIconAnswer;
+  at: string;
+  /** What setAppBadge did on that phone for that test (set:N, cleared, unsupported, or the error). */
+  badgeResult: string | null;
+};
+
 /**
  * Whether this login's phones registered for the project have ever reported an alert arriving.
  */
@@ -2196,6 +2238,8 @@ export interface PhoneAlerts {
   confirmedAt?: string;
   removedAt?: string;
   banner?: PhoneAlertsBanner;
+  /** Latest answer to "Did a number appear on the SiteSort icon?" from a test alert. */
+  icon?: PhoneAlertsIcon;
 }
 
 export type PortalStatusStatus =

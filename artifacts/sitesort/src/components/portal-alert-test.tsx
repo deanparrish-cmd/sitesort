@@ -90,9 +90,9 @@ export function PortalAlertTestCard({ subscribed }: { subscribed: boolean }) {
     void load();
   };
 
-  const answer = async (alertId: string, a: "yes" | "no") => {
+  const answer = async (alertId: string, a: "yes" | "no", question: "banner" | "icon") => {
     setBusyId(alertId);
-    const r = await portalPushCall("test-answer", { alertId, answer: a });
+    const r = await portalPushCall("test-answer", { alertId, answer: a, question });
     setBusyId(null);
     if (r.status !== 200) { toast({ title: "Answer not saved", description: "Check your signal and try again.", variant: "destructive" }); return; }
     void load();
@@ -116,13 +116,14 @@ export function PortalAlertTestCard({ subscribed }: { subscribed: boolean }) {
         <p className="text-sm text-muted-foreground mt-0.5">
           Check that alerts really reach you, for example when someone is waiting at the gate.
           We send a test alert {SEND_DELAY_S} seconds after you tap. Lock your phone straight away and watch for a banner.
+          Then unlock it and, before you open SiteSort, look for a number on the SiteSort icon.
         </p>
       </div>
       {phase.kind === "countdown" ? (
         <div className="rounded-xl border-2 border-primary/40 bg-primary/5 p-4 text-center" role="status">
           <p className="text-2xl font-extrabold">{phase.left}</p>
           <p className="text-base font-bold">Lock your phone now</p>
-          <p className="text-sm text-muted-foreground">Then come back here to say whether a banner appeared.</p>
+          <p className="text-sm text-muted-foreground">Watch for a banner. Then unlock and look at the SiteSort icon before you open SiteSort.</p>
         </div>
       ) : (
         <PortalButton onClick={start} disabled={phase.kind === "sent" && testOut} icon={<BellRing className="w-5 h-5" />}>
@@ -150,7 +151,7 @@ export function PortalAlertTestCard({ subscribed }: { subscribed: boolean }) {
 
 function DeviceRow({ d, isMine, pruneAfter, busy, onAnswer, onRemove }: {
   d: PortalPushDevice; isMine: boolean; pruneAfter: number; busy: boolean;
-  onAnswer: (alertId: string, a: "yes" | "no") => void; onRemove: () => void;
+  onAnswer: (alertId: string, a: "yes" | "no", question: "banner" | "icon") => void; onRemove: () => void;
 }) {
   const t = d.lastTest;
   const fresh = t && Date.now() - new Date(t.sentAt).getTime() < 15 * 60_000;
@@ -175,8 +176,11 @@ function DeviceRow({ d, isMine, pruneAfter, busy, onAnswer, onRemove }: {
   }
 
   // Ask once the result is in: the phone replied, or the reply window passed.
-  const ask = fresh && t && t.sendResult === "accepted" && !t.bannerAnswer && (t.receivedAt || waited);
+  const settled = !!(fresh && t && t.sendResult === "accepted" && (t.receivedAt || waited));
+  const askBanner = settled && !t!.bannerAnswer;
+  const askIcon = settled && !t!.iconAnswer;
   const answered = fresh && t?.bannerAnswer ? t : null;
+  const iconAnswered = fresh && t?.iconAnswer ? t : null;
 
   return (
     <ListRow
@@ -191,16 +195,27 @@ function DeviceRow({ d, isMine, pruneAfter, busy, onAnswer, onRemove }: {
           {d.unansweredInARow > 0 && d.lastConfirmedAt && !(fresh && t?.receivedAt) && (
             <p className="text-sm text-muted-foreground">{d.unansweredInARow} alert{d.unansweredInARow === 1 ? "" : "s"} in a row with no reply. A phone is removed after {pruneAfter} in a row; opening SiteSort on it sets it up again.</p>
           )}
-          {ask && t && (
+          {askBanner && t && (
             <div className="space-y-2 pt-1" data-testid="banner-question">
               <p className="text-base font-bold">Did a banner appear on this phone?</p>
               <div className="flex flex-wrap gap-2">
-                <PortalButton full={false} tone="outline" disabled={busy} onClick={() => onAnswer(t.alertId, "yes")}>Yes</PortalButton>
-                <PortalButton full={false} tone="outline" disabled={busy} onClick={() => onAnswer(t.alertId, "no")}>No, nothing appeared</PortalButton>
+                <PortalButton full={false} tone="outline" disabled={busy} onClick={() => onAnswer(t.alertId, "yes", "banner")}>Yes</PortalButton>
+                <PortalButton full={false} tone="outline" disabled={busy} onClick={() => onAnswer(t.alertId, "no", "banner")}>No, nothing appeared</PortalButton>
               </div>
             </div>
           )}
           {answered && <BannerAdvice answer={answered.bannerAnswer!} reached={!!answered.receivedAt} label={d.label} />}
+          {askIcon && t && (
+            <div className="space-y-2 pt-1" data-testid="icon-question">
+              <p className="text-base font-bold">Did a number appear on the SiteSort icon?</p>
+              <p className="text-sm text-muted-foreground">On your Home Screen, before you opened SiteSort. Opening it changes the number.</p>
+              <div className="flex flex-wrap gap-2">
+                <PortalButton full={false} tone="outline" disabled={busy} onClick={() => onAnswer(t.alertId, "yes", "icon")}>Yes</PortalButton>
+                <PortalButton full={false} tone="outline" disabled={busy} onClick={() => onAnswer(t.alertId, "no", "icon")}>No number</PortalButton>
+              </div>
+            </div>
+          )}
+          {iconAnswered && <IconAdvice answer={iconAnswered.iconAnswer!} badgeResult={iconAnswered.badgeResult} label={d.label} />}
         </div>
       }
       actions={!isMine ? (
@@ -210,6 +225,36 @@ function DeviceRow({ d, isMine, pruneAfter, busy, onAnswer, onRemove }: {
         </button>
       ) : undefined}
     />
+  );
+}
+
+// "Did a number appear on the SiteSort icon?" The phone's own report says
+// whether it accepted the number (badgeResult); the person says whether it
+// showed. Accepted but not shown = Badges is off in Settings, or SiteSort was
+// opened from Safari instead of the Home Screen icon.
+function IconAdvice({ answer, badgeResult, label }: { answer: string; badgeResult: string | null; label: string }) {
+  if (answer === "yes") {
+    return <p className="text-sm text-emerald-700 dark:text-emerald-400">Thanks. The SiteSort icon shows how many people are waiting at the gate. Your project manager can see this.</p>;
+  }
+  const apple = /iPhone|iPad/.test(label) || isIOS();
+  if (badgeResult === "unsupported") {
+    return (
+      <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3 text-sm space-y-1">
+        <p className="font-bold">This phone can't show a number on the SiteSort icon.</p>
+        <p>{apple ? "Open SiteSort from its Home Screen icon, not from Safari, then send another test." : "Alerts still work. Check the Site Register when you get one."}</p>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3 text-sm space-y-1">
+      <p className="font-bold">{badgeResult?.startsWith("set:") ? "The phone took the number, but it's hidden." : "No number showed on the icon."}</p>
+      {apple ? (
+        <p>On the {label.includes("iPad") ? "iPad" : "iPhone"}: Settings, then Notifications, then SiteSort. Turn on Badges. Use SiteSort from its Home Screen icon.</p>
+      ) : (
+        <p>In the phone's settings, find SiteSort or your browser under Notifications (or Apps) and turn on app icon badges or dots.</p>
+      )}
+      <p>Then send another test. Your project manager can see your answer.</p>
+    </div>
   );
 }
 

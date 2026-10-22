@@ -6452,7 +6452,14 @@ components:
         answeredAt:
           type: string
           nullable: true
-      required: [alertId, sentAt, sendResult, receivedAt, outcome, showError, tappedAt, shown, permission, bannerAnswer, answeredAt]
+        badgeResult:
+          type: string
+          nullable: true
+        iconAnswer:
+          type: string
+          enum: [yes, no]
+          nullable: true
+      required: [alertId, sentAt, sendResult, receivedAt, outcome, showError, tappedAt, shown, permission, bannerAnswer, answeredAt, badgeResult, iconAnswer]
 
     PortalPushDevice:
       type: object
@@ -6528,6 +6535,10 @@ components:
         answer:
           type: string
           enum: [yes, no]
+        question:
+          type: string
+          enum: [banner, icon]
+          description: Which question this answers (default banner). icon = "Did a number appear on the SiteSort icon?"
       required: [alertId, answer]
 
     PhoneAlerts:
@@ -6556,6 +6567,20 @@ components:
             reachedPhone:
               type: boolean
           required: [answer, at, reachedPhone]
+        icon:
+          type: object
+          description: Latest answer to "Did a number appear on the SiteSort icon?" from a test alert.
+          properties:
+            answer:
+              type: string
+              enum: [yes, no]
+            at:
+              type: string
+            badgeResult:
+              type: string
+              nullable: true
+              description: What setAppBadge did on that phone for that test (set:N, cleared, unsupported, or the error).
+          required: [answer, at, badgeResult]
       required: [state, devices, confirmedDevices]
 
     PortalStatus:

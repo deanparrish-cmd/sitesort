@@ -1239,9 +1239,13 @@ router.post("/portal/push/test", authenticate, requirePortalSession, requirePort
     if (delay > 0) await new Promise(r => setTimeout(r, delay));
     const sent = await sendToDevices(userId, req.portalProjectId!, subs, {
       title: "SiteSort test alert",
-      body: "This phone gets SiteSort alerts. Tap here and answer one question.",
+      body: "This phone gets SiteSort alerts. Before you open SiteSort, look for a number on its icon.",
       url: "/portal/settings?alertTest=1",
       tag: `alert-test-${Date.now()}`,
+      // The icon number too: Badges can be off in Settings while banners
+      // work, and SiteSort is never told. Opening SiteSort puts the real
+      // count back (layout.tsx), so the test number lasts until then.
+      badge: 1,
     }, "test");
     req.log.info({ userId, devices: sent.length, accepted: sent.filter(s => s.result === "accepted").length }, "web-push: test alert");
     res.json({ sent: sent.map(s => ({ deviceId: deviceKey(s.endpoint), alertId: s.alertId, result: s.result })) });
@@ -1251,14 +1255,17 @@ router.post("/portal/push/test", authenticate, requirePortalSession, requirePort
   }
 });
 
-// POST /api/portal/push/test-answer: "Did a banner appear?" Recorded for the PM:
+// POST /api/portal/push/test-answer: "Did a banner appear?" (question banner)
+// or "Did a number appear on the SiteSort icon?" (question icon). Recorded for the PM:
 // "no" on a phone that DID report the alert arriving means the phone hid it
 // (Focus, Do Not Disturb, banners off), not a dead install.
 router.post("/portal/push/test-answer", authenticate, requirePortalSession, requirePortalMember, async (req, res) => {
   const parsed = AnswerPortalPushTestBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "validation_error", message: "Invalid request." }); return; }
   try {
-    const done = await db.update(pushAlertsTable).set({ bannerAnswer: parsed.data.answer, answeredAt: new Date() })
+    const now = new Date();
+    const done = await db.update(pushAlertsTable)
+      .set(parsed.data.question === "icon" ? { iconAnswer: parsed.data.answer, iconAnsweredAt: now } : { bannerAnswer: parsed.data.answer, answeredAt: now })
       .where(and(eq(pushAlertsTable.id, parsed.data.alertId), eq(pushAlertsTable.userId, req.user!.id), eq(pushAlertsTable.kind, "test")))
       .returning({ id: pushAlertsTable.id });
     if (done.length === 0) { res.status(404).json({ error: "not_found", message: "That test alert wasn't found." }); return; }

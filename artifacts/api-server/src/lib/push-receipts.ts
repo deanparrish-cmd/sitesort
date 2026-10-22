@@ -85,6 +85,7 @@ export function alertOutcome(r: {
 export type DeviceAlertRow = {
   alertId: string; sentAt: string; sendResult: string; receivedAt: string | null; outcome: AlertOutcome | null; showError: string | null; tappedAt: string | null;
   shown: boolean | null; permission: string | null; bannerAnswer: "yes" | "no" | null; answeredAt: string | null;
+  badgeResult: string | null; iconAnswer: "yes" | "no" | null;
 };
 export type UserDevice = {
   deviceId: string; label: string; registeredAt: string; lastConfirmedAt: string | null;
@@ -96,6 +97,7 @@ const toRow = (r: any): DeviceAlertRow => ({
   alertId: r.id, sentAt: iso(r.sent_at)!, sendResult: r.send_result, receivedAt: iso(r.received_at),
   outcome: alertOutcome(r), showError: r.show_error ?? null, tappedAt: iso(r.tapped_at),
   shown: r.shown, permission: r.permission, bannerAnswer: r.banner_answer, answeredAt: iso(r.answered_at),
+  badgeResult: r.badge_result ?? null, iconAnswer: r.icon_answer ?? null,
 });
 
 // Every phone this login has registered (any project), with what it has told us.
@@ -142,6 +144,7 @@ export type PhoneAlerts = {
   confirmedAt?: string;
   removedAt?: string;
   banner?: { answer: "yes" | "no"; at: string; reachedPhone: boolean };
+  icon?: { answer: "yes" | "no"; at: string; badgeResult: string | null };
 };
 
 // The PM's view, per login on one project: only phones registered for THIS
@@ -149,7 +152,7 @@ export type PhoneAlerts = {
 export async function phoneAlertsFor(userIds: string[], projectId: string): Promise<Map<string, PhoneAlerts>> {
   const out = new Map<string, PhoneAlerts>();
   if (userIds.length === 0) return out;
-  const [{ rows: devs }, { rows: banners }, { rows: pruned }] = await Promise.all([
+  const [{ rows: devs }, { rows: banners }, { rows: pruned }, { rows: icons }] = await Promise.all([
     pool.query(
       `SELECT s.user_id, count(DISTINCT s.endpoint)::int AS devices,
               count(DISTINCT s.endpoint) FILTER (WHERE a.t IS NOT NULL)::int AS confirmed, max(a.t) AS confirmed_at
@@ -161,7 +164,11 @@ export async function phoneAlertsFor(userIds: string[], projectId: string): Prom
         WHERE user_id = ANY($1) AND kind = 'test' AND banner_answer IS NOT NULL ORDER BY user_id, answered_at DESC`, [userIds]),
     pool.query(
       `SELECT user_id, max(sent_at) AS t FROM push_alerts WHERE user_id = ANY($1) AND send_result = 'pruned' GROUP BY user_id`, [userIds]),
+    pool.query(
+      `SELECT DISTINCT ON (user_id) user_id, icon_answer, icon_answered_at, badge_result FROM push_alerts
+        WHERE user_id = ANY($1) AND kind = 'test' AND icon_answer IS NOT NULL ORDER BY user_id, icon_answered_at DESC`, [userIds]),
   ]);
+  const iconBy = new Map(icons.map((r: any) => [r.user_id, r]));
   const devBy = new Map(devs.map((r: any) => [r.user_id, r]));
   const bannerBy = new Map(banners.map((r: any) => [r.user_id, r]));
   const prunedBy = new Map(pruned.map((r: any) => [r.user_id, r.t as Date]));
@@ -178,6 +185,8 @@ export async function phoneAlertsFor(userIds: string[], projectId: string): Prom
     if (d?.confirmed_at) pa.confirmedAt = iso(d.confirmed_at)!;
     if (devices === 0 && p) pa.removedAt = iso(p)!;
     if (b) pa.banner = { answer: b.banner_answer, at: iso(b.answered_at)!, reachedPhone: !!(b.received_at || b.arrived_at || b.tapped_at) };
+    const ic = iconBy.get(id);
+    if (ic) pa.icon = { answer: ic.icon_answer, at: iso(ic.icon_answered_at)!, badgeResult: ic.badge_result ?? null };
     out.set(id, pa);
   }
   return out;

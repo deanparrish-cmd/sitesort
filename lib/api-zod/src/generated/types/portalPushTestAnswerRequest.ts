@@ -6,9 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PortalPushTestAnswerRequestAnswer } from "./portalPushTestAnswerRequestAnswer";
+import type { PortalPushTestAnswerRequestQuestion } from "./portalPushTestAnswerRequestQuestion";
 
 export interface PortalPushTestAnswerRequest {
   /** @maxLength 64 */
   alertId: string;
   answer: PortalPushTestAnswerRequestAnswer;
+  /** Which question this answers (default banner). icon = "Did a number appear on the SiteSort icon?" */
+  question?: PortalPushTestAnswerRequestQuestion;
 }

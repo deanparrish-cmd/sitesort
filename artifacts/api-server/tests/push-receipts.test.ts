@@ -137,7 +137,8 @@ describe("phone alert receipts", () => {
     expect(r.json.sent[0].deviceId).toBe(deviceKey(A.endpoint()));
     if (!pushReachable) return;
     const got = received.filter(x => x.path === A.id).at(-1)!;
-    expect(got.payload).toMatchObject({ title: "SiteSort test alert", receipt: r.json.sent[0].alertId, url: "/portal/settings?alertTest=1" });
+    // The test puts a number on the icon too (Badges can be off while banners work).
+    expect(got.payload).toMatchObject({ title: "SiteSort test alert", receipt: r.json.sent[0].alertId, url: "/portal/settings?alertTest=1", badge: 1 });
 
     const devs = await api("/portal/push/devices", { token: tok });
     expect(devs.status).toBe(200);
@@ -163,10 +164,22 @@ describe("phone alert receipts", () => {
     // Someone else can't answer for this phone.
     expect((await api("/portal/push/test-answer", { method: "POST", token: otherTok, body: { alertId, answer: "yes" } })).status).toBe(404);
     expect((await api("/portal/push/test-answer", { method: "POST", token: tok, body: { alertId, answer: "no" } })).status).toBe(200);
+    // Second question, answered separately: the phone accepted the number but none showed (Badges off).
+    await db.update(pushAlertsTable).set({ badgeResult: "set:1" }).where(eq(pushAlertsTable.id, alertId));
+    expect((await api("/portal/push/test-answer", { method: "POST", token: otherTok, body: { alertId, answer: "yes", question: "icon" } })).status).toBe(404);
+    expect((await api("/portal/push/test-answer", { method: "POST", token: tok, body: { alertId, answer: "no", question: "icon" } })).status).toBe(200);
+    expect((await api("/portal/push/test-answer", { method: "POST", token: tok, body: { alertId, answer: "no", question: "volume" } })).status).toBe(400);
+
+    const lt = (await api("/portal/push/devices", { token: tok })).json.devices[0].lastTest;
+    expect(lt).toMatchObject({ bannerAnswer: "no", iconAnswer: "no", badgeResult: "set:1" });
 
     const people = await api(`/projects/${co.projectId}/in-house-people`, { token: admin });
     const pa = (people.json as any[]).find(p => p.id === member.personIds[0]).portal.phoneAlerts;
-    expect(pa).toMatchObject({ state: "confirmed", devices: 1, confirmedDevices: 1, banner: { answer: "no", reachedPhone: true } });
+    expect(pa).toMatchObject({
+      state: "confirmed", devices: 1, confirmedDevices: 1,
+      banner: { answer: "no", reachedPhone: true },
+      icon: { answer: "no", badgeResult: "set:1" },
+    });
   });
 
   it("a second test within 20 seconds is refused", async (ctx) => {
