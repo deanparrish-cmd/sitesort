@@ -160,7 +160,12 @@ function DeviceRow({ d, isMine, pruneAfter, busy, onAnswer, onRemove }: {
   if (fresh && t) {
     if (t.sendResult === "gone") line = { text: "This phone's alert registration had expired, so it has been removed. Open SiteSort on that phone to set it up again.", tone: "bad" };
     else if (t.sendResult === "failed") line = { text: "Couldn't send to this phone. Try again in a minute.", tone: "bad" };
-    else if (t.receivedAt) line = { text: `Test alert reached this phone at ${fmtTime(t.receivedAt)}${t.tappedAt ? " and was tapped" : ""}.`, tone: "ok" };
+    else if (t.outcome === "show_failed") line = { text: `The alert reached this phone, but SiteSort couldn't show it${t.showError ? ` (${t.showError})` : ""}. Remove SiteSort from the Home Screen, add it again and turn alerts on.`, tone: "bad" };
+    else if (t.outcome === "arrived_no_result") line = { text: "The alert reached this phone, but it stopped before showing it.", tone: "bad" };
+    else if (t.outcome === "not_posted") line = { text: "This phone said it showed the alert, but it isn't in the phone's notifications.", tone: "bad" };
+    else if (t.outcome === "displayed_app_open") line = { text: `Test alert reached this phone at ${fmtTime(t.receivedAt ?? t.sentAt)}, while SiteSort was open on screen. An iPhone shows no banner over the open app: lock the phone and test again.`, tone: "warn" };
+    else if (t.receivedAt || t.outcome === "displayed") line = { text: `Test alert reached this phone at ${fmtTime(t.receivedAt ?? t.sentAt)}${t.tappedAt ? " and was tapped" : ""}.`, tone: "ok" };
+    else if (t.outcome === "no_receipt_old_app") line = { text: "This phone has an older copy of SiteSort that can't reply. Open SiteSort on it, then send another test.", tone: "warn" };
     else if (!waited) line = { text: "Waiting for this phone to reply.", tone: "muted" };
     else line = { text: "No reply from this phone. The alert didn't reach it.", tone: "bad" };
   } else if (d.lastConfirmedAt) {

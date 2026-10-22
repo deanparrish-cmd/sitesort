@@ -4776,6 +4776,8 @@ export const GetPortalPushKeyResponse = zod.object({
 /**
  * @summary Register this device's Web Push subscription for the member
  */
+export const portalPushSubscribeBodySwVersionMax = 32;
+
 export const PortalPushSubscribeBody = zod.object({
   endpoint: zod.string(),
   keys: zod.object({
@@ -4783,6 +4785,13 @@ export const PortalPushSubscribeBody = zod.object({
     auth: zod.string(),
   }),
   userAgent: zod.string().optional(),
+  swVersion: zod
+    .string()
+    .max(portalPushSubscribeBodySwVersionMax)
+    .optional()
+    .describe(
+      "The phone's active service worker version (null\/absent = an old one that can't send receipts).",
+    ),
 });
 
 export const PortalPushSubscribeResponse = zod.object({
@@ -4809,11 +4818,19 @@ export const pushReceiptBodyIdMax = 64;
 
 export const pushReceiptBodyPermissionMax = 16;
 
+export const pushReceiptBodyErrorMax = 300;
+
+export const pushReceiptBodySwMax = 32;
+
 export const PushReceiptBody = zod.object({
   id: zod.string().max(pushReceiptBodyIdMax),
-  event: zod.enum(["received", "tapped"]),
-  shown: zod.boolean().optional(),
-  permission: zod.string().max(pushReceiptBodyPermissionMax).optional(),
+  event: zod.enum(["arrived", "received", "tapped"]),
+  shown: zod.boolean().nullish(),
+  permission: zod.string().max(pushReceiptBodyPermissionMax).nullish(),
+  error: zod.string().max(pushReceiptBodyErrorMax).nullish(),
+  posted: zod.boolean().nullish(),
+  foreground: zod.boolean().nullish(),
+  sw: zod.string().max(pushReceiptBodySwMax).optional(),
 });
 
 export const PushReceiptResponse = zod.object({
@@ -4838,6 +4855,12 @@ export const ListPortalPushDevicesResponse = zod.object({
           sentAt: zod.string(),
           sendResult: zod.string().describe("accepted | gone | failed"),
           receivedAt: zod.string().nullable(),
+          outcome: zod
+            .string()
+            .describe(
+              "no_receipt_old_app | never_arrived | waiting | arrived_no_result | show_failed | not_posted | displayed | displayed_app_open",
+            ),
+          showError: zod.string().nullable(),
           tappedAt: zod.string().nullable(),
           shown: zod.boolean().nullable(),
           permission: zod.string().nullable(),

@@ -20,8 +20,20 @@ export const pushAlertsTable = pgTable("push_alerts", {
   sentAt: timestamp("sent_at").notNull().defaultNow(),
   sendResult: text("send_result").notNull(),
   sendStatus: integer("send_status"),
+  // Service worker version on the phone when this was sent (null = an old one
+  // that can't report back, so silence proves nothing).
+  deviceSw: text("device_sw"),
+  // The service worker ran: reported before it tries to show anything.
+  arrivedAt: timestamp("arrived_at"),
+  // showNotification finished: shown = it resolved, showError = what it threw,
+  // posted = the notification is in the phone's list afterwards, foreground =
+  // a SiteSort window was visible (iOS shows no banner over the open app).
   receivedAt: timestamp("received_at"),
   shown: boolean("shown"),
+  showError: text("show_error"),
+  posted: boolean("posted"),
+  foreground: boolean("foreground"),
+  swVersion: text("sw_version"),
   permission: text("permission"),
   tappedAt: timestamp("tapped_at"),
   bannerAnswer: text("banner_answer"),

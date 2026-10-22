@@ -1160,10 +1160,10 @@ router.get("/portal/push/public-key", authenticate, requirePortalSession, requir
 router.post("/portal/push/subscribe", authenticate, requirePortalSession, requirePortalMember, async (req, res) => {
   const parsed = PortalPushSubscribeBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "validation_error", message: "Invalid subscription." }); return; }
-  const { endpoint, keys, userAgent } = parsed.data;
+  const { endpoint, keys, userAgent, swVersion } = parsed.data;
   try {
     const projects = await registerPushDevice(req.user!.id, req.portalProjectId!, {
-      endpoint, p256dh: keys.p256dh, auth: keys.auth, userAgent: userAgent ?? null,
+      endpoint, p256dh: keys.p256dh, auth: keys.auth, userAgent: userAgent ?? null, swVersion: swVersion ?? null,
     });
     res.json({ success: true, projects: projects.length });
   } catch (err) {

@@ -11,7 +11,13 @@ export interface PushReceiptRequest {
   /** @maxLength 64 */
   id: string;
   event: PushReceiptRequestEvent;
-  shown?: boolean;
+  shown?: boolean | null;
   /** @maxLength 16 */
-  permission?: string;
+  permission?: string | null;
+  /** @maxLength 300 */
+  error?: string | null;
+  posted?: boolean | null;
+  foreground?: boolean | null;
+  /** @maxLength 32 */
+  sw?: string;
 }

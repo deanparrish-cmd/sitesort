@@ -8,9 +8,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { db } from "@workspace/db";
 import { and, eq, like, inArray } from "drizzle-orm";
-import { pushSubscriptionsTable, pushAlertsTable, portalSessionsTable } from "@workspace/db/schema";
+import { pushSubscriptionsTable, pushAlertsTable, portalSessionsTable, projectsTable, siteCheckinsTable, qrCodesTable, notificationsTable } from "@workspace/db/schema";
 import {
-  seedCompany, cleanupFixtures, login, api, portalLogin, seedCrossTenantPortalMember, cleanupPortalMember,
+  API_BASE, seedCompany, cleanupFixtures, login, api, portalLogin, seedCrossTenantPortalMember, cleanupPortalMember,
   type Fixture, type PortalMemberFixture,
 } from "./helpers";
 
@@ -49,10 +49,11 @@ describe("phone alert receipts", () => {
     return {
       id,
       endpoint: () => `https://localhost:${port}/push/${id}`,
-      body: (ua = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Mobile") => ({
+      body: (ua = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Mobile", swVersion?: string) => ({
         endpoint: `https://localhost:${port}/push/${id}`,
         keys: { p256dh: ecdh.getPublicKey().toString("base64url"), auth: auth.toString("base64url") },
         userAgent: ua,
+        ...(swVersion ? { swVersion } : {}),
       }),
     };
   }
@@ -97,6 +98,11 @@ describe("phone alert receipts", () => {
   });
 
   afterAll(async () => {
+    await new Promise(r => setTimeout(r, 500)); // hold alerts are fire-and-forget
+    await db.delete(notificationsTable).where(inArray(notificationsTable.userId, [co.userId, member.userId, other.userId]));
+    await db.delete(siteCheckinsTable).where(eq(siteCheckinsTable.projectId, co.projectId));
+    await db.delete(qrCodesTable).where(eq(qrCodesTable.projectId, co.projectId));
+    await db.update(projectsTable).set({ siteManagerId: null }).where(eq(projectsTable.id, co.projectId));
     await db.delete(pushAlertsTable).where(like(pushAlertsTable.endpoint, `https://localhost:${port}/push/%`));
     await db.delete(pushSubscriptionsTable).where(like(pushSubscriptionsTable.endpoint, `https://localhost:${port}/push/%`));
     for (const m of [member, other]) await db.delete(portalSessionsTable).where(eq(portalSessionsTable.userId, m.userId));
@@ -176,7 +182,9 @@ describe("phone alert receipts", () => {
     expect((await api("/push/receipt", { method: "POST", body: { id: alertId, event: "tapped" } })).status).toBe(200);
     const [row] = await db.select().from(pushAlertsTable).where(eq(pushAlertsTable.id, alertId));
     expect(row.tappedAt).toBeTruthy();
-    expect(row.receivedAt).toBeTruthy();
+    expect(row.arrivedAt).toBeTruthy();
+    const d = (await api("/portal/push/devices", { token: tok })).json.devices.find((x: any) => x.deviceId === deviceKey(A.endpoint()));
+    expect(d.lastTest.outcome).toBe("displayed");
   });
 
   it("removes one of my phones, never someone else's", async (ctx) => {
@@ -245,5 +253,106 @@ describe("phone alert receipts", () => {
     const r = await sendTest(otherTok);
     expect(r.json.sent.find((s: any) => s.deviceId === deviceKey(G.endpoint())).result).toBe("gone");
     expect(await subsFor(G.endpoint())).toHaveLength(0);
+  });
+
+  // Dean, 2026-10-22: tell apart (1) the service worker never ran, (2) it ran
+  // but showNotification failed, (3) it ran and displayed. Plus: an old
+  // service worker that can't report must not read as (1).
+  describe("what the phone's service worker did", () => {
+    const E = phone("e");
+    const outcome = async () => (await api("/portal/push/devices", { token: otherTok })).json.devices
+      .find((d: any) => d.deviceId === deviceKey(E.endpoint())).lastTest;
+    const freshTest = async () => {
+      await ageTests(other.userId);
+      const r = await sendTest(otherTok);
+      expect(r.status).toBe(200);
+      return r.json.sent.find((x: any) => x.deviceId === deviceKey(E.endpoint())).alertId as string;
+    };
+    const receipt = (body: Record<string, unknown>) => api("/push/receipt", { method: "POST", body: { sw: "receipts-2", ...body } });
+
+    it("an old service worker (no version at registration): silence is 'no receipt, old app', not 'never arrived'", async (ctx) => {
+      if (!pushReachable) ctx.skip();
+      expect((await api("/portal/push/subscribe", { method: "POST", token: otherTok, body: E.body() })).status).toBe(200);
+      const id = await freshTest();
+      await db.update(pushAlertsTable).set({ sentAt: new Date(Date.now() - 5 * 60_000) }).where(eq(pushAlertsTable.id, id));
+      expect((await outcome()).outcome).toBe("no_receipt_old_app");
+    });
+
+    it("(1) new service worker, no word within a minute: never arrived", async (ctx) => {
+      if (!pushReachable) ctx.skip();
+      expect((await api("/portal/push/subscribe", { method: "POST", token: otherTok, body: E.body(undefined, "receipts-2") })).status).toBe(200);
+      const id = await freshTest();
+      expect((await db.select().from(pushAlertsTable).where(eq(pushAlertsTable.id, id)))[0].deviceSw).toBe("receipts-2");
+      expect((await outcome()).outcome).toBe("waiting");
+      await db.update(pushAlertsTable).set({ sentAt: new Date(Date.now() - 10 * 60_000) })
+        .where(and(eq(pushAlertsTable.endpoint, E.endpoint()), eq(pushAlertsTable.kind, "test")));
+      await db.update(pushAlertsTable).set({ sentAt: new Date(Date.now() - 5 * 60_000) }).where(eq(pushAlertsTable.id, id));
+      expect((await outcome()).outcome).toBe("never_arrived");
+    });
+
+    it("ran, then nothing more (killed while showing): arrived, no result", async (ctx) => {
+      if (!pushReachable) ctx.skip();
+      const id = await freshTest();
+      await receipt({ id, event: "arrived", permission: "granted" });
+      expect((await outcome()).outcome).toBe("arrived_no_result");
+    });
+
+    it("the exact bodies sw.js sends on success are accepted, nulls included (a 400 here once dropped every success)", async (ctx) => {
+      if (!pushReachable) ctx.skip();
+      const id = await freshTest();
+      for (const body of [
+        { id, event: "arrived", permission: "granted", sw: "receipts-2" },
+        { id, event: "received", permission: "granted", sw: "receipts-2", shown: true, error: null, posted: null, foreground: false },
+      ]) expect((await api("/push/receipt", { method: "POST", body })).status).toBe(200);
+      expect((await outcome()).outcome).toBe("displayed");
+    });
+
+    it("(2) ran and showNotification threw: show failed, with the error", async (ctx) => {
+      if (!pushReachable) ctx.skip();
+      const id = await freshTest();
+      await receipt({ id, event: "arrived" });
+      await receipt({ id, event: "received", shown: false, error: "TypeError: No active registration", posted: false, foreground: false });
+      expect(await outcome()).toMatchObject({ outcome: "show_failed", showError: "TypeError: No active registration" });
+    });
+
+    it("showNotification resolved but nothing is in the phone's list: not posted", async (ctx) => {
+      if (!pushReachable) ctx.skip();
+      const id = await freshTest();
+      await receipt({ id, event: "received", shown: true, posted: false, foreground: false });
+      expect((await outcome()).outcome).toBe("not_posted");
+    });
+
+    it("(3) displayed; and displayed while SiteSort was open on screen is told apart", async (ctx) => {
+      if (!pushReachable) ctx.skip();
+      let id = await freshTest();
+      await receipt({ id, event: "arrived" });
+      await receipt({ id, event: "received", shown: true, posted: true, foreground: false });
+      expect((await outcome()).outcome).toBe("displayed");
+      id = await freshTest();
+      await receipt({ id, event: "received", shown: true, posted: true, foreground: true });
+      expect((await outcome()).outcome).toBe("displayed_app_open");
+    });
+
+    it("a real gate hold sends the site manager's phone an alert that leaves a receipt row tagged hold-<id>", async (ctx) => {
+      if (!pushReachable) ctx.skip();
+      await db.update(projectsTable).set({ siteManagerId: other.userId }).where(eq(projectsTable.id, co.projectId));
+      const qr = await api(`/projects/${co.projectId}/qr-codes`, { method: "POST", token: admin, body: { categories: ["general"] } });
+      const fd = new FormData();
+      fd.append("photo", new Blob([Buffer.from("/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=", "base64")], { type: "image/jpeg" }), "c.jpg");
+      for (const [k, v] of Object.entries({ phone: "07700 900999", workerName: "Gate Tester", companyName: "Nobody Ltd" })) fd.append(k, v);
+      const res = await fetch(`${API_BASE}/site/${qr.json[0].token}/checkin`, { method: "POST", body: fd });
+      const held = await res.json();
+      expect(res.status).toBe(403);
+      expect(held.error).toBe("check_in_held");
+      const [row] = await db.select().from(siteCheckinsTable).where(eq(siteCheckinsTable.projectId, co.projectId));
+      let alert: any;
+      for (let i = 0; i < 20 && !alert; i++) {
+        await new Promise(r => setTimeout(r, 250));
+        [alert] = await db.select().from(pushAlertsTable).where(and(eq(pushAlertsTable.endpoint, E.endpoint()), eq(pushAlertsTable.tag, `hold-${row.id}`)));
+      }
+      expect(alert).toMatchObject({ sendResult: "accepted", deviceSw: "receipts-2", kind: "alert" });
+      const got = received.filter(x => x.path === E.id).at(-1)!;
+      expect(got.payload).toMatchObject({ tag: `hold-${row.id}`, receipt: alert.id, url: "/portal/site-register" });
+    });
   });
 });

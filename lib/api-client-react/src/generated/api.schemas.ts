@@ -1987,6 +1987,11 @@ export interface PortalPushSubscribeRequest {
   endpoint: string;
   keys: PortalPushSubscribeRequestKeys;
   userAgent?: string;
+  /**
+   * The phone's active service worker version (null/absent = an old one that can't send receipts).
+   * @maxLength 32
+   */
+  swVersion?: string;
 }
 
 export interface PortalPushUnsubscribeRequest {
@@ -2031,6 +2036,7 @@ export type PushReceiptRequestEvent =
   (typeof PushReceiptRequestEvent)[keyof typeof PushReceiptRequestEvent];
 
 export const PushReceiptRequestEvent = {
+  arrived: "arrived",
   received: "received",
   tapped: "tapped",
 } as const;
@@ -2039,9 +2045,15 @@ export interface PushReceiptRequest {
   /** @maxLength 64 */
   id: string;
   event: PushReceiptRequestEvent;
-  shown?: boolean;
+  shown?: boolean | null;
   /** @maxLength 16 */
-  permission?: string;
+  permission?: string | null;
+  /** @maxLength 300 */
+  error?: string | null;
+  posted?: boolean | null;
+  foreground?: boolean | null;
+  /** @maxLength 32 */
+  sw?: string;
 }
 
 export type PortalPushAlertRowBannerAnswer =
@@ -2059,6 +2071,9 @@ export interface PortalPushAlertRow {
   /** accepted | gone | failed */
   sendResult: string;
   receivedAt: string | null;
+  /** no_receipt_old_app | never_arrived | waiting | arrived_no_result | show_failed | not_posted | displayed | displayed_app_open */
+  outcome: string;
+  showError: string | null;
   tappedAt: string | null;
   shown: boolean | null;
   permission: string | null;

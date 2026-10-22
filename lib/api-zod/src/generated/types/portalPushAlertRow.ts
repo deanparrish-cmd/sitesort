@@ -13,6 +13,9 @@ export interface PortalPushAlertRow {
   /** accepted | gone | failed */
   sendResult: string;
   receivedAt: string | null;
+  /** no_receipt_old_app | never_arrived | waiting | arrived_no_result | show_failed | not_posted | displayed | displayed_app_open */
+  outcome: string;
+  showError: string | null;
   tappedAt: string | null;
   shown: boolean | null;
   permission: string | null;

@@ -6295,6 +6295,10 @@ components:
           required: [p256dh, auth]
         userAgent:
           type: string
+        swVersion:
+          type: string
+          maxLength: 32
+          description: The phone's active service worker version (null/absent = an old one that can't send receipts).
       required: [endpoint, keys]
 
     PortalPushUnsubscribeRequest:
@@ -6361,12 +6365,27 @@ components:
           maxLength: 64
         event:
           type: string
-          enum: [received, tapped]
+          enum: [arrived, received, tapped]
         shown:
           type: boolean
+          nullable: true
         permission:
           type: string
           maxLength: 16
+          nullable: true
+        error:
+          type: string
+          maxLength: 300
+          nullable: true
+        posted:
+          type: boolean
+          nullable: true
+        foreground:
+          type: boolean
+          nullable: true
+        sw:
+          type: string
+          maxLength: 32
       required: [id, event]
 
     PortalPushAlertRow:
@@ -6380,6 +6399,12 @@ components:
           type: string
           description: accepted | gone | failed
         receivedAt:
+          type: string
+          nullable: true
+        outcome:
+          type: string
+          description: no_receipt_old_app | never_arrived | waiting | arrived_no_result | show_failed | not_posted | displayed | displayed_app_open
+        showError:
           type: string
           nullable: true
         tappedAt:
@@ -6398,7 +6423,7 @@ components:
         answeredAt:
           type: string
           nullable: true
-      required: [alertId, sentAt, sendResult, receivedAt, tappedAt, shown, permission, bannerAnswer, answeredAt]
+      required: [alertId, sentAt, sendResult, receivedAt, outcome, showError, tappedAt, shown, permission, bannerAnswer, answeredAt]
 
     PortalPushDevice:
       type: object

@@ -113,6 +113,20 @@ async function fetchVapidKey(): Promise<string | null> {
   }
 }
 
+// Which service worker version is running on this phone (sw.js SW_VERSION).
+// Null = an old one that doesn't answer and can't send alert receipts, so the
+// server must not read its silence as "the alert never arrived".
+async function activeSwVersion(reg: ServiceWorkerRegistration): Promise<string | null> {
+  const sw = reg.active;
+  if (!sw) return null;
+  return new Promise((resolve) => {
+    const ch = new MessageChannel();
+    const t = setTimeout(() => resolve(null), 1500);
+    ch.port1.onmessage = (e) => { clearTimeout(t); resolve(typeof e.data === "string" ? e.data : null); };
+    try { sw.postMessage("SW_VERSION?", [ch.port2]); } catch { clearTimeout(t); resolve(null); }
+  });
+}
+
 // Is THIS device currently subscribed (permission granted + an active push
 // subscription registered)? Drives the settings toggle state.
 export async function isDeviceSubscribed(): Promise<boolean> {
@@ -168,6 +182,7 @@ export async function resyncPush(): Promise<void> {
         endpoint: sub.endpoint,
         keys: { p256dh: json.keys?.p256dh ?? bufToB64Url(sub.getKey("p256dh")), auth: json.keys?.auth ?? bufToB64Url(sub.getKey("auth")) },
         userAgent: navigator.userAgent,
+        swVersion: await activeSwVersion(reg),
       }),
     }).catch(() => {});
   } catch { /* best-effort — never disrupt app load */ }
@@ -206,6 +221,7 @@ export async function enablePush(): Promise<EnableResult> {
         endpoint: sub.endpoint,
         keys: { p256dh: json.keys?.p256dh ?? bufToB64Url(sub.getKey("p256dh")), auth: json.keys?.auth ?? bufToB64Url(sub.getKey("auth")) },
         userAgent: navigator.userAgent,
+        swVersion: await activeSwVersion(reg),
       }),
     }).catch(() => null);
     if (!res) return "unreachable";

@@ -11,4 +11,9 @@ export interface PortalPushSubscribeRequest {
   endpoint: string;
   keys: PortalPushSubscribeRequestKeys;
   userAgent?: string;
+  /**
+   * The phone's active service worker version (null/absent = an old one that can't send receipts).
+   * @maxLength 32
+   */
+  swVersion?: string;
 }

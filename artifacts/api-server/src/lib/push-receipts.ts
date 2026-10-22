@@ -23,26 +23,66 @@ export function deviceLabel(userAgent: string | null): string {
   return "Device";
 }
 
-export type ReceiptEvent = "received" | "tapped";
+export type ReceiptEvent = "arrived" | "received" | "tapped";
+export type ReceiptDetail = {
+  shown?: boolean | null; permission?: string | null; error?: string | null;
+  posted?: boolean | null; foreground?: boolean | null; sw?: string | null;
+};
 
 // Called by sw.js (no login: a service worker holds no portal token). The id is
 // a random UUID only ever carried inside the encrypted push payload, and a
-// receipt can only stamp its own row once, so a guessed id changes nothing real.
-export async function recordReceipt(id: string, event: ReceiptEvent, shown: boolean | null, permission: string | null): Promise<boolean> {
-  const perm = permission && ["granted", "denied", "default"].includes(permission) ? permission : null;
-  const { rowCount } = event === "received"
-    ? await pool.query(
-        `UPDATE push_alerts SET received_at = COALESCE(received_at, now()), shown = COALESCE($2, shown), permission = COALESCE($3, permission)
-          WHERE id = $1 AND send_result = 'accepted'`, [id, shown, perm])
-    // A tap proves the phone got it even if the "received" report was lost.
-    : await pool.query(
-        `UPDATE push_alerts SET tapped_at = COALESCE(tapped_at, now()), received_at = COALESCE(received_at, now())
-          WHERE id = $1 AND send_result = 'accepted'`, [id]);
+// receipt can only stamp its own row, so a guessed id changes nothing real.
+//   arrived:  the service worker ran (sent BEFORE it tries to show anything)
+//   received: showNotification finished; shown/error say whether it threw
+//   tapped:   the notification was tapped
+export async function recordReceipt(id: string, event: ReceiptEvent, d: ReceiptDetail = {}): Promise<boolean> {
+  const perm = d.permission && ["granted", "denied", "default"].includes(d.permission) ? d.permission : null;
+  const sw = d.sw ? d.sw.slice(0, 32) : null;
+  const q = event === "arrived"
+    ? [`UPDATE push_alerts SET arrived_at = COALESCE(arrived_at, now()), sw_version = COALESCE($2, sw_version), permission = COALESCE($3, permission)
+         WHERE id = $1 AND send_result = 'accepted'`, [id, sw, perm]]
+    : event === "received"
+    ? [`UPDATE push_alerts SET received_at = COALESCE(received_at, now()), arrived_at = COALESCE(arrived_at, now()),
+              shown = COALESCE($2, shown), permission = COALESCE($3, permission), show_error = COALESCE($4, show_error),
+              posted = COALESCE($5, posted), foreground = COALESCE($6, foreground), sw_version = COALESCE($7, sw_version)
+         WHERE id = $1 AND send_result = 'accepted'`,
+       [id, d.shown ?? null, perm, d.error ? d.error.slice(0, 300) : null, d.posted ?? null, d.foreground ?? null, sw]]
+    // A tap proves the phone got it even if the other reports were lost.
+    : [`UPDATE push_alerts SET tapped_at = COALESCE(tapped_at, now()), arrived_at = COALESCE(arrived_at, now())
+         WHERE id = $1 AND send_result = 'accepted'`, [id]];
+  const { rowCount } = await pool.query(q[0] as string, q[1] as unknown[]);
   return (rowCount ?? 0) > 0;
 }
 
+// What happened to one alert on one phone, in words a person can act on.
+//   no_receipt_old_app  sent to a phone still on the old service worker: silence proves nothing
+//   waiting             under a minute old, no word yet
+//   never_arrived       the service worker never ran (the push didn't reach it, or no signal to report)
+//   arrived_no_result   it ran, then never finished showing (killed or hung)
+//   show_failed         it ran and showNotification threw (show_error says what)
+//   not_posted          showNotification resolved but the phone's list doesn't have it
+//   displayed           shown and posted; a banner depends on the phone's settings (Focus, banners)
+//   displayed_app_open  shown while SiteSort was open on screen: iOS shows no banner then, by design
+export type AlertOutcome = "no_receipt_old_app" | "waiting" | "never_arrived" | "arrived_no_result" | "show_failed" | "not_posted" | "displayed" | "displayed_app_open";
+export function alertOutcome(r: {
+  send_result: string; sent_at: Date | string; device_sw: string | null; arrived_at: Date | string | null; received_at: Date | string | null;
+  shown: boolean | null; posted: boolean | null; foreground: boolean | null; sw_version: string | null; tapped_at: Date | string | null;
+}): AlertOutcome | null {
+  if (r.send_result !== "accepted") return null;
+  const heard = r.arrived_at || r.received_at || r.tapped_at;
+  if (!heard) {
+    if (!r.device_sw) return "no_receipt_old_app";
+    return Date.now() - new Date(r.sent_at).getTime() < 60_000 ? "waiting" : "never_arrived";
+  }
+  // A tap with no other report: it was on screen.
+  if (!r.received_at) return r.tapped_at ? "displayed" : "arrived_no_result";
+  if (r.shown === false) return "show_failed";
+  if (r.posted === false) return "not_posted";
+  return r.foreground ? "displayed_app_open" : "displayed";
+}
+
 export type DeviceAlertRow = {
-  alertId: string; sentAt: string; sendResult: string; receivedAt: string | null; tappedAt: string | null;
+  alertId: string; sentAt: string; sendResult: string; receivedAt: string | null; outcome: AlertOutcome | null; showError: string | null; tappedAt: string | null;
   shown: boolean | null; permission: string | null; bannerAnswer: "yes" | "no" | null; answeredAt: string | null;
 };
 export type UserDevice = {
@@ -52,7 +92,8 @@ export type UserDevice = {
 
 const iso = (d: Date | null | undefined) => (d ? new Date(d).toISOString() : null);
 const toRow = (r: any): DeviceAlertRow => ({
-  alertId: r.id, sentAt: iso(r.sent_at)!, sendResult: r.send_result, receivedAt: iso(r.received_at), tappedAt: iso(r.tapped_at),
+  alertId: r.id, sentAt: iso(r.sent_at)!, sendResult: r.send_result, receivedAt: iso(r.received_at),
+  outcome: alertOutcome(r), showError: r.show_error ?? null, tappedAt: iso(r.tapped_at),
   shown: r.shown, permission: r.permission, bannerAnswer: r.banner_answer, answeredAt: iso(r.answered_at),
 });
 
@@ -65,10 +106,10 @@ export async function listUserDevices(userId: string): Promise<Array<UserDevice 
   if (subs.length === 0) return [];
   const endpoints = subs.map((s: any) => s.endpoint);
   const [{ rows: confirmed }, { rows: tests }, { rows: recent }] = await Promise.all([
-    pool.query(`SELECT endpoint, max(received_at) AS t FROM push_alerts WHERE user_id = $1 AND endpoint = ANY($2) GROUP BY endpoint`, [userId, endpoints]),
+    pool.query(`SELECT endpoint, max(COALESCE(received_at, arrived_at, tapped_at)) AS t FROM push_alerts WHERE user_id = $1 AND endpoint = ANY($2) GROUP BY endpoint`, [userId, endpoints]),
     pool.query(`SELECT DISTINCT ON (endpoint) * FROM push_alerts WHERE user_id = $1 AND endpoint = ANY($2) AND kind = 'test' ORDER BY endpoint, sent_at DESC`, [userId, endpoints]),
     pool.query(`SELECT endpoint, received_at, sent_at FROM (
-                  SELECT endpoint, received_at, sent_at, row_number() OVER (PARTITION BY endpoint ORDER BY sent_at DESC) AS n
+                  SELECT endpoint, COALESCE(received_at, arrived_at, tapped_at) AS received_at, sent_at, row_number() OVER (PARTITION BY endpoint ORDER BY sent_at DESC) AS n
                     FROM push_alerts WHERE user_id = $1 AND endpoint = ANY($2) AND send_result = 'accepted') x
                  WHERE n <= 20 ORDER BY sent_at DESC`, [userId, endpoints]),
   ]);
@@ -112,10 +153,10 @@ export async function phoneAlertsFor(userIds: string[], projectId: string): Prom
       `SELECT s.user_id, count(DISTINCT s.endpoint)::int AS devices,
               count(DISTINCT s.endpoint) FILTER (WHERE a.t IS NOT NULL)::int AS confirmed, max(a.t) AS confirmed_at
          FROM push_subscriptions s
-         LEFT JOIN LATERAL (SELECT max(received_at) AS t FROM push_alerts WHERE endpoint = s.endpoint AND user_id = s.user_id) a ON true
+         LEFT JOIN LATERAL (SELECT max(COALESCE(received_at, arrived_at, tapped_at)) AS t FROM push_alerts WHERE endpoint = s.endpoint AND user_id = s.user_id) a ON true
         WHERE s.project_id = $1 AND s.user_id = ANY($2) GROUP BY s.user_id`, [projectId, userIds]),
     pool.query(
-      `SELECT DISTINCT ON (user_id) user_id, banner_answer, answered_at, received_at FROM push_alerts
+      `SELECT DISTINCT ON (user_id) user_id, banner_answer, answered_at, received_at, arrived_at, tapped_at FROM push_alerts
         WHERE user_id = ANY($1) AND kind = 'test' AND banner_answer IS NOT NULL ORDER BY user_id, answered_at DESC`, [userIds]),
     pool.query(
       `SELECT user_id, max(sent_at) AS t FROM push_alerts WHERE user_id = ANY($1) AND send_result = 'pruned' GROUP BY user_id`, [userIds]),
@@ -135,7 +176,7 @@ export async function phoneAlertsFor(userIds: string[], projectId: string): Prom
     };
     if (d?.confirmed_at) pa.confirmedAt = iso(d.confirmed_at)!;
     if (devices === 0 && p) pa.removedAt = iso(p)!;
-    if (b) pa.banner = { answer: b.banner_answer, at: iso(b.answered_at)!, reachedPhone: !!b.received_at };
+    if (b) pa.banner = { answer: b.banner_answer, at: iso(b.answered_at)!, reachedPhone: !!(b.received_at || b.arrived_at || b.tapped_at) };
     out.set(id, pa);
   }
   return out;

@@ -6,7 +6,9 @@
 // shell + its current asset hashes when online); immutable /assets/* build files
 // are cache-first (fast, and safe because their filename hash changes on rebuild);
 // everything else same-origin is network-first with a cache fallback.
-const CACHE = "sitesort-portal-v5";
+const CACHE = "sitesort-portal-v6";
+// Reported with every receipt and at registration. Bump when receipt behaviour changes.
+const SW_VERSION = "receipts-2";
 const SHELL = ["/index.html", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {
@@ -26,6 +28,9 @@ self.addEventListener("activate", (event) => {
 // Allow the page to trigger an immediate activation of a waiting SW.
 self.addEventListener("message", (event) => {
   if (event.data === "SKIP_WAITING") self.skipWaiting();
+  // The page asks which version is running, so the server knows whether this
+  // phone can send receipts (an old service worker never answers).
+  if (event.data === "SW_VERSION?" && event.ports && event.ports[0]) event.ports[0].postMessage(SW_VERSION);
 });
 
 // ---- Web Push (Team Portal notifications) ----
@@ -41,7 +46,11 @@ function sendReceipt(id, event, extra) {
   if (!id) return Promise.resolve();
   var perm = null;
   try { perm = (typeof Notification !== "undefined" && Notification.permission) || null; } catch (e) { perm = null; }
-  var body = Object.assign({ id: String(id), event: event, permission: perm }, extra || {});
+  var body = { id: String(id), event: event, sw: SW_VERSION };
+  if (perm) body.permission = perm;
+  // Leave out empty fields: a report must never be refused over a null.
+  var more = extra || {};
+  for (var k in more) if (more[k] !== null && more[k] !== undefined) body[k] = more[k];
   return fetch("/api/push/receipt", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), keepalive: true })
     .catch(function () { /* no signal: the alert just counts as unanswered */ });
 }
@@ -58,17 +67,34 @@ self.addEventListener("push", (event) => {
     data: { url: data.url || "/portal/overview", receipt: data.receipt || null },
   };
   event.waitUntil((async () => {
+    // 1. "arrived": this handler ran. Sent first and not awaited, so a hang or
+    //    a kill while showing still leaves proof the push got here.
+    const arrived = sendReceipt(data.receipt, "arrived");
     // iOS suppresses the notification banner while the PWA is in the
     // foreground, so ALSO hand the payload to any open window — the app shows
     // its own in-app banner. The system notification is still posted for the
     // lock screen / notification centre.
+    let foreground = false;
     try {
       const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-      for (const w of wins) w.postMessage({ kind: "push", title: title, body: options.body, url: options.data.url });
+      for (const w of wins) {
+        if (w.visibilityState === "visible" || w.focused) foreground = true;
+        w.postMessage({ kind: "push", title: title, body: options.body, url: options.data.url });
+      }
     } catch (e) { /* best-effort */ }
+    // 2. Show it, keeping what it threw if it fails.
     let shown = true;
-    try { await self.registration.showNotification(title, options); } catch (e) { shown = false; }
-    await sendReceipt(data.receipt, "received", { shown: shown });
+    let error = null;
+    try { await self.registration.showNotification(title, options); }
+    catch (e) { shown = false; error = String((e && e.name) || "Error") + ": " + String((e && e.message) || e); }
+    // 3. Is it really in the phone's notification list now?
+    let posted = null;
+    try {
+      const list = await self.registration.getNotifications(options.tag ? { tag: options.tag } : undefined);
+      posted = list.length > 0;
+    } catch (e) { posted = null; }
+    await arrived;
+    await sendReceipt(data.receipt, "received", { shown: shown, error: error, posted: posted, foreground: foreground });
   })());
 });
 

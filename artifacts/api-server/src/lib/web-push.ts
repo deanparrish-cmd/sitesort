@@ -40,7 +40,7 @@ export function getVapidPublicKey(): string | null {
 // their alerts don't land on a phone they no longer use. Returns project ids.
 export async function registerPushDevice(
   userId: string, currentProjectId: string,
-  sub: { endpoint: string; p256dh: string; auth: string; userAgent: string | null },
+  sub: { endpoint: string; p256dh: string; auth: string; userAgent: string | null; swVersion?: string | null },
 ): Promise<string[]> {
   const memberships = await db.select({ projectId: projectMembersTable.projectId }).from(projectMembersTable)
     .where(and(eq(projectMembersTable.userId, userId), isNotNull(projectMembersTable.personId)));
@@ -54,10 +54,10 @@ export async function registerPushDevice(
     const now = new Date();
     for (const projectId of projectIds) {
       await tx.insert(pushSubscriptionsTable)
-        .values({ id: generateId(), userId, projectId, endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth, userAgent: sub.userAgent })
+        .values({ id: generateId(), userId, projectId, endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth, userAgent: sub.userAgent, swVersion: sub.swVersion ?? null })
         .onConflictDoUpdate({
           target: [pushSubscriptionsTable.endpoint, pushSubscriptionsTable.projectId],
-          set: { userId, p256dh: sub.p256dh, auth: sub.auth, userAgent: sub.userAgent, lastSeenAt: now },
+          set: { userId, p256dh: sub.p256dh, auth: sub.auth, userAgent: sub.userAgent, swVersion: sub.swVersion ?? null, lastSeenAt: now },
         });
     }
   });
@@ -82,7 +82,7 @@ export const PRUNE_AFTER_UNANSWERED = 7;
 // signal gets it late and reports back late.
 export const RECEIPT_GRACE_MS = 10 * 60 * 1000;
 
-type Device = { endpoint: string; p256dh: string; auth: string };
+type Device = { endpoint: string; p256dh: string; auth: string; swVersion?: string | null };
 export type DeviceSend = { alertId: string; endpoint: string; result: "accepted" | "gone" | "failed"; status: number | null };
 
 // Send one payload to each phone once, recording a push_alerts row per phone.
@@ -116,7 +116,7 @@ export async function sendToDevices(
       }
     }
     await db.insert(pushAlertsTable).values({
-      id: alertId, userId, projectId, endpoint: d.endpoint, kind, tag: payload.tag ?? null, sendResult: result, sendStatus: status,
+      id: alertId, userId, projectId, endpoint: d.endpoint, kind, tag: payload.tag ?? null, sendResult: result, sendStatus: status, deviceSw: d.swVersion ?? null,
     }).catch((err) => logger.warn({ err }, "web-push: alert row not recorded"));
     if (result === "accepted") await pruneIfUnanswered(userId, d.endpoint).catch((err) => logger.warn({ err }, "web-push: prune check failed"));
     out.push({ alertId, endpoint: d.endpoint, result, status });
@@ -129,8 +129,8 @@ export async function sendToDevices(
 // no receipt. Leaves a `pruned` marker row so the PM can see why it went.
 export async function pruneIfUnanswered(userId: string, endpoint: string): Promise<boolean> {
   const { rows } = await pool.query(
-    `WITH first AS (SELECT min(received_at) AS t FROM push_alerts WHERE endpoint = $1 AND received_at IS NOT NULL)
-     SELECT a.received_at FROM push_alerts a, first
+    `WITH first AS (SELECT min(COALESCE(received_at, arrived_at, tapped_at)) AS t FROM push_alerts WHERE endpoint = $1)
+     SELECT COALESCE(a.received_at, a.arrived_at, a.tapped_at) AS received_at FROM push_alerts a, first
       WHERE a.endpoint = $1 AND a.send_result = 'accepted' AND first.t IS NOT NULL
         AND a.sent_at > first.t AND a.sent_at < now() - ($2::int * interval '1 millisecond')
       ORDER BY a.sent_at DESC LIMIT $3`,

@@ -10,6 +10,7 @@ export type PushReceiptRequestEvent =
   (typeof PushReceiptRequestEvent)[keyof typeof PushReceiptRequestEvent];
 
 export const PushReceiptRequestEvent = {
+  arrived: "arrived",
   received: "received",
   tapped: "tapped",
 } as const;
