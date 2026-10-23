@@ -209,7 +209,7 @@ export default function LandingPage() {
                 points: [
                   "One-tap 'read and understood' confirmations",
                   "PIN-protected sign-off for RAMS, permits & safety docs",
-                  "Tamper-proof audit trail of every sign-off",
+                  "A sign-off trail SiteSort only ever adds to, showing PIN signatures apart from taps",
                 ],
               },
               {

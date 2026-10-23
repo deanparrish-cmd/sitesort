@@ -282,7 +282,7 @@ export function DocumentDialogs() {
               <div className="min-w-0">
                 <p className="font-semibold text-sm truncate">{auditDoc.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  A permanent, tamper-proof record of every sign-off. Entries can never be edited or deleted.
+                  Every sign-off of this document. SiteSort only ever adds to this record, and each entry shows whether it was signed with a PIN.
                 </p>
               </div>
             </div>
