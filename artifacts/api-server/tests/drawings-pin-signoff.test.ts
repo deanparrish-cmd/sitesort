@@ -78,9 +78,21 @@ describe("drawings require a PIN signature from now on; nothing recorded is rese
     expect(shared.requiresAcknowledgment).toBe(false);
     expect(shared.myStatus).toBe("viewed"); // its Opened mark is kept
     expect((await db.select().from(documentsTable).where(eq(documentsTable.id, old.id)))[0].requiresAcknowledgment).toBe(false);
-    const rev = await upload({ previousVersionId: old.id, requiresAcknowledgment: false, carryForward: "share" });
+    // A real revision: supersededDocumentId plus the carry-forward answer
+    // (the upload route reads these; an unknown field would upload an
+    // unrelated new drawing and prove nothing about revisions).
+    const ruleIds = (await db.select().from(portalSharesTable).where(eq(portalSharesTable.itemId, old.id))).map(r => r.id);
+    expect(ruleIds.length).toBeGreaterThan(0);
+    const rev = await upload({ name: old.name, supersededDocumentId: old.id, requiresAcknowledgment: false, carryShareIds: ruleIds, carryShownShareIds: ruleIds });
+    const [oldRow] = await db.select().from(documentsTable).where(eq(documentsTable.id, old.id));
+    expect(oldRow.status).toBe("superseded");
+    const [revRow] = await db.select().from(documentsTable).where(eq(documentsTable.id, rev.id));
+    expect(revRow.previousVersionId).toBe(old.id);
     expect(rev.requiresAcknowledgment).toBe(true);
     expect(rev.pinRequired).toBe(true);
+    // The member gets the revision and must sign it with a PIN.
+    expect((await api(`/portal/documents/${rev.id}/view`, { method: "POST", token: portal })).status).toBe(200);
+    expect((await api(`/portal/documents/${rev.id}/acknowledge`, { method: "POST", token: portal, body: {} })).status).toBe(400);
   });
 
   it("on an existing drawing that already required sign-off, an earlier no-PIN acknowledgement stays; anyone still to sign now needs a PIN", async () => {
