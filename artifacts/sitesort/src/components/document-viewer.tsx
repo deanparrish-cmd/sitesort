@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CheckCircle2, Download, ExternalLink, FileSignature, X } from "lucide-react";
+import { CheckCircle2, Download, ExternalLink, FileSignature, ShieldCheck, X } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { SignOffPinCard } from "@/components/sign-off-pin-card";
 import type { useSignOffFlow } from "@/hooks/use-sign-off-flow";
@@ -142,9 +142,9 @@ export function DocumentViewer({ doc, recordOpen, signOff, pinRequired, signBloc
           data-testid="document-viewer-signoff">
           {signed ? (
             <div className="flex flex-col gap-3" data-testid="document-viewer-signed">
-              <p className="flex items-start gap-2 text-success font-bold text-base">
-                <CheckCircle2 className="w-6 h-6 shrink-0" />
-                <span>Signed off at {signOff.lastSigned!.at.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}. Your name and the time are recorded.</span>
+              <p className={`flex items-start gap-2 font-bold text-base ${pinRequired ? "text-success" : "text-foreground"}`}>
+                {pinRequired ? <ShieldCheck className="w-6 h-6 shrink-0" /> : <CheckCircle2 className="w-6 h-6 shrink-0 text-muted-foreground" />}
+                <span>{pinRequired ? "Signed with your PIN" : "Acknowledged, without a PIN,"} at {signOff.lastSigned!.at.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}. Your name and the time are recorded.</span>
               </p>
               <button type="button" onClick={close}
                 className="w-full min-h-12 rounded-xl border-2 border-border text-base font-bold hover:bg-muted">Close</button>
@@ -157,7 +157,7 @@ export function DocumentViewer({ doc, recordOpen, signOff, pinRequired, signBloc
             <button type="button" data-testid="document-viewer-sign-off"
               onClick={() => signOff.open({ id: doc.id, name: doc.name, pinRequired })}
               className="w-full inline-flex items-center justify-center gap-2 min-h-14 rounded-xl bg-accent text-accent-foreground text-base font-bold hover:bg-accent/90 active:scale-[0.98] transition-all">
-              <FileSignature className="w-5 h-5" /> Sign off
+              <FileSignature className="w-5 h-5" /> {pinRequired ? "Sign off" : "Acknowledge"}
             </button>
           ) : recorded === "failed" ? (
             <div className="flex flex-col gap-2 pb-1">

@@ -16,6 +16,12 @@ export const usersTable = pgTable("users", {
   // (admin/project_manager/site_worker). Same pattern as people.roleTitle.
   roleTitle: text("role_title"),
   pinHash: text("pin_hash"),
+  // Set when the PIN is switched off after 3 lockouts in 24 h (Dean,
+  // 2026-10-23). Only the owner's emailed reset link clears it.
+  pinLockedAt: timestamp("pin_locked_at"),
+  // When this account proved it can read its inbox: accepted an invite whose
+  // link only ever went to that address. Null = never proven.
+  emailProvenAt: timestamp("email_proven_at"),
   avatarUrl: text("avatar_url"),
   emailVerified: boolean("email_verified").notNull().default(false),
   emailNotifications: boolean("email_notifications").notNull().default(true),

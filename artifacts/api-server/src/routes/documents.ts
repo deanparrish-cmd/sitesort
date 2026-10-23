@@ -8,7 +8,7 @@ import { authenticate } from "../middlewares/auth";
 import { allow, COMPANY_MANAGER, INTERNAL_STAFF, projectApprover, projectApproverFor } from "../lib/authz";
 import { enqueuePushForMembers, acceptedPortalMemberUserIds } from "../lib/push-triggers";
 import { removedFromProjectUserIds } from "../lib/project-membership";
-import { isPinLockedOut, recordFailedPinAttempt, clearPinAttempts } from "../lib/pin-attempts";
+import { pinLockResponse, recordFailedPinAttempt, clearPinAttempts } from "../lib/pin-attempts";
 import { pinRequiredForDoc, signOffRequiredOnUpload, SUPERSEDED_SIGNOFF_MESSAGE, SHARE_ANSWER_REQUIRED_MESSAGE, SHARE_LIST_CHANGED_MESSAGE, OPEN_FIRST_MESSAGE } from "../lib/signoff";
 import { distributeDocumentToUser } from "../lib/document-distribution";
 import { isProjectApprover } from "../lib/project-authority";
@@ -25,12 +25,16 @@ const DOC_APPROVER = projectApproverFor("document", async (req) => {
   return row?.projectId ?? null;
 });
 
-function getDistSummary(dists: Array<{ status: string }>) {
+// signedWithPin: how many of the acknowledged were signed with a PIN. The rest
+// were a tap on a signed-in device and are never shown as equivalent (Dean,
+// 2026-10-23: "Signed with PIN" versus "Acknowledged").
+function getDistSummary(dists: Array<{ status: string; signedOffWithPin?: boolean }>) {
   const total = dists.length;
   const pending = dists.filter(d => d.status === "pending").length;
   const viewed = dists.filter(d => d.status === "viewed").length;
   const acknowledged = dists.filter(d => d.status === "acknowledged").length;
-  return { total, pending, viewed, acknowledged };
+  const signedWithPin = dists.filter(d => d.status === "acknowledged" && d.signedOffWithPin).length;
+  return { total, pending, viewed, acknowledged, signedWithPin };
 }
 
 // Alphabetical revision label from a 1-based version (F3): 1→A … 26→Z, 27→AA…
@@ -101,7 +105,7 @@ router.get("/projects/:projectId/documents", authenticate, allow(INTERNAL_STAFF)
     const uploaderIds = [...new Set(docs.map(d => d.uploadedBy))];
     const ruleItemIds = [...new Set([...docIds, ...docs.map(d => d.previousVersionId).filter((x): x is string => !!x)])];
     const [allDists, uploaders, ruleRows] = docIds.length === 0 ? [[], [], []] : await Promise.all([
-      db.select({ documentId: documentDistributionsTable.documentId, userId: documentDistributionsTable.userId, status: documentDistributionsTable.status })
+      db.select({ documentId: documentDistributionsTable.documentId, userId: documentDistributionsTable.userId, status: documentDistributionsTable.status, signedOffWithPin: documentDistributionsTable.signedOffWithPin })
         .from(documentDistributionsTable).where(inArray(documentDistributionsTable.documentId, docIds)),
       db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(inArray(usersTable.id, uploaderIds)),
       db.select({ itemId: portalSharesTable.itemId }).from(portalSharesTable)
@@ -110,7 +114,7 @@ router.get("/projects/:projectId/documents", authenticate, allow(INTERNAL_STAFF)
     // A current revision with no portal shares while the one it replaced had
     // some has reached nobody on the portal: the documents tab flags it.
     const sharedOnPortal = new Set(ruleRows.map(r => r.itemId));
-    const distsByDoc = new Map<string, { userId: string; status: string }[]>();
+    const distsByDoc = new Map<string, { userId: string; status: string; signedOffWithPin: boolean }[]>();
     for (const r of allDists) {
       const list = distsByDoc.get(r.documentId) ?? [];
       list.push(r);
@@ -141,6 +145,7 @@ router.get("/projects/:projectId/documents", authenticate, allow(INTERNAL_STAFF)
         createdAt: d.createdAt.toISOString(),
         distributionSummary: getDistSummary(dists),
         myDistributionStatus: myDist?.status ?? null,
+        mySignedOffWithPin: myDist?.status === "acknowledged" ? myDist.signedOffWithPin : null,
         newRevisionNotShared: d.status === "current" && d.type !== "safety" && !sharedOnPortal.has(d.id)
           && !!d.previousVersionId && sharedOnPortal.has(d.previousVersionId),
       };
@@ -501,8 +506,9 @@ router.post("/documents/:documentId/acknowledge", authenticate, allow(INTERNAL_S
     // PIN checks are rate-limited per user (5 wrong attempts locks out 15 min).
     const pinRequired = pinRequiredForDoc(docs[0]);
     if (pinRequired) {
-      if (await isPinLockedOut(req.user!.id)) {
-        res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
+      const pinLocked = await pinLockResponse(req.user!.id);
+      if (pinLocked) {
+        res.status(pinLocked.status).json(pinLocked.body);
         return;
       }
 
@@ -520,9 +526,9 @@ router.post("/documents/:documentId/acknowledge", authenticate, allow(INTERNAL_S
 
       const valid = await bcrypt.compare(String(pin), pinHash);
       if (!valid) {
-        const { locked, remaining } = await recordFailedPinAttempt(req.user!.id);
+        const { locked, remaining, lock } = await recordFailedPinAttempt(req.user!.id);
         if (locked) {
-          res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
+          res.status(lock.status).json(lock.body);
         } else {
           res.status(401).json({ error: "invalid_pin", message: "Incorrect PIN", attemptsRemaining: remaining });
         }
@@ -706,7 +712,7 @@ router.patch("/documents/:documentId", authenticate, allow(DOC_APPROVER), async 
     await db.update(documentsTable).set(updates).where(eq(documentsTable.id, req.params.documentId));
     const updated = await db.select().from(documentsTable).where(eq(documentsTable.id, req.params.documentId)).limit(1);
     const d = updated[0];
-    const dists = await db.select({ status: documentDistributionsTable.status }).from(documentDistributionsTable).where(eq(documentDistributionsTable.documentId, d.id));
+    const dists = await db.select({ status: documentDistributionsTable.status, signedOffWithPin: documentDistributionsTable.signedOffWithPin }).from(documentDistributionsTable).where(eq(documentDistributionsTable.documentId, d.id));
     const uploaderRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, d.uploadedBy)).limit(1);
     res.json({
       id: d.id, projectId: d.projectId, uploadedBy: d.uploadedBy,

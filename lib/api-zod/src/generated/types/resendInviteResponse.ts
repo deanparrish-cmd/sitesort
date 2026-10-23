@@ -10,5 +10,4 @@ import type { ResendInviteResponseEmailStatus } from "./resendInviteResponseEmai
 export interface ResendInviteResponse {
   success: boolean;
   emailStatus: ResendInviteResponseEmailStatus;
-  inviteUrl?: string;
 }

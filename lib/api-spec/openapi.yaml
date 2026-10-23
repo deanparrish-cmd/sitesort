@@ -4089,6 +4089,10 @@ components:
           type: string
           enum: [pending, viewed, acknowledged]
           nullable: true
+        mySignedOffWithPin:
+          type: boolean
+          nullable: true
+          description: When the requester has signed it, whether they did so with their PIN (true) or acknowledged without one (false). Null when not signed.
         newRevisionNotShared:
           type: boolean
           description: Current revision with no portal shares while the revision it replaced had some, so it has reached nobody on the portal.
@@ -4116,6 +4120,9 @@ components:
           type: integer
         acknowledged:
           type: integer
+        signedWithPin:
+          type: integer
+          description: How many of the acknowledged were signed with a PIN; the rest were acknowledged without one.
       required: [total, pending, viewed, acknowledged]
 
     UploadDocumentRequest:
@@ -6079,6 +6086,10 @@ components:
           format: date-time
           nullable: true
           description: When this viewer signed it off, if they have.
+        mySignedOffWithPin:
+          type: boolean
+          nullable: true
+          description: Whether this viewer's sign-off was made with their PIN (true) or acknowledged without one (false). Null when not signed.
         myViewedAt:
           type: string
           format: date-time
@@ -6474,9 +6485,7 @@ components:
       properties:
         invite:
           $ref: "#/components/schemas/ProjectInvite"
-        inviteUrl:
-          type: string
-      required: [invite, inviteUrl]
+      required: [invite]
 
     PushReceiptRequest:
       type: object
@@ -6933,13 +6942,10 @@ components:
           enum: [invited, member]
         person:
           $ref: "#/components/schemas/Person"
-        inviteUrl:
-          type: string
-          nullable: true
         emailStatus:
           type: string
-          enum: [sent, failed]
-          description: Delivery state of the invite email just sent (absent when provisioning an existing member).
+          enum: [sent, failed, portal]
+          description: Where the invite went (absent when provisioning an existing member). The invite link itself is never returned; it goes only to the invitee's email.
       required: [status, person]
 
     ResendInviteResponse:
@@ -6950,8 +6956,6 @@ components:
         emailStatus:
           type: string
           enum: [sent, failed, portal]
-        inviteUrl:
-          type: string
       required: [success, emailStatus]
 
     ActivityEntry:

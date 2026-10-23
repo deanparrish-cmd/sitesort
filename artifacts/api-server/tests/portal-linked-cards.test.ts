@@ -8,6 +8,7 @@ import {
 import {
   seedCompany, cleanupFixtures, api, login, portalLogin, seedCrossTenantPortalMember, cleanupPortalMember,
   createTestDocument, cleanupTestDocuments, type Fixture, type PortalMemberFixture,
+  inviteTokenFromInbox,
 } from "./helpers";
 
 /**
@@ -86,7 +87,7 @@ describe("one login, several cards on a project (option B)", () => {
     cardC = await firmCard(`Linked Firm C ${Date.now()}`);
     const invC = await api(`/projects/${co.projectId}/portal-invites`, { method: "POST", token: admin, body: { personId: cardC, role: "subcontractor" } });
     expect(invC.status).toBe(201);
-    const raw = String(invC.json.inviteUrl).split("/accept/")[1];
+    const raw = await inviteTokenFromInbox(co.projectId, cardC);
     const accC = await api(`/portal/invite/${raw}/accept`, { method: "POST", body: { password: member.password } });
     expect(accC.status).toBe(200);
   });

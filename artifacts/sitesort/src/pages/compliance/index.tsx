@@ -19,6 +19,7 @@ import { CertTypeConfirm } from "@/components/cert-type";
 import { ListRow } from "@/components/ui/list-row";
 import { useSignOffFlow } from "@/hooks/use-sign-off-flow";
 import { DocumentViewer } from "@/components/document-viewer";
+import { SignatureMark } from "@/components/signature-mark";
 
 type InsuranceItem = { subcontractorId: string; subcontractorName: string; insuranceType: string; expiryDate: string; status: string; certificateUrl?: string | null };
 type ArchivedInsuranceItem = { id: string; subcontractorId: string; subcontractorName: string; insuranceType: string; expiryDate: string; certificateUrl?: string | null; archivedAt: string };
@@ -27,7 +28,7 @@ type ArchivedCertItem = { id: string; personId: string; personName: string; cert
 type PermitItem = { permitId: string; projectId: string; projectName: string; permitType: string; expiryDate: string; status: string; documentUrl?: string | null };
 type ArchivedPermitItem = { id: string; projectId: string; projectName: string; permitType: string; expiryDate: string; documentUrl?: string | null; archivedAt: string };
 type ArchivedDocItem = { id: string; name: string; type: string; version: number; fileUrl: string; projectId: string; projectName: string; createdAt: string };
-type AckRecipient = { userId: string; name: string; status: string; viewedAt?: string | null; acknowledgedAt?: string | null };
+type AckRecipient = { userId: string; name: string; status: string; viewedAt?: string | null; acknowledgedAt?: string | null; signedOffWithPin?: boolean };
 type AckItem = {
   documentId: string; documentName: string; projectId: string; projectName: string;
   pendingCount: number; notSent?: boolean; fileUrl?: string | null; version: number; revision?: string | null;
@@ -867,9 +868,7 @@ export default function CompliancePage() {
                                 <span className="truncate">{r.name}</span>
                               </span>
                               {r.status === "acknowledged" ? (
-                                <span className="flex items-center gap-1 text-emerald-600 font-medium shrink-0">
-                                  <CheckCircle2 className="w-3 h-3" /> Signed off {r.acknowledgedAt ? new Date(r.acknowledgedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : ""}
-                                </span>
+                                <SignatureMark withPin={r.signedOffWithPin} at={r.acknowledgedAt ? new Date(r.acknowledgedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : null} className="shrink-0 font-medium" />
                               ) : r.status === "viewed" ? (
                                 <span className="text-amber-700 dark:text-amber-400 shrink-0">Opened{r.viewedAt ? ` ${new Date(r.viewedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}, not signed</span>
                               ) : r.status === "pending" ? (
@@ -1094,7 +1093,7 @@ export default function CompliancePage() {
 
             {!signOff.target.pinRequired ? (
               <p className="text-sm text-muted-foreground">
-                By signing off you confirm: <span className="font-medium text-foreground">"I confirm I have read and understood this document."</span> Your name and the time will be recorded.
+                By acknowledging you confirm: <span className="font-medium text-foreground">"I confirm I have read and understood this document."</span> Your name and the time will be recorded. No PIN is asked for this document, so it's recorded as acknowledged, not signed with a PIN.
               </p>
             ) : signOff.setPinMode ? (
               <div className="space-y-3">
@@ -1142,7 +1141,7 @@ export default function CompliancePage() {
             <DialogFooter>
               <Button variant="ghost" onClick={signOff.close}>Cancel</Button>
               <Button variant="accent" onClick={signOff.submit} isLoading={signOff.submitting}>
-                {!signOff.target.pinRequired ? "Confirm & sign off" : signOff.setPinMode ? "Set PIN & sign off" : "Sign off"}
+                {!signOff.target.pinRequired ? "Confirm & acknowledge" : signOff.setPinMode ? "Set PIN & sign off" : "Sign off"}
               </Button>
             </DialogFooter>
           </div>

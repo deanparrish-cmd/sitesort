@@ -146,8 +146,9 @@ export const PM_GUIDE: GuideSection[] = [
       {
         heading: "Send an invite",
         body: [
-          "On a project's Team tab, click Invite to Portal on a person's card. They'll get an email with a link to set up access; you can also Copy link to share it directly (by text, WhatsApp, etc.).",
-          "If their email already has a SiteSort login, they can join with their existing password instead of setting a new one. Invite links keep working even after they've been accepted, so re-sending an old link won't lock anyone out.",
+          "On a project's Team tab, click Invite to Portal on a person's card. They get an email with a link to set up access. The link only ever goes to their email: nobody at your company, you included, is shown it. That way only they can create their login and choose their password and PIN, which is what makes their signatures count. If the email doesn't arrive, check the address on their card and press Send again.",
+          "If their email already has a SiteSort login, the invite just adds the project to it: they sign in with their own password. An invite never changes anyone's password. Each link works once; sending again makes a fresh one.",
+          "Nobody at your company can see, set or reset someone else's password or PIN. A worker who forgets their PIN resets it themselves, with their password or a link to their own email. They get an email and a phone alert whenever their password or PIN changes.",
         ],
       },
       {
@@ -279,6 +280,7 @@ export const PM_GUIDE: GuideSection[] = [
         heading: "Sign-offs",
         body: [
           "Pending Sign-offs (on the dashboard and in Compliance) counts everyone who hasn't signed a document that needs a sign-off, whether they've opened it or not, on its latest revision. Tap the dashboard item: if the document is waiting for your signature it starts your sign-off; if it's someone else's, Compliance shows who hasn't signed (Not opened, or Opened, not signed). For safety-critical documents (method statements, permits and safety documents), or any document where you've switched on \"Require a PIN to sign off\", the signer enters their 4-digit PIN. Everything else uses a simple read-and-confirm step, no PIN needed.",
+          "Every signature says how it was given. Signed with PIN: the person entered their own 4-digit PIN. Acknowledged, no PIN: a tap on a signed-in phone or computer, for documents that don't ask for a PIN. The two are shown differently everywhere (Documents, Compliance, the sign-off history, daily reports, close-out and the project report) because an acknowledgement proves less: anyone holding a signed-in phone could have tapped it.",
           "A document has to be opened before it can be signed off, by you and by everyone on the Team Portal: a signature means \"I have read this and I accept it\". Until it's opened the button says Open to sign off. That opens the document inside SiteSort; once it's on screen the open is recorded and Sign off appears at the bottom of the same screen, so the signer enters their PIN and sees the confirmation without closing the document. Files SiteSort can't show (Word, CAD) have an Open the file or Download button there instead, and Sign off appears once they've taken it.",
         ],
       },
@@ -592,7 +594,7 @@ export const FAQ: FaqItem[] = [
   {
     id: "invite-spam",
     question: "I can't find my invite email",
-    answer: "Check your spam or junk folder first. If it's still not there, ask your project manager to resend it or send you the Copy link directly.",
+    answer: "Check your spam or junk folder first. If it's still not there, ask your project manager to check the email address they have for you and send it again. The link only ever goes to your own email.",
     audience: "both",
   },
   {
@@ -616,7 +618,7 @@ export const FAQ: FaqItem[] = [
   {
     id: "signoff-pin",
     question: "How do sign-off PINs work?",
-    answer: "A PIN is only asked for on safety-critical documents (method statements, permits and safety documents) or where your project manager has switched it on for a specific document; everything else is a simple read-and-confirm. The first time you sign off with a PIN, you'll set a 4-digit PIN (confirmed with your account password). After that, entering the same PIN confirms each sign-off. Forgotten it? Use \"Forgot your PIN? Reset it with your password\" on the sign-off screen.",
+    answer: "A PIN is only asked for on safety-critical documents (method statements, permits and safety documents) or where your project manager has switched it on for a specific document; everything else is a simple read-and-confirm. The first time you sign off with a PIN, you'll set a 4-digit PIN (confirmed with your account password). After that, entering the same PIN confirms each sign-off. Forgotten it? Use \"Forgot your PIN? Reset it with your password\" on the sign-off screen, or \"Or email me a PIN reset link\". Only you can do this: nobody at your company can reset your PIN for you. After too many wrong tries in a day your PIN is switched off and only the emailed link brings it back. You get an email and a phone alert whenever your PIN or password changes. A document signed with your PIN shows as Signed with PIN; one that doesn't ask for a PIN shows as Acknowledged.",
     audience: "both",
   },
   {

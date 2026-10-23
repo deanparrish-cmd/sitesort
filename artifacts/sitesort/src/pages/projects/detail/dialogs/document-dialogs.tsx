@@ -6,6 +6,7 @@ import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, Shield
 import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { openDocument, cadBadgeLabel } from "@/lib/documents";
 import { formatDate, formatBytes, cn } from "@/lib/utils";
+import { SignatureMark } from "@/components/signature-mark";
 import { useDetail } from "../context";
 import { docRev, type CarryRule } from "../use-project-detail";
 
@@ -199,7 +200,7 @@ export function DocumentDialogs() {
 
             {!signOffNeedsPin && (
               <p className="text-sm text-muted-foreground">
-                By signing off you confirm: <span className="font-medium text-foreground">"I confirm I have read and understood this document."</span> Your name and the time will be recorded.
+                By acknowledging you confirm: <span className="font-medium text-foreground">"I confirm I have read and understood this document."</span> Your name and the time will be recorded. No PIN is asked for this document, so it's recorded as acknowledged, not signed with a PIN.
               </p>
             )}
 
@@ -263,7 +264,7 @@ export function DocumentDialogs() {
             <DialogFooter>
               <Button variant="ghost" onClick={closeSignOff}>Cancel</Button>
               <Button variant="accent" onClick={submitSignOff} isLoading={signOffSubmitting}>
-                {!signOffNeedsPin ? "Confirm & sign off" : setPinMode ? "Set PIN & sign off" : "Sign off"}
+                {!signOffNeedsPin ? "Confirm & acknowledge" : setPinMode ? "Set PIN & sign off" : "Sign off"}
               </Button>
             </DialogFooter>
           </div>
@@ -294,20 +295,17 @@ export function DocumentDialogs() {
               <div className="max-h-80 overflow-y-auto space-y-2 -mx-1 px-1">
                 {auditEntries.map(entry => (
                   <div key={entry.id} className="flex items-start gap-3 p-3 rounded-lg border bg-card">
-                    <div className="w-9 h-9 rounded-full bg-success/10 text-success flex items-center justify-center shrink-0">
-                      <CheckCircle2 className="w-4 h-4" />
+                    <div className={cn("w-9 h-9 rounded-full flex items-center justify-center shrink-0", entry.signedOffWithPin ? "bg-success/10 text-success" : "bg-muted text-muted-foreground")}>
+                      {entry.signedOffWithPin ? <ShieldCheck className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-semibold text-sm">{entry.userName}{entry.removedFromProject && <span className="font-normal text-muted-foreground"> (removed from project)</span>}</p>
                         <Badge variant="secondary" className="text-[10px] capitalize">{entry.userRole.replace(/_/g, " ")}</Badge>
                         <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-[10px] font-bold">v{entry.documentVersion}</span>
-                        {entry.signedOffWithPin && (
-                          <Badge variant="success" className="text-[10px]"><ShieldCheck className="w-3 h-3 mr-1" /> PIN verified</Badge>
-                        )}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Acknowledged on {formatDate(entry.createdAt)}
+                      <p className="text-xs mt-0.5">
+                        <SignatureMark withPin={entry.signedOffWithPin} at={`on ${formatDate(entry.createdAt)}`} className="font-normal" />
                       </p>
                     </div>
                   </div>

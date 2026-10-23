@@ -169,7 +169,7 @@ router.get("/compliance", authenticate, allow(INTERNAL_STAFF), async (req, res) 
       revision: string | null;
       myStatus: string | null;
       pinRequired: boolean;
-      recipients: Array<{ userId: string; name: string; status: string; viewedAt: string | null; acknowledgedAt: string | null }>;
+      recipients: Array<{ userId: string; name: string; status: string; viewedAt: string | null; acknowledgedAt: string | null; signedOffWithPin?: boolean }>;
     }> = [];
 
     let archivedDocuments: Array<{
@@ -291,6 +291,7 @@ router.get("/compliance", authenticate, allow(INTERNAL_STAFF), async (req, res) 
             status: d.status,
             viewedAt: d.viewedAt?.toISOString() ?? null,
             acknowledgedAt: d.acknowledgedAt?.toISOString() ?? null,
+            signedOffWithPin: d.status === "acknowledged" ? d.signedOffWithPin : false,
           })),
         });
       }

@@ -8,7 +8,7 @@ import { LinkRow } from "@/components/ui/link-row";
 import { useToast } from "@/hooks/use-toast";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import {
+import { CheckCircle2,
   Users, FileText, Upload, Pencil, ShieldCheck, Eye, Camera,
   ClipboardCheck, ClipboardList, PencilLine, Plus,
 } from "lucide-react";
@@ -265,8 +265,8 @@ export function DailyReportDetail({
               <LinkRow
                 key={`s-${e.documentId}-${e.at}`}
                 href={itemDeepLink(report.projectId, "document", e.documentId) ?? undefined}
-                icon={<ShieldCheck className="w-3.5 h-3.5 text-primary" />}
-                label={<><span className="font-medium">{e.documentName}</span> signed off by {e.userName}</>}
+                icon={e.signedOffWithPin ? <ShieldCheck className="w-3.5 h-3.5 text-success" /> : <CheckCircle2 className="w-3.5 h-3.5 text-muted-foreground" />}
+                label={<><span className="font-medium">{e.documentName}</span> {e.signedOffWithPin ? "signed with PIN" : "acknowledged without a PIN"} by {e.userName}</>}
                 detail={time(e.at)}
               />
             ))}

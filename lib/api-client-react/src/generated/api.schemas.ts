@@ -242,6 +242,8 @@ export interface DistributionSummary {
   pending: number;
   viewed: number;
   acknowledged: number;
+  /** How many of the acknowledged were signed with a PIN; the rest were acknowledged without one. */
+  signedWithPin?: number;
 }
 
 export interface Document {
@@ -266,6 +268,8 @@ export interface Document {
   createdAt: string;
   distributionSummary: DistributionSummary;
   myDistributionStatus?: DocumentMyDistributionStatus;
+  /** When the requester has signed it, whether they did so with their PIN (true) or acknowledged without one (false). Null when not signed. */
+  mySignedOffWithPin?: boolean | null;
   /** Current revision with no portal shares while the revision it replaced had some, so it has reached nobody on the portal. */
   newRevisionNotShared?: boolean;
 }
@@ -1846,6 +1850,8 @@ export interface PortalDocument {
   myStatus?: PortalDocumentMyStatus;
   /** When this viewer signed it off, if they have. */
   mySignedOffAt?: string | null;
+  /** Whether this viewer's sign-off was made with their PIN (true) or acknowledged without one (false). Null when not signed. */
+  mySignedOffWithPin?: boolean | null;
   /** When this viewer first opened the document, if they have (powers the "Received" label once a New item is opened). */
   myViewedAt?: string | null;
 }
@@ -2109,7 +2115,6 @@ export interface CreateInviteRequest {
 
 export interface CreateInviteResponse {
   invite: ProjectInvite;
-  inviteUrl: string;
 }
 
 export type PushReceiptRequestEvent =
@@ -2509,7 +2514,7 @@ export const PortalInviteResponseStatus = {
 } as const;
 
 /**
- * Delivery state of the invite email just sent (absent when provisioning an existing member).
+ * Where the invite went (absent when provisioning an existing member). The invite link itself is never returned; it goes only to the invitee's email.
  */
 export type PortalInviteResponseEmailStatus =
   (typeof PortalInviteResponseEmailStatus)[keyof typeof PortalInviteResponseEmailStatus];
@@ -2517,13 +2522,13 @@ export type PortalInviteResponseEmailStatus =
 export const PortalInviteResponseEmailStatus = {
   sent: "sent",
   failed: "failed",
+  portal: "portal",
 } as const;
 
 export interface PortalInviteResponse {
   status: PortalInviteResponseStatus;
   person: Person;
-  inviteUrl?: string | null;
-  /** Delivery state of the invite email just sent (absent when provisioning an existing member). */
+  /** Where the invite went (absent when provisioning an existing member). The invite link itself is never returned; it goes only to the invitee's email. */
   emailStatus?: PortalInviteResponseEmailStatus;
 }
 
@@ -2539,7 +2544,6 @@ export const ResendInviteResponseEmailStatus = {
 export interface ResendInviteResponse {
   success: boolean;
   emailStatus: ResendInviteResponseEmailStatus;
-  inviteUrl?: string;
 }
 
 export interface ActivityEntry {

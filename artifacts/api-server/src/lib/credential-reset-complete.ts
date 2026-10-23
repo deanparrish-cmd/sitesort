@@ -7,6 +7,8 @@ import { generateId } from "./id";
 import { clearAttempts } from "./login-attempts";
 import { logger } from "./logger";
 import { logResetCompleted } from "./credential-reset";
+import { recordCredentialEvent } from "./credential-notice";
+import { clearPinAttempts } from "./pin-attempts";
 import { bustSessionsInvalidBeforeCache } from "../middlewares/auth";
 
 // Completion side of the unified reset backbone (separate module so the
@@ -42,6 +44,7 @@ export async function completePasswordReset(userId: string, password: string, re
   }
 
   await logResetCompleted(userId, "password", req);
+  await recordCredentialEvent(userId, "password_changed", req);
 }
 
 // New PIN via email token (locked-out path). PIN is bcrypt-hashed like the
@@ -53,7 +56,9 @@ export async function completePinReset(userId: string, pin: string, req: Request
   const user = rows[0];
   if (!user) throw new Error("User not found for PIN reset");
 
-  await db.update(usersTable).set({ pinHash }).where(eq(usersTable.id, userId));
+  // The emailed link is the owner's way back after a switch-off.
+  await db.update(usersTable).set({ pinHash, pinLockedAt: null }).where(eq(usersTable.id, userId));
+  await clearPinAttempts(userId, { lockouts: true });
   await db.insert(pinAuditLogTable).values({
     id: generateId(),
     userId,
@@ -64,4 +69,5 @@ export async function completePinReset(userId: string, pin: string, req: Request
   });
 
   await logResetCompleted(userId, "pin", req);
+  await recordCredentialEvent(userId, user.pinHash ? "pin_changed" : "pin_set", req);
 }

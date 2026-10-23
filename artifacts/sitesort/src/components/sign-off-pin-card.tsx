@@ -11,7 +11,7 @@ export function SignOffPinCard({ flow, actionLabel = "Sign off", busyLabel = "Si
     <div className="bg-card border border-primary/30 bg-primary/5 rounded-2xl p-5">
       {!flow.target.pinRequired ? (
         <p className="text-sm text-muted-foreground">
-          By signing off you confirm: <span className="font-medium text-foreground">"I confirm I have read and understood this document."</span> Your name and the time will be recorded.
+          By acknowledging you confirm: <span className="font-medium text-foreground">"I confirm I have read and understood this document."</span> Your name and the time will be recorded. No PIN is asked for this document, so it's recorded as acknowledged, not signed with a PIN.
         </p>
       ) : flow.setPinMode ? (
         <div className="space-y-3">
@@ -50,6 +50,14 @@ export function SignOffPinCard({ flow, actionLabel = "Sign off", busyLabel = "Si
           >
             Forgot your PIN? Reset it with your password
           </button>
+          {/* A PIN switched off after repeated wrong tries comes back only
+              through the owner's emailed link (Dean, 2026-10-23). */}
+          <a
+            href={`/forgot-pin${typeof window !== "undefined" && window.location.pathname.startsWith("/portal") ? "?context=portal" : ""}`}
+            className="mt-1 block text-xs text-primary hover:underline"
+          >
+            Or email me a PIN reset link
+          </a>
         </div>
       )}
       {flow.error && <p className="mt-2 text-xs text-destructive">{flow.error}</p>}
@@ -59,7 +67,7 @@ export function SignOffPinCard({ flow, actionLabel = "Sign off", busyLabel = "Si
           disabled={flow.submitting}
           className="flex-1 min-h-14 rounded-xl bg-primary text-primary-foreground text-base font-bold hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50"
         >
-          {flow.submitting ? busyLabel : !flow.target.pinRequired ? `Confirm & ${actionLabel.toLowerCase()}` : flow.setPinMode ? `Set PIN & ${actionLabel.toLowerCase()}` : actionLabel}
+          {flow.submitting ? busyLabel : !flow.target.pinRequired ? (actionLabel === "Sign off" ? "Confirm & acknowledge" : `Confirm & ${actionLabel.toLowerCase()}`) : flow.setPinMode ? `Set PIN & ${actionLabel.toLowerCase()}` : actionLabel}
         </button>
         <button onClick={flow.close} className="min-h-14 px-5 rounded-xl border-2 border-border text-base font-bold hover:bg-muted active:scale-[0.98] transition-all">Cancel</button>
       </div>

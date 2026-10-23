@@ -276,6 +276,39 @@ This link expires in 1 hour. If you didn't request this, your account is safe. J
   });
 }
 
+// Security notice to the owner of a login when its password or PIN changes,
+// or its PIN is switched off (Dean, 2026-10-23: only the owner controls these,
+// and the owner hears of every change). Sent whatever the email setting says,
+// like the reset emails themselves: it's about the account, not a feature.
+export type CredentialNoticeKind = "password_changed" | "pin_set" | "pin_changed" | "pin_switched_off";
+export function credentialNoticeText(kind: CredentialNoticeKind): { subject: string; heading: string; lines: string[] } {
+  const notYou = "If this wasn't you, reset your password straight away with Forgot password on the SiteSort sign-in page. Only you can do this: nobody at your company can change your password or PIN for you.";
+  switch (kind) {
+    case "password_changed": return { subject: "Your SiteSort password was changed", heading: "Your password was changed", lines: ["The password on your SiteSort account was just changed. If you did this, there's nothing else to do.", notYou] };
+    case "pin_set": return { subject: "A sign-off PIN was set on your SiteSort account", heading: "Your sign-off PIN was set", lines: ["A 4-digit sign-off PIN was just set on your SiteSort account. It's what you enter to sign off method statements, permits and other documents.", notYou] };
+    case "pin_changed": return { subject: "Your SiteSort sign-off PIN was changed", heading: "Your sign-off PIN was changed", lines: ["The 4-digit sign-off PIN on your SiteSort account was just changed. If you did this, there's nothing else to do.", notYou] };
+    case "pin_switched_off": return { subject: "Your SiteSort sign-off PIN has been switched off", heading: "Your sign-off PIN is switched off", lines: ["Your sign-off PIN was entered wrongly too many times, so it has been switched off and nothing can be signed with it.", "To use it again, choose Forgot PIN (on the SiteSort sign-in page, or from the sign-off box) and use the link we email you to choose a new PIN.", "If you didn't try to sign anything, someone else may have had your phone."] };
+  }
+}
+export async function sendCredentialNoticeEmail(to: string, name: string, kind: CredentialNoticeKind) {
+  const t = credentialNoticeText(kind);
+  const greeting = firstName(name);
+  return send({
+    to,
+    subject: t.subject,
+    html: layout(`
+      ${h(t.heading)}
+      ${p(`Hi ${greeting},`)}
+      ${t.lines.map(l => p(l)).join("")}
+    `),
+    text: textLayout(`${t.heading}
+
+Hi ${greeting},
+
+${t.lines.join("\n\n")}`),
+  });
+}
+
 // Sent once a user has verified their email and their account is active.
 export async function sendWelcomeEmail(to: string, name: string) {
   const link = `${APP_URL}/dashboard`;

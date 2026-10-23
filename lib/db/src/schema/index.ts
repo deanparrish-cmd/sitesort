@@ -14,6 +14,7 @@ export * from "./documents";
 export * from "./document_distributions";
 export * from "./acknowledgment_audit";
 export * from "./pin_audit_log";
+export * from "./credential_events";
 export * from "./insurance_records";
 export * from "./permits";
 export * from "./photos";

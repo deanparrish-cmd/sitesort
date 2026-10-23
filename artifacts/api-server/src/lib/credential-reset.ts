@@ -12,6 +12,7 @@ import { logger } from "./logger";
 import { logActivity } from "./activity";
 import { sendPasswordResetEmail, sendPinResetEmail } from "./email";
 import type { Request } from "express";
+import { recordCredentialEvent } from "./credential-notice";
 
 // Unified "forgot password / forgot PIN" backbone. One token model for all
 // three credential types (PM password, portal member password, sign-off PIN —
@@ -114,6 +115,7 @@ export async function requestCredentialReset(opts: {
   send.catch((err) => logger.error({ err }, "Failed to send credential reset email"));
 
   void logResetEvent(user.id, user.companyId ?? "", "reset_requested", opts.kind, opts.req);
+  void recordCredentialEvent(user.id, opts.kind === "pin" ? "pin_reset_requested" : "password_reset_requested", opts.req);
   return { limited: false };
 }
 

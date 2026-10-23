@@ -20,7 +20,7 @@
  *   LAYOUT_VIEWPORTS=360,390,768
  *   LAYOUT_REPORT_PATH=reports/layout-check.json
  */
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomBytes, createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -375,11 +375,16 @@ async function apiJson(path: string, token: string, init: RequestInit = {}): Pro
   return res.status === 204 ? null : res.json();
 }
 
-function inviteTokenFromUrl(inviteUrl: unknown): string {
-  if (typeof inviteUrl !== "string") throw new Error("Portal invite response did not include inviteUrl");
-  const match = inviteUrl.match(/\/portal\/accept\/([^/?#]+)/);
-  if (!match?.[1]) throw new Error(`Portal invite URL did not contain an acceptance token: ${inviteUrl}`);
-  return decodeURIComponent(match[1]);
+// The invite link goes only to the invitee's email, never back to the inviter
+// (2026-10-23), and the raw token is never stored. Like the API tests, the
+// sweep stands in for the fixture person's inbox: it sets a token it knows on
+// their pending invite in the LOCAL database.
+function inviteTokenFromInbox(personId: string): string {
+  const raw = randomBytes(32).toString("hex");
+  const hash = createHash("sha256").update(raw).digest("hex");
+  if (!/^[0-9a-f-]+$/i.test(personId)) throw new Error(`Unexpected fixture person id: ${personId}`);
+  runFixtureSql(`UPDATE project_invites SET token_hash = '${hash}' WHERE person_id = '${personId}' AND status = 'pending'`);
+  return raw;
 }
 
 /**
@@ -415,7 +420,8 @@ async function setupFixtures(appToken: string): Promise<FixtureData> {
     method: "POST",
     body: JSON.stringify({ personId: person.id }),
   }) as { inviteUrl?: string; status?: string };
-  const acceptanceToken = inviteTokenFromUrl(invite.inviteUrl);
+  void invite;
+  const acceptanceToken = inviteTokenFromInbox(person.id!);
 
   let portalToken = "";
   let accepted: { token?: string } | null = null;
@@ -493,11 +499,11 @@ async function setupFixtures(appToken: string): Promise<FixtureData> {
   // Keep a fresh pending token for the acceptance page route itself. The
   // first token is intentionally consumed above, so probing it would produce
   // an expected 410 and hide whether the page can load a real invite.
-  const pendingInvite = await apiJson(`/api/projects/${projectId}/portal-invites`, appToken, {
+  await apiJson(`/api/projects/${projectId}/portal-invites`, appToken, {
     method: "POST",
     body: JSON.stringify({ personId: person.id }),
-  }) as { inviteUrl?: string };
-  const inviteToken = inviteTokenFromUrl(pendingInvite.inviteUrl);
+  });
+  const inviteToken = inviteTokenFromInbox(person.id!);
 
   let qrCodes = await apiJson(`/api/projects/${projectId}/qr-codes`, appToken) as Array<{ category?: string; token?: string }>;
   let siteToken = qrCodes.find((qr) => qr.category === "site_board")?.token ?? "";

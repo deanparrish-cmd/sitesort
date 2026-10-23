@@ -1,7 +1,7 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomBytes, createHash } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { db } from "@workspace/db";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, and } from "drizzle-orm";
 import {
   companiesTable,
   usersTable,
@@ -156,7 +156,7 @@ export async function seedCrossTenantPortalMember(fixtures: { companyId: string;
 
     if (i === 0) {
       // First invite: brand-new person, no portal login yet -> email-link accept.
-      const rawToken = String(inviteRes.json.inviteUrl).split("/accept/")[1];
+      const rawToken = await inviteTokenFromInbox(projectId, personRes.json.id);
       const acceptRes = await api(`/portal/invite/${rawToken}/accept`, {
         method: "POST", body: { password: PORTAL_TEST_PASSWORD },
       });
@@ -184,6 +184,20 @@ export async function seedCrossTenantPortalMember(fixtures: { companyId: string;
 
   const meRes = await api("/portal/me", { token: sharedToken });
   return { email, password: PORTAL_TEST_PASSWORD, pin: PORTAL_TEST_PIN, userId: meRes.json.member.userId, personIds };
+}
+
+// The invite link goes only to the invitee's email (2026-10-23), never back to
+// the inviter, and the raw token is never stored. Tests stand in for the
+// invitee's inbox: replace the pending invite's token with one we know, as the
+// emailed link would carry. Never available to the app itself.
+export async function inviteTokenFromInbox(projectId: string, personId: string): Promise<string> {
+  const raw = randomBytes(32).toString("hex");
+  const rows = await db.update(projectInvitesTable)
+    .set({ tokenHash: createHash("sha256").update(raw).digest("hex") })
+    .where(and(eq(projectInvitesTable.projectId, projectId), eq(projectInvitesTable.personId, personId), eq(projectInvitesTable.status, "pending")))
+    .returning({ id: projectInvitesTable.id });
+  if (rows.length !== 1) throw new Error(`Expected one pending invite for ${personId} on ${projectId}, found ${rows.length}`);
+  return raw;
 }
 
 export async function portalLogin(email: string, password: string, projectId?: string): Promise<{ token: string; projectId: string }> {

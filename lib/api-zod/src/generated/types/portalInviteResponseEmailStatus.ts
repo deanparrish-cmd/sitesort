@@ -7,7 +7,7 @@
  */
 
 /**
- * Delivery state of the invite email just sent (absent when provisioning an existing member).
+ * Where the invite went (absent when provisioning an existing member). The invite link itself is never returned; it goes only to the invitee's email.
  */
 export type PortalInviteResponseEmailStatus =
   (typeof PortalInviteResponseEmailStatus)[keyof typeof PortalInviteResponseEmailStatus];
@@ -15,4 +15,5 @@ export type PortalInviteResponseEmailStatus =
 export const PortalInviteResponseEmailStatus = {
   sent: "sent",
   failed: "failed",
+  portal: "portal",
 } as const;

@@ -9,5 +9,4 @@ import type { ProjectInvite } from "./projectInvite";
 
 export interface CreateInviteResponse {
   invite: ProjectInvite;
-  inviteUrl: string;
 }

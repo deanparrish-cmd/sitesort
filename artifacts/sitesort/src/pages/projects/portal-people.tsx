@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { GateStanding } from "@/components/gate-standing";
 import {
-  Copy, Trash2, ShieldCheck, ShieldOff, Send, X,
+  Trash2, ShieldCheck, ShieldOff, Send, X,
   RefreshCw, AlertTriangle, CheckCircle2, Circle,
 } from "lucide-react";
 
@@ -27,8 +27,9 @@ type PortalStatus = {
 const RESEND_COOLDOWN_MS = 5 * 60 * 1000;
 
 // Invite-email delivery state + a rate-limited "Resend" action. Shown for pending
-// invites so the PM knows whether the email went out and can re-send / fall back
-// to the copy link if it failed.
+// invites so the PM knows whether the email went out and can re-send. There is
+// no copy link: the invite link only ever goes to the invitee's own email
+// (Dean, 2026-10-23), or a PM could accept it as them.
 function InviteEmailStatus({ projectId, portal, onDone }: { projectId: string; portal: PortalStatus; onDone: () => void }) {
   const { toast } = useToast();
   const resend = useResendPortalInvite();
@@ -39,7 +40,8 @@ function InviteEmailStatus({ projectId, portal, onDone }: { projectId: string; p
     try {
       const res = await resend.mutateAsync({ projectId, inviteId: portal.inviteId! });
       if (res.emailStatus === "sent") toast({ title: "Invite email resent" });
-      else toast({ variant: "destructive", title: "Send failed", description: "Use the Copy link instead." });
+      else if (res.emailStatus === "portal") toast({ title: "Reminder sent to their portal" });
+      else toast({ variant: "destructive", title: "Send failed", description: "The invite email couldn't be sent. Check the email address on their card, then resend." });
       onDone();
     } catch (e: any) {
       toast({ variant: "destructive", title: "Couldn't resend", description: e?.data?.message ?? "Please try again shortly." });
@@ -49,7 +51,7 @@ function InviteEmailStatus({ projectId, portal, onDone }: { projectId: string; p
   return (
     <span className="inline-flex items-center gap-1.5 text-[11px] leading-tight flex-wrap">
       {portal.emailStatus === "failed" ? (
-        <span className="inline-flex items-center gap-0.5 text-destructive font-medium"><AlertTriangle className="w-3 h-3" /> Email failed, use copy link or resend</span>
+        <span className="inline-flex items-center gap-0.5 text-destructive font-medium"><AlertTriangle className="w-3 h-3" /> Email failed: check the address, then resend</span>
       ) : portal.emailStatus === "portal" ? (
         <span className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="w-3 h-3" /> Invited via their portal {fmtRelative(portal.emailLastSentAt)}</span>
       ) : portal.emailStatus === "sent" ? (
@@ -162,8 +164,8 @@ function usePortalMembership({
   const person = knownPersonId ? people.find(p => p.id === knownPersonId) : (email ? people.find(p => p.email.toLowerCase() === email) : undefined);
   const portal: PortalStatus = person?.portal ?? { status: "not_invited" };
 
-  // Single invite-creation path for every route into the portal — email send
-  // and copyable link both come from this ONE call, which never accepts
+  // Single invite-creation path for every route into the portal — the email
+  // send comes from this ONE call (the link itself never reaches the inviter), which never accepts
   // permission fields (CreatePortalInviteBody: personId + role only). Section
   // permissions are only ever set afterwards, once status is "member", via
   // togglePermission below — so no invite path can create a member with
@@ -181,9 +183,10 @@ function usePortalMembership({
         personId = (created as { id: string }).id;
       }
       const res = await invite.mutateAsync({ projectId, data: { personId, role: (portal.role as PortalRole) ?? "worker" } });
-      if (res.inviteUrl) {
-        try { await navigator.clipboard.writeText(res.inviteUrl); } catch { /* noop */ }
-        toast({ title: "Invite link copied", description: "Share it to grant portal-only access." });
+      if (res.status === "invited") {
+        if (res.emailStatus === "portal") toast({ title: "Invited in their portal", description: "They already use the Team Portal, so the invitation is waiting on their portal Home." });
+        else if (res.emailStatus === "failed") toast({ variant: "destructive", title: "Invite email not sent", description: `The email to ${useEmail} couldn't be sent. Check the address on their card, then send it again.` });
+        else toast({ title: "Invite emailed", description: `The invite link went to ${useEmail}. Only they can use it to join.` });
       } else if (res.status === "member") {
         // Server auto-linked an EXISTING SiteSort account with this email (same
         // company) — no invite email is sent in that case, which looks like a
@@ -308,8 +311,8 @@ export function PortalStatusPill({
       <>
         <span className="inline-flex flex-col items-end gap-0.5">
           <span className="inline-flex items-center gap-1">
-            <button className={cn(PILL, portal.emailStatus === "failed" ? "border-red-200 bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300 dark:border-red-800" : "border-amber-200 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800")} onClick={onInvite} disabled={busy} title="Copy a fresh invite link">
-              <Copy className="w-3.5 h-3.5" /> Invited · Copy link
+            <button className={cn(PILL, portal.emailStatus === "failed" ? "border-red-200 bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300 dark:border-red-800" : "border-amber-200 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800")} onClick={onInvite} disabled={busy} title="Email them a fresh invite link">
+              <Send className="w-3.5 h-3.5" /> Invited · Send again
             </button>
             <button
               type="button"

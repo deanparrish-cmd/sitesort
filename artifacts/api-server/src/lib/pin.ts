@@ -4,6 +4,8 @@ import { db } from "@workspace/db";
 import { usersTable, pinAuditLogTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { generateId } from "./id";
+import { recordCredentialEvent } from "./credential-notice";
+import { PIN_SWITCHED_OFF_MESSAGE } from "./pin-attempts";
 
 type SetPinResult =
   | { ok: true }
@@ -28,6 +30,9 @@ export async function setUserPin(userId: string, currentPassword: string, pin: s
 
   const valid = await bcrypt.compare(currentPassword, user.passwordHash);
   if (!valid) return { ok: false, status: 401, error: "invalid_credentials", message: "Current password is incorrect" };
+  // A PIN switched off after repeated wrong tries comes back only through the
+  // owner's emailed reset link, never with the password alone.
+  if (user.pinLockedAt) return { ok: false, status: 423, error: "pin_switched_off", message: PIN_SWITCHED_OFF_MESSAGE };
 
   const pinHash = await bcrypt.hash(String(pin), 10);
   await db.update(usersTable).set({ pinHash }).where(eq(usersTable.id, user.id));
@@ -39,6 +44,7 @@ export async function setUserPin(userId: string, currentPassword: string, pin: s
     ipAddress: req.ip ?? null,
     userAgent: req.headers["user-agent"] ?? null,
   });
+  await recordCredentialEvent(user.id, user.pinHash ? "pin_changed" : "pin_set", req);
 
   return { ok: true };
 }

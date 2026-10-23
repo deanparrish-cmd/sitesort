@@ -6,7 +6,7 @@ import {
   usersTable, companyMembersTable, projectMembersTable, subcontractorsTable, peopleTable,
   projectInvitesTable, portalSessionsTable, activityLogTable,
 } from "@workspace/db/schema";
-import { seedCompany, cleanupFixtures, api, login, type Fixture } from "./helpers";
+import { seedCompany, cleanupFixtures, api, login, inviteTokenFromInbox, type Fixture } from "./helpers";
 import { generateToken } from "../src/middlewares/auth";
 
 /**
@@ -96,7 +96,7 @@ describe("subcontractors are portal-only", () => {
     expect((await api(`/projects/${co.projectId}/members/person`, { method: "POST", token: admin, body: { personId, role: "subcontractor" } })).status).toBe(201);
     const invite = await api(`/projects/${co.projectId}/portal-invites`, { method: "POST", token: admin, body: { personId } });
     expect(invite.status).toBe(201);
-    const token = String(invite.json.inviteUrl).split("/portal/accept/")[1];
+    const token = await inviteTokenFromInbox(co.projectId, personId);
     const accepted = await api(`/portal/invite/${encodeURIComponent(token)}/accept`, { method: "POST", body: { password: "Contractor-Pass-2026!" } });
     expect(accepted.status).toBe(200);
 

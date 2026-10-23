@@ -12,7 +12,7 @@ import { authenticate } from "../middlewares/auth";
 import { allow, INTERNAL_STAFF, projectApprover } from "../lib/authz";
 import { expiryStatus } from "../lib/expiry";
 import { issueCategoryFilter } from "../lib/accountability";
-import { isPinLockedOut, recordFailedPinAttempt, clearPinAttempts } from "../lib/pin-attempts";
+import { pinLockResponse, recordFailedPinAttempt, clearPinAttempts } from "../lib/pin-attempts";
 import { isProjectApprover } from "../lib/project-authority";
 import { outstandingSignOffs } from "../lib/outstanding-signoffs";
 
@@ -61,12 +61,22 @@ async function computeReadiness(projectId: string) {
   const outstanding = await outstandingSignOffs([projectId]);
   const pendingSignOffs = outstanding.reduce((a, d) => a + d.pendingCount, 0);
   const notSentSignOffs = outstanding.reduce((a, d) => a + d.notSentCount, 0);
+  // Signatures given, split by how: a PIN-verified signature and a tap on a
+  // signed-in device are never shown as the same thing (Dean, 2026-10-23).
+  const given = await db.select({ withPin: documentDistributionsTable.signedOffWithPin, n: count() })
+    .from(documentDistributionsTable)
+    .innerJoin(documentsTable, eq(documentsTable.id, documentDistributionsTable.documentId))
+    .where(and(eq(documentsTable.projectId, projectId), eq(documentsTable.status, "current"),
+      eq(documentsTable.requiresAcknowledgment, true), eq(documentDistributionsTable.status, "acknowledged")))
+    .groupBy(documentDistributionsTable.signedOffWithPin);
+  const signedWithPin = Number(given.find(g => g.withPin)?.n ?? 0);
+  const acknowledgedWithoutPin = Number(given.find(g => !g.withPin)?.n ?? 0);
 
   const checks = {
     openIssues: { count: openIssues, ok: openIssues === 0 },
     insurance: { subsWithIssues: subsWithInsuranceIssues, subsTotal: subIds.length, ok: subsWithInsuranceIssues === 0 },
     permits: { expiredCount: expiredPermits, ok: expiredPermits === 0 },
-    signOffs: { pendingCount: pendingSignOffs, notSentCount: notSentSignOffs, ok: pendingSignOffs + notSentSignOffs === 0 },
+    signOffs: { pendingCount: pendingSignOffs, notSentCount: notSentSignOffs, signedWithPin, acknowledgedWithoutPin, ok: pendingSignOffs + notSentSignOffs === 0 },
   };
   const ready = checks.openIssues.ok && checks.insurance.ok && checks.permits.ok && checks.signOffs.ok;
   return { checks, ready };
@@ -133,8 +143,9 @@ router.post("/projects/:projectId/closeout", authenticate, allow(projectApprover
 
     // PIN gate — close-out is a critical action, always PIN-confirmed (reuses the
     // same per-user lockout + bcrypt verification as document sign-off).
-    if (await isPinLockedOut(req.user!.id)) {
-      res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
+    const pinLocked = await pinLockResponse(req.user!.id);
+    if (pinLocked) {
+      res.status(pinLocked.status).json(pinLocked.body);
       return;
     }
     const actorRows = await db.select({ name: usersTable.name, role: usersTable.role, pinHash: usersTable.pinHash })
@@ -150,9 +161,9 @@ router.post("/projects/:projectId/closeout", authenticate, allow(projectApprover
     }
     const valid = await bcrypt.compare(String(pin), pinHash);
     if (!valid) {
-      const { locked, remaining } = await recordFailedPinAttempt(req.user!.id);
+      const { locked, remaining, lock } = await recordFailedPinAttempt(req.user!.id);
       if (locked) {
-        res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
+        res.status(lock.status).json(lock.body);
       } else {
         res.status(401).json({ error: "invalid_pin", message: "Incorrect PIN", attemptsRemaining: remaining });
       }

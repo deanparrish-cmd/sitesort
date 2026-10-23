@@ -62,7 +62,12 @@ describe("uploaded files are login-only", () => {
   });
 
   it("a tampered or expired signature is refused", async () => {
-    expect((await fetchUrl(certUrl.replace(/sig=./, "sig=A"))).status).toBe(403);
+    // Change the signature's first character to a DIFFERENT one. Always
+    // writing "A" left the link untouched whenever the real signature began
+    // with "A" (about 1 run in 64), which is why this test was flaky.
+    const tampered = certUrl.replace(/sig=(.)/, (_m, c: string) => `sig=${c === "A" ? "B" : "A"}`);
+    expect(tampered).not.toBe(certUrl);
+    expect((await fetchUrl(tampered)).status).toBe(403);
     const old = signUploadUrl(bare(certUrl), Date.now() - 3 * 24 * 3600_000);
     expect((await fetchUrl(old)).status).toBe(403);
   });

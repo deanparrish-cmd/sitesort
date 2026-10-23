@@ -32,6 +32,8 @@ export interface Document {
   createdAt: Date;
   distributionSummary: DistributionSummary;
   myDistributionStatus?: DocumentMyDistributionStatus;
+  /** When the requester has signed it, whether they did so with their PIN (true) or acknowledged without one (false). Null when not signed. */
+  mySignedOffWithPin?: boolean | null;
   /** Current revision with no portal shares while the revision it replaced had some, so it has reached nobody on the portal. */
   newRevisionNotShared?: boolean;
 }

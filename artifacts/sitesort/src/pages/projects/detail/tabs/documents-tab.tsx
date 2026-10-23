@@ -8,6 +8,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { DocumentViewer, type ViewerDoc } from "@/components/document-viewer";
 import { useSignOffFlow } from "@/hooks/use-sign-off-flow";
+import { SignatureMark } from "@/components/signature-mark";
 import {
   useGetProject,
   getGetProjectQueryKey,
@@ -205,8 +206,9 @@ export function DocumentsTab() {
                       <span className="text-xs text-muted-foreground">{DOCUMENT_TYPE_LABELS[doc.type] ?? doc.type.replaceAll("_", " ")}</span>
                       <span className="text-xs text-muted-foreground">· {formatDate(doc.createdAt)}</span>
                     </div>
-                    <div className="flex items-center gap-3 text-xs mb-3">
-                      <span className="flex items-center gap-1 text-success"><CheckCircle2 className="w-3.5 h-3.5"/> {doc.distributionSummary.acknowledged} ack</span>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs mb-3">
+                      <span className="flex items-center gap-1 text-success" title="Signed with their PIN"><ShieldCheck className="w-3.5 h-3.5"/> {doc.distributionSummary.signedWithPin ?? 0} with PIN</span>
+                      <span className="flex items-center gap-1 text-muted-foreground" title="Acknowledged without a PIN"><CheckCircle2 className="w-3.5 h-3.5"/> {doc.distributionSummary.acknowledged - (doc.distributionSummary.signedWithPin ?? 0)} no PIN</span>
                       <span className="flex items-center gap-1 text-primary"><Eye className="w-3.5 h-3.5"/> {doc.distributionSummary.viewed} viewed</span>
                       <span className="flex items-center gap-1 text-muted-foreground"><EyeOff className="w-3.5 h-3.5"/> {doc.distributionSummary.pending} pending</span>
                     </div>
@@ -220,7 +222,7 @@ export function DocumentsTab() {
                         </button>
                       )}
                       {doc.myDistributionStatus === "acknowledged" && (
-                        <span className="flex items-center gap-1 text-xs text-success font-semibold"><CheckCircle2 className="w-3 h-3" />Signed off</span>
+                        <SignatureMark withPin={doc.mySignedOffWithPin} className="text-xs" />
                       )}
                       <button
                         onClick={() => openAndRecord(doc)}
@@ -316,8 +318,9 @@ export function DocumentsTab() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-4 text-xs">
-                          <div className="flex items-center gap-1 text-success"><CheckCircle2 className="w-4 h-4"/> {doc.distributionSummary.acknowledged}</div>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                          <div className="flex items-center gap-1 text-success" title="Signed with their PIN"><ShieldCheck className="w-4 h-4"/> {doc.distributionSummary.signedWithPin ?? 0}</div>
+                          <div className="flex items-center gap-1 text-muted-foreground" title="Acknowledged without a PIN"><CheckCircle2 className="w-4 h-4"/> {doc.distributionSummary.acknowledged - (doc.distributionSummary.signedWithPin ?? 0)}</div>
                           <div className="flex items-center gap-1 text-primary"><Eye className="w-4 h-4"/> {doc.distributionSummary.viewed}</div>
                           <div className="flex items-center gap-1 text-muted-foreground"><EyeOff className="w-4 h-4"/> {doc.distributionSummary.pending}</div>
                         </div>
@@ -338,9 +341,7 @@ export function DocumentsTab() {
                             </button>
                           )}
                           {doc.myDistributionStatus === "acknowledged" && (
-                            <span className="flex items-center gap-1 text-xs text-success font-semibold" title="You signed this off">
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                            </span>
+                            <SignatureMark withPin={doc.mySignedOffWithPin} iconOnly className="text-xs" />
                           )}
                           <button
                             type="button"

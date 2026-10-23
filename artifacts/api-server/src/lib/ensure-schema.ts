@@ -697,6 +697,27 @@ export async function ensureSchema(): Promise<void> {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS pin_audit_user_idx ON pin_audit_log (user_id)`);
 
+    // Only the owner controls a login (Dean, 2026-10-23): PIN switch-off,
+    // proven inbox, email-only invite tokens, and the credential change log.
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS pin_locked_at timestamp`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_proven_at timestamp`);
+    await pool.query(`ALTER TABLE project_invites ADD COLUMN IF NOT EXISTS email_only boolean NOT NULL DEFAULT false`);
+    await pool.query(`ALTER TABLE project_invites ADD COLUMN IF NOT EXISTS accepted_ip text`);
+    await pool.query(`ALTER TABLE project_invites ADD COLUMN IF NOT EXISTS accepted_user_agent text`);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS credential_events (
+        id text PRIMARY KEY,
+        user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind text NOT NULL,
+        ip_address text,
+        user_agent text,
+        email_notice text,
+        push_notice integer,
+        created_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS credential_events_user_idx ON credential_events (user_id)`);
+
     // Per-document "require PIN sign-off" override (lib/signoff.ts#pinRequiredForDoc):
     // safety-critical types (method_statement/permit/safety) always require a PIN;
     // this lets a PM force it on any other document too. Added here because the

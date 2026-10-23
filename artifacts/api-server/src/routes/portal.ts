@@ -39,8 +39,9 @@ import { findUpload } from "../lib/gcs";
 import { memberUploadSingle, saveMemberUpload } from "../lib/portal-upload";
 import { isReportLocked, upsertManagerReport, contributorsForReport, hasManagerContent, londonDateStr, listReportPhotos, addReportPhotos } from "../lib/daily-reports";
 import { notesFor, addNote } from "../lib/portal-submission-notes";
-import { isPinLockedOut, recordFailedPinAttempt, clearPinAttempts } from "../lib/pin-attempts";
+import { pinLockResponse, recordFailedPinAttempt, clearPinAttempts } from "../lib/pin-attempts";
 import { setUserPin } from "../lib/pin";
+import { recordCredentialEvent } from "../lib/credential-notice";
 import { requestCredentialReset, consumeCredentialResetToken } from "../lib/credential-reset";
 import { transcribeAudio } from "../lib/transcribe";
 import { completePasswordReset } from "../lib/credential-reset-complete";
@@ -101,21 +102,24 @@ function serializeDoc(d: typeof documentsTable.$inferSelect) {
 // This viewer's own sign-off status for a batch of documents — merged onto
 // serializeDoc's output wherever a member might need to sign off (the PIN
 // gate itself is re-checked server-side regardless of what the client saw).
-async function myDocStatuses(userId: string, docIds: string[]): Promise<Map<string, { status: string; acknowledgedAt: Date | null; viewedAt: Date | null }>> {
+async function myDocStatuses(userId: string, docIds: string[]): Promise<Map<string, { status: string; acknowledgedAt: Date | null; viewedAt: Date | null; signedOffWithPin: boolean }>> {
   if (docIds.length === 0) return new Map();
   const rows = await db.select({
     documentId: documentDistributionsTable.documentId,
     status: documentDistributionsTable.status,
     acknowledgedAt: documentDistributionsTable.acknowledgedAt,
     viewedAt: documentDistributionsTable.viewedAt,
+    signedOffWithPin: documentDistributionsTable.signedOffWithPin,
   }).from(documentDistributionsTable)
     .where(and(inArray(documentDistributionsTable.documentId, docIds), eq(documentDistributionsTable.userId, userId)));
-  return new Map(rows.map(r => [r.documentId, { status: r.status, acknowledgedAt: r.acknowledgedAt, viewedAt: r.viewedAt }]));
+  return new Map(rows.map(r => [r.documentId, { status: r.status, acknowledgedAt: r.acknowledgedAt, viewedAt: r.viewedAt, signedOffWithPin: r.signedOffWithPin }]));
 }
-function withMyStatus<T extends { id: string }>(rows: T[], statuses: Map<string, { status: string; acknowledgedAt: Date | null; viewedAt: Date | null }>): (T & { myStatus: string | null; mySignedOffAt: string | null; myViewedAt: string | null })[] {
+function withMyStatus<T extends { id: string }>(rows: T[], statuses: Map<string, { status: string; acknowledgedAt: Date | null; viewedAt: Date | null; signedOffWithPin: boolean }>): (T & { myStatus: string | null; mySignedOffAt: string | null; myViewedAt: string | null; mySignedOffWithPin: boolean | null })[] {
   return rows.map(r => {
     const mine = statuses.get(r.id);
-    return { ...r, myStatus: mine?.status ?? null, mySignedOffAt: mine?.acknowledgedAt?.toISOString() ?? null, myViewedAt: mine?.viewedAt?.toISOString() ?? null };
+    return { ...r, myStatus: mine?.status ?? null, mySignedOffAt: mine?.acknowledgedAt?.toISOString() ?? null, myViewedAt: mine?.viewedAt?.toISOString() ?? null,
+      // "Signed with PIN" versus "Acknowledged" (Dean, 2026-10-23).
+      mySignedOffWithPin: mine?.status === "acknowledged" ? mine.signedOffWithPin : null };
   });
 }
 function serializePermit(p: typeof permitsTable.$inferSelect) {
@@ -740,8 +744,11 @@ router.post("/portal/invites/:id/accept", ...portalGuards, async (req, res) => {
   try {
     const userId = req.user!.id;
 
-    if (await isPinLockedOut(userId)) {
-      res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
+    const pinLocked = await pinLockResponse(userId);
+
+    if (pinLocked) {
+
+      res.status(pinLocked.status).json(pinLocked.body);
       return;
     }
     const pinRow = await db.select({ pinHash: usersTable.pinHash }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
@@ -756,8 +763,8 @@ router.post("/portal/invites/:id/accept", ...portalGuards, async (req, res) => {
       return;
     }
     if (!(await bcrypt.compare(String(pin), pinHash))) {
-      const { locked, remaining } = await recordFailedPinAttempt(userId);
-      if (locked) res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
+      const { locked, remaining, lock } = await recordFailedPinAttempt(userId);
+      if (locked) res.status(lock.status).json(lock.body);
       else res.status(401).json({ error: "invalid_pin", message: "Incorrect PIN", attemptsRemaining: remaining });
       return;
     }
@@ -914,11 +921,12 @@ router.get("/portal/invite/:token", async (req, res) => {
     if (!inv) { res.status(410).json({ error: "invalid_invite", message: "This invite link is not valid." }); return; }
     if (inv.status !== "pending") { res.status(410).json({ error: "invite_used", message: "This invite has already been used or revoked." }); return; }
     if (inv.expiresAt.getTime() < Date.now()) { res.status(410).json({ error: "invite_expired", message: "This invite link has expired." }); return; }
-    // Does this email already have a full (dashboard) SiteSort account? If so, the
-    // accept flow attaches portal access to it instead of asking for a new password.
-    const acct = (await db.select({ portalOnly: usersTable.portalOnly }).from(usersTable)
+    // Does this email already have a SiteSort login (dashboard OR portal)? If so,
+    // the accept flow attaches access to it and they sign in with their own
+    // password: an invite never sets a password on an existing login.
+    const acct = (await db.select({ id: usersTable.id }).from(usersTable)
       .where(eq(usersTable.email, inv.email.trim().toLowerCase())).limit(1))[0];
-    const existingAccount = !!acct && !acct.portalOnly;
+    const existingAccount = !!acct;
     res.json({ valid: true, name: inv.name, email: inv.email, projectName: inv.projectName, expiresAt: inv.expiresAt.toISOString(), existingAccount });
   } catch (err) {
     req.log.error({ err }, "Get portal invite error");
@@ -926,10 +934,13 @@ router.get("/portal/invite/:token", async (req, res) => {
   }
 });
 
-// POST /api/portal/invite/:token/accept — enter the portal. New/portal-only
-// invitees set a password here. An invitee whose email ALREADY has a full SiteSort
-// account (this or another company) joins with their EXISTING login — no password
-// is required or changed; the valid single-use invite token is the authorisation.
+// POST /api/portal/invite/:token/accept — enter the portal. A NEW invitee sets
+// a password here. An invitee whose email ALREADY has a SiteSort login (portal
+// or dashboard, this or another company) joins with that EXISTING login: no
+// password is asked for or changed, no session is issued, they sign in with
+// their own password. Only the account holder controls a login (Dean,
+// 2026-10-23): this route used to overwrite a portal login's password, and the
+// inviting PM held the link.
 router.post("/portal/invite/:token/accept", async (req, res) => {
   try {
     const invRows = await db.select().from(projectInvitesTable)
@@ -942,9 +953,8 @@ router.post("/portal/invite/:token/accept", async (req, res) => {
     const email = inv.email.trim().toLowerCase();
     const existing = (await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1))[0];
 
-    // A password is required ONLY when we're creating or (re)securing a portal-only
-    // account. An existing dashboard account keeps its own password untouched.
-    const needsPassword = !existing || existing.portalOnly;
+    // A password is required ONLY when creating a new login.
+    const needsPassword = !existing;
     const parsed = AcceptPortalInviteBody.safeParse(req.body);
     const password = parsed.success ? String(parsed.data.password ?? "") : "";
     if (needsPassword && password.length < 8) {
@@ -959,22 +969,25 @@ router.post("/portal/invite/:token/accept", async (req, res) => {
     // session without a password check (that would let anyone holding the link in
     // as that account). They authenticate at /portal/login with their own password.
     let grantOnly = false;
+    // The link proves the inbox only if it has only ever gone to that email
+    // (emailOnly); before 2026-10-23 the inviter was handed it too.
+    const provenAt = inv.emailOnly ? new Date() : null;
     if (!existing) {
       userId = generateId();
       userName = inv.name;
       userCompanyId = inv.companyId;
       await db.insert(usersTable).values({
         id: userId, companyId: inv.companyId, email, passwordHash: await bcrypt.hash(password, 10), name: inv.name,
-        role: "site_worker", emailVerified: true, portalOnly: true,
+        role: "site_worker", emailVerified: !!provenAt, emailProvenAt: provenAt, portalOnly: true,
       });
-    } else if (existing.portalOnly) {
-      userId = existing.id; userName = existing.name; userCompanyId = existing.companyId;
-      await db.update(usersTable).set({ passwordHash: await bcrypt.hash(password, 10) }).where(eq(usersTable.id, existing.id));
     } else {
-      // Existing full account — attach portal access, DO NOT touch their password
-      // and DO NOT auto-authenticate. They sign in with their own credentials.
+      // Existing login (portal or dashboard): attach access, DO NOT touch the
+      // password and DO NOT auto-authenticate. They sign in with their own.
       userId = existing.id; userName = existing.name; userCompanyId = existing.companyId;
       grantOnly = true;
+      if (provenAt && !existing.emailProvenAt) {
+        await db.update(usersTable).set({ emailProvenAt: provenAt }).where(eq(usersTable.id, existing.id));
+      }
     }
 
     // Link the individual person to their account so per-person portal status resolves.
@@ -1029,8 +1042,9 @@ router.post("/portal/invite/:token/accept", async (req, res) => {
     }
 
     await db.update(projectInvitesTable)
-      .set({ status: "accepted", acceptedUserId: userId, acceptedAt: new Date() })
+      .set({ status: "accepted", acceptedUserId: userId, acceptedAt: new Date(), acceptedIp: req.ip ?? null, acceptedUserAgent: (req.headers["user-agent"] as string | undefined) ?? null })
       .where(eq(projectInvitesTable.id, inv.id));
+    await recordCredentialEvent(userId, "invite_accepted", req);
 
     const proj = await db.select({ name: projectsTable.name }).from(projectsTable).where(eq(projectsTable.id, inv.projectId)).limit(1);
     // Existing account: access granted, but they must sign in with their own
@@ -2204,8 +2218,9 @@ router.post("/portal/documents/:documentId/acknowledge", ...portalGuards, async 
     const pinRequired = pinRequiredForDoc(doc);
     const userRows = await db.select({ pinHash: usersTable.pinHash, name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.id)).limit(1);
     if (pinRequired) {
-      if (await isPinLockedOut(req.user!.id)) {
-        res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
+      const pinLocked = await pinLockResponse(req.user!.id);
+      if (pinLocked) {
+        res.status(pinLocked.status).json(pinLocked.body);
         return;
       }
       const pinHash = userRows[0]?.pinHash ?? null;
@@ -2219,8 +2234,8 @@ router.post("/portal/documents/:documentId/acknowledge", ...portalGuards, async 
       }
       const valid = await bcrypt.compare(String(pin), pinHash);
       if (!valid) {
-        const { locked, remaining } = await recordFailedPinAttempt(req.user!.id);
-        if (locked) res.status(429).json({ error: "too_many_attempts", message: "Too many incorrect PIN attempts. Try again in 15 minutes." });
+        const { locked, remaining, lock } = await recordFailedPinAttempt(req.user!.id);
+        if (locked) res.status(lock.status).json(lock.body);
         else res.status(401).json({ error: "invalid_pin", message: "Incorrect PIN", attemptsRemaining: remaining });
         return;
       }

@@ -120,7 +120,7 @@ export default function PortalAccept() {
                     <p className="text-sm font-medium">Portal access granted</p>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    You can now open <span className="font-medium text-foreground">{invite.data.projectName}</span> in the portal. Sign in with your existing SiteSort password.
+                    You can now open <span className="font-medium text-foreground">{invite.data.projectName}</span> in the portal. Sign in with your existing SiteSort password. Forgotten it? Use Forgot password on the sign-in page.
                   </p>
                   <Button type="button" className="w-full" size="lg" onClick={() => setLocation("/portal/login")}>
                     Go to portal login

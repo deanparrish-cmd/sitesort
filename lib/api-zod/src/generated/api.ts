@@ -378,10 +378,22 @@ export const ListDocumentsResponseItem = zod.object({
     pending: zod.number(),
     viewed: zod.number(),
     acknowledged: zod.number(),
+    signedWithPin: zod
+      .number()
+      .optional()
+      .describe(
+        "How many of the acknowledged were signed with a PIN; the rest were acknowledged without one.",
+      ),
   }),
   myDistributionStatus: zod
     .enum(["pending", "viewed", "acknowledged"])
     .nullish(),
+  mySignedOffWithPin: zod
+    .boolean()
+    .nullish()
+    .describe(
+      "When the requester has signed it, whether they did so with their PIN (true) or acknowledged without one (false). Null when not signed.",
+    ),
   newRevisionNotShared: zod
     .boolean()
     .optional()
@@ -478,10 +490,22 @@ export const GetDocumentResponse = zod
       pending: zod.number(),
       viewed: zod.number(),
       acknowledged: zod.number(),
+      signedWithPin: zod
+        .number()
+        .optional()
+        .describe(
+          "How many of the acknowledged were signed with a PIN; the rest were acknowledged without one.",
+        ),
     }),
     myDistributionStatus: zod
       .enum(["pending", "viewed", "acknowledged"])
       .nullish(),
+    mySignedOffWithPin: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "When the requester has signed it, whether they did so with their PIN (true) or acknowledged without one (false). Null when not signed.",
+      ),
     newRevisionNotShared: zod
       .boolean()
       .optional()
@@ -3230,10 +3254,22 @@ export const GetQrContentResponse = zod.object({
         pending: zod.number(),
         viewed: zod.number(),
         acknowledged: zod.number(),
+        signedWithPin: zod
+          .number()
+          .optional()
+          .describe(
+            "How many of the acknowledged were signed with a PIN; the rest were acknowledged without one.",
+          ),
       }),
       myDistributionStatus: zod
         .enum(["pending", "viewed", "acknowledged"])
         .nullish(),
+      mySignedOffWithPin: zod
+        .boolean()
+        .nullish()
+        .describe(
+          "When the requester has signed it, whether they did so with their PIN (true) or acknowledged without one (false). Null when not signed.",
+        ),
       newRevisionNotShared: zod
         .boolean()
         .optional()
@@ -4019,6 +4055,12 @@ export const GetPortalHsResponse = zod.object({
         .date()
         .nullish()
         .describe("When this viewer signed it off, if they have."),
+      mySignedOffWithPin: zod
+        .boolean()
+        .nullish()
+        .describe(
+          "Whether this viewer's sign-off was made with their PIN (true) or acknowledged without one (false). Null when not signed.",
+        ),
       myViewedAt: zod
         .date()
         .nullish()
@@ -4087,6 +4129,12 @@ export const GetPortalHsResponse = zod.object({
         .date()
         .nullish()
         .describe("When this viewer signed it off, if they have."),
+      mySignedOffWithPin: zod
+        .boolean()
+        .nullish()
+        .describe(
+          "Whether this viewer's sign-off was made with their PIN (true) or acknowledged without one (false). Null when not signed.",
+        ),
       myViewedAt: zod
         .date()
         .nullish()
@@ -4175,6 +4223,12 @@ export const GetPortalSharedResponse = zod.object({
         .date()
         .nullish()
         .describe("When this viewer signed it off, if they have."),
+      mySignedOffWithPin: zod
+        .boolean()
+        .nullish()
+        .describe(
+          "Whether this viewer's sign-off was made with their PIN (true) or acknowledged without one (false). Null when not signed.",
+        ),
       myViewedAt: zod
         .date()
         .nullish()
@@ -4344,6 +4398,12 @@ export const GetPortalDrawingsResponseItem = zod.object({
     .date()
     .nullish()
     .describe("When this viewer signed it off, if they have."),
+  mySignedOffWithPin: zod
+    .boolean()
+    .nullish()
+    .describe(
+      "Whether this viewer's sign-off was made with their PIN (true) or acknowledged without one (false). Null when not signed.",
+    ),
   myViewedAt: zod
     .date()
     .nullish()
@@ -4421,6 +4481,12 @@ export const GetPortalDrawingResponse = zod.object({
     .date()
     .nullish()
     .describe("When this viewer signed it off, if they have."),
+  mySignedOffWithPin: zod
+    .boolean()
+    .nullish()
+    .describe(
+      "Whether this viewer's sign-off was made with their PIN (true) or acknowledged without one (false). Null when not signed.",
+    ),
   myViewedAt: zod
     .date()
     .nullish()
@@ -4621,6 +4687,12 @@ export const GetPortalMethodStatementsResponseItem = zod.object({
     .date()
     .nullish()
     .describe("When this viewer signed it off, if they have."),
+  mySignedOffWithPin: zod
+    .boolean()
+    .nullish()
+    .describe(
+      "Whether this viewer's sign-off was made with their PIN (true) or acknowledged without one (false). Null when not signed.",
+    ),
   myViewedAt: zod
     .date()
     .nullish()
@@ -4698,6 +4770,12 @@ export const GetPortalMethodStatementResponse = zod.object({
     .date()
     .nullish()
     .describe("When this viewer signed it off, if they have."),
+  mySignedOffWithPin: zod
+    .boolean()
+    .nullish()
+    .describe(
+      "Whether this viewer's sign-off was made with their PIN (true) or acknowledged without one (false). Null when not signed.",
+    ),
   myViewedAt: zod
     .date()
     .nullish()
@@ -4804,6 +4882,12 @@ export const GetPortalSafetyResponseItem = zod.object({
     .date()
     .nullish()
     .describe("When this viewer signed it off, if they have."),
+  mySignedOffWithPin: zod
+    .boolean()
+    .nullish()
+    .describe(
+      "Whether this viewer's sign-off was made with their PIN (true) or acknowledged without one (false). Null when not signed.",
+    ),
   myViewedAt: zod
     .date()
     .nullish()
@@ -4877,6 +4961,12 @@ export const GetPortalGeneralResponse = zod.object({
         .date()
         .nullish()
         .describe("When this viewer signed it off, if they have."),
+      mySignedOffWithPin: zod
+        .boolean()
+        .nullish()
+        .describe(
+          "Whether this viewer's sign-off was made with their PIN (true) or acknowledged without one (false). Null when not signed.",
+        ),
       myViewedAt: zod
         .date()
         .nullish()
@@ -5968,7 +6058,6 @@ export const ResendPortalInviteParams = zod.object({
 export const ResendPortalInviteResponse = zod.object({
   success: zod.boolean(),
   emailStatus: zod.enum(["sent", "failed", "portal"]),
-  inviteUrl: zod.string().optional(),
 });
 
 /**

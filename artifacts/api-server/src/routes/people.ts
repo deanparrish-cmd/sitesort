@@ -600,7 +600,7 @@ router.post("/projects/:projectId/portal-invites", authenticate, allow(COMPANY_M
           invitedByUserId: req.user!.id, acceptedUserId: dashUser.id, acceptedAt: new Date(),
         });
       }
-      res.status(201).json({ status: "member", person: serializePerson({ ...person, userId: dashUser.id }), inviteUrl: null });
+      res.status(201).json({ status: "member", person: serializePerson({ ...person, userId: dashUser.id }) });
       return;
     }
 
@@ -637,16 +637,18 @@ router.post("/projects/:projectId/portal-invites", authenticate, allow(COMPANY_M
     if (pending[0]) {
       inviteId = pending[0].id;
       await db.update(projectInvitesTable)
-        .set({ tokenHash: hashToken(rawToken), role, expiresAt, email: person.email, name: person.name })
+        .set({ tokenHash: hashToken(rawToken), role, expiresAt, email: person.email, name: person.name, emailOnly: true })
         .where(eq(projectInvitesTable.id, inviteId));
     } else {
       inviteId = generateId();
       await db.insert(projectInvitesTable).values({
         id: inviteId, projectId: pid, companyId: req.user!.companyId, personId: person.id,
         email: person.email, name: person.name, tokenHash: hashToken(rawToken), role,
-        status: "pending", expiresAt, invitedByUserId: req.user!.id,
+        status: "pending", expiresAt, invitedByUserId: req.user!.id, emailOnly: true,
       });
     }
+    // The link goes ONLY to the invitee's email, never back to the inviter
+    // (Dean, 2026-10-23: a PM holding the link could accept it as them).
     const inviteUrl = `${inviteBaseUrl()}/portal/accept/${rawToken}`;
     const { inviterName, companyName } = await inviteContext(req.user!.id, req.user!.companyId);
 
@@ -666,7 +668,7 @@ router.post("/projects/:projectId/portal-invites", authenticate, allow(COMPANY_M
         url: "/portal/overview",
         tag: `invite-${inviteId}`,
       }).catch(() => {});
-      res.status(201).json({ status: "invited", person: serializePerson({ ...person, userId: portalUser.id }), inviteUrl, emailStatus: "portal" });
+      res.status(201).json({ status: "invited", person: serializePerson({ ...person, userId: portalUser.id }), emailStatus: "portal" });
       return;
     }
 
@@ -676,7 +678,7 @@ router.post("/projects/:projectId/portal-invites", authenticate, allow(COMPANY_M
       inviteId, email: person.email, name: person.name, role,
       inviterName, companyName, projectName: project.name, inviteUrl,
     });
-    res.status(201).json({ status: "invited", person: serializePerson(person), inviteUrl, emailStatus });
+    res.status(201).json({ status: "invited", person: serializePerson(person), emailStatus });
   } catch (err) {
     req.log.error({ err }, "Create portal invite error");
     res.status(500).json({ error: "server_error", message: "Failed to create invite" });
@@ -708,7 +710,7 @@ router.post("/projects/:projectId/portal-invites/:inviteId/resend", authenticate
     }
     const rawToken = randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    await db.update(projectInvitesTable).set({ tokenHash: hashToken(rawToken), expiresAt }).where(eq(projectInvitesTable.id, inv.id));
+    await db.update(projectInvitesTable).set({ tokenHash: hashToken(rawToken), expiresAt, emailOnly: true }).where(eq(projectInvitesTable.id, inv.id));
     const inviteUrl = `${inviteBaseUrl()}/portal/accept/${rawToken}`;
     const { inviterName, companyName } = await inviteContext(req.user!.id, req.user!.companyId);
 
@@ -726,7 +728,7 @@ router.post("/projects/:projectId/portal-invites/:inviteId/resend", authenticate
           url: "/portal/overview",
           tag: `invite-${inv.id}`,
         }).catch(() => {});
-        res.json({ success: true, emailStatus: "portal", inviteUrl });
+        res.json({ success: true, emailStatus: "portal" });
         return;
       }
     }
@@ -735,7 +737,7 @@ router.post("/projects/:projectId/portal-invites/:inviteId/resend", authenticate
       inviteId: inv.id, email: inv.email, name: inv.name, role: inv.role,
       inviterName, companyName, projectName: project.name, inviteUrl,
     });
-    res.json({ success: true, emailStatus, inviteUrl });
+    res.json({ success: true, emailStatus });
   } catch (err) {
     req.log.error({ err }, "Resend portal invite error");
     res.status(500).json({ error: "server_error", message: "Failed to resend invite" });

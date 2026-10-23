@@ -373,12 +373,16 @@ export function ProjectTeamActivity({ projectId }: { projectId: string }) {
     setRemindingId(inviteId);
     try {
       const res = await resendInvite.mutateAsync({ projectId, inviteId });
-      toast({
-        title: "Reminder sent",
-        description: res.emailStatus === "portal"
-          ? `${name} has been pinged in their portal.`
-          : `A fresh invite email is on its way to ${name}.`,
-      });
+      if (res.emailStatus === "failed") {
+        toast({ title: "Reminder not sent", description: `The email to ${name} couldn't be sent. Check the address on their card and try again.`, variant: "destructive" });
+      } else {
+        toast({
+          title: "Reminder sent",
+          description: res.emailStatus === "portal"
+            ? `${name} has been pinged in their portal.`
+            : `A fresh invite email is on its way to ${name}.`,
+        });
+      }
     } catch (err: any) {
       toast({ title: "Couldn't send reminder", description: err?.data?.message || "Please try again.", variant: "destructive" });
     } finally {

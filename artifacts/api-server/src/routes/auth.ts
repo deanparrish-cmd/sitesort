@@ -19,6 +19,7 @@ import {
 } from "../lib/email";
 import { parseFullPersonName } from "../lib/name-validation";
 import { setUserPin } from "../lib/pin";
+import { recordCredentialEvent } from "../lib/credential-notice";
 import { requestCredentialReset, consumeCredentialResetToken } from "../lib/credential-reset";
 import { completePasswordReset, completePinReset } from "../lib/credential-reset-complete";
 
@@ -499,6 +500,7 @@ router.post("/auth/change-password", authenticate, allow(ANY_MEMBER), async (req
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
     await db.update(usersTable).set({ passwordHash }).where(eq(usersTable.id, user.id));
+    await recordCredentialEvent(user.id, "password_changed", req);
     res.json({ success: true });
   } catch (err) {
     req.log.error({ err }, "Change password error");

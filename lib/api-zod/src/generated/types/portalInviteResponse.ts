@@ -12,7 +12,6 @@ import type { PortalInviteResponseStatus } from "./portalInviteResponseStatus";
 export interface PortalInviteResponse {
   status: PortalInviteResponseStatus;
   person: Person;
-  inviteUrl?: string | null;
-  /** Delivery state of the invite email just sent (absent when provisioning an existing member). */
+  /** Where the invite went (absent when provisioning an existing member). The invite link itself is never returned; it goes only to the invitee's email. */
   emailStatus?: PortalInviteResponseEmailStatus;
 }

@@ -49,6 +49,7 @@ import { Bell, BellOff } from "lucide-react";
 import { useSignOffFlow } from "@/hooks/use-sign-off-flow";
 import { SignOffPinCard } from "@/components/sign-off-pin-card";
 import { DocumentViewer } from "@/components/document-viewer";
+import { SignatureMark } from "@/components/signature-mark";
 import { ClipboardList } from "lucide-react";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { WORKER_GUIDE, workerFaq } from "@workspace/user-guide";
@@ -416,9 +417,7 @@ function DocRow({ doc, section, unseen, focused, signOff }: { doc: any; section:
             <span>{doc.revision ? `Rev ${doc.revision}` : `v${doc.version}`} · {fmtDate(doc.createdAt)}</span>
             {cad && <span className="font-mono bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 px-1.5 py-0.5 rounded text-[10px] font-bold">{cad}</span>}
             {signedOff && (
-              <span className="inline-flex items-center gap-1 text-success font-semibold">
-                <CheckCircle2 className="w-4 h-4" /> Signed off {doc.mySignedOffAt ? fmtDate(doc.mySignedOffAt) : ""}
-              </span>
+              <SignatureMark withPin={doc.mySignedOffWithPin} at={doc.mySignedOffAt ? fmtDate(doc.mySignedOffAt) : null} />
             )}
           </p>
         </div>

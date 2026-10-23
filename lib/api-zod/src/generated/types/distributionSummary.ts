@@ -11,4 +11,6 @@ export interface DistributionSummary {
   pending: number;
   viewed: number;
   acknowledged: number;
+  /** How many of the acknowledged were signed with a PIN; the rest were acknowledged without one. */
+  signedWithPin?: number;
 }

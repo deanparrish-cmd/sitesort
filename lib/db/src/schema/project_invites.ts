@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, boolean, text, timestamp } from "drizzle-orm/pg-core";
 import { projectsTable } from "./projects";
 import { companiesTable } from "./companies";
 import { usersTable } from "./users";
@@ -38,6 +38,12 @@ export const projectInvitesTable = pgTable("project_invites", {
   // resend rate limit (max 1 / 5 min) and the "sent · time" display.
   emailStatus: text("email_status"),
   emailLastSentAt: timestamp("email_last_sent_at"),
+  // True once the current token has only ever gone to the invitee's email
+  // (2026-10-23: the link is no longer handed to the inviter). Accepting such
+  // an invite proves the inbox; an older token might have been copied.
+  emailOnly: boolean("email_only").notNull().default(false),
+  acceptedIp: text("accepted_ip"),
+  acceptedUserAgent: text("accepted_user_agent"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

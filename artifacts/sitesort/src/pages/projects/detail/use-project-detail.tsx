@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { signatureCountsText } from "@/components/signature-mark";
 import { ToastAction } from "@/components/ui/toast";
 import { cardLabel } from "@/lib/card-label";
 import { useRoute, useLocation, Link } from "wouter";
@@ -637,7 +638,9 @@ export function useProjectDetailState() {
       const data = await res.json().catch(() => ({}));
 
       if (res.ok) {
-        toast({ title: "Signed off", description: `You signed off "${signOffDoc.name}".` });
+        toast(pinRequired
+          ? { title: "Signed with your PIN", description: `You signed "${signOffDoc.name}" with your PIN.` }
+          : { title: "Acknowledged", description: `You acknowledged "${signOffDoc.name}". No PIN was asked for this document.` });
         await refetchDocs();
         closeSignOff();
         return;
@@ -666,7 +669,7 @@ export function useProjectDetailState() {
     openIssues: { count: number; ok: boolean };
     insurance: { subsWithIssues: number; subsTotal: number; ok: boolean };
     permits: { expiredCount: number; ok: boolean };
-    signOffs: { pendingCount: number; notSentCount?: number; ok: boolean };
+    signOffs: { pendingCount: number; notSentCount?: number; signedWithPin?: number; acknowledgedWithoutPin?: number; ok: boolean };
   };
   type CloseoutRecord = { id: string; signedOffByName: string; signedOffByRole: string; note: string | null; createdAt: string };
   type CloseoutData = { status: string; isComplete: boolean; ready: boolean; checks: CloseoutChecks; closeout: CloseoutRecord | null };
@@ -1459,7 +1462,11 @@ export function useProjectDetailState() {
 
     const docsRows = [...(documents ?? [])].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).map(doc => {
       const pending = doc.distributionSummary?.pending ?? 0;
-      const signOff = doc.status === "superseded" ? "Superseded" : pending > 0 ? `${pending} pending` : "All signed off";
+      // How each signature was given: a PIN signature and an acknowledgement
+      // without one are never reported as the same (Dean, 2026-10-23).
+      const ack = doc.distributionSummary?.acknowledged ?? 0;
+      const given = signatureCountsText(doc.distributionSummary?.signedWithPin ?? 0, ack);
+      const signOff = doc.status === "superseded" ? "Superseded" : pending > 0 ? `${pending} pending${given ? `; ${given}` : ""}` : given ? `Done: ${given}` : "Nobody to sign";
       return `<tr${doc.status === "superseded" ? ' class="superseded"' : ""}><td>${doc.name}</td><td class="capitalize">${doc.type.replace("_", " ")}</td><td>v${doc.version}</td><td>${doc.status === "superseded" ? "Superseded" : "Current"}</td><td>${signOff}</td><td>${fmtD(String(doc.createdAt))}</td></tr>`;
     }).join("");
 

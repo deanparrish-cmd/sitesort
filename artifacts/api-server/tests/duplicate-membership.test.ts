@@ -9,6 +9,7 @@ import { ensureSchema } from "../src/lib/ensure-schema";
 import {
   seedCompany, cleanupFixtures, api, login, portalLogin, seedCrossTenantPortalMember, cleanupPortalMember,
   type Fixture, type PortalMemberFixture,
+  inviteTokenFromInbox,
 } from "./helpers";
 
 /**
@@ -141,7 +142,8 @@ describe("one card with a stale duplicate membership row", () => {
     const card = person.json.id as string;
     expect((await api(`/projects/${co.projectId}/members/person`, { method: "POST", token: admin, body: { personId: card, role: "subcontractor" } })).status).toBeLessThan(300);
     const inv = await api(`/projects/${co.projectId}/portal-invites`, { method: "POST", token: admin, body: { personId: card, role: "subcontractor" } });
-    const acc = await api(`/portal/invite/${String(inv.json.inviteUrl).split("/accept/")[1]}/accept`, { method: "POST", body: { password: "PortalTest123!" } });
+    expect(inv.status).toBe(201);
+    const acc = await api(`/portal/invite/${await inviteTokenFromInbox(co.projectId, card)}/accept`, { method: "POST", body: { password: "PortalTest123!" } });
     expect(acc.status).toBe(200);
     const userId = (await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, email)))[0].id;
     members.push({ email, password: "PortalTest123!", pin: "", userId, personIds: [] });

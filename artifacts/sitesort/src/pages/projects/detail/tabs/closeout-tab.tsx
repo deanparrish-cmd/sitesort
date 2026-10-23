@@ -4,6 +4,7 @@ import { LinkRow } from "@/components/ui/link-row";
 import { Button } from "@/components/ui/button";
 import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronUp, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, PinOff, StickyNote, Send, Loader2, History, Archive, Paperclip } from "lucide-react";
 import { formatDate, formatBytes, cn } from "@/lib/utils";
+import { signatureCountsText } from "@/components/signature-mark";
 import { useDetail } from "../context";
 
 export function CloseoutTab() {
@@ -84,7 +85,7 @@ export function CloseoutTab() {
                           {
                             label: "Document sign-offs",
                             ok: closeout.checks.signOffs.ok,
-                            detail: closeout.checks.signOffs.ok ? "All complete" : signOffDetail(closeout.checks.signOffs),
+                            detail: closeout.checks.signOffs.ok ? signOffDoneDetail(closeout.checks.signOffs) : signOffDetail(closeout.checks.signOffs),
                             onClick: () => openTab("finances", { signoff: "pending" }, "section-docstatus"),
                           },
                         ].map(row => (
@@ -126,10 +127,19 @@ export function CloseoutTab() {
 }
 
 // "3 pending", "Latest revision not sent to 4", or both.
-function signOffDetail(s: { pendingCount: number; notSentCount?: number }): string {
+// Done: say how the signatures were given (Dean, 2026-10-23: a tap on a
+// signed-in phone is never shown as equivalent to a PIN signature).
+function signOffDoneDetail(s: { signedWithPin?: number; acknowledgedWithoutPin?: number }): string {
+  const counts = signatureCountsText(s.signedWithPin ?? 0, (s.signedWithPin ?? 0) + (s.acknowledgedWithoutPin ?? 0));
+  return counts ? `All complete: ${counts}` : "All complete";
+}
+
+function signOffDetail(s: { pendingCount: number; notSentCount?: number; signedWithPin?: number; acknowledgedWithoutPin?: number }): string {
   const parts: string[] = [];
   if (s.pendingCount > 0) parts.push(`${s.pendingCount} pending`);
   if (s.notSentCount) parts.push(`latest revision not sent to ${s.notSentCount}`);
+  const given = signatureCountsText(s.signedWithPin ?? 0, (s.signedWithPin ?? 0) + (s.acknowledgedWithoutPin ?? 0));
+  if (given) parts.push(given);
   const text = parts.join(", ");
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
