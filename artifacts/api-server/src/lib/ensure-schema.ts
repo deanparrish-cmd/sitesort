@@ -717,6 +717,19 @@ export async function ensureSchema(): Promise<void> {
       )
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS credential_events_user_idx ON credential_events (user_id)`);
+    // Refused pre-#169 invite links (handed to the inviter): one row per try.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS invite_link_refusals (
+        id text PRIMARY KEY,
+        invite_id text NOT NULL REFERENCES project_invites(id) ON DELETE CASCADE,
+        project_id text NOT NULL,
+        stage text NOT NULL,
+        ip_address text,
+        user_agent text,
+        created_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS invite_link_refusals_invite_idx ON invite_link_refusals (invite_id)`);
 
     // Per-document "require PIN sign-off" override (lib/signoff.ts#pinRequiredForDoc):
     // safety-critical types (method_statement/permit/safety) always require a PIN;

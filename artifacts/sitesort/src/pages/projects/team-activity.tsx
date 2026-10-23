@@ -442,6 +442,11 @@ export function ProjectTeamActivity({ projectId }: { projectId: string }) {
                 <div className="min-w-0">
                   <p className="font-medium truncate">{inv.name} <span className="text-xs text-muted-foreground font-normal">· {inv.email}</span></p>
                   <p className="text-xs text-muted-foreground capitalize">{inv.role} · invited {fmtRelative(inv.createdAt)}</p>
+                  {inv.linkOutdated && (
+                    <p className="text-xs text-destructive font-medium" data-testid="invite-link-outdated">
+                      The link sent before 23 Oct no longer works. Press Remind to email them a fresh one{inv.oldLinkRefusedAt ? `. They tried the old one ${fmtRelative(inv.oldLinkRefusedAt)}` : ""}.
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {inv.status === "pending" && (

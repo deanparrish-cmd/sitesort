@@ -5,6 +5,7 @@ import {
   peopleTable, subcontractorsTable, projectsTable, projectMembersTable,
   projectInvitesTable, usersTable, companyMembersTable, companiesTable,
   documentDistributionsTable, notificationsTable,
+  inviteLinkRefusalsTable,
 } from "@workspace/db/schema";
 import { and, eq, desc, asc, inArray, isNull, isNotNull, sql } from "drizzle-orm";
 import { generateId } from "../lib/id";
@@ -50,12 +51,24 @@ type PortalStatus = {
   lastActiveAt?: string;
   emailStatus?: string;      // 'sent' | 'failed' (undefined = never attempted)
   emailLastSentAt?: string;
+  // Pending invite whose link was issued before #169: it no longer opens; the
+  // PM must Send again. oldLinkRefusedAt = last time someone tried it.
+  linkOutdated?: boolean;
+  oldLinkRefusedAt?: string;
   memberId?: string;               // project_members.id — needed to PATCH .../permissions
   canLogIssues?: boolean;
   canUpdatePlantMaterials?: boolean;
   canEditDailyReport?: boolean;
   phoneAlerts?: PhoneAlerts;
 };
+// Latest refusal of a pre-#169 link per invite (invite_link_refusals).
+export async function lastOldLinkRefusals(inviteIds: string[]): Promise<Map<string, Date>> {
+  if (inviteIds.length === 0) return new Map();
+  const rows = await db.select({ inviteId: inviteLinkRefusalsTable.inviteId, at: sql<Date>`max(${inviteLinkRefusalsTable.createdAt})` })
+    .from(inviteLinkRefusalsTable).where(inArray(inviteLinkRefusalsTable.inviteId, inviteIds))
+    .groupBy(inviteLinkRefusalsTable.inviteId);
+  return new Map(rows.map(r => [r.inviteId, new Date(r.at)]));
+}
 async function portalStatusFor(personIds: string[], projectId: string): Promise<Map<string, PortalStatus>> {
   const out = new Map<string, PortalStatus>();
   if (personIds.length === 0) return out;
@@ -69,15 +82,16 @@ async function portalStatusFor(personIds: string[], projectId: string): Promise<
       .from(projectMembersTable)
       .leftJoin(usersTable, eq(projectMembersTable.userId, usersTable.id))
       .where(and(eq(projectMembersTable.projectId, projectId), inArray(projectMembersTable.personId, personIds))),
-    db.select({ id: projectInvitesTable.id, personId: projectInvitesTable.personId, role: projectInvitesTable.role, status: projectInvitesTable.status, expiresAt: projectInvitesTable.expiresAt, emailStatus: projectInvitesTable.emailStatus, emailLastSentAt: projectInvitesTable.emailLastSentAt })
+    db.select({ id: projectInvitesTable.id, personId: projectInvitesTable.personId, role: projectInvitesTable.role, status: projectInvitesTable.status, expiresAt: projectInvitesTable.expiresAt, emailStatus: projectInvitesTable.emailStatus, emailLastSentAt: projectInvitesTable.emailLastSentAt, emailOnly: projectInvitesTable.emailOnly })
       .from(projectInvitesTable)
       .where(and(eq(projectInvitesTable.projectId, projectId), inArray(projectInvitesTable.personId, personIds)))
       .orderBy(desc(projectInvitesTable.createdAt)),
   ]);
   // Latest invite per person (invites already ordered newest-first) — used to give
   // the UI an inviteId to revoke against, for members AND pending invites alike.
-  const latestInvite = new Map<string, { id: string; status: string; expiresAt: Date; role: string; emailStatus: string | null; emailLastSentAt: Date | null }>();
-  for (const inv of invites) if (inv.personId && !latestInvite.has(inv.personId)) latestInvite.set(inv.personId, { id: inv.id, status: inv.status, expiresAt: inv.expiresAt, role: inv.role, emailStatus: inv.emailStatus, emailLastSentAt: inv.emailLastSentAt });
+  const latestInvite = new Map<string, { id: string; status: string; expiresAt: Date; role: string; emailStatus: string | null; emailLastSentAt: Date | null; emailOnly: boolean }>();
+  for (const inv of invites) if (inv.personId && !latestInvite.has(inv.personId)) latestInvite.set(inv.personId, { id: inv.id, status: inv.status, expiresAt: inv.expiresAt, role: inv.role, emailStatus: inv.emailStatus, emailLastSentAt: inv.emailLastSentAt, emailOnly: inv.emailOnly });
+  const lastRefusal = await lastOldLinkRefusals([...latestInvite.values()].filter(i => !i.emailOnly && i.status === "pending").map(i => i.id));
 
   const memberByPerson = new Map(members.filter(m => m.personId).map(m => [m.personId as string, m]));
 
@@ -128,6 +142,7 @@ async function portalStatusFor(personIds: string[], projectId: string): Promise<
         canEditDailyReport: mem?.canEditDailyReport,
         emailStatus: inv.emailStatus ?? undefined,
         emailLastSentAt: inv.emailLastSentAt ? inv.emailLastSentAt.toISOString() : undefined,
+        ...(inv.emailOnly ? {} : { linkOutdated: true, oldLinkRefusedAt: lastRefusal.get(inv.id)?.toISOString() }),
       });
     }
   }

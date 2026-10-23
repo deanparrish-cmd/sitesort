@@ -21,6 +21,10 @@ export interface PortalStatus {
   emailStatus?: PortalStatusEmailStatus;
   /** ISO timestamp of the last invite-email send attempt. */
   emailLastSentAt?: string;
+  /** A pending invite whose link was issued before 23 Oct 2026 (it was handed to the inviter too). It no longer opens; send it again. */
+  linkOutdated?: boolean;
+  /** The last time someone tried that out-of-date link and was refused. */
+  oldLinkRefusedAt?: string | null;
   /** project_members.id — present when status is "member"; PATCH .../members/{memberId}/permissions targets this id. */
   memberId?: string;
   canLogIssues?: boolean;

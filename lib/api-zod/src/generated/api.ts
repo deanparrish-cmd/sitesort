@@ -5231,6 +5231,18 @@ export const ListProjectInvitesResponseItem = zod.object({
   acceptedAt: zod.string().optional(),
   revokedAt: zod.string().optional(),
   createdAt: zod.string(),
+  linkOutdated: zod
+    .boolean()
+    .optional()
+    .describe(
+      "A pending invite whose link was issued before 23 Oct 2026 (it was handed to the inviter too). It no longer opens; send it again.",
+    ),
+  oldLinkRefusedAt: zod
+    .string()
+    .nullish()
+    .describe(
+      "The last time someone tried that out-of-date link and was refused.",
+    ),
 });
 export const ListProjectInvitesResponse = zod.array(
   ListProjectInvitesResponseItem,
@@ -5316,6 +5328,18 @@ export const ListSubcontractorPeopleResponseItem = zod
           .string()
           .optional()
           .describe("ISO timestamp of the last invite-email send attempt."),
+        linkOutdated: zod
+          .boolean()
+          .optional()
+          .describe(
+            "A pending invite whose link was issued before 23 Oct 2026 (it was handed to the inviter too). It no longer opens; send it again.",
+          ),
+        oldLinkRefusedAt: zod
+          .string()
+          .nullish()
+          .describe(
+            "The last time someone tried that out-of-date link and was refused.",
+          ),
         memberId: zod
           .string()
           .optional()
@@ -5514,6 +5538,18 @@ export const UpdatePersonResponse = zod
           .string()
           .optional()
           .describe("ISO timestamp of the last invite-email send attempt."),
+        linkOutdated: zod
+          .boolean()
+          .optional()
+          .describe(
+            "A pending invite whose link was issued before 23 Oct 2026 (it was handed to the inviter too). It no longer opens; send it again.",
+          ),
+        oldLinkRefusedAt: zod
+          .string()
+          .nullish()
+          .describe(
+            "The last time someone tried that out-of-date link and was refused.",
+          ),
         memberId: zod
           .string()
           .optional()
@@ -5806,6 +5842,18 @@ export const ListAllPeopleResponseItem = zod
           .string()
           .optional()
           .describe("ISO timestamp of the last invite-email send attempt."),
+        linkOutdated: zod
+          .boolean()
+          .optional()
+          .describe(
+            "A pending invite whose link was issued before 23 Oct 2026 (it was handed to the inviter too). It no longer opens; send it again.",
+          ),
+        oldLinkRefusedAt: zod
+          .string()
+          .nullish()
+          .describe(
+            "The last time someone tried that out-of-date link and was refused.",
+          ),
         memberId: zod
           .string()
           .optional()
@@ -5938,6 +5986,18 @@ export const ListInHousePeopleResponseItem = zod
           .string()
           .optional()
           .describe("ISO timestamp of the last invite-email send attempt."),
+        linkOutdated: zod
+          .boolean()
+          .optional()
+          .describe(
+            "A pending invite whose link was issued before 23 Oct 2026 (it was handed to the inviter too). It no longer opens; send it again.",
+          ),
+        oldLinkRefusedAt: zod
+          .string()
+          .nullish()
+          .describe(
+            "The last time someone tried that out-of-date link and was refused.",
+          ),
         memberId: zod
           .string()
           .optional()

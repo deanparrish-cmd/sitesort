@@ -18,4 +18,8 @@ export interface ProjectInvite {
   acceptedAt?: string;
   revokedAt?: string;
   createdAt: string;
+  /** A pending invite whose link was issued before 23 Oct 2026 (it was handed to the inviter too). It no longer opens; send it again. */
+  linkOutdated?: boolean;
+  /** The last time someone tried that out-of-date link and was refused. */
+  oldLinkRefusedAt?: string | null;
 }

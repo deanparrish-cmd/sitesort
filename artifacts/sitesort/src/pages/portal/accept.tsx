@@ -78,13 +78,16 @@ export default function PortalAccept() {
           const code = (invite.error as any)?.data?.error;
           const expired = code === "invite_expired";
           const used = code === "invite_used";
+          const outdated = code === "invite_link_outdated";
           return (
             <div className="text-center">
               <p className="text-destructive font-semibold mb-2">
-                {expired ? "This invite has expired" : used ? "This invite has already been used" : "This invite link isn't valid"}
+                {outdated ? "This invite link is out of date" : expired ? "This invite has expired" : used ? "This invite has already been used" : "This invite link isn't valid"}
               </p>
               <p className="text-sm text-muted-foreground mb-4">
-                {expired
+                {outdated
+                  ? "Invite links now go only to your own email. Ask the person who invited you to send it again, then open the new link from your email."
+                  : expired
                   ? "Invite links are valid for 7 days. Ask your project manager to resend it, then open the new link."
                   : used
                   ? "If this is your account, log in to the portal below. Otherwise ask your project manager for a fresh invite."

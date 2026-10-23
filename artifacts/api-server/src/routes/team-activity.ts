@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { lastOldLinkRefusals } from "./people";
 import { db } from "@workspace/db";
 import {
   projectsTable, projectInvitesTable, projectMembersTable, usersTable, activityLogTable, portalSessionsTable,
@@ -22,8 +23,10 @@ async function loadOwnedProject(projectId: string, companyId: string) {
   return rows[0] ?? null;
 }
 
-function serializeInvite(i: typeof projectInvitesTable.$inferSelect) {
+function serializeInvite(i: typeof projectInvitesTable.$inferSelect, refusedAt?: Date) {
+  const outdated = i.status === "pending" && !i.emailOnly;
   return {
+    ...(outdated ? { linkOutdated: true, oldLinkRefusedAt: refusedAt?.toISOString() } : {}),
     id: i.id, projectId: i.projectId, email: i.email, name: i.name, role: i.role, status: i.status,
     expiresAt: i.expiresAt.toISOString(),
     acceptedUserId: i.acceptedUserId ?? undefined,
@@ -56,7 +59,8 @@ router.get("/projects/:projectId/invites", authenticate, allow(COMPANY_MANAGER),
     const rows = await db.select().from(projectInvitesTable)
       .where(eq(projectInvitesTable.projectId, req.params.projectId))
       .orderBy(desc(projectInvitesTable.createdAt));
-    res.json(rows.map(serializeInvite));
+    const refused = await lastOldLinkRefusals(rows.filter(r => r.status === "pending" && !r.emailOnly).map(r => r.id));
+    res.json(rows.map(r => serializeInvite(r, refused.get(r.id))));
   } catch (err) {
     req.log.error({ err }, "List invites error");
     res.status(500).json({ error: "server_error", message: "Failed to load invites" });

@@ -5,7 +5,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import {
   usersTable, projectInvitesTable, credentialEventsTable, credentialResetTokensTable, portalSharesTable,
   documentDistributionsTable, acknowledgmentAuditTable, portalSessionsTable, notificationsTable, peopleTable,
-  projectMembersTable, pinAuditLogTable,
+  projectMembersTable, pinAuditLogTable, inviteLinkRefusalsTable,
 } from "@workspace/db/schema";
 import {
   seedCompany, cleanupFixtures, api, login, portalLogin, seedCrossTenantPortalMember, cleanupPortalMember,
@@ -103,7 +103,7 @@ describe("only the owner controls a login; signatures say how they were given", 
     expect(await events(member.userId)).toContain("invite_accepted");
   });
 
-  it("accepting an email-only invite proves the inbox; an older, possibly copied token doesn't", async () => {
+  it("accepting an email-only invite proves the inbox", async () => {
     const proven = `owner-proven-${randomUUID().slice(0, 8)}@sitesort-tests.local`;
     const p1 = await newPerson(co.projectId, admin, proven);
     expect((await api(`/projects/${co.projectId}/portal-invites`, { method: "POST", token: admin, body: { personId: p1, role: "worker" } })).status).toBe(201);
@@ -116,17 +116,64 @@ describe("only the owner controls a login; signatures say how they were given", 
     const i1 = (await db.select().from(projectInvitesTable).where(eq(projectInvitesTable.personId, p1)))[0];
     expect(i1.acceptedIp).toBeTruthy();
     expect(i1.acceptedUserAgent).toBeTruthy();
+  });
 
+  it("a link issued before #169 is refused and logged, the PM is told to send it again, and the fresh link works", async () => {
     const old = `owner-old-${randomUUID().slice(0, 8)}@sitesort-tests.local`;
     const p2 = await newPerson(co.projectId, admin, old);
     expect((await api(`/projects/${co.projectId}/portal-invites`, { method: "POST", token: admin, body: { personId: p2, role: "worker" } })).status).toBe(201);
     const t2 = await inviteTokenFromInbox(co.projectId, p2);
-    await db.update(projectInvitesTable).set({ emailOnly: false }).where(eq(projectInvitesTable.personId, p2)); // a pre-2026-10-23 token
-    expect((await api(`/portal/invite/${t2}/accept`, { method: "POST", body: { password: "Older-Pass-2026!" } })).status).toBe(200);
+    const [inv] = await db.update(projectInvitesTable).set({ emailOnly: false, emailLastSentAt: null })
+      .where(eq(projectInvitesTable.personId, p2)).returning(); // a pre-#169 token, handed to the inviter
+    const opened = await api(`/portal/invite/${t2}`);
+    expect(opened.status).toBe(410);
+    expect(opened.json.error).toBe("invite_link_outdated");
+    expect(opened.json.message).toBe("This invite link is out of date and no longer works. Ask the person who invited you to send it again: the new link will come to your email.");
+    const tried = await api(`/portal/invite/${t2}/accept`, { method: "POST", body: { password: "Older-Pass-2026!" } });
+    expect(tried.status).toBe(410);
+    expect(tried.json.error).toBe("invite_link_outdated");
+    expect((await db.select().from(usersTable).where(eq(usersTable.email, old))).length).toBe(0);
+    const refusals = await db.select().from(inviteLinkRefusalsTable).where(eq(inviteLinkRefusalsTable.inviteId, inv.id));
+    expect(refusals.map(r => r.stage).sort()).toEqual(["accept", "open"]);
+    expect(refusals.every(r => r.ipAddress)).toBe(true);
+
+    // The PM sees it on the Team tab card and in the Team Portal invite list.
+    const people = (await api(`/projects/${co.projectId}/in-house-people`, { token: admin })).json as any[];
+    const card = people.find(x => x.id === p2);
+    expect(card.portal).toMatchObject({ status: "invited", linkOutdated: true });
+    expect(card.portal.oldLinkRefusedAt).toBeTruthy();
+    const listed = ((await api(`/projects/${co.projectId}/invites`, { token: admin })).json as any[]).find(x => x.id === inv.id);
+    expect(listed).toMatchObject({ linkOutdated: true });
+
+    // Send again: an email-only link that works; the old one stays refused.
+    expect((await api(`/projects/${co.projectId}/portal-invites/${inv.id}/resend`, { method: "POST", token: admin })).status).toBe(200);
+    expect((await api(`/portal/invite/${t2}`)).status).toBe(410);
+    const fresh = await inviteTokenFromInbox(co.projectId, p2);
+    expect((await api(`/portal/invite/${fresh}/accept`, { method: "POST", body: { password: "Fresh-Pass-2026!" } })).status).toBe(200);
     const u2 = (await db.select().from(usersTable).where(eq(usersTable.email, old)))[0];
     extraUsers.push(u2.id);
-    expect(u2.emailProvenAt).toBeNull();
-    expect(u2.emailVerified).toBe(false);
+    expect(u2.emailProvenAt).toBeTruthy();
+  });
+
+  it("Send again (or inviting again) kills the previous link: only the newest one opens", async () => {
+    const email = `owner-resend-${randomUUID().slice(0, 8)}@sitesort-tests.local`;
+    const personId = await newPerson(co.projectId, admin, email);
+    expect((await api(`/projects/${co.projectId}/portal-invites`, { method: "POST", token: admin, body: { personId, role: "worker" } })).status).toBe(201);
+    const first = await inviteTokenFromInbox(co.projectId, personId);
+    expect((await api(`/portal/invite/${first}`)).status).toBe(200);
+    const row = (await db.select().from(projectInvitesTable).where(and(eq(projectInvitesTable.personId, personId), eq(projectInvitesTable.status, "pending"))))[0];
+    await db.update(projectInvitesTable).set({ emailLastSentAt: null }).where(eq(projectInvitesTable.id, row.id));
+    expect((await api(`/projects/${co.projectId}/portal-invites/${row.id}/resend`, { method: "POST", token: admin })).status).toBe(200);
+    const afterResend = await api(`/portal/invite/${first}`);
+    expect(afterResend.status).toBe(410);
+    expect(afterResend.json.error).toBe("invalid_invite");
+    expect((await api(`/portal/invite/${first}/accept`, { method: "POST", body: { password: "Held-Link-2026!" } })).status).toBe(410);
+    // Inviting again from the card does the same.
+    const second = await inviteTokenFromInbox(co.projectId, personId);
+    expect((await api(`/projects/${co.projectId}/portal-invites`, { method: "POST", token: admin, body: { personId, role: "worker" } })).status).toBe(201);
+    expect((await api(`/portal/invite/${second}`)).status).toBe(410);
+    expect((await db.select().from(projectInvitesTable).where(and(eq(projectInvitesTable.personId, personId), eq(projectInvitesTable.status, "pending")))).length).toBe(1);
+    expect((await db.select().from(usersTable).where(eq(usersTable.email, email))).length).toBe(0);
   });
 
   it("the 3rd lockout in a day switches the PIN off until the owner's emailed reset; the password alone can't bring it back", async () => {

@@ -20,6 +20,7 @@ import {
 type PortalStatus = {
   status: "not_invited" | "invited" | "member"; role?: string; inviteId?: string; lastActiveAt?: string;
   emailStatus?: "sent" | "failed" | "portal"; emailLastSentAt?: string;
+  linkOutdated?: boolean; oldLinkRefusedAt?: string | null;
   memberId?: string; canLogIssues?: boolean; canUpdatePlantMaterials?: boolean; canEditDailyReport?: boolean;
   phoneAlerts?: PhoneAlerts;
 };
@@ -50,7 +51,13 @@ function InviteEmailStatus({ projectId, portal, onDone }: { projectId: string; p
   };
   return (
     <span className="inline-flex items-center gap-1.5 text-[11px] leading-tight flex-wrap">
-      {portal.emailStatus === "failed" ? (
+      {portal.linkOutdated ? (
+        // Issued before 23 Oct 2026, when the link was handed to the inviter
+        // too: it's refused now, so the only way in is a fresh emailed link.
+        <span className="inline-flex items-center gap-0.5 text-destructive font-medium" data-testid="invite-link-outdated">
+          <AlertTriangle className="w-3 h-3" /> Old invite link no longer works: resend it{portal.oldLinkRefusedAt ? `. They tried it ${fmtRelative(portal.oldLinkRefusedAt)}` : ""}
+        </span>
+      ) : portal.emailStatus === "failed" ? (
         <span className="inline-flex items-center gap-0.5 text-destructive font-medium"><AlertTriangle className="w-3 h-3" /> Email failed: check the address, then resend</span>
       ) : portal.emailStatus === "portal" ? (
         <span className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="w-3 h-3" /> Invited via their portal {fmtRelative(portal.emailLastSentAt)}</span>

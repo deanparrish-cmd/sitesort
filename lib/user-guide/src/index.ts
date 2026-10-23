@@ -147,7 +147,7 @@ export const PM_GUIDE: GuideSection[] = [
         heading: "Send an invite",
         body: [
           "On a project's Team tab, click Invite to Portal on a person's card. They get an email with a link to set up access. The link only ever goes to their email: nobody at your company, you included, is shown it. That way only they can create their login and choose their password and PIN, which is what makes their signatures count. If the email doesn't arrive, check the address on their card and press Send again.",
-          "If their email already has a SiteSort login, the invite just adds the project to it: they sign in with their own password. An invite never changes anyone's password. Each link works once; sending again makes a fresh one.",
+          "If their email already has a SiteSort login, the invite just adds the project to it: they sign in with their own password. An invite never changes anyone's password. Each link works once, and sending again makes a fresh one and stops the previous link working. Links sent before 23 October 2026 no longer open: the person is told to ask for it to be sent again, and their card shows \"Old invite link no longer works: resend it\". Press Resend.",
           "Nobody at your company can see, set or reset someone else's password or PIN. A worker who forgets their PIN resets it themselves, with their password or a link to their own email. They get an email and a phone alert whenever their password or PIN changes.",
         ],
       },

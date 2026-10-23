@@ -6465,6 +6465,13 @@ components:
           type: string
         createdAt:
           type: string
+        linkOutdated:
+          type: boolean
+          description: A pending invite whose link was issued before 23 Oct 2026 (it was handed to the inviter too). It no longer opens; send it again.
+        oldLinkRefusedAt:
+          type: string
+          nullable: true
+          description: The last time someone tried that out-of-date link and was refused.
       required: [id, projectId, email, name, role, status, expiresAt, createdAt]
 
     CreateInviteRequest:
@@ -6709,6 +6716,13 @@ components:
         emailLastSentAt:
           type: string
           description: ISO timestamp of the last invite-email send attempt.
+        linkOutdated:
+          type: boolean
+          description: A pending invite whose link was issued before 23 Oct 2026 (it was handed to the inviter too). It no longer opens; send it again.
+        oldLinkRefusedAt:
+          type: string
+          nullable: true
+          description: The last time someone tried that out-of-date link and was refused.
         memberId:
           type: string
           description: project_members.id — present when status is "member"; PATCH .../members/{memberId}/permissions targets this id.

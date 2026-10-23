@@ -13,6 +13,7 @@ import {
   portalMemberDocumentsTable, notificationsTable, companyMembersTable, portalSubmissionNotesTable,
   plantItemsTable, plantItemAttachmentsTable, plantItemDistributionsTable, personCertificationsTable, dailyReportsTable,
   messagesTable, channelMessagesTable, acknowledgmentAuditTable, portalItemViewsTable,
+  inviteLinkRefusalsTable,
 } from "@workspace/db/schema";
 import { and, eq, inArray, isNull, isNotNull, desc, asc, gte, lt, count, max, or, ne, sql } from "drizzle-orm";
 import { buildSiteBoardPayload } from "../lib/site-board";
@@ -904,6 +905,24 @@ router.post("/portal/reset-password", async (req, res) => {
   }
 });
 
+// An invite link issued before #169 was handed to the inviter as well as
+// emailed, so whoever held it could accept it as the invitee. Such links are
+// refused (Dean, 2026-10-23); the invitee asks for it to be sent again, which
+// emails a fresh link only they receive. Every refusal is logged.
+export const OUTDATED_INVITE_MESSAGE = "This invite link is out of date and no longer works. Ask the person who invited you to send it again: the new link will come to your email.";
+async function refuseOutdatedInvite(inv: { id: string; projectId: string }, stage: "open" | "accept", req: import("express").Request, res: import("express").Response) {
+  try {
+    await db.insert(inviteLinkRefusalsTable).values({
+      id: generateId(), inviteId: inv.id, projectId: inv.projectId, stage,
+      ipAddress: req.ip ?? null, userAgent: (req.headers["user-agent"] as string | undefined) ?? null,
+    });
+  } catch (err) {
+    req.log.error({ err, inviteId: inv.id }, "failed to log refused invite link");
+  }
+  req.log.info({ inviteId: inv.id, stage }, "refused an invite link issued before #169");
+  res.status(410).json({ error: "invite_link_outdated", message: OUTDATED_INVITE_MESSAGE });
+}
+
 // GET /api/portal/invite/:token — validate a single-use invite link.
 router.get("/portal/invite/:token", async (req, res) => {
   try {
@@ -911,6 +930,7 @@ router.get("/portal/invite/:token", async (req, res) => {
       .select({
         id: projectInvitesTable.id, name: projectInvitesTable.name, email: projectInvitesTable.email,
         status: projectInvitesTable.status, expiresAt: projectInvitesTable.expiresAt,
+        emailOnly: projectInvitesTable.emailOnly, projectId: projectInvitesTable.projectId,
         projectName: projectsTable.name,
       })
       .from(projectInvitesTable)
@@ -921,6 +941,7 @@ router.get("/portal/invite/:token", async (req, res) => {
     if (!inv) { res.status(410).json({ error: "invalid_invite", message: "This invite link is not valid." }); return; }
     if (inv.status !== "pending") { res.status(410).json({ error: "invite_used", message: "This invite has already been used or revoked." }); return; }
     if (inv.expiresAt.getTime() < Date.now()) { res.status(410).json({ error: "invite_expired", message: "This invite link has expired." }); return; }
+    if (!inv.emailOnly) { await refuseOutdatedInvite(inv, "open", req, res); return; }
     // Does this email already have a SiteSort login (dashboard OR portal)? If so,
     // the accept flow attaches access to it and they sign in with their own
     // password: an invite never sets a password on an existing login.
@@ -949,6 +970,7 @@ router.post("/portal/invite/:token/accept", async (req, res) => {
     if (!inv) { res.status(410).json({ error: "invalid_invite", message: "This invite link is not valid." }); return; }
     if (inv.status !== "pending") { res.status(410).json({ error: "invite_used", message: "This invite has already been used or revoked." }); return; }
     if (inv.expiresAt.getTime() < Date.now()) { res.status(410).json({ error: "invite_expired", message: "This invite link has expired." }); return; }
+    if (!inv.emailOnly) { await refuseOutdatedInvite(inv, "accept", req, res); return; }
 
     const email = inv.email.trim().toLowerCase();
     const existing = (await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1))[0];
