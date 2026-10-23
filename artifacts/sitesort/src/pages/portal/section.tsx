@@ -403,7 +403,9 @@ function DocRow({ doc, section, unseen, focused, signOff }: { doc: any; section:
   // anything. `unseen` is kept only as a fallback for payloads without view
   // tracking (myViewedAt key absent).
   const tracksViews = "myViewedAt" in doc;
-  const isNewDoc = tracksViews ? !receivedAt : !!unseen;
+  // A superseded revision says Superseded and nothing that invites a tap
+  // (Dean, 2026-10-23): no New / Opened label and no new-item highlight.
+  const isNewDoc = !supersededNow && (tracksViews ? !receivedAt : !!unseen);
 
   return (
     <div
@@ -413,12 +415,14 @@ function DocRow({ doc, section, unseen, focused, signOff }: { doc: any; section:
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="font-bold text-base truncate">{doc.name}</p>
+          {/* Wraps rather than truncates: revisions of one drawing share a long
+              name, and the end of it is often what tells them apart. */}
+          <p className="font-bold text-base break-words [overflow-wrap:anywhere]">{doc.name}</p>
           <p className="text-sm text-muted-foreground flex items-center gap-1.5 flex-wrap mt-1">
             {/* One pill: this person's strongest state on this revision. */}
             {signedOff
               ? <DocStatePill state={doc.mySignedOffWithPin ? "pin" : "acknowledged"} at={doc.mySignedOffAt ? fmtDate(doc.mySignedOffAt) : null} />
-              : receivedAt ? <OpenedPill at={receivedAt} /> : isNewDoc && <NewPill />}
+              : supersededNow ? null : receivedAt ? <OpenedPill at={receivedAt} /> : isNewDoc && <NewPill />}
             <span>{doc.revision ? `Rev ${doc.revision}` : `v${doc.version}`} · {fmtDate(doc.createdAt)}</span>
             {cad && <span className="font-mono bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 px-1.5 py-0.5 rounded text-[10px] font-bold">{cad}</span>}
           </p>
@@ -426,7 +430,7 @@ function DocRow({ doc, section, unseen, focused, signOff }: { doc: any; section:
         {/* Which revision this is, not anything the person did: Superseded is a
             warning; Current is plain text so it can't pass for a signature. */}
         {supersededNow
-          ? <Badge label="Superseded" className={BAD} />
+          ? <span className="shrink-0" data-testid="revision-superseded"><Badge label="Superseded" className={BAD} /></span>
           : <span className="shrink-0 pt-1 text-xs font-bold uppercase tracking-wide text-muted-foreground" data-testid="revision-current">Current</span>}
       </div>
       <div className="flex flex-wrap items-center gap-x-1 gap-y-2 mt-2 -ml-1">

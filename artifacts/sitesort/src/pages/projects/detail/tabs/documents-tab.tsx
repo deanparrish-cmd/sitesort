@@ -40,13 +40,16 @@ const DOCUMENT_TYPE_LABELS: Record<string, string> = {
 
 // Who is where on this revision, in the one vocabulary (New / Opened /
 // Acknowledged / Signed with PIN), weakest first; empty states left out.
-function DistributionPills({ summary }: { summary: { total: number; pending: number; viewed: number; acknowledged: number; signedWithPin?: number } }) {
+// A superseded revision shows only the signatures already given on it (the
+// record), never New / Opened (Dean, 2026-10-23: nothing that invites a tap).
+function DistributionPills({ summary, superseded }: { summary: { total: number; pending: number; viewed: number; acknowledged: number; signedWithPin?: number }; superseded?: boolean }) {
   const pin = summary.signedWithPin ?? 0;
   const parts: [import("@/components/doc-state").DocState, number][] = [
-    ["new", summary.pending], ["opened", summary.viewed], ["acknowledged", summary.acknowledged - pin], ["pin", pin],
+    ...(superseded ? [] : [["new", summary.pending], ["opened", summary.viewed]] as [import("@/components/doc-state").DocState, number][]),
+    ["acknowledged", summary.acknowledged - pin], ["pin", pin],
   ];
   const shown = parts.filter(([, n]) => n > 0);
-  if (shown.length === 0) return <span className="text-xs text-muted-foreground">Not sent to anyone</span>;
+  if (shown.length === 0) return superseded ? null : <span className="text-xs text-muted-foreground">Not sent to anyone</span>;
   return <>{shown.map(([st, n]) => <DocStatePill key={st} state={st} count={n} />)}</>;
 }
 
@@ -54,7 +57,7 @@ function DistributionPills({ summary }: { summary: { total: number; pending: num
 // can't pass for a signature; Superseded is a warning.
 function RevisionState({ superseded }: { superseded: boolean }) {
   return superseded
-    ? <Badge variant="destructive" className="text-[10px]"><AlertTriangle className="w-3 h-3 mr-1"/>SUPERSEDED</Badge>
+    ? <Badge variant="destructive" className="text-[10px]" data-testid="revision-superseded"><AlertTriangle className="w-3 h-3 mr-1"/>SUPERSEDED</Badge>
     : <span className="px-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground" data-testid="revision-current">Current</span>;
 }
 
@@ -209,9 +212,12 @@ export function DocumentsTab() {
               ).map(doc => {
                 const isSuperseded = doc.status === 'superseded';
                 const cadBadge = cadBadgeLabel(doc.fileUrl, doc.name);
+                // The fade is for the content, not the warning: the SUPERSEDED
+                // badge stays at full strength (Dean, 2026-10-23).
+                const fade = isSuperseded && "opacity-70";
                 return (
-                  <div key={doc.id} className={cn("px-4 py-4", isSuperseded && "opacity-70 bg-muted/20")}>
-                    <div className="flex items-start gap-3 mb-2">
+                  <div key={doc.id} className={cn("px-4 py-4", isSuperseded && "bg-muted/20")}>
+                    <div className={cn("flex items-start gap-3 mb-2", fade)}>
                       <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center shrink-0", isSuperseded ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary")}>
                         <FileText className="w-4 h-4" />
                       </div>
@@ -221,7 +227,7 @@ export function DocumentsTab() {
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-1.5 mb-2.5">
-                      <span className="font-mono bg-muted px-2 py-0.5 rounded text-xs font-bold">{docRev(doc)}</span>
+                      <span className={cn("font-mono bg-muted px-2 py-0.5 rounded text-xs font-bold", fade)}>{docRev(doc)}</span>
                       <RevisionState superseded={isSuperseded} />
                       {doc.newRevisionNotShared && (
                         <button type="button" onClick={() => setSharingDoc({ type: "document", id: doc.id, name: doc.name, version: doc.version, fileUrl: doc.fileUrl })}
@@ -230,14 +236,14 @@ export function DocumentsTab() {
                           <AlertTriangle className="w-3 h-3" />Not shared yet: share
                         </button>
                       )}
-                      {cadBadge && <span className="font-mono bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 px-2 py-0.5 rounded text-[10px] font-bold">{cadBadge}</span>}
-                      <span className="text-xs text-muted-foreground">{DOCUMENT_TYPE_LABELS[doc.type] ?? doc.type.replaceAll("_", " ")}</span>
-                      <span className="text-xs text-muted-foreground">· {formatDate(doc.createdAt)}</span>
+                      {cadBadge && <span className={cn("font-mono bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 px-2 py-0.5 rounded text-[10px] font-bold", fade)}>{cadBadge}</span>}
+                      <span className={cn("text-xs text-muted-foreground", fade)}>{DOCUMENT_TYPE_LABELS[doc.type] ?? doc.type.replaceAll("_", " ")}</span>
+                      <span className={cn("text-xs text-muted-foreground", fade)}>· {formatDate(doc.createdAt)}</span>
                     </div>
-                    <div className="flex flex-wrap items-center gap-1.5 mb-3" data-testid="distribution-pills">
-                      <DistributionPills summary={doc.distributionSummary} />
+                    <div className={cn("flex flex-wrap items-center gap-1.5 mb-3 empty:hidden", fade)} data-testid="distribution-pills">
+                      <DistributionPills summary={doc.distributionSummary} superseded={isSuperseded} />
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className={cn("flex flex-wrap gap-2", fade)}>
                       {!isSuperseded && (doc.myDistributionStatus === "pending" || doc.myDistributionStatus === "viewed") && (
                         <button
                           onClick={() => doc.myDistributionStatus === "pending" ? openAndRecord(doc) : openSignOff({ id: doc.id, name: doc.name, type: doc.type, pinRequired: doc.pinRequired ?? true })}
@@ -307,9 +313,11 @@ export function DocumentsTab() {
                   (searchQuery === '' || d.name.toLowerCase().includes(searchQuery.toLowerCase()))
                 ).map(doc => {
                   const isSuperseded = doc.status === 'superseded';
+                  // Fade the content, never the SUPERSEDED badge (Dean, 2026-10-23).
+                  const fade = isSuperseded && "opacity-70";
                   return (
-                    <tr key={doc.id} className={cn("border-b transition-colors", isSuperseded ? "bg-muted/30 opacity-70" : "hover:bg-muted/10")}>
-                      <td className="px-6 py-4">
+                    <tr key={doc.id} className={cn("border-b transition-colors", isSuperseded ? "bg-muted/30" : "hover:bg-muted/10")}>
+                      <td className={cn("px-6 py-4", fade)}>
                         <div className="flex items-center gap-3">
                           <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center shrink-0", isSuperseded ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary")}>
                             <FileText className="w-5 h-5" />
@@ -320,10 +328,10 @@ export function DocumentsTab() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4">{DOCUMENT_TYPE_LABELS[doc.type] ?? doc.type.replaceAll("_", " ")}</td>
+                      <td className={cn("px-6 py-4", fade)}>{DOCUMENT_TYPE_LABELS[doc.type] ?? doc.type.replaceAll("_", " ")}</td>
                       <td className="px-6 py-4">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-mono bg-muted px-2 py-0.5 rounded text-xs font-bold">{docRev(doc)}</span>
+                          <span className={cn("font-mono bg-muted px-2 py-0.5 rounded text-xs font-bold", fade)}>{docRev(doc)}</span>
                           <RevisionState superseded={isSuperseded} />
                           {doc.newRevisionNotShared && (
                             <button type="button" onClick={() => setSharingDoc({ type: "document", id: doc.id, name: doc.name, version: doc.version, fileUrl: doc.fileUrl })}
@@ -335,15 +343,15 @@ export function DocumentsTab() {
                           {cadBadgeLabel(doc.fileUrl, doc.name) && <span className="font-mono bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 px-2 py-0.5 rounded text-[10px] font-bold">{cadBadgeLabel(doc.fileUrl, doc.name)}</span>}
                         </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className={cn("px-6 py-4", fade)}>
                         <div className="flex flex-wrap items-center gap-1.5" data-testid="distribution-pills">
-                          <DistributionPills summary={doc.distributionSummary} />
+                          <DistributionPills summary={doc.distributionSummary} superseded={isSuperseded} />
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-muted-foreground">
+                      <td className={cn("px-6 py-4 text-muted-foreground", fade)}>
                         {formatDate(doc.createdAt)}
                       </td>
-                      <td className="px-3 py-4">
+                      <td className={cn("px-3 py-4", fade)}>
                         <div className="flex flex-wrap items-center gap-1.5">
                           {!isSuperseded && (doc.myDistributionStatus === "pending" || doc.myDistributionStatus === "viewed") && (
                             <button
