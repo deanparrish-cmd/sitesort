@@ -8,7 +8,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { DocumentViewer, type ViewerDoc } from "@/components/document-viewer";
 import { useSignOffFlow } from "@/hooks/use-sign-off-flow";
-import { SignatureMark } from "@/components/signature-mark";
+import { DocStatePill, docStateOf } from "@/components/doc-state";
 import {
   useGetProject,
   getGetProjectQueryKey,
@@ -37,6 +37,37 @@ const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   programme: "Construction Programme",
   general: "General",
 };
+
+// Who is where on this revision, in the one vocabulary (New / Opened /
+// Acknowledged / Signed with PIN), weakest first; empty states left out.
+function DistributionPills({ summary }: { summary: { total: number; pending: number; viewed: number; acknowledged: number; signedWithPin?: number } }) {
+  const pin = summary.signedWithPin ?? 0;
+  const parts: [import("@/components/doc-state").DocState, number][] = [
+    ["new", summary.pending], ["opened", summary.viewed], ["acknowledged", summary.acknowledged - pin], ["pin", pin],
+  ];
+  const shown = parts.filter(([, n]) => n > 0);
+  if (shown.length === 0) return <span className="text-xs text-muted-foreground">Not sent to anyone</span>;
+  return <>{shown.map(([st, n]) => <DocStatePill key={st} state={st} count={n} />)}</>;
+}
+
+// Which revision this is, not what anyone did: Current is plain text so it
+// can't pass for a signature; Superseded is a warning.
+function RevisionState({ superseded }: { superseded: boolean }) {
+  return superseded
+    ? <Badge variant="destructive" className="text-[10px]"><AlertTriangle className="w-3 h-3 mr-1"/>SUPERSEDED</Badge>
+    : <span className="px-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground" data-testid="revision-current">Current</span>;
+}
+
+// Round pill buttons with a chevron (never the square state pills).
+const DOC_BTN = "inline-flex items-center gap-1 rounded-full text-xs font-semibold transition-colors";
+const DOC_BTN_FILLED = `${DOC_BTN} px-3 py-1.5 bg-primary text-primary-foreground hover:bg-primary/90`;
+const DOC_BTN_OUTLINE = `${DOC_BTN} px-3 py-1.5 border border-primary/40 text-primary hover:bg-primary/10`;
+
+// "Open to sign off" / "Sign off", or "acknowledge" where no PIN is asked for.
+function signLabel(doc: { myDistributionStatus?: string | null; pinRequired?: boolean }): string {
+  const verb = (doc.pinRequired ?? true) ? "sign off" : "acknowledge";
+  return doc.myDistributionStatus === "pending" ? `Open to ${verb}` : verb.charAt(0).toUpperCase() + verb.slice(1);
+}
 
 export function DocumentsTab() {
   const {
@@ -191,10 +222,7 @@ export function DocumentsTab() {
                     </div>
                     <div className="flex flex-wrap gap-1.5 mb-2.5">
                       <span className="font-mono bg-muted px-2 py-0.5 rounded text-xs font-bold">{docRev(doc)}</span>
-                      {isSuperseded
-                        ? <Badge variant="destructive" className="text-[10px]"><AlertTriangle className="w-3 h-3 mr-1"/>SUPERSEDED</Badge>
-                        : <Badge variant="success" className="text-[10px]">CURRENT</Badge>
-                      }
+                      <RevisionState superseded={isSuperseded} />
                       {doc.newRevisionNotShared && (
                         <button type="button" onClick={() => setSharingDoc({ type: "document", id: doc.id, name: doc.name, version: doc.version, fileUrl: doc.fileUrl })}
                           title="The revision this replaced was shared on the Team Portal. This one has reached nobody yet."
@@ -206,29 +234,23 @@ export function DocumentsTab() {
                       <span className="text-xs text-muted-foreground">{DOCUMENT_TYPE_LABELS[doc.type] ?? doc.type.replaceAll("_", " ")}</span>
                       <span className="text-xs text-muted-foreground">· {formatDate(doc.createdAt)}</span>
                     </div>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs mb-3">
-                      <span className="flex items-center gap-1 text-success" title="Signed with their PIN"><ShieldCheck className="w-3.5 h-3.5"/> {doc.distributionSummary.signedWithPin ?? 0} with PIN</span>
-                      <span className="flex items-center gap-1 text-muted-foreground" title="Acknowledged without a PIN"><CheckCircle2 className="w-3.5 h-3.5"/> {doc.distributionSummary.acknowledged - (doc.distributionSummary.signedWithPin ?? 0)} no PIN</span>
-                      <span className="flex items-center gap-1 text-primary"><Eye className="w-3.5 h-3.5"/> {doc.distributionSummary.viewed} viewed</span>
-                      <span className="flex items-center gap-1 text-muted-foreground"><EyeOff className="w-3.5 h-3.5"/> {doc.distributionSummary.pending} pending</span>
+                    <div className="flex flex-wrap items-center gap-1.5 mb-3" data-testid="distribution-pills">
+                      <DistributionPills summary={doc.distributionSummary} />
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {!isSuperseded && (doc.myDistributionStatus === "pending" || doc.myDistributionStatus === "viewed") && (
                         <button
                           onClick={() => doc.myDistributionStatus === "pending" ? openAndRecord(doc) : openSignOff({ id: doc.id, name: doc.name, type: doc.type, pinRequired: doc.pinRequired ?? true })}
-                          className="flex items-center gap-1 px-2 py-1 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-xs font-semibold"
+                          className={DOC_BTN_FILLED}
                         >
-                          <ClipboardCheck className="w-3 h-3" />{doc.myDistributionStatus === "pending" ? "Open to sign off" : "Sign off"}
+                          <ClipboardCheck className="w-3 h-3" />{signLabel(doc)}<ChevronRight className="w-3.5 h-3.5 -mr-1" />
                         </button>
                       )}
                       {doc.myDistributionStatus === "acknowledged" && (
-                        <SignatureMark withPin={doc.mySignedOffWithPin} className="text-xs" />
+                        <DocStatePill state={docStateOf("acknowledged", doc.mySignedOffWithPin)!} />
                       )}
-                      <button
-                        onClick={() => openAndRecord(doc)}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-primary/25 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/15 transition-colors"
-                      >
-                        {cadBadge ? <><Download className="w-3 h-3" />Download</> : <><ExternalLink className="w-3 h-3" />Open</>}
+                      <button onClick={() => openAndRecord(doc)} className={DOC_BTN_OUTLINE}>
+                        {cadBadge ? <><Download className="w-3 h-3" />Download</> : <>Open</>}<ChevronRight className="w-3.5 h-3.5 -mr-1" />
                       </button>
                       {canViewAudit && (
                         <button onClick={() => setAuditDoc({ id: doc.id, name: doc.name })}
@@ -302,11 +324,7 @@ export function DocumentsTab() {
                       <td className="px-6 py-4">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-mono bg-muted px-2 py-0.5 rounded text-xs font-bold">{docRev(doc)}</span>
-                          {isSuperseded ? (
-                            <Badge variant="destructive" className="text-[10px]"><AlertTriangle className="w-3 h-3 mr-1"/> SUPERSEDED</Badge>
-                          ) : (
-                            <Badge variant="success" className="text-[10px]">CURRENT</Badge>
-                          )}
+                          <RevisionState superseded={isSuperseded} />
                           {doc.newRevisionNotShared && (
                             <button type="button" onClick={() => setSharingDoc({ type: "document", id: doc.id, name: doc.name, version: doc.version, fileUrl: doc.fileUrl })}
                               title="The revision this replaced was shared on the Team Portal. This one has reached nobody yet."
@@ -318,11 +336,8 @@ export function DocumentsTab() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                          <div className="flex items-center gap-1 text-success" title="Signed with their PIN"><ShieldCheck className="w-4 h-4"/> {doc.distributionSummary.signedWithPin ?? 0}</div>
-                          <div className="flex items-center gap-1 text-muted-foreground" title="Acknowledged without a PIN"><CheckCircle2 className="w-4 h-4"/> {doc.distributionSummary.acknowledged - (doc.distributionSummary.signedWithPin ?? 0)}</div>
-                          <div className="flex items-center gap-1 text-primary"><Eye className="w-4 h-4"/> {doc.distributionSummary.viewed}</div>
-                          <div className="flex items-center gap-1 text-muted-foreground"><EyeOff className="w-4 h-4"/> {doc.distributionSummary.pending}</div>
+                        <div className="flex flex-wrap items-center gap-1.5" data-testid="distribution-pills">
+                          <DistributionPills summary={doc.distributionSummary} />
                         </div>
                       </td>
                       <td className="px-6 py-4 text-muted-foreground">
@@ -333,25 +348,25 @@ export function DocumentsTab() {
                           {!isSuperseded && (doc.myDistributionStatus === "pending" || doc.myDistributionStatus === "viewed") && (
                             <button
                               onClick={() => doc.myDistributionStatus === "pending" ? openAndRecord(doc) : openSignOff({ id: doc.id, name: doc.name, type: doc.type, pinRequired: doc.pinRequired ?? true })}
-                              className="flex items-center gap-1 px-2 py-1 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-xs font-semibold"
+                              className={DOC_BTN_FILLED}
                               title={doc.myDistributionStatus === "pending" ? "Open it first: you can sign off once you've opened it" : "Sign off this document"}
                             >
                               <ClipboardCheck className="w-3.5 h-3.5" />
-                              {doc.myDistributionStatus === "pending" ? "Open to sign off" : "Sign off"}
+                              {signLabel(doc)}<ChevronRight className="w-3.5 h-3.5 -mr-1" />
                             </button>
                           )}
                           {doc.myDistributionStatus === "acknowledged" && (
-                            <SignatureMark withPin={doc.mySignedOffWithPin} iconOnly className="text-xs" />
+                            <DocStatePill state={docStateOf("acknowledged", doc.mySignedOffWithPin)!} />
                           )}
                           <button
                             type="button"
                             onClick={() => openAndRecord(doc)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-primary/25 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/15 transition-colors"
+                            className={DOC_BTN_OUTLINE}
                             title={cadBadgeLabel(doc.fileUrl, doc.name) ? "Download document" : "Open document"}
                           >
                             {cadBadgeLabel(doc.fileUrl, doc.name)
                               ? <><Download className="w-3.5 h-3.5" />Download</>
-                              : <><ExternalLink className="w-3.5 h-3.5" />Open</>}
+                              : <>Open</>}<ChevronRight className="w-3.5 h-3.5 -mr-1" />
                           </button>
                           {canViewAudit && (
                             <button

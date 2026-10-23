@@ -6,12 +6,13 @@ import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, Shield
 import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { openDocument, cadBadgeLabel } from "@/lib/documents";
 import { formatDate, formatBytes, cn } from "@/lib/utils";
-import { SignatureMark } from "@/components/signature-mark";
+import { DocStatePill } from "@/components/doc-state";
 import { useDetail } from "../context";
 import { docRev, type CarryRule } from "../use-project-detail";
 
-// Safety-critical document types always require a PIN to sign off (mirrors the server's list).
-const PIN_ALWAYS_TYPES = new Set(["method_statement", "permit", "safety"]);
+// These types always require a PIN to sign off (mirrors the server's
+// PIN_REQUIRED_DOC_TYPES; drawings joined 2026-10-23).
+const PIN_ALWAYS_TYPES = new Set(["drawing", "method_statement", "permit", "safety"]);
 
 export function DocumentDialogs() {
   const {
@@ -118,10 +119,19 @@ export function DocumentDialogs() {
               </div>
             )}
             {PIN_ALWAYS_TYPES.has(editDocModal.type) ? (
-              <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 shrink-0 text-primary" />
-                Safety-critical document. A 4-digit PIN is always required to sign off.
-              </p>
+              // Say what this document actually does: one uploaded before its
+              // type needed sign-off asks nobody to sign (2026-10-23).
+              editDocModal.requiresAcknowledgment === false ? (
+                <p className="text-xs text-muted-foreground flex items-start gap-1.5" data-testid="edit-doc-no-signoff">
+                  <ShieldCheck className="w-3.5 h-3.5 shrink-0 mt-0.5 text-muted-foreground" />
+                  Nobody is asked to sign this one: it was uploaded before {editDocModal.type === "drawing" ? "drawings" : "this type"} needed sign-off. Its next revision will need a PIN signature from everyone it goes to.
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 shrink-0 text-primary" />
+                  A 4-digit PIN is always required to sign off this type of document.
+                </p>
+              )
             ) : (
               <div className="flex items-start gap-2 p-4 bg-muted/30 border rounded-lg">
                 <input
@@ -305,7 +315,7 @@ export function DocumentDialogs() {
                         <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-[10px] font-bold">v{entry.documentVersion}</span>
                       </div>
                       <p className="text-xs mt-0.5">
-                        <SignatureMark withPin={entry.signedOffWithPin} at={`on ${formatDate(entry.createdAt)}`} className="font-normal" />
+                        <DocStatePill state={entry.signedOffWithPin ? "pin" : "acknowledged"} at={formatDate(entry.createdAt)} />
                       </p>
                     </div>
                   </div>
@@ -416,7 +426,7 @@ export function DocumentDialogs() {
             <label htmlFor="reqAck" className="text-sm font-medium">
               Require team members to digitally sign-off
               {PIN_ALWAYS_TYPES.has(watchedType)
-                ? <span className="block text-xs text-muted-foreground font-normal">Always required for RAMS, permits and safety documents.</span>
+                ? <span className="block text-xs text-muted-foreground font-normal">Always required for drawings, RAMS, permits and safety documents.</span>
                 : inheritsAck && <span className="block text-xs text-muted-foreground font-normal">Required: the revision this replaces needed sign-off.</span>}
             </label>
           </div>
@@ -424,7 +434,7 @@ export function DocumentDialogs() {
             PIN_ALWAYS_TYPES.has(watchedType) ? (
               <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1.5">
                 <ShieldCheck className="w-3.5 h-3.5 shrink-0 text-primary" />
-                Safety-critical document. A 4-digit PIN is always required to sign off.
+                A 4-digit PIN is always required to sign off this type of document.
               </p>
             ) : (
               <div className="flex items-start gap-2 p-4 bg-muted/30 border rounded-lg mt-2">

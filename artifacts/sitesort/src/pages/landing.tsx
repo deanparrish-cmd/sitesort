@@ -33,7 +33,7 @@ const faqs = [
   },
   {
     q: "How do digital sign-offs work?",
-    a: "You choose which documents need signing off. Most take a single tap, \"I confirm I have read and understood\", recorded with the person's name and the time. Safety-critical documents like RAMS, permits and safety packs always require the signer's personal 4-digit PIN, and you can switch PIN protection on for any other document too. Every sign-off is kept in an audit trail that SiteSort only ever adds to, and it shows plainly whether it was signed with a PIN or acknowledged with a tap.",
+    a: "You choose which documents need signing off. Most take a single tap, \"I confirm I have read and understood\", recorded with the person's name and the time. Drawings, RAMS, permits and safety packs always require the signer's personal 4-digit PIN, and you can switch PIN protection on for any other document too. Every sign-off is kept in an audit trail that SiteSort only ever adds to, and it shows plainly whether it was signed with a PIN or acknowledged with a tap.",
   },
   {
     q: "How does the free trial work?",
@@ -208,7 +208,7 @@ export default function LandingPage() {
                 title: "Digital sign-offs",
                 points: [
                   "One-tap 'read and understood' confirmations",
-                  "PIN-protected sign-off for RAMS, permits & safety docs",
+                  "PIN-protected sign-off for drawings, RAMS, permits & safety docs",
                   "A sign-off trail SiteSort only ever adds to, showing PIN signatures apart from taps",
                 ],
               },

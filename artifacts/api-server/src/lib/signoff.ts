@@ -5,7 +5,10 @@
 // reserved for safety-critical document types (method statements / RAMS,
 // permits, and safety documents such as inductions), plus any document the
 // PM explicitly flags with the per-document "require PIN sign-off" toggle.
-export const PIN_REQUIRED_DOC_TYPES = new Set(["method_statement", "permit", "safety"]);
+// Drawings joined 2026-10-23 (Dean, option a): new drawings and new revisions
+// need a PIN signature; existing drawings keep their own requires_acknowledgment
+// (no data changed), and nothing already recorded is reset.
+export const PIN_REQUIRED_DOC_TYPES = new Set(["drawing", "method_statement", "permit", "safety"]);
 
 export function pinRequiredForDoc(doc: { type: string; requirePinSignoff: boolean }): boolean {
   return PIN_REQUIRED_DOC_TYPES.has(doc.type) || doc.requirePinSignoff;

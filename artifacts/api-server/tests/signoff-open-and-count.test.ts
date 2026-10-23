@@ -103,7 +103,7 @@ describe("open before sign-off; what counts as waiting for sign-off; mark as rep
   });
 
   it("waiting for sign-off: only documents that need one; opened-but-unsigned counts; signed doesn't", async () => {
-    const noSignoff = await upload("drawing", false);
+    const noSignoff = await upload("general", false);
     expect((await shareAll(noSignoff)).status).toBe(201);
     const needs = await upload("general", true);
     expect((await shareAll(needs)).status).toBe(201);

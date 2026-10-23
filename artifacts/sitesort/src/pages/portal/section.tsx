@@ -49,7 +49,7 @@ import { Bell, BellOff } from "lucide-react";
 import { useSignOffFlow } from "@/hooks/use-sign-off-flow";
 import { SignOffPinCard } from "@/components/sign-off-pin-card";
 import { DocumentViewer } from "@/components/document-viewer";
-import { SignatureMark } from "@/components/signature-mark";
+import { DocStatePill } from "@/components/doc-state";
 import { ClipboardList } from "lucide-react";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { WORKER_GUIDE, workerFaq } from "@workspace/user-guide";
@@ -264,19 +264,23 @@ function SubmissionNotesThread({ notes, onAdd, adding }: { notes: SubmissionNote
 
 // Small "New" pill for unseen (newly-shared) items in "Shared with me".
 function NewPill() {
-  return <span className="shrink-0 text-xs font-bold uppercase tracking-wide bg-accent text-white px-2 py-0.5 rounded-md">New</span>;
+  return <DocStatePill state="new" />;
 }
 
 // Once a shared document has been opened, "New" gives way to a quiet receipt:
 // when this member first viewed it (server-recorded viewed_at, or the moment
 // they opened it this session).
-function ReceivedPill({ at }: { at: string }) {
-  return (
-    <span className="shrink-0 text-xs font-semibold bg-muted text-muted-foreground px-2 py-0.5 rounded-md">
-      Received {fmtDateTime(at)}
-    </span>
-  );
+// "Opened", never "Received" (Dean, 2026-10-23): it only means the file was
+// opened or downloaded, and it must never look like a confirmation.
+function OpenedPill({ at }: { at: string }) {
+  return <DocStatePill state="opened" at={fmtDateTime(at)} />;
 }
+
+// Pill buttons with a chevron: round and filled/outlined, never the square
+// state pills, so nobody taps a status by mistake.
+const ROW_BUTTON = "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-4 min-h-11 text-base font-bold active:scale-[0.98] transition-all disabled:opacity-50";
+const ROW_BUTTON_OUTLINE = `${ROW_BUTTON} border-2 border-primary text-primary hover:bg-primary/10`;
+const ROW_BUTTON_FILLED = `${ROW_BUTTON} bg-accent text-white hover:bg-accent/90`;
 
 // A row for a document (drawing / method statement / safety / general doc). The
 // superseded badge reflects the last list fetch; opening re-checks live status.
@@ -409,27 +413,26 @@ function DocRow({ doc, section, unseen, focused, signOff }: { doc: any; section:
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="font-bold text-base truncate flex items-center gap-1.5">
-            {receivedAt ? <ReceivedPill at={receivedAt} /> : isNewDoc && <NewPill />}
-            <span className="truncate">{doc.name}</span>
-          </p>
+          <p className="font-bold text-base truncate">{doc.name}</p>
           <p className="text-sm text-muted-foreground flex items-center gap-1.5 flex-wrap mt-1">
+            {/* One pill: this person's strongest state on this revision. */}
+            {signedOff
+              ? <DocStatePill state={doc.mySignedOffWithPin ? "pin" : "acknowledged"} at={doc.mySignedOffAt ? fmtDate(doc.mySignedOffAt) : null} />
+              : receivedAt ? <OpenedPill at={receivedAt} /> : isNewDoc && <NewPill />}
             <span>{doc.revision ? `Rev ${doc.revision}` : `v${doc.version}`} · {fmtDate(doc.createdAt)}</span>
             {cad && <span className="font-mono bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 px-1.5 py-0.5 rounded text-[10px] font-bold">{cad}</span>}
-            {signedOff && (
-              <SignatureMark withPin={doc.mySignedOffWithPin} at={doc.mySignedOffAt ? fmtDate(doc.mySignedOffAt) : null} />
-            )}
           </p>
         </div>
-        {/* Status readable by colour alone, before the name/date registers. */}
-        <Badge label={supersededNow ? "Superseded" : "Current"} className={supersededNow ? BAD : GOOD} />
+        {/* Which revision this is, not anything the person did: Superseded is a
+            warning; Current is plain text so it can't pass for a signature. */}
+        {supersededNow
+          ? <Badge label="Superseded" className={BAD} />
+          : <span className="shrink-0 pt-1 text-xs font-bold uppercase tracking-wide text-muted-foreground" data-testid="revision-current">Current</span>}
       </div>
-      <div className="flex items-center gap-1 mt-2 -ml-1">
-          <button
-            onClick={open}
-            className="inline-flex items-center gap-1.5 rounded-xl px-4 min-h-11 text-base text-primary font-bold hover:bg-primary/10 active:scale-[0.98] transition-all"
-          >
-            {cad ? <><Download className="w-5 h-5" /> Download</> : <><ExternalLink className="w-5 h-5" /> View</>}
+      <div className="flex flex-wrap items-center gap-x-1 gap-y-2 mt-2 -ml-1">
+          <button onClick={open} className={ROW_BUTTON_OUTLINE} data-testid="button-view">
+            {cad ? <><Download className="w-5 h-5" /> Download</> : <>View</>}
+            <ChevronRight className="w-5 h-5 -mr-1" />
           </button>
           {!cad && (
             <button
@@ -445,19 +448,15 @@ function DocRow({ doc, section, unseen, focused, signOff }: { doc: any; section:
               read this", so Sign off appears once SiteSort has recorded the
               open; until then the button opens the document. */}
           {needsSignOff && !active && (tracksViews && !receivedAt ? (
-            <button
-              onClick={open}
-              data-testid="button-open-to-sign"
-              className="inline-flex items-center gap-1.5 rounded-xl px-4 min-h-11 text-base text-accent font-bold hover:bg-accent/10 active:scale-[0.98] transition-all"
-            >
-              <FileSignature className="w-5 h-5" /> Open to sign off
+            <button onClick={open} data-testid="button-open-to-sign" className={ROW_BUTTON_FILLED}>
+              <FileSignature className="w-5 h-5" /> {(doc.pinRequired ?? true) ? "Open to sign off" : "Open to acknowledge"} <ChevronRight className="w-5 h-5 -mr-1" />
             </button>
           ) : (
             <button
               onClick={() => signOff.open({ id: doc.id, name: doc.name, pinRequired: doc.pinRequired ?? true })}
-              className="inline-flex items-center gap-1.5 rounded-xl px-4 min-h-11 text-base text-accent font-bold hover:bg-accent/10 active:scale-[0.98] transition-all"
+              className={ROW_BUTTON_FILLED}
             >
-              <FileSignature className="w-5 h-5" /> Sign off
+              <FileSignature className="w-5 h-5" /> {(doc.pinRequired ?? true) ? "Sign off" : "Acknowledge"} <ChevronRight className="w-5 h-5 -mr-1" />
             </button>
           ))}
       </div>
@@ -484,7 +483,7 @@ function PermitRow({ p, unseen }: { p: any; unseen?: boolean }) {
   const { toast } = useToast();
   const [downloading, setDownloading] = useState(false);
   // Same per-item receipt pattern as DocRow: New until THIS member opens it,
-  // then a permanent "Received <when>". openedAt covers the current session so
+  // then a permanent "Opened <when>". openedAt covers the current session so
   // the pill flips instantly; the server's viewed_at makes it stick.
   const [openedAt, setOpenedAt] = useState<string | null>(null);
   const receivedAt: string | null = openedAt ?? p.myViewedAt ?? null;
@@ -519,19 +518,15 @@ function PermitRow({ p, unseen }: { p: any; unseen?: boolean }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="font-bold text-base truncate flex items-center gap-1.5">
-            {receivedAt ? <ReceivedPill at={receivedAt} /> : isNewPermit && <NewPill />}
+            {receivedAt ? <OpenedPill at={receivedAt} /> : isNewPermit && <NewPill />}
             <span className="truncate">{p.type}</span>
           </p>
           <p className="text-sm text-muted-foreground truncate mt-1">{p.description} · expires {fmtDate(p.expiryDate)}</p>
         </div>
         <Badge label={p.status === "expiring_soon" ? "Expiring" : p.status === "expired" ? "Expired" : "Active"} className={PERMIT_BADGE[p.status]} />
       </div>
-      <button
-        onClick={view}
-        disabled={downloading}
-        className="mt-2 -ml-1 inline-flex items-center gap-1.5 rounded-xl px-4 min-h-11 text-base text-primary font-bold hover:bg-primary/10 active:scale-[0.98] transition-all disabled:opacity-50"
-      >
-        <ExternalLink className="w-5 h-5" /> {downloading ? "Opening…" : "View"}
+      <button onClick={view} disabled={downloading} className={cn(ROW_BUTTON_OUTLINE, "mt-2")}>
+        {downloading ? "Opening…" : "View"} <ChevronRight className="w-5 h-5 -mr-1" />
       </button>
     </div>
   );
@@ -1653,7 +1648,7 @@ function SharedView() {
                 onClick={() => openSharedReport(r)}
                 className="w-full flex items-center gap-3 px-3 min-h-14 text-left hover:bg-muted/60 active:scale-[0.98] transition-all border-b border-border last:border-b-0"
               >
-                {receivedAt ? <ReceivedPill at={receivedAt} /> : <NewPill />}
+                {receivedAt ? <OpenedPill at={receivedAt} /> : <NewPill />}
                 <ClipboardList className="w-5 h-5 text-primary shrink-0" />
                 <span className="flex-1 min-w-0 text-base font-bold truncate">Daily site report · {fmtDate(r.reportDate)}</span>
               </button>

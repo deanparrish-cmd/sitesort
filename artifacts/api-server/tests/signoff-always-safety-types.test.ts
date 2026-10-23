@@ -50,7 +50,8 @@ describe("sign-off always required for RAMS, permits and safety documents", () =
     await cleanupFixtures([co]);
   });
 
-  it.each(["method_statement", "permit", "safety"])("%s uploaded with sign-off off is stored with sign-off on", async (type) => {
+  // Drawings joined 2026-10-23 (Dean, option a).
+  it.each(["drawing", "method_statement", "permit", "safety"])("%s uploaded with sign-off off is stored with sign-off on", async (type) => {
     for (const asked of [false, undefined]) {
       const d = await upload(type, asked);
       expect(d.requiresAcknowledgment).toBe(true);
@@ -59,7 +60,7 @@ describe("sign-off always required for RAMS, permits and safety documents", () =
   });
 
   it("other types keep the uploader's choice", async () => {
-    for (const type of ["drawing", "general", "programme"]) {
+    for (const type of ["general", "programme"]) {
       expect((await upload(type, false)).requiresAcknowledgment).toBe(false);
       expect((await upload(type, true)).requiresAcknowledgment).toBe(true);
     }

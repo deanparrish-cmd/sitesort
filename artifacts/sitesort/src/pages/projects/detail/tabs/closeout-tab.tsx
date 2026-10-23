@@ -4,8 +4,9 @@ import { LinkRow } from "@/components/ui/link-row";
 import { Button } from "@/components/ui/button";
 import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronUp, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, PinOff, StickyNote, Send, Loader2, History, Archive, Paperclip } from "lucide-react";
 import { formatDate, formatBytes, cn } from "@/lib/utils";
-import { signatureCountsText } from "@/components/signature-mark";
+import { signatureCountsText } from "@/components/doc-state";
 import { useDetail } from "../context";
+import { useLocation } from "wouter";
 
 export function CloseoutTab() {
   const {
@@ -20,6 +21,7 @@ export function CloseoutTab() {
     openCloseout,
     reopenProject,
   } = useDetail();
+  const [, setLocation] = useLocation();
 
   return (
     <>
@@ -86,7 +88,8 @@ export function CloseoutTab() {
                             label: "Document sign-offs",
                             ok: closeout.checks.signOffs.ok,
                             detail: closeout.checks.signOffs.ok ? signOffDoneDetail(closeout.checks.signOffs) : signOffDetail(closeout.checks.signOffs),
-                            onClick: () => openTab("finances", { signoff: "pending" }, "section-docstatus"),
+                            // Was a "finances" tab removed with invoices (#126): a dead link.
+                            onClick: () => setLocation("/compliance?filter=signoffs"),
                           },
                         ].map(row => (
                           <LinkRow
@@ -136,7 +139,7 @@ function signOffDoneDetail(s: { signedWithPin?: number; acknowledgedWithoutPin?:
 
 function signOffDetail(s: { pendingCount: number; notSentCount?: number; signedWithPin?: number; acknowledgedWithoutPin?: number }): string {
   const parts: string[] = [];
-  if (s.pendingCount > 0) parts.push(`${s.pendingCount} pending`);
+  if (s.pendingCount > 0) parts.push(`${s.pendingCount} not signed yet`);
   if (s.notSentCount) parts.push(`latest revision not sent to ${s.notSentCount}`);
   const given = signatureCountsText(s.signedWithPin ?? 0, (s.signedWithPin ?? 0) + (s.acknowledgedWithoutPin ?? 0));
   if (given) parts.push(given);

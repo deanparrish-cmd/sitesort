@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { signatureCountsText } from "@/components/signature-mark";
+import { signatureCountsText } from "@/components/doc-state";
 import { ToastAction } from "@/components/ui/toast";
 import { cardLabel } from "@/lib/card-label";
 import { useRoute, useLocation, Link } from "wouter";
@@ -521,7 +521,7 @@ export function useProjectDetailState() {
   const queryClient = useQueryClient();
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
-  type EditDocModal = { id: string; name: string; status: string; version: number; type: string; revision?: string | null; requirePinSignoff?: boolean };
+  type EditDocModal = { id: string; name: string; status: string; version: number; type: string; revision?: string | null; requirePinSignoff?: boolean; requiresAcknowledgment?: boolean };
   const [editDocModal, setEditDocModal] = useState<EditDocModal | null>(null);
   const [editDocSaving, setEditDocSaving] = useState(false);
   const [editDocStatus, setEditDocStatus] = useState("current");
@@ -1224,10 +1224,10 @@ export function useProjectDetailState() {
 
   const watchedType = watch("type") ?? "drawing";
   const supersedableDocs = (documents ?? []).filter(d => d.status === "current" && d.type === watchedType);
-  // RAMS, permits and safety documents always require sign-off (the server
-  // enforces it too): show the box ticked.
+  // Drawings, RAMS, permits and safety documents always require sign-off (the
+  // server enforces it too): show the box ticked.
   useEffect(() => {
-    if (["method_statement", "permit", "safety"].includes(watchedType)) setValue("requiresAcknowledgment", true);
+    if (["drawing", "method_statement", "permit", "safety"].includes(watchedType)) setValue("requiresAcknowledgment", true);
   }, [watchedType, setValue]);
 
   // Revision carry-forward (2026-10-21). The revision this upload replaces:
@@ -1358,7 +1358,7 @@ export function useProjectDetailState() {
     });
   };
 
-  const openDocEdit = (doc: { id: string; name: string; status: string; version: number; type: string; revision?: string | null; requirePinSignoff?: boolean }) => {
+  const openDocEdit = (doc: { id: string; name: string; status: string; version: number; type: string; revision?: string | null; requirePinSignoff?: boolean; requiresAcknowledgment?: boolean }) => {
     setEditDocStatus(doc.status);
     setEditDocVersion(doc.version);
     setEditDocRevision(doc.revision ?? "");
@@ -1466,7 +1466,11 @@ export function useProjectDetailState() {
       // without one are never reported as the same (Dean, 2026-10-23).
       const ack = doc.distributionSummary?.acknowledged ?? 0;
       const given = signatureCountsText(doc.distributionSummary?.signedWithPin ?? 0, ack);
-      const signOff = doc.status === "superseded" ? "Superseded" : pending > 0 ? `${pending} pending${given ? `; ${given}` : ""}` : given ? `Done: ${given}` : "Nobody to sign";
+      // Same words as everywhere else: New (not opened) and Opened are kept
+      // apart, and neither is a signature.
+      const opened = doc.distributionSummary?.viewed ?? 0;
+      const waiting = [pending > 0 ? `${pending} new` : "", opened > 0 ? `${opened} opened` : ""].filter(Boolean).join(", ");
+      const signOff = doc.status === "superseded" ? "Superseded" : waiting ? `${waiting}${given ? `; ${given}` : ""}` : given ? `Done: ${given}` : "Nobody to sign";
       return `<tr${doc.status === "superseded" ? ' class="superseded"' : ""}><td>${doc.name}</td><td class="capitalize">${doc.type.replace("_", " ")}</td><td>v${doc.version}</td><td>${doc.status === "superseded" ? "Superseded" : "Current"}</td><td>${signOff}</td><td>${fmtD(String(doc.createdAt))}</td></tr>`;
     }).join("");
 

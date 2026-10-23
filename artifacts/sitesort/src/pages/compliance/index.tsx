@@ -10,7 +10,7 @@ import { ShareModal } from "@/components/share-modal";
 import {
   ShieldAlert, ShieldX, FileSignature, Search,
   CheckCircle2, Upload, FileText, AlertTriangle, Loader2, Calendar,
-  ExternalLink, Share2, Archive, ChevronDown, ChevronUp, User,
+  ExternalLink, Share2, Archive, ChevronDown, ChevronUp, ChevronRight, User,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCapabilities } from "@/hooks/use-capabilities";
@@ -19,7 +19,7 @@ import { CertTypeConfirm } from "@/components/cert-type";
 import { ListRow } from "@/components/ui/list-row";
 import { useSignOffFlow } from "@/hooks/use-sign-off-flow";
 import { DocumentViewer } from "@/components/document-viewer";
-import { SignatureMark } from "@/components/signature-mark";
+import { DocStatePill, docStateOf } from "@/components/doc-state";
 
 type InsuranceItem = { subcontractorId: string; subcontractorName: string; insuranceType: string; expiryDate: string; status: string; certificateUrl?: string | null };
 type ArchivedInsuranceItem = { id: string; subcontractorId: string; subcontractorName: string; insuranceType: string; expiryDate: string; certificateUrl?: string | null; archivedAt: string };
@@ -836,8 +836,8 @@ export default function CompliancePage() {
                             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-800 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
                             title="Open document"
                           >
-                            <ExternalLink className="w-3 h-3" />
                             Open
+                            <ChevronRight className="w-3 h-3 -mr-0.5" />
                           </button>
                           {/* Open before sign-off (Dean, 2026-10-22): Open records it. */}
                           {iNeedToSign && (
@@ -847,7 +847,8 @@ export default function CompliancePage() {
                               title={a.myStatus === "pending" ? "Open it first: you can sign off once you've opened it" : "Sign off this document"}
                               data-testid="button-ack-sign"
                             >
-                              <FileSignature className="w-3 h-3" /> {a.myStatus === "pending" ? "Open to sign off" : "Sign off"}
+                              <FileSignature className="w-3 h-3" /> {(a.pinRequired ?? true) ? (a.myStatus === "pending" ? "Open to sign off" : "Sign off") : (a.myStatus === "pending" ? "Open to acknowledge" : "Acknowledge")}
+                              <ChevronRight className="w-3 h-3 -mr-0.5" />
                             </button>
                           )}
                           <button
@@ -867,12 +868,13 @@ export default function CompliancePage() {
                                 <User className="w-3 h-3 text-muted-foreground shrink-0" />
                                 <span className="truncate">{r.name}</span>
                               </span>
-                              {r.status === "acknowledged" ? (
-                                <SignatureMark withPin={r.signedOffWithPin} at={r.acknowledgedAt ? new Date(r.acknowledgedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : null} className="shrink-0 font-medium" />
-                              ) : r.status === "viewed" ? (
-                                <span className="text-amber-700 dark:text-amber-400 shrink-0">Opened{r.viewedAt ? ` ${new Date(r.viewedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}, not signed</span>
-                              ) : r.status === "pending" ? (
-                                <span className="text-muted-foreground shrink-0">Not opened</span>
+                              {docStateOf(r.status, r.signedOffWithPin) ? (
+                                // One vocabulary (Dean, 2026-10-23): Opened is a grey outline,
+                                // never amber; it isn't a confirmation.
+                                <DocStatePill
+                                  state={docStateOf(r.status, r.signedOffWithPin)!}
+                                  at={(() => { const t = r.status === "acknowledged" ? r.acknowledgedAt : r.status === "viewed" ? r.viewedAt : null; return t ? new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : null; })()}
+                                />
                               ) : (
                                 <span className="text-muted-foreground shrink-0 capitalize">{r.status}</span>
                               )}

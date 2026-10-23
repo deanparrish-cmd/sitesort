@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { DocStatePill } from "@/components/doc-state";
 import { fmtSiteTime } from "@/lib/site-time";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -265,8 +266,8 @@ export function DailyReportDetail({
               <LinkRow
                 key={`s-${e.documentId}-${e.at}`}
                 href={itemDeepLink(report.projectId, "document", e.documentId) ?? undefined}
-                icon={e.signedOffWithPin ? <ShieldCheck className="w-3.5 h-3.5 text-success" /> : <CheckCircle2 className="w-3.5 h-3.5 text-muted-foreground" />}
-                label={<><span className="font-medium">{e.documentName}</span> {e.signedOffWithPin ? "signed with PIN" : "acknowledged without a PIN"} by {e.userName}</>}
+                icon={<DocStatePill state={e.signedOffWithPin ? "pin" : "acknowledged"} />}
+                label={<><span className="font-medium">{e.documentName}</span>, {e.userName}</>}
                 detail={time(e.at)}
               />
             ))}
@@ -274,8 +275,8 @@ export function DailyReportDetail({
               <LinkRow
                 key={`v-${e.documentId}-${e.at}`}
                 href={itemDeepLink(report.projectId, "document", e.documentId) ?? undefined}
-                icon={<Eye className="w-3.5 h-3.5 text-muted-foreground" />}
-                label={<><span className="font-medium">{e.documentName}</span> viewed by {e.userName}</>}
+                icon={<DocStatePill state="opened" />}
+                label={<><span className="font-medium">{e.documentName}</span>, {e.userName}</>}
                 detail={time(e.at)}
               />
             ))}
