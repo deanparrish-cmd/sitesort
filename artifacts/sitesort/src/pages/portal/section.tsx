@@ -415,6 +415,12 @@ function DocRow({ doc, section, unseen, focused, signOff }: { doc: any; section:
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
+          {/* Superseded sits above the name, sized to its word (never a full
+              width bar, which reads as a heading for the rows below), so a
+              long name keeps the row's full width (Dean, 2026-10-23). */}
+          {supersededNow && (
+            <span className="block w-fit mb-1.5" data-testid="revision-superseded"><Badge label="Superseded" className={BAD} /></span>
+          )}
           {/* Wraps rather than truncates: revisions of one drawing share a long
               name, and the end of it is often what tells them apart. */}
           <p className="font-bold text-base break-words [overflow-wrap:anywhere]">{doc.name}</p>
@@ -427,11 +433,9 @@ function DocRow({ doc, section, unseen, focused, signOff }: { doc: any; section:
             {cad && <span className="font-mono bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 px-1.5 py-0.5 rounded text-[10px] font-bold">{cad}</span>}
           </p>
         </div>
-        {/* Which revision this is, not anything the person did: Superseded is a
-            warning; Current is plain text so it can't pass for a signature. */}
-        {supersededNow
-          ? <span className="shrink-0" data-testid="revision-superseded"><Badge label="Superseded" className={BAD} /></span>
-          : <span className="shrink-0 pt-1 text-xs font-bold uppercase tracking-wide text-muted-foreground" data-testid="revision-current">Current</span>}
+        {/* Which revision this is, not anything the person did: Current is
+            plain text so it can't pass for a signature. */}
+        {!supersededNow && <span className="shrink-0 pt-1 text-xs font-bold uppercase tracking-wide text-muted-foreground" data-testid="revision-current">Current</span>}
       </div>
       <div className="flex flex-wrap items-center gap-x-1 gap-y-2 mt-2 -ml-1">
           <button onClick={open} className={ROW_BUTTON_OUTLINE} data-testid="button-view">
