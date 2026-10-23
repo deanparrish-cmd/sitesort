@@ -31,6 +31,7 @@ export interface ProjectMember {
   pliCertUrl?: string | null;
   pliExpiryDate?: Date | null;
   role: ProjectMemberRole;
+  /** ok = insurance checked and covered. unchecked = let on as in-house staff with no insurance check (never shown as compliant). */
   complianceStatus: ProjectMemberComplianceStatus;
   gateVerdict?: GateVerdict;
   scheduledDays?: string[];

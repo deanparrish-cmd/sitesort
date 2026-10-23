@@ -6,9 +6,10 @@ import { useCreateSubcontractorPerson, useListPersonCertifications, useCreatePer
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronUp, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, PinOff, StickyNote, Send, Loader2, History, Archive, Paperclip, Building2 } from "lucide-react";
+import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronUp, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, PinOff, StickyNote, Send, Loader2, History, Archive, Paperclip, Building2, ShieldOff } from "lucide-react";
 import { InsuranceCertZone } from "@/components/ui/insurance-cert-zone";
 import { CertTypeSelect, CertTypeConfirm, GateVerdictLine, CERT_TYPE_SHORT, type CertTypeValue } from "@/components/cert-type";
+import { GateStandingLine, GiveCardDialog } from "@/components/gate-standing";
 import { formatDate, formatBytes, cn } from "@/lib/utils";
 import { cardLabel } from "@/lib/card-label";
 import { useDetail } from "../context";
@@ -37,6 +38,9 @@ function complianceBadge(status: string) {
     ? <Badge variant="warning" className="text-[10px]"><AlertTriangle className="w-3 h-3 mr-1"/>Insurance Expiring</Badge>
     : status === "hold"
     ? <Badge variant="destructive" className="text-[10px]"><AlertTriangle className="w-3 h-3 mr-1"/>Site Access Denied</Badge>
+    // Own staff let on with no insurance check: untested, never "Compliant".
+    : status === "unchecked"
+    ? <Badge variant="secondary" className="text-[10px]" data-testid="badge-not-checked"><ShieldOff className="w-3 h-3 mr-1"/>Not insurance checked</Badge>
     : null;
 }
 
@@ -201,6 +205,9 @@ export function TeamTab() {
     openSchedule,
   } = useDetail();
 
+  // "Give them a card" (#164): someone on the project with no card or firm.
+  const [cardFor, setCardFor] = useState<{ id: string; name: string } | null>(null);
+
   // ?person=<id> (e.g. from an "invite email bounced" notification): open that
   // person's trade folder, scroll to their card and ring it for a few seconds.
   const [highlightPerson, setHighlightPerson] = useState<string | null>(
@@ -304,6 +311,7 @@ export function TeamTab() {
                   personEmail={member.email}
                   source={portalSource}
                   canManage={caps.canManageTeam}
+                  gateStanding={member.gateStanding}
                 />
               ))}
             </div>
@@ -467,9 +475,13 @@ export function TeamTab() {
           )}
         </div>
 
-        {/* The site gate's own verdict for this person's firm (Dean, 2026-10-22):
-            the card can no longer look covered while the gate holds them. */}
-        {member.gateVerdict && <GateVerdictLine v={member.gateVerdict} className="pt-1" />}
+        {/* What the site gate will do for this person, worked out by the
+            gate's own function (#164), so the card can never disagree with
+            the barrier. Older API responses fall back to the firm verdict. */}
+        {member.gateStanding
+          ? <GateStandingLine standing={member.gateStanding} className="pt-1"
+              onGiveCard={caps.canManageTeam && member.userId && !member.personId ? () => setCardFor({ id: member.id, name: member.name }) : undefined} />
+          : member.gateVerdict && <GateVerdictLine v={member.gateVerdict} className="pt-1" />}
         {member.personId && (
           <div className="pt-1 border-t border-border/50">
             <PersonCertifications personId={member.personId} canManage={caps.canManageTeam} />
@@ -656,6 +668,10 @@ export function TeamTab() {
             );
           })()}
         </TabsContent>
+        {cardFor && (
+          <GiveCardDialog projectId={projectId} memberId={cardFor.id} name={cardFor.name} open onClose={() => setCardFor(null)}
+            onDone={() => { void queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/members`] }); }} />
+        )}
     </>
   );
 }

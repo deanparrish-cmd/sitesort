@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import type { GateStanding } from "@/components/gate-standing";
 import {
   Copy, Trash2, ShieldCheck, ShieldOff, Send, X,
   RefreshCw, AlertTriangle, CheckCircle2, Circle,
@@ -226,23 +227,29 @@ function usePortalMembership({
 // (kills active sessions, cancels any pending invite). After removal the pill
 // reverts to "Invite to Portal", so clicking it again re-invites/restores.
 export function PortalStatusPill({
-  projectId, personName, personEmail, source, canManage,
+  projectId, personName, personEmail, source, canManage, gateStanding,
 }: {
   projectId: string;
   personName: string;
   personEmail?: string;
   source: PillSource;
   canManage: boolean;
+  // What the site gate will do for this card (#164). Inviting someone the gate
+  // treats as your own staff asks first: they're let on with no insurance check.
+  gateStanding?: GateStanding | null;
 }) {
   const { portal, busy, loading, doInvite, doRevoke, revoke } = usePortalMembership({ projectId, personName, personEmail, source, canManage });
   const [prompting, setPrompting] = useState(false);
+  const [confirmStaff, setConfirmStaff] = useState(false);
   const [emailInput, setEmailInput] = useState("");
   const [confirmRevoke, setConfirmRevoke] = useState<"member" | "invited" | null>(null);
 
   if (!canManage) return null;
 
   const email = (personEmail ?? "").trim().toLowerCase();
-  const onInvite = () => { if (!email) { setPrompting(true); return; } void doInvite(email); };
+  const sendInvite = () => { if (!email) { setPrompting(true); return; } void doInvite(email); };
+  // First invite of an in-house card: a choice the PM sees, never a side effect.
+  const onInvite = () => { if (portal.status === "not_invited" && gateStanding?.kind === "staff") { setConfirmStaff(true); return; } sendInvite(); };
 
   // Subcontractor primary contact with no email on file → prompt + save it back.
   if (prompting) {
@@ -333,9 +340,26 @@ export function PortalStatusPill({
   }
 
   return (
-    <button className={cn(PILL, "border-border bg-background text-muted-foreground hover:text-primary hover:bg-muted")} onClick={onInvite} disabled={busy}>
-      <Send className="w-3.5 h-3.5" /> Invite to Portal
-    </button>
+    <>
+      <button className={cn(PILL, "border-border bg-background text-muted-foreground hover:text-primary hover:bg-muted")} onClick={onInvite} disabled={busy}>
+        <Send className="w-3.5 h-3.5" /> Invite to Portal
+      </button>
+      <Dialog open={confirmStaff} onOpenChange={v => { if (!v) setConfirmStaff(false); }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-start gap-2 break-words">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" /> Invite {personName} as your own staff?
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2 text-sm" data-testid="invite-staff-warning">
+          <p className="font-semibold">They'll be let on site as your own staff, with no insurance check.</p>
+          <p className="text-muted-foreground">Their card has no firm. If they work for a subcontractor, add them to that firm's card instead so the gate checks the firm's public liability insurance.</p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setConfirmStaff(false)}>Cancel</Button>
+          <Button onClick={() => { setConfirmStaff(false); sendInvite(); }} data-testid="button-invite-as-staff">Invite as our own staff</Button>
+        </DialogFooter>
+      </Dialog>
+    </>
   );
 }
 

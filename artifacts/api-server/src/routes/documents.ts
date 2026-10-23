@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import bcrypt from "bcryptjs";
 import { db } from "@workspace/db";
-import { documentsTable, documentDistributionsTable, usersTable, projectsTable, acknowledgmentAuditTable, portalSharesTable } from "@workspace/db/schema";
+import { documentsTable, documentDistributionsTable, usersTable, projectsTable, acknowledgmentAuditTable, portalSharesTable, qrBoardPinsTable } from "@workspace/db/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
@@ -261,6 +261,12 @@ router.post("/projects/:projectId/documents", authenticate, allow(projectApprove
       requirePinSignoff: needsPin,
       publicAccess: publicAccess ?? false,
     });
+    // A drawing pinned to the site board follows its current revision (#167):
+    // a superseded drawing never stays up on the gate board.
+    if (previous) {
+      await db.update(qrBoardPinsTable).set({ itemId: docId })
+        .where(and(eq(qrBoardPinsTable.projectId, req.params.projectId), eq(qrBoardPinsTable.itemType, "document"), eq(qrBoardPinsTable.itemId, previous.id)));
+    }
 
     // Look up project name once for all notifications
     const projectRows = await db.select({ name: projectsTable.name }).from(projectsTable).where(eq(projectsTable.id, req.params.projectId)).limit(1);

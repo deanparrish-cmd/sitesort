@@ -99,7 +99,10 @@ function CheckInCard({
   token: string;
   projectName: string;
   siteManager: SiteManager | null;
-  onCheckedIn: () => void;
+  // clearance: on what grounds the gate let them on (from the server), shown
+  // on the site information screen. Absent when the board didn't just check
+  // them in (e.g. already signed in earlier).
+  onCheckedIn: (clearance?: string) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   // phone: ask for the number. confirm: "Is this you?". details: number not on
@@ -117,6 +120,7 @@ function CheckInCard({
   const [checkingPaused, setCheckingPaused] = useState(false);
   const [status, setStatus] = useState<"idle" | "capturing" | "uploading" | "done">("idle");
   const [doneAt, setDoneAt] = useState<string | null>(null);
+  const [clearance, setClearance] = useState<string | null>(null);
   const [hold, setHold] = useState<{ token: string; reason: string; status: "pending" | "approved" | "refused" | "lapsed" } | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [capturedFile, setCapturedFile] = useState<File | null>(null);
@@ -180,7 +184,7 @@ function CheckInCard({
         .then(r => r.ok ? r.json() : null)
         .then(d => {
           if (!d || d.status === "pending") return;
-          if (d.status === "approved") applyDeviceResult(d);
+          if (d.status === "approved") { applyDeviceResult(d); if (typeof d.clearanceText === "string") setClearance(d.clearanceText); }
           setHold(h => h ? { ...h, status: d.status } : h);
         })
         .catch(() => {});
@@ -358,8 +362,10 @@ function CheckInCard({
       const created = await res.json().catch(() => null);
       applyDeviceResult(created);
       if (created?.checkedInAt) setDoneAt(fmtSiteTimeLabelled(created.checkedInAt, created.siteTimeZone));
+      const grounds = typeof created?.clearanceText === "string" ? created.clearanceText : undefined;
+      setClearance(grounds ?? null);
       setStatus("done");
-      setTimeout(() => onCheckedIn(), 2000);
+      setTimeout(() => onCheckedIn(grounds), 2000);
     } catch {
       setErrorMsg("Check-in failed. Please try again.");
       setStatus("capturing");
@@ -437,7 +443,7 @@ function CheckInCard({
               </button>
             </>
           )}
-          <button onClick={onCheckedIn} className="w-full border border-gray-200 text-gray-700 font-semibold py-3 rounded-xl min-h-11">
+          <button onClick={() => onCheckedIn()} className="w-full border border-gray-200 text-gray-700 font-semibold py-3 rounded-xl min-h-11">
             View site information
           </button>
           {!byDevice && (
@@ -454,7 +460,9 @@ function CheckInCard({
   if (hold) {
     const why = hold.reason === "unverified"
       ? "your mobile number isn't on file for this project"
-      : hold.reason === "insurance_expired" ? "your insurance on file has expired" : "we don't have your insurance on file";
+      : hold.reason === "insurance_expired" ? "your insurance on file has expired"
+      : hold.reason === "firm_unknown" ? "we can't tell which firm you're with, so we can't check your insurance"
+      : "we don't have your insurance on file";
     if (hold.status === "approved") {
       return (
         <div className="bg-white rounded-2xl shadow-sm border p-6 text-center" data-testid="panel-hold-approved">
@@ -465,7 +473,7 @@ function CheckInCard({
               ? "The site manager has let you on site. Next time, your mobile number signs you straight in."
               : "The site manager has let you on site. Please get your insurance certificate to them as soon as you can."}
           </p>
-          <button onClick={onCheckedIn} className="w-full bg-orange-600 text-white font-semibold py-3 rounded-xl min-h-11">View site information</button>
+          <button onClick={() => onCheckedIn(clearance ?? undefined)} className="w-full bg-orange-600 text-white font-semibold py-3 rounded-xl min-h-11">View site information</button>
         </div>
       );
     }
@@ -513,6 +521,7 @@ function CheckInCard({
         <p className="text-gray-500 text-sm mt-1 mb-3">
           Your attendance has been recorded at {doneAt ?? new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}.
         </p>
+        {clearance && <p className="text-gray-900 text-sm font-semibold mb-3 break-words" data-testid="text-clearance">{clearance}</p>}
         <p className="text-green-600 text-sm font-medium">Loading site information…</p>
       </div>
     );
@@ -700,6 +709,8 @@ export default function SiteBoard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [checkedIn, setCheckedIn] = useState(false);
+  // On what grounds the gate let them on (from the check-in response).
+  const [clearance, setClearance] = useState<string | null>(null);
   // A board left open on a tablet at the gate can run months-old code (Dean,
   // 2026-10-21). Show the update bar; on the sign-in screen, where nobody may
   // be there to tap Reload, reload by itself once nobody has touched it for
@@ -847,7 +858,7 @@ export default function SiteBoard() {
             token={token}
             projectName={project.name}
             siteManager={siteManager}
-            onCheckedIn={() => setCheckedIn(true)}
+            onCheckedIn={(grounds) => { setClearance(grounds ?? null); setCheckedIn(true); }}
           />
         </div>
       </div>
@@ -917,7 +928,10 @@ export default function SiteBoard() {
         {/* Verified badge */}
         <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
           <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
-          <p className="text-green-800 text-sm font-medium">Check-in verified. You are cleared to access the site.</p>
+          <div className="min-w-0">
+            <p className="text-green-800 text-sm font-medium">Check-in verified. You are cleared to access the site.</p>
+            {clearance && <p className="text-green-900 text-sm font-semibold break-words" data-testid="text-clearance-badge">{clearance}</p>}
+          </div>
         </div>
 
         {/* Key info strip */}
@@ -1074,7 +1088,10 @@ export default function SiteBoard() {
                   <p className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-2">Documents</p>
                   <div className="space-y-0 divide-y">
                     {pinnedDocs.map((doc: any) => (
-                      <div key={doc.id} className="flex items-center justify-between gap-3 py-2.5">
+                      // Pinned = published (#167): the whole row opens it. CAD
+                      // files download (a browser tab can't show them).
+                      <button type="button" key={doc.id} onClick={() => doc.fileUrl && openDocument(doc.fileUrl, doc.name)} disabled={!doc.fileUrl}
+                        className="w-full text-left flex items-center justify-between gap-3 py-2.5 min-h-11 hover:bg-orange-50/60 active:bg-orange-50 disabled:cursor-default" data-testid={`pinned-open-${doc.id}`}>
                         <div className="flex items-center gap-2 flex-1 min-w-0">
                           <FileText className="w-4 h-4 text-gray-400 shrink-0" />
                           <div className="min-w-0">
@@ -1087,13 +1104,10 @@ export default function SiteBoard() {
                             <p className="text-gray-400 text-xs">{TYPE_LABELS[doc.type] ?? doc.type} · v{doc.version}</p>
                           </div>
                         </div>
-                        {doc.fileUrl && (
-                          // CAD files (DWG/DXF/…) can't render in a browser tab — a raw
-                          // window.open() left a blank tab; download them instead, same
-                          // as every other document view in the app.
-                          <button onClick={() => openDocument(doc.fileUrl, doc.name)} className="shrink-0 text-orange-600 text-xs font-semibold hover:underline">View</button>
-                        )}
-                      </div>
+                        {doc.fileUrl
+                          ? <span className="shrink-0 text-orange-600 text-xs font-semibold">Open</span>
+                          : <span className="shrink-0 text-amber-700 text-xs font-semibold">No file attached</span>}
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -1105,13 +1119,12 @@ export default function SiteBoard() {
                   <div className="grid grid-cols-2 gap-2">
                     {pinnedPhotos.map((photo: any) => (
                       <div key={photo.id} className="rounded-lg overflow-hidden border bg-gray-50">
-                        {photo.photoUrl && (
-                          <img
-                            src={photo.photoUrl}
-                            alt={photo.referenceNumber}
-                            className="w-full h-24 object-cover cursor-pointer"
-                            onClick={() => window.open(photo.photoUrl)}
-                          />
+                        {photo.photoUrl ? (
+                          <button type="button" onClick={() => window.open(photo.photoUrl, "_blank", "noopener")} className="block w-full" data-testid={`pinned-open-${photo.id}`} aria-label={`Open photo ${photo.referenceNumber}`}>
+                            <img src={photo.photoUrl} alt={photo.referenceNumber} className="w-full h-24 object-cover" />
+                          </button>
+                        ) : (
+                          <p className="h-24 flex items-center justify-center text-xs text-amber-700 font-semibold px-2 text-center">No photo file attached</p>
                         )}
                         <div className="px-2 py-1.5">
                           <p className="text-xs font-medium text-gray-700 truncate">{photo.referenceNumber}</p>
@@ -1128,10 +1141,16 @@ export default function SiteBoard() {
                   <p className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-2">Permits</p>
                   <div className="space-y-0 divide-y">
                     {pinnedPermits.map((permit: any) => (
-                      <div key={permit.id} className="flex items-start justify-between gap-2 py-2.5">
+                      // A pinned permit opens its document; with none attached the
+                      // row says so plainly instead of looking tappable (#167).
+                      <button type="button" key={permit.id} onClick={() => permit.fileUrl && openDocument(permit.fileUrl, permit.type)} disabled={!permit.fileUrl}
+                        className="w-full text-left flex items-start justify-between gap-2 py-2.5 min-h-11 hover:bg-orange-50/60 active:bg-orange-50 disabled:cursor-default disabled:hover:bg-transparent" data-testid={`pinned-open-${permit.id}`}>
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold text-gray-900 text-sm">{permit.type}</p>
                           {permit.description && <p className="text-gray-500 text-xs mt-0.5 truncate">{permit.description}</p>}
+                          {permit.fileUrl
+                            ? <p className="text-orange-600 text-xs font-semibold mt-0.5">Open permit</p>
+                            : <p className="text-amber-700 text-xs font-semibold mt-0.5" data-testid={`pinned-no-file-${permit.id}`}>No permit document attached</p>}
                         </div>
                         <div className="text-right shrink-0">
                           {(() => {
@@ -1147,7 +1166,7 @@ export default function SiteBoard() {
                             {new Date(permit.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
                           </p>
                         </div>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </div>

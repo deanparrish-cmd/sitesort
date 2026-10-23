@@ -636,7 +636,11 @@ export const ListProjectMembersResponseItem = zod.object({
   pliCertUrl: zod.string().nullish(),
   pliExpiryDate: zod.date().nullish(),
   role: zod.enum(["manager", "worker", "subcontractor"]),
-  complianceStatus: zod.enum(["ok", "warning", "hold", "none"]),
+  complianceStatus: zod
+    .enum(["ok", "warning", "hold", "none", "unchecked"])
+    .describe(
+      "ok = insurance checked and covered. unchecked = let on as in-house staff with no insurance check (never shown as compliant).",
+    ),
   gateVerdict: zod
     .object({
       status: zod.enum(["valid", "expiring_soon", "expired", "none"]),
@@ -3929,7 +3933,12 @@ export const GetPortalSiteBoardResponse = zod
           type: zod.string().optional(),
           version: zod.number().optional(),
           superseded: zod.boolean().optional(),
-          fileUrl: zod.string().optional(),
+          fileUrl: zod
+            .string()
+            .nullish()
+            .describe(
+              "The file to open (#167: pinned items open for whoever looks at the board). Null for a permit with no document attached.",
+            ),
           referenceNumber: zod.string().optional(),
           category: zod.string().optional(),
           description: zod.string().nullish(),

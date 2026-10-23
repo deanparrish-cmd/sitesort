@@ -47,6 +47,8 @@ import {
 } from "@/lib/portal-push";
 import { Bell, BellOff } from "lucide-react";
 import { useSignOffFlow } from "@/hooks/use-sign-off-flow";
+import { SignOffPinCard } from "@/components/sign-off-pin-card";
+import { DocumentViewer } from "@/components/document-viewer";
 import { ClipboardList } from "lucide-react";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { WORKER_GUIDE, workerFaq } from "@workspace/user-guide";
@@ -318,7 +320,19 @@ function DocRow({ doc, section, unseen, focused, signOff }: { doc: any; section:
     }
   };
 
+  // A document waiting for this member's signature opens in the in-app viewer,
+  // which carries the sign-off (Dean, 2026-10-23); everything else opens as
+  // before.
+  const [viewing, setViewing] = useState(false);
+  const signViaViewer = doc.requiresAcknowledgment && doc.myStatus !== "acknowledged" && !supersededNow && !!doc.fileUrl;
+  const recordOpen = async () => {
+    const r = await fetch(`/api/portal/documents/${doc.id}/view`, { method: "POST" });
+    if (r.ok && !openedAt && !doc.myViewedAt) setOpenedAt(new Date().toISOString());
+    return r.ok;
+  };
+
   const open = () => {
+    if (signViaViewer) { setViewing(true); checkCurrent(); return; }
     const opened = openDocFile(doc);
     // Log the view for every doc type (not just drawings/method-statements) —
     // opening never needs a PIN, only signing off does. Fire-and-forget for the
@@ -328,8 +342,12 @@ function DocRow({ doc, section, unseen, focused, signOff }: { doc: any; section:
     void fetch(`/api/portal/documents/${doc.id}/view`, { method: "POST" }).then(r => {
       if (opened && r.ok && !openedAt && !doc.myViewedAt) setOpenedAt(new Date().toISOString());
     }).catch(() => {});
+    checkCurrent();
+  };
+
+  // Confirm current status at open (not from the cached list row).
+  const checkCurrent = () => {
     if (!clickable) return;
-    // Confirm current status at open (not from the cached list row).
     void fetchFreshDoc(section, doc.id).then(({ ok, doc: fresh }: { ok: boolean; doc: FreshDocFull }) => {
       if (!ok) {
         toast({ title: "No longer available", description: "This document has been removed or is no longer shared with you.", variant: "destructive" });
@@ -444,81 +462,25 @@ function DocRow({ doc, section, unseen, focused, signOff }: { doc: any; section:
             </button>
           ))}
       </div>
-      {active && (
+      {active && !viewing && (
         <div className="pb-3">
           <SignOffPinCard flow={signOff} />
         </div>
+      )}
+      {viewing && (
+        <DocumentViewer
+          doc={{ id: doc.id, name: doc.name, fileUrl: doc.fileUrl ?? null, label: doc.revision ? `Rev ${doc.revision}` : `v${doc.version}` }}
+          recordOpen={recordOpen}
+          signOff={doc.requiresAcknowledgment ? signOff : null}
+          pinRequired={doc.pinRequired ?? true}
+          signBlocked={supersededNow ? "This revision has been replaced by a newer one, so it can't be signed off." : null}
+          onClose={() => setViewing(false)}
+        />
       )}
     </div>
   );
 }
 
-// Inline (no modal) PIN entry for a portal sign-off — mobile-first, matches the
-// rest of the portal's "expand in place" pattern (e.g. AddPlantItemForm) rather
-// than the dashboard's dialog-based flow.
-function SignOffPinCard({ flow, actionLabel = "Sign off", busyLabel = "Signing off…" }: {
-  flow: ReturnType<typeof useSignOffFlow>; actionLabel?: string; busyLabel?: string;
-}) {
-  if (!flow.target) return null;
-  return (
-    <Card className="border-primary/30 bg-primary/5">
-      {!flow.target.pinRequired ? (
-        <p className="text-sm text-muted-foreground">
-          By signing off you confirm: <span className="font-medium text-foreground">"I confirm I have read and understood this document."</span> Your name and the time will be recorded.
-        </p>
-      ) : flow.setPinMode ? (
-        <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">Set a 4-digit sign-off PIN to continue. You'll use it to confirm future sign-offs.</p>
-          <div>
-            <label className="text-sm font-bold text-muted-foreground">Account password</label>
-            <input
-              type="password" autoComplete="current-password" value={flow.password} onChange={e => flow.setPassword(e.target.value)}
-              placeholder="Confirm it's you"
-              className="mt-1 w-full min-h-14 rounded-xl border-2 border-border bg-background px-4 text-base focus:outline-none focus:ring-2 focus:ring-primary/40"
-            />
-          </div>
-          <div>
-            <label className="text-sm font-bold text-muted-foreground">Choose a 4-digit PIN</label>
-            <input
-              type="password" inputMode="numeric" value={flow.newPin} onChange={e => flow.setNewPin(flow.onlyDigits(e.target.value))}
-              placeholder="••••"
-              className="mt-1 w-full min-h-14 rounded-xl border-2 border-border bg-background px-4 text-xl font-bold tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-primary/40"
-            />
-          </div>
-        </div>
-      ) : (
-        <div>
-          <label className="text-sm font-bold text-muted-foreground">Enter your 4-digit PIN</label>
-          <input
-            type="password" inputMode="numeric" autoFocus value={flow.pin}
-            onChange={e => flow.setPin(flow.onlyDigits(e.target.value))}
-            onKeyDown={e => { if (e.key === "Enter") void flow.submit(); }}
-            placeholder="••••"
-            className="mt-1 w-full min-h-14 rounded-xl border-2 border-border bg-background px-4 text-xl font-bold tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-primary/40"
-          />
-          <button
-            type="button"
-            onClick={flow.forgotPin}
-            className="mt-2 text-xs text-primary hover:underline"
-          >
-            Forgot your PIN? Reset it with your password
-          </button>
-        </div>
-      )}
-      {flow.error && <p className="mt-2 text-xs text-destructive">{flow.error}</p>}
-      <div className="flex gap-2 mt-3">
-        <button
-          onClick={() => void flow.submit()}
-          disabled={flow.submitting}
-          className="flex-1 min-h-14 rounded-xl bg-primary text-primary-foreground text-base font-bold hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50"
-        >
-          {flow.submitting ? busyLabel : !flow.target.pinRequired ? `Confirm & ${actionLabel.toLowerCase()}` : flow.setPinMode ? `Set PIN & ${actionLabel.toLowerCase()}` : actionLabel}
-        </button>
-        <button onClick={flow.close} className="min-h-14 px-5 rounded-xl border-2 border-border text-base font-bold hover:bg-muted active:scale-[0.98] transition-all">Cancel</button>
-      </div>
-    </Card>
-  );
-}
 function PermitRow({ p, unseen }: { p: any; unseen?: boolean }) {
   const { toast } = useToast();
   const [downloading, setDownloading] = useState(false);
@@ -1429,14 +1391,14 @@ function SiteBoardView({ embedded }: { embedded?: boolean }) {
       {pinnedDocs.length > 0 && (
         <div>
           <SectionTitle>Pinned documents</SectionTitle>
+          {/* Pinned = published to everyone looking at this board (#167): the
+              whole row opens it. CAD files download (openDocFile). */}
           <Card>{pinnedDocs.map(d => (
-            <div key={d.id} className="flex items-center justify-between gap-3 py-3 border-b border-border/60 last:border-0">
+            <button type="button" key={d.id} onClick={() => openDocFile(d)} disabled={!d.fileUrl} data-testid={`portal-pinned-open-${d.id}`}
+              className="w-full text-left flex items-center justify-between gap-3 py-3 min-h-11 border-b border-border/60 last:border-0 hover:bg-primary/5 active:bg-primary/10 disabled:cursor-default">
               <div className="min-w-0"><p className="font-bold text-base truncate flex items-center gap-1.5"><span className="truncate">{d.name}</span>{d.superseded && <Badge label="Superseded" className={BAD} />}</p><p className="text-sm text-muted-foreground capitalize mt-0.5">{d.type} · v{d.version}</p></div>
-              {/* CAD files (DWG/DXF/…) can't render in a browser tab — must download
-                  instead of a raw window.open, which left a blank tab. Same helper
-                  DocRow uses for regular (non-pinned) documents. */}
-              {d.fileUrl && <button onClick={() => openDocFile(d)} className="shrink-0 min-h-11 px-3 rounded-lg text-base text-primary font-bold hover:bg-primary/10 active:scale-[0.98] transition-all">View</button>}
-            </div>
+              {d.fileUrl ? <span className="shrink-0 px-3 text-base text-primary font-bold">Open</span> : <span className="shrink-0 text-sm text-amber-700 dark:text-amber-400 font-bold">No file attached</span>}
+            </button>
           ))}</Card>
         </div>
       )}
@@ -1444,10 +1406,17 @@ function SiteBoardView({ embedded }: { embedded?: boolean }) {
         <div>
           <SectionTitle>Pinned permits</SectionTitle>
           <Card>{pinnedPermits.map(p => (
-            <div key={p.id} className="flex items-center justify-between gap-3 py-3 border-b border-border/60 last:border-0">
-              <div className="min-w-0"><p className="font-bold text-base truncate capitalize">{p.type}</p>{p.description && <p className="text-sm text-muted-foreground truncate mt-0.5">{p.description}</p>}</div>
+            <button type="button" key={p.id} onClick={() => openDocFile({ fileUrl: p.fileUrl, name: p.type })} disabled={!p.fileUrl} data-testid={`portal-pinned-open-${p.id}`}
+              className="w-full text-left flex items-center justify-between gap-3 py-3 min-h-11 border-b border-border/60 last:border-0 hover:bg-primary/5 active:bg-primary/10 disabled:cursor-default disabled:hover:bg-transparent">
+              <div className="min-w-0">
+                <p className="font-bold text-base truncate capitalize">{p.type}</p>
+                {p.description && <p className="text-sm text-muted-foreground truncate mt-0.5">{p.description}</p>}
+                {p.fileUrl
+                  ? <p className="text-sm text-primary font-bold mt-0.5">Open permit</p>
+                  : <p className="text-sm text-amber-700 dark:text-amber-400 font-bold mt-0.5">No permit document attached</p>}
+              </div>
               <Badge label={p.status === "expiring_soon" ? "Expiring" : p.status === "expired" ? "Expired" : "Active"} className={permitBadge(p.status)} />
-            </div>
+            </button>
           ))}</Card>
         </div>
       )}
@@ -1455,7 +1424,11 @@ function SiteBoardView({ embedded }: { embedded?: boolean }) {
         <div>
           <SectionTitle>Pinned photos</SectionTitle>
           <div className="grid grid-cols-2 gap-3">
-            {pinnedPhotos.map(p => p.photoUrl && <img key={p.id} src={fileHref(p.photoUrl)} alt="" className="rounded-lg w-full h-32 object-cover" loading="lazy" />)}
+            {pinnedPhotos.map(p => p.photoUrl && (
+              <button type="button" key={p.id} onClick={() => window.open(fileHref(p.photoUrl), "_blank", "noopener")} aria-label={`Open photo ${p.referenceNumber ?? ""}`} className="block rounded-lg overflow-hidden" data-testid={`portal-pinned-open-${p.id}`}>
+                <img src={fileHref(p.photoUrl)} alt="" className="w-full h-32 object-cover" loading="lazy" />
+              </button>
+            ))}
           </div>
         </div>
       )}

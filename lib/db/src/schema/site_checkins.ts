@@ -45,6 +45,13 @@ export const siteCheckinsTable = pgTable("site_checkins", {
   // (they may still be on site), but they stop counting as "on site". The
   // manager's register still lists them for that day, marked.
   autoClosedAt: timestamp("auto_closed_at"),
+  // On what grounds a check-in was let on site (2026-10-22): 'public_liability'
+  // (checked, in date; clearancePliExpiry = the expiry that cleared them),
+  // 'in_house_staff' (known own staff: NO insurance check ran), or
+  // 'manager_approved' (held, then approved). NULL = held / refused, or a row
+  // from before the grounds were recorded.
+  clearanceBasis: text("clearance_basis"),
+  clearancePliExpiry: text("clearance_pli_expiry"),
 }, (t) => ({
   projectOpenIdx: index("site_checkins_project_open_idx").on(t.projectId, t.checkedOutAt),
 }));

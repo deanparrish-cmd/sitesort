@@ -158,3 +158,44 @@ export async function subcontractorInsuranceVerdict(subcontractorId: string, com
 export async function subcontractorInsuranceStatus(subcontractorId: string, companyId: string): Promise<InsuranceStatus> {
   return (await subcontractorInsuranceVerdict(subcontractorId, companyId)).status;
 }
+
+// ---- Which firm a team row belongs to (card AND gate, Dean 2026-10-22) -----
+// A row on a project can name a firm itself (project_members.subcontractor_id)
+// and point at a person who belongs to a firm. The person's firm wins: it's the
+// one the card shows. The gate used to take the row's firm first, so the two
+// could judge different firms' insurance.
+export function memberFirm(rowFirm: string | null | undefined, personFirm: string | null | undefined): string | null {
+  return personFirm ?? rowFirm ?? null;
+}
+
+// ---- The gate's decision for someone tied to one or more firms -------------
+// Every firm the person is known at is judged; one that holds, holds them (a
+// subbie listed at two firms is let on only if neither firm's cover is missing).
+export type GateOutcome =
+  | { cleared: true; basis: "public_liability"; publicLiabilityExpiry: string }
+  | { cleared: false; holdReason: "insurance_none" | "insurance_expired" };
+export async function gateDecisionForFirms(subIds: string[], companyId: string): Promise<GateOutcome> {
+  if (subIds.length === 0) return { cleared: false, holdReason: "insurance_none" };
+  const verdicts = await Promise.all(subIds.map(id => subcontractorInsuranceVerdict(id, companyId)));
+  if (verdicts.some(v => v.status === "none")) return { cleared: false, holdReason: "insurance_none" };
+  if (verdicts.some(v => v.status === "expired" || !v.publicLiabilityExpiry)) return { cleared: false, holdReason: "insurance_expired" };
+  const soonest = verdicts.map(v => v.publicLiabilityExpiry as string).sort()[0];
+  return { cleared: true, basis: "public_liability", publicLiabilityExpiry: soonest };
+}
+
+// ---- On what grounds someone was let on site (stored on the check-in) ------
+// 'public_liability' (checked and in date, expiry kept), 'in_house_staff' (a
+// known member of the company's own staff: no insurance check ran), or
+// 'manager_approved' (held, then let on by a manager with a reason). NULL =
+// a check-in from before the grounds were recorded.
+export type ClearanceBasis = "public_liability" | "in_house_staff" | "manager_approved";
+export function clearanceText(basis: string | null | undefined, pliExpiry: string | null | undefined, note?: string | null): string {
+  if (basis === "public_liability" && pliExpiry) return `Cleared: public liability to ${ukDate(pliExpiry)}`;
+  if (basis === "in_house_staff") return "Cleared as in-house staff, no insurance check";
+  if (basis === "manager_approved") return note ? `Let on by a manager after a hold: ${note}` : "Let on by a manager after a hold";
+  return "Cleared before the grounds were recorded";
+}
+// True when nobody's insurance was checked: the site manager should see it.
+export function clearanceUnchecked(basis: string | null | undefined): boolean {
+  return basis !== "public_liability";
+}

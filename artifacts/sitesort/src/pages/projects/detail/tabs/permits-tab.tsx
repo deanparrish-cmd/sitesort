@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { ListRow, Pill } from "@/components/ui/list-row";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronUp, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, PinOff, StickyNote, Send, Loader2, History, Archive, Paperclip } from "lucide-react";
+import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronUp, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, PinOff, StickyNote, Send, Loader2, History, Archive, Paperclip, ShieldOff } from "lucide-react";
 import { openDocument, cadBadgeLabel } from "@/lib/documents";
 import { OverdueBadge } from "@/components/ui/overdue-badge";
 import { formatDate, formatBytes, cn } from "@/lib/utils";
@@ -340,6 +340,8 @@ export function PermitsTab() {
                               ? <Badge variant="destructive" className="text-[10px]"><AlertTriangle className="w-3 h-3 mr-1" />Site Access Denied</Badge>
                               : m.complianceStatus === "warning"
                               ? <Badge className="text-[10px] bg-orange-100 text-orange-700 border-orange-200"><AlertTriangle className="w-3 h-3 mr-1" />Insurance Expiring</Badge>
+                              : m.complianceStatus === "unchecked"
+                              ? <Badge variant="secondary" className="text-[10px]"><ShieldOff className="w-3 h-3 mr-1" />Own staff, not checked</Badge>
                               : m.pliCertUrl
                               ? <Badge variant="success" className="text-[10px]"><ShieldCheck className="w-3 h-3 mr-1" />Insured{m.pliExpiryDate ? ` · ${new Date(m.pliExpiryDate + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}` : ""}</Badge>
                               : <Badge variant="secondary" className="text-[10px]">No cert on file</Badge>

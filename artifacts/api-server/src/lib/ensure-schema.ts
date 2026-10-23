@@ -905,6 +905,9 @@ export async function ensureSchema(): Promise<void> {
     await pool.query(`ALTER TABLE site_checkins ADD COLUMN IF NOT EXISTS hold_decided_at timestamp`);
     await pool.query(`ALTER TABLE site_checkins ADD COLUMN IF NOT EXISTS hold_note text`);
     await pool.query(`ALTER TABLE site_checkins ADD COLUMN IF NOT EXISTS auto_closed_at timestamp`);
+    // On what grounds a check-in was let on (2026-10-22): shown in the register.
+    await pool.query(`ALTER TABLE site_checkins ADD COLUMN IF NOT EXISTS clearance_basis text`);
+    await pool.query(`ALTER TABLE site_checkins ADD COLUMN IF NOT EXISTS clearance_pli_expiry text`);
     await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS site_time_zone text NOT NULL DEFAULT 'Europe/London'`);
     await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS site_close_time text NOT NULL DEFAULT '20:00'`);
     // Staff notes belong to the company they were written in (#121). Backfill:

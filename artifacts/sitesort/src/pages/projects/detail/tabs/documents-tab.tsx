@@ -4,6 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronUp, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, PinOff, StickyNote, Send, Loader2, History, Archive, Paperclip } from "lucide-react";
 import { openDocument, cadBadgeLabel } from "@/lib/documents";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { DocumentViewer, type ViewerDoc } from "@/components/document-viewer";
+import { useSignOffFlow } from "@/hooks/use-sign-off-flow";
 import {
   useGetProject,
   getGetProjectQueryKey,
@@ -55,11 +59,38 @@ export function DocumentsTab() {
     setSelectedStatus,
     setSharingDoc,
     openDocEdit,
+    hasPin,
+    authHeaders,
+    isCancelled,
   } = useDetail();
 
   // Opening records the open on your own copy: sign-off needs it (Dean,
   // 2026-10-22), so Sign off appears once the list has refreshed.
-  const openAndRecord = (doc: { id: string; fileUrl: string; name: string; myDistributionStatus?: string | null }) => {
+  // A document waiting for your signature opens in the in-app viewer, which
+  // records the open and carries Sign off on the same screen (Dean, 2026-10-23).
+  const queryClient = useQueryClient();
+  const viewerSignOff = useSignOffFlow({
+    hasPin,
+    acknowledgeUrl: id => `/api/documents/${id}/acknowledge`,
+    setPinUrl: "/api/auth/pin",
+    authHeaders,
+    onSigned: () => { void refetchDocs(); },
+    onPinSet: () => { void queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] }); },
+  });
+  const [viewing, setViewing] = useState<(ViewerDoc & { pinRequired: boolean }) | null>(null);
+  const recordViewerOpen = async () => {
+    if (!viewing) return false;
+    const r = await fetch(`/api/documents/${viewing.id}/view`, { method: "POST", headers: authHeaders() });
+    if (r.ok) void refetchDocs();
+    return r.ok;
+  };
+
+  const openAndRecord = (doc: { id: string; fileUrl: string; name: string; myDistributionStatus?: string | null; requiresAcknowledgment?: boolean; status?: string; pinRequired?: boolean; revision?: string | null; version?: number }) => {
+    const waitingForMe = doc.myDistributionStatus === "pending" || doc.myDistributionStatus === "viewed";
+    if (waitingForMe && doc.requiresAcknowledgment && doc.status !== "superseded" && doc.fileUrl && !isCancelled) {
+      setViewing({ id: doc.id, name: doc.name, fileUrl: doc.fileUrl, label: doc.revision ? `Rev ${doc.revision}` : doc.version ? `v${doc.version}` : null, pinRequired: doc.pinRequired ?? true });
+      return;
+    }
     openDocument(doc.fileUrl, doc.name);
     if (doc.myDistributionStatus !== "pending") return;
     const t = localStorage.getItem("sitesort_token");
@@ -378,6 +409,15 @@ export function DocumentsTab() {
             </div>
           </div>
         </TabsContent>
+        {viewing && (
+          <DocumentViewer
+            doc={viewing}
+            recordOpen={recordViewerOpen}
+            signOff={viewerSignOff}
+            pinRequired={viewing.pinRequired}
+            onClose={() => setViewing(null)}
+          />
+        )}
     </>
   );
 }

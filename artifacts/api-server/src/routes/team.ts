@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { projectMembersTable, usersTable, subcontractorsTable, insuranceRecordsTable, projectsTable, peopleTable, projectInvitesTable, companyMembersTable } from "@workspace/db/schema";
 import { eq, and, isNull, asc, desc, sql } from "drizzle-orm";
-import { subcontractorInsuranceVerdict, type GateVerdict } from "../lib/insurance";
+import { subcontractorInsuranceVerdict, memberFirm, type GateVerdict } from "../lib/insurance";
 import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { allow, COMPANY_MANAGER, INTERNAL_STAFF, projectApprover } from "../lib/authz";
@@ -10,6 +10,8 @@ import { expiryStatus } from "../lib/expiry";
 import { canonicalPersonName } from "../lib/person-name";
 import { otherCardsByRow, borrowedLoginsByRow } from "../lib/linked-cards";
 import { removeCardFromProject, endSessionsIfNoAccess } from "../lib/card-removal";
+import { gateStandingByMember, describeGate, gateStandingFor } from "../lib/gate-identity";
+import { logActivity } from "../lib/activity";
 
 const router: IRouter = Router();
 
@@ -42,6 +44,8 @@ router.get("/projects/:projectId/members", authenticate, allow(INTERNAL_STAFF), 
     }
 
     const members = await db.select().from(projectMembersTable).where(eq(projectMembersTable.projectId, req.params.projectId));
+    // What the QR gate will do for each card: the gate's own function.
+    const standings = await gateStandingByMember(req.params.projectId);
 
     // Shared company-level compliance lookup (PLI + insurance status), used by
     // both the personId branch (person belongs to a firm) and the legacy
@@ -117,9 +121,13 @@ router.get("/projects/:projectId/members", authenticate, allow(INTERNAL_STAFF), 
         contactType = p?.contactType ?? null;
         trades = p?.trades ?? [];
         avatarUrl = p?.avatarUrl ?? null;
-        if (p?.subcontractorId) {
-          effectiveSubId = effectiveSubId ?? p.subcontractorId;
-          const c = await companyCompliance(p.subcontractorId);
+        // The firm this card is judged on: the same rule the QR gate uses
+        // (memberFirm: the person's firm, else the row's), so the card and the
+        // gate can never judge two different firms.
+        const firm = memberFirm(m.subcontractorId, p?.subcontractorId);
+        if (firm) {
+          effectiveSubId = effectiveSubId ?? firm;
+          const c = await companyCompliance(firm);
           complianceStatus = c.complianceStatus;
           gateVerdict = c.gateVerdict;
           pliCertUrl = c.pliCertUrl;
@@ -172,6 +180,16 @@ router.get("/projects/:projectId/members", authenticate, allow(INTERNAL_STAFF), 
         pliExpiryDate = c.pliExpiryDate;
       }
 
+      // What the gate will do (the gate's own function). The badge follows it:
+      // never "Compliant" while the gate holds them; no card and no firm shows
+      // no badge, the held line says why (#164). "Compliant" means insurance
+      // was checked and covers them, nothing else: own staff let on with no
+      // check are "unchecked", a neutral badge (Dean, 2026-10-22, #165).
+      const gateStanding = await describeGate(standings.get(m.id), req.user!.companyId);
+      if (gateStanding.kind === "held") complianceStatus = "none";
+      else if (gateStanding.kind === "staff") complianceStatus = "unchecked";
+      else if (gateStanding.holds && (complianceStatus === "ok" || complianceStatus === "warning")) complianceStatus = "hold";
+
       return {
         id: m.id,
         projectId: m.projectId,
@@ -193,6 +211,7 @@ router.get("/projects/:projectId/members", authenticate, allow(INTERNAL_STAFF), 
         role: m.role,
         complianceStatus,
         ...(gateVerdict ? { gateVerdict } : {}),
+        gateStanding,
         scheduledDays: m.scheduledDays ?? [],
         siteStartTime: m.siteStartTime ?? null,
         siteEndTime: m.siteEndTime ?? null,
@@ -294,7 +313,7 @@ router.post("/projects/:projectId/members", authenticate, allow(projectApprover(
         if (personRow) {
           await db.update(projectMembersTable).set({ userId, role }).where(eq(projectMembersTable.id, personRow.id));
           const userRows = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
-          res.status(201).json({ id: personRow.id, projectId: req.params.projectId, userId, subcontractorId: personRow.subcontractorId, role, name: userRows[0]?.name ?? "Unknown" });
+          res.status(201).json({ id: personRow.id, projectId: req.params.projectId, userId, subcontractorId: personRow.subcontractorId, role, name: userRows[0]?.name ?? "Unknown", gateStanding: await gateStandingFor(req.params.projectId, personRow.id) });
           return;
         }
       }
@@ -326,10 +345,75 @@ router.post("/projects/:projectId/members", authenticate, allow(projectApprover(
       name = subRows[0]?.companyName ?? "Unknown";
     }
 
-    res.status(201).json({ id, projectId: req.params.projectId, userId: userId ?? null, subcontractorId: subcontractorId ?? null, name, role, complianceStatus: "ok", addedAt: new Date().toISOString() });
+    // What the gate will do with them, so the screen can warn now rather than
+    // the barrier on Monday (Dean, 2026-10-22: warn, never refuse).
+    res.status(201).json({ id, projectId: req.params.projectId, userId: userId ?? null, subcontractorId: subcontractorId ?? null, name, role, complianceStatus: "ok", addedAt: new Date().toISOString(), gateStanding: await gateStandingFor(req.params.projectId, id) });
   } catch (err) {
     req.log.error({ err }, "Add member error");
     res.status(500).json({ error: "server_error", message: "Failed to add member" });
+  }
+});
+
+// "Give them a card" (#164): a login on the project with no card is held at the
+// gate every time. The PM decides who they are: our own staff (an in-house
+// card) or someone at a firm (a card at that firm, whose insurance the gate
+// then checks). Reuses the login's existing card of that kind at this company
+// if there is one, else makes it, and attaches it to their project row.
+router.post("/projects/:projectId/members/:memberId/card", authenticate, allow(projectApprover()), async (req, res) => {
+  try {
+    const project = await loadOwnedProject(req.params.projectId, req.user!.companyId);
+    if (!project) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+    const inHouse = req.body?.inHouse === true;
+    const subcontractorId = typeof req.body?.subcontractorId === "string" && req.body.subcontractorId ? req.body.subcontractorId : null;
+    if (inHouse === !!subcontractorId) {
+      res.status(400).json({ error: "validation_error", message: "Choose your own staff or a firm." });
+      return;
+    }
+    const row = (await db.select().from(projectMembersTable)
+      .where(and(eq(projectMembersTable.id, req.params.memberId), eq(projectMembersTable.projectId, project.id))).limit(1))[0];
+    if (!row) { res.status(404).json({ error: "not_found", message: "Team member not found" }); return; }
+    if (!row.userId || row.personId) {
+      res.status(409).json({ error: "has_card", message: "This person already has a card on this project." });
+      return;
+    }
+    let firmName: string | null = null;
+    if (subcontractorId) {
+      const sub = (await db.select({ id: subcontractorsTable.id, companyName: subcontractorsTable.companyName }).from(subcontractorsTable)
+        .where(and(eq(subcontractorsTable.id, subcontractorId), eq(subcontractorsTable.companyId, project.companyId), isNull(subcontractorsTable.archivedAt))).limit(1))[0];
+      if (!sub) { res.status(404).json({ error: "not_found", message: "That firm isn't in your contacts." }); return; }
+      firmName = sub.companyName;
+    }
+    const user = (await db.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, phone: usersTable.phone }).from(usersTable)
+      .where(eq(usersTable.id, row.userId)).limit(1))[0];
+    if (!user) { res.status(404).json({ error: "not_found", message: "Team member not found" }); return; }
+
+    const existing = (await db.select({ id: peopleTable.id }).from(peopleTable)
+      .where(and(eq(peopleTable.userId, user.id), eq(peopleTable.companyId, project.companyId), isNull(peopleTable.archivedAt),
+        subcontractorId ? eq(peopleTable.subcontractorId, subcontractorId) : isNull(peopleTable.subcontractorId)))
+      .orderBy(asc(peopleTable.createdAt)).limit(1))[0];
+    const onProject = existing ? (await db.select({ id: projectMembersTable.id }).from(projectMembersTable)
+      .where(and(eq(projectMembersTable.projectId, project.id), eq(projectMembersTable.personId, existing.id))).limit(1))[0] : undefined;
+    if (onProject) {
+      res.status(409).json({ error: "card_on_project", message: "That card is already on this project as a separate entry." });
+      return;
+    }
+    let personId = existing?.id;
+    if (!personId) {
+      personId = generateId();
+      const [firstName, ...rest] = user.name.trim().split(/\s+/);
+      await db.insert(peopleTable).values({
+        id: personId, companyId: project.companyId, userId: user.id, subcontractorId,
+        name: user.name, firstName: firstName || null, lastName: rest.join(" ") || null,
+        email: user.email, phone: user.phone ?? null,
+      });
+    }
+    await db.update(projectMembersTable).set({ personId }).where(eq(projectMembersTable.id, row.id));
+    void logActivity({ userId: req.user!.id, projectId: project.id, companyId: project.companyId, section: "team", action: "update", itemType: "project_member", itemId: row.id,
+      metadata: { gaveCard: inHouse ? "in_house" : "firm", firm: firmName, worker: user.name, reusedCard: !!existing }, req });
+    res.json({ memberId: row.id, personId, reusedCard: !!existing, gateStanding: await gateStandingFor(project.id, row.id) });
+  } catch (err) {
+    req.log.error({ err }, "Give card error");
+    res.status(500).json({ error: "server_error", message: "Failed to give them a card" });
   }
 });
 

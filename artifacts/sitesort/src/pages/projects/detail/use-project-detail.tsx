@@ -904,19 +904,34 @@ export function useProjectDetailState() {
   const [qrChecking, setQrChecking] = useState(true);
   const [qrError, setQrError] = useState<string | null>(null);
   const qrSvgRef = useRef<HTMLDivElement>(null);
-  const [qrPins, setQrPins] = useState<{ id: string; itemType: string; itemId: string }[]>([]);
-  const isPinned = (itemType: string, itemId: string) => qrPins.some(p => p.itemType === itemType && p.itemId === itemId);
+  // Board pins (#167): shownId = what the board shows (a pinned drawing: its
+  // current revision); hidden = a pin the board leaves off, with the reason.
+  type QrPin = { id: string; itemType: string; itemId: string; shownId?: string | null; name?: string | null; hidden?: string | null; hiddenText?: string | null };
+  const [qrPins, setQrPins] = useState<QrPin[]>([]);
+  const isPinned = (itemType: string, itemId: string) => qrPins.some(p => p.itemType === itemType && (p.itemId === itemId || p.shownId === itemId));
+  const reloadPins = async () => {
+    const r = await fetch(`/api/projects/${projectId}/qr-pins`, { headers: authHeaders() }).catch(() => null);
+    if (r?.ok) { const pins = await r.json().catch(() => null); if (Array.isArray(pins)) setQrPins(pins); }
+  };
+  // Pinning publishes the item to everyone who looks at the board; the server
+  // checks it and says what happened. Never shows "pinned" when it wasn't.
   const togglePin = async (itemType: string, itemId: string) => {
     const h = authHeaders();
     const pinned = isPinned(itemType, itemId);
-    if (pinned) {
-      await fetch(`/api/projects/${projectId}/qr-pins`, { method: "DELETE", headers: h, body: JSON.stringify({ itemType, itemId }) });
-      setQrPins(prev => prev.filter(p => !(p.itemType === itemType && p.itemId === itemId)));
-    } else {
-      const res = await fetch(`/api/projects/${projectId}/qr-pins`, { method: "POST", headers: h, body: JSON.stringify({ itemType, itemId }) });
+    try {
+      const res = await fetch(`/api/projects/${projectId}/qr-pins`, { method: pinned ? "DELETE" : "POST", headers: h, body: JSON.stringify({ itemType, itemId }) });
       const data = await res.json().catch(() => ({}));
-      if (data.id) setQrPins(prev => [...prev, data]);
+      if (!res.ok) {
+        toast({ variant: "destructive", title: pinned ? "Couldn't unpin it" : "Couldn't pin it", description: data.message ?? "Try again." });
+      } else if (!pinned) {
+        toast({ title: data.noFile ? "Pinned, with no file attached" : "Pinned to the site board", description: data.message });
+      } else {
+        toast({ title: "Removed from the site board" });
+      }
+    } catch {
+      toast({ variant: "destructive", title: "Couldn't reach SiteSort", description: "Check your connection and try again." });
     }
+    await reloadPins();
   };
 
   // "Generate": the POST is idempotent (it returns the existing site_board QR

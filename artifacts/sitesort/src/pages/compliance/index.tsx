@@ -18,6 +18,7 @@ import { useGetMe, useListUnconfirmedCertifications, getListUnconfirmedCertifica
 import { CertTypeConfirm } from "@/components/cert-type";
 import { ListRow } from "@/components/ui/list-row";
 import { useSignOffFlow } from "@/hooks/use-sign-off-flow";
+import { DocumentViewer } from "@/components/document-viewer";
 
 type InsuranceItem = { subcontractorId: string; subcontractorName: string; insuranceType: string; expiryDate: string; status: string; certificateUrl?: string | null };
 type ArchivedInsuranceItem = { id: string; subcontractorId: string; subcontractorName: string; insuranceType: string; expiryDate: string; certificateUrl?: string | null; archivedAt: string };
@@ -146,7 +147,27 @@ export default function CompliancePage() {
     onPinSet: () => refetchMe(),
   });
 
+  // Your own unsigned copy opens in the in-app viewer: it records the open and
+  // carries Sign off on the same screen (Dean, 2026-10-23). Its own flow, so
+  // the sign-off dialog below never opens over it.
+  const viewerSignOff = useSignOffFlow({
+    hasPin,
+    acknowledgeUrl: id => `/api/documents/${id}/acknowledge`,
+    setPinUrl: "/api/auth/pin",
+    authHeaders,
+    onSigned: loadCompliance,
+    onPinSet: () => refetchMe(),
+  });
+  const [viewingAck, setViewingAck] = useState<AckItem | null>(null);
+  const recordAckOpen = async () => {
+    if (!viewingAck) return false;
+    const r = await fetch(`/api/documents/${viewingAck.documentId}/view`, { method: "POST", headers: authHeaders() });
+    if (r.ok) loadCompliance();
+    return r.ok;
+  };
+
   const openAck = async (a: AckItem) => {
+    if (a.myStatus && a.myStatus !== "acknowledged" && a.fileUrl) { setViewingAck(a); return; }
     try {
       const res = await fetch(`/api/documents/${a.documentId}`, { headers: authHeaders() });
       const fresh = await res.json().catch(() => null);
@@ -1048,6 +1069,15 @@ export default function CompliancePage() {
         projectId={shareItem?.projectId}
       />
 
+      {viewingAck && (
+        <DocumentViewer
+          doc={{ id: viewingAck.documentId, name: viewingAck.documentName, fileUrl: viewingAck.fileUrl ?? null, label: `${viewingAck.projectName} · ${viewingAck.revision ? `Rev ${viewingAck.revision}` : `v${viewingAck.version}`}` }}
+          recordOpen={recordAckOpen}
+          signOff={viewerSignOff}
+          pinRequired={viewingAck.pinRequired ?? true}
+          onClose={() => setViewingAck(null)}
+        />
+      )}
       <Dialog open={!!signOff.target} onOpenChange={v => { if (!v) signOff.close(); }}>
         <DialogHeader>
           <DialogTitle>{signOff.target && !signOff.target.pinRequired ? "Sign off this document" : signOff.setPinMode ? "Set your sign-off PIN" : "Sign off with your PIN"}</DialogTitle>

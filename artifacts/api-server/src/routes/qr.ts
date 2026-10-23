@@ -7,7 +7,9 @@ import { generateId } from "../lib/id";
 import { authenticate } from "../middlewares/auth";
 import { expiryStatus } from "../lib/expiry";
 import { buildSiteBoardPayload } from "../lib/site-board";
-import { subcontractorInsuranceStatus } from "../lib/insurance";
+import { subcontractorInsuranceStatus, gateDecisionForFirms, clearanceText, clearanceUnchecked, type ClearanceBasis } from "../lib/insurance";
+import { loadRegistered, recordForKey, byGate, type Registered } from "../lib/gate-identity";
+import { resolvePins, currentRevisionId, PIN_TYPES, HIDDEN_PIN_TEXT } from "../lib/board-pins";
 import { randomBytes, createHash } from "crypto";
 import jwt from "jsonwebtoken";
 import multer from "multer";
@@ -204,6 +206,7 @@ async function notifyHeldCheckin(projectId: string, row: { id: string; workerNam
 function holdReasonText(reason: string | null | undefined): string {
   if (reason === "unverified") return "the mobile number they gave isn't on file for anyone on this project";
   if (reason === "insurance_expired") return "their insurance has expired";
+  if (reason === "firm_unknown") return "they aren't linked to a firm and aren't on your company's staff, so their insurance can't be checked";
   return "there is no insurance on file for them";
 }
 
@@ -359,8 +362,10 @@ router.get("/projects/:projectId/qr-pins", authenticate, allow(INTERNAL_STAFF), 
       .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId)))
       .limit(1);
     if (!project[0]) { res.status(404).json({ error: "not_found" }); return; }
-    const pins = await db.select().from(qrBoardPinsTable).where(eq(qrBoardPinsTable.projectId, req.params.projectId));
-    res.json(pins.map(p => ({ id: p.id, itemType: p.itemType, itemId: p.itemId })));
+    // shownId: what the board shows (a pinned drawing: its current revision).
+    // hidden: a pin the board leaves off, with the reason in words.
+    const pins = await resolvePins(req.params.projectId);
+    res.json(pins.map(p => ({ id: p.pinId, itemType: p.itemType, itemId: p.itemId, shownId: p.shownId, name: p.name, hidden: p.hidden, hiddenText: p.hidden ? HIDDEN_PIN_TEXT[p.hidden] : null })));
   } catch (err) {
     res.status(500).json({ error: "server_error" });
   }
@@ -377,13 +382,55 @@ router.post("/projects/:projectId/qr-pins", authenticate, allow(projectApprover(
     if (!project[0]) { res.status(404).json({ error: "not_found" }); return; }
     const { itemType, itemId } = req.body;
     if (!itemType || !itemId) { res.status(400).json({ error: "validation_error", message: "itemType and itemId required" }); return; }
+    // The item must belong to THIS project (#166). Before, any id was accepted:
+    // a pin is published on the public board, so pinning another project's or
+    // another company's document would have made it readable by anyone with
+    // this board's QR code.
+    if (!PIN_TYPES.has(itemType) || typeof itemId !== "string") {
+      res.status(400).json({ error: "validation_error", message: "Only documents, photos and permits can be pinned." });
+      return;
+    }
+    const item = await pinItem(itemType, itemId);
+    if (!item || item.projectId !== req.params.projectId) {
+      res.status(404).json({ error: "not_found", message: "That item isn't on this project, so it can't be pinned to its board." });
+      return;
+    }
+    // Everything pinned must open for whoever looks at the board (#167):
+    // nothing archived goes up, and a drawing goes up as its current revision.
+    if (item.archived) {
+      res.status(409).json({ error: "archived", message: "That has been archived, so it can't go on the site board." });
+      return;
+    }
+    const pinId = itemType === "document" ? await currentRevisionId(req.params.projectId, itemId) : itemId;
     const id = generateId();
-    await db.insert(qrBoardPinsTable).values({ id, projectId: req.params.projectId, itemType, itemId }).onConflictDoNothing();
-    res.status(201).json({ id, itemType, itemId });
+    await db.insert(qrBoardPinsTable).values({ id, projectId: req.params.projectId, itemType, itemId: pinId }).onConflictDoNothing();
+    res.status(201).json({
+      id, itemType, itemId: pinId, noFile: !item.hasFile,
+      message: item.hasFile
+        ? "Pinned. Anyone who scans the site QR code, and everyone on the Team Portal for this project, can open it."
+        : itemType === "permit"
+          ? "Pinned. This permit has no document attached, so the board shows it as a notice and says so."
+          : "Pinned. It has no file attached, so the board says so.",
+    });
   } catch (err) {
     res.status(500).json({ error: "server_error" });
   }
 });
+
+// The item to be pinned: its project, whether it's archived and whether it has
+// a file to open. null if there's no such item.
+async function pinItem(itemType: string, itemId: string): Promise<{ projectId: string; archived: boolean; hasFile: boolean } | null> {
+  if (itemType === "document") {
+    const d = (await db.select({ projectId: documentsTable.projectId, fileUrl: documentsTable.fileUrl }).from(documentsTable).where(eq(documentsTable.id, itemId)).limit(1))[0];
+    return d ? { projectId: d.projectId, archived: false, hasFile: !!d.fileUrl } : null;
+  }
+  if (itemType === "photo") {
+    const p = (await db.select({ projectId: photosTable.projectId, url: photosTable.photoUrl, archivedAt: photosTable.archivedAt }).from(photosTable).where(eq(photosTable.id, itemId)).limit(1))[0];
+    return p ? { projectId: p.projectId, archived: !!p.archivedAt, hasFile: !!p.url } : null;
+  }
+  const p = (await db.select({ projectId: permitsTable.projectId, url: permitsTable.documentUrl, archivedAt: permitsTable.archivedAt }).from(permitsTable).where(eq(permitsTable.id, itemId)).limit(1))[0];
+  return p ? { projectId: p.projectId, archived: !!p.archivedAt, hasFile: !!p.url } : null;
+}
 
 // Unpin an item from the QR board
 router.delete("/projects/:projectId/qr-pins", authenticate, allow(projectApprover()), async (req, res) => {
@@ -393,9 +440,15 @@ router.delete("/projects/:projectId/qr-pins", authenticate, allow(projectApprove
       .limit(1);
     if (!project[0]) { res.status(404).json({ error: "not_found" }); return; }
     const { itemType, itemId } = req.body;
-    await db.delete(qrBoardPinsTable).where(
-      and(eq(qrBoardPinsTable.projectId, req.params.projectId), eq(qrBoardPinsTable.itemType, itemType), eq(qrBoardPinsTable.itemId, itemId))
-    );
+    // The pin as stored, or a pin whose board item is this one (a drawing
+    // pinned before its newest revision arrived).
+    const stored = (await resolvePins(req.params.projectId))
+      .filter(p => p.itemType === itemType && (p.itemId === itemId || p.shownId === itemId)).map(p => p.itemId);
+    if (stored.length) {
+      await db.delete(qrBoardPinsTable).where(
+        and(eq(qrBoardPinsTable.projectId, req.params.projectId), eq(qrBoardPinsTable.itemType, itemType), inArray(qrBoardPinsTable.itemId, stored))
+      );
+    }
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: "server_error" });
@@ -486,13 +539,19 @@ function serializeCheckin<T extends StateRow & { holdDecidedAt?: Date | null; ph
     checkedInAt: c.checkedInAt.toISOString(),
     checkedOutAt: c.checkedOutAt ? c.checkedOutAt.toISOString() : null,
     holdDecidedAt: c.holdDecidedAt ? c.holdDecidedAt.toISOString() : null,
+    // On what grounds a cleared check-in was let on (null while held / refused).
+    ...("clearanceBasis" in c && c.holdStatus !== "pending" && c.holdStatus !== "refused" && c.holdStatus !== "lapsed"
+      ? { clearanceText: clearanceText(c.clearanceBasis as string | null, (c as { clearancePliExpiry?: string | null }).clearancePliExpiry, (c as { holdNote?: string | null }).holdNote), insuranceChecked: !clearanceUnchecked(c.clearanceBasis as string | null) }
+      : {}),
     ...checkinState(c, clock),
   };
 }
 // Public QR responses (the person at the gate, no login) never carry the photo,
 // GPS or identity key: anyone can type a name and company at the sign-out screen.
 function publicCheckin<T extends StateRow & { holdDecidedAt?: Date | null; photoUrl?: string | null; lat?: number | null; lng?: number | null; personKey?: string | null }>(c: T, clock: SiteClock) {
-  const { photoUrl: _p, lat: _la, lng: _ln, personKey: _k, ...rest } = serializeCheckin(c, clock);
+  // Nor the grounds (a firm's insurance expiry, a manager's note): the check-in
+  // response adds its own plain clearance line for the person who just signed in.
+  const { photoUrl: _p, lat: _la, lng: _ln, personKey: _k, clearanceBasis: _cb, clearancePliExpiry: _ce, clearanceText: _ct, insuranceChecked: _ic, holdNote: _hn, ...rest } = serializeCheckin(c, clock) as ReturnType<typeof serializeCheckin> & Record<string, unknown>;
   return rest;
 }
 // The person's currently-open cycles on a project (name + company, case-insensitive),
@@ -552,88 +611,9 @@ function normText(v: string): string {
 // check-ins, so a contact card and its primary-contact person (which can carry
 // slightly different names) count as ONE human.
 //
-// INSURANCE (#114): every record that belongs to a subcontractor card carries
-// that card's id in `insuranceSubId`, and the check-in gate checks it. That
-// includes a USER account linked to a card (a subcontractor who joined the
-// Team Portal): before #114 those matched as plain users on name alone and
-// skipped the insurance check entirely. Only genuine in-house staff (no card)
-// have no insuranceSubId, and they must give THIS company's name to match, so
-// nobody from a subcontractor can pass as staff by name alone.
-type Registered = {
-  key: string;
-  kind: "user" | "contact" | "person";
-  names: string[];            // accepted spellings of the name
-  company: string | null;     // canonical company text
-  companyRequired: boolean;
-  insuranceSubId: string | null;
-};
-
-async function loadRegistered(projectId: string): Promise<Registered[]> {
-  const out: Registered[] = [];
-  const own = (await db.select({ name: companiesTable.name }).from(projectsTable)
-    .innerJoin(companiesTable, eq(companiesTable.id, projectsTable.companyId))
-    .where(eq(projectsTable.id, projectId)).limit(1))[0]?.name ?? null;
-
-  // Every card on the project, with its primary person, keyed once.
-  const contacts = await db.select({ id: subcontractorsTable.id, contactName: subcontractorsTable.contactName, companyName: subcontractorsTable.companyName })
-    .from(projectMembersTable)
-    .innerJoin(subcontractorsTable, eq(subcontractorsTable.id, projectMembersTable.subcontractorId))
-    .where(eq(projectMembersTable.projectId, projectId));
-
-  // People on the project (and the card each belongs to, if any).
-  const people = await db.select({ id: peopleTable.id, name: peopleTable.name, subId: peopleTable.subcontractorId, subCompany: subcontractorsTable.companyName })
-    .from(projectMembersTable)
-    .innerJoin(peopleTable, eq(peopleTable.id, projectMembersTable.personId))
-    .leftJoin(subcontractorsTable, eq(subcontractorsTable.id, peopleTable.subcontractorId))
-    .where(and(eq(projectMembersTable.projectId, projectId), isNull(peopleTable.archivedAt)));
-
-  // Users on the project, with whatever card their membership links to: the
-  // membership row's own card, or the card of the person it points at.
-  const users = await db.select({
-    id: usersTable.id, name: usersTable.name,
-    personId: projectMembersTable.personId, personName: peopleTable.name,
-    subId: sql<string | null>`coalesce(${projectMembersTable.subcontractorId}, ${peopleTable.subcontractorId})`,
-  })
-    .from(projectMembersTable)
-    .innerJoin(usersTable, eq(usersTable.id, projectMembersTable.userId))
-    .leftJoin(peopleTable, eq(peopleTable.id, projectMembersTable.personId))
-    .where(eq(projectMembersTable.projectId, projectId));
-
-  const userSubIds = users.map(u => u.subId).filter((v): v is string => !!v);
-  const subIds = [...new Set([...contacts.map(c => c.id), ...userSubIds])];
-  const subs = subIds.length
-    ? await db.select({ id: subcontractorsTable.id, companyName: subcontractorsTable.companyName }).from(subcontractorsTable).where(inArray(subcontractorsTable.id, subIds))
-    : [];
-  const subCompany = new Map(subs.map(x => [x.id, x.companyName]));
-  const primaries = subIds.length
-    ? await db.select({ id: peopleTable.id, subId: peopleTable.subcontractorId, name: peopleTable.name })
-        .from(peopleTable)
-        .where(and(inArray(peopleTable.subcontractorId, subIds), eq(peopleTable.isPrimaryContact, true), isNull(peopleTable.archivedAt)))
-    : [];
-  const primaryBySub = new Map(primaries.map(p => [p.subId as string, p]));
-  const cardKey = (subId: string) => { const prim = primaryBySub.get(subId); return prim ? `person:${prim.id}` : `sub:${subId}`; };
-
-  for (const u of users) {
-    const names = [...new Set([u.name, u.personName].filter((n): n is string => !!n))];
-    if (u.subId) {
-      // A subcontractor's own login: same identity, company and insurance as their card.
-      out.push({ key: u.personId ? `person:${u.personId}` : cardKey(u.subId), kind: "user", names, company: subCompany.get(u.subId) ?? null, companyRequired: true, insuranceSubId: u.subId });
-    } else {
-      out.push({ key: `user:${u.id}`, kind: "user", names, company: own, companyRequired: !!own, insuranceSubId: null });
-    }
-  }
-  for (const c of contacts) {
-    const prim = primaryBySub.get(c.id);
-    // Accept the contact card's spelling AND its linked primary person's, and
-    // key both to the person so they group as one human.
-    out.push({ key: cardKey(c.id), kind: "contact", names: [c.contactName, ...(prim ? [prim.name] : [])], company: c.companyName, companyRequired: true, insuranceSubId: c.id });
-  }
-  for (const p of people) {
-    if (p.subId) out.push({ key: `person:${p.id}`, kind: "person", names: [p.name], company: p.subCompany ?? null, companyRequired: true, insuranceSubId: p.subId });
-    else out.push({ key: `person:${p.id}`, kind: "person", names: [p.name], company: own, companyRequired: !!own, insuranceSubId: null });
-  }
-  return out;
-}
+// Who someone at the gate is, and what the gate does with them (firm / staff /
+// held), lives in lib/gate-identity.ts: the Team tab and the add routes ask the
+// same function, so a warning can never disagree with the barrier.
 
 // Name (any accepted spelling) AND company must match, whitespace- and
 // case-insensitive. If several records match, one tied to a subcontractor card
@@ -673,10 +653,9 @@ export function samePhone(a: string, b: string): boolean {
 
 function matchRegistered(records: Registered[], typedName: string, typedCompany: string): Registered | null {
   const n = normText(typedName), c = normText(typedCompany);
-  const order = { user: 0, contact: 1, person: 2 } as const;
   const hits = records
     .filter(r => r.names.some(x => normText(x) === n) && (!r.companyRequired || normText(r.company ?? "") === c))
-    .sort((a, b) => Number(!b.insuranceSubId) - Number(!a.insuranceSubId) || order[a.kind] - order[b.kind]);
+    .sort(byGate);
   return hits[0] ?? null;
 }
 
@@ -840,7 +819,7 @@ async function deviceTokenFor(
 }
 // The registered record a remembered device stands for, if still on the project.
 function deviceRecord(records: Registered[], who: { workerName: string; companyName: string; key: string | null }): Registered | null {
-  return (who.key ? records.find(r => r.key === who.key) : null) ?? matchRegistered(records, who.workerName, who.companyName);
+  return (who.key ? recordForKey(records, who.key) : null) ?? matchRegistered(records, who.workerName, who.companyName);
 }
 
 // ---- Phone-first identity (#124) ----------------------------------------------
@@ -851,10 +830,9 @@ function deviceRecord(records: Registered[], who: { workerName: string; companyN
 async function recordsForPhone(records: Registered[], phone: string): Promise<Registered[]> {
   const seen = new Set<string>();
   const out: Registered[] = [];
-  const order = { user: 0, contact: 1, person: 2 } as const;
-  // Same priority as matchRegistered: a record tied to a card wins, so a
-  // phone match can't dodge an insurance check.
-  const sorted = [...records].sort((a, b) => Number(!b.insuranceSubId) - Number(!a.insuranceSubId) || order[a.kind] - order[b.kind]);
+  // Same priority as matchRegistered: a record that runs an insurance check
+  // wins, so a phone match can't dodge one.
+  const sorted = [...records].sort(byGate);
   for (const r of sorted) {
     if (seen.has(r.key)) continue;
     seen.add(r.key);
@@ -1130,7 +1108,7 @@ router.get("/notifications/:notificationId/checkin", authenticate, allow(ANY_MEM
       const reason = meta.reason ?? (/insurance/i.test(n.message) ? "no_valid_insurance" : "not_registered");
       res.json({
         kind: "blocked", project: { id: project.id, name: project.name }, at: n.createdAt.toISOString(),
-        attempt: { workerName, companyName, reason, reasonText: reason === "not_registered" ? "They are not registered on this project (name or company did not match a project contact)." : "They have no valid insurance on file." },
+        attempt: { workerName, companyName, reason, reasonText: reason === "not_registered" ? "They are not registered on this project (name or company did not match a project contact)." : reason === "firm_unknown" ? "They aren't linked to a firm and aren't on your company's staff, so their insurance couldn't be checked." : "They have no valid insurance on file." },
       });
       return;
     }
@@ -1193,7 +1171,7 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
       if (!match) { res.status(403).json({ error: "identity_not_confirmed", message: "We couldn't confirm it's you. Enter your mobile number." }); return; }
     } else if (typeof matchToken === "string" && matchToken) {
       const key = readMatchToken(matchToken, qr.projectId);
-      match = key ? registered.find(r => r.key === key) ?? null : null;
+      match = key ? recordForKey(registered, key) : null;
       if (!match) { res.status(403).json({ error: "identity_not_confirmed", message: "That took too long. Enter your mobile number again." }); return; }
     } else {
       if (normPhone(phone).length < 9) { res.status(400).json({ error: "validation_error", message: "Enter your mobile number." }); return; }
@@ -1255,21 +1233,27 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
       return;
     }
 
-    // INSURANCE GATE. Every match tied to a subcontractor card is checked here,
-    // whichever way they were identified (a remembered device, their mobile
-    // number on file, or the "Is this you?" tap after it). Same source as the
-    // Contacts card badge: company insurance records plus filed insurance-named
-    // person certificates, judged against today's date. "expiring_soon" still
-    // passes; "expired" or "none" does NOT let them on site: the check-in is
-    // HELD for an admin / PM to approve (with a reason) or refuse.
-    let holdReason: "insurance_none" | "insurance_expired" | null = null;
-    if (match.insuranceSubId) {
-      const project = await db.select({ companyId: projectsTable.companyId }).from(projectsTable)
-        .where(eq(projectsTable.id, qr.projectId)).limit(1);
-      const status = project[0] ? await subcontractorInsuranceStatus(match.insuranceSubId, project[0].companyId) : "none";
-      if (status === "expired") holdReason = "insurance_expired";
-      else if (status === "none") holdReason = "insurance_none";
+    // INSURANCE GATE. Whichever way they were identified (a remembered device,
+    // their mobile number on file, or the "Is this you?" tap after it), the
+    // matched record's `gate` decides: firm = the shared public liability rule
+    // (lib/insurance.ts, the same verdict the card shows; "expiring_soon"
+    // passes, "expired" / "none" is HELD); staff = let on, recorded as "no
+    // insurance check"; unknown = HELD. Nothing here lets anyone on by default:
+    // the grounds are stored on the check-in and shown in the register.
+    let holdReason: "insurance_none" | "insurance_expired" | "firm_unknown" | null = null;
+    let clearance: { basis: ClearanceBasis; pliExpiry: string | null } | null = null;
+    if (match.gate.kind === "firm") {
+      const project = (await db.select({ companyId: projectsTable.companyId }).from(projectsTable)
+        .where(eq(projectsTable.id, qr.projectId)).limit(1))[0];
+      const outcome = project ? await gateDecisionForFirms(match.gate.subIds, project.companyId) : { cleared: false as const, holdReason: "insurance_none" as const };
+      if (outcome.cleared) clearance = { basis: "public_liability", pliExpiry: outcome.publicLiabilityExpiry };
+      else holdReason = outcome.holdReason;
+    } else if (match.gate.kind === "staff") {
+      clearance = { basis: "in_house_staff", pliExpiry: null };
+    } else {
+      holdReason = "firm_unknown";
     }
+    if (!holdReason && !clearance) holdReason = "firm_unknown";
 
     // Store the registered record's own spelling so every visit reads the same.
     const storedName = fullName(match) || workerName.trim();
@@ -1299,6 +1283,8 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
       lng: lng ? parseFloat(lng) : null,
       holdReason,
       holdStatus: holdReason ? "pending" : null,
+      clearanceBasis: holdReason ? null : clearance!.basis,
+      clearancePliExpiry: holdReason ? null : clearance!.pliExpiry,
     }).returning();
 
     if (holdReason) {
@@ -1315,7 +1301,7 @@ router.post("/site/:token/checkin", checkinUpload.single("photo"), async (req: R
 
     const device = await deviceTokenFor(qr.projectId, { history: deviceHistory, held: heldDeviceToken ?? deviceToken, legacyShared },
       { workerName: storedName, companyName: storedCompany, key: match.key }, normPhone(phone).length >= 9 ? [phone] : []);
-    res.status(201).json({ ...publicCheckin(checkin, clock), ...device });
+    res.status(201).json({ ...publicCheckin(checkin, clock), clearanceText: clearanceText(checkin.clearanceBasis, checkin.clearancePliExpiry), ...device });
   } catch (err) {
     res.status(500).json({ error: "server_error", message: "Check-in failed" });
   }
@@ -1334,6 +1320,7 @@ router.get("/site/:token/hold", async (req: Request, res: Response) => {
     res.json({
       status: row.holdStatus ?? "approved",
       decidedAt: row.holdDecidedAt ? row.holdDecidedAt.toISOString() : null,
+      ...(row.holdStatus === "approved" ? { clearanceText: clearanceText(row.clearanceBasis ?? "manager_approved", null) } : {}),
       ...(row.holdStatus === "approved"
         ? await deviceTokenFor(qr.projectId, { history: req.query.deviceHistory, held: req.query.heldDeviceToken, legacyShared: req.query.legacyShared },
             { workerName: row.workerName, companyName: row.companyName ?? "", key: row.personKey }, row.typedPhone ? [row.typedPhone] : [])
@@ -1358,7 +1345,8 @@ async function decideHold(projectId: string, checkinId: string, actorId: string,
   if (decision === "approve" && !note) return { status: 400, body: { error: "validation_error", message: "Give a reason for letting them on site" } };
   const now = new Date();
   const [row] = await db.update(siteCheckinsTable)
-    .set({ holdStatus: decision === "approve" ? "approved" : "refused", holdDecidedBy: actorId, holdDecidedAt: now, holdNote: note || null })
+    .set({ holdStatus: decision === "approve" ? "approved" : "refused", holdDecidedBy: actorId, holdDecidedAt: now, holdNote: note || null,
+      ...(decision === "approve" ? { clearanceBasis: "manager_approved", clearancePliExpiry: null } : {}) })
     .where(and(eq(siteCheckinsTable.id, checkinId), eq(siteCheckinsTable.projectId, project.id), eq(siteCheckinsTable.holdStatus, "pending")))
     .returning();
   if (!row) return { status: 409, body: { error: "not_pending", message: "This check-in has already been decided, or isn't waiting for a decision" } };
@@ -1693,7 +1681,7 @@ async function buildSiteRegister(projectId: string) {
     const base = { id: r.id, workerName: r.workerName, companyName: r.companyName, checkedInAt: r.checkedInAt.toISOString() };
     if (st.presence === "held") {
       const claimed = r.personKey ? byKey.get(r.personKey) : undefined;
-      const insurance = claimed?.insuranceSubId && project ? await subcontractorInsuranceStatus(claimed.insuranceSubId, project.companyId) : null;
+      const insurance = claimed?.gate.kind === "firm" && project ? await subcontractorInsuranceStatus(claimed.gate.subIds[0], project.companyId) : null;
       held.push({
         ...base, holdReason: r.holdReason, why: holdReasonText(r.holdReason),
         typedPhone: r.holdReason === "unverified" ? r.typedPhone : null,
@@ -1707,7 +1695,10 @@ async function buildSiteRegister(projectId: string) {
     const ident = r.personKey ?? `${normText(r.workerName)}|${normText(r.companyName ?? "")}`;
     if (seen.has(ident)) continue;
     seen.add(ident);
-    (st.presence === "on_site" ? onSite : notSignedOut).push({ ...base, autoClosedAt: st.autoClosedAt });
+    // On what grounds they were let on: a site manager must be able to see
+    // who came on without an insurance check.
+    const cleared = { clearance: clearanceText(r.clearanceBasis, r.clearancePliExpiry, r.holdNote), insuranceChecked: !clearanceUnchecked(r.clearanceBasis) };
+    (st.presence === "on_site" ? onSite : notSignedOut).push({ ...base, ...cleared, autoClosedAt: st.autoClosedAt });
   }
   const byName = (a: any, b: any) => String(a.workerName).localeCompare(String(b.workerName));
   onSite.sort(byName); notSignedOut.sort(byName);

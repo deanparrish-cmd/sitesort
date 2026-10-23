@@ -189,6 +189,7 @@ export const PM_GUIDE: GuideSection[] = [
         heading: "Pin what's on display",
         body: [
           "From a project's Site Board tab, pin documents, permits or photos so they show on the public board anyone can see by scanning the code. No login needed.",
+          "Pinning publishes: anyone who scans the site QR code, and everyone on the Team Portal for this project, can tap a pinned item and open it. SiteSort says so before you pin. A permit with no document attached shows on the board as a notice saying no permit document is attached. A pinned drawing always shows its current revision: when you upload a new revision, the board switches to it. Archived items, and anything not on this project, can't be pinned, and an older pin to one is listed under Not shown on the board.",
         ],
       },
       {
@@ -211,7 +212,10 @@ export const PM_GUIDE: GuideSection[] = [
       {
         heading: "Waiting at the gate",
         body: [
-          "Someone waits at the gate when their mobile isn't on file, or when they're from a subcontractor with no insurance on file or insurance that has expired. They are not signed in and not on the roll call. You get a Waiting at the gate notification.",
+          "Someone waits at the gate when their mobile isn't on file, when they're from a subcontractor with no insurance on file or insurance that has expired, or when they aren't linked to a firm and aren't on your staff (the gate can't check their insurance, so it never lets them on by default). They are not signed in and not on the roll call. You get a Waiting at the gate notification.",
+          "Who counts as your own staff at the gate: a person you added to the team with no firm, or an admin or project manager of your company, as long as nothing links them to a subcontractor. They are let on without an insurance check. If someone also has a card at a firm, the gate checks that firm's insurance, the same as their card shows.",
+          "Every Team card says what the gate will do for that person, worked out the same way the gate does it. Held at the gate: no card or firm means they're on the project by their login alone, so the gate holds them every time. Choose Give them a card and say who they are: Our own staff (let on with no insurance check) or At a firm (the gate checks that firm's public liability). You see the same warning straight after Add to project on the Team page, so you can add someone before their paperwork arrives and sort the card when it does. Inviting someone from a card with no firm asks you first, because they'll be let on as your own staff with no insurance check.",
+          "Every sign-in says on what grounds it was let on, in the Site Register and on the Check-ins tab: Cleared: public liability to 1 Jan 2027, Cleared as in-house staff, no insurance check, or Let on by a manager after a hold, with the reason. Anyone let on without an insurance check is marked in amber, so you can see it at a glance.",
           "What the gate counts as insurance: an in-date public liability for the person's firm, either a public liability record on the firm or a certificate on one of its people whose type is Public liability insurance. Only the latest public liability counts, so an old expired one doesn't block a renewal. Employer's liability and other insurance are kept and tracked but don't decide the gate. Every contact and Team card shows the gate's own verdict, for example Gate: lets on. Public liability to 1 Jan 2027, or Gate: will hold. No public liability insurance on file.",
           "When you add a certificate, choose what it is: Public liability insurance, Employer's liability insurance, Other insurance, or Qualification or card. The name you type doesn't decide anything. Certificates added before this have no confirmed type and don't count at the gate until you confirm it: they're listed under Certificates to confirm in Compliance (and on the dashboard), each with a suggested type to confirm or change.",
           "Open it, or Currently on site, and choose Let on site or Refuse. Letting someone on needs a reason (for example, checked photo ID, or cert seen on his phone, upload promised today). Your name, the time and the reason are recorded. Their phone updates by itself. If nobody decides by the site close time, the request lapses and they are not on site.",
@@ -275,7 +279,7 @@ export const PM_GUIDE: GuideSection[] = [
         heading: "Sign-offs",
         body: [
           "Pending Sign-offs (on the dashboard and in Compliance) counts everyone who hasn't signed a document that needs a sign-off, whether they've opened it or not, on its latest revision. Tap the dashboard item: if the document is waiting for your signature it starts your sign-off; if it's someone else's, Compliance shows who hasn't signed (Not opened, or Opened, not signed). For safety-critical documents (method statements, permits and safety documents), or any document where you've switched on \"Require a PIN to sign off\", the signer enters their 4-digit PIN. Everything else uses a simple read-and-confirm step, no PIN needed.",
-          "A document has to be opened before it can be signed off, by you and by everyone on the Team Portal: a signature means \"I have read this and I accept it\". Until it's opened the button says Open to sign off; opening it (or downloading it in the portal) is recorded, and then Sign off appears.",
+          "A document has to be opened before it can be signed off, by you and by everyone on the Team Portal: a signature means \"I have read this and I accept it\". Until it's opened the button says Open to sign off. That opens the document inside SiteSort; once it's on screen the open is recorded and Sign off appears at the bottom of the same screen, so the signer enters their PIN and sees the confirmation without closing the document. Files SiteSort can't show (Word, CAD) have an Open the file or Download button there instead, and Sign off appears once they've taken it.",
         ],
       },
     ],
@@ -452,6 +456,7 @@ export const WORKER_GUIDE: GuideSection[] = [
         heading: "Who is on site",
         body: [
           "If you're the project's site manager, or covering for the project manager, Home shows a Site Register tile. It lists everyone on site now, for a roll call or a fire, and anyone who didn't sign out before the site closed.",
+          "Under each name it says on what grounds they were let on: Cleared: public liability to a date, or, marked in amber, Cleared as in-house staff, no insurance check, or Let on by a manager after a hold.",
           "Check Last updated before you count heads. With signal it refreshes every 30 seconds. With no signal you see the copy saved on your phone, marked No signal, with the time it was taken. Open the Site Register once a day with signal so the saved copy is today's.",
           "If you've been signed out, the sign-in screen has Open the saved site register, which works with no signal.",
           "Until you open the Site Register each day, Home reminds you. If anything else needs sorting (for example notifications are off), it's listed at the top of the Site Register. If the fire roll isn't ready, you and the project manager get one alert that day.",
@@ -492,7 +497,7 @@ export const WORKER_GUIDE: GuideSection[] = [
         body: [
           "A document marked Superseded has been replaced. If you open one anyway, you'll see a prompt offering to open the latest version instead.",
           "If a new version of a document is shared with you, you'll be notified and asked to acknowledge it, even if you'd acknowledged the earlier version. A superseded version can't be signed off: sign off the latest one.",
-          "Open a document before you sign it off. Until you've opened it the button says Open to sign off: tap it, read the document, then Sign off appears.",
+          "Open a document before you sign it off. Until you've opened it the button says Open to sign off: tap it and the document opens. Read it, then tap Sign off at the bottom of the same screen, enter your PIN, and you'll see it's signed before you close the document.",
         ],
       },
       {

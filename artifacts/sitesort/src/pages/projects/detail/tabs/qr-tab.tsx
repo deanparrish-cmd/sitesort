@@ -2,6 +2,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronUp, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, PinOff, StickyNote, Send, Loader2, History, Archive, Paperclip } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
+import { useState } from "react";
+import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { formatDate, formatBytes, cn } from "@/lib/utils";
 import { useDetail } from "../context";
 import { docRev } from "../use-project-detail";
@@ -24,10 +26,20 @@ export function QrTab() {
     qrSvgRef,
     isPinned,
     togglePin,
+    qrPins,
     loadQr,
     downloadQr,
     printQr,
   } = useDetail();
+
+  // Pinning publishes (#167): say so plainly before anything goes up.
+  const [confirmPin, setConfirmPin] = useState<{ itemType: string; itemId: string; name: string; noFile: boolean } | null>(null);
+  const [pinning, setPinning] = useState(false);
+  const askPin = (itemType: string, itemId: string, name: string, noFile = false) => {
+    if (isPinned(itemType, itemId)) { void togglePin(itemType, itemId); return; }
+    setConfirmPin({ itemType, itemId, name, noFile });
+  };
+  const hiddenPins = (qrPins ?? []).filter((p: any) => p.hidden);
 
   return (
     <>
@@ -170,7 +182,24 @@ export function QrTab() {
                     <Pin className="w-4 h-4 text-primary" />
                     <h3 className="font-semibold text-sm">Board Contents</h3>
                   </div>
-                  <p className="text-xs text-muted-foreground mb-4">Pin specific items to highlight them for workers who scan this QR code.</p>
+                  <p className="text-xs text-muted-foreground mb-4">Pin items to put them on the board. Anyone who scans this QR code, and everyone on the Team Portal for this project, can open what you pin.</p>
+
+                  {/* Pins the board leaves off, with the reason (#166, #167). */}
+                  {hiddenPins.length > 0 && (
+                    <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-3 space-y-2" data-testid="hidden-pins">
+                      <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 uppercase tracking-wide">Not shown on the board</p>
+                      {hiddenPins.map((p: any) => (
+                        <div key={p.id} className="flex flex-wrap items-center gap-2 min-w-0">
+                          <p className="text-sm min-w-0 flex-1 basis-48 break-words"><span className="font-medium">{p.name ?? "An item from elsewhere"}</span> <span className="text-muted-foreground">{p.hiddenText}</span></p>
+                          {isProjectApprover && (
+                            <button onClick={() => togglePin(p.itemType, p.itemId)} className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-destructive px-2 py-1 rounded-lg hover:bg-muted">
+                              <PinOff className="w-3.5 h-3.5" /> Remove pin
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Documents */}
                   {(documents?.length ?? 0) > 0 && (
@@ -187,7 +216,7 @@ export function QrTab() {
                                 <p className="text-xs text-muted-foreground">{doc.type} · {docRev(doc)}</p>
                               </div>
                               <button
-                                onClick={() => togglePin("document", doc.id!)}
+                                onClick={() => askPin("document", doc.id!, doc.name ?? "This document")}
                                 className={cn("p-1.5 rounded-lg transition-colors", pinned ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-muted")}
                                 title={pinned ? "Unpin from board" : "Pin to board"}
                               >
@@ -215,7 +244,7 @@ export function QrTab() {
                                 {photo.description && <p className="text-xs text-muted-foreground truncate">{photo.description}</p>}
                               </div>
                               <button
-                                onClick={() => togglePin("photo", photo.id)}
+                                onClick={() => askPin("photo", photo.id, `Photo ${photo.referenceNumber}`, !photo.photoUrl)}
                                 className={cn("p-1.5 rounded-lg transition-colors", pinned ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-muted")}
                                 title={pinned ? "Unpin from board" : "Pin to board"}
                               >
@@ -243,7 +272,7 @@ export function QrTab() {
                                 <p className="text-xs text-muted-foreground">Expires {new Date(permit.expiryDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
                               </div>
                               <button
-                                onClick={() => togglePin("permit", permit.id)}
+                                onClick={() => askPin("permit", permit.id, permit.type, !permit.documentUrl)}
                                 className={cn("p-1.5 rounded-lg transition-colors", pinned ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-muted")}
                                 title={pinned ? "Unpin from board" : "Pin to board"}
                               >
@@ -264,6 +293,30 @@ export function QrTab() {
             ) : null}
           </div>
         </TabsContent>
+        <Dialog open={!!confirmPin} onOpenChange={v => { if (!v) setConfirmPin(null); }}>
+          <DialogHeader>
+            <DialogTitle className="flex items-start gap-2 break-words"><Pin className="w-4 h-4 shrink-0 mt-1 text-primary" /> Pin {confirmPin?.name} to the site board?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 text-sm" data-testid="pin-confirm">
+            <p className="font-semibold">Anyone who scans the site QR code, and everyone on the Team Portal for this project, can open it.</p>
+            {confirmPin?.itemType === "document" && <p className="text-muted-foreground">When a new revision is uploaded, the board shows the new one instead.</p>}
+            {confirmPin?.noFile && (
+              <p className="text-amber-700 dark:text-amber-400 font-medium">
+                {confirmPin.itemType === "permit" ? "This permit has no document attached, so the board shows it as a notice and says so." : "It has no file attached, so the board says so."}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmPin(null)}>Cancel</Button>
+            <Button isLoading={pinning} data-testid="button-pin-confirm" onClick={async () => {
+              if (!confirmPin) return;
+              setPinning(true);
+              await togglePin(confirmPin.itemType, confirmPin.itemId);
+              setPinning(false);
+              setConfirmPin(null);
+            }}>Pin to the board</Button>
+          </DialogFooter>
+        </Dialog>
     </>
   );
 }

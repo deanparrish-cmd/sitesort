@@ -61,7 +61,8 @@ describe("High batch: role checks below the buttons", () => {
   });
 
   it("public board pins: a site worker can't pin, unpin or read them (Team Portal only, #123); approvers can", async () => {
-    const body = { itemType: "document", itemId: `doc-${sfx}` };
+    // A real item on this project: since #166 the pin route refuses any other.
+    const body = { itemType: "permit", itemId: permitId };
     expect((await api(`/projects/${co.projectId}/qr-pins`, { method: "POST", token: tok.worker, body })).status).toBe(403);
     expect([401, 403]).toContain((await api(`/projects/${co.projectId}/qr-pins`, { method: "POST", token: tok.oldSub, body })).status);
     expect(await db.select().from(qrBoardPinsTable).where(eq(qrBoardPinsTable.projectId, co.projectId))).toHaveLength(0);

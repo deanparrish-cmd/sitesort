@@ -6,6 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * ok = insurance checked and covered. unchecked = let on as in-house staff with no insurance check (never shown as compliant).
+ */
 export type ProjectMemberComplianceStatus =
   (typeof ProjectMemberComplianceStatus)[keyof typeof ProjectMemberComplianceStatus];
 
@@ -14,4 +17,5 @@ export const ProjectMemberComplianceStatus = {
   warning: "warning",
   hold: "hold",
   none: "none",
+  unchecked: "unchecked",
 } as const;

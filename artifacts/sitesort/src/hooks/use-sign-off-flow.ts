@@ -25,6 +25,9 @@ export function useSignOffFlow({ hasPin, acknowledgeUrl, setPinUrl, authHeaders,
   const [newPin, setNewPin] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The last successful sign-off, so a surface that stays open afterwards (the
+  // document viewer) can confirm it in place.
+  const [lastSigned, setLastSigned] = useState<{ id: string; at: Date } | null>(null);
 
   const onlyDigits = (v: string) => v.replace(/\D/g, "").slice(0, 4);
 
@@ -96,6 +99,7 @@ export function useSignOffFlow({ hasPin, acknowledgeUrl, setPinUrl, authHeaders,
       const data = await res.json().catch(() => ({}));
 
       if (res.ok) {
+        setLastSigned({ id: target.id, at: new Date() });
         onSigned?.();
         close();
         return;
@@ -120,7 +124,7 @@ export function useSignOffFlow({ hasPin, acknowledgeUrl, setPinUrl, authHeaders,
   };
 
   return {
-    target, open, close, forgotPin,
+    target, open, close, forgotPin, lastSigned,
     pin, setPin,
     setPinMode,
     password, setPassword,

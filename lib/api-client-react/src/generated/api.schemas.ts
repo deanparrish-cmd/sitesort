@@ -411,6 +411,9 @@ export const ProjectMemberRole = {
   subcontractor: "subcontractor",
 } as const;
 
+/**
+ * ok = insurance checked and covered. unchecked = let on as in-house staff with no insurance check (never shown as compliant).
+ */
 export type ProjectMemberComplianceStatus =
   (typeof ProjectMemberComplianceStatus)[keyof typeof ProjectMemberComplianceStatus];
 
@@ -419,6 +422,7 @@ export const ProjectMemberComplianceStatus = {
   warning: "warning",
   hold: "hold",
   none: "none",
+  unchecked: "unchecked",
 } as const;
 
 export type GateVerdictStatus =
@@ -463,6 +467,7 @@ export interface ProjectMember {
   pliCertUrl?: string | null;
   pliExpiryDate?: string | null;
   role: ProjectMemberRole;
+  /** ok = insurance checked and covered. unchecked = let on as in-house staff with no insurance check (never shown as compliant). */
   complianceStatus: ProjectMemberComplianceStatus;
   gateVerdict?: GateVerdict;
   scheduledDays?: string[];
@@ -1939,7 +1944,8 @@ export interface PortalBoardPin {
   type?: string;
   version?: number;
   superseded?: boolean;
-  fileUrl?: string;
+  /** The file to open (#167: pinned items open for whoever looks at the board). Null for a permit with no document attached. */
+  fileUrl?: string | null;
   referenceNumber?: string;
   category?: string;
   description?: string | null;

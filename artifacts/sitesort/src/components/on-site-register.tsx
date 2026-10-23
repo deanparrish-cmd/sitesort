@@ -26,6 +26,11 @@ export type RegisterCheckin = {
   holdReason?: string | null;
   holdStatus?: string | null;
   siteTimeZone?: string;
+  // On what grounds the gate let them on, and whether anyone's insurance was
+  // actually checked (false for in-house staff, a manager's approval, or a
+  // row from before the grounds were recorded).
+  clearanceText?: string | null;
+  insuranceChecked?: boolean;
 };
 
 function authHeaders(): Record<string, string> {
@@ -44,7 +49,9 @@ const presenceOf = (c: RegisterCheckin): Presence =>
   c.presence ?? (c.checkedOutAt ? "signed_out" : c.notSignedOut ? "auto_closed" : "on_site");
 
 export const holdReasonText = (r?: string | null) =>
-  r === "insurance_expired" ? "Insurance expired" : "No insurance on file";
+  r === "insurance_expired" ? "Insurance expired"
+  : r === "firm_unknown" ? "Firm not known, insurance not checked"
+  : "No insurance on file";
 
 // One line of status for a check-in card, on the site clock.
 export function checkinStatusLine(ci: {
@@ -219,6 +226,12 @@ export function OnSiteRegister({
                     {label(c)}{label(c) ? " · " : ""}in {when(c.checkedInAt, c.siteTimeZone)}
                     {auto && c.autoClosedAt ? ` · closed automatically ${fmtSiteTime(c.autoClosedAt, c.siteTimeZone)}` : ""}
                   </p>
+                  {c.clearanceText && (
+                    <p className={`text-xs font-medium break-words flex items-start gap-1 ${c.insuranceChecked ? "text-green-800" : "text-amber-700"}`} data-testid={`text-clearance-${c.id}`}>
+                      {c.insuranceChecked ? <Check className="w-3.5 h-3.5 shrink-0 mt-px" /> : <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-px" />}
+                      <span className="min-w-0">{c.clearanceText}</span>
+                    </p>
+                  )}
                 </>}
                 actions={<>
                   {auto

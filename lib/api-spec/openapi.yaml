@@ -4352,7 +4352,8 @@ components:
           enum: [manager, worker, subcontractor]
         complianceStatus:
           type: string
-          enum: [ok, warning, hold, none]
+          description: "ok = insurance checked and covered. unchecked = let on as in-house staff with no insurance check (never shown as compliant)."
+          enum: [ok, warning, hold, none, unchecked]
         gateVerdict:
           $ref: "#/components/schemas/GateVerdict"
         scheduledDays:
@@ -6220,7 +6221,10 @@ components:
         type: { type: string }
         version: { type: integer }
         superseded: { type: boolean }
-        fileUrl: { type: string }
+        fileUrl:
+          type: string
+          nullable: true
+          description: "The file to open (#167: pinned items open for whoever looks at the board). Null for a permit with no document attached."
         referenceNumber: { type: string }
         category: { type: string }
         description: { type: string, nullable: true }

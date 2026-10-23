@@ -16,7 +16,8 @@ export interface PortalBoardPin {
   type?: string;
   version?: number;
   superseded?: boolean;
-  fileUrl?: string;
+  /** The file to open (#167: pinned items open for whoever looks at the board). Null for a permit with no document attached. */
+  fileUrl?: string | null;
   referenceNumber?: string;
   category?: string;
   description?: string | null;

@@ -116,6 +116,9 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
   const [portalMsgTone, setPortalMsgTone] = useState<"ok" | "warn" | "error">("ok");
   const [isPinned, setIsPinned] = useState(false);
   const [pinLoading, setPinLoading] = useState(false);
+  // What the server said about the last pin / unpin (#167): a refusal reason,
+  // or what the board will show. Never claims "pinned" when it wasn't.
+  const [pinMsg, setPinMsg] = useState<{ text: string; bad: boolean } | null>(null);
   const [siteBoardUrl, setSiteBoardUrl] = useState<string | null>(null);
   const canSeeSiteQr = useCapabilities().isManager;
   // Project picker — used when no projectId prop is supplied (e.g. insurance certs in Compliance)
@@ -346,13 +349,24 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
   const togglePin = async () => {
     if (!canPin) return;
     setPinLoading(true);
+    setPinMsg(null);
     const method = isPinned ? "DELETE" : "POST";
-    await fetch(`/api/projects/${projectId}/qr-pins`, {
-      method,
-      headers: authH(),
-      body: JSON.stringify({ itemType: entityType, itemId: entityId }),
-    }).catch(() => {});
-    setIsPinned(v => !v);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/qr-pins`, {
+        method,
+        headers: authH(),
+        body: JSON.stringify({ itemType: entityType, itemId: entityId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setIsPinned(v => !v);
+        setPinMsg(method === "POST" ? { text: data.message ?? "Pinned to the site board.", bad: false } : { text: "Removed from the site board.", bad: false });
+      } else {
+        setPinMsg({ text: data.message ?? "That didn't save. Try again.", bad: true });
+      }
+    } catch {
+      setPinMsg({ text: "Couldn't reach SiteSort. Check your connection and try again.", bad: true });
+    }
     setPinLoading(false);
   };
 
@@ -683,9 +697,12 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
                         </button>
                         <p className="text-xs text-muted-foreground text-center">
                           {isPinned
-                            ? "Visible to anyone who scans the site QR code"
-                            : "Pin so workers can access it by scanning the site QR code"}
+                            ? "On the site board: anyone who scans the site QR code, and everyone on the Team Portal for this project, can open it."
+                            : "Pinning puts it on the site board: anyone who scans the site QR code, and everyone on the Team Portal for this project, can open it."}
                         </p>
+                        {pinMsg && (
+                          <p className={`text-xs text-center font-medium ${pinMsg.bad ? "text-destructive" : "text-emerald-700 dark:text-emerald-400"}`} data-testid="pin-message">{pinMsg.text}</p>
+                        )}
                       </>
                     )}
                   </div>

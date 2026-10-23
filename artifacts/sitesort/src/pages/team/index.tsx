@@ -13,6 +13,7 @@ import {
   Pencil, CheckCircle2, X, FolderPlus, Trash2, Building2, ChevronDown, ChevronRight, Archive,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { GateStandingLine, GiveCardDialog, type GateStanding } from "@/components/gate-standing";
 import { useCapabilities } from "@/hooks/use-capabilities";
 import { useGetMe } from "@workspace/api-client-react";
 
@@ -141,10 +142,15 @@ export default function TeamPage() {
   const [projList, setProjList] = useState<{ id: string; name: string; address?: string }[]>([]);
   const [projLoading, setProjLoading] = useState(false);
   const [linkStatus, setLinkStatus] = useState<Record<string, "idle" | "loading" | "added" | "already" | "error">>({});
+  // What the site gate will do for them on each project just added (#164):
+  // warned here, at the point of the mistake, never refused.
+  const [linkStanding, setLinkStanding] = useState<Record<string, { memberId: string; standing: GateStanding }>>({});
+  const [cardFor, setCardFor] = useState<{ projectId: string; memberId: string } | null>(null);
 
   async function openAddToProject(member: TeamMember) {
     setProjTarget(member);
     setLinkStatus({});
+    setLinkStanding({});
     setProjList([]);
     setProjLoading(true);
     const res = await fetch("/api/projects", { headers: authHeaders() });
@@ -164,6 +170,10 @@ export default function TeamPage() {
       body: JSON.stringify({ userId: projTarget.id, role: projTarget.role }),
     });
     setLinkStatus(prev => ({ ...prev, [projectId]: res.ok ? "added" : res.status === 409 ? "already" : "error" }));
+    if (res.ok) {
+      const d = await res.json().catch(() => null);
+      if (d?.gateStanding && d?.id) setLinkStanding(prev => ({ ...prev, [projectId]: { memberId: d.id, standing: d.gateStanding } }));
+    }
   }
 
   // Edit member dialog (name / phone / role — like the Contacts page's Edit)
@@ -774,7 +784,8 @@ export default function TeamPage() {
                 {projList.map(project => {
                   const status = linkStatus[project.id] ?? "idle";
                   return (
-                    <div key={project.id} className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border bg-card hover:bg-muted/20 transition-colors">
+                    <div key={project.id} className="rounded-xl border bg-card hover:bg-muted/20 transition-colors">
+                    <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
                       <div className="min-w-0">
                         <p className="font-semibold text-sm truncate">{project.name}</p>
                         {project.address && <p className="text-xs text-muted-foreground truncate">{project.address}</p>}
@@ -807,6 +818,13 @@ export default function TeamPage() {
                         )}
                       </div>
                     </div>
+                    {linkStanding[project.id] && (
+                      <div className="px-4 pb-3" data-testid={`add-gate-warning-${project.id}`}>
+                        <GateStandingLine standing={linkStanding[project.id].standing}
+                          onGiveCard={() => setCardFor({ projectId: project.id, memberId: linkStanding[project.id].memberId })} />
+                      </div>
+                    )}
+                    </div>
                   );
                 })}
               </div>
@@ -818,6 +836,11 @@ export default function TeamPage() {
           </div>
         )}
       </Dialog>
+
+      {cardFor && projTarget && (
+        <GiveCardDialog projectId={cardFor.projectId} memberId={cardFor.memberId} name={projTarget.name} open onClose={() => setCardFor(null)}
+          onDone={standing => setLinkStanding(prev => ({ ...prev, [cardFor.projectId]: { memberId: cardFor.memberId, standing } }))} />
+      )}
 
       {/* Edit member dialog */}
       <Dialog open={!!editTarget} onOpenChange={open => { if (!open) setEditTarget(null); }}>

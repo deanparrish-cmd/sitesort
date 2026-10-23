@@ -13,7 +13,10 @@ import { RefreshCw, Users, WifiOff, Clock, AlertTriangle, CheckCircle2, XCircle,
 // straight away next time, with the time it was taken shown prominently. A
 // copy is only ever as good as its age, so the age drives the colour.
 
-type Row = { id: string; workerName: string; companyName: string | null; checkedInAt: string; autoClosedAt?: string | null };
+// clearance: on what grounds the gate let them on. insuranceChecked false =
+// nobody's insurance was checked (in-house staff, a manager's approval, or a
+// copy saved before the grounds were recorded): the site manager must see it.
+type Row = { id: string; workerName: string; companyName: string | null; checkedInAt: string; autoClosedAt?: string | null; clearance?: string; insuranceChecked?: boolean };
 type HeldRow = Row & {
   holdReason: string; why: string; typedPhone: string | null; photoUrl: string | null;
   claimed: { name: string; company: string | null } | null; insurance: string | null;
@@ -146,6 +149,12 @@ function PersonLine({ r, action }: { r: Row; action?: React.ReactNode }) {
       <div className="min-w-0 flex-1">
         <p className="text-lg font-bold break-words">{r.workerName}</p>
         <p className="text-sm text-muted-foreground break-words">{r.companyName || "No company given"} · in at {hhmm(r.checkedInAt)}</p>
+        {r.clearance && (
+          <p className={cn("text-sm font-semibold break-words flex items-start gap-1.5 mt-0.5", r.insuranceChecked ? "text-success" : "text-foreground bg-warning/20 rounded-lg px-2 py-1 w-fit max-w-full")} data-testid={`register-clearance-${r.id}`} data-checked={r.insuranceChecked ? "yes" : "no"}>
+            {r.insuranceChecked ? <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" /> : <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />}
+            <span className="min-w-0">{r.clearance}</span>
+          </p>
+        )}
       </div>
       {action}
     </li>
@@ -213,6 +222,7 @@ function HeldCard({ h, online, onDone, source }: { h: HeldRow; online: boolean; 
           <p className="text-sm text-muted-foreground break-words">{h.companyName || "No company given"} · at the gate since {hhmm(h.checkedInAt)}</p>
           <PillGroup>
             {h.holdReason === "unverified" && <Pill className="bg-warning/20 text-foreground">Mobile not on file</Pill>}
+            {h.holdReason === "firm_unknown" && <Pill className="bg-destructive/15 text-destructive" icon={<ShieldAlert className="w-3.5 h-3.5" />}>Firm not known, insurance not checked</Pill>}
             {(h.holdReason === "insurance_none" || h.holdReason === "insurance_expired" || insuranceBad) && <Pill className="bg-destructive/15 text-destructive" icon={<ShieldAlert className="w-3.5 h-3.5" />}>{h.holdReason === "insurance_expired" || h.insurance === "expired" ? "Insurance expired" : "No insurance on file"}</Pill>}
           </PillGroup>
           {h.typedPhone && <p className="text-sm flex items-center gap-1.5 break-all"><Phone className="w-4 h-4 shrink-0" /> Gave {h.typedPhone}</p>}
