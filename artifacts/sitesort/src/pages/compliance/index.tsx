@@ -18,7 +18,7 @@ import { useGetMe, useListUnconfirmedCertifications, getListUnconfirmedCertifica
 import { CertTypeConfirm } from "@/components/cert-type";
 import { ListRow } from "@/components/ui/list-row";
 import { useSignOffFlow } from "@/hooks/use-sign-off-flow";
-import { DocumentViewer } from "@/components/document-viewer";
+import { DocumentViewer, type ReachedEndHow } from "@/components/document-viewer";
 import { DocStatePill, docStateOf } from "@/components/doc-state";
 
 type InsuranceItem = { subcontractorId: string; subcontractorName: string; insuranceType: string; expiryDate: string; status: string; certificateUrl?: string | null };
@@ -139,14 +139,6 @@ export default function CompliancePage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const signOff = useSignOffFlow({
-    hasPin,
-    acknowledgeUrl: id => `/api/documents/${id}/acknowledge`,
-    setPinUrl: "/api/auth/pin",
-    authHeaders,
-    onSigned: loadCompliance,
-    onPinSet: () => refetchMe(),
-  });
 
   // Your own unsigned copy opens in the in-app viewer: it records the open and
   // carries Sign off on the same screen (Dean, 2026-10-23). Its own flow, so
@@ -166,9 +158,16 @@ export default function CompliancePage() {
     if (r.ok) loadCompliance();
     return r.ok;
   };
+  const recordAckEnd = async (how: ReachedEndHow) => {
+    if (!viewingAck) return false;
+    const r = await fetch(`/api/documents/${viewingAck.documentId}/reached-end`, {
+      method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ how }),
+    });
+    return r.ok;
+  };
 
   const openAck = async (a: AckItem) => {
-    if (a.myStatus && a.myStatus !== "acknowledged" && a.fileUrl) { setViewingAck(a); return; }
+    if (a.myStatus && a.myStatus !== "acknowledged") { setViewingAck(a); return; }
     try {
       const res = await fetch(`/api/documents/${a.documentId}`, { headers: authHeaders() });
       const fresh = await res.json().catch(() => null);
@@ -243,7 +242,7 @@ export default function CompliancePage() {
     if (a) {
       setExpandedAckId(a.documentId);
       setTimeout(() => document.getElementById(`ack-${a.documentId}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 100);
-      if (a.myStatus === "viewed") signOff.open({ id: a.documentId, name: a.documentName, pinRequired: a.pinRequired ?? true });
+      if (a.myStatus === "pending" || a.myStatus === "viewed") setViewingAck(a);
       return;
     }
     setHighlightSection(target);
@@ -842,12 +841,12 @@ export default function CompliancePage() {
                           {/* Open before sign-off (Dean, 2026-10-22): Open records it. */}
                           {iNeedToSign && (
                             <button
-                              onClick={() => a.myStatus === "pending" ? void openAck(a) : signOff.open({ id: a.documentId, name: a.documentName, pinRequired: a.pinRequired ?? true })}
+                              onClick={() => void openAck(a)}
                               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent text-accent-foreground text-xs font-medium hover:opacity-90 transition-opacity"
-                              title={a.myStatus === "pending" ? "Open it first: you can sign off once you've opened it" : "Sign off this document"}
+                              title="Open it and scroll to the end: you can sign off once you have"
                               data-testid="button-ack-sign"
                             >
-                              <FileSignature className="w-3 h-3" /> {(a.pinRequired ?? true) ? (a.myStatus === "pending" ? "Open to sign off" : "Sign off") : (a.myStatus === "pending" ? "Open to acknowledge" : "Acknowledge")}
+                              <FileSignature className="w-3 h-3" /> {(a.pinRequired ?? true) ? "Open to sign off" : "Open to acknowledge"}
                               <ChevronRight className="w-3 h-3 -mr-0.5" />
                             </button>
                           )}
@@ -1074,81 +1073,12 @@ export default function CompliancePage() {
         <DocumentViewer
           doc={{ id: viewingAck.documentId, name: viewingAck.documentName, fileUrl: viewingAck.fileUrl ?? null, label: `${viewingAck.projectName} · ${viewingAck.revision ? `Rev ${viewingAck.revision}` : `v${viewingAck.version}`}` }}
           recordOpen={recordAckOpen}
+          recordEnd={recordAckEnd}
           signOff={viewerSignOff}
           pinRequired={viewingAck.pinRequired ?? true}
           onClose={() => setViewingAck(null)}
         />
       )}
-      <Dialog open={!!signOff.target} onOpenChange={v => { if (!v) signOff.close(); }}>
-        <DialogHeader>
-          <DialogTitle>{signOff.target && !signOff.target.pinRequired ? "Sign off this document" : signOff.setPinMode ? "Set your sign-off PIN" : "Sign off with your PIN"}</DialogTitle>
-        </DialogHeader>
-        {signOff.target && (
-          <div className="space-y-4">
-            <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/40 border">
-              <FileSignature className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-              <div className="min-w-0">
-                <p className="font-semibold text-sm truncate">{signOff.target.name}</p>
-                <p className="text-xs text-muted-foreground">Signing off confirms you have read and understood this document.</p>
-              </div>
-            </div>
-
-            {!signOff.target.pinRequired ? (
-              <p className="text-sm text-muted-foreground">
-                By acknowledging you confirm: <span className="font-medium text-foreground">"I confirm I have read and understood this document."</span> Your name and the time will be recorded. No PIN is asked for this document, so it's recorded as acknowledged, not signed with a PIN.
-              </p>
-            ) : signOff.setPinMode ? (
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  Set a 4-digit sign-off PIN to continue. You'll use it to confirm future sign-offs.
-                </p>
-                <div className="space-y-1.5">
-                  <label className="text-sm font-semibold block">Account password</label>
-                  <Input type="password" value={signOff.password} onChange={e => signOff.setPassword(e.target.value)} autoComplete="current-password" placeholder="Confirm it's you" />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-sm font-semibold block">Choose a 4-digit PIN</label>
-                  <Input type="password" inputMode="numeric" value={signOff.newPin} onChange={e => signOff.setNewPin(signOff.onlyDigits(e.target.value))} placeholder="••••" />
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-1.5">
-                <label className="text-sm font-semibold block">Enter your 4-digit PIN</label>
-                <Input
-                  type="password"
-                  inputMode="numeric"
-                  value={signOff.pin}
-                  onChange={e => signOff.setPin(signOff.onlyDigits(e.target.value))}
-                  onKeyDown={e => { if (e.key === "Enter") signOff.submit(); }}
-                  placeholder="••••"
-                  autoFocus
-                />
-                <button
-                  type="button"
-                  onClick={signOff.forgotPin}
-                  className="text-xs text-primary hover:underline"
-                >
-                  Forgot your PIN? Reset it with your password
-                </button>
-              </div>
-            )}
-
-            {signOff.error && (
-              <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
-                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>{signOff.error}</span>
-              </div>
-            )}
-
-            <DialogFooter>
-              <Button variant="ghost" onClick={signOff.close}>Cancel</Button>
-              <Button variant="accent" onClick={signOff.submit} isLoading={signOff.submitting}>
-                {!signOff.target.pinRequired ? "Confirm & acknowledge" : signOff.setPinMode ? "Set PIN & sign off" : "Sign off"}
-              </Button>
-            </DialogFooter>
-          </div>
-        )}
-      </Dialog>
     </SidebarLayout>
   );
 }

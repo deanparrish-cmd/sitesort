@@ -240,3 +240,11 @@ export async function dashboardToken(id: string, companyId: string, role: string
   }
   return login(email);
 }
+
+// Reached the end before sign-off (2026-10-24): what the viewer reports once
+// the person has scrolled to the end of the document. Portal by default;
+// `dashboard: true` for a dashboard user's own copy.
+export async function reachEnd(token: string, documentId: string, opts: { dashboard?: boolean; how?: string } = {}): Promise<number> {
+  const path = opts.dashboard ? `/documents/${documentId}/reached-end` : `/portal/documents/${documentId}/reached-end`;
+  return (await api(path, { method: "POST", token, body: { how: opts.how ?? "scrolled" } })).status;
+}

@@ -6,7 +6,7 @@ import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, Shield
 import { openDocument, cadBadgeLabel } from "@/lib/documents";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { DocumentViewer, type ViewerDoc } from "@/components/document-viewer";
+import { DocumentViewer, type ViewerDoc, type ReachedEndHow } from "@/components/document-viewer";
 import { useSignOffFlow } from "@/hooks/use-sign-off-flow";
 import { DocStatePill, docStateOf } from "@/components/doc-state";
 import {
@@ -67,9 +67,9 @@ const DOC_BTN_FILLED = `${DOC_BTN} px-3 py-1.5 bg-primary text-primary-foregroun
 const DOC_BTN_OUTLINE = `${DOC_BTN} px-3 py-1.5 border border-primary/40 text-primary hover:bg-primary/10`;
 
 // "Open to sign off" / "Sign off", or "acknowledge" where no PIN is asked for.
-function signLabel(doc: { myDistributionStatus?: string | null; pinRequired?: boolean }): string {
-  const verb = (doc.pinRequired ?? true) ? "sign off" : "acknowledge";
-  return doc.myDistributionStatus === "pending" ? `Open to ${verb}` : verb.charAt(0).toUpperCase() + verb.slice(1);
+// Sign-off happens only in the viewer, once the end is reached (Dean, 2026-10-24).
+function signLabel(doc: { pinRequired?: boolean }): string {
+  return (doc.pinRequired ?? true) ? "Open to sign off" : "Open to acknowledge";
 }
 
 export function DocumentsTab() {
@@ -85,7 +85,6 @@ export function DocumentsTab() {
     caps,
     canViewAudit,
     setAuditDoc,
-    openSignOff,
     selectedDocType,
     setSelectedDocType,
     searchQuery,
@@ -119,10 +118,17 @@ export function DocumentsTab() {
     if (r.ok) void refetchDocs();
     return r.ok;
   };
+  const recordViewerEnd = async (how: ReachedEndHow) => {
+    if (!viewing) return false;
+    const r = await fetch(`/api/documents/${viewing.id}/reached-end`, {
+      method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ how }),
+    });
+    return r.ok;
+  };
 
   const openAndRecord = (doc: { id: string; fileUrl: string; name: string; myDistributionStatus?: string | null; requiresAcknowledgment?: boolean; status?: string; pinRequired?: boolean; revision?: string | null; version?: number }) => {
     const waitingForMe = doc.myDistributionStatus === "pending" || doc.myDistributionStatus === "viewed";
-    if (waitingForMe && doc.requiresAcknowledgment && doc.status !== "superseded" && doc.fileUrl && !isCancelled) {
+    if (waitingForMe && doc.requiresAcknowledgment && doc.status !== "superseded" && !isCancelled) {
       setViewing({ id: doc.id, name: doc.name, fileUrl: doc.fileUrl, label: doc.revision ? `Rev ${doc.revision}` : doc.version ? `v${doc.version}` : null, pinRequired: doc.pinRequired ?? true });
       return;
     }
@@ -246,7 +252,7 @@ export function DocumentsTab() {
                     <div className={cn("flex flex-wrap gap-2", fade)}>
                       {!isSuperseded && (doc.myDistributionStatus === "pending" || doc.myDistributionStatus === "viewed") && (
                         <button
-                          onClick={() => doc.myDistributionStatus === "pending" ? openAndRecord(doc) : openSignOff({ id: doc.id, name: doc.name, type: doc.type, pinRequired: doc.pinRequired ?? true })}
+                          onClick={() => openAndRecord(doc)}
                           className={DOC_BTN_FILLED}
                         >
                           <ClipboardCheck className="w-3 h-3" />{signLabel(doc)}<ChevronRight className="w-3.5 h-3.5 -mr-1" />
@@ -355,9 +361,9 @@ export function DocumentsTab() {
                         <div className="flex flex-wrap items-center gap-1.5">
                           {!isSuperseded && (doc.myDistributionStatus === "pending" || doc.myDistributionStatus === "viewed") && (
                             <button
-                              onClick={() => doc.myDistributionStatus === "pending" ? openAndRecord(doc) : openSignOff({ id: doc.id, name: doc.name, type: doc.type, pinRequired: doc.pinRequired ?? true })}
+                              onClick={() => openAndRecord(doc)}
                               className={DOC_BTN_FILLED}
-                              title={doc.myDistributionStatus === "pending" ? "Open it first: you can sign off once you've opened it" : "Sign off this document"}
+                              title="Open it and scroll to the end: you can sign off once you have"
                             >
                               <ClipboardCheck className="w-3.5 h-3.5" />
                               {signLabel(doc)}<ChevronRight className="w-3.5 h-3.5 -mr-1" />
@@ -437,6 +443,7 @@ export function DocumentsTab() {
           <DocumentViewer
             doc={viewing}
             recordOpen={recordViewerOpen}
+            recordEnd={recordViewerEnd}
             signOff={viewerSignOff}
             pinRequired={viewing.pinRequired}
             onClose={() => setViewing(null)}

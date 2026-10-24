@@ -30,7 +30,7 @@ import { pushSubscriptionsTable, activityLogTable, portalSessionsTable, pushAler
 import { linkedCardsForLogin } from "../lib/linked-cards";
 import { PortalPushSubscribeBody, PortalPushUnsubscribeBody, RemovePortalPushDeviceBody, SendPortalPushTestBody, AnswerPortalPushTestBody } from "@workspace/api-zod";
 import { isLockedOut, recordFailedAttempt, clearAttempts } from "../lib/login-attempts";
-import { pinRequiredForDoc, SUPERSEDED_SIGNOFF_MESSAGE, SUPERSEDED_NOT_SHARED_SIGNOFF_MESSAGE, OPEN_FIRST_MESSAGE } from "../lib/signoff";
+import { pinRequiredForDoc, SUPERSEDED_SIGNOFF_MESSAGE, SUPERSEDED_NOT_SHARED_SIGNOFF_MESSAGE, OPEN_FIRST_MESSAGE, REACH_END_FIRST_MESSAGE, reachedEndHowAllowed } from "../lib/signoff";
 import { expiryStatus } from "../lib/expiry";
 import { issueCategoryFilter } from "../lib/accountability";
 import { canonicalPersonName } from "../lib/person-name";
@@ -2237,6 +2237,34 @@ router.post("/portal/documents/:documentId/view", ...portalGuards, async (req, r
   res.json({ success: true });
 });
 
+// POST /api/portal/documents/:documentId/reached-end { how } — the viewer
+// reports that this member reached the end of the document (or, for a file
+// SiteSort can't draw, opened it outside SiteSort). Needs a recorded open;
+// the first report stands. Sign-off needs it (REACH_END_FIRST_MESSAGE).
+router.post("/portal/documents/:documentId/reached-end", ...portalGuards, async (req, res) => {
+  const pid = req.portalProjectId!;
+  const rows = await db.select({ id: documentsTable.id, type: documentsTable.type, status: documentsTable.status, fileUrl: documentsTable.fileUrl }).from(documentsTable)
+    .where(and(eq(documentsTable.id, req.params.documentId), eq(documentsTable.projectId, pid)))
+    .limit(1);
+  if (!rows[0] || !(await isDocVisibleToViewer(pid, req.user!.id, rows[0]))) {
+    res.status(404).json({ error: "not_found", message: "Document not found" });
+    return;
+  }
+  const how = (req.body as { how?: unknown })?.how;
+  if (!reachedEndHowAllowed(rows[0].fileUrl, how)) {
+    res.status(400).json({ error: "validation_error", message: "That isn't how this file can be read." });
+    return;
+  }
+  const mine = (await db.select().from(documentDistributionsTable)
+    .where(and(eq(documentDistributionsTable.documentId, rows[0].id), eq(documentDistributionsTable.userId, req.user!.id))).limit(1))[0];
+  if (!mine?.viewedAt) { res.status(409).json({ error: "open_first", message: OPEN_FIRST_MESSAGE }); return; }
+  if (!mine.reachedEndAt) {
+    await db.update(documentDistributionsTable).set({ reachedEndAt: new Date(), reachedEndHow: how })
+      .where(eq(documentDistributionsTable.id, mine.id));
+  }
+  res.json({ success: true });
+});
+
 // POST /api/portal/documents/:documentId/acknowledge — PIN-confirmed sign-off,
 // the portal twin of POST /documents/:documentId/acknowledge (dashboard). A
 // portal member's "distribution" is implicit in what's shared with them (no
@@ -2273,6 +2301,11 @@ router.post("/portal/documents/:documentId/acknowledge", ...portalGuards, async 
       .limit(1);
     if (!existing[0]?.viewedAt) {
       res.status(409).json({ error: "open_first", message: OPEN_FIRST_MESSAGE });
+      return;
+    }
+    // Reached the end first (Dean, 2026-10-24), PIN or not.
+    if (!existing[0].reachedEndAt) {
+      res.status(409).json({ error: "reach_end_first", message: REACH_END_FIRST_MESSAGE });
       return;
     }
 
@@ -2320,6 +2353,7 @@ router.post("/portal/documents/:documentId/acknowledge", ...portalGuards, async 
         userRole: req.portalMemberRole ?? "portal_member",
         action: "acknowledged",
         signedOffWithPin: pinRequired,
+        reachedEndHow: existing[0].reachedEndHow,
         ipAddress: req.ip ?? null,
         userAgent: req.headers["user-agent"] ?? null,
       });

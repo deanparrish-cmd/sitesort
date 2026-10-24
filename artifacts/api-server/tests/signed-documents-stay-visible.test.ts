@@ -5,8 +5,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { portalSharesTable, portalSessionsTable, notificationsTable, documentDistributionsTable, documentsTable, acknowledgmentAuditTable } from "@workspace/db/schema";
 import {
   API_BASE, seedCompany, cleanupFixtures, api, login, portalLogin, seedCrossTenantPortalMember, cleanupPortalMember,
-  cleanupTestDocuments, type Fixture, type PortalMemberFixture,
-} from "./helpers";
+  cleanupTestDocuments, type Fixture, type PortalMemberFixture, reachEnd } from "./helpers";
 
 /**
  * Dean, 2026-10-24: if you signed it, you can always open what you signed.
@@ -46,6 +45,7 @@ describe("signed documents stay visible to whoever signed them", () => {
   };
   const sign = async (token: string, id: string, pin?: string) => {
     expect((await api(`/portal/documents/${id}/view`, { method: "POST", token })).status).toBe(200);
+    expect(await reachEnd(token, id)).toBe(200);
     expect((await api(`/portal/documents/${id}/acknowledge`, { method: "POST", token, body: pin ? { pin } : {} })).status).toBe(200);
   };
   const shared = async (token: string) => (await api("/portal/shared", { token })).json.documents as any[];

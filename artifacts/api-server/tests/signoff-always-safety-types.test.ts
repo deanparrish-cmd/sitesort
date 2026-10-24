@@ -5,8 +5,7 @@ import { eq, inArray } from "drizzle-orm";
 import { portalSharesTable, portalSessionsTable, notificationsTable, documentDistributionsTable, documentsTable, acknowledgmentAuditTable } from "@workspace/db/schema";
 import {
   seedCompany, cleanupFixtures, api, login, portalLogin, seedCrossTenantPortalMember, cleanupPortalMember,
-  cleanupTestDocuments, type Fixture, type PortalMemberFixture,
-} from "./helpers";
+  cleanupTestDocuments, type Fixture, type PortalMemberFixture, reachEnd } from "./helpers";
 
 /**
  * 2026-10-21 (Dean): RAMS, permits and safety documents always require
@@ -73,6 +72,7 @@ describe("sign-off always required for RAMS, permits and safety documents", () =
     expect(row?.requiresAcknowledgment).toBe(true);
     // Open before sign-off (2026-10-22).
     expect((await api(`/portal/documents/${d.id}/view`, { method: "POST", token: portal })).status).toBe(200);
+    expect(await reachEnd(portal, d.id)).toBe(200);
     const ack = await api(`/portal/documents/${d.id}/acknowledge`, { method: "POST", token: portal, body: { pin: member.pin } });
     expect(ack.status).toBe(200);
   });

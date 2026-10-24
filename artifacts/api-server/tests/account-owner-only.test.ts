@@ -9,8 +9,7 @@ import {
 } from "@workspace/db/schema";
 import {
   seedCompany, cleanupFixtures, api, login, portalLogin, seedCrossTenantPortalMember, cleanupPortalMember,
-  cleanupTestDocuments, inviteTokenFromInbox, TEST_PASSWORD, type Fixture, type PortalMemberFixture,
-} from "./helpers";
+  cleanupTestDocuments, inviteTokenFromInbox, TEST_PASSWORD, type Fixture, type PortalMemberFixture, reachEnd } from "./helpers";
 import { recordFailedPinAttempt, clearPinAttempts } from "../src/lib/pin-attempts";
 
 /**
@@ -184,6 +183,7 @@ describe("only the owner controls a login; signatures say how they were given", 
     docIds.push(rams);
     expect((await api(`/projects/${co.projectId}/portal-shares`, { method: "POST", token: admin, body: { itemType: "document", itemId: rams, audiences: [{ type: "all" }] } })).status).toBe(201);
     expect((await api(`/portal/documents/${rams}/view`, { method: "POST", token: portal })).status).toBe(200);
+    expect(await reachEnd(portal, rams)).toBe(200);
 
     // Three lockouts (5 wrong tries each), the 15 minutes between them simulated.
     let last: Awaited<ReturnType<typeof recordFailedPinAttempt>> | null = null;
@@ -231,6 +231,7 @@ describe("only the owner controls a login; signatures say how they were given", 
       docIds.push(r.json.id);
       expect((await api(`/projects/${co.projectId}/portal-shares`, { method: "POST", token: admin, body: { itemType: "document", itemId: r.json.id, audiences: [{ type: "all" }] } })).status).toBe(201);
       expect((await api(`/portal/documents/${r.json.id}/view`, { method: "POST", token: portal })).status).toBe(200);
+      expect(await reachEnd(portal, r.json.id)).toBe(200);
       return r.json.id as string;
     };
     const permit = await mk("permit");

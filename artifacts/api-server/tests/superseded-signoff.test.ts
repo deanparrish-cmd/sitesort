@@ -5,8 +5,7 @@ import { eq, inArray } from "drizzle-orm";
 import { portalSharesTable, portalSessionsTable, notificationsTable, documentDistributionsTable, acknowledgmentAuditTable } from "@workspace/db/schema";
 import {
   seedCompany, cleanupFixtures, api, login, portalLogin, seedCrossTenantPortalMember, cleanupPortalMember,
-  cleanupTestDocuments, type Fixture, type PortalMemberFixture,
-} from "./helpers";
+  cleanupTestDocuments, type Fixture, type PortalMemberFixture, reachEnd } from "./helpers";
 
 /**
  * 2026-10-21 (Dean): a replaced revision can't be signed off, and close-out,
@@ -98,6 +97,7 @@ describe("sign-off reads the latest revision", () => {
     expect(await closeout()).toMatchObject({ pendingCount: 1, notSentCount: 0, ok: false });
     // Open before sign-off (2026-10-22): the member opens it, then signs.
     expect((await api(`/portal/documents/${revC}/view`, { method: "POST", token: portal })).status).toBe(200);
+    expect(await reachEnd(portal, revC)).toBe(200);
     const ack = await api(`/portal/documents/${revC}/acknowledge`, { method: "POST", token: portal, body: { pin: member.pin } });
     expect(ack.status).toBe(200);
     expect(await closeout()).toMatchObject({ pendingCount: 0, notSentCount: 0, ok: true });

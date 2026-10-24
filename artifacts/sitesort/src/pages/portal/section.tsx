@@ -48,7 +48,7 @@ import {
 import { Bell, BellOff } from "lucide-react";
 import { useSignOffFlow } from "@/hooks/use-sign-off-flow";
 import { SignOffPinCard } from "@/components/sign-off-pin-card";
-import { DocumentViewer } from "@/components/document-viewer";
+import { DocumentViewer, SUPERSEDED_IN_VIEWER, type ReachedEndHow } from "@/components/document-viewer";
 import { DocStatePill } from "@/components/doc-state";
 import { ClipboardList } from "lucide-react";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -335,6 +335,12 @@ function DocRow({ doc, section, unseen, focused, signOff }: { doc: any; section:
     if (r.ok && !openedAt && !doc.myViewedAt) setOpenedAt(new Date().toISOString());
     return r.ok;
   };
+  const recordEnd = async (how: ReachedEndHow) => {
+    const r = await fetch(`/api/portal/documents/${doc.id}/reached-end`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ how }),
+    });
+    return r.ok;
+  };
 
   const open = () => {
     if (signViaViewer) { setViewing(true); checkCurrent(); return; }
@@ -455,31 +461,25 @@ function DocRow({ doc, section, unseen, focused, signOff }: { doc: any; section:
           {/* Open before sign-off (Dean, 2026-10-22): a signature means "I have
               read this", so Sign off appears once SiteSort has recorded the
               open; until then the button opens the document. */}
-          {needsSignOff && !active && (tracksViews && !receivedAt ? (
+          {/* Sign-off happens only in the viewer, once the end is reached
+              (Dean, 2026-10-24): "Open to sign off" even after an earlier
+              open; the row has no Sign off button or PIN box of its own. */}
+          {needsSignOff && !active && (doc.fileUrl ? (
             <button onClick={open} data-testid="button-open-to-sign" className={ROW_BUTTON_FILLED}>
               <FileSignature className="w-5 h-5" /> {(doc.pinRequired ?? true) ? "Open to sign off" : "Open to acknowledge"} <ChevronRight className="w-5 h-5 -mr-1" />
             </button>
           ) : (
-            <button
-              onClick={() => signOff.open({ id: doc.id, name: doc.name, pinRequired: doc.pinRequired ?? true })}
-              className={ROW_BUTTON_FILLED}
-            >
-              <FileSignature className="w-5 h-5" /> {(doc.pinRequired ?? true) ? "Sign off" : "Acknowledge"} <ChevronRight className="w-5 h-5 -mr-1" />
-            </button>
+            <span className="text-sm text-muted-foreground px-1" data-testid="row-no-file">No file attached yet. Ask your project manager.</span>
           ))}
       </div>
-      {active && !viewing && (
-        <div className="pb-3">
-          <SignOffPinCard flow={signOff} />
-        </div>
-      )}
       {viewing && (
         <DocumentViewer
           doc={{ id: doc.id, name: doc.name, fileUrl: doc.fileUrl ?? null, label: doc.revision ? `Rev ${doc.revision}` : `v${doc.version}` }}
           recordOpen={recordOpen}
+          recordEnd={recordEnd}
           signOff={doc.requiresAcknowledgment ? signOff : null}
           pinRequired={doc.pinRequired ?? true}
-          signBlocked={supersededNow ? "This revision has been replaced by a newer one, so it can't be signed off." : null}
+          signBlocked={supersededNow ? SUPERSEDED_IN_VIEWER : null}
           onClose={() => setViewing(false)}
         />
       )}

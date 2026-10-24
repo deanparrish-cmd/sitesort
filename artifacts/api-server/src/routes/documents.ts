@@ -9,7 +9,7 @@ import { allow, COMPANY_MANAGER, INTERNAL_STAFF, projectApprover, projectApprove
 import { enqueuePushForMembers, acceptedPortalMemberUserIds } from "../lib/push-triggers";
 import { removedFromProjectUserIds } from "../lib/project-membership";
 import { pinLockResponse, recordFailedPinAttempt, clearPinAttempts } from "../lib/pin-attempts";
-import { pinRequiredForDoc, signOffRequiredOnUpload, SUPERSEDED_SIGNOFF_MESSAGE, SHARE_ANSWER_REQUIRED_MESSAGE, SHARE_LIST_CHANGED_MESSAGE, OPEN_FIRST_MESSAGE } from "../lib/signoff";
+import { pinRequiredForDoc, signOffRequiredOnUpload, SUPERSEDED_SIGNOFF_MESSAGE, SHARE_ANSWER_REQUIRED_MESSAGE, SHARE_LIST_CHANGED_MESSAGE, OPEN_FIRST_MESSAGE, REACH_END_FIRST_MESSAGE, reachedEndHowAllowed } from "../lib/signoff";
 import { distributeDocumentToUser } from "../lib/document-distribution";
 import { isProjectApprover } from "../lib/project-authority";
 import { applyPortalShare, type Audience } from "./portal-shares";
@@ -460,6 +460,35 @@ router.post("/documents/:documentId/view", authenticate, allow(INTERNAL_STAFF), 
   }
 });
 
+// POST /api/documents/:documentId/reached-end { how }: the viewer reports that
+// this dashboard user reached the end of their own copy (or opened a file
+// SiteSort can't draw). Needs a recorded open; the first report stands.
+router.post("/documents/:documentId/reached-end", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
+  try {
+    const docs = await db.select({ id: documentsTable.id, projectId: documentsTable.projectId, fileUrl: documentsTable.fileUrl }).from(documentsTable)
+      .where(eq(documentsTable.id, req.params.documentId)).limit(1);
+    const project = docs[0] ? await db.select({ id: projectsTable.id }).from(projectsTable)
+      .where(and(eq(projectsTable.id, docs[0].projectId), eq(projectsTable.companyId, req.user!.companyId))).limit(1) : [];
+    if (!docs[0] || !project[0]) { res.status(404).json({ error: "not_found", message: "Document not found" }); return; }
+    const how = (req.body as { how?: unknown })?.how;
+    if (!reachedEndHowAllowed(docs[0].fileUrl, how)) {
+      res.status(400).json({ error: "validation_error", message: "That isn't how this file can be read." });
+      return;
+    }
+    const mine = (await db.select().from(documentDistributionsTable)
+      .where(and(eq(documentDistributionsTable.documentId, docs[0].id), eq(documentDistributionsTable.userId, req.user!.id))).limit(1))[0];
+    if (!mine?.viewedAt) { res.status(409).json({ error: "open_first", message: OPEN_FIRST_MESSAGE }); return; }
+    if (!mine.reachedEndAt) {
+      await db.update(documentDistributionsTable).set({ reachedEndAt: new Date(), reachedEndHow: how })
+        .where(eq(documentDistributionsTable.id, mine.id));
+    }
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Record reached end error");
+    res.status(500).json({ error: "server_error", message: "Failed to record that you reached the end" });
+  }
+});
+
 router.post("/documents/:documentId/acknowledge", authenticate, allow(INTERNAL_STAFF), async (req, res) => {
   try {
     const { pin } = req.body ?? {};
@@ -496,6 +525,11 @@ router.post("/documents/:documentId/acknowledge", authenticate, allow(INTERNAL_S
     }
     if (!distRecord[0].viewedAt) {
       res.status(409).json({ error: "open_first", message: OPEN_FIRST_MESSAGE });
+      return;
+    }
+    // Reached the end first (Dean, 2026-10-24), PIN or not.
+    if (!distRecord[0].reachedEndAt) {
+      res.status(409).json({ error: "reach_end_first", message: REACH_END_FIRST_MESSAGE });
       return;
     }
 
@@ -558,6 +592,7 @@ router.post("/documents/:documentId/acknowledge", authenticate, allow(INTERNAL_S
         userRole: actorRows[0]?.role ?? req.user!.role,
         action: "acknowledged",
         signedOffWithPin: pinRequired,
+        reachedEndHow: distRecord[0].reachedEndHow,
         ipAddress: req.ip ?? null,
         userAgent: req.headers["user-agent"] ?? null,
       });

@@ -20,6 +20,8 @@ export const acknowledgmentAuditTable = pgTable("acknowledgment_audit_log", {
   signedOffWithPin: boolean("signed_off_with_pin").notNull().default(false),
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
+  // How the signer reached the end before signing (2026-10-24); null on rows from before.
+  reachedEndHow: text("reached_end_how"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => [
   index("ack_audit_document_idx").on(t.documentId),

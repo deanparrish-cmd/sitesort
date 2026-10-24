@@ -4,7 +4,7 @@ import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui
 import { Input } from "@/components/ui/input";
 import { MapPin, Calendar, Upload, FileText, CheckCircle2, AlertTriangle, ShieldCheck, Eye, EyeOff, Users, Search, X, Phone, Mail, HardHat, UserCheck, Clock, Pencil, Camera, FolderOpen, ChevronDown, ChevronUp, ChevronRight, QrCode, Download, Printer, RefreshCw, ArrowDownCircle, ArrowUpCircle, Receipt, ClipboardCheck, UserPlus, ExternalLink, Share2, MessageCircle, FileDown, Plus, Trash2, Flag, Pin, PinOff, StickyNote, Send, Loader2, History, Archive, Paperclip } from "lucide-react";
 import { FileDropZone } from "@/components/ui/file-drop-zone";
-import { openDocument, cadBadgeLabel } from "@/lib/documents";
+import { openDocument, cadBadgeLabel, fileExt } from "@/lib/documents";
 import { formatDate, formatBytes, cn } from "@/lib/utils";
 import { DocStatePill } from "@/components/doc-state";
 import { useDetail } from "../context";
@@ -13,6 +13,8 @@ import { docRev, type CarryRule } from "../use-project-detail";
 // These types always require a PIN to sign off (mirrors the server's
 // PIN_REQUIRED_DOC_TYPES; drawings joined 2026-10-23).
 const PIN_ALWAYS_TYPES = new Set(["drawing", "method_statement", "permit", "safety"]);
+// The file types the document viewer draws (components/document-viewer.tsx).
+const VIEWER_IMAGE_EXTS = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg", "heic", "heif"];
 
 export function DocumentDialogs() {
   const {
@@ -416,6 +418,23 @@ export function DocumentDialogs() {
           )}
           <div>
             <label className="text-sm font-semibold mb-2 block">File</label>
+            {/* Tell them before they choose (Dean, 2026-10-24): a PDF or image
+                gets a reached-the-end record before sign-off; any other file
+                only records that it was opened. Not a block. */}
+            {(!!watch("requiresAcknowledgment") || PIN_ALWAYS_TYPES.has(watchedType) || inheritsAck) && (() => {
+              const ext = fileExt(watch("fileUrl") || null);
+              const weak = !!watch("fileUrl") && ext !== "pdf" && !VIEWER_IMAGE_EXTS.includes(ext);
+              return weak ? (
+                <p className="text-xs mb-2 flex items-start gap-1.5 rounded-md bg-amber-50 text-amber-900 border border-amber-200 dark:bg-amber-950/50 dark:text-amber-200 dark:border-amber-900 p-2" data-testid="upload-signoff-format-warning">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <span>This file isn't a PDF or an image, so SiteSort can only record that signers opened it, not that they reached the end. Upload it as a PDF for the stronger record.</span>
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground mb-2" data-testid="upload-signoff-format-note">
+                  Signers must reach the end of a PDF or image before they can sign, and SiteSort records that. For Word, Excel, CAD and other files, SiteSort can only record that the file was opened.
+                </p>
+              );
+            })()}
             <FileDropZone
               onUploaded={f => { setValue("fileUrl", f.url); setValue("fileSize", f.size); }}
               onCleared={() => { setValue("fileUrl", ""); setValue("fileSize", 0); }}

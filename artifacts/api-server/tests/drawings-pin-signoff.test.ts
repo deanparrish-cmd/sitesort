@@ -5,8 +5,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { portalSharesTable, portalSessionsTable, notificationsTable, documentDistributionsTable, documentsTable, acknowledgmentAuditTable } from "@workspace/db/schema";
 import {
   seedCompany, cleanupFixtures, api, login, portalLogin, seedCrossTenantPortalMember, cleanupPortalMember,
-  cleanupTestDocuments, type Fixture, type PortalMemberFixture,
-} from "./helpers";
+  cleanupTestDocuments, type Fixture, type PortalMemberFixture, reachEnd } from "./helpers";
 
 /**
  * Dean, 2026-10-23, option (a): new drawings and new revisions require a PIN
@@ -63,6 +62,7 @@ describe("drawings require a PIN signature from now on; nothing recorded is rese
     expect(d.pinRequired).toBe(true);
     expect((await share(d.id)).status).toBe(201);
     expect((await api(`/portal/documents/${d.id}/view`, { method: "POST", token: portal })).status).toBe(200);
+    expect(await reachEnd(portal, d.id)).toBe(200);
     const noPin = await api(`/portal/documents/${d.id}/acknowledge`, { method: "POST", token: portal, body: {} });
     expect(noPin.status).toBe(400);
     expect((await api(`/portal/documents/${d.id}/acknowledge`, { method: "POST", token: portal, body: { pin: member.pin } })).status).toBe(200);
@@ -92,6 +92,7 @@ describe("drawings require a PIN signature from now on; nothing recorded is rese
     expect(rev.pinRequired).toBe(true);
     // The member gets the revision and must sign it with a PIN.
     expect((await api(`/portal/documents/${rev.id}/view`, { method: "POST", token: portal })).status).toBe(200);
+    expect(await reachEnd(portal, rev.id)).toBe(200);
     expect((await api(`/portal/documents/${rev.id}/acknowledge`, { method: "POST", token: portal, body: {} })).status).toBe(400);
   });
 
@@ -100,6 +101,7 @@ describe("drawings require a PIN signature from now on; nothing recorded is rese
     await db.insert(documentDistributionsTable).values({ id: randomUUID(), documentId: d.id, userId: co.userId, status: "acknowledged", viewedAt: new Date(Date.now() - 60_000), acknowledgedAt: new Date(), signedOffWithPin: false });
     expect((await share(d.id)).status).toBe(201);
     expect((await api(`/portal/documents/${d.id}/view`, { method: "POST", token: portal })).status).toBe(200);
+    expect(await reachEnd(portal, d.id)).toBe(200);
     expect((await api(`/portal/documents/${d.id}/acknowledge`, { method: "POST", token: portal, body: {} })).status).toBe(400);
     expect((await api(`/portal/documents/${d.id}/acknowledge`, { method: "POST", token: portal, body: { pin: member.pin } })).status).toBe(200);
     const rows = await db.select().from(documentDistributionsTable).where(eq(documentDistributionsTable.documentId, d.id));

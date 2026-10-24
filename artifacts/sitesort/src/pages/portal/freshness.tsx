@@ -49,7 +49,8 @@ export function usePortalFreshnessState(): PortalFreshness {
   }, [qc]);
 
   // New-build check: shared with the dashboard, site board and share links.
-  const newBuild = useNewBuild();
+  // The portal reloads itself on resume when a newer build is live (2026-10-24).
+  const newBuild = useNewBuild({ reloadOnResume: true });
 
   // Lists currently on screen. A 401 is handled by the login bounce, not here;
   // helper checks (meta.freshnessIgnore) aren't lists the reader is looking at.

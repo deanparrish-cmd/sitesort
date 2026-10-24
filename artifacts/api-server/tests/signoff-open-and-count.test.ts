@@ -8,8 +8,7 @@ import {
 } from "@workspace/db/schema";
 import {
   API_BASE, seedCompany, cleanupFixtures, api, login, portalLogin, seedCrossTenantPortalMember, cleanupPortalMember,
-  cleanupTestDocuments, type Fixture, type PortalMemberFixture,
-} from "./helpers";
+  cleanupTestDocuments, type Fixture, type PortalMemberFixture, reachEnd } from "./helpers";
 
 /**
  * Dean, 2026-10-22:
@@ -74,6 +73,7 @@ describe("open before sign-off; what counts as waiting for sign-off; mark as rep
     expect((await myRow(rams, member.userId))?.viewedAt ?? null).toBeNull();
     expect((await api(`/portal/documents/${rams}/view`, { method: "POST", token: portal })).status).toBe(200);
     const opened = (await myRow(rams, member.userId))!.viewedAt!;
+    expect(await reachEnd(portal, rams)).toBe(200);
     await new Promise(r => setTimeout(r, 20));
     expect((await api(`/portal/documents/${rams}/acknowledge`, { method: "POST", token: portal, body: { pin: member.pin } })).status).toBe(200);
     const row = (await myRow(rams, member.userId))!;
@@ -82,11 +82,15 @@ describe("open before sign-off; what counts as waiting for sign-off; mark as rep
     expect(row.acknowledgedAt!.getTime()).toBeGreaterThan(opened.getTime());
   });
 
-  it("portal: downloading the file counts as opening it", async () => {
+  it("portal: downloading the file counts as opening it, but not as reaching the end", async () => {
     const rams = await upload("method_statement", true);
     expect((await shareAll(rams)).status).toBe(201);
     await fetch(`${API_BASE}/portal/documents/${rams}/download`, { headers: { Authorization: `Bearer ${portal}` } }).then(r => r.arrayBuffer()).catch(() => null);
     expect((await myRow(rams, member.userId))?.viewedAt).toBeTruthy();
+    const early = await api(`/portal/documents/${rams}/acknowledge`, { method: "POST", token: portal, body: { pin: member.pin } });
+    expect(early.status).toBe(409);
+    expect(early.json.error).toBe("reach_end_first");
+    expect(await reachEnd(portal, rams)).toBe(200);
     expect((await api(`/portal/documents/${rams}/acknowledge`, { method: "POST", token: portal, body: { pin: member.pin } })).status).toBe(200);
   });
 
@@ -98,6 +102,7 @@ describe("open before sign-off; what counts as waiting for sign-off; mark as rep
     expect(early.json.error).toBe("open_first");
     const v = await api(`/documents/${doc}/view`, { method: "POST", token: admin });
     expect(v.json).toMatchObject({ success: true, recorded: true });
+    expect(await reachEnd(admin, doc, { dashboard: true })).toBe(200);
     expect((await api(`/documents/${doc}/acknowledge`, { method: "POST", token: admin, body: {} })).status).toBe(200);
     expect((await myRow(doc, co.userId))!.status).toBe("acknowledged");
   });
@@ -113,6 +118,7 @@ describe("open before sign-off; what counts as waiting for sign-off; mark as rep
     expect(list.find(a => a.documentId === needs).recipients[0]).toMatchObject({ userId: member.userId, status: "pending" });
     // Opened, not signed: still waiting.
     expect((await api(`/portal/documents/${needs}/view`, { method: "POST", token: portal })).status).toBe(200);
+    expect(await reachEnd(portal, needs)).toBe(200);
     list = await waiting();
     expect(list.find(a => a.documentId === needs)).toMatchObject({ pendingCount: 1 });
     expect(list.find(a => a.documentId === needs).recipients[0].status).toBe("viewed");

@@ -13,6 +13,10 @@ export const documentDistributionsTable = pgTable("document_distributions", {
   viewedAt: timestamp("viewed_at"),
   acknowledgedAt: timestamp("acknowledged_at"),
   signedOffWithPin: boolean("signed_off_with_pin").notNull().default(false),
+  // Reached the end before sign-off (2026-10-24): when, and how the phone
+  // reported it (scrolled | one_screen | opened_outside_render_failed | opened_outside).
+  reachedEndAt: timestamp("reached_end_at"),
+  reachedEndHow: text("reached_end_how"),
   deviceInfo: text("device_info"),
 });
 

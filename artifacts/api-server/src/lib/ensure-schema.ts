@@ -704,6 +704,10 @@ export async function ensureSchema(): Promise<void> {
     await pool.query(`ALTER TABLE project_invites ADD COLUMN IF NOT EXISTS email_only boolean NOT NULL DEFAULT false`);
     await pool.query(`ALTER TABLE project_invites ADD COLUMN IF NOT EXISTS accepted_ip text`);
     await pool.query(`ALTER TABLE project_invites ADD COLUMN IF NOT EXISTS accepted_user_agent text`);
+    // Reached the end before sign-off (2026-10-24).
+    await pool.query(`ALTER TABLE document_distributions ADD COLUMN IF NOT EXISTS reached_end_at timestamp`);
+    await pool.query(`ALTER TABLE document_distributions ADD COLUMN IF NOT EXISTS reached_end_how text`);
+    await pool.query(`ALTER TABLE acknowledgment_audit_log ADD COLUMN IF NOT EXISTS reached_end_how text`);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS credential_events (
         id text PRIMARY KEY,
