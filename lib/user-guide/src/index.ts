@@ -99,6 +99,7 @@ export const PM_GUIDE: GuideSection[] = [
           "If who the old version is shared with changes while the upload window is open, SiteSort stops the upload and shows the new list. Check it and upload again.",
           "If you see \"SiteSort has been updated\" at the top of the screen, tap Reload before uploading, so you have the latest version of the app.",
           "A new version keeps the sign-off requirement of the one it replaces. Everyone has to sign off the new version, even if they signed off the old one. A superseded version can no longer be signed off. Anyone opening a superseded document sees a prompt offering the latest version instead, or, if the latest version hasn't been shared with them, a message telling them to ask you to share it.",
+          "If you signed it, you can always open what you signed. Anyone who has signed or acknowledged a document keeps it in their Team Portal, read-only, after it is superseded or after you remove the share that reached them. Someone who never signed it doesn't get it back.",
         ],
       },
       {
@@ -499,6 +500,7 @@ export const WORKER_GUIDE: GuideSection[] = [
         body: [
           "A document marked Superseded has been replaced. If you open one anyway, you'll see a prompt offering to open the latest version instead.",
           "If a new version of a document is shared with you, you'll be notified and asked to acknowledge it, even if you'd acknowledged the earlier version. A superseded version can't be signed off: sign off the latest one.",
+          "If you signed it, you can always open what you signed. A document you've signed or acknowledged stays in Shared with me, marked Superseded once it's replaced, even if it's no longer shared with you. You can open and download it, but not sign it again.",
           "Open a document before you sign it off. Until you've opened it the button says Open to sign off: tap it and the document opens. Read it, then tap Sign off at the bottom of the same screen, enter your PIN, and you'll see it's signed before you close the document.",
         ],
       },

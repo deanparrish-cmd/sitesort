@@ -67,7 +67,11 @@ describe("Shared with me badge matches the list", () => {
   });
 
   it("badge = unseen items in the list; archived permit in neither, safety doc once", async () => {
-    const [unseen, list] = await Promise.all([api("/portal/unseen", { token: portal }), api("/portal/shared", { token: portal })]);
+    // Badge first, then the list: opening the list records a view of the
+    // section once its response is sent, and a badge read racing it in
+    // parallel could see that view and count 0 (the old flake).
+    const unseen = await api("/portal/unseen", { token: portal });
+    const list = await api("/portal/shared", { token: portal });
     expect(list.status).toBe(200);
     const items = [...list.json.documents, ...list.json.photos, ...list.json.permits, ...list.json.dailyReports];
     const unseenInList = items.filter((i: any) => i.unseen).length;

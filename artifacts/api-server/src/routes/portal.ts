@@ -218,14 +218,47 @@ async function visibleIds(projectId: string, itemType: string, viewer: Viewer): 
   return set;
 }
 
-// Safety docs bypass sharing entirely (always visible); everything else is
-// gated on an explicit portal_shares rule. Used by the doc-scoped write routes
+// A CURRENT safety document skips the share check on purpose (#65): it is
+// open to every member of the project, because safety-critical content must
+// never be hidden by a missed share. Not an oversight; don't "fix" it. Once
+// superseded it is gated like everything else (Dean, 2026-10-24).
+function openToEveryMember(doc: { type: string; status: string }): boolean {
+  return doc.type === "safety" && doc.status === "current";
+}
+
+// Everything except a current safety doc is gated on a portal_shares rule
+// or the viewer's own signature. Used by the doc-scoped write routes
 // (view/acknowledge) that don't go through docListHandler/docDetailHandler.
-async function isDocVisibleToViewer(pid: string, userId: string, doc: { id: string; type: string }): Promise<boolean> {
-  if (doc.type === "safety") return true;
+async function isDocVisibleToViewer(pid: string, userId: string, doc: { id: string; type: string; status: string }): Promise<boolean> {
+  if (openToEveryMember(doc)) return true;
   const viewer = await resolveViewer(userId, pid);
   const ids = await visibleIds(pid, "document", viewer);
-  return ids.has(doc.id);
+  return ids.has(doc.id) || (await signedDocIds(userId, pid)).has(doc.id);
+}
+
+// If you signed it, you can always open what you signed (Dean, 2026-10-24):
+// documents on this project this login has signed or acknowledged, whatever
+// their status and whether or not a share rule still reaches them. ORed into
+// every portal document visibility check; it discloses nothing they haven't
+// already been shown, and sign-off on a superseded one is still refused.
+async function signedDocIds(userId: string, pid: string): Promise<Set<string>> {
+  const rows = await db.select({ id: documentDistributionsTable.documentId }).from(documentDistributionsTable)
+    .innerJoin(documentsTable, eq(documentsTable.id, documentDistributionsTable.documentId))
+    .where(and(eq(documentDistributionsTable.userId, userId), isNotNull(documentDistributionsTable.acknowledgedAt), eq(documentsTable.projectId, pid)));
+  return new Set(rows.map(r => r.id));
+}
+
+// Share rules plus signatures: every non-safety document this viewer may open.
+async function openableDocIds(pid: string, userId: string, viewer: Viewer): Promise<Set<string>> {
+  const [shared, signed] = await Promise.all([visibleIds(pid, "document", viewer), signedDocIds(userId, pid)]);
+  return new Set([...shared, ...signed]);
+}
+
+// Safety lists: every current one, plus any older revision this viewer may
+// open (a share rule reaches them, or they signed it).
+function currentOrOpenable(openable: Set<string>) {
+  const current = eq(documentsTable.status, "current");
+  return openable.size ? or(current, and(inArray(documentsTable.id, [...openable]), eq(documentsTable.status, "superseded"))) : current;
 }
 
 // Like visibleIds, but maps each visible item to the MOST RECENT matching share
@@ -1390,8 +1423,9 @@ function serializeSharedReport(r: { id: string; reportDate: string; managerRepor
 export async function buildPortalShared(userId: string, pid: string, trace?: SharedTrace) {
   const viewer = await resolveViewer(userId, pid);
   if (trace) trace.viewer = viewer;
-  const [docMap, photoMap, permitMap, reportMap, lastView, permRow] = await Promise.all([
+  const [docMap, signedIds, photoMap, permitMap, reportMap, lastView, permRow] = await Promise.all([
     visibleShareMap(pid, "document", viewer, trace?.rules),
+    signedDocIds(userId, pid),
     visibleShareMap(pid, "photo", viewer, trace?.rules),
     visibleShareMap(pid, "permit", viewer, trace?.rules),
     visibleShareMap(pid, "daily_report", viewer, trace?.rules),
@@ -1401,10 +1435,10 @@ export async function buildPortalShared(userId: string, pid: string, trace?: Sha
   ]);
   const canLogIssues = permRow[0]?.canLogIssues ?? false;
   const seenBefore = lastView.get("shared");
-  const docIds = [...docMap.keys()], photoIds = canLogIssues ? [...photoMap.keys()] : [], permitIds = [...permitMap.keys()], reportIds = [...reportMap.keys()];
+  const docIds = [...new Set([...docMap.keys(), ...signedIds])], photoIds = canLogIssues ? [...photoMap.keys()] : [], permitIds = [...permitMap.keys()], reportIds = [...reportMap.keys()];
   const [gatedDocs, safetyDocs, photos, permits, reports] = await Promise.all([
     docIds.length ? db.select().from(documentsTable).where(and(eq(documentsTable.projectId, pid), inArray(documentsTable.id, docIds), inArray(documentsTable.status, ["current", "superseded"]))) : Promise.resolve([]),
-    db.select().from(documentsTable).where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, "safety"), eq(documentsTable.status, "current"))),
+    db.select().from(documentsTable).where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, "safety"), currentOrOpenable(new Set([...docMap.keys(), ...signedIds])))),
     photoIds.length ? db.select().from(photosTable).where(and(eq(photosTable.projectId, pid), inArray(photosTable.id, photoIds))) : Promise.resolve([]),
     permitIds.length ? db.select().from(permitsTable).where(and(eq(permitsTable.projectId, pid), isNull(permitsTable.archivedAt), inArray(permitsTable.id, permitIds))) : Promise.resolve([]),
     reportIds.length ? db.select().from(dailyReportsTable).where(and(eq(dailyReportsTable.projectId, pid), inArray(dailyReportsTable.id, reportIds))) : Promise.resolve([] as (typeof dailyReportsTable.$inferSelect)[]),
@@ -1413,14 +1447,23 @@ export async function buildPortalShared(userId: string, pid: string, trace?: Sha
   // fold their own createdAt in as a synthetic "shared at" for ordering/unseen.
   const docMapWithSafety = new Map(docMap);
   for (const d of safetyDocs) if (!docMapWithSafety.has(d.id)) docMapWithSafety.set(d.id, d.createdAt);
-  const docs = [...gatedDocs, ...safetyDocs.filter(d => !docMap.has(d.id))];
+  const gatedIds = new Set(gatedDocs.map(d => d.id));
+  // Kept only because they signed it: never "new", no unseen highlight. Its
+  // signature time stands in as the "shared at" for ordering.
+  const keptBySignature = new Set([...gatedDocs, ...safetyDocs]
+    .filter(d => signedIds.has(d.id) && !docMap.has(d.id) && !openToEveryMember(d)).map(d => d.id));
+  const docs = [...gatedDocs, ...safetyDocs.filter(d => !gatedIds.has(d.id))];
   if (trace) {
     // Matched by a rule but not returned: deleted, archived or another project.
     const kept = new Set(gatedDocs.map(d => d.id));
-    trace.matchedDocIds = docIds;
-    trace.droppedDocIds = docIds.filter(id => !kept.has(id));
+    trace.matchedDocIds = [...docMap.keys()];
+    trace.droppedDocIds = [...docMap.keys()].filter(id => !kept.has(id));
   }
   const myStatuses = await myDocStatuses(userId, docs.map(d => d.id));
+  for (const id of keptBySignature) {
+    const at = myStatuses.get(id)?.acknowledgedAt;
+    if (at && !docMap.has(id)) docMapWithSafety.set(id, at);
+  }
   // A share rule can outlive its content (e.g. shared before the diary was ever
   // written) — only surface reports that actually have something to read.
   const reportsWithContent = reports.filter(r => hasManagerContent(r.managerReport));
@@ -1438,7 +1481,7 @@ export async function buildPortalShared(userId: string, pid: string, trace?: Sha
     myItemViews(userId, "daily_report", reportsWithContent.map(r => r.id)),
   ]);
   return {
-    documents: withMyStatus(await annotate(docs, serializeDoc, docMapWithSafety), myStatuses),
+    documents: withMyStatus((await annotate(docs, serializeDoc, docMapWithSafety)).map(d => keptBySignature.has(d.id) ? { ...d, unseen: false } : d), myStatuses),
     photos: await annotate(photos, p => serializeIssue(p), photoMap),
     permits: withMyView(await annotate(permits, serializePermit, permitMap), permitViews),
     dailyReports: withMyView(await annotate(reportsWithContent, serializeSharedReport, reportMap), reportViews),
@@ -1517,19 +1560,19 @@ router.post("/portal/documents/revision-check", ...portalGuards, async (req, res
   const ids = Array.isArray(raw) ? [...new Set(raw.filter((x): x is string => typeof x === "string"))].slice(0, 200) : [];
   if (ids.length === 0) { res.json({ documents: [] }); return; }
   const viewer = await resolveViewer(req.user!.id, pid);
-  const visible = await visibleIds(pid, "document", viewer);
+  const visible = await openableDocIds(pid, req.user!.id, viewer);
   const rows = await db.select().from(documentsTable)
     .where(and(eq(documentsTable.projectId, pid), inArray(documentsTable.id, ids)));
   const out = [];
   for (const d of rows) {
-    if (d.type !== "safety" && !visible.has(d.id)) continue;
+    if (!openToEveryMember(d) && !visible.has(d.id)) continue;
     if (d.status !== "superseded") { out.push({ id: d.id, status: d.status, latest: null }); continue; }
     const next = await resolveReplacement(pid, d.id);
     out.push({
       id: d.id, status: d.status,
       latest: next ? {
         id: next.id, name: next.name, revision: next.revision ?? null, version: next.version,
-        sharedWithYou: next.type === "safety" || visible.has(next.id),
+        sharedWithYou: openToEveryMember(next) || visible.has(next.id),
       } : null,
     });
   }
@@ -2029,10 +2072,10 @@ router.get("/portal/site-board", ...portalGuards, async (req, res) => {
 router.get("/portal/hs", ...portalGuards, async (req, res) => {
   const pid = req.portalProjectId!;
   const viewer = await resolveViewer(req.user!.id, pid);
-  const [docIds, permitIds] = await Promise.all([visibleIds(pid, "document", viewer), visibleIds(pid, "permit", viewer)]);
+  const [docIds, permitIds] = await Promise.all([openableDocIds(pid, req.user!.id, viewer), visibleIds(pid, "permit", viewer)]);
   const [methodStatements, safety, permits] = await Promise.all([
     docIds.size ? db.select().from(documentsTable).where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, "method_statement"), inArray(documentsTable.id, [...docIds]), inArray(documentsTable.status, ["current", "superseded"]))).orderBy(desc(documentsTable.createdAt)) : Promise.resolve([]),
-    db.select().from(documentsTable).where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, "safety"), eq(documentsTable.status, "current"))).orderBy(desc(documentsTable.createdAt)),
+    db.select().from(documentsTable).where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, "safety"), currentOrOpenable(docIds))).orderBy(desc(documentsTable.createdAt)),
     permitIds.size ? db.select().from(permitsTable).where(and(eq(permitsTable.projectId, pid), isNull(permitsTable.archivedAt), inArray(permitsTable.id, [...permitIds]))).orderBy(desc(permitsTable.createdAt)) : Promise.resolve([]),
   ]);
   res.json({ methodStatements: methodStatements.map(serializeDoc), safety: safety.map(serializeDoc), permits: permits.map(serializePermit) });
@@ -2047,14 +2090,14 @@ function docListHandler(type: string) {
     const pid = req.portalProjectId!;
     if (type === "safety") {
       const rows = await db.select().from(documentsTable)
-        .where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, type), eq(documentsTable.status, "current")))
+        .where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, type), currentOrOpenable(await openableDocIds(pid, req.user!.id, await resolveViewer(req.user!.id, pid)))))
         .orderBy(desc(documentsTable.createdAt));
       const myStatuses = await myDocStatuses(req.user!.id, rows.map(r => r.id));
       res.json(withMyStatus(rows.map(serializeDoc), myStatuses));
       return;
     }
     const viewer = await resolveViewer(req.user!.id, pid);
-    const ids = await visibleIds(pid, "document", viewer);
+    const ids = await openableDocIds(pid, req.user!.id, viewer);
     if (ids.size === 0) { res.json([]); return; }
     const rows = await db.select().from(documentsTable)
       .where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, type), inArray(documentsTable.id, [...ids]), inArray(documentsTable.status, ["current", "superseded"])))
@@ -2070,10 +2113,10 @@ function docDetailHandler(type: string) {
       .where(and(eq(documentsTable.id, req.params.documentId), eq(documentsTable.projectId, pid), eq(documentsTable.type, type)))
       .limit(1);
     if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Document not found" }); return; }
-    // Gate everything except safety; opening a shared doc records the view.
-    if (type !== "safety") {
+    // Gate everything except a current safety doc; opening records the view.
+    if (!openToEveryMember(rows[0])) {
       const viewer = await resolveViewer(req.user!.id, pid);
-      const ids = await visibleIds(pid, "document", viewer);
+      const ids = await openableDocIds(pid, req.user!.id, viewer);
       if (!ids.has(rows[0].id)) { res.status(404).json({ error: "not_found", message: "Document not found" }); return; }
       await recordDocView(rows[0].id, req.user!.id);
     }
@@ -2153,9 +2196,9 @@ router.get("/portal/documents/:documentId/download", ...portalGuards, async (req
     .limit(1);
   if (!rows[0]) { res.status(404).json({ error: "not_found", message: "Document not found" }); return; }
   const doc = rows[0];
-  if (doc.type !== "safety") {
+  if (!openToEveryMember(doc)) {
     const viewer = await resolveViewer(req.user!.id, pid);
-    const ids = await visibleIds(pid, "document", viewer);
+    const ids = await openableDocIds(pid, req.user!.id, viewer);
     if (!ids.has(doc.id)) { res.status(404).json({ error: "not_found", message: "Document not found" }); return; }
   }
   const filename = fileUrlToFilename(doc.fileUrl);
@@ -2183,7 +2226,7 @@ router.get("/portal/documents/:documentId/download", ...portalGuards, async (req
 // sign-off: viewing never needs a PIN, only signing off does.
 router.post("/portal/documents/:documentId/view", ...portalGuards, async (req, res) => {
   const pid = req.portalProjectId!;
-  const rows = await db.select({ id: documentsTable.id, type: documentsTable.type }).from(documentsTable)
+  const rows = await db.select({ id: documentsTable.id, type: documentsTable.type, status: documentsTable.status }).from(documentsTable)
     .where(and(eq(documentsTable.id, req.params.documentId), eq(documentsTable.projectId, pid)))
     .limit(1);
   if (!rows[0] || !(await isDocVisibleToViewer(pid, req.user!.id, rows[0]))) {
@@ -2819,7 +2862,7 @@ router.post("/portal/daily-report/:date/notes", authenticate, requirePortalSessi
 router.get("/portal/general", ...portalGuards, async (req, res) => {
   const pid = req.portalProjectId!;
   const viewer = await resolveViewer(req.user!.id, pid);
-  const gIds = await visibleIds(pid, "document", viewer);
+  const gIds = await openableDocIds(pid, req.user!.id, viewer);
   const [docs, notes] = await Promise.all([
     gIds.size ? db.select().from(documentsTable).where(and(eq(documentsTable.projectId, pid), eq(documentsTable.type, "general"), inArray(documentsTable.id, [...gIds]), inArray(documentsTable.status, ["current", "superseded"]))).orderBy(desc(documentsTable.createdAt)) : Promise.resolve([]),
     db.select({
