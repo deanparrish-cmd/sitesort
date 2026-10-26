@@ -2,6 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- One address (Dean, 2026-10-26): the bare domain moves to www before anything loads,
+         keeping the path, query and hash. Replit has no redirect setting and a registrar
+         redirect risks a certificate warning on https://sitesort.co.uk. -->
+    <script>
+      if (location.hostname === "sitesort.co.uk") {
+        location.replace("https://www.sitesort.co.uk" + location.pathname + location.search + location.hash);
+      }
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover" />
 
     <!-- Primary meta -->

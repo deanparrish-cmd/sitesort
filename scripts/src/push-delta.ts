@@ -123,8 +123,18 @@ async function main() {
   const tree = await withRetry("create tree", () => api(`/repos/${OWNER}/${REPO}/git/trees`, "POST", { tree: items, base_tree: baseCommit }), b => b?.sha);
   const subject = git(["log", "-1", "--format=%s", REF]).trim();
   // A prune names every removed path in the commit, so GitHub's history says what went.
+  // GitHub cuts a message at 64 KB: real code first (dot-folders last), and anything over
+  // the cap is counted by folder, so the cut can never hide a code path silently.
+  const ordered = [...toPrune].sort((a, b) => Number(a.startsWith(".")) - Number(b.startsWith(".")) || a.localeCompare(b));
+  const listed: string[] = [];
+  let bytes = 0;
+  for (const p of ordered) { if (bytes + p.length + 3 > 60_000) break; listed.push(p); bytes += p.length + 3; }
+  const overflow = new Map<string, number>();
+  for (const p of ordered.slice(listed.length)) { const d = p.split("/").slice(0, 2).join("/"); overflow.set(d, (overflow.get(d) ?? 0) + 1); }
+  const overflowText = overflow.size ? `\nNot listed (message size cap), by folder:\n${[...overflow].map(([d, n]) => `- ${n} under ${d}/`).join("\n")}\n` : "";
+  if (overflow.size) console.warn(`Commit message lists ${listed.length} of ${toPrune.length} removed paths; the rest are counted by folder.`);
   const message = toPrune.length
-    ? `sync: ${subject}\n\nRemoved from GitHub (not in the workspace), ${toPrune.length} file(s):\n${toPrune.map(p => `- ${p}`).join("\n")}\n`
+    ? `sync: ${subject}\n\nRemoved from GitHub (not in the workspace), ${toPrune.length} file(s):\n${listed.map(p => `- ${p}`).join("\n")}\n${overflowText}`
     : `sync: ${subject}`;
   const commit = await withRetry("create commit", () => api(`/repos/${OWNER}/${REPO}/git/commits`, "POST", { message, tree, parents: [main] }), b => b?.sha);
   const ref = await withRetry("update ref", () => api(`/repos/${OWNER}/${REPO}/git/refs/heads/main`, "PATCH", { sha: commit, force: true }), b => b?.object?.sha);
