@@ -20,16 +20,16 @@ import { messagesTable, channelMessagesTable } from "@workspace/db/schema";
  *    only for people who have that setting (a dashboard account); portal-only
  *    members and people with no account never see it;
  *  - the safety alert says it ignores the email setting, on purpose.
- * Real-looking addresses are put on the fixture accounts for the run, because
- * test domains are dropped before the (captured) transport.
+ * Reserved .test addresses are put on the fixture accounts for the run; the
+ * captured stand-in transport receives them (it is never Resend).
  */
 describe("email links and the email-settings footer", () => {
   let co: Fixture;
   let member: PortalMemberFixture;
   const tag = randomUUID().slice(0, 8);
-  const dashEmail = `dash-${tag}@sitesort-footer-check.co.uk`;
-  const portalEmail = `portal-${tag}@sitesort-footer-check.co.uk`;
-  const noAccountEmail = `nobody-${tag}@sitesort-footer-check.co.uk`;
+  const dashEmail = `dash-${tag}@footer-check.sitesort.test`;
+  const portalEmail = `portal-${tag}@footer-check.sitesort.test`;
+  const noAccountEmail = `nobody-${tag}@footer-check.sitesort.test`;
   let originalDash = "";
   let originalPortal = "";
   let adminToken = "";

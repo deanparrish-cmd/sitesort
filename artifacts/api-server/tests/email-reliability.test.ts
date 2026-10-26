@@ -21,6 +21,8 @@ describe("test addresses never reach Resend", () => {
   it.each([
     "a@example.test", "a@sitesort-tests.local", "a@example.com", "a@x.example.org", "a@foo.invalid",
     "a@test", "a@localhost", "a@local", "a@example", "a@demo.sitesort.test",
+    // Real-looking domains tests once used: someone could register them.
+    "tom@testsitesort.co.uk", "a@sitesort-footer-check.co.uk", "a@SITESORT-REMINDER-CHECK.co.uk", "a@example-real.co.uk",
   ])("%s is blocked", (a) => expect(isReservedTestAddress(a)).toBe(true));
   it.each(["a@latest.co.uk", "a@contest.com", "a@gmail.com", "a@sitesort.co.uk", "a@testing.com"])(
     "%s is a real address", (a) => expect(isReservedTestAddress(a)).toBe(false));
@@ -29,15 +31,15 @@ describe("test addresses never reach Resend", () => {
 describe("expiry reminders: recorded only once Resend accepts them", () => {
   let co: Fixture;
   const permitId = randomUUID();
-  const realLooking = `reminder-check-${randomUUID().slice(0, 8)}@sitesort-reminder-check.co.uk`;
+  const reminderAddress = `reminder-check-${randomUUID().slice(0, 8)}@reminder-check.sitesort.test`;
   const started = new Date();
   const expiry = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
 
   beforeAll(async () => {
     co = await seedCompany();
-    // A real-looking address so the reserved-domain skip doesn't apply; the
-    // stand-in transport below means nothing is actually sent.
-    await db.update(usersTable).set({ email: realLooking, emailNotifications: true }).where(eq(usersTable.id, co.userId));
+    // A reserved .test address: the stand-in transport below still receives it
+    // (it is never Resend), so nothing can be sent for real.
+    await db.update(usersTable).set({ email: reminderAddress, emailNotifications: true }).where(eq(usersTable.id, co.userId));
     await db.insert(permitsTable).values({ id: permitId, projectId: co.projectId, type: "hot_works", description: "Reminder check", responsibleUserId: co.userId, startDate: "2026-01-01", expiryDate: expiry });
     process.env.RESEND_API_KEY ??= "test-key-not-used";
   });
@@ -64,7 +66,7 @@ describe("expiry reminders: recorded only once Resend accepts them", () => {
   });
 
   it("the next run retries it; accepted, it is recorded once", async () => {
-    __setEmailTransportForTests(async (p) => p.to === realLooking
+    __setEmailTransportForTests(async (p) => p.to === reminderAddress
       ? { data: { id: `re_${randomUUID()}` }, error: null }
       : { data: null, error: { message: "refused in test" } });
     await runComplianceReminders();
@@ -109,7 +111,7 @@ describe("Resend webhook", () => {
     expect(inv.status).toBe(201);
     inviteId = (await db.select().from(projectInvitesTable).where(eq(projectInvitesTable.personId, personId)).limit(1))[0].id;
     // As if the deployed app had sent the invite and Resend accepted it.
-    await db.insert(emailLogTable).values({ id: randomUUID(), providerId, toAddress: "builder@example-real.co.uk", subject: "Invite", refType: "project_invite", refId: inviteId, status: "sent" });
+    await db.insert(emailLogTable).values({ id: randomUUID(), providerId, toAddress: "builder@bounce-check.sitesort.test", subject: "Invite", refType: "project_invite", refId: inviteId, status: "sent" });
   });
 
   afterAll(async () => {
@@ -121,7 +123,7 @@ describe("Resend webhook", () => {
     await cleanupFixtures([co]);
   });
 
-  const bounce = JSON.stringify({ type: "email.bounced", data: { email_id: providerId, to: ["builder@example-real.co.uk"], subject: "Invite", bounce: { message: "Mailbox does not exist" } } });
+  const bounce = JSON.stringify({ type: "email.bounced", data: { email_id: providerId, to: ["builder@bounce-check.sitesort.test"], subject: "Invite", bounce: { message: "Mailbox does not exist" } } });
 
   it("refuses an unsigned or wrongly signed report", async () => {
     expect((await post(bounce, { "Content-Type": "application/json" })).status).toBe(401);

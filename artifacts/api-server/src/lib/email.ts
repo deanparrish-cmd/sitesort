@@ -28,8 +28,13 @@ function resend() {
 // those addresses; this keeps them from reaching the live mail provider.
 // Matches the bare name too (x@test, x@localhost), not only x@a.test.
 const RESERVED_TEST_DOMAIN = /@(?:[^@\s]*\.)?(?:test|invalid|example|localhost|local|example\.(?:com|net|org))$/i;
+// Real-looking domains that tests and old fixtures once used. Someone could
+// register any of them, so they are never sent to, wherever the code runs
+// (Dean, 2026-10-26: "safe because of where it happens to run" stops being true quietly).
+const NEVER_SEND_DOMAINS = ["testsitesort.co.uk", "sitesort-footer-check.co.uk", "sitesort-reminder-check.co.uk", "example-real.co.uk"];
 export function isReservedTestAddress(to: string): boolean {
-  return RESERVED_TEST_DOMAIN.test(to.trim());
+  const addr = to.trim().toLowerCase();
+  return RESERVED_TEST_DOMAIN.test(addr) || NEVER_SEND_DOMAINS.some(d => addr.endsWith(`@${d}`) || addr.endsWith(`.${d}`));
 }
 
 // What an email was for, so a bounce reported later by the Resend webhook can
@@ -95,7 +100,9 @@ async function resolveSettingsLine(opts: SendOpts): Promise<SendOpts> {
 
 async function send(opts: SendOpts): Promise<{ data: { id: string } | null; error: null }> {
   opts = await resolveSettingsLine(opts);
-  if (isReservedTestAddress(opts.to)) {
+  // A test's stand-in transport may still receive these (it is never Resend),
+  // so tests can capture email on .test addresses instead of real-looking ones.
+  if (isReservedTestAddress(opts.to) && !testTransport) {
     return { data: { id: "skipped-reserved-test-domain" }, error: null };
   }
   // Outside the deployed app no email ever leaves: the workspace database holds
