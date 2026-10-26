@@ -122,7 +122,11 @@ async function main() {
 
   const tree = await withRetry("create tree", () => api(`/repos/${OWNER}/${REPO}/git/trees`, "POST", { tree: items, base_tree: baseCommit }), b => b?.sha);
   const subject = git(["log", "-1", "--format=%s", REF]).trim();
-  const commit = await withRetry("create commit", () => api(`/repos/${OWNER}/${REPO}/git/commits`, "POST", { message: `sync: ${subject}`, tree, parents: [main] }), b => b?.sha);
+  // A prune names every removed path in the commit, so GitHub's history says what went.
+  const message = toPrune.length
+    ? `sync: ${subject}\n\nRemoved from GitHub (not in the workspace), ${toPrune.length} file(s):\n${toPrune.map(p => `- ${p}`).join("\n")}\n`
+    : `sync: ${subject}`;
+  const commit = await withRetry("create commit", () => api(`/repos/${OWNER}/${REPO}/git/commits`, "POST", { message, tree, parents: [main] }), b => b?.sha);
   const ref = await withRetry("update ref", () => api(`/repos/${OWNER}/${REPO}/git/refs/heads/main`, "PATCH", { sha: commit, force: true }), b => b?.object?.sha);
   console.log(`\n✅ Pushed. main → ${String(ref).slice(0, 8)} (${uploaded} uploaded, ${toPrune.length} removed)`);
   report(remoteOnly.filter(p => !toPrune.includes(p)), accepted, skipped);
