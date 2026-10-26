@@ -4,17 +4,24 @@
  * GitHub rate limit. This diffs `git ls-tree -r <ref>` (default HEAD) against main's
  * recursive tree by blob SHA and creates blobs only for the delta.
  *
- * Usage: pnpm --filter @workspace/scripts exec tsx ./src/push-delta.ts [ref]
- * Additive like push-robust (base_tree): local deletions are NOT propagated.
+ * Usage: pnpm --filter @workspace/scripts exec tsx ./src/push-delta.ts [ref] [--prune]
+ * Additive like push-robust (base_tree): local deletions are NOT propagated unless
+ * --prune is given. Every run reports what GitHub holds that the workspace doesn't
+ * (minus scripts/push-accepted-differences.txt) and what was too large to upload, so
+ * the off-platform copy is never quietly different from the workspace.
  */
 import { ReplitConnectors, type ProxyOptions } from "@replit/connectors-sdk";
 import { execFileSync } from "child_process";
+import { existsSync, readFileSync } from "fs";
 
 const connectors = new ReplitConnectors();
 const OWNER = "deanparrish-cmd", REPO = "sitesort";
 const WORKDIR = "/home/runner/workspace";
 const MAX_BYTES = 650 * 1024; // proxy ~1MB body limit after base64
-const REF = process.argv[2] ?? "HEAD";
+const ARGS = process.argv.slice(2);
+const PRUNE = ARGS.includes("--prune");
+const REF = ARGS.find(a => !a.startsWith("--")) ?? "HEAD";
+const ACCEPTED_FILE = `${WORKDIR}/scripts/push-accepted-differences.txt`;
 
 const git = (args: string[]) => execFileSync("git", args, { cwd: WORKDIR, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
 
@@ -41,6 +48,30 @@ async function withRetry<T>(label: string, fn: () => Promise<{ status: number; b
   throw new Error(`${label} failed after ${tries} tries: HTTP ${last.status} ${JSON.stringify(last.body).slice(0, 160)}`);
 }
 
+// One line per path or folder prefix (ending in "/"); "#" starts a comment.
+function acceptedDifferences(): string[] {
+  if (!existsSync(ACCEPTED_FILE)) return [];
+  return readFileSync(ACCEPTED_FILE, "utf8").split("\n").map(l => l.replace(/#.*/, "").trim()).filter(Boolean);
+}
+
+function report(remoteOnly: string[], accepted: string[], skipped: string[]) {
+  const isAccepted = (p: string) => accepted.some(a => (a.endsWith("/") ? p.startsWith(a) : p === a));
+  const unexpected = remoteOnly.filter(p => !isAccepted(p));
+  console.log("\n── Backup report (GitHub main vs this workspace) ──");
+  if (unexpected.length === 0) console.log("GitHub has no files the workspace doesn't" + (remoteOnly.length ? ` (${remoteOnly.length} accepted difference(s)).` : "."));
+  else {
+    console.log(`⚠️  GitHub has ${unexpected.length} file(s) the workspace doesn't. A restore from GitHub would bring them back.`);
+    const byDir = new Map<string, number>();
+    for (const p of unexpected) { const d = p.split("/").slice(0, 2).join("/"); byDir.set(d, (byDir.get(d) ?? 0) + 1); }
+    for (const [d, n] of [...byDir].sort((a, b) => b[1] - a[1])) console.log(`   ${String(n).padStart(5)}  ${d}`);
+    for (const p of unexpected.slice(0, 15)) console.log(`   - ${p}`);
+    if (unexpected.length > 15) console.log(`   ... and ${unexpected.length - 15} more`);
+    console.log("   Remove them with --prune, or list them in scripts/push-accepted-differences.txt.");
+  }
+  if (skipped.length) console.log(`⚠️  Too large to upload, so missing or out of date on GitHub: ${skipped.join(", ")}`);
+  console.log("GitHub only backs up code committed to git. Uploaded files (object storage), the database, and anything git ignores are NOT on GitHub.");
+}
+
 async function main() {
   const localSha = git(["rev-parse", REF]).trim();
   console.log(`Pushing ${REF} (${localSha.slice(0, 8)}) as a delta…`);
@@ -55,16 +86,23 @@ async function main() {
 
   // Local committed files: "<mode> blob <sha>\t<path>"
   const changed: { path: string; sha: string }[] = [];
+  const localPaths = new Set<string>();
   for (const line of git(["ls-tree", "-r", REF]).split("\n").filter(Boolean)) {
     const m = line.match(/^(\d+) blob ([0-9a-f]+)\t(.+)$/);
-    if (!m || m[1] === "120000") continue;
+    if (!m) continue;
+    localPaths.add(m[3]);
+    if (m[1] === "120000") continue;
     if (remoteSha.get(m[3]) !== m[2]) changed.push({ path: m[3], sha: m[2] });
   }
+  const accepted = acceptedDifferences();
+  const isAccepted = (p: string) => accepted.some(a => (a.endsWith("/") ? p.startsWith(a) : p === a));
+  const remoteOnly = [...remoteSha.keys()].filter(p => !localPaths.has(p)).sort();
+  const toPrune = PRUNE ? remoteOnly.filter(p => !isAccepted(p)) : [];
   console.log(`${changed.length} file(s) differ from GitHub main`);
-  if (changed.length === 0) { console.log("Nothing to push."); return; }
+  if (changed.length === 0 && toPrune.length === 0) { console.log("Nothing to push."); report(remoteOnly, accepted, []); return; }
   if (changed.length > 300) throw new Error(`${changed.length} changed files is too many for a targeted push; use push-robust.ts`);
 
-  const items: { path: string; mode: "100644"; type: "blob"; sha: string }[] = [];
+  const items: { path: string; mode: "100644"; type: "blob"; sha: string | null }[] = [];
   const skipped: string[] = [];
   for (const f of changed) {
     const size = Number(git(["cat-file", "-s", f.sha]).trim());
@@ -75,11 +113,18 @@ async function main() {
     console.log(`  blob ${items.length}/${changed.length - skipped.length}: ${f.path}`);
   }
   if (skipped.length) console.warn(`Skipped ${skipped.length} oversized: ${skipped.join(", ")}`);
+  const uploaded = items.length;
+  if (toPrune.length) {
+    console.log(`Removing ${toPrune.length} file(s) from GitHub that the workspace doesn't have:`);
+    for (const p of toPrune) console.log(`  - ${p}`);
+    for (const path of toPrune) items.push({ path, mode: "100644", type: "blob", sha: null });
+  }
 
   const tree = await withRetry("create tree", () => api(`/repos/${OWNER}/${REPO}/git/trees`, "POST", { tree: items, base_tree: baseCommit }), b => b?.sha);
   const subject = git(["log", "-1", "--format=%s", REF]).trim();
   const commit = await withRetry("create commit", () => api(`/repos/${OWNER}/${REPO}/git/commits`, "POST", { message: `sync: ${subject}`, tree, parents: [main] }), b => b?.sha);
   const ref = await withRetry("update ref", () => api(`/repos/${OWNER}/${REPO}/git/refs/heads/main`, "PATCH", { sha: commit, force: true }), b => b?.object?.sha);
-  console.log(`\n✅ Pushed. main → ${String(ref).slice(0, 8)} (${items.length} files)`);
+  console.log(`\n✅ Pushed. main → ${String(ref).slice(0, 8)} (${uploaded} uploaded, ${toPrune.length} removed)`);
+  report(remoteOnly.filter(p => !toPrune.includes(p)), accepted, skipped);
 }
 main().catch(e => { console.error("❌ PUSH FAILED:", e.message); process.exit(1); });
