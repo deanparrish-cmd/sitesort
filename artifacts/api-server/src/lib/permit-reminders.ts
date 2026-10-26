@@ -2,9 +2,9 @@ import { randomUUID } from "node:crypto";
 import { db } from "@workspace/db";
 import {
   permitsTable, projectsTable, usersTable, insuranceRecordsTable,
-  subcontractorsTable, expiryReminderLogsTable, personCertificationsTable, peopleTable,
+  subcontractorsTable, expiryReminderLogsTable, personCertificationsTable, peopleTable, companyMembersTable,
 } from "@workspace/db/schema";
-import { and, eq, gte, lte, isNull } from "drizzle-orm";
+import { and, eq, gte, lte, isNull, inArray } from "drizzle-orm";
 import { sendPermitExpiryEmail, sendInsuranceExpiryEmail, sendPersonCertExpiryEmail } from "./email";
 import { daysUntilExpiry } from "./expiry";
 import { logger } from "./logger";
@@ -61,6 +61,28 @@ async function releaseMilestone(entityType: string, entityId: string, milestone:
     eq(expiryReminderLogsTable.entityId, entityId),
     eq(expiryReminderLogsTable.milestone, milestone),
   ));
+}
+
+// Who is told when a firm's insurance or a person's certificate is about to
+// lapse: every admin AND project manager of the company (Dean, 2026-10-26:
+// "the one person responsible for a site is the one person not told"; PMs are
+// company-wide, 2026-10-08). Membership comes from company_members, so an
+// admin or PM whose home company is elsewhere is included too (before, only
+// users homed at the company with role admin were emailed). Portal-only
+// accounts never; the email setting is respected as before.
+export async function reminderRecipients(companyId: string): Promise<Array<{ userId: string; name: string; email: string }>> {
+  const rows = await db
+    .select({ userId: usersTable.id, name: usersTable.name, email: usersTable.email })
+    .from(companyMembersTable)
+    .innerJoin(usersTable, eq(usersTable.id, companyMembersTable.userId))
+    .where(and(
+      eq(companyMembersTable.companyId, companyId),
+      inArray(companyMembersTable.role, ["admin", "project_manager"]),
+      eq(usersTable.emailNotifications, true),
+      eq(usersTable.portalOnly, false),
+    ));
+  const seen = new Set<string>();
+  return rows.filter(r => !seen.has(r.userId) && seen.add(r.userId));
 }
 
 // Date-string bounds for the scan window: from EXPIRED_GRACE_DAYS in the past to
@@ -155,10 +177,7 @@ async function runInsuranceReminders(now: Date, failures: ReminderFailure[]): Pr
   async function adminsFor(companyId: string) {
     const cached = adminsByCompany.get(companyId);
     if (cached) return cached;
-    const admins = await db
-      .select({ name: usersTable.name, email: usersTable.email })
-      .from(usersTable)
-      .where(and(eq(usersTable.companyId, companyId), eq(usersTable.role, "admin"), eq(usersTable.emailNotifications, true)));
+    const admins = await reminderRecipients(companyId);
     adminsByCompany.set(companyId, admins);
     return admins;
   }
@@ -188,7 +207,7 @@ async function runInsuranceReminders(now: Date, failures: ReminderFailure[]): Pr
     const admins = await adminsFor(record.companyId);
     if (admins.length === 0) { stats.notifyOff++; continue; }
 
-    // One claim per record+milestone — admins are notified together as a batch.
+    // One claim per record+milestone: admins and PMs are notified together as a batch.
     if (!(await claimMilestone("insurance", record.id, milestone))) { stats.deduped++; continue; }
 
     logger.info({ recordId: record.id, milestone, daysLeft, recipients: admins.length }, "Sending Insurance expiry email");
@@ -211,8 +230,9 @@ async function runInsuranceReminders(now: Date, failures: ReminderFailure[]): Pr
 }
 
 // Person certifications (CSCS, SSSTS, gas safe, plant tickets, etc.) expiring
-// soon / expired. Same shape as runInsuranceReminders — notifies company admins
-// (compliance is a PM/admin concern, not the individual's).
+// soon / expired. Same shape as runInsuranceReminders: notifies the company's
+// admins and PMs (reminderRecipients; compliance is their concern, not the
+// individual's).
 async function runPersonCertReminders(now: Date, failures: ReminderFailure[]): Promise<ReminderStats> {
   const stats: ReminderStats = { scanned: 0, noMilestone: 0, notifyOff: 0, deduped: 0, sent: 0, failed: 0 };
   const { fromStr, toStr } = scanWindow(now);
@@ -221,10 +241,7 @@ async function runPersonCertReminders(now: Date, failures: ReminderFailure[]): P
   async function adminsFor(companyId: string) {
     const cached = adminsByCompany.get(companyId);
     if (cached) return cached;
-    const admins = await db
-      .select({ name: usersTable.name, email: usersTable.email })
-      .from(usersTable)
-      .where(and(eq(usersTable.companyId, companyId), eq(usersTable.role, "admin"), eq(usersTable.emailNotifications, true)));
+    const admins = await reminderRecipients(companyId);
     adminsByCompany.set(companyId, admins);
     return admins;
   }

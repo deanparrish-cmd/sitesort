@@ -7,6 +7,7 @@ import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { openDocument, cadBadgeLabel, fileExt } from "@/lib/documents";
 import { formatDate, formatBytes, cn } from "@/lib/utils";
 import { DocStatePill } from "@/components/doc-state";
+import { useSafetyAudience, SafetyUploadNotice, emailAllLabel } from "@/components/safety-audience";
 import { useDetail } from "../context";
 import { docRev, type CarryRule } from "../use-project-detail";
 
@@ -18,6 +19,7 @@ const VIEWER_IMAGE_EXTS = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg", "h
 
 export function DocumentDialogs() {
   const {
+    projectId,
     project,
     uploadMutation,
     isUploadOpen,
@@ -76,6 +78,8 @@ export function DocumentDialogs() {
     onUpload,
     saveDocEdit,
   } = useDetail();
+  // A safety document goes to everyone: say who, before Upload (Dean, 2026-10-26).
+  const safetyAudience = useSafetyAudience(projectId, null, isUploadOpen && watchedType === "safety");
 
   return (
     <>
@@ -294,7 +298,7 @@ export function DocumentDialogs() {
               <div className="min-w-0">
                 <p className="font-semibold text-sm truncate">{auditDoc.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  Every sign-off of this document. SiteSort only ever adds to this record, and each entry shows whether it was signed with a PIN.
+                  Every sign-off of this document, with who signed, when, and whether they used their PIN. Entries can't be edited. They are removed only if that person's account or the company is deleted.
                 </p>
               </div>
             </div>
@@ -352,6 +356,28 @@ export function DocumentDialogs() {
               <option value="general">General</option>
             </select>
           </div>
+          {watchedType === "safety" && (
+            <div className="rounded-lg border p-3 space-y-2 min-w-0 bg-muted/30">
+              {safetyAudience.data ? (
+                <>
+                  <SafetyUploadNotice audience={safetyAudience.data} />
+                  {safetyAudience.data.members > 0 && (
+                    <label className="flex items-start gap-2 text-sm cursor-pointer select-none" htmlFor="upload-email-all">
+                      <input id="upload-email-all" type="checkbox" {...register("emailEveryone")} className="mt-0.5 h-4 w-4 shrink-0 accent-primary" data-testid="upload-email-all" />
+                      <span className="min-w-0 break-words">
+                        {emailAllLabel(safetyAudience.data.members)}
+                        <span className="block text-xs text-muted-foreground">The email links to the Team Portal, so they sign in to open it.</span>
+                      </span>
+                    </label>
+                  )}
+                </>
+              ) : safetyAudience.failed ? (
+                <p className="text-sm break-words">Safety documents go to everyone on this project. Couldn't load how many people that is: check your connection.</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">Checking who this reaches...</p>
+              )}
+            </div>
+          )}
           {supersedableDocs.length > 0 && (
             <div>
               <label className="text-sm font-semibold mb-1 block">Supersedes <span className="text-muted-foreground font-normal">(optional)</span></label>

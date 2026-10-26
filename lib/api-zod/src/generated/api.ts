@@ -440,6 +440,12 @@ export const UploadDocumentBody = zod.object({
     .describe(
       "Every portal share rule of the replaced revision that the uploader was shown. Must match the revision's current rules, or the upload is refused with 409 share_list_changed.",
     ),
+  emailEveryone: zod
+    .boolean()
+    .optional()
+    .describe(
+      'Safety documents only (\"Also email all N\"). Emails every portal member of the project; a safety document goes to all of them anyway.',
+    ),
 });
 
 /**

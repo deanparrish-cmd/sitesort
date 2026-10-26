@@ -32,6 +32,8 @@ import { PortalPushSubscribeBody, PortalPushUnsubscribeBody, RemovePortalPushDev
 import { isLockedOut, recordFailedAttempt, clearAttempts } from "../lib/login-attempts";
 import { pinRequiredForDoc, SUPERSEDED_SIGNOFF_MESSAGE, SUPERSEDED_NOT_SHARED_SIGNOFF_MESSAGE, OPEN_FIRST_MESSAGE, REACH_END_FIRST_MESSAGE, reachedEndHowAllowed } from "../lib/signoff";
 import { expiryStatus } from "../lib/expiry";
+// A current safety document is open to every member (#65); one place decides it.
+import { openToEveryMember } from "../lib/safety-audience";
 import { issueCategoryFilter } from "../lib/accountability";
 import { canonicalPersonName } from "../lib/person-name";
 import { PORTAL_SECTIONS } from "../lib/activity";
@@ -218,13 +220,6 @@ async function visibleIds(projectId: string, itemType: string, viewer: Viewer): 
   return set;
 }
 
-// A CURRENT safety document skips the share check on purpose (#65): it is
-// open to every member of the project, because safety-critical content must
-// never be hidden by a missed share. Not an oversight; don't "fix" it. Once
-// superseded it is gated like everything else (Dean, 2026-10-24).
-function openToEveryMember(doc: { type: string; status: string }): boolean {
-  return doc.type === "safety" && doc.status === "current";
-}
 
 // Everything except a current safety doc is gated on a portal_shares rule
 // or the viewer's own signature. Used by the doc-scoped write routes

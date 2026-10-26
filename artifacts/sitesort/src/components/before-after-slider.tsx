@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 /**
  * Before/After comparison slider for the hero. Sweeps once when it scrolls
  * into view, then the visitor can drag (or touch) the handle to compare.
- * Shared by the landing page and the sales/info page so both stay in sync.
+ * Used by the landing page (www and /info were merged into it, 2026-10-26).
  */
 export function BeforeAfterSlider() {
   const [pos, setPos] = useState(50); // % of the width where the divider sits

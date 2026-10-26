@@ -45,9 +45,12 @@ describe("Shared with me badge matches the list", () => {
     await db.insert(permitsTable).values([{ id: permitLive, ...permit }, { id: permitArchived, ...permit, archivedAt: new Date() }]);
     await db.insert(photosTable).values({ id: issue, projectId: co.projectId, uploadedBy: co.userId, category: "snag", referenceNumber: `B-${issue.slice(0, 6)}`, description: "Badge snag", status: "open" });
 
-    for (const [t, id] of [["document", drawing], ["document", safety], ["permit", permitLive], ["permit", permitArchived], ["photo", issue]] as const) {
+    for (const [t, id] of [["document", drawing], ["permit", permitLive], ["permit", permitArchived], ["photo", issue]] as const) {
       expect((await share(t, id)).status).toBe(201);
     }
+    // A current safety document goes to everyone and takes no share rule
+    // (2026-10-26): it is in the list without one.
+    expect((await share("document", safety)).status).toBe(409);
   });
 
   afterAll(async () => {

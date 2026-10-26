@@ -7,6 +7,7 @@ import { allow, INTERNAL_STAFF } from "../lib/authz";
 import { expiryStatus } from "../lib/expiry";
 import { pinRequiredForDoc } from "../lib/signoff";
 import { revisionsNotSent } from "../lib/outstanding-signoffs";
+import { openToEveryMember, portalMemberUserIds, safetyOwersWithoutRow } from "../lib/safety-audience";
 
 const router: IRouter = Router();
 
@@ -235,8 +236,13 @@ router.get("/compliance", authenticate, allow(INTERNAL_STAFF), async (req, res) 
       }
       // A new revision that reached nobody while the one it replaced had
       // recipients is outstanding too (lib/outstanding-signoffs.ts).
-      const notSent = await revisionsNotSent(allDocs, new Set(distsByDoc.keys()));
-      const distUserIds = [...new Set([...allDists.map(d => d.userId), ...[...notSent.values()].flatMap(n => n.userIds)])];
+      // Every portal member owes a current safety document (Dean, 2026-10-26),
+      // so it is never "not sent" while the project has members.
+      const members = await portalMemberUserIds(projectIds);
+      const rowUsers = new Map([...distsByDoc].map(([id, ds]) => [id, new Set(ds.map(d => d.userId))]));
+      const safetyOwers = safetyOwersWithoutRow(allDocs, rowUsers, members);
+      const notSent = await revisionsNotSent(allDocs.filter(d => !(openToEveryMember(d) && (members.get(d.projectId)?.size ?? 0) > 0)), new Set(distsByDoc.keys()));
+      const distUserIds = [...new Set([...allDists.map(d => d.userId), ...[...notSent.values()].flatMap(n => n.userIds), ...[...safetyOwers.values()].flat()])];
       const distUsers = distUserIds.length
         ? await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(inArray(usersTable.id, distUserIds))
         : [];
@@ -249,9 +255,12 @@ router.get("/compliance", authenticate, allow(INTERNAL_STAFF), async (req, res) 
       for (const doc of allDocs) {
         if (!doc.requiresAcknowledgment) continue;
         const dists = distsByDoc.get(doc.id) ?? [];
+        // Members who can open a current safety document but haven't yet: they
+        // owe it like anyone with an unopened copy.
+        const notOpened = safetyOwers.get(doc.id) ?? [];
         const pending = dists.filter(d => d.status !== "acknowledged");
         const notSentTo = notSent.get(doc.id)?.userIds ?? [];
-        if (pending.length === 0 && notSentTo.length === 0) continue;
+        if (pending.length === 0 && notSentTo.length === 0 && notOpened.length === 0) continue;
         const proj = myProjects.find(p => p.id === doc.projectId);
         if (notSentTo.length > 0) {
           pendingAcknowledgments.push({
@@ -278,21 +287,26 @@ router.get("/compliance", authenticate, allow(INTERNAL_STAFF), async (req, res) 
           documentName: doc.name,
           projectId: doc.projectId,
           projectName: proj?.name ?? "Unknown",
-          pendingCount: pending.length,
+          pendingCount: pending.length + notOpened.length,
           fileUrl: doc.fileUrl ?? null,
           version: doc.version,
           revision: doc.revision ?? null,
           myStatus: mine?.status ?? null,
           pinRequired: pinRequiredForDoc(doc),
           // Not signed first (not opened, then opened), then signed.
-          recipients: [...dists].sort((a, b) => signRank(a.status) - signRank(b.status)).map(d => ({
-            userId: d.userId,
-            name: nameByUserId.get(d.userId) ?? "Unknown",
-            status: d.status,
-            viewedAt: d.viewedAt?.toISOString() ?? null,
-            acknowledgedAt: d.acknowledgedAt?.toISOString() ?? null,
-            signedOffWithPin: d.status === "acknowledged" ? d.signedOffWithPin : false,
-          })),
+          recipients: [
+            ...notOpened.map(userId => ({
+              userId, name: nameByUserId.get(userId) ?? "Unknown", status: "pending", viewedAt: null, acknowledgedAt: null, signedOffWithPin: false,
+            })),
+            ...[...dists].sort((a, b) => signRank(a.status) - signRank(b.status)).map(d => ({
+              userId: d.userId,
+              name: nameByUserId.get(d.userId) ?? "Unknown",
+              status: d.status,
+              viewedAt: d.viewedAt?.toISOString() ?? null,
+              acknowledgedAt: d.acknowledgedAt?.toISOString() ?? null,
+              signedOffWithPin: d.status === "acknowledged" ? d.signedOffWithPin : false,
+            })),
+          ].sort((a, b) => signRank(a.status) - signRank(b.status)),
         });
       }
 

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { emailedText } from "@/components/safety-audience";
 import { signatureCountsText } from "@/components/doc-state";
 import { ToastAction } from "@/components/ui/toast";
 import { cardLabel } from "@/lib/card-label";
@@ -1306,6 +1307,7 @@ export function useProjectDetailState() {
           requirePinSignoff: !!data.requirePinSignoff,
           ...(data.supersededDocumentId ? { supersededDocumentId: data.supersededDocumentId } : {}),
           ...(data.type === "drawing" && data.revision?.trim() ? { revision: data.revision.trim() } : {}),
+          ...(data.type === "safety" && data.emailEveryone ? { emailEveryone: true } : {}),
           ...carry,
         } as any
       });
@@ -1313,6 +1315,9 @@ export function useProjectDetailState() {
       reset();
       refetchDocs();
       reportCarryForward(created as any);
+      // "Also email all N" on a safety document: say what was actually sent.
+      const safetyEmail = (created as any)?.safetyEmail as { recipientCount: number; emailedCount: number } | null | undefined;
+      if (safetyEmail) toast({ title: "Safety document uploaded", description: emailedText(safetyEmail) });
     } catch (e) {
       // Say why it was refused (it used to be swallowed, so a refused upload
       // looked like Upload doing nothing). If who the revision is shared with

@@ -21,3 +21,20 @@ ORDER BY documents DESC;
 SELECT type, revision, count(*) FROM documents
 WHERE type <> 'drawing' AND revision IS NOT NULL
 GROUP BY type, revision ORDER BY type, count(*) DESC;
+
+-- 3. (added 2026-10-26) Labels already repeated within one document's
+--    revision chain, which the new warning would flag. Chains follow
+--    previous_version_id back to the first revision.
+WITH RECURSIVE chain AS (
+  SELECT id, id AS root FROM documents WHERE previous_version_id IS NULL
+  UNION ALL
+  SELECT d.id, c.root FROM documents d JOIN chain c ON d.previous_version_id = c.id
+)
+SELECT count(*) AS repeated_label_groups,
+       coalesce(sum(n), 0) AS documents_involved
+FROM (
+  SELECT c.root, d.revision, count(*) AS n
+  FROM chain c JOIN documents d ON d.id = c.id
+  WHERE d.revision IS NOT NULL
+  GROUP BY c.root, d.revision HAVING count(*) > 1
+) x;

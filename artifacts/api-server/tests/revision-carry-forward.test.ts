@@ -173,7 +173,10 @@ describe("revision carry-forward", () => {
   it("safety documents need no answer (every member sees them)", async () => {
     const name = `Safety ${randomUUID().slice(0, 6)}`;
     const b = await upload({ name, type: "safety" });
-    expect((await share(b.id, [{ type: "all" }])).status).toBe(201);
+    // The API refuses new rules on a current safety document (2026-10-26),
+    // but rules from before that still exist on prod: one stands in for them.
+    expect((await share(b.id, [{ type: "all" }])).status).toBe(409);
+    await db.insert(portalSharesTable).values({ id: randomUUID(), projectId: co.projectId, itemType: "document", itemId: b.id, audienceType: "all", sharedByUserId: co.userId });
     const c = await upload({ name, type: "safety" });
     expect(c.previousVersionId).toBe(b.id);
   });

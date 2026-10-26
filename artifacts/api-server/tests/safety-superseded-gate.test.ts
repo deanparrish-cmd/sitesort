@@ -55,9 +55,11 @@ describe("superseded safety documents obey the share check; current ones stay op
     };
     const name = `Site rules ${randomUUID().slice(0, 6)}`;
     v1 = await upload({ name });
-    expect((await api(`/projects/${co.projectId}/portal-shares`, { method: "POST", token: admin, body: { itemType: "document", itemId: v1, audiences: [{ type: "person", personId: reached.personIds[0] }] } })).status).toBe(201);
     v2 = await upload({ name, supersededDocumentId: v1 });
     expect((await db.select().from(documentsTable).where(eq(documentsTable.id, v1)))[0].status).toBe("superseded");
+    // A current safety document takes no share rule (it goes to everyone,
+    // 2026-10-26), so the rule is put on v1 once it is superseded.
+    expect((await api(`/projects/${co.projectId}/portal-shares`, { method: "POST", token: admin, body: { itemType: "document", itemId: v1, audiences: [{ type: "person", personId: reached.personIds[0] }] } })).status).toBe(201);
   });
 
   afterAll(async () => {

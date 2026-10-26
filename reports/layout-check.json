@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-24T10:31:39.836Z",
+  "generatedAt": "2026-10-26T15:36:22.579Z",
   "target": "http://localhost:8090",
   "viewports": [
     360,
@@ -133,7 +133,7 @@
         "auth": "none"
       },
       {
-        "path": "/s/1tkhlQlEnqfUU4cD0mtCBKmCe-ks4ynz",
+        "path": "/s/fW0rMzRWwhM8qazMc38552-algOgmU4C",
         "label": "s",
         "auth": "none"
       },
@@ -233,7 +233,7 @@
         "auth": "none"
       },
       {
-        "path": "/portal/accept/3f6c583dea832d68b753344a2c25db510cd60fc6ec1d136013e896cee736293f",
+        "path": "/portal/accept/2ea06787262278011d61d1928c2419643f6070e60ade1dc58e6166ff29f6b136",
         "label": "portal-accept",
         "auth": "none"
       },
@@ -495,7 +495,7 @@
       "label": "info",
       "path": "/info",
       "width": 360,
-      "finalPath": "/info",
+      "finalPath": "/",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -952,9 +952,9 @@
     },
     {
       "label": "s",
-      "path": "/s/1tkhlQlEnqfUU4cD0mtCBKmCe-ks4ynz",
+      "path": "/s/fW0rMzRWwhM8qazMc38552-algOgmU4C",
       "width": 360,
-      "finalPath": "/s/1tkhlQlEnqfUU4cD0mtCBKmCe-ks4ynz",
+      "finalPath": "/s/fW0rMzRWwhM8qazMc38552-algOgmU4C",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -1972,9 +1972,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/3f6c583dea832d68b753344a2c25db510cd60fc6ec1d136013e896cee736293f",
+      "path": "/portal/accept/2ea06787262278011d61d1928c2419643f6070e60ade1dc58e6166ff29f6b136",
       "width": 360,
-      "finalPath": "/portal/accept/3f6c583dea832d68b753344a2c25db510cd60fc6ec1d136013e896cee736293f",
+      "finalPath": "/portal/accept/2ea06787262278011d61d1928c2419643f6070e60ade1dc58e6166ff29f6b136",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -3912,7 +3912,7 @@
       "label": "info",
       "path": "/info",
       "width": 390,
-      "finalPath": "/info",
+      "finalPath": "/",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -4369,9 +4369,9 @@
     },
     {
       "label": "s",
-      "path": "/s/1tkhlQlEnqfUU4cD0mtCBKmCe-ks4ynz",
+      "path": "/s/fW0rMzRWwhM8qazMc38552-algOgmU4C",
       "width": 390,
-      "finalPath": "/s/1tkhlQlEnqfUU4cD0mtCBKmCe-ks4ynz",
+      "finalPath": "/s/fW0rMzRWwhM8qazMc38552-algOgmU4C",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -5389,9 +5389,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/3f6c583dea832d68b753344a2c25db510cd60fc6ec1d136013e896cee736293f",
+      "path": "/portal/accept/2ea06787262278011d61d1928c2419643f6070e60ade1dc58e6166ff29f6b136",
       "width": 390,
-      "finalPath": "/portal/accept/3f6c583dea832d68b753344a2c25db510cd60fc6ec1d136013e896cee736293f",
+      "finalPath": "/portal/accept/2ea06787262278011d61d1928c2419643f6070e60ade1dc58e6166ff29f6b136",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -7329,7 +7329,7 @@
       "label": "info",
       "path": "/info",
       "width": 768,
-      "finalPath": "/info",
+      "finalPath": "/",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -7786,9 +7786,9 @@
     },
     {
       "label": "s",
-      "path": "/s/1tkhlQlEnqfUU4cD0mtCBKmCe-ks4ynz",
+      "path": "/s/fW0rMzRWwhM8qazMc38552-algOgmU4C",
       "width": 768,
-      "finalPath": "/s/1tkhlQlEnqfUU4cD0mtCBKmCe-ks4ynz",
+      "finalPath": "/s/fW0rMzRWwhM8qazMc38552-algOgmU4C",
       "ok": true,
       "reasons": [],
       "metrics": {
@@ -8971,9 +8971,9 @@
     },
     {
       "label": "portal-accept",
-      "path": "/portal/accept/3f6c583dea832d68b753344a2c25db510cd60fc6ec1d136013e896cee736293f",
+      "path": "/portal/accept/2ea06787262278011d61d1928c2419643f6070e60ade1dc58e6166ff29f6b136",
       "width": 768,
-      "finalPath": "/portal/accept/3f6c583dea832d68b753344a2c25db510cd60fc6ec1d136013e896cee736293f",
+      "finalPath": "/portal/accept/2ea06787262278011d61d1928c2419643f6070e60ade1dc58e6166ff29f6b136",
       "ok": true,
       "reasons": [],
       "metrics": {

@@ -72,7 +72,7 @@ export function CheckoutGate() {
     }
   };
 
-  // A plan picked on /register or the /info pricing cards goes straight to Stripe.
+  // A plan picked on /register or the landing page's pricing cards goes straight to Stripe.
   useEffect(() => {
     if (justPaid) return;
     try {

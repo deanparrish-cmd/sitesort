@@ -13,6 +13,7 @@ import { pinRequiredForDoc, signOffRequiredOnUpload, SUPERSEDED_SIGNOFF_MESSAGE,
 import { distributeDocumentToUser } from "../lib/document-distribution";
 import { isProjectApprover } from "../lib/project-authority";
 import { applyPortalShare, type Audience } from "./portal-shares";
+import { openToEveryMember, portalMemberUserIds, safetyOwersWithoutRow, safetyOwersForDoc, everyoneOnProject, emailEveryMember } from "../lib/safety-audience";
 
 const router: IRouter = Router();
 
@@ -28,9 +29,11 @@ const DOC_APPROVER = projectApproverFor("document", async (req) => {
 // signedWithPin: how many of the acknowledged were signed with a PIN. The rest
 // were a tap on a signed-in device and are never shown as equivalent (Dean,
 // 2026-10-23: "Signed with PIN" versus "Acknowledged").
-function getDistSummary(dists: Array<{ status: string; signedOffWithPin?: boolean }>) {
-  const total = dists.length;
-  const pending = dists.filter(d => d.status === "pending").length;
+// notOpened: members who owe a current safety document and have no row yet
+// (lib/safety-audience.ts); counted as New, like an unopened copy.
+function getDistSummary(dists: Array<{ status: string; signedOffWithPin?: boolean }>, notOpened = 0) {
+  const total = dists.length + notOpened;
+  const pending = dists.filter(d => d.status === "pending").length + notOpened;
   const viewed = dists.filter(d => d.status === "viewed").length;
   const acknowledged = dists.filter(d => d.status === "acknowledged").length;
   const signedWithPin = dists.filter(d => d.status === "acknowledged" && d.signedOffWithPin).length;
@@ -121,6 +124,9 @@ router.get("/projects/:projectId/documents", authenticate, allow(INTERNAL_STAFF)
       distsByDoc.set(r.documentId, list);
     }
     const uploaderName = new Map(uploaders.map(u => [u.id, u.name]));
+    // Every portal member owes a current safety document (Dean, 2026-10-26).
+    const safetyOwers = safetyOwersWithoutRow(docs, new Map([...distsByDoc].map(([id, ds]) => [id, new Set(ds.map(x => x.userId))])),
+      docs.some(openToEveryMember) ? await portalMemberUserIds([req.params.projectId]) : new Map());
 
     const result = docs.map((d) => {
       const dists = distsByDoc.get(d.id) ?? [];
@@ -143,7 +149,7 @@ router.get("/projects/:projectId/documents", authenticate, allow(INTERNAL_STAFF)
         pinRequired: pinRequiredForDoc(d),
         publicAccess: d.publicAccess,
         createdAt: d.createdAt.toISOString(),
-        distributionSummary: getDistSummary(dists),
+        distributionSummary: getDistSummary(dists, safetyOwers.get(d.id)?.length ?? 0),
         myDistributionStatus: myDist?.status ?? null,
         mySignedOffWithPin: myDist?.status === "acknowledged" ? myDist.signedOffWithPin : null,
         newRevisionNotShared: d.status === "current" && d.type !== "safety" && !sharedOnPortal.has(d.id)
@@ -168,7 +174,7 @@ router.post("/projects/:projectId/documents", authenticate, allow(projectApprove
       return;
     }
 
-    const { name, type, fileUrl, fileSize, requiresAcknowledgment, requirePinSignoff, publicAccess, distributeToUserIds, supersededDocumentId, revision, carryShareIds, carryShownShareIds } = req.body;
+    const { name, type, fileUrl, fileSize, requiresAcknowledgment, requirePinSignoff, publicAccess, distributeToUserIds, supersededDocumentId, revision, carryShareIds, carryShownShareIds, emailEveryone } = req.body;
     if (!name || !type || !fileUrl) {
       res.status(400).json({ error: "validation_error", message: "name, type, fileUrl required" });
       return;
@@ -291,6 +297,12 @@ router.post("/projects/:projectId/documents", authenticate, allow(projectApprove
         });
       } catch (e) { req.log.warn({ e }, "safety-notice push enqueue failed"); }
     }
+    // "Also email all N" ticked in the upload dialog (safety only).
+    let safetyEmail: { recipientCount: number; emailedCount: number } | null = null;
+    if (type === "safety" && emailEveryone === true) {
+      safetyEmail = await emailEveryMember(req.params.projectId, { id: docId, name, version: newVersion, requiresAcknowledgment: needsAck }, projectName,
+        err => req.log.error({ err }, "Safety document email failed"));
+    }
 
     // Revision carry-forward (Dean, 2026-10-21): the new revision goes to the
     // rules the uploader ticked (`carryShareIds`; checked above to be an
@@ -348,12 +360,57 @@ router.post("/projects/:projectId/documents", authenticate, allow(projectApprove
       pinRequired: pinRequiredForDoc({ type, requirePinSignoff: needsPin }),
       publicAccess: publicAccess ?? false,
       createdAt: new Date().toISOString(),
-      distributionSummary: getDistSummary(dists),
+      distributionSummary: getDistSummary(dists, (await safetyOwersForDoc({ id: docId, projectId: req.params.projectId, type, status: "current", requiresAcknowledgment: needsAck })).length),
       portalCarryForward,
+      safetyEmail,
     });
   } catch (err) {
     req.log.error({ err }, "Upload document error");
     res.status(500).json({ error: "server_error", message: "Failed to upload document" });
+  }
+});
+
+// Who a safety document reaches, for the Share and upload dialogs (Dean,
+// 2026-10-26: no picker where the choice does nothing). With ?documentId=,
+// openToEveryone says whether that document skips the share check now.
+router.get("/projects/:projectId/safety-audience", authenticate, allow(projectApprover()), async (req, res) => {
+  try {
+    const project = (await db.select({ id: projectsTable.id, name: projectsTable.name }).from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId))).limit(1))[0];
+    if (!project) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+    const documentId = typeof req.query.documentId === "string" ? req.query.documentId : null;
+    let openToEveryone: boolean | null = null;
+    if (documentId) {
+      const doc = (await db.select({ type: documentsTable.type, status: documentsTable.status }).from(documentsTable)
+        .where(and(eq(documentsTable.id, documentId), eq(documentsTable.projectId, project.id))).limit(1))[0];
+      if (!doc) { res.status(404).json({ error: "not_found", message: "Document not found" }); return; }
+      openToEveryone = openToEveryMember(doc);
+    }
+    res.json({ projectName: project.name, ...(await everyoneOnProject(project.id)), openToEveryone });
+  } catch (err) {
+    req.log.error({ err }, "Safety audience error");
+    res.status(500).json({ error: "server_error", message: "Failed to load who this reaches" });
+  }
+});
+
+// "Also email all N" from the Share dialog on a current safety document.
+router.post("/projects/:projectId/documents/:documentId/email-everyone", authenticate, allow(projectApprover()), async (req, res) => {
+  try {
+    const project = (await db.select({ id: projectsTable.id, name: projectsTable.name }).from(projectsTable)
+      .where(and(eq(projectsTable.id, req.params.projectId), eq(projectsTable.companyId, req.user!.companyId))).limit(1))[0];
+    if (!project) { res.status(404).json({ error: "not_found", message: "Project not found" }); return; }
+    const doc = (await db.select().from(documentsTable)
+      .where(and(eq(documentsTable.id, req.params.documentId), eq(documentsTable.projectId, project.id))).limit(1))[0];
+    if (!doc) { res.status(404).json({ error: "not_found", message: "Document not found" }); return; }
+    if (!openToEveryMember(doc)) {
+      res.status(409).json({ error: "not_open_to_everyone", message: "Only a current safety document goes to everyone. Share this one to the people who need it." });
+      return;
+    }
+    const result = await emailEveryMember(project.id, doc, project.name, err => req.log.error({ err }, "Safety document email failed"));
+    res.json(result);
+  } catch (err) {
+    req.log.error({ err }, "Email everyone error");
+    res.status(500).json({ error: "server_error", message: "Failed to send the email" });
   }
 });
 
@@ -429,7 +486,7 @@ router.get("/documents/:documentId", authenticate, allow(INTERNAL_STAFF), async 
       pinRequired: pinRequiredForDoc(d),
       publicAccess: d.publicAccess,
       createdAt: d.createdAt.toISOString(),
-      distributionSummary: getDistSummary(distsWithUsers),
+      distributionSummary: getDistSummary(distsWithUsers, (await safetyOwersForDoc(d)).length),
       distributions: distsWithUsers,
     });
   } catch (err) {
@@ -757,7 +814,7 @@ router.patch("/documents/:documentId", authenticate, allow(DOC_APPROVER), async 
       status: d.status, requiresAcknowledgment: d.requiresAcknowledgment,
       requirePinSignoff: d.requirePinSignoff, pinRequired: pinRequiredForDoc(d),
       publicAccess: d.publicAccess, createdAt: d.createdAt.toISOString(),
-      distributionSummary: getDistSummary(dists),
+      distributionSummary: getDistSummary(dists, (await safetyOwersForDoc(d)).length),
     });
   } catch (err) {
     req.log.error({ err }, "Update document error");

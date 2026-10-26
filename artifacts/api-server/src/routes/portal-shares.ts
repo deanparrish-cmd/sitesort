@@ -14,6 +14,7 @@ import { enqueuePushForMembers } from "../lib/push-triggers";
 import { isProjectApprover } from "../lib/project-authority";
 import { distributeDocumentToUser } from "../lib/document-distribution";
 import { borrowedLoginsByRow } from "../lib/linked-cards";
+import { openToEveryMember, SAFETY_GOES_TO_EVERYONE_MESSAGE } from "../lib/safety-audience";
 
 const router: IRouter = Router();
 
@@ -306,6 +307,16 @@ router.post("/projects/:projectId/portal-shares", authenticate, allow(projectApp
     const owned = (await db.select({ id: table.id }).from(table)
       .where(and(eq(table.id, itemId), eq(table.projectId, req.params.projectId))).limit(1))[0];
     if (!owned) { res.status(404).json({ error: "not_found", message: "Item not found in this project" }); return; }
+    // A current safety document already goes to everyone on the project (#65),
+    // so a share rule on it would be a choice that controls nothing. The screen
+    // no longer offers one and the API refuses it too (Dean, 2026-10-26).
+    if (itemType === "document") {
+      const doc = (await db.select({ type: documentsTable.type, status: documentsTable.status }).from(documentsTable).where(eq(documentsTable.id, itemId)).limit(1))[0];
+      if (doc && openToEveryMember(doc)) {
+        res.status(409).json({ error: "safety_goes_to_everyone", message: SAFETY_GOES_TO_EVERYONE_MESSAGE });
+        return;
+      }
+    }
 
     const { recipientCount, emailedCount } = await applyPortalShare({
       projectId: req.params.projectId, itemType, itemId, audiences,

@@ -49,7 +49,6 @@ function lazyWithRetry<T extends { default: ComponentType<any> }>(factory: () =>
 
 // Pages — lazy-loaded so each route ships as its own chunk (code splitting).
 const LandingPage = lazyWithRetry(() => import("@/pages/landing"));
-const InfoPage = lazyWithRetry(() => import("@/pages/info"));
 const Login = lazyWithRetry(() => import("@/pages/auth/login"));
 const Register = lazyWithRetry(() => import("@/pages/auth/register"));
 const VerifyEmail = lazyWithRetry(() => import("@/pages/auth/verify-email"));
@@ -117,7 +116,9 @@ function Router() {
       <Switch>
       {/* Public Routes */}
       <Route path="/" component={LandingPage} />
-      <Route path="/info" component={InfoPage} />
+      {/* /info merged into the landing page (Dean, 2026-10-26). The static host
+          can't send a 301, so old links are redirected here in the app. */}
+      <Route path="/info"><Redirect to="/" replace /></Route>
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
       <Route path="/verify-email" component={VerifyEmail} />

@@ -6,6 +6,7 @@ import { QRCodeCanvas } from "qrcode.react";
 import { cn } from "@/lib/utils";
 import { itemDeepLink } from "@/lib/deep-link";
 import { useCapabilities } from "@/hooks/use-capabilities";
+import { useSafetyAudience, SafetyShareNotice, emailAllLabel, emailedText } from "@/components/safety-audience";
 import {
   Share2, Mail, MessageCircle, Users, ExternalLink, X,
   Download, Clock, Loader2, CheckCircle2, Pin, PinOff, QrCode, ChevronDown, AlertTriangle,
@@ -134,6 +135,28 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
 
   const fullUrl = fileUrl ? normaliseUrl(fileUrl) : null;
   const isPortalEntity = PORTAL_ENTITY_TYPES.has(entityType);
+  // A current safety document goes to everyone: no picker for it (Dean,
+  // 2026-10-26). Until the server says, the picker isn't shown either.
+  const safety = useSafetyAudience(effectiveProjectId, entityType === "document" ? entityId : null, open && entityType === "document");
+  const safetyChecking = entityType === "document" && !!effectiveProjectId && !safety.data && !safety.failed;
+  const [emailAll, setEmailAll] = useState(false);
+  const [emailAllSending, setEmailAllSending] = useState(false);
+  const [emailAllMsg, setEmailAllMsg] = useState<{ text: string; bad: boolean } | null>(null);
+  useEffect(() => { if (!open) { setEmailAll(false); setEmailAllMsg(null); } }, [open]);
+  const sendEmailAll = async () => {
+    if (!effectiveProjectId) return;
+    setEmailAllSending(true); setEmailAllMsg(null);
+    try {
+      const res = await fetch(`/api/projects/${effectiveProjectId}/documents/${entityId}/email-everyone`, { method: "POST", headers: authH() });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) setEmailAllMsg({ text: data.message ? `Not emailed: ${data.message}` : `Not emailed (error ${res.status}). Please try again.`, bad: true });
+      else { setEmailAllMsg({ text: emailedText(data), bad: false }); setEmailAll(false); }
+    } catch {
+      setEmailAllMsg({ text: "Not emailed: could not reach SiteSort. Check your connection and try again.", bad: true });
+    } finally {
+      setEmailAllSending(false);
+    }
+  };
   // Pinning publishes to the PUBLIC site board: admins / PMs only (the API enforces it).
   const canPinRole = useCapabilities().isManager;
   const canPin = isPortalEntity && !!projectId && canPinRole;
@@ -464,6 +487,36 @@ export function ShareModal({ open, onClose, entityType, entityId, entityName, fi
                         {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
+                  </div>
+                ) : safetyChecking ? (
+                  <p className="text-xs text-muted-foreground">Checking who this reaches...</p>
+                ) : safety.data?.openToEveryone ? (
+                  <div className="space-y-3">
+                    <SafetyShareNotice audience={safety.data} />
+                    {safety.data.members > 0 && (
+                      <div className="space-y-2">
+                        <label className="flex items-start gap-2 text-sm cursor-pointer select-none" htmlFor="portal-share-email-all">
+                          <input id="portal-share-email-all" type="checkbox" className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                            checked={emailAll} onChange={e => setEmailAll(e.target.checked)} data-testid="portal-share-email-all" />
+                          <span className="min-w-0 break-words">
+                            {emailAllLabel(safety.data.members)}
+                            <span className="block text-xs text-muted-foreground">The email links to the Team Portal, so they sign in to open it.</span>
+                          </span>
+                        </label>
+                        {emailAll && (
+                          <button onClick={sendEmailAll} disabled={emailAllSending}
+                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-sm font-semibold disabled:opacity-40">
+                            {emailAllSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                            Send the email
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {emailAllMsg && (
+                      <p role="status" className={cn("flex items-start gap-1.5 text-xs", emailAllMsg.bad ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400")}>
+                        {emailAllMsg.bad ? <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" /> : <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-px" />} {emailAllMsg.text}
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-3">
