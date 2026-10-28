@@ -619,7 +619,7 @@ export default function LandingPage() {
             </nav>
           </div>
           <div className="mt-8 pt-8 border-t flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
-            <p>© {new Date().getFullYear()} SiteSort. Built by OnyxSorts for UK construction SMEs. Built by an insurance broker with twenty years in UK construction insurance.</p>
+            <p>© {new Date().getFullYear()} SiteSort. Built by OnyxSorts for UK construction SMEs.</p>
             <p>Document control, sign-offs, compliance, daily reports &amp; QR site boards.</p>
           </div>
         </div>
