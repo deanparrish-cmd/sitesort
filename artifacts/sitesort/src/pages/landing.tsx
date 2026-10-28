@@ -6,7 +6,6 @@ import {
   FileText,
   ArrowRight,
   CheckCircle2,
-  Sparkles,
   UploadCloud,
   QrCode,
   Plus,
@@ -18,12 +17,14 @@ import {
   Users,
   Share2,
   Quote,
-  UserRound,
 } from "lucide-react";
 import { captureAttribution, withAttribution } from "@/lib/attribution";
 import { BeforeAfterSlider } from "@/components/before-after-slider";
 import builtForBeam from "@assets/built_for_beam_nobg.webp";
 import founderPhoto from "@assets/founder-dean-parrish.webp";
+import girderProblem from "@assets/girder-the-problem.webp";
+import girderSolution from "@assets/girder-the-solution.webp";
+import girderWhy from "@assets/girder-why-we-built-it.webp";
 
 // One landing page (Dean, 2026-10-26): www and /info merged; /info now
 // redirects here. Untouched copies of both: landing.original.tsx and
@@ -33,6 +34,27 @@ import founderPhoto from "@assets/founder-dean-parrish.webp";
 // The founder's photo beside his signature, sized for its 60px display
 // (served at 2x), from founder-dean-parrish.png (Dean, 2026-10-26).
 const FOUNDER_PHOTO: string | null = founderPhoto;
+
+// Section headings engraved on girders to match the hero (Dean, 2026-10-28),
+// from attached_assets/*Girder.jpeg with the white background removed. Served
+// at 768px wide, 2x the largest display width. The real heading stays in the
+// page, visually hidden, for screen readers and search engines; the image
+// repeats it, so it is decorative (alt="", Dean, 2026-10-28).
+function GirderHeading({ src, text, height }: { src: string; text: string; height: number }) {
+  return (
+    <>
+      <h2 className="sr-only">{text}</h2>
+      <img
+        src={src}
+        alt=""
+        width={768}
+        height={height}
+        loading="lazy"
+        className="block w-full max-w-[18rem] sm:max-w-sm h-auto mx-auto mb-8 drop-shadow-md"
+      />
+    </>
+  );
+}
 
 const testimonials = [
   {
@@ -251,23 +273,22 @@ export default function LandingPage() {
       {/* The problem */}
       <section className="py-20 bg-muted/50 border-y">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold uppercase tracking-wide mb-6">
-            <AlertTriangle className="w-3.5 h-3.5" />
-            The problem
-          </div>
-          <div className="space-y-5 text-lg text-foreground leading-relaxed">
-            <p>
-              You sent the updated drawing. You're sure you did. But the wall's gone up two
-              courses wrong, and the brickie's holding a set that's three revisions old, the
-              one that was in the WhatsApp group before the new one, or maybe the one still
-              in the van.
-            </p>
-            <p>
-              Now it's coming down. That's a day gone, materials wasted, and a conversation
-              with the client you didn't want to have. Nobody's sure how it happened, because
-              the "system" is four WhatsApp groups, a shared email account and a folder on
-              someone's desktop.
-            </p>
+          <GirderHeading src={girderProblem} text="The problem" height={135} />
+          <div className="rounded-2xl border bg-card shadow-sm p-8">
+            <div className="space-y-5 text-lg text-foreground leading-relaxed">
+              <p>
+                You sent the updated drawing. You're sure you did. But the wall's gone up two
+                courses wrong, and the brickie's holding a set that's three revisions old, the
+                one that was in the WhatsApp group before the new one, or maybe the one still
+                in the van.
+              </p>
+              <p>
+                Now it's coming down. That's a day gone, materials wasted, and a conversation
+                with the client you didn't want to have. Nobody's sure how it happened, because
+                the "system" is four WhatsApp groups, a shared email account and a folder on
+                someone's desktop.
+              </p>
+            </div>
           </div>
         </div>
       </section>
@@ -275,23 +296,22 @@ export default function LandingPage() {
       {/* The solution */}
       <section className="py-20 border-b">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold uppercase tracking-wide mb-6">
-            <Sparkles className="w-3.5 h-3.5" />
-            The solution
-          </div>
-          <div className="space-y-5 text-lg text-foreground leading-relaxed">
-            <p>
-              SiteSort gives every job one home. Drawings, RAMS, permits, insurance
-              certificates, sign-offs, all in one place, all version-controlled, all pointing
-              at what's current. You decide what each team sees, and it lands on their phone.
-              Upload a new revision and the old one is marked superseded, so nobody builds off
-              the wrong set by mistake.
-            </p>
-            <p>
-              Every view, share and sign-off carries a name, a date and a time. Not a shoebox
-              of paperwork six months later, but an answer to "who was told, and when." The
-              rebuilds stop. The chasing stops.
-            </p>
+          <GirderHeading src={girderSolution} text="The solution" height={136} />
+          <div className="rounded-2xl border bg-card shadow-sm p-8">
+            <div className="space-y-5 text-lg text-foreground leading-relaxed">
+              <p>
+                SiteSort gives every job one home. Drawings, RAMS, permits, insurance
+                certificates, sign-offs, all in one place, all version-controlled, all pointing
+                at what's current. You decide what each team sees, and it lands on their phone.
+                Upload a new revision and the old one is marked superseded, so nobody builds off
+                the wrong set by mistake.
+              </p>
+              <p>
+                Every view, share and sign-off carries a name, a date and a time. Not a shoebox
+                of paperwork six months later, but an answer to "who was told, and when." The
+                rebuilds stop. The chasing stops.
+              </p>
+            </div>
           </div>
         </div>
       </section>
@@ -299,36 +319,35 @@ export default function LandingPage() {
       {/* Why we built it (Dean, 2026-10-26: the founder note) */}
       <section className="py-20 bg-muted/50 border-b">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-background border border-border text-muted-foreground text-xs font-semibold uppercase tracking-wide mb-6">
-            <UserRound className="w-3.5 h-3.5" />
-            Why we built it
-          </div>
-          <div className="space-y-5 text-lg text-foreground leading-relaxed">
-            <p>
-              I've spent over twenty years as an insurance broker working with construction SMEs.
-              Long enough to see the same claims and the same arguments again and again: work
-              built off a superseded drawing, RAMS nobody could prove were issued, a subcontractor
-              on site whose public liability had lapsed months earlier.
-            </p>
-            <p>
-              Almost none of it is bad work. It's paperwork nobody can find when it matters.
-              Those years also taught me which parts of it genuinely wind contractors up, so
-              SiteSort is built to keep the record straight while the job is running, without
-              becoming another job in itself.
-            </p>
-          </div>
-          <div className="mt-8 flex items-center gap-4">
-            {FOUNDER_PHOTO && (
-              <img
-                src={FOUNDER_PHOTO}
-                alt="Dean Parrish, founder of SiteSort"
-                width={60}
-                height={60}
-                loading="lazy"
-                className="w-[60px] h-[60px] rounded-full object-cover shrink-0 border border-border"
-              />
-            )}
-            <p className="text-base font-semibold text-foreground">Dean Parrish, founder</p>
+          <GirderHeading src={girderWhy} text="Why we built it" height={134} />
+          <div className="rounded-2xl border bg-card shadow-sm p-8">
+            <div className="space-y-5 text-lg text-foreground leading-relaxed">
+              <p>
+                I've spent over twenty years as an insurance broker working with construction SMEs.
+                Long enough to see the same claims and the same arguments again and again: work
+                built off a superseded drawing, RAMS nobody could prove were issued, a subcontractor
+                on site whose public liability had lapsed months earlier.
+              </p>
+              <p>
+                Almost none of it is bad work. It's paperwork nobody can find when it matters.
+                Those years also taught me which parts of it genuinely wind contractors up, so
+                SiteSort is built to keep the record straight while the job is running, without
+                becoming another job in itself.
+              </p>
+            </div>
+            <div className="mt-8 flex items-center gap-4">
+              {FOUNDER_PHOTO && (
+                <img
+                  src={FOUNDER_PHOTO}
+                  alt="Dean Parrish, founder of SiteSort"
+                  width={60}
+                  height={60}
+                  loading="lazy"
+                  className="w-[60px] h-[60px] rounded-full object-cover shrink-0 border border-border"
+                />
+              )}
+              <p className="text-base font-semibold text-foreground">Dean Parrish, founder</p>
+            </div>
           </div>
         </div>
       </section>
@@ -562,14 +581,16 @@ export default function LandingPage() {
       {/* Ready to sort your site */}
       <section className="py-24">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="relative overflow-hidden rounded-3xl bg-primary text-primary-foreground px-8 py-16 text-center">
+          <div className="relative overflow-hidden rounded-3xl bg-primary text-primary-foreground px-5 sm:px-8 py-16 text-center">
             <div className="absolute -top-24 -right-24 w-72 h-72 bg-accent/20 rounded-full blur-3xl"></div>
             <h2 className="relative text-3xl md:text-4xl font-bold text-primary-foreground mb-4">
               Ready to sort your site?
             </h2>
-            <Link href={registerHref} className="relative inline-block mb-6">
-              <Button size="lg" variant="accent" className="group">
-                Start your free 14-day trial
+            {/* Narrower padding and wrapping on phones: at 375px the nowrap
+                button was 320px in a 279px box and got clipped (live until 2026-10-28). */}
+            <Link href={registerHref} className="relative inline-block max-w-full mb-6">
+              <Button size="lg" variant="accent" className="group max-w-full h-auto min-h-14 py-3 px-5 sm:px-8 whitespace-normal">
+                <span>Start your free <span className="whitespace-nowrap">14-day trial</span></span>
                 <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Button>
             </Link>

@@ -31,7 +31,13 @@ const RESERVED_TEST_DOMAIN = /@(?:[^@\s]*\.)?(?:test|invalid|example|localhost|l
 // Real-looking domains that tests and old fixtures once used. Someone could
 // register any of them, so they are never sent to, wherever the code runs
 // (Dean, 2026-10-26: "safe because of where it happens to run" stops being true quietly).
-const NEVER_SEND_DOMAINS = ["testsitesort.co.uk", "sitesort-footer-check.co.uk", "sitesort-reminder-check.co.uk", "example-real.co.uk"];
+const NEVER_SEND_DOMAINS = [
+  "testsitesort.co.uk", "sitesort-footer-check.co.uk", "sitesort-reminder-check.co.uk", "example-real.co.uk",
+  // Invented firms of the demo company (Brookfield & Haigh, #182). Real people
+  // may own these domains; demo cards with no login use them.
+  "brookfieldhaigh.co.uk", "ryecroftmoorgroundworks.co.uk", "airedalescaffolding.co.uk", "thrumbletonbrick.co.uk",
+  "scammondenelectrical.co.uk", "blackmoorfootplumbing.co.uk", "wessendenroofing.co.uk", "studiohartley.co.uk", "kirkbylister.co.uk",
+];
 export function isReservedTestAddress(to: string): boolean {
   const addr = to.trim().toLowerCase();
   return RESERVED_TEST_DOMAIN.test(addr) || NEVER_SEND_DOMAINS.some(d => addr.endsWith(`@${d}`) || addr.endsWith(`.${d}`));

@@ -14,14 +14,20 @@
 // was just edited) and only falls back to the people row's own columns for
 // an in-house contact with no subcontractor link, where people.* IS the
 // canonical record.
+//
+// The firm's contact fields describe its PRIMARY contact only. Every other
+// person at the firm has their own name on their people row (#183: the Team
+// tab and the portal team list showed a firm's second person under the
+// primary contact's name).
 export function canonicalPersonName(
-  person: { firstName?: string | null; lastName?: string | null; name: string },
+  person: { firstName?: string | null; lastName?: string | null; name: string; isPrimaryContact: boolean },
   sub?: { contactFirstName?: string | null; contactLastName?: string | null; contactName?: string | null } | null,
 ): { firstName: string | null; lastName: string | null; name: string } {
-  const subFirst = sub?.contactFirstName?.trim();
-  const subLast = sub?.contactLastName?.trim();
+  const firmContact = person.isPrimaryContact ? sub : null;
+  const subFirst = firmContact?.contactFirstName?.trim();
+  const subLast = firmContact?.contactLastName?.trim();
   if (subFirst && subLast) {
-    return { firstName: subFirst, lastName: subLast, name: sub?.contactName?.trim() || `${subFirst} ${subLast}` };
+    return { firstName: subFirst, lastName: subLast, name: firmContact?.contactName?.trim() || `${subFirst} ${subLast}` };
   }
   const personFirst = person.firstName?.trim();
   const personLast = person.lastName?.trim();

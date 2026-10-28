@@ -23,8 +23,12 @@ describe("test addresses never reach Resend", () => {
     "a@test", "a@localhost", "a@local", "a@example", "a@demo.sitesort.test",
     // Real-looking domains tests once used: someone could register them.
     "tom@testsitesort.co.uk", "a@sitesort-footer-check.co.uk", "a@SITESORT-REMINDER-CHECK.co.uk", "a@example-real.co.uk",
+    // Demo company firms (#182).
+    "richard.haigh@brookfieldhaigh.co.uk", "a@ryecroftmoorgroundworks.co.uk", "a@airedalescaffolding.co.uk",
+    "a@thrumbletonbrick.co.uk", "a@scammondenelectrical.co.uk", "a@blackmoorfootplumbing.co.uk",
+    "a@wessendenroofing.co.uk", "a@studiohartley.co.uk", "a@KirkbyLister.co.uk",
   ])("%s is blocked", (a) => expect(isReservedTestAddress(a)).toBe(true));
-  it.each(["a@latest.co.uk", "a@contest.com", "a@gmail.com", "a@sitesort.co.uk", "a@testing.com"])(
+  it.each(["a@latest.co.uk", "a@contest.com", "a@gmail.com", "a@sitesort.co.uk", "a@testing.com", "a@notbrookfieldhaigh.co.uk"])(
     "%s is a real address", (a) => expect(isReservedTestAddress(a)).toBe(false));
 });
 
