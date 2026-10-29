@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 import { onMessagesRead } from "@/lib/message-events";
 import { useGetMe, useLogout } from "@workspace/api-client-react";
 import { useSubscription } from "@/contexts/subscription";
-import { CheckoutGate } from "@/components/checkout-gate";
+import { CheckoutGate, BillingCheckFailed } from "@/components/checkout-gate";
 import { UpdateBar } from "@/components/update-bar";
 import { CompanySwitcher } from "@/components/company-switcher";
 import { useToast } from "@/hooks/use-toast";
@@ -57,7 +57,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
   const { data: user, isLoading, error } = useGetMe();
   const logoutMutation = useLogout();
   const { toast } = useToast();
-  const { isCancelled, needsCheckout } = useSubscription();
+  const { isCancelled, needsCheckout, billingKnown, billingFailed, retry: retryBilling } = useSubscription();
   const [unreadMsgCount, setUnreadMsgCount] = useState(0);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const [accessRequestCount, setAccessRequestCount] = useState(0);
@@ -188,8 +188,14 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     { name: "User Guide", href: "/user-guide", icon: HelpCircle, badge: 0 },
   ];
 
-  if (isLoading) {
+  // Nothing renders until both the login and the company's billing state are
+  // known. An unknown billing state never opens the dashboard (fail closed).
+  if (isLoading || error || (!billingKnown && !billingFailed)) {
     return <div className="min-h-screen flex items-center justify-center bg-background"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
+  }
+
+  if (!billingKnown) {
+    return <BillingCheckFailed onRetry={retryBilling} />;
   }
 
   // Registered but never completed Stripe Checkout → hard-block the app until

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { CreditCard, Building2, Loader2, LogOut } from "lucide-react";
+import { CreditCard, Building2, Loader2, LogOut, AlertCircle, RefreshCw } from "lucide-react";
 
 const PLANS = {
   solo: { name: "Solo", price: "£29", tagline: "Perfect for a single site" },
@@ -153,6 +153,41 @@ export function CheckoutGate() {
         </div>
 
         <button onClick={logout} className="mt-6 mx-auto flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+          <LogOut className="w-3.5 h-3.5" /> Log out
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Shown when the company's billing state couldn't be read for this login
+ * (network, server error). The dashboard stays closed rather than assuming
+ * the company has paid.
+ */
+export function BillingCheckFailed({ onRetry }: { onRetry: () => void }) {
+  const logout = () => {
+    localStorage.removeItem("sitesort_token");
+    window.location.href = "/login";
+  };
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-muted/30 p-6">
+      <div className="w-full max-w-md bg-card rounded-2xl shadow-2xl border border-border/50 p-8 flex flex-col items-center text-center">
+        <div className="w-12 h-12 bg-destructive/10 rounded-xl flex items-center justify-center mb-4">
+          <AlertCircle className="w-6 h-6 text-destructive" />
+        </div>
+        <h1 className="text-xl font-display font-bold text-primary">We couldn't check your subscription</h1>
+        <p className="text-muted-foreground mt-2 text-sm">
+          SiteSort checks your company's plan before opening the dashboard. Check your connection, then try again.
+        </p>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold hover:bg-primary/90 transition-colors"
+        >
+          <RefreshCw className="w-4 h-4" /> Try again
+        </button>
+        <button onClick={logout} className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
           <LogOut className="w-3.5 h-3.5" /> Log out
         </button>
       </div>

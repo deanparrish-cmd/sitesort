@@ -14,7 +14,8 @@
  * the revision history carries real dates spread over the days before the demo.
  *
  * Refuses unless the signed-in company is exactly the demo company with
- * beta access on, and unless every email in its data is on the never-send
+ * beta access on (first run) or on Solo, active, off beta (after
+ * reports/demo-solo-tier.sql; re-runs and --next-revision), and unless every email in its data is on the never-send
  * list (lib/email.ts, #182) or one of the four inboxes given.
  */
 import { tmpdir } from "node:os";
@@ -72,6 +73,7 @@ const firms: Firm[] = [
     people: [{ key: "james", first: "James", last: "Sutcliffe", email: "james@wessendenroofing.co.uk", phone: "07700 900647", role: "Roofer (sole trader)" }] },
 ];
 const gary: Person = { key: "gary", first: "Gary", last: "Booth", email: INBOX.gary, phone: "07700 900709", role: "Site manager", invite: true };
+const richardPhone = "07700 900101";
 const sarah = { name: "Sarah Whitworth", email: "sarah.whitworth@brookfieldhaigh.co.uk", role: "project_manager", roleTitle: "Project manager" };
 
 const personCerts = [
@@ -82,7 +84,6 @@ const personCerts = [
 ];
 
 const PROJECT = { name: "Ravensworth Mews", address: "Old Mill Lane, Ossett, WF5", startDate: "2026-09-14", targetEndDate: "2027-08-27" };
-const PROJECT2 = { name: "Unit 3 Lowfield Business Park", address: "Lowfield Business Park, Wakefield, WF2", startDate: "2026-11-30", targetEndDate: "2027-02-26" };
 
 // First upload: the revision current when the company starts using SiteSort.
 // `next`: later revisions, uploaded one per --next-revision run.
@@ -183,7 +184,7 @@ function checkEmails() {
   const bad = all.filter(e => !inboxes.has(e.toLowerCase()) && !NEVER_SEND.some(d => e.toLowerCase().endsWith(`@${d}`)));
   if (bad.length) { console.error(`Refusing: these addresses are neither on the never-send list nor one of your inboxes: ${bad.join(", ")}`); process.exit(2); }
   // Ofcom's drama ranges only: 07700 900000 to 900999, 0113 496 0000 to 0999.
-  const phones = [gary.phone, ...firms.flatMap(f => f.people.map(p => p.phone))];
+  const phones = [richardPhone, gary.phone, ...firms.flatMap(f => f.people.map(p => p.phone))];
   const realLooking = phones.filter(n => !/^07700 900\d{3}$/.test(n) && !/^0113 496 0\d{3}$/.test(n));
   if (realLooking.length) { console.error(`Refusing: these numbers are outside Ofcom's drama ranges: ${realLooking.join(", ")}`); process.exit(2); }
 }
@@ -192,9 +193,11 @@ async function main() {
   checkEmails();
   const login = await api<{ token: string }>("POST", "/auth/login", { email: ADMIN_EMAIL, password: PASSWORD });
   token = login.data.token;
-  const co = (await api<{ name: string; betaAccess: boolean }>("GET", "/companies/mine")).data;
+  const co = (await api<{ name: string; betaAccess: boolean; subscriptionTier: string; subscriptionStatus: string }>("GET", "/companies/mine")).data;
   if (co.name !== COMPANY) { console.error(`Refusing: signed in to "${co.name}", not "${COMPANY}".`); process.exit(2); }
-  if (!co.betaAccess) { console.error("Refusing: beta access is off for this company. Run the beta_access SQL first."); process.exit(2); }
+  // Beta for the first run; Solo, active and off beta once demo-solo-tier.sql has run (re-runs, --next-revision).
+  const onSolo = !co.betaAccess && co.subscriptionTier === "solo" && co.subscriptionStatus === "active";
+  if (!co.betaAccess && !onSolo) { console.error(`Refusing: the company is on ${co.subscriptionTier}, ${co.subscriptionStatus}, beta off. Run the beta_access SQL first.`); process.exit(2); }
   console.log(`Signed in to ${co.name} on ${base}.`);
 
   const files = new DemoFiles(join(tmpdir(), "sitesort-demo-files"));
@@ -205,6 +208,11 @@ async function main() {
     await uploadNextRevision(project.id, files);
     return;
   }
+
+  // Richard's own phone, only if his profile has none
+  const me = (await api<{ phone: string | null }>("GET", "/auth/me")).data;
+  if (me.phone) console.log(`exists   Richard's phone ${me.phone}`);
+  else { await api("PATCH", "/auth/me", { phone: richardPhone }); log("Richard's phone", richardPhone, true); }
 
   // Sarah, project manager
   const users = (await api<any[]>("GET", "/users")).data;
@@ -262,7 +270,6 @@ async function main() {
     return r.data.id as string;
   }
   const pid = await ensureProject(PROJECT);
-  await ensureProject(PROJECT2);
 
   // Gary, in-house (POST returns the existing card when the email is known)
   const g = await api("POST", `/projects/${pid}/in-house-people`, { firstName: gary.first, lastName: gary.last, email: gary.email, phone: gary.phone, roleTitle: gary.role });
